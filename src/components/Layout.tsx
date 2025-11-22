@@ -10,11 +10,11 @@ import {
 } from "lucide-react";
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Inbox", href: "/inbox", icon: Inbox },
-  { name: "Contacts", href: "/contacts", icon: Users },
-  { name: "Organizations", href: "/organizations", icon: Building2 },
-  { name: "Deals", href: "/deals", icon: TrendingUp },
+  { name: "Painel", href: "/", icon: LayoutDashboard },
+  { name: "Caixa de Entrada", href: "/inbox", icon: Inbox },
+  { name: "Contatos", href: "/contacts", icon: Users },
+  { name: "Organizações", href: "/organizations", icon: Building2 },
+  { name: "Negócios", href: "/deals", icon: TrendingUp },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -54,7 +54,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             <Settings className="h-5 w-5" />
-            Settings
+            Configurações
           </Link>
         </div>
       </aside>

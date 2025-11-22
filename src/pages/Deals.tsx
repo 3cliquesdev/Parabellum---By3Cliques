@@ -4,33 +4,33 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 
 const stages = [
-  { name: "Qualification", color: "bg-info" },
-  { name: "Proposal", color: "bg-warning" },
-  { name: "Negotiation", color: "bg-primary" },
-  { name: "Closed Won", color: "bg-success" },
+  { name: "Qualificação", color: "bg-info" },
+  { name: "Proposta", color: "bg-warning" },
+  { name: "Negociação", color: "bg-primary" },
+  { name: "Fechado/Ganho", color: "bg-success" },
 ];
 
 const deals = [
   {
     id: 1,
-    title: "Enterprise License - Acme Corp",
-    value: "$25,000",
-    contact: "John Doe",
-    stage: "Negotiation",
+    title: "Licença Enterprise - Acme Corp",
+    value: "R$ 25.000",
+    contact: "João Silva",
+    stage: "Negociação",
   },
   {
     id: 2,
-    title: "Annual Subscription - TechStart",
-    value: "$12,000",
-    contact: "Sarah Miller",
-    stage: "Proposal",
+    title: "Assinatura Anual - TechStart",
+    value: "R$ 12.000",
+    contact: "Maria Santos",
+    stage: "Proposta",
   },
   {
     id: 3,
-    title: "Consulting Services - Innovate Inc",
-    value: "$8,500",
-    contact: "Mike Johnson",
-    stage: "Qualification",
+    title: "Serviços de Consultoria - Innovate Inc",
+    value: "R$ 8.500",
+    contact: "Pedro Costa",
+    stage: "Qualificação",
   },
 ];
 
@@ -39,12 +39,12 @@ export default function Deals() {
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-foreground">Deals Pipeline</h2>
-          <p className="text-muted-foreground">Track your deals through the sales pipeline</p>
+          <h2 className="text-3xl font-bold text-foreground">Funil de Negócios</h2>
+          <p className="text-muted-foreground">Acompanhe seus negócios pelo funil de vendas</p>
         </div>
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
-          Add Deal
+          Adicionar Negócio
         </Button>
       </div>
 
@@ -57,7 +57,7 @@ export default function Deals() {
                 <h3 className="font-semibold text-foreground">{stage.name}</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                {deals.filter(d => d.stage === stage.name).length} deals
+                {deals.filter(d => d.stage === stage.name).length} negócios
               </p>
             </div>
             

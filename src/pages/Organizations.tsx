@@ -9,7 +9,7 @@ const mockOrganizations = [
     domain: "acme.com",
     contacts: 5,
     deals: 3,
-    revenue: "$75,000",
+    revenue: "R$ 75.000",
   },
   {
     id: "2",
@@ -17,7 +17,7 @@ const mockOrganizations = [
     domain: "techstart.io",
     contacts: 3,
     deals: 2,
-    revenue: "$42,000",
+    revenue: "R$ 42.000",
   },
   {
     id: "3",
@@ -25,7 +25,7 @@ const mockOrganizations = [
     domain: "innovate.com",
     contacts: 7,
     deals: 4,
-    revenue: "$125,000",
+    revenue: "R$ 125.000",
   },
 ];
 
@@ -34,12 +34,12 @@ export default function Organizations() {
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-foreground">Organizations</h2>
-          <p className="text-muted-foreground">Manage company relationships</p>
+          <h2 className="text-3xl font-bold text-foreground">Organizações</h2>
+          <p className="text-muted-foreground">Gerencie relacionamentos empresariais</p>
         </div>
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
-          Add Organization
+          Adicionar Organização
         </Button>
       </div>
 
@@ -58,20 +58,20 @@ export default function Organizations() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Users className="h-4 w-4" />
-                    <span className="text-sm">Contacts</span>
+                    <span className="text-sm">Contatos</span>
                   </div>
                   <span className="font-semibold text-foreground">{org.contacts}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <TrendingUp className="h-4 w-4" />
-                    <span className="text-sm">Active Deals</span>
+                    <span className="text-sm">Negócios Ativos</span>
                   </div>
                   <span className="font-semibold text-foreground">{org.deals}</span>
                 </div>
                 <div className="pt-3 border-t border-border">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Total Revenue</span>
+                    <span className="text-sm text-muted-foreground">Receita Total</span>
                     <span className="font-bold text-success">{org.revenue}</span>
                   </div>
                 </div>

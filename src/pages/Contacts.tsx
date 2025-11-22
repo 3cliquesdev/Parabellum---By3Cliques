@@ -15,26 +15,26 @@ import { Search, Plus, Mail, Phone } from "lucide-react";
 const mockContacts = [
   {
     id: "1",
-    firstName: "John",
-    lastName: "Doe",
-    email: "john@example.com",
-    phone: "+1 234 567 8900",
+    firstName: "João",
+    lastName: "Silva",
+    email: "joao@exemplo.com",
+    phone: "+55 11 98765-4321",
     organization: "Acme Corp",
   },
   {
     id: "2",
-    firstName: "Sarah",
-    lastName: "Miller",
-    email: "sarah@techstart.io",
-    phone: "+1 234 567 8901",
+    firstName: "Maria",
+    lastName: "Santos",
+    email: "maria@techstart.io",
+    phone: "+55 11 98765-4322",
     organization: "TechStart",
   },
   {
     id: "3",
-    firstName: "Mike",
-    lastName: "Johnson",
-    email: "mike@innovate.com",
-    phone: "+1 234 567 8902",
+    firstName: "Pedro",
+    lastName: "Costa",
+    email: "pedro@innovate.com",
+    phone: "+55 11 98765-4323",
     organization: "Innovate Inc",
   },
 ];
@@ -46,12 +46,12 @@ export default function Contacts() {
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-foreground">Contacts</h2>
-          <p className="text-muted-foreground">Manage your contacts and relationships</p>
+          <h2 className="text-3xl font-bold text-foreground">Contatos</h2>
+          <p className="text-muted-foreground">Gerencie seus contatos e relacionamentos</p>
         </div>
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
-          Add Contact
+          Adicionar Contato
         </Button>
       </div>
 
@@ -59,7 +59,7 @@ export default function Contacts() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search contacts..."
+            placeholder="Buscar contatos..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -71,11 +71,11 @@ export default function Contacts() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Organization</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
+              <TableHead>Nome</TableHead>
+              <TableHead>E-mail</TableHead>
+              <TableHead>Telefone</TableHead>
+              <TableHead>Organização</TableHead>
+              <TableHead className="w-[100px]">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -109,7 +109,7 @@ export default function Contacts() {
                   <Badge variant="secondary">{contact.organization}</Badge>
                 </TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm">View</Button>
+                  <Button variant="ghost" size="sm">Ver</Button>
                 </TableCell>
               </TableRow>
             ))}

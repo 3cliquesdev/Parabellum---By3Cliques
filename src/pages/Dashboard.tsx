@@ -3,28 +3,28 @@ import { DollarSign, Users, TrendingUp, Inbox } from "lucide-react";
 
 const stats = [
   {
-    name: "Total Revenue",
-    value: "$45,231",
-    change: "+20.1%",
+    name: "Receita Total",
+    value: "R$ 45.231",
+    change: "+20,1%",
     icon: DollarSign,
     color: "text-success",
   },
   {
-    name: "Active Deals",
+    name: "Negócios Ativos",
     value: "12",
     change: "+3",
     icon: TrendingUp,
     color: "text-primary",
   },
   {
-    name: "Total Contacts",
-    value: "2,345",
+    name: "Total de Contatos",
+    value: "2.345",
     change: "+180",
     icon: Users,
     color: "text-info",
   },
   {
-    name: "Unread Messages",
+    name: "Mensagens Não Lidas",
     value: "8",
     change: "-2",
     icon: Inbox,
@@ -36,8 +36,8 @@ export default function Dashboard() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h2 className="text-3xl font-bold text-foreground">Dashboard</h2>
-        <p className="text-muted-foreground">Welcome back! Here's what's happening with your business.</p>
+        <h2 className="text-3xl font-bold text-foreground">Painel</h2>
+        <p className="text-muted-foreground">Bem-vindo de volta! Veja o que está acontecendo com seu negócio.</p>
       </div>
 
       {/* Stats Grid */}
@@ -58,7 +58,7 @@ export default function Dashboard() {
                   <span className={cn("font-medium", stat.change.startsWith("+") ? "text-success" : "text-muted-foreground")}>
                     {stat.change}
                   </span>{" "}
-                  from last month
+                  desde o mês passado
                 </p>
               </CardContent>
             </Card>
@@ -70,28 +70,28 @@ export default function Dashboard() {
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Recent Deals</CardTitle>
+            <CardTitle>Negócios Recentes</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-foreground">Enterprise License - Acme Corp</p>
-                  <p className="text-sm text-muted-foreground">Updated 2 hours ago</p>
+                  <p className="font-medium text-foreground">Licença Enterprise - Acme Corp</p>
+                  <p className="text-sm text-muted-foreground">Atualizado há 2 horas</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-success">$25,000</p>
-                  <p className="text-xs text-muted-foreground">Negotiation</p>
+                  <p className="font-semibold text-success">R$ 25.000</p>
+                  <p className="text-xs text-muted-foreground">Negociação</p>
                 </div>
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-foreground">Annual Subscription - TechStart</p>
-                  <p className="text-sm text-muted-foreground">Updated 5 hours ago</p>
+                  <p className="font-medium text-foreground">Assinatura Anual - TechStart</p>
+                  <p className="text-sm text-muted-foreground">Atualizado há 5 horas</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-success">$12,000</p>
-                  <p className="text-xs text-muted-foreground">Proposal</p>
+                  <p className="font-semibold text-success">R$ 12.000</p>
+                  <p className="text-xs text-muted-foreground">Proposta</p>
                 </div>
               </div>
             </div>
@@ -100,29 +100,29 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Recent Conversations</CardTitle>
+            <CardTitle>Conversas Recentes</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
-                  JD
+                  JS
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-foreground">John Doe</p>
-                  <p className="text-sm text-muted-foreground">Can we schedule a demo?</p>
+                  <p className="font-medium text-foreground">João Silva</p>
+                  <p className="text-sm text-muted-foreground">Podemos agendar uma demo?</p>
                 </div>
-                <span className="text-xs text-muted-foreground">5m ago</span>
+                <span className="text-xs text-muted-foreground">há 5m</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-info/10 text-info font-semibold">
-                  SM
+                  MS
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-foreground">Sarah Miller</p>
-                  <p className="text-sm text-muted-foreground">Thanks for the proposal!</p>
+                  <p className="font-medium text-foreground">Maria Santos</p>
+                  <p className="text-sm text-muted-foreground">Obrigada pela proposta!</p>
                 </div>
-                <span className="text-xs text-muted-foreground">1h ago</span>
+                <span className="text-xs text-muted-foreground">há 1h</span>
               </div>
             </div>
           </CardContent>
