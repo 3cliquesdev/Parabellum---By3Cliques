@@ -94,18 +94,18 @@ export default function PublicForm() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#22c55e]"></div>
       </div>
     );
   }
 
   if (!formData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="min-h-screen flex items-center justify-center bg-black p-4">
         <Card className="w-full max-w-md">
           <CardContent className="p-12 text-center">
-            <p className="text-muted-foreground">Formulário não encontrado</p>
+            <p className="text-[#999999]">Formulário não encontrado</p>
           </CardContent>
         </Card>
       </div>
@@ -114,12 +114,12 @@ export default function PublicForm() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="min-h-screen flex items-center justify-center bg-black p-4">
         <Card className="w-full max-w-md">
           <CardContent className="p-12 text-center space-y-4">
-            <CheckCircle2 className="h-16 w-16 text-success mx-auto" />
-            <h2 className="text-2xl font-bold text-foreground">Formulário enviado!</h2>
-            <p className="text-muted-foreground">
+            <CheckCircle2 className="h-16 w-16 text-[#22c55e] mx-auto" />
+            <h2 className="text-2xl font-bold text-white">Formulário enviado!</h2>
+            <p className="text-[#999999]">
               Obrigado pelo seu interesse. Entraremos em contato em breve.
             </p>
           </CardContent>
@@ -129,7 +129,7 @@ export default function PublicForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-black p-4">
       <Card className="w-full max-w-2xl">
         <CardHeader>
           <CardTitle>{formData.name}</CardTitle>

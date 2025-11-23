@@ -49,8 +49,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
 
   if (!conversation) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-background">
-        <p className="text-muted-foreground">
+      <div className="flex-1 flex items-center justify-center bg-black">
+        <p className="text-[#999999]">
           Selecione uma conversa para começar
         </p>
       </div>
@@ -58,7 +58,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
+    <div className="flex-1 flex flex-col bg-black">
       {/* Header */}
       <div className="h-16 border-b border-border bg-card flex items-center px-4 gap-3">
         <Avatar className="h-10 w-10 bg-primary/10 flex items-center justify-center">
