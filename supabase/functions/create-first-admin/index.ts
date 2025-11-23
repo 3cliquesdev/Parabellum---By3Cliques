@@ -47,6 +47,8 @@ Deno.serve(async (req) => {
         console.log('Found existing user, deleting:', existingUser.id)
         await supabaseAdmin.auth.admin.deleteUser(existingUser.id)
         console.log('Existing user deleted successfully')
+        // Wait a bit after deletion
+        await new Promise(resolve => setTimeout(resolve, 1000))
       }
     } catch (error) {
       console.error('Error checking/deleting existing user:', error)
