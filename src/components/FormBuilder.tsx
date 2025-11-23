@@ -50,7 +50,7 @@ export default function FormBuilder({ schema, onChange }: FormBuilderProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-foreground">Campos do Formulário</h3>
-        <Button onClick={addField} size="sm" className="gap-2">
+        <Button type="button" onClick={addField} size="sm" className="gap-2">
           <Plus className="h-4 w-4" />
           Adicionar Campo
         </Button>
@@ -121,6 +121,7 @@ export default function FormBuilder({ schema, onChange }: FormBuilderProps) {
                     </div>
 
                     <Button
+                      type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => removeField(field.id)}
