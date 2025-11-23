@@ -10,6 +10,8 @@ import Inbox from "./pages/Inbox";
 import Contacts from "./pages/Contacts";
 import Organizations from "./pages/Organizations";
 import Deals from "./pages/Deals";
+import Forms from "./pages/Forms";
+import PublicForm from "./pages/PublicForm";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -23,11 +25,13 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/public/form/:formId" element={<PublicForm />} />
           <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
           <Route path="/inbox" element={<ProtectedRoute><Layout><Inbox /></Layout></ProtectedRoute>} />
           <Route path="/contacts" element={<ProtectedRoute><Layout><Contacts /></Layout></ProtectedRoute>} />
           <Route path="/organizations" element={<ProtectedRoute><Layout><Organizations /></Layout></ProtectedRoute>} />
           <Route path="/deals" element={<ProtectedRoute><Layout><Deals /></Layout></ProtectedRoute>} />
+          <Route path="/forms" element={<ProtectedRoute><Layout><Forms /></Layout></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

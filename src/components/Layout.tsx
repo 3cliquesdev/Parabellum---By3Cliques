@@ -6,6 +6,7 @@ import {
   Building2, 
   TrendingUp, 
   Inbox,
+  FileText,
   LogOut
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,6 +19,7 @@ const navigation = [
   { name: "Contatos", href: "/contacts", icon: Users },
   { name: "Organizações", href: "/organizations", icon: Building2 },
   { name: "Negócios", href: "/deals", icon: TrendingUp },
+  { name: "Formulários", href: "/forms", icon: FileText },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
