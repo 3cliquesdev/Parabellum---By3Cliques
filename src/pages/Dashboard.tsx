@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, Users, TrendingUp, Inbox } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const stats = [
   {
@@ -130,8 +131,4 @@ export default function Dashboard() {
       </div>
     </div>
   );
-}
-
-function cn(...classes: string[]) {
-  return classes.filter(Boolean).join(" ");
 }
