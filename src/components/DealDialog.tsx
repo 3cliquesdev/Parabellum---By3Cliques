@@ -1,0 +1,284 @@
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useCreateDeal, useUpdateDeal } from "@/hooks/useDeals";
+import { useContacts } from "@/hooks/useContacts";
+import { useOrganizations } from "@/hooks/useOrganizations";
+import { useStages } from "@/hooks/useStages";
+import type { Tables } from "@/integrations/supabase/types";
+
+const dealSchema = z.object({
+  title: z.string().min(1, "Título é obrigatório").max(100),
+  value: z.string().optional().or(z.literal("")),
+  currency: z.string().optional(),
+  contact_id: z.string().uuid().optional().or(z.literal("")),
+  organization_id: z.string().uuid().optional().or(z.literal("")),
+  stage_id: z.string().uuid().optional().or(z.literal("")),
+  status: z.enum(["open", "won", "lost"]),
+});
+
+type DealFormData = z.infer<typeof dealSchema>;
+
+interface DealDialogProps {
+  deal?: Tables<"deals">;
+  trigger: React.ReactNode;
+  onOpenChange?: (open: boolean) => void;
+  prefilledContactId?: string;
+}
+
+export default function DealDialog({ deal, trigger, onOpenChange, prefilledContactId }: DealDialogProps) {
+  const [open, setOpen] = useState(false);
+  const createDeal = useCreateDeal();
+  const updateDeal = useUpdateDeal();
+  const { data: contacts } = useContacts();
+  const { data: organizations } = useOrganizations();
+  const { data: stages } = useStages();
+
+  const form = useForm<DealFormData>({
+    resolver: zodResolver(dealSchema),
+    defaultValues: {
+      title: deal?.title || "",
+      value: deal?.value?.toString() || "",
+      currency: deal?.currency || "BRL",
+      contact_id: prefilledContactId || deal?.contact_id || "",
+      organization_id: deal?.organization_id || "",
+      stage_id: deal?.stage_id || stages?.[0]?.id || "",
+      status: deal?.status || "open",
+    },
+  });
+
+  useEffect(() => {
+    if (stages && !deal && !form.getValues("stage_id")) {
+      form.setValue("stage_id", stages[0]?.id || "");
+    }
+  }, [stages, deal, form]);
+
+  const onSubmit = async (data: DealFormData) => {
+    const payload = {
+      title: data.title,
+      value: data.value ? parseFloat(data.value) : null,
+      currency: data.currency || "BRL",
+      contact_id: data.contact_id || null,
+      organization_id: data.organization_id || null,
+      stage_id: data.stage_id || null,
+      status: data.status,
+    };
+
+    if (deal) {
+      await updateDeal.mutateAsync({ id: deal.id, updates: payload });
+    } else {
+      await createDeal.mutateAsync(payload);
+    }
+
+    setOpen(false);
+    form.reset();
+    onOpenChange?.(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>
+            {deal ? "Editar Negócio" : "Novo Negócio"}
+          </DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Título</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Nome do negócio" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="value"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valor (opcional)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="currency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Moeda</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="BRL" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="BRL">BRL (R$)</SelectItem>
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="contact_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contato (opcional)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um contato" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">Nenhum</SelectItem>
+                      {contacts?.map((contact) => (
+                        <SelectItem key={contact.id} value={contact.id}>
+                          {contact.first_name} {contact.last_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="organization_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Organização (opcional)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma organização" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">Nenhuma</SelectItem>
+                      {organizations?.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>
+                          {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="stage_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Etapa</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma etapa" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {stages?.map((stage) => (
+                        <SelectItem key={stage.id} value={stage.id}>
+                          {stage.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="open">Aberto</SelectItem>
+                      <SelectItem value="won">Ganho</SelectItem>
+                      <SelectItem value="lost">Perdido</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={createDeal.isPending || updateDeal.isPending}>
+                {deal ? "Salvar" : "Criar"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}

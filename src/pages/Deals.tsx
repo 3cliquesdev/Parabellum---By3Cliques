@@ -1,85 +1,103 @@
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent } from "@dnd-kit/core";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { useDeals, useUpdateDealStage } from "@/hooks/useDeals";
+import { useStages } from "@/hooks/useStages";
+import KanbanColumn from "@/components/KanbanColumn";
+import KanbanCard from "@/components/KanbanCard";
+import DealDialog from "@/components/DealDialog";
+import type { Tables } from "@/integrations/supabase/types";
 
-const stages = [
-  { name: "Qualificação", color: "bg-info" },
-  { name: "Proposta", color: "bg-warning" },
-  { name: "Negociação", color: "bg-primary" },
-  { name: "Fechado/Ganho", color: "bg-success" },
-];
-
-const deals = [
-  {
-    id: 1,
-    title: "Licença Enterprise - Acme Corp",
-    value: "R$ 25.000",
-    contact: "João Silva",
-    stage: "Negociação",
-  },
-  {
-    id: 2,
-    title: "Assinatura Anual - TechStart",
-    value: "R$ 12.000",
-    contact: "Maria Santos",
-    stage: "Proposta",
-  },
-  {
-    id: 3,
-    title: "Serviços de Consultoria - Innovate Inc",
-    value: "R$ 8.500",
-    contact: "Pedro Costa",
-    stage: "Qualificação",
-  },
-];
+type Deal = Tables<"deals"> & {
+  contacts: { first_name: string; last_name: string } | null;
+  organizations: { name: string } | null;
+};
 
 export default function Deals() {
+  const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
+  const { data: deals, isLoading: dealsLoading } = useDeals();
+  const { data: stages, isLoading: stagesLoading } = useStages();
+  const updateDealStage = useUpdateDealStage();
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const deal = active.data.current?.deal;
+    if (deal) {
+      setActiveDeal(deal);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDeal(null);
+
+    if (!over) return;
+
+    const dealId = active.id as string;
+    const newStageId = over.id as string;
+
+    // Find the deal's current stage
+    const deal = deals?.find((d) => d.id === dealId);
+    if (!deal || deal.stage_id === newStageId) return;
+
+    // Optimistically update the stage
+    updateDealStage.mutate({ id: dealId, stage_id: newStageId });
+  };
+
+  if (dealsLoading || stagesLoading) {
+    return (
+      <div className="p-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stages || stages.length === 0) {
+    return (
+      <div className="p-8">
+        <div className="rounded-lg border border-border bg-card p-12 text-center">
+          <p className="text-muted-foreground">
+            Nenhuma etapa configurada. Configure etapas para usar o pipeline.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-foreground">Funil de Negócios</h2>
-          <p className="text-muted-foreground">Acompanhe seus negócios pelo funil de vendas</p>
+          <h2 className="text-3xl font-bold text-foreground">Pipeline de Negócios</h2>
+          <p className="text-muted-foreground">
+            Arraste e solte para mover negócios entre etapas
+          </p>
         </div>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          Adicionar Negócio
-        </Button>
+        <DealDialog
+          trigger={
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Novo Negócio
+            </Button>
+          }
+        />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-4">
-        {stages.map((stage) => (
-          <div key={stage.name}>
-            <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className={`h-2 w-2 rounded-full ${stage.color}`} />
-                <h3 className="font-semibold text-foreground">{stage.name}</h3>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {deals.filter(d => d.stage === stage.name).length} negócios
-              </p>
-            </div>
-            
-            <div className="space-y-3">
-              {deals
-                .filter((deal) => deal.stage === stage.name)
-                .map((deal) => (
-                  <Card key={deal.id} className="p-4 cursor-pointer hover:border-primary transition-colors">
-                    <h4 className="font-medium text-foreground mb-2">{deal.title}</h4>
-                    <p className="text-2xl font-bold text-success mb-3">{deal.value}</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                        {deal.contact.split(" ").map(n => n[0]).join("")}
-                      </div>
-                      <span className="text-sm text-muted-foreground">{deal.contact}</span>
-                    </div>
-                  </Card>
-                ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="flex gap-6 overflow-x-auto pb-4">
+          {stages.map((stage) => {
+            const stageDeals = deals?.filter((deal) => deal.stage_id === stage.id) || [];
+            return <KanbanColumn key={stage.id} stage={stage} deals={stageDeals as Deal[]} />;
+          })}
+        </div>
+
+        <DragOverlay>
+          {activeDeal ? <KanbanCard deal={activeDeal} /> : null}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }
