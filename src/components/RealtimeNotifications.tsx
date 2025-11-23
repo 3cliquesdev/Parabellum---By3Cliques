@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MessageSquare } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Message = Tables<"messages">;
@@ -13,9 +14,16 @@ export default function RealtimeNotifications() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   useEffect(() => {
-    console.log("RealtimeNotifications: Setting up message listener");
+    // Don't set up realtime listener if user is not authenticated
+    if (!user) {
+      console.log("RealtimeNotifications: User not authenticated, skipping setup");
+      return;
+    }
+
+    console.log("RealtimeNotifications: Setting up message listener for authenticated user");
 
     const channel = supabase
       .channel("global-messages")
@@ -77,7 +85,7 @@ export default function RealtimeNotifications() {
       console.log("RealtimeNotifications: Cleaning up");
       supabase.removeChannel(channel);
     };
-  }, [location.pathname, navigate, queryClient]);
+  }, [user, location.pathname, navigate, queryClient]);
 
   return null;
 }
