@@ -10,6 +10,7 @@ import {
   UserCog
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useUserRole } from "@/hooks/useUserRole";
 
 const navigationIcons = [
@@ -23,7 +24,7 @@ const navigationIcons = [
 
 export function IconSidebar() {
   const location = useLocation();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, loading } = useUserRole();
 
   return (
     <aside className="w-20 bg-[#050505] border-r border-[#27272A] flex flex-col items-center py-6">
@@ -54,7 +55,9 @@ export function IconSidebar() {
           );
         })}
         
-        {isAdmin && (
+        {loading ? (
+          <Skeleton className="h-12 w-12 rounded-2xl" />
+        ) : isAdmin && (
           <Link
             to="/users"
             className={cn(

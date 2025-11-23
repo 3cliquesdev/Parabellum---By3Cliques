@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -16,8 +18,21 @@ import { useOrganizations, useDeleteOrganization } from "@/hooks/useOrganization
 import OrganizationDialog from "@/components/OrganizationDialog";
 
 export default function Organizations() {
+  const [searchParams] = useSearchParams();
+  const filter = searchParams.get("filter") || "all";
   const { data: organizations, isLoading } = useOrganizations();
   const deleteOrganization = useDeleteOrganization();
+
+  const filteredOrganizations = useMemo(() => {
+    if (!organizations) return [];
+    
+    switch (filter) {
+      case "partners":
+        return organizations.filter(o => o.domain);
+      default:
+        return organizations;
+    }
+  }, [organizations, filter]);
 
   if (isLoading) {
     return (
@@ -46,13 +61,13 @@ export default function Organizations() {
         />
       </div>
 
-      {!organizations || organizations.length === 0 ? (
+      {!filteredOrganizations || filteredOrganizations.length === 0 ? (
         <div className="rounded-lg border border-border bg-card p-12 text-center">
           <p className="text-muted-foreground">Nenhuma organização cadastrada ainda</p>
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {organizations.map((org) => (
+          {filteredOrganizations.map((org) => (
             <Card key={org.id} className="hover:border-primary transition-colors">
               <CardHeader>
                 <div className="mb-4 flex items-start justify-between">

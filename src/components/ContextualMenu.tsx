@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -64,10 +64,18 @@ const menuItems: Record<string, { title: string; items: { label: string; value: 
 export function ContextualMenu() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { signOut, user } = useAuth();
   const { toast } = useToast();
   
   const currentMenu = menuItems[location.pathname] || menuItems["/"];
+  const activeFilter = searchParams.get("filter") || "all";
+
+  const handleFilterClick = (filterValue: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("filter", filterValue);
+    navigate(`${location.pathname}?${params.toString()}`);
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -91,9 +99,12 @@ export function ContextualMenu() {
           {currentMenu.items.map((item) => (
             <button
               key={item.value}
+              onClick={() => handleFilterClick(item.value)}
               className={cn(
                 "w-full text-left px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-200",
-                "text-[#999999] hover:bg-[#1A1A1A] hover:text-white"
+                activeFilter === item.value
+                  ? "bg-[#4ADE80] text-black"
+                  : "text-[#999999] hover:bg-[#1A1A1A] hover:text-white"
               )}
             >
               {item.label}
