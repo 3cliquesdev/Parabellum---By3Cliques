@@ -2,21 +2,23 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { 
   LayoutDashboard, 
-  Users, 
+  Users as UsersIcon, 
   Building2, 
   TrendingUp, 
   Inbox,
   FileText,
-  LogOut
+  LogOut,
+  UserCog
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 const navigation = [
   { name: "Painel", href: "/", icon: LayoutDashboard },
   { name: "Caixa de Entrada", href: "/inbox", icon: Inbox },
-  { name: "Contatos", href: "/contacts", icon: Users },
+  { name: "Contatos", href: "/contacts", icon: UsersIcon },
   { name: "Organizações", href: "/organizations", icon: Building2 },
   { name: "Negócios", href: "/deals", icon: TrendingUp },
   { name: "Formulários", href: "/forms", icon: FileText },
@@ -26,6 +28,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
+  const { isAdmin } = useUserRole();
   const { toast } = useToast();
 
   const handleSignOut = async () => {
@@ -64,6 +67,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          
+          {/* Admin-only link */}
+          {isAdmin && (
+            <Link
+              to="/users"
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                location.pathname === "/users"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              )}
+            >
+              <UserCog className="h-5 w-5" />
+              Usuários
+            </Link>
+          )}
         </nav>
         <div className="border-t border-border p-4">
           <div className="mb-3 px-3">
