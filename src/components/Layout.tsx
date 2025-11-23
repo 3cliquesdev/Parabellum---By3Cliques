@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { 
   LayoutDashboard, 
@@ -6,8 +6,11 @@ import {
   Building2, 
   TrendingUp, 
   Inbox,
-  Settings
+  LogOut
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 const navigation = [
   { name: "Painel", href: "/", icon: LayoutDashboard },
@@ -19,6 +22,18 @@ const navigation = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut, user } = useAuth();
+  const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast({
+      title: "Logout realizado",
+      description: "Até logo!",
+    });
+    navigate("/auth");
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -49,13 +64,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="border-t border-border p-4">
-          <Link
-            to="/settings"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          <div className="mb-3 px-3">
+            <p className="text-xs text-muted-foreground truncate">
+              {user?.email}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            onClick={handleSignOut}
+            className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground"
           >
-            <Settings className="h-5 w-5" />
-            Configurações
-          </Link>
+            <LogOut className="h-5 w-5" />
+            Sair
+          </Button>
         </div>
       </aside>
 
