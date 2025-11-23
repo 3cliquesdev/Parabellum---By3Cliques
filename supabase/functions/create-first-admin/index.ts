@@ -24,27 +24,6 @@ Deno.serve(async (req) => {
       }
     )
 
-    // Check if any users exist
-    const { data: existingUsers, error: checkError } = await supabaseAdmin
-      .from('user_roles')
-      .select('id')
-      .limit(1)
-
-    if (checkError) {
-      throw checkError
-    }
-
-    // If users already exist, don't allow creating admin
-    if (existingUsers && existingUsers.length > 0) {
-      return new Response(
-        JSON.stringify({ error: 'Admin user already exists' }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
     const { email, password } = await req.json()
 
     if (!email || !password) {
@@ -57,7 +36,41 @@ Deno.serve(async (req) => {
       )
     }
 
+    console.log('Attempting to create admin user:', email)
+
+    // Check if any users exist in user_roles table
+    const { data: existingRoles } = await supabaseAdmin
+      .from('user_roles')
+      .select('id')
+      .limit(1)
+
+    if (existingRoles && existingRoles.length > 0) {
+      console.log('Admin user already exists in user_roles')
+      return new Response(
+        JSON.stringify({ error: 'Admin user already exists' }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    // Try to find existing user with this email
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+    const existingUser = existingUsers.users.find(u => u.email === email)
+
+    // If user exists, delete it first
+    if (existingUser) {
+      console.log('Found existing user, deleting:', existingUser.id)
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(existingUser.id)
+      if (deleteError) {
+        console.error('Error deleting existing user:', deleteError)
+        // Continue anyway, try to create the new user
+      }
+    }
+
     // Create the user using admin API
+    console.log('Creating new user')
     const { data: user, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -68,8 +81,11 @@ Deno.serve(async (req) => {
     })
 
     if (createError) {
+      console.error('Error creating user:', createError)
       throw createError
     }
+
+    console.log('User created successfully:', user.user?.id)
 
     return new Response(
       JSON.stringify({ 
@@ -84,7 +100,7 @@ Deno.serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error creating admin user:', error)
+    console.error('Error in create-first-admin function:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     return new Response(
       JSON.stringify({ error: errorMessage }),
