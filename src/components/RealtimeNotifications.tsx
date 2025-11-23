@@ -25,8 +25,9 @@ export default function RealtimeNotifications() {
 
     console.log("RealtimeNotifications: Setting up message listener for authenticated user");
 
-    const channel = supabase
-      .channel("global-messages")
+    try {
+      const channel = supabase
+        .channel("global-messages")
       .on(
         "postgres_changes",
         {
@@ -81,10 +82,13 @@ export default function RealtimeNotifications() {
         console.log("RealtimeNotifications subscription status:", status);
       });
 
-    return () => {
-      console.log("RealtimeNotifications: Cleaning up");
-      supabase.removeChannel(channel);
-    };
+      return () => {
+        console.log("RealtimeNotifications: Cleaning up");
+        supabase.removeChannel(channel);
+      };
+    } catch (error) {
+      console.error("RealtimeNotifications: Error setting up listener", error);
+    }
   }, [user, location.pathname, navigate, queryClient]);
 
   return null;
