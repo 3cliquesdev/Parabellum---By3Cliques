@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,9 +32,24 @@ type ContactWithOrg = Tables<"contacts"> & {
 };
 
 export default function Contacts() {
+  const [searchParams] = useSearchParams();
+  const filter = searchParams.get("filter") || "all";
   const [searchQuery, setSearchQuery] = useState("");
   const { data: contacts, isLoading } = useContacts(searchQuery);
   const deleteContact = useDeleteContact();
+
+  const filteredContacts = useMemo(() => {
+    if (!contacts) return [];
+    
+    switch (filter) {
+      case "active":
+        return contacts.filter(c => c.email || c.phone);
+      case "inactive":
+        return contacts.filter(c => !c.email && !c.phone);
+      default:
+        return contacts;
+    }
+  }, [contacts, filter]);
 
   if (isLoading) {
     return (
@@ -74,7 +90,7 @@ export default function Contacts() {
         </div>
       </div>
 
-      {!contacts || contacts.length === 0 ? (
+      {!filteredContacts || filteredContacts.length === 0 ? (
         <div className="rounded-lg border border-border bg-card p-12 text-center">
           <p className="text-muted-foreground">
             {searchQuery ? "Nenhum contato encontrado" : "Nenhum contato cadastrado ainda"}
@@ -93,7 +109,7 @@ export default function Contacts() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {contacts.map((contact: ContactWithOrg) => (
+              {filteredContacts.map((contact: ContactWithOrg) => (
                 <TableRow key={contact.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">

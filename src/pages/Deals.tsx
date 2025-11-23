@@ -1,5 +1,6 @@
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent } from "@dnd-kit/core";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useDeals, useUpdateDealStage } from "@/hooks/useDeals";
@@ -15,10 +16,27 @@ type Deal = Tables<"deals"> & {
 };
 
 export default function Deals() {
+  const [searchParams] = useSearchParams();
+  const filter = searchParams.get("filter") || "all";
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
   const { data: deals, isLoading: dealsLoading } = useDeals();
   const { data: stages, isLoading: stagesLoading } = useStages();
   const updateDealStage = useUpdateDealStage();
+
+  const filteredDeals = useMemo(() => {
+    if (!deals) return [];
+    
+    switch (filter) {
+      case "open":
+        return deals.filter(d => d.status === "open");
+      case "won":
+        return deals.filter(d => d.status === "won");
+      case "lost":
+        return deals.filter(d => d.status === "lost");
+      default:
+        return deals;
+    }
+  }, [deals, filter]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -38,7 +56,7 @@ export default function Deals() {
     const newStageId = over.id as string;
 
     // Find the deal's current stage
-    const deal = deals?.find((d) => d.id === dealId);
+    const deal = filteredDeals?.find((d) => d.id === dealId);
     if (!deal || deal.stage_id === newStageId) return;
 
     // Optimistically update the stage
@@ -89,7 +107,7 @@ export default function Deals() {
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex gap-6 overflow-x-auto pb-4">
           {stages.map((stage) => {
-            const stageDeals = deals?.filter((deal) => deal.stage_id === stage.id) || [];
+            const stageDeals = filteredDeals?.filter((deal) => deal.stage_id === stage.id) || [];
             return <KanbanColumn key={stage.id} stage={stage} deals={stageDeals as Deal[]} />;
           })}
         </div>

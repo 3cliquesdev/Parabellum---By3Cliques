@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useConversations } from "@/hooks/useConversations";
 import ConversationList from "@/components/ConversationList";
 import ChatWindow from "@/components/ChatWindow";
@@ -14,8 +15,23 @@ type Conversation = Tables<"conversations"> & {
 };
 
 export default function Inbox() {
+  const [searchParams] = useSearchParams();
+  const filter = searchParams.get("filter") || "all";
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const { data: conversations, isLoading } = useConversations();
+
+  const filteredConversations = useMemo(() => {
+    if (!conversations) return [];
+    
+    switch (filter) {
+      case "unread":
+        return conversations.filter(c => c.status === "open");
+      case "archived":
+        return conversations.filter(c => c.status === "closed");
+      default:
+        return conversations;
+    }
+  }, [conversations, filter]);
 
   if (isLoading) {
     return (
@@ -28,7 +44,7 @@ export default function Inbox() {
   return (
     <div className="flex h-full">
       <ConversationList
-        conversations={conversations || []}
+        conversations={filteredConversations}
         activeConversationId={activeConversation?.id || null}
         onSelectConversation={setActiveConversation}
       />

@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -19,10 +21,25 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 
 export default function Forms() {
+  const [searchParams] = useSearchParams();
+  const filter = searchParams.get("filter") || "all";
   const { data: forms, isLoading } = useForms();
   const deleteForm = useDeleteForm();
   const updateForm = useUpdateForm();
   const { toast } = useToast();
+
+  const filteredForms = useMemo(() => {
+    if (!forms) return [];
+    
+    switch (filter) {
+      case "active":
+        return forms.filter(f => f.is_active);
+      case "inactive":
+        return forms.filter(f => !f.is_active);
+      default:
+        return forms;
+    }
+  }, [forms, filter]);
 
   const copyFormLink = (formId: string) => {
     const url = `${window.location.origin}/public/form/${formId}`;
@@ -67,7 +84,7 @@ export default function Forms() {
         />
       </div>
 
-      {!forms || forms.length === 0 ? (
+      {!filteredForms || filteredForms.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <p className="text-muted-foreground">
@@ -77,7 +94,7 @@ export default function Forms() {
         </Card>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {forms.map((form) => (
+          {filteredForms.map((form) => (
             <Card key={form.id}>
               <CardHeader>
                 <div className="flex items-start justify-between mb-2">
