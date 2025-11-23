@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRM - Gestão de Relacionamento com Clientes</title>
+    
+    <!-- SOLUÇÃO NUCLEAR: FORÇAR DARK MODE -->
+    <style>
+      html, body, #root {
+        background-color: #000000 !important;
+        color: #ffffff !important;
+      }
+      /* Garante que se algo tiver bg-white, será ignorado */
+      .bg-white {
+        background-color: #000000 !important;
+      }
+    </style>
+    <script>
+      // Script de bloqueio imediato
+      document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
+    </script>
     <meta name="description" content="CRM moderno com caixa de entrada unificada para gerenciar contatos, organizações, negócios e conversas" />
     <meta name="author" content="Lovable" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
