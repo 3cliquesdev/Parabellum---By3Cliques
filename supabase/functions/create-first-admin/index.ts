@@ -38,35 +38,18 @@ Deno.serve(async (req) => {
 
     console.log('Attempting to create admin user:', email)
 
-    // Check if any users exist in user_roles table
-    const { data: existingRoles } = await supabaseAdmin
-      .from('user_roles')
-      .select('id')
-      .limit(1)
+    // Try to find and delete existing user with this email
+    try {
+      const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+      const existingUser = existingUsers.users.find(u => u.email === email)
 
-    if (existingRoles && existingRoles.length > 0) {
-      console.log('Admin user already exists in user_roles')
-      return new Response(
-        JSON.stringify({ error: 'Admin user already exists' }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
-    // Try to find existing user with this email
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-    const existingUser = existingUsers.users.find(u => u.email === email)
-
-    // If user exists, delete it first
-    if (existingUser) {
-      console.log('Found existing user, deleting:', existingUser.id)
-      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(existingUser.id)
-      if (deleteError) {
-        console.error('Error deleting existing user:', deleteError)
-        // Continue anyway, try to create the new user
+      if (existingUser) {
+        console.log('Found existing user, deleting:', existingUser.id)
+        await supabaseAdmin.auth.admin.deleteUser(existingUser.id)
+        console.log('Existing user deleted successfully')
       }
+    } catch (error) {
+      console.error('Error checking/deleting existing user:', error)
     }
 
     // Create the user using admin API
