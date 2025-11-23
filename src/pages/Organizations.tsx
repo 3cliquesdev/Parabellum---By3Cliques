@@ -1,35 +1,34 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, Plus, Users, TrendingUp } from "lucide-react";
-
-const mockOrganizations = [
-  {
-    id: "1",
-    name: "Acme Corp",
-    domain: "acme.com",
-    contacts: 5,
-    deals: 3,
-    revenue: "R$ 75.000",
-  },
-  {
-    id: "2",
-    name: "TechStart",
-    domain: "techstart.io",
-    contacts: 3,
-    deals: 2,
-    revenue: "R$ 42.000",
-  },
-  {
-    id: "3",
-    name: "Innovate Inc",
-    domain: "innovate.com",
-    contacts: 7,
-    deals: 4,
-    revenue: "R$ 125.000",
-  },
-];
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Building2, Plus, Users, TrendingUp, Pencil, Trash2 } from "lucide-react";
+import { useOrganizations, useDeleteOrganization } from "@/hooks/useOrganizations";
+import OrganizationDialog from "@/components/OrganizationDialog";
 
 export default function Organizations() {
+  const { data: organizations, isLoading } = useOrganizations();
+  const deleteOrganization = useDeleteOrganization();
+
+  if (isLoading) {
+    return (
+      <div className="p-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
@@ -37,49 +36,99 @@ export default function Organizations() {
           <h2 className="text-3xl font-bold text-foreground">Organizações</h2>
           <p className="text-muted-foreground">Gerencie relacionamentos empresariais</p>
         </div>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          Adicionar Organização
-        </Button>
+        <OrganizationDialog
+          trigger={
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Adicionar Organização
+            </Button>
+          }
+        />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {mockOrganizations.map((org) => (
-          <Card key={org.id} className="hover:border-primary transition-colors cursor-pointer">
-            <CardHeader>
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                <Building2 className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle className="text-xl">{org.name}</CardTitle>
-              <p className="text-sm text-muted-foreground">{org.domain}</p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Users className="h-4 w-4" />
-                    <span className="text-sm">Contatos</span>
+      {!organizations || organizations.length === 0 ? (
+        <div className="rounded-lg border border-border bg-card p-12 text-center">
+          <p className="text-muted-foreground">Nenhuma organização cadastrada ainda</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {organizations.map((org) => (
+            <Card key={org.id} className="hover:border-primary transition-colors">
+              <CardHeader>
+                <div className="mb-4 flex items-start justify-between">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+                    <Building2 className="h-6 w-6 text-primary" />
                   </div>
-                  <span className="font-semibold text-foreground">{org.contacts}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <TrendingUp className="h-4 w-4" />
-                    <span className="text-sm">Negócios Ativos</span>
+                  <div className="flex gap-1">
+                    <OrganizationDialog
+                      organization={org}
+                      trigger={
+                        <Button variant="ghost" size="sm">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Tem certeza que deseja excluir {org.name}? Esta ação não pode ser desfeita.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteOrganization.mutate(org.id)}
+                          >
+                            Excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
-                  <span className="font-semibold text-foreground">{org.deals}</span>
                 </div>
-                <div className="pt-3 border-t border-border">
+                <CardTitle className="text-xl">{org.name}</CardTitle>
+                {org.domain && <p className="text-sm text-muted-foreground">{org.domain}</p>}
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Receita Total</span>
-                    <span className="font-bold text-success">{org.revenue}</span>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Users className="h-4 w-4" />
+                      <span className="text-sm">Contatos</span>
+                    </div>
+                    <span className="font-semibold text-foreground">{org.contactsCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <TrendingUp className="h-4 w-4" />
+                      <span className="text-sm">Negócios Ativos</span>
+                    </div>
+                    <span className="font-semibold text-foreground">{org.activeDeals}</span>
+                  </div>
+                  <div className="pt-3 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Receita Total</span>
+                      <span className="font-bold text-success">
+                        {new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        }).format(org.totalRevenue)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
