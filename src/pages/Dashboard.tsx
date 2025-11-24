@@ -34,6 +34,18 @@ export default function Dashboard() {
   const view = searchParams.get("view") || "overview";
   const { role, loading } = useUserRole();
   const { user } = useAuth();
+  
+  // ✅ Todos os hooks no topo - antes de qualquer return condicional
+  const { data: conversionStats } = useConversionStats();
+  const financialStats = useFinancialStats();
+
+  // Helper function
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  };
 
   if (loading) {
     return (
@@ -102,16 +114,6 @@ export default function Dashboard() {
     );
   }
 
-  const { data: conversionStats } = useConversionStats();
-  const financialStats = useFinancialStats();
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
-  };
-
   // ADMIN/MANAGER: Dashboard Geral com Business Intelligence
   return (
     <div className="min-h-screen p-6 flex flex-col gap-6">
@@ -120,91 +122,69 @@ export default function Dashboard() {
         <p className="text-muted-foreground">Inteligência de negócios em tempo real</p>
       </div>
 
-      {/* Visualização Financeira */}
-      {view === "financial" && (
-        <>
-          <div className="w-full">
-            <FinancialStatusWidget />
-          </div>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1">
-            <div className="min-h-[400px]">
-              <LTVWidget />
+      {/* LINHA 1: KPIs Cards (3 colunas) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <PipelineValueWidget />
+        
+        {/* Taxa de Conversão simplificada */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              🎯 Taxa de Conversão
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold text-primary">
+              {conversionStats?.conversionRate?.toFixed(1) || 0}%
             </div>
-            <div className="min-h-[400px]">
-              <ConversionRateWidget />
+            <p className="text-sm text-muted-foreground mt-2">
+              {conversionStats?.wonDeals || 0} ganhos /{" "}
+              {(conversionStats?.wonDeals || 0) + (conversionStats?.lostDeals || 0)}{" "}
+              finalizados
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Saldo Líquido simplificado */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              💵 Saldo Líquido
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold text-primary">
+              {formatCurrency(financialStats.balance)}
             </div>
-          </div>
-        </>
-      )}
+            <p className="text-sm text-muted-foreground mt-2">
+              Lucro acumulado
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Visualização Completa (overview) - NOVO LAYOUT BI */}
-      {view === "overview" && (
-        <>
-          {/* LINHA 1: KPIs Cards (3 colunas) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <PipelineValueWidget />
-            
-            {/* Taxa de Conversão simplificada */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  🎯 Taxa de Conversão
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-4xl font-bold text-primary">
-                  {conversionStats?.conversionRate?.toFixed(1) || 0}%
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {conversionStats?.wonDeals || 0} ganhos /{" "}
-                  {(conversionStats?.wonDeals || 0) + (conversionStats?.lostDeals || 0)}{" "}
-                  finalizados
-                </p>
-              </CardContent>
-            </Card>
+      {/* LINHA 2: Gráficos Principais (2 colunas) */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <SalesByRepWidget />
+        <RevenueEvolutionWidget />
+      </div>
 
-            {/* Saldo Líquido simplificado */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  💵 Saldo Líquido
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-4xl font-bold text-primary">
-                  {formatCurrency(financialStats.balance)}
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Lucro acumulado
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+      {/* LINHA 3: Funil + Hot Deals (2 colunas) */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <SalesFunnelWidget />
+        <HotDealsWidget />
+      </div>
 
-          {/* LINHA 2: Gráficos Principais (2 colunas) */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <SalesByRepWidget />
-            <RevenueEvolutionWidget />
-          </div>
+      {/* LINHA 4: Análises Complementares (2 colunas) */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <RottenDealsWidget />
+        <LostReasonsWidget />
+      </div>
 
-          {/* LINHA 3: Funil + Hot Deals (2 colunas) */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <SalesFunnelWidget />
-            <HotDealsWidget />
-          </div>
-
-          {/* LINHA 4: Análises Complementares (2 colunas) */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <RottenDealsWidget />
-            <LostReasonsWidget />
-          </div>
-
-          {/* LINHA 5: Ações Recentes (Full Width) */}
-          <div className="w-full">
-            <RecentActionsWidget />
-          </div>
-        </>
-      )}
+      {/* LINHA 5: Ações Recentes (Full Width) */}
+      <div className="w-full">
+        <RecentActionsWidget />
+      </div>
     </div>
   );
 }
