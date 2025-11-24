@@ -1,5 +1,6 @@
 import { ConversionRateWidget } from "@/components/widgets/ConversionRateWidget";
 import { AIInsightsWidget } from "@/components/widgets/AIInsightsWidget";
+import { YoYComparisonWidget } from "@/components/widgets/YoYComparisonWidget";
 
 export default function Analytics() {
   return (
@@ -15,6 +16,9 @@ export default function Analytics() {
         {/* FASE 12C: AI Insights Widget */}
         <AIInsightsWidget />
 
+        {/* FASE 12D: YoY Comparison Widget */}
+        <YoYComparisonWidget />
+
         {/* FASE 12B: Conversion Rate Trend Widget */}
         <div className="grid gap-6">
           <ConversionRateWidget />
@@ -26,7 +30,7 @@ export default function Analytics() {
             🚧 Mais widgets serão adicionados nas próximas subfases
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            FASE 12C: AI Insights | FASE 12D: YoY Comparison | FASE 12E: Channel Quality
+            FASE 12E: Channel Quality | FASE 12F: Analytics Page Complete
           </p>
         </div>
       </div>
