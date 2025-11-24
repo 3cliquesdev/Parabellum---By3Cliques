@@ -6,6 +6,7 @@ import type { Tables } from "@/integrations/supabase/types";
 type Deal = Tables<"deals"> & {
   contacts: { first_name: string; last_name: string } | null;
   organizations: { name: string } | null;
+  assigned_user: { id: string; full_name: string; avatar_url: string | null } | null;
 };
 
 interface KanbanColumnProps {

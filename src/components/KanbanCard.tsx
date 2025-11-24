@@ -2,6 +2,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { User, Pencil } from "lucide-react";
 import DealDialog from "./DealDialog";
 import type { Tables } from "@/integrations/supabase/types";
@@ -9,6 +10,7 @@ import type { Tables } from "@/integrations/supabase/types";
 type Deal = Tables<"deals"> & {
   contacts: { first_name: string; last_name: string } | null;
   organizations: { name: string } | null;
+  assigned_user: { id: string; full_name: string; avatar_url: string | null } | null;
 };
 
 interface KanbanCardProps {
@@ -75,6 +77,21 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
             <Badge variant="secondary" className="mt-2">
               {deal.organizations.name}
             </Badge>
+          )}
+
+          {deal.assigned_user && (
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+              <Avatar className="h-6 w-6">
+                <AvatarImage 
+                  src={deal.assigned_user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${deal.assigned_user.full_name}`} 
+                  alt={deal.assigned_user.full_name} 
+                />
+                <AvatarFallback className="text-xs">
+                  {deal.assigned_user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-xs text-muted-foreground">{deal.assigned_user.full_name}</span>
+            </div>
           )}
         </div>
       </CardContent>

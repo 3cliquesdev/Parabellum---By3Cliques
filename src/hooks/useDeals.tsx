@@ -18,7 +18,13 @@ export function useDeals() {
     queryFn: async () => {
       let query = supabase
         .from("deals")
-        .select("*, contacts(first_name, last_name), organizations(name), stages(name, position)");
+        .select(`
+          *, 
+          contacts(first_name, last_name), 
+          organizations(name), 
+          stages(name, position),
+          assigned_user:profiles!deals_assigned_to_fkey(id, full_name, avatar_url)
+        `);
 
       // Filtrar por assigned_to se for sales_rep
       if (role && (role as string) === "sales_rep" && user?.id) {
