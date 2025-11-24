@@ -193,6 +193,11 @@ async function executeSendNotification(automation: Automation, triggerData: any)
 }
 
 async function executeSendEmailToCustomer(automation: Automation, triggerData: any) {
+  console.log('[executeSendEmailToCustomer] Starting email send action', {
+    automationId: automation.id,
+    dealId: triggerData.deal_id,
+  });
+
   const { template_id } = automation.action_config;
 
   if (!template_id) {
@@ -207,54 +212,99 @@ async function executeSendEmailToCustomer(automation: Automation, triggerData: a
     .single();
 
   if (templateError || !template) {
-    console.error('Template not found:', templateError);
+    console.error('[executeSendEmailToCustomer] Template not found:', templateError);
     return { success: false, message: 'Template not found' };
   }
 
-  // Buscar dados do deal
+  console.log('[executeSendEmailToCustomer] Template fetched:', template.name);
+
+  // Buscar deal com dados completos (customer, organization, sales rep)
   const { data: deal, error: dealError } = await supabase
     .from('deals')
     .select(`
       *,
-      contact:contacts(*)
+      contact:contacts(*),
+      organization:organizations(*),
+      sales_rep:profiles!deals_assigned_to_fkey(*)
     `)
     .eq('id', triggerData.deal_id)
     .single();
 
   if (dealError || !deal || !deal.contact) {
-    console.error('Deal or contact not found:', dealError);
+    console.error('[executeSendEmailToCustomer] Deal or contact not found:', dealError);
     return { success: false, message: 'Deal or contact not found' };
   }
 
   const contact = deal.contact as any;
+  const organization = deal.organization as any;
+  const salesRep = deal.sales_rep as any;
+
+  console.log('[executeSendEmailToCustomer] Deal data fetched:', {
+    dealTitle: deal.title,
+    customerEmail: contact?.email,
+  });
 
   if (!contact.email) {
-    console.error('Contact has no email');
+    console.error('[executeSendEmailToCustomer] Contact has no email');
     return { success: false, message: 'Contact has no email' };
   }
 
-  // Substituir variáveis no subject e html_body
+  // Get current date/time
+  const now = new Date();
+  const currentDate = now.toLocaleDateString('pt-BR');
+  const currentTime = now.toLocaleTimeString('pt-BR');
+  const currentYear = now.getFullYear().toString();
+
+  // Build comprehensive variables object with new format [VARIABLE]
   const variables: Record<string, string> = {
-    customer_name: `${contact.first_name} ${contact.last_name}`,
-    deal_title: deal.title,
-    deal_value: deal.value?.toString() || '0',
-    deal_currency: deal.currency || 'BRL',
+    // Customer variables
+    '[CUSTOMER_FIRST_NAME]': contact.first_name || '',
+    '[CUSTOMER_LAST_NAME]': contact.last_name || '',
+    '[CUSTOMER_FULL_NAME]': `${contact.first_name} ${contact.last_name}`,
+    '[CUSTOMER_EMAIL]': contact.email || '',
+    '[CUSTOMER_PHONE]': contact.phone || '',
+    '[CUSTOMER_COMPANY]': contact.company || '',
+    '[CUSTOMER_STATUS]': contact.status || '',
+    
+    // Deal variables
+    '[DEAL_TITLE]': deal.title || '',
+    '[DEAL_VALUE]': deal.value?.toString() || '0',
+    '[DEAL_CURRENCY]': deal.currency || 'BRL',
+    '[DEAL_STATUS]': deal.status || '',
+    '[DEAL_PROBABILITY]': deal.probability?.toString() || '',
+    
+    // Sales rep variables
+    '[SALES_REP_NAME]': salesRep?.full_name || '',
+    '[SALES_REP_EMAIL]': '', // Email não está no profiles
+    '[SALES_REP_JOB_TITLE]': salesRep?.job_title || '',
+    
+    // Organization variables
+    '[ORGANIZATION_NAME]': organization?.name || '',
+    '[ORGANIZATION_DOMAIN]': organization?.domain || '',
+    
+    // Contextual variables
+    '[CURRENT_DATE]': currentDate,
+    '[CURRENT_TIME]': currentTime,
+    '[CURRENT_YEAR]': currentYear,
   };
 
   let subject = template.subject;
   let html_body = template.html_body;
 
-  Object.keys(variables).forEach(key => {
-    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-    subject = subject.replace(regex, variables[key]);
-    html_body = html_body.replace(regex, variables[key]);
+  // Replace all variables in subject and html_body using new format [VARIABLE]
+  Object.entries(variables).forEach(([key, value]) => {
+    const regex = new RegExp(key.replace(/[[\]]/g, '\\$&'), 'g');
+    subject = subject.replace(regex, value);
+    html_body = html_body.replace(regex, value);
   });
+
+  console.log('[executeSendEmailToCustomer] Template variables replaced');
 
   // Chamar send-email Edge Function
   const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-email', {
     body: {
       to: contact.email,
-      to_name: variables.customer_name,
+      to_name: `${contact.first_name} ${contact.last_name}`,
       subject: subject,
       html: html_body,
       customer_id: contact.id,
@@ -262,11 +312,13 @@ async function executeSendEmailToCustomer(automation: Automation, triggerData: a
   });
 
   if (emailError) {
-    console.error('Error sending email:', emailError);
+    console.error('[executeSendEmailToCustomer] Error sending email:', emailError);
     return { success: false, message: emailError.message };
   }
 
-  return { success: true, email_sent: true, to: contact.email };
+  console.log('[executeSendEmailToCustomer] Email sent successfully', emailResult);
+
+  return { success: true, email_sent: true, to: contact.email, template_used: template.name };
 }
 
 async function logExecution(
