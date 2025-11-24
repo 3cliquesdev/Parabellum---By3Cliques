@@ -1,32 +1,33 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export function useConversionStats() {
+export interface ConversionTimelineData {
+  date: string;
+  total_deals: number;
+  won_deals: number;
+  lost_deals: number;
+  conversion_rate: number;
+}
+
+export function useConversionStats(daysBack: number = 90) {
   return useQuery({
-    queryKey: ["conversion-stats"],
+    queryKey: ["conversion-stats-timeline", daysBack],
     queryFn: async () => {
-      const { data: deals, error } = await supabase
-        .from("deals")
-        .select("status, stage_id, stages(name, position)");
+      console.log(`📊 useConversionStats: Fetching conversion timeline for last ${daysBack} days`);
+      
+      const { data, error } = await supabase.rpc("get_conversion_rate_timeline", {
+        p_days_back: daysBack,
+      });
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ useConversionStats: Error fetching conversion timeline:", error);
+        throw error;
+      }
 
-      const totalDeals = deals.length;
-      const wonDeals = deals.filter(d => d.status === 'won').length;
-      const lostDeals = deals.filter(d => d.status === 'lost').length;
-      const openDeals = deals.filter(d => d.status === 'open').length;
-
-      const conversionRate = totalDeals > 0 ? (wonDeals / totalDeals) * 100 : 0;
-      const lossRate = totalDeals > 0 ? (lostDeals / totalDeals) * 100 : 0;
-
-      return {
-        totalDeals,
-        wonDeals,
-        lostDeals,
-        openDeals,
-        conversionRate,
-        lossRate,
-      };
+      console.log(`✅ useConversionStats: Fetched ${data?.length || 0} data points`, data);
+      
+      return (data || []) as ConversionTimelineData[];
     },
+    staleTime: 1000 * 60 * 5, // 5 minutos
   });
 }
