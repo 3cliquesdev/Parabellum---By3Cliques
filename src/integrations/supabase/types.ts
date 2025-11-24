@@ -192,6 +192,7 @@ export type Database = {
           last_name: string
           organization_id: string | null
           phone: string | null
+          source: string | null
           status: Database["public"]["Enums"]["customer_status"] | null
           total_ltv: number | null
           whatsapp_id: string | null
@@ -208,6 +209,7 @@ export type Database = {
           last_name: string
           organization_id?: string | null
           phone?: string | null
+          source?: string | null
           status?: Database["public"]["Enums"]["customer_status"] | null
           total_ltv?: number | null
           whatsapp_id?: string | null
@@ -224,6 +226,7 @@ export type Database = {
           last_name?: string
           organization_id?: string | null
           phone?: string | null
+          source?: string | null
           status?: Database["public"]["Enums"]["customer_status"] | null
           total_ltv?: number | null
           whatsapp_id?: string | null
@@ -752,6 +755,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_conversion_rate_timeline: {
+        Args: { p_days_back?: number }
+        Returns: {
+          conversion_rate: number
+          date: string
+          lost_deals: number
+          total_deals: number
+          won_deals: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
