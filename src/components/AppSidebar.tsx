@@ -10,7 +10,8 @@ import {
   UserCog,
   Zap,
   Mail,
-  LogOut
+  LogOut,
+  BarChart3
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -37,6 +38,7 @@ import ProfileEditDialog from "@/components/ProfileEditDialog";
 const mainItems = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard },
   { title: "Inbox", href: "/inbox", icon: Inbox },
+  { title: "Análises", href: "/analytics", icon: BarChart3 },
 ];
 
 const crmItems = [

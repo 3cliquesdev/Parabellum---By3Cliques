@@ -1,190 +1,223 @@
-import { useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useConversionStats } from "@/hooks/useConversionStats";
-import { useFinancialStats } from "@/hooks/useFinancialStats";
-
-// Widgets BI - KPIs
-import { PipelineValueWidget } from "@/components/widgets/PipelineValueWidget";
-
-// Widgets BI - Gráficos
-import { SalesByRepWidget } from "@/components/widgets/SalesByRepWidget";
-import { RevenueEvolutionWidget } from "@/components/widgets/RevenueEvolutionWidget";
-import { SalesFunnelWidget } from "@/components/widgets/SalesFunnelWidget";
-import { HotDealsWidget } from "@/components/widgets/HotDealsWidget";
-
-// Widgets Legacy
-import { FinancialStatusWidget } from "@/components/widgets/FinancialStatusWidget";
-import { LTVWidget } from "@/components/widgets/LTVWidget";
-import { ConversionRateWidget } from "@/components/widgets/ConversionRateWidget";
-import { RecentActionsWidget } from "@/components/widgets/RecentActionsWidget";
-import RottenDealsWidget from "@/components/widgets/RottenDealsWidget";
-import LostReasonsWidget from "@/components/widgets/LostReasonsWidget";
-
-// Widgets Sales Rep
-import { MySalesWidget } from "@/components/widgets/MySalesWidget";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus, Calendar, Mail, BarChart3, CheckCircle, AlertCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { MyActivitiesWidget } from "@/components/widgets/MyActivitiesWidget";
-import { MyLeadsWidget } from "@/components/widgets/MyLeadsWidget";
-import { MyPerformanceWidget } from "@/components/widgets/MyPerformanceWidget";
 
 export default function Dashboard() {
-  const [searchParams] = useSearchParams();
-  const view = searchParams.get("view") || "overview";
   const { role, loading } = useUserRole();
   const { user } = useAuth();
-  
-  // ✅ Todos os hooks no topo - antes de qualquer return condicional
-  const { data: conversionStats } = useConversionStats();
-  const financialStats = useFinancialStats();
 
-  // Helper function
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
-  };
+  // Query para contar tarefas pendentes
+  const { data: pendingActivities } = useQuery({
+    queryKey: ["pending-activities", user?.id, role],
+    queryFn: async () => {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+
+      let query = supabase
+        .from("activities")
+        .select("id", { count: "exact" })
+        .eq("completed", false)
+        .lte("due_date", today.toISOString());
+
+      if (role === "sales_rep" && user?.id) {
+        query = query.eq("assigned_to", user.id);
+      }
+
+      const { count } = await query;
+      return count || 0;
+    },
+    enabled: !!user?.id && !loading,
+  });
+
+  // Query para contar novos leads hoje
+  const { data: newLeadsToday } = useQuery({
+    queryKey: ["new-leads-today", user?.id, role],
+    queryFn: async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let query = supabase
+        .from("contacts")
+        .select("id", { count: "exact" })
+        .eq("status", "lead")
+        .gte("created_at", today.toISOString());
+
+      if (role === "sales_rep" && user?.id) {
+        query = query.eq("assigned_to", user.id);
+      }
+
+      const { count } = await query;
+      return count || 0;
+    },
+    enabled: !!user?.id && !loading,
+  });
+
+  // Query para contar fechamentos desta semana
+  const { data: dealsThisWeek } = useQuery({
+    queryKey: ["deals-this-week", user?.id, role],
+    queryFn: async () => {
+      const startOfWeek = new Date();
+      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(endOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      let query = supabase
+        .from("deals")
+        .select("id", { count: "exact" })
+        .eq("status", "open")
+        .gte("expected_close_date", startOfWeek.toISOString().split("T")[0])
+        .lte("expected_close_date", endOfWeek.toISOString().split("T")[0]);
+
+      if (role === "sales_rep" && user?.id) {
+        query = query.eq("assigned_to", user.id);
+      }
+
+      const { count } = await query;
+      return count || 0;
+    },
+    enabled: !!user?.id && !loading,
+  });
 
   if (loading) {
     return (
-      <div className="min-h-screen p-6 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex items-center justify-center min-h-screen">
+        <Skeleton className="h-12 w-12 rounded-full" />
       </div>
     );
   }
 
-  // VENDEDOR: Dashboard Pessoal
-  if (role && (role as string) === "sales_rep") {
-    return (
-      <div className="min-h-screen p-6 flex flex-col gap-6">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold text-foreground">Meu Dashboard</h1>
-          <p className="text-muted-foreground">Suas métricas e atividades pessoais</p>
-        </div>
-
-        {/* Linha 1: Vendas + Pipeline Ponderado */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <MySalesWidget userId={user?.id} />
-          <PipelineValueWidget />
-        </div>
-
-        {/* Linha 2: Leads + Atividades */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <MyLeadsWidget userId={user?.id} />
-          <MyActivitiesWidget />
-        </div>
-
-        {/* Linha 3: Hot Deals + Performance */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <HotDealsWidget />
-          <MyPerformanceWidget userId={user?.id} />
-        </div>
-
-        {/* Linha 4: Funil Pessoal */}
-        <div className="w-full">
-          <SalesFunnelWidget />
-        </div>
-
-        {/* Linha 5: Negócios Estagnados */}
-        <div className="w-full">
-          <RottenDealsWidget />
-        </div>
-      </div>
-    );
-  }
-
-  // Visualização Financeira - apenas widgets financeiros
-  if (view === "financial") {
-    return (
-      <div className="min-h-screen p-6 flex flex-col gap-6">
-        <div className="w-full">
-          <FinancialStatusWidget />
-        </div>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1">
-          <div className="min-h-[400px]">
-            <LTVWidget />
-          </div>
-          <div className="min-h-[400px]">
-            <ConversionRateWidget />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ADMIN/MANAGER: Dashboard Geral com Business Intelligence
   return (
     <div className="min-h-screen p-6 flex flex-col gap-6">
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-foreground">Dashboard de Vendas</h1>
-        <p className="text-muted-foreground">Inteligência de negócios em tempo real</p>
+        <h1 className="text-2xl font-bold">
+          {role === "sales_rep" ? "Meu Dashboard" : "Dashboard"}
+        </h1>
+        <p className="text-muted-foreground">
+          {role === "sales_rep" ? "Suas tarefas e metas de hoje" : "Centro de ação imediata"}
+        </p>
       </div>
 
-      {/* LINHA 1: KPIs Cards (3 colunas) */}
+      {/* LINHA 1: KPIs Essenciais (3 cards) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <PipelineValueWidget />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              {role === "sales_rep" ? "Minhas Tarefas Pendentes" : "Tarefas Pendentes"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold text-primary">
+              {pendingActivities ?? 0}
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              Atividades vencidas ou para hoje
+            </p>
+            <Button className="w-full mt-4" variant="outline" asChild>
+              <Link to="/deals">Ver Todas</Link>
+            </Button>
+          </CardContent>
+        </Card>
         
-        {/* Taxa de Conversão simplificada */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              🎯 Taxa de Conversão
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Plus className="h-5 w-5 text-blue-500" />
+              {role === "sales_rep" ? "Meus Novos Leads" : "Novos Leads Hoje"}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-4xl font-bold text-primary">
-              {conversionStats?.conversionRate?.toFixed(1) || 0}%
+              {newLeadsToday ?? 0}
             </div>
             <p className="text-sm text-muted-foreground mt-2">
-              {conversionStats?.wonDeals || 0} ganhos /{" "}
-              {(conversionStats?.wonDeals || 0) + (conversionStats?.lostDeals || 0)}{" "}
-              finalizados
+              Aguardando primeira ação
             </p>
+            <Button className="w-full mt-4" variant="outline" asChild>
+              <Link to="/contacts">Ver Leads</Link>
+            </Button>
           </CardContent>
         </Card>
-
-        {/* Saldo Líquido simplificado */}
+        
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              💵 Saldo Líquido
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              Fechamentos Esta Semana
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-4xl font-bold text-primary">
-              {formatCurrency(financialStats.balance)}
+              {dealsThisWeek ?? 0}
             </div>
             <p className="text-sm text-muted-foreground mt-2">
-              Lucro acumulado
+              Com previsão de fechamento
             </p>
+            <Button className="w-full mt-4" variant="outline" asChild>
+              <Link to="/deals">Ver Hot Deals</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
 
-      {/* LINHA 2: Gráficos Principais (2 colunas) */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <SalesByRepWidget />
-        <RevenueEvolutionWidget />
-      </div>
+      {/* LINHA 2: Atalhos Rápidos */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            ⚡ Ações Rápidas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Button className="h-20 flex flex-col gap-2" asChild>
+              <Link to="/contacts">
+                <Plus className="h-6 w-6" />
+                Novo Lead
+              </Link>
+            </Button>
+            <Button className="h-20 flex flex-col gap-2" variant="outline" asChild>
+              <Link to="/deals">
+                <Calendar className="h-6 w-6" />
+                Nova Tarefa
+              </Link>
+            </Button>
+            <Button className="h-20 flex flex-col gap-2" variant="outline" asChild>
+              <Link to="/inbox">
+                <Mail className="h-6 w-6" />
+                Enviar Email
+              </Link>
+            </Button>
+            <Button className="h-20 flex flex-col gap-2" variant="outline" asChild>
+              <Link to="/analytics">
+                <BarChart3 className="h-6 w-6" />
+                Ver Análises
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* LINHA 3: Funil + Hot Deals (2 colunas) */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <SalesFunnelWidget />
-        <HotDealsWidget />
-      </div>
-
-      {/* LINHA 4: Análises Complementares (2 colunas) */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <RottenDealsWidget />
-        <LostReasonsWidget />
-      </div>
-
-      {/* LINHA 5: Ações Recentes (Full Width) */}
-      <div className="w-full">
-        <RecentActionsWidget />
-      </div>
+      {/* LINHA 3: Agenda do Dia */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            📅 Agenda de Hoje
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <MyActivitiesWidget />
+        </CardContent>
+      </Card>
     </div>
   );
 }

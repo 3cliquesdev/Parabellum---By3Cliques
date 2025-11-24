@@ -21,6 +21,7 @@ import PublicForm from "./pages/PublicForm";
 import Auth from "./pages/Auth";
 import Setup from "./pages/Setup";
 import Automations from "./pages/Automations";
+import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -99,6 +100,7 @@ const App = () => {
             <Route path="/users" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Users /></Layout></ProtectedRoute>} />
             <Route path="/automations" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Automations /></Layout></ProtectedRoute>} />
             <Route path="/email-templates" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><EmailTemplates /></Layout></ProtectedRoute>} />
+            <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Settings /></Layout></ProtectedRoute>} />
             <Route path="/settings/email-templates" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><EmailTemplates /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
