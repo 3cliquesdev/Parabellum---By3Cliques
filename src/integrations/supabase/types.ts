@@ -17,35 +17,47 @@ export type Database = {
       contacts: {
         Row: {
           avatar_url: string | null
+          company: string | null
           created_at: string
           email: string | null
           first_name: string
           id: string
+          last_contact_date: string | null
           last_name: string
           organization_id: string | null
           phone: string | null
+          status: Database["public"]["Enums"]["customer_status"] | null
+          total_ltv: number | null
           whatsapp_id: string | null
         }
         Insert: {
           avatar_url?: string | null
+          company?: string | null
           created_at?: string
           email?: string | null
           first_name: string
           id?: string
+          last_contact_date?: string | null
           last_name: string
           organization_id?: string | null
           phone?: string | null
+          status?: Database["public"]["Enums"]["customer_status"] | null
+          total_ltv?: number | null
           whatsapp_id?: string | null
         }
         Update: {
           avatar_url?: string | null
+          company?: string | null
           created_at?: string
           email?: string | null
           first_name?: string
           id?: string
+          last_contact_date?: string | null
           last_name?: string
           organization_id?: string | null
           phone?: string | null
+          status?: Database["public"]["Enums"]["customer_status"] | null
+          total_ltv?: number | null
           whatsapp_id?: string | null
         }
         Relationships: [
@@ -93,13 +105,54 @@ export type Database = {
           },
         ]
       }
+      customer_tags: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          customer_id: string
+          id: string
+          tag_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          tag_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_tags_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deals: {
         Row: {
+          closed_at: string | null
           contact_id: string | null
           created_at: string
           currency: string | null
           id: string
           organization_id: string | null
+          probability: number | null
           stage_id: string | null
           status: Database["public"]["Enums"]["deal_status"]
           title: string
@@ -107,11 +160,13 @@ export type Database = {
           value: number | null
         }
         Insert: {
+          closed_at?: string | null
           contact_id?: string | null
           created_at?: string
           currency?: string | null
           id?: string
           organization_id?: string | null
+          probability?: number | null
           stage_id?: string | null
           status?: Database["public"]["Enums"]["deal_status"]
           title: string
@@ -119,11 +174,13 @@ export type Database = {
           value?: number | null
         }
         Update: {
+          closed_at?: string | null
           contact_id?: string | null
           created_at?: string
           currency?: string | null
           id?: string
           organization_id?: string | null
+          probability?: number | null
           stage_id?: string | null
           status?: Database["public"]["Enums"]["deal_status"]
           title?: string
@@ -183,6 +240,47 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      interactions: {
+        Row: {
+          channel: Database["public"]["Enums"]["communication_channel"]
+          content: string
+          created_at: string | null
+          created_by: string | null
+          customer_id: string
+          id: string
+          metadata: Json | null
+          type: Database["public"]["Enums"]["interaction_type"]
+        }
+        Insert: {
+          channel: Database["public"]["Enums"]["communication_channel"]
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          metadata?: Json | null
+          type: Database["public"]["Enums"]["interaction_type"]
+        }
+        Update: {
+          channel?: Database["public"]["Enums"]["communication_channel"]
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          metadata?: Json | null
+          type?: Database["public"]["Enums"]["interaction_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interactions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -296,6 +394,33 @@ export type Database = {
           },
         ]
       }
+      tags: {
+        Row: {
+          category: string | null
+          color: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          category?: string | null
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          category?: string | null
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -335,9 +460,38 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      communication_channel:
+        | "email"
+        | "phone"
+        | "whatsapp"
+        | "chat"
+        | "meeting"
+        | "form"
+        | "other"
       conversation_channel: "whatsapp" | "email"
       conversation_status: "open" | "closed"
+      customer_status:
+        | "lead"
+        | "qualified"
+        | "customer"
+        | "inactive"
+        | "churned"
       deal_status: "open" | "won" | "lost"
+      interaction_type:
+        | "email_sent"
+        | "email_open"
+        | "email_click"
+        | "call_incoming"
+        | "call_outgoing"
+        | "whatsapp_msg"
+        | "whatsapp_reply"
+        | "deal_created"
+        | "deal_won"
+        | "deal_lost"
+        | "note"
+        | "status_change"
+        | "meeting"
+        | "form_submission"
       sender_type: "user" | "contact"
     }
     CompositeTypes: {
@@ -467,9 +621,35 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      communication_channel: [
+        "email",
+        "phone",
+        "whatsapp",
+        "chat",
+        "meeting",
+        "form",
+        "other",
+      ],
       conversation_channel: ["whatsapp", "email"],
       conversation_status: ["open", "closed"],
+      customer_status: ["lead", "qualified", "customer", "inactive", "churned"],
       deal_status: ["open", "won", "lost"],
+      interaction_type: [
+        "email_sent",
+        "email_open",
+        "email_click",
+        "call_incoming",
+        "call_outgoing",
+        "whatsapp_msg",
+        "whatsapp_reply",
+        "deal_created",
+        "deal_won",
+        "deal_lost",
+        "note",
+        "status_change",
+        "meeting",
+        "form_submission",
+      ],
       sender_type: ["user", "contact"],
     },
   },
