@@ -9,7 +9,8 @@ import {
   FileText,
   Settings,
   UserCog,
-  Zap
+  Zap,
+  Mail
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,18 +64,33 @@ export function IconSidebar() {
         ) : (
           <>
             {(isAdmin || isManager) && (
-              <Link
-                to="/automations"
-                className={cn(
-                  "flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200",
-                  location.pathname === "/automations"
-                    ? "bg-[#4ADE80] text-black shadow-lg shadow-[#4ADE80]/50"
-                    : "text-[#999999] hover:bg-[#1A1A1A] hover:text-white"
-                )}
-                title="Automações"
-              >
-                <Zap className="h-5 w-5" />
-              </Link>
+              <>
+                <Link
+                  to="/automations"
+                  className={cn(
+                    "flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200",
+                    location.pathname === "/automations"
+                      ? "bg-[#4ADE80] text-black shadow-lg shadow-[#4ADE80]/50"
+                      : "text-[#999999] hover:bg-[#1A1A1A] hover:text-white"
+                  )}
+                  title="Automações"
+                >
+                  <Zap className="h-5 w-5" />
+                </Link>
+
+                <Link
+                  to="/email-templates"
+                  className={cn(
+                    "flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200",
+                    location.pathname === "/email-templates"
+                      ? "bg-[#4ADE80] text-black shadow-lg shadow-[#4ADE80]/50"
+                      : "text-[#999999] hover:bg-[#1A1A1A] hover:text-white"
+                  )}
+                  title="Templates de Email"
+                >
+                  <Mail className="h-5 w-5" />
+                </Link>
+              </>
             )}
             
             {isAdmin && (
