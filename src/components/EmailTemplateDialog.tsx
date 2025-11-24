@@ -167,8 +167,8 @@ export function EmailTemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] p-0">
-        <div className="flex h-full">
+      <DialogContent className="max-w-6xl max-h-[90vh] p-0 flex flex-col">
+        <div className="flex flex-1 min-h-0">
           {/* Main Form Area */}
           <div className="flex-1 overflow-y-auto p-6">
             <DialogHeader>
@@ -304,7 +304,7 @@ export function EmailTemplateDialog({
           </div>
 
           {/* Variables Sidebar Panel */}
-          <div className="w-80 border-l bg-muted/30 p-6 overflow-y-auto">
+          <div className="w-80 border-l bg-muted/30 p-6 overflow-y-auto max-h-full">
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-semibold mb-2">Parâmetros Disponíveis</h3>
