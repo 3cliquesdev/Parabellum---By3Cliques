@@ -30,6 +30,7 @@ import { useCreateDeal, useUpdateDeal } from "@/hooks/useDeals";
 import { useContacts } from "@/hooks/useContacts";
 import { useOrganizations } from "@/hooks/useOrganizations";
 import { useStages } from "@/hooks/useStages";
+import { useSalesReps } from "@/hooks/useSalesReps";
 import type { Tables } from "@/integrations/supabase/types";
 
 const dealSchema = z.object({
@@ -40,6 +41,7 @@ const dealSchema = z.object({
   organization_id: z.string().uuid().optional().or(z.literal("")),
   stage_id: z.string().uuid().optional().or(z.literal("")),
   status: z.enum(["open", "won", "lost"]),
+  assigned_to: z.string().uuid().optional().or(z.literal("")),
 });
 
 type DealFormData = z.infer<typeof dealSchema>;
@@ -58,6 +60,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
   const { data: contacts } = useContacts();
   const { data: organizations } = useOrganizations();
   const { data: stages } = useStages();
+  const { data: salesReps } = useSalesReps();
 
   const form = useForm<DealFormData>({
     resolver: zodResolver(dealSchema),
@@ -69,6 +72,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       organization_id: deal?.organization_id || "",
       stage_id: deal?.stage_id || stages?.[0]?.id || "",
       status: deal?.status || "open",
+      assigned_to: (deal as any)?.assigned_to || "",
     },
   });
 
@@ -87,6 +91,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       organization_id: data.organization_id || null,
       stage_id: data.stage_id || null,
       status: data.status,
+      assigned_to: data.assigned_to || null,
     };
 
     if (deal) {
@@ -232,6 +237,32 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
                       {stages?.map((stage) => (
                         <SelectItem key={stage.id} value={stage.id}>
                           {stage.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="assigned_to"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Atribuir para (opcional)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um vendedor" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">Não atribuído</SelectItem>
+                      {salesReps?.map((rep) => (
+                        <SelectItem key={rep.id} value={rep.id}>
+                          {rep.full_name} {rep.job_title && `(${rep.job_title})`}
                         </SelectItem>
                       ))}
                     </SelectContent>

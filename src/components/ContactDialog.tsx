@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { useCreateContact, useUpdateContact } from "@/hooks/useContacts";
 import { useUpsertContact } from "@/hooks/useUpsertContact";
 import { useOrganizations } from "@/hooks/useOrganizations";
+import { useSalesReps } from "@/hooks/useSalesReps";
 import type { Tables } from "@/integrations/supabase/types";
 
 const contactSchema = z.object({
@@ -37,6 +38,7 @@ const contactSchema = z.object({
   email: z.string().email("E-mail inválido").max(255).optional().or(z.literal("")),
   phone: z.string().max(20).optional().or(z.literal("")),
   organization_id: z.string().uuid().optional().or(z.literal("")),
+  assigned_to: z.string().uuid().optional().or(z.literal("")),
 });
 
 type ContactFormData = z.infer<typeof contactSchema>;
@@ -52,6 +54,7 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
   const updateContact = useUpdateContact();
   const upsertContact = useUpsertContact();
   const { data: organizations } = useOrganizations();
+  const { data: salesReps } = useSalesReps();
 
   const form = useForm<ContactFormData>({
     resolver: zodResolver(contactSchema),
@@ -61,6 +64,7 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
       email: contact?.email || "",
       phone: contact?.phone || "",
       organization_id: contact?.organization_id || "",
+      assigned_to: (contact as any)?.assigned_to || "",
     },
   });
 
@@ -72,6 +76,7 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
         email: contact.email || "",
         phone: contact.phone || "",
         organization_id: contact.organization_id || "",
+        assigned_to: (contact as any)?.assigned_to || "",
       });
     }
   }, [contact, form]);
@@ -85,6 +90,7 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
         email: data.email || null,
         phone: data.phone || null,
         organization_id: data.organization_id || null,
+        assigned_to: data.assigned_to || null,
       };
       await updateContact.mutateAsync({ id: contact.id, updates: payload });
     } else {
@@ -195,6 +201,31 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
                       {organizations?.map((org) => (
                         <SelectItem key={org.id} value={org.id}>
                           {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="assigned_to"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Responsável (opcional)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um responsável" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">Não atribuído</SelectItem>
+                      {salesReps?.map((rep) => (
+                        <SelectItem key={rep.id} value={rep.id}>
+                          {rep.full_name} {rep.job_title && `(${rep.job_title})`}
                         </SelectItem>
                       ))}
                     </SelectContent>

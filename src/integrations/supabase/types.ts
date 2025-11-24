@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       contacts: {
         Row: {
+          assigned_to: string | null
           avatar_url: string | null
           company: string | null
           created_at: string
@@ -31,6 +32,7 @@ export type Database = {
           whatsapp_id: string | null
         }
         Insert: {
+          assigned_to?: string | null
           avatar_url?: string | null
           company?: string | null
           created_at?: string
@@ -46,6 +48,7 @@ export type Database = {
           whatsapp_id?: string | null
         }
         Update: {
+          assigned_to?: string | null
           avatar_url?: string | null
           company?: string | null
           created_at?: string
@@ -61,6 +64,13 @@ export type Database = {
           whatsapp_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "contacts_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contacts_organization_id_fkey"
             columns: ["organization_id"]
@@ -129,6 +139,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "customer_tags_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "customer_tags_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
@@ -146,6 +163,7 @@ export type Database = {
       }
       deals: {
         Row: {
+          assigned_to: string | null
           closed_at: string | null
           contact_id: string | null
           created_at: string
@@ -160,6 +178,7 @@ export type Database = {
           value: number | null
         }
         Insert: {
+          assigned_to?: string | null
           closed_at?: string | null
           contact_id?: string | null
           created_at?: string
@@ -174,6 +193,7 @@ export type Database = {
           value?: number | null
         }
         Update: {
+          assigned_to?: string | null
           closed_at?: string | null
           contact_id?: string | null
           created_at?: string
@@ -188,6 +208,13 @@ export type Database = {
           value?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "deals_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "deals_contact_id_fkey"
             columns: ["contact_id"]
@@ -274,6 +301,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "interactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "interactions_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
@@ -359,6 +393,33 @@ export type Database = {
           id?: string
           is_default?: boolean | null
           name?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          full_name: string
+          id: string
+          job_title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          full_name: string
+          id: string
+          job_title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          full_name?: string
+          id?: string
+          job_title?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
