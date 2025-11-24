@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,8 +15,7 @@ import {
   Pencil,
   Trash2,
   Eye,
-  CheckCircle2,
-  XCircle,
+  Sparkles,
 } from "lucide-react";
 import { EmailTemplateDialog } from "@/components/EmailTemplateDialog";
 import { useEmailTemplates } from "@/hooks/useEmailTemplates";
@@ -34,6 +32,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function EmailTemplates() {
   const navigate = useNavigate();
@@ -95,116 +99,151 @@ export default function EmailTemplates() {
 
   if (isLoading || roleLoading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Carregando templates...</p>
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Carregando templates...</p>
+      </div>
     );
   }
 
+  const getHtmlPreview = (html: string) => {
+    const text = html.replace(/<[^>]*>/g, '');
+    return text.length > 120 ? text.substring(0, 120) + '...' : text;
+  };
+
   return (
-    <Layout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Templates de Email</h1>
-            <p className="text-muted-foreground">
-              Gerencie templates de email para automações
-            </p>
-          </div>
-          <Button onClick={handleNewTemplate}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Template
-          </Button>
+    <>
+      <div className="p-8 space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h1 className="text-4xl font-bold tracking-tight">Templates de Email</h1>
+          <p className="text-lg text-muted-foreground">
+            Crie e gerencie templates reutilizáveis para suas automações
+          </p>
         </div>
+        <Button onClick={handleNewTemplate} size="lg" className="gap-2">
+          <Plus className="h-5 w-5" />
+          Novo Template
+        </Button>
+      </div>
 
-        {!templates || templates.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Mail className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-lg font-medium mb-2">Nenhum template criado</p>
-              <p className="text-sm text-muted-foreground mb-4">
-                Crie seu primeiro template de email para usar em automações
-              </p>
-              <Button onClick={handleNewTemplate}>
-                <Plus className="mr-2 h-4 w-4" />
-                Criar Primeiro Template
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {templates.map((template) => (
-              <Card key={template.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        {template.name}
-                        {template.is_active ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-muted-foreground" />
+      {/* Empty State */}
+      {!templates || templates.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="rounded-full bg-primary/10 p-6 mb-6">
+              <Mail className="h-16 w-16 text-primary" />
+            </div>
+            <h3 className="text-2xl font-semibold mb-2">Nenhum template ainda</h3>
+            <p className="text-muted-foreground mb-6 text-center max-w-md">
+              Templates de email permitem que você envie mensagens personalizadas automaticamente baseadas em eventos do CRM
+            </p>
+            <Button onClick={handleNewTemplate} size="lg" className="gap-2">
+              <Sparkles className="h-5 w-5" />
+              Criar Primeiro Template
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2">
+          {templates.map((template) => (
+            <Card key={template.id} className="hover:shadow-lg transition-all duration-200 overflow-hidden">
+              <CardHeader className="pb-4">
+                {/* Status Badge */}
+                <div className="flex items-start justify-between mb-3">
+                  <Badge 
+                    variant={template.is_active ? "default" : "secondary"}
+                    className={template.is_active ? "bg-green-500/20 text-green-400 border-green-500/50" : ""}
+                  >
+                    {template.is_active ? "● Ativo" : "○ Inativo"}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {getTriggerLabel(template.trigger_type)}
+                  </Badge>
+                </div>
+
+                {/* Title and Subject */}
+                <CardTitle className="text-xl mb-2">{template.name}</CardTitle>
+                <CardDescription className="text-base">
+                  <span className="font-medium text-foreground">Assunto:</span> {template.subject}
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                {/* HTML Preview */}
+                <div className="bg-muted/50 rounded-md p-3 border border-border/50">
+                  <p className="text-xs text-muted-foreground mb-1 font-medium">Preview:</p>
+                  <p className="text-sm text-foreground/80 line-clamp-3">
+                    {getHtmlPreview(template.html_body)}
+                  </p>
+                </div>
+
+                {/* Variables */}
+                {template.variables && Array.isArray(template.variables) && template.variables.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-2 font-medium">Variáveis disponíveis:</p>
+                    <TooltipProvider>
+                      <div className="flex flex-wrap gap-1.5">
+                        {template.variables.slice(0, 4).map((variable: string, idx: number) => (
+                          <Badge key={idx} variant="secondary" className="text-xs font-mono">
+                            {variable}
+                          </Badge>
+                        ))}
+                        {template.variables.length > 4 && (
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <Badge variant="secondary" className="text-xs">
+                                +{template.variables.length - 4} mais
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="space-y-1">
+                                {template.variables.slice(4).map((variable: string, idx: number) => (
+                                  <div key={idx} className="text-xs font-mono">{variable}</div>
+                                ))}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
                         )}
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        {template.subject}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Trigger:</p>
-                      <Badge variant="secondary">
-                        {getTriggerLabel(template.trigger_type)}
-                      </Badge>
-                    </div>
-
-                    {template.variables && Array.isArray(template.variables) && template.variables.length > 0 && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">Variáveis:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {template.variables.map((variable: string, idx: number) => (
-                            <Badge key={idx} variant="outline" className="text-xs">
-                              {variable}
-                            </Badge>
-                          ))}
-                        </div>
                       </div>
-                    )}
-
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handlePreview(template)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEdit(template)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDelete(template.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    </TooltipProvider>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handlePreview(template)}
+                    className="flex-1 gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Visualizar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleEdit(template)}
+                    className="flex-1 gap-2 hover:bg-yellow-500/10 hover:text-yellow-500 hover:border-yellow-500/50"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Editar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDelete(template.id)}
+                    className="gap-2 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
       </div>
 
       <EmailTemplateDialog
@@ -246,6 +285,6 @@ export default function EmailTemplates() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Layout>
+    </>
   );
 }
