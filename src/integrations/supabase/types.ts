@@ -82,6 +82,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          assigned_to: string | null
           channel: Database["public"]["Enums"]["conversation_channel"]
           contact_id: string
           created_at: string
@@ -90,6 +91,7 @@ export type Database = {
           status: Database["public"]["Enums"]["conversation_status"]
         }
         Insert: {
+          assigned_to?: string | null
           channel: Database["public"]["Enums"]["conversation_channel"]
           contact_id: string
           created_at?: string
@@ -98,6 +100,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["conversation_status"]
         }
         Update: {
+          assigned_to?: string | null
           channel?: Database["public"]["Enums"]["conversation_channel"]
           contact_id?: string
           created_at?: string
@@ -106,6 +109,13 @@ export type Database = {
           status?: Database["public"]["Enums"]["conversation_status"]
         }
         Relationships: [
+          {
+            foreignKeyName: "conversations_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "conversations_contact_id_fkey"
             columns: ["contact_id"]
@@ -589,6 +599,7 @@ export type Database = {
         | "status_change"
         | "meeting"
         | "form_submission"
+        | "conversation_transferred"
       sender_type: "user" | "contact"
     }
     CompositeTypes: {
@@ -746,6 +757,7 @@ export const Constants = {
         "status_change",
         "meeting",
         "form_submission",
+        "conversation_transferred",
       ],
       sender_type: ["user", "contact"],
     },

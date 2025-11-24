@@ -9,6 +9,12 @@ type Contact = Tables<"contacts"> & {
 
 type Conversation = Tables<"conversations"> & {
   contacts: Contact;
+  assigned_user?: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    job_title: string | null;
+  } | null;
 };
 
 export function useConversations() {
@@ -17,7 +23,11 @@ export function useConversations() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("conversations")
-        .select("*, contacts(*, organizations(*))")
+        .select(`
+          *,
+          contacts(*, organizations(*)),
+          assigned_user:profiles!assigned_to(id, full_name, avatar_url, job_title)
+        `)
         .order("last_message_at", { ascending: false });
 
       if (error) throw error;

@@ -12,6 +12,12 @@ type Contact = Tables<"contacts"> & {
 
 type Conversation = Tables<"conversations"> & {
   contacts: Contact;
+  assigned_user?: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    job_title: string | null;
+  } | null;
 };
 
 interface ConversationListProps {
@@ -65,7 +71,7 @@ export default function ConversationList({
                       })}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Badge
                       variant={conversation.channel === "whatsapp" ? "default" : "secondary"}
                       className="text-xs"
@@ -75,6 +81,11 @@ export default function ConversationList({
                     {conversation.status === "open" && (
                       <Badge variant="outline" className="text-xs">
                         Aberta
+                      </Badge>
+                    )}
+                    {conversation.assigned_user && (
+                      <Badge variant="secondary" className="text-xs">
+                        {conversation.assigned_user.full_name}
                       </Badge>
                     )}
                   </div>

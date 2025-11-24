@@ -3,7 +3,8 @@ import {
   PhoneIncoming, PhoneOutgoing,
   MessageCircle, MessageCircleReply,
   Calendar, FileText, Plus,
-  CheckCircle, XCircle, StickyNote, TrendingUp
+  CheckCircle, XCircle, StickyNote, TrendingUp,
+  ArrowRightLeft
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
@@ -31,6 +32,7 @@ const INTERACTION_ICONS: Record<string, IconConfig> = {
   deal_lost: { icon: XCircle, color: "text-red-500", bg: "bg-red-500/10" },
   note: { icon: StickyNote, color: "text-yellow-500", bg: "bg-yellow-500/10" },
   status_change: { icon: TrendingUp, color: "text-orange-500", bg: "bg-orange-500/10" },
+  conversation_transferred: { icon: ArrowRightLeft, color: "text-blue-500", bg: "bg-blue-500/10" },
 };
 
 interface TimelineItemProps {

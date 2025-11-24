@@ -3,11 +3,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { Send, Mail, MessageCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Send, Mail, MessageCircle, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
 import { useSendEmail } from "@/hooks/useSendEmail";
+import { useAuth } from "@/hooks/useAuth";
+import TransferConversationDialog from "@/components/TransferConversationDialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -16,6 +19,12 @@ type Contact = Tables<"contacts"> & {
 
 type Conversation = Tables<"conversations"> & {
   contacts: Contact;
+  assigned_user?: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    job_title: string | null;
+  } | null;
 };
 
 interface ChatWindowProps {
@@ -26,7 +35,9 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const [messageText, setMessageText] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [isEmailMode, setIsEmailMode] = useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
   const { data: messages, isLoading } = useMessages(conversation?.id || null);
   const sendMessage = useSendMessage();
   const sendEmail = useSendEmail();
@@ -81,49 +92,74 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-black">
-      {/* Header */}
-      <div className="h-16 border-b border-border bg-card flex items-center px-4 gap-3 justify-between">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-10 w-10 bg-primary/10 flex items-center justify-center">
-            <span className="text-sm font-semibold text-primary">
-              {conversation.contacts.first_name[0]}
-              {conversation.contacts.last_name[0]}
-            </span>
-          </Avatar>
-          <div>
-            <p className="font-medium text-foreground">
-              {conversation.contacts.first_name} {conversation.contacts.last_name}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {conversation.contacts.email || conversation.contacts.phone}
-            </p>
+    <>
+      <TransferConversationDialog
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+        conversation={conversation}
+        currentUserId={user?.id || ""}
+      />
+      <div className="flex-1 flex flex-col bg-black">
+        {/* Header */}
+        <div className="h-16 border-b border-border bg-card flex items-center px-4 gap-3 justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10 bg-primary/10 flex items-center justify-center">
+              <span className="text-sm font-semibold text-primary">
+                {conversation.contacts.first_name[0]}
+                {conversation.contacts.last_name[0]}
+              </span>
+            </Avatar>
+            <div>
+              <p className="font-medium text-foreground">
+                {conversation.contacts.first_name} {conversation.contacts.last_name}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {conversation.contacts.email || conversation.contacts.phone}
+              </p>
+              {conversation.assigned_user && (
+                <Badge variant="secondary" className="text-xs mt-1">
+                  Atribuído: {conversation.assigned_user.full_name}
+                </Badge>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {/* Transfer Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTransferDialogOpen(true)}
+              className="h-8 gap-1"
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+              <span className="text-xs">Transferir</span>
+            </Button>
+            
+            {/* Toggle Email/Chat */}
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+              <Button
+                variant={!isEmailMode ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setIsEmailMode(false)}
+                className="h-8 gap-1"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span className="text-xs">Chat</span>
+              </Button>
+              <Button
+                variant={isEmailMode ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setIsEmailMode(true)}
+                className="h-8 gap-1"
+                disabled={!conversation.contacts.email}
+              >
+                <Mail className="h-4 w-4" />
+                <span className="text-xs">Email</span>
+              </Button>
+            </div>
           </div>
         </div>
-        
-        {/* Toggle Email/Chat */}
-        <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
-          <Button
-            variant={!isEmailMode ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setIsEmailMode(false)}
-            className="h-8 gap-1"
-          >
-            <MessageCircle className="h-4 w-4" />
-            <span className="text-xs">Chat</span>
-          </Button>
-          <Button
-            variant={isEmailMode ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setIsEmailMode(true)}
-            className="h-8 gap-1"
-            disabled={!conversation.contacts.email}
-          >
-            <Mail className="h-4 w-4" />
-            <span className="text-xs">Email</span>
-          </Button>
-        </div>
-      </div>
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
@@ -207,6 +243,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
