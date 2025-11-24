@@ -78,6 +78,7 @@ serve(async (req) => {
       p_phone: body.phone?.trim() || null,
       p_company: body.company?.trim() || null,
       p_organization_id: body.organization_id || null,
+      p_assigned_to: body.assigned_to || null,
       p_source: body.source || 'form',
     });
 

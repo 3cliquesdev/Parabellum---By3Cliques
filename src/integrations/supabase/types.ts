@@ -518,23 +518,42 @@ export type Database = {
         }
         Returns: boolean
       }
-      upsert_contact_with_interaction: {
-        Args: {
-          p_company?: string
-          p_email: string
-          p_first_name: string
-          p_last_name: string
-          p_organization_id?: string
-          p_phone?: string
-          p_source?: string
-        }
-        Returns: {
-          contact_id: string
-          is_new_contact: boolean
-          message: string
-          previous_status: Database["public"]["Enums"]["customer_status"]
-        }[]
-      }
+      upsert_contact_with_interaction:
+        | {
+            Args: {
+              p_company?: string
+              p_email: string
+              p_first_name: string
+              p_last_name: string
+              p_organization_id?: string
+              p_phone?: string
+              p_source?: string
+            }
+            Returns: {
+              contact_id: string
+              is_new_contact: boolean
+              message: string
+              previous_status: Database["public"]["Enums"]["customer_status"]
+            }[]
+          }
+        | {
+            Args: {
+              p_assigned_to?: string
+              p_company?: string
+              p_email: string
+              p_first_name: string
+              p_last_name: string
+              p_organization_id?: string
+              p_phone?: string
+              p_source?: string
+            }
+            Returns: {
+              contact_id: string
+              is_new_contact: boolean
+              message: string
+              previous_status: Database["public"]["Enums"]["customer_status"]
+            }[]
+          }
     }
     Enums: {
       app_role: "admin" | "user"
