@@ -11,7 +11,8 @@ import {
   Zap,
   Mail,
   LogOut,
-  BarChart3
+  BarChart3,
+  Target
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -53,6 +54,7 @@ const automationItems = [
 
 const reportItems = [
   { title: "Analytics", href: "/analytics", icon: BarChart3 },
+  { title: "Metas", href: "/goals", icon: Target },
 ];
 
 const formsItems = [

@@ -509,6 +509,41 @@ export type Database = {
         }
         Relationships: []
       }
+      goal_milestones: {
+        Row: {
+          achieved_at: string | null
+          created_at: string
+          goal_id: string
+          id: string
+          milestone_percentage: number
+          notified: boolean | null
+        }
+        Insert: {
+          achieved_at?: string | null
+          created_at?: string
+          goal_id: string
+          id?: string
+          milestone_percentage: number
+          notified?: boolean | null
+        }
+        Update: {
+          achieved_at?: string | null
+          created_at?: string
+          goal_id?: string
+          id?: string
+          milestone_percentage?: number
+          notified?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_milestones_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "sales_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interactions: {
         Row: {
           channel: Database["public"]["Enums"]["communication_channel"]
@@ -666,6 +701,69 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      sales_goals: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          created_by: string | null
+          department: Database["public"]["Enums"]["department_type"] | null
+          description: string | null
+          goal_type: string
+          id: string
+          period_month: number
+          period_year: number
+          status: string
+          target_value: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          created_by?: string | null
+          department?: Database["public"]["Enums"]["department_type"] | null
+          description?: string | null
+          goal_type: string
+          id?: string
+          period_month: number
+          period_year: number
+          status?: string
+          target_value: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          created_by?: string | null
+          department?: Database["public"]["Enums"]["department_type"] | null
+          description?: string | null
+          goal_type?: string
+          id?: string
+          period_month?: number
+          period_year?: number
+          status?: string
+          target_value?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_goals_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_goals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stages: {
         Row: {
