@@ -5,8 +5,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Target, Calendar } from "lucide-react";
 import { GoalDialog } from "@/components/GoalDialog";
 import { GoalCard } from "@/components/GoalCard";
+import { PerformanceRanking } from "@/components/PerformanceRanking";
+import { MonthlyTrendChart } from "@/components/MonthlyTrendChart";
 import { useGoals } from "@/hooks/useGoals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export default function Goals() {
   const { role, loading: roleLoading } = useUserRole();
@@ -103,30 +106,51 @@ export default function Goals() {
           </div>
         </div>
 
-        {/* Goals Grid */}
-        {isLoading ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-96" />
-            ))}
-          </div>
-        ) : goals && goals.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {goals.map((goal) => (
-              <GoalCard key={goal.id} goal={goal} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Nenhuma meta encontrada</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {role === "admin" 
-                ? "Crie uma nova meta para começar a acompanhar o progresso da equipe." 
-                : "Aguardando definição de metas pelo administrador."}
-            </p>
-          </div>
-        )}
+        {/* Tabs: Minhas Metas / Dashboard */}
+        <Tabs defaultValue="goals" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="goals">Minhas Metas</TabsTrigger>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          </TabsList>
+
+          {/* Tab: Minhas Metas */}
+          <TabsContent value="goals" className="mt-6">
+            {isLoading ? (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-96" />
+                ))}
+              </div>
+            ) : goals && goals.length > 0 ? (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {goals.map((goal) => (
+                  <GoalCard key={goal.id} goal={goal} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Nenhuma meta encontrada</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {role === "admin" 
+                    ? "Crie uma nova meta para começar a acompanhar o progresso da equipe." 
+                    : "Aguardando definição de metas pelo administrador."}
+                </p>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Tab: Dashboard */}
+          <TabsContent value="dashboard" className="mt-6">
+            <div className="space-y-6">
+              {/* Monthly Trend Chart - Full Width */}
+              <MonthlyTrendChart year={selectedYear} />
+
+              {/* Performance Ranking - Full Width */}
+              <PerformanceRanking month={selectedMonth} year={selectedYear} />
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
