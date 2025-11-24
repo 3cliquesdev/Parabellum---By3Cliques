@@ -39,39 +39,29 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
       // Validate input
       userSchema.parse({ email, password, role, full_name: fullName, department });
 
-      // Create user via Supabase Auth Admin API with metadata
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
+      console.log("Criando usuário:", { email, role, full_name: fullName, department });
+
+      // Call Edge Function to create user (secure server-side operation)
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: {
+          email,
+          password,
+          role,
           full_name: fullName,
           department,
-        },
+        }
       });
 
-      if (authError) throw authError;
-
-      // Insert user role
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .insert({
-          user_id: authData.user.id,
-          role: role,
-        });
-
-      if (roleError) throw roleError;
-
-      // Update department in profiles table
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({ department })
-        .eq("id", authData.user.id);
-
-      if (profileError) {
-        console.error("Erro ao atualizar departamento:", profileError);
-        // Não bloquear - departamento já tem default
+      if (error) {
+        console.error("Edge Function error:", error);
+        throw new Error(error.message || "Erro ao chamar função de criação");
       }
+
+      if (!data?.success) {
+        throw new Error(data?.error || "Falha ao criar usuário");
+      }
+
+      console.log("Usuário criado com sucesso:", data.user);
 
       const roleLabels = {
         admin: "Administrador",
