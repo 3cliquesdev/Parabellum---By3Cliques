@@ -54,7 +54,9 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
   const updateContact = useUpdateContact();
   const upsertContact = useUpsertContact();
   const { data: organizations } = useOrganizations();
-  const { data: salesReps } = useSalesReps();
+  const { data: salesReps, isLoading: salesRepsLoading } = useSalesReps();
+
+  console.log("[ContactDialog] Sales reps data:", { salesReps, salesRepsLoading });
 
   const form = useForm<ContactFormData>({
     resolver: zodResolver(contactSchema),
@@ -226,15 +228,21 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
                   <Select onValueChange={field.onChange} value={field.value || undefined}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione um responsável" />
+                        <SelectValue placeholder={salesRepsLoading ? "Carregando..." : "Selecione um responsável"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {salesReps?.map((rep) => (
-                        <SelectItem key={rep.id} value={rep.id}>
-                          {rep.full_name} {rep.job_title && `(${rep.job_title})`}
+                      {salesReps && salesReps.length > 0 ? (
+                        salesReps.map((rep) => (
+                          <SelectItem key={rep.id} value={rep.id}>
+                            {rep.full_name} {rep.job_title && `(${rep.job_title})`}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-data" disabled>
+                          {salesRepsLoading ? "Carregando..." : "Nenhum responsável disponível"}
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />

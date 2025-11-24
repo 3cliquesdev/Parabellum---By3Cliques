@@ -7,6 +7,7 @@ export function useSalesReps() {
   return useQuery({
     queryKey: ["sales-reps"],
     queryFn: async () => {
+      console.log("[useSalesReps] Fetching sales reps...");
       const { data, error } = await supabase
         .from("profiles")
         .select(`
@@ -19,7 +20,12 @@ export function useSalesReps() {
         // .eq("user_roles.role", "sales_rep") // COMENTADO TEMPORARIAMENTE
         .order("full_name");
 
-      if (error) throw error;
+      if (error) {
+        console.error("[useSalesReps] Error fetching sales reps:", error);
+        throw error;
+      }
+      
+      console.log("[useSalesReps] Data fetched:", data);
       return data;
     },
   });
