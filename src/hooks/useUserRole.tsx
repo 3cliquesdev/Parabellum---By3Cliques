@@ -11,32 +11,55 @@ export function useUserRole() {
 
   useEffect(() => {
     if (!user) {
+      console.log("useUserRole: No user logged in");
       setRole(null);
       setLoading(false);
       return;
     }
 
-    console.log("useUserRole: Fetching role for user", user.id);
+    console.log("useUserRole: [DEBUG] Starting role fetch for user:", {
+      user_id: user.id,
+      user_email: user.email
+    });
 
     const fetchRole = async () => {
       try {
+        console.log("useUserRole: [DEBUG] Executing query to user_roles...");
+        
         const { data, error } = await supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", user.id)
           .single();
 
+        console.log("useUserRole: [DEBUG] Query completed", {
+          data,
+          error,
+          hasData: !!data,
+          hasError: !!error
+        });
+
         if (error) {
-          console.error("useUserRole: Error fetching role", error);
+          console.error("useUserRole: [ERROR] Failed to fetch role", {
+            error,
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint
+          });
           setRole(null);
         } else {
-          console.log("useUserRole: Role fetched", data?.role);
+          console.log("useUserRole: [SUCCESS] Role fetched successfully", {
+            role: data?.role,
+            isAdmin: data?.role === "admin"
+          });
           setRole(data?.role as AppRole);
         }
       } catch (error) {
-        console.error("useUserRole: Unexpected error", error);
+        console.error("useUserRole: [CRITICAL] Unexpected error in fetchRole", error);
         setRole(null);
       } finally {
+        console.log("useUserRole: [DEBUG] Setting loading to false");
         setLoading(false);
       }
     };
