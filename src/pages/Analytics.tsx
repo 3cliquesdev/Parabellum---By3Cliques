@@ -30,6 +30,26 @@ export default function Analytics() {
     daysBack: 90
   });
 
+  // CRITICAL: Calcular período ANTES de qualquer conditional return (React Hooks Rule)
+  const { startDate, endDate, daysBack } = useMemo(() => {
+    if (periodFilter.type === 'custom' && periodFilter.dateRange?.from && periodFilter.dateRange?.to) {
+      return {
+        startDate: periodFilter.dateRange.from,
+        endDate: periodFilter.dateRange.to,
+        daysBack: Math.ceil((periodFilter.dateRange.to.getTime() - periodFilter.dateRange.from.getTime()) / (1000 * 60 * 60 * 24))
+      };
+    } else {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - (periodFilter.daysBack || 90));
+      return { 
+        startDate: start, 
+        endDate: end,
+        daysBack: periodFilter.daysBack || 90
+      };
+    }
+  }, [periodFilter]);
+
   // Validação de permissões - apenas admin e manager podem acessar Analytics
   useEffect(() => {
     if (!roleLoading && role !== null && role === 'sales_rep') {
@@ -57,26 +77,6 @@ export default function Analytics() {
   if (role === 'sales_rep') {
     return null;
   }
-
-  // Calcular startDate e endDate baseado no filtro
-  const { startDate, endDate, daysBack } = useMemo(() => {
-    if (periodFilter.type === 'custom' && periodFilter.dateRange?.from && periodFilter.dateRange?.to) {
-      return {
-        startDate: periodFilter.dateRange.from,
-        endDate: periodFilter.dateRange.to,
-        daysBack: Math.ceil((periodFilter.dateRange.to.getTime() - periodFilter.dateRange.from.getTime()) / (1000 * 60 * 60 * 24))
-      };
-    } else {
-      const end = new Date();
-      const start = new Date();
-      start.setDate(start.getDate() - (periodFilter.daysBack || 90));
-      return { 
-        startDate: start, 
-        endDate: end,
-        daysBack: periodFilter.daysBack || 90
-      };
-    }
-  }, [periodFilter]);
 
   return (
     <div className="container mx-auto p-6">
