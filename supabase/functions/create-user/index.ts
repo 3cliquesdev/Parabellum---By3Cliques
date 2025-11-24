@@ -102,17 +102,19 @@ serve(async (req) => {
 
     console.log('User created successfully:', newUser.user.id);
 
-    // Insert role into user_roles table
-    const { error: roleInsertError } = await supabaseAdmin
+    // Upsert role into user_roles table (trigger may have already created one)
+    const { error: roleUpsertError } = await supabaseAdmin
       .from('user_roles')
-      .insert({
+      .upsert({
         user_id: newUser.user.id,
         role: role
+      }, {
+        onConflict: 'user_id'
       });
 
-    if (roleInsertError) {
-      console.error('Error inserting user role:', roleInsertError);
-      // Delete the user if role insertion fails to maintain consistency
+    if (roleUpsertError) {
+      console.error('Error upserting user role:', roleUpsertError);
+      // Delete the user if role upsert fails to maintain consistency
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
       return new Response(
         JSON.stringify({ error: 'Failed to assign user role' }),
