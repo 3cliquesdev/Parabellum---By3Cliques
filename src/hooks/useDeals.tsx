@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
 type Deal = Tables<"deals">;
@@ -8,13 +10,22 @@ type DealInsert = TablesInsert<"deals">;
 type DealUpdate = TablesUpdate<"deals">;
 
 export function useDeals() {
+  const { user } = useAuth();
+  const { role } = useUserRole();
+
   return useQuery({
-    queryKey: ["deals"],
+    queryKey: ["deals", user?.id, role],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("deals")
-        .select("*, contacts(first_name, last_name), organizations(name), stages(name, position)")
-        .order("created_at", { ascending: false });
+        .select("*, contacts(first_name, last_name), organizations(name), stages(name, position)");
+
+      // Filtrar por assigned_to se for sales_rep
+      if (role && (role as string) === "sales_rep" && user?.id) {
+        query = query.eq("assigned_to", user.id);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
 
       if (error) throw error;
       return data;

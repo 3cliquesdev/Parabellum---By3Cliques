@@ -11,9 +11,9 @@ import { z } from "zod";
 const userSchema = z.object({
   email: z.string().email({ message: "Email inválido" }),
   password: z.string().min(8, { message: "Senha deve ter no mínimo 8 caracteres" }),
-  role: z.enum(["admin", "user"], { message: "Role inválida" }),
+  role: z.enum(["admin", "manager", "sales_rep"], { message: "Role inválida" }),
   full_name: z.string().min(1, { message: "Nome completo é obrigatório" }),
-  job_title: z.string().optional(),
+  department: z.enum(["comercial", "suporte", "marketing", "operacional"], { message: "Departamento inválido" }),
 });
 
 interface UserDialogProps {
@@ -25,9 +25,9 @@ interface UserDialogProps {
 export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialogProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"admin" | "user">("user");
+  const [role, setRole] = useState<"admin" | "manager" | "sales_rep">("sales_rep");
   const [fullName, setFullName] = useState("");
-  const [jobTitle, setJobTitle] = useState("");
+  const [department, setDepartment] = useState<"comercial" | "suporte" | "marketing" | "operacional">("comercial");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -37,7 +37,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
 
     try {
       // Validate input
-      userSchema.parse({ email, password, role, full_name: fullName, job_title: jobTitle });
+      userSchema.parse({ email, password, role, full_name: fullName, department });
 
       // Create user via Supabase Auth Admin API with metadata
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -46,7 +46,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
         email_confirm: true,
         user_metadata: {
           full_name: fullName,
-          job_title: jobTitle || "Vendedor",
+          department,
         },
       });
 
@@ -62,16 +62,33 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
 
       if (roleError) throw roleError;
 
+      // Update department in profiles table
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ department })
+        .eq("id", authData.user.id);
+
+      if (profileError) {
+        console.error("Erro ao atualizar departamento:", profileError);
+        // Não bloquear - departamento já tem default
+      }
+
+      const roleLabels = {
+        admin: "Administrador",
+        manager: "Gerente de Vendas",
+        sales_rep: "Vendedor",
+      };
+
       toast({
         title: "Usuário criado com sucesso!",
-        description: `${email} foi criado como ${role === "admin" ? "administrador" : "usuário"}.`,
+        description: `${email} foi criado como ${roleLabels[role]}.`,
       });
 
       setEmail("");
       setPassword("");
-      setRole("user");
+      setRole("sales_rep");
       setFullName("");
-      setJobTitle("");
+      setDepartment("comercial");
       onOpenChange(false);
       onSuccess();
     } catch (error) {
@@ -140,24 +157,45 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="job_title">Cargo (opcional)</Label>
-              <Input
-                id="job_title"
-                type="text"
-                placeholder="Vendedor, Gerente de Vendas, etc."
-                value={jobTitle}
-                onChange={(e) => setJobTitle(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">Perfil de Acesso</Label>
-              <Select value={role} onValueChange={(value) => setRole(value as "admin" | "user")}>
+              <Label htmlFor="role">Perfil de Acesso *</Label>
+              <Select value={role} onValueChange={(value: any) => setRole(value)} required>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione o perfil..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">Usuário</SelectItem>
-                  <SelectItem value="admin">Administrador</SelectItem>
+                  <SelectItem value="admin">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Administrador</span>
+                      <span className="text-xs text-muted-foreground">Acesso total ao sistema</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="manager">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Gerente de Vendas</span>
+                      <span className="text-xs text-muted-foreground">Vê todo o time e métricas gerais</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="sales_rep">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Vendedor</span>
+                      <span className="text-xs text-muted-foreground">Apenas seus leads e métricas pessoais</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="department">Departamento *</Label>
+              <Select value={department} onValueChange={(value: any) => setDepartment(value)} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o departamento..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="comercial">Comercial</SelectItem>
+                  <SelectItem value="suporte">Suporte</SelectItem>
+                  <SelectItem value="marketing">Marketing</SelectItem>
+                  <SelectItem value="operacional">Operacional</SelectItem>
                 </SelectContent>
               </Select>
             </div>

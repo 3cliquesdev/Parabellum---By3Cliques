@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -14,21 +16,31 @@ type Conversation = Tables<"conversations"> & {
     full_name: string;
     avatar_url: string | null;
     job_title: string | null;
+    department: string | null;
   } | null;
 };
 
 export function useConversations() {
+  const { user } = useAuth();
+  const { role } = useUserRole();
+
   return useQuery({
-    queryKey: ["conversations"],
+    queryKey: ["conversations", user?.id, role],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("conversations")
         .select(`
           *,
           contacts(*, organizations(*)),
-          assigned_user:profiles!assigned_to(id, full_name, avatar_url, job_title)
-        `)
-        .order("last_message_at", { ascending: false });
+          assigned_user:profiles!assigned_to(id, full_name, avatar_url, job_title, department)
+        `);
+
+      // Filtrar por assigned_to se for sales_rep
+      if (role && (role as string) === "sales_rep" && user?.id) {
+        query = query.eq("assigned_to", user.id);
+      }
+
+      const { data, error } = await query.order("last_message_at", { ascending: false });
 
       if (error) throw error;
       return data as Conversation[];

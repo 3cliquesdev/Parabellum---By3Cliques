@@ -410,6 +410,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string | null
+          department: Database["public"]["Enums"]["department_type"] | null
           full_name: string
           id: string
           job_title: string | null
@@ -418,6 +419,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
+          department?: Database["public"]["Enums"]["department_type"] | null
           full_name: string
           id: string
           job_title?: string | null
@@ -426,6 +428,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string | null
+          department?: Database["public"]["Enums"]["department_type"] | null
           full_name?: string
           id?: string
           job_title?: string | null
@@ -566,7 +569,7 @@ export type Database = {
           }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "manager" | "sales_rep"
       communication_channel:
         | "email"
         | "phone"
@@ -584,6 +587,7 @@ export type Database = {
         | "inactive"
         | "churned"
       deal_status: "open" | "won" | "lost"
+      department_type: "comercial" | "suporte" | "marketing" | "operacional"
       interaction_type:
         | "email_sent"
         | "email_open"
@@ -728,7 +732,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "manager", "sales_rep"],
       communication_channel: [
         "email",
         "phone",
@@ -742,6 +746,7 @@ export const Constants = {
       conversation_status: ["open", "closed"],
       customer_status: ["lead", "qualified", "customer", "inactive", "churned"],
       deal_status: ["open", "won", "lost"],
+      department_type: ["comercial", "suporte", "marketing", "operacional"],
       interaction_type: [
         "email_sent",
         "email_open",

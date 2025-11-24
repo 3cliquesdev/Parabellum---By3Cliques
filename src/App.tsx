@@ -15,6 +15,7 @@ import Organizations from "./pages/Organizations";
 import Deals from "./pages/Deals";
 import Forms from "./pages/Forms";
 import Users from "./pages/Users";
+import Settings from "./pages/Settings";
 import PublicForm from "./pages/PublicForm";
 import Auth from "./pages/Auth";
 import Setup from "./pages/Setup";
@@ -93,7 +94,8 @@ const App = () => {
             <Route path="/organizations" element={<ProtectedRoute><Layout><Organizations /></Layout></ProtectedRoute>} />
             <Route path="/deals" element={<ProtectedRoute><Layout><Deals /></Layout></ProtectedRoute>} />
             <Route path="/forms" element={<ProtectedRoute><Layout><Forms /></Layout></ProtectedRoute>} />
-            <Route path="/users" element={<ProtectedRoute><Layout><Users /></Layout></ProtectedRoute>} />
+            <Route path="/users" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Users /></Layout></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Settings /></Layout></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

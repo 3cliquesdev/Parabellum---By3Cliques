@@ -1,16 +1,19 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  allowedRoles?: ("admin" | "manager" | "sales_rep")[];
 }
 
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, loading } = useAuth();
+export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { role, loading: roleLoading } = useUserRole();
 
-  console.log("ProtectedRoute: Render", { isAuthenticated, loading });
+  console.log("ProtectedRoute: Render", { isAuthenticated, authLoading, roleLoading, role, allowedRoles });
 
-  if (loading) {
+  if (authLoading || roleLoading) {
     console.log("ProtectedRoute: Showing loading state");
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
@@ -25,6 +28,12 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (!isAuthenticated) {
     console.log("ProtectedRoute: Redirecting to /auth");
     return <Navigate to="/auth" replace />;
+  }
+
+  // Check role permissions (if allowedRoles is specified)
+  if (allowedRoles && role && !allowedRoles.includes(role as "admin" | "manager" | "sales_rep")) {
+    console.log("ProtectedRoute: User lacks required role, redirecting to /");
+    return <Navigate to="/" replace />;
   }
 
   console.log("ProtectedRoute: Rendering protected content");

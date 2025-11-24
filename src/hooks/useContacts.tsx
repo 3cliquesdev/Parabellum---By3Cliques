@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts">;
@@ -8,8 +10,11 @@ type ContactInsert = TablesInsert<"contacts">;
 type ContactUpdate = TablesUpdate<"contacts">;
 
 export function useContacts(searchQuery?: string) {
+  const { user } = useAuth();
+  const { role } = useUserRole();
+
   return useQuery({
-    queryKey: ["contacts", searchQuery],
+    queryKey: ["contacts", searchQuery, user?.id, role],
     queryFn: async () => {
       let query = supabase
         .from("contacts")
@@ -20,6 +25,11 @@ export function useContacts(searchQuery?: string) {
         query = query.or(
           `first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
         );
+      }
+
+      // Filtrar por assigned_to se for sales_rep
+      if (role && (role as string) === "sales_rep" && user?.id) {
+        query = query.eq("assigned_to", user.id);
       }
 
       const { data, error } = await query;

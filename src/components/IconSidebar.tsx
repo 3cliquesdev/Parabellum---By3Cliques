@@ -60,19 +60,36 @@ export function IconSidebar() {
         
         {loading ? (
           <Skeleton className="h-12 w-12 rounded-2xl" />
-        ) : isAdmin && (
-          <Link
-            to="/users"
-            className={cn(
-              "flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200",
-              location.pathname === "/users"
-                ? "bg-[#4ADE80] text-black shadow-lg shadow-[#4ADE80]/50"
-                : "text-[#999999] hover:bg-[#1A1A1A] hover:text-white"
-            )}
-            title="Usuários"
-          >
-            <UserCog className="h-5 w-5" />
-          </Link>
+        ) : (
+          isAdmin && (
+            <>
+              <Link
+                to="/users"
+                className={cn(
+                  "flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200",
+                  location.pathname === "/users"
+                    ? "bg-[#4ADE80] text-black shadow-lg shadow-[#4ADE80]/50"
+                    : "text-[#999999] hover:bg-[#1A1A1A] hover:text-white"
+                )}
+                title="Usuários"
+              >
+                <UserCog className="h-5 w-5" />
+              </Link>
+
+              <Link
+                to="/settings"
+                className={cn(
+                  "flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200",
+                  location.pathname === "/settings"
+                    ? "bg-[#4ADE80] text-black shadow-lg shadow-[#4ADE80]/50"
+                    : "text-[#999999] hover:bg-[#1A1A1A] hover:text-white"
+                )}
+                title="Configurações"
+              >
+                <Settings className="h-5 w-5" />
+              </Link>
+            </>
+          )
         )}
       </nav>
 

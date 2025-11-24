@@ -78,5 +78,6 @@ export function useAuth() {
     loading,
     signOut,
     isAuthenticated: !!user,
+    department: profile?.department || null,
   };
 }
