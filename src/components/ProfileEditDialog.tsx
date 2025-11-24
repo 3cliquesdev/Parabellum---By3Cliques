@@ -139,7 +139,7 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
                 <FormItem>
                   <FormLabel>URL da Foto (opcional)</FormLabel>
                   <FormControl>
-                    <Input type="url" placeholder="https://exemplo.com/foto.jpg" {...field} />
+                    <Input type="url" placeholder="https://api.dicebear.com/7.x/avataaars/svg?seed=Usuario" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -25,16 +25,19 @@ export default function Users() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { role, isAdmin, loading: roleLoading } = useUserRole();
   const { data: users, isLoading } = useUsers();
 
-  // Redirect if not admin
+  // Redirect if not admin - only after role is loaded and confirmed not admin
   useEffect(() => {
-    if (!roleLoading && !isAdmin) {
+    console.log("[Users] Checking access", { roleLoading, role, isAdmin });
+    
+    // Only redirect if role is loaded AND user is confirmed not admin
+    if (!roleLoading && role !== null && !isAdmin) {
       console.log("[Users] User is not admin, redirecting to dashboard");
       navigate("/");
     }
-  }, [isAdmin, roleLoading, navigate]);
+  }, [role, isAdmin, roleLoading, navigate]);
 
   const handleSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ["users"] });
