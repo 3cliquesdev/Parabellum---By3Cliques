@@ -109,6 +109,7 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
         last_name: data.last_name,
         phone: data.phone || undefined,
         organization_id: data.organization_id || undefined,
+        assigned_to: data.assigned_to || undefined,
         source: 'manual',
       });
     }

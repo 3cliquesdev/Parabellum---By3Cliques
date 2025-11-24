@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -12,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUserRole } from "@/hooks/useUserRole";
+import ProfileEditDialog from "@/components/ProfileEditDialog";
 
 const navigationIcons = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -25,6 +27,7 @@ const navigationIcons = [
 export function IconSidebar() {
   const location = useLocation();
   const { isAdmin, loading } = useUserRole();
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
 
   return (
     <aside className="w-20 bg-[#050505] border-r border-[#27272A] flex flex-col items-center py-6">
@@ -74,9 +77,13 @@ export function IconSidebar() {
       </nav>
 
       {/* Settings at bottom */}
-      <button className="flex items-center justify-center w-12 h-12 rounded-2xl text-[#999999] hover:bg-[#1A1A1A] hover:text-white transition-all duration-200">
-        <Settings className="h-5 w-5" />
-      </button>
+      <ProfileEditDialog
+        trigger={
+          <button className="flex items-center justify-center w-12 h-12 rounded-2xl text-[#999999] hover:bg-[#1A1A1A] hover:text-white transition-all duration-200">
+            <Settings className="h-5 w-5" />
+          </button>
+        }
+      />
     </aside>
   );
 }

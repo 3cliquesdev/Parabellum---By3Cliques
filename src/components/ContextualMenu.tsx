@@ -11,7 +11,6 @@ const menuItems: Record<string, { title: string; items: { label: string; value: 
     items: [
       { label: "Visão Geral", value: "overview" },
       { label: "Financeiro", value: "financial" },
-      { label: "Convidados", value: "guests" },
     ],
   },
   "/inbox": {
@@ -69,11 +68,15 @@ export function ContextualMenu() {
   const { toast } = useToast();
   
   const currentMenu = menuItems[location.pathname] || menuItems["/"];
-  const activeFilter = searchParams.get("filter") || "all";
+  const activeFilter = location.pathname === "/" 
+    ? (searchParams.get("view") || "overview")
+    : (searchParams.get("filter") || "all");
 
   const handleFilterClick = (filterValue: string) => {
     const params = new URLSearchParams(searchParams);
-    params.set("filter", filterValue);
+    // Dashboard usa "view", outros usam "filter"
+    const paramName = location.pathname === "/" ? "view" : "filter";
+    params.set(paramName, filterValue);
     navigate(`${location.pathname}?${params.toString()}`);
   };
 

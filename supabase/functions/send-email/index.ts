@@ -27,15 +27,18 @@ serve(async (req) => {
 
     // Validação
     if (!to || !subject || !html || !customer_id) {
+      console.error('[send-email] Missing fields:', { to: !!to, subject: !!subject, html: !!html, customer_id: !!customer_id });
       throw new Error('Missing required fields: to, subject, html, customer_id');
     }
 
     // Enviar email via Resend
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     if (!resendApiKey) {
+      console.error('[send-email] RESEND_API_KEY not configured');
       throw new Error('RESEND_API_KEY not configured');
     }
 
+    console.log('[send-email] Sending email via Resend API...');
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {

@@ -169,6 +169,11 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
 
       {/* Input */}
       <div className="border-t border-border bg-card p-4">
+        {!isEmailMode && (
+          <p className="text-xs text-muted-foreground mb-2 px-1">
+            💬 Mensagens do chat são apenas internas (WhatsApp não configurado)
+          </p>
+        )}
         <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
           {isEmailMode && (
             <Input

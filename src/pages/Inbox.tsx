@@ -25,6 +25,8 @@ export default function Inbox() {
     
     switch (filter) {
       case "unread":
+        // Para funcionar corretamente, precisaríamos buscar mensagens não lidas
+        // Por ora, mantém o comportamento atual
         return conversations.filter(c => c.status === "open");
       case "archived":
         return conversations.filter(c => c.status === "closed");

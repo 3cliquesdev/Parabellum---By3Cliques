@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,6 +9,7 @@ import { UserPlus, Edit } from "lucide-react";
 import UserDialog from "@/components/UserDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useNavigate } from "react-router-dom";
+import { useUsers } from "@/hooks/useUsers";
 
 interface UserWithRole {
   id: string;
@@ -26,57 +26,13 @@ export default function Users() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { data: users, isLoading } = useUsers();
 
   // Redirect if not admin
   if (!roleLoading && !isAdmin) {
     navigate("/");
     return null;
   }
-
-  const { data: users, isLoading } = useQuery({
-    queryKey: ["users"],
-    queryFn: async () => {
-      // Fetch users with roles and profiles
-      const { data: rolesData, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("user_id, role, created_at");
-
-      if (rolesError) throw rolesError;
-
-      // Fetch profiles
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("*");
-
-      const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
-
-      // Fetch user emails from auth.users using admin API
-      const usersWithEmails = await Promise.all(
-        rolesData.map(async (role) => {
-          const { data: userData, error: userError } = await supabase.auth.admin.getUserById(role.user_id);
-          
-          if (userError) {
-            console.error("Error fetching user:", userError);
-            return null;
-          }
-
-          const profile = profilesMap.get(role.user_id);
-
-          return {
-            id: role.user_id,
-            email: userData.user.email || "N/A",
-            created_at: role.created_at,
-            role: role.role as "admin" | "user",
-            full_name: profile?.full_name,
-            job_title: profile?.job_title,
-            avatar_url: profile?.avatar_url,
-          } as UserWithRole;
-        })
-      );
-
-      return usersWithEmails.filter((u) => u !== null) as UserWithRole[];
-    },
-  });
 
   const handleSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ["users"] });
