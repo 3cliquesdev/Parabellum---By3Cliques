@@ -60,7 +60,9 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
   const { data: contacts } = useContacts();
   const { data: organizations } = useOrganizations();
   const { data: stages } = useStages();
-  const { data: salesReps } = useSalesReps();
+  const { data: salesReps, isLoading: salesRepsLoading } = useSalesReps();
+
+  console.log("[DealDialog] Sales reps data:", { salesReps, salesRepsLoading });
 
   const form = useForm<DealFormData>({
     resolver: zodResolver(dealSchema),
@@ -274,15 +276,21 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
                   <Select onValueChange={field.onChange} value={field.value || undefined}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione um vendedor" />
+                        <SelectValue placeholder={salesRepsLoading ? "Carregando..." : "Selecione um vendedor"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {salesReps?.map((rep) => (
-                        <SelectItem key={rep.id} value={rep.id}>
-                          {rep.full_name} {rep.job_title && `(${rep.job_title})`}
+                      {salesReps && salesReps.length > 0 ? (
+                        salesReps.map((rep) => (
+                          <SelectItem key={rep.id} value={rep.id}>
+                            {rep.full_name} {rep.job_title && `(${rep.job_title})`}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-data" disabled>
+                          {salesRepsLoading ? "Carregando..." : "Nenhum vendedor disponível"}
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />
