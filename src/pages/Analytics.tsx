@@ -112,6 +112,7 @@ export default function Analytics() {
                 }}
               >
                 <TabsList>
+                  <TabsTrigger value="1">Hoje</TabsTrigger>
                   <TabsTrigger value="7">7 dias</TabsTrigger>
                   <TabsTrigger value="30">30 dias</TabsTrigger>
                   <TabsTrigger value="90">90 dias</TabsTrigger>
