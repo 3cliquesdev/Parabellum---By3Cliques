@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { User, Pencil, AlertCircle, CheckCircle, AlertTriangle } from "lucide-react";
-import { format } from "date-fns";
+import { User, Pencil, AlertCircle, CheckCircle, AlertTriangle, Skull } from "lucide-react";
+import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import DealDialog from "./DealDialog";
 import { useNextActivity } from "@/hooks/useNextActivity";
@@ -69,6 +69,22 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
   const activityStatus = getActivityStatus();
   const ActivityIcon = activityStatus.icon;
 
+  // Verificar se é Rotten Deal
+  const isRottenDeal = () => {
+    if (deal.status !== "open") return false;
+
+    const daysSinceUpdate = differenceInDays(new Date(), new Date(deal.updated_at));
+    
+    if (!nextActivity) {
+      return daysSinceUpdate > 14;
+    }
+
+    const daysSinceActivity = differenceInDays(new Date(), new Date(nextActivity.due_date));
+    return daysSinceUpdate > 14 || daysSinceActivity > 7;
+  };
+
+  const isRotten = isRottenDeal();
+
   return (
     <Card
       ref={setNodeRef}
@@ -103,6 +119,43 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
+        {/* Indicador Rotten Deal */}
+        {isRotten && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="absolute top-2 left-9">
+                  <Badge variant="destructive" className="gap-1 px-1.5 py-0.5">
+                    <Skull className="h-3 w-3" />
+                  </Badge>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-sm">⚠️ Negócio estagnado há {differenceInDays(new Date(), new Date(deal.updated_at))} dias sem atividade</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
+        {/* Badge Lost Reason */}
+        {deal.status === "lost" && (deal as any).lost_reason && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="mb-2">
+                  <Badge variant="destructive" className="text-xs">
+                    Perdido
+                  </Badge>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="text-sm font-semibold mb-1">Motivo da Perda:</p>
+                <p className="text-sm">{(deal as any).lost_reason}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
 
         {/* Área draggable */}
         <div {...listeners} {...attributes}>

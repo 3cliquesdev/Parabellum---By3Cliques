@@ -7,6 +7,7 @@ import { useDeals, useUpdateDealStage } from "@/hooks/useDeals";
 import { useStages } from "@/hooks/useStages";
 import { useSalesReps } from "@/hooks/useSalesReps";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useRottenDeals } from "@/hooks/useRottenDeals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import KanbanColumn from "@/components/KanbanColumn";
 import KanbanCard from "@/components/KanbanCard";
@@ -28,6 +29,7 @@ export default function Deals() {
   const { data: stages, isLoading: stagesLoading } = useStages();
   const { data: salesReps } = useSalesReps();
   const { role } = useUserRole();
+  const { data: rottenDeals } = useRottenDeals();
   const updateDealStage = useUpdateDealStage();
   
   const isManagerOrAdmin = role && (role === "admin" || role === "manager");
@@ -48,6 +50,11 @@ export default function Deals() {
       case "lost":
         filtered = filtered.filter(d => d.status === "lost");
         break;
+      case "rotten":
+        // Filtrar apenas deals que estão em rottenDeals
+        const rottenIds = new Set(rottenDeals?.map(d => d.id) || []);
+        filtered = filtered.filter(d => rottenIds.has(d.id));
+        break;
     }
     
     // Filtrar por vendedor (apenas para admin/manager)
@@ -56,7 +63,7 @@ export default function Deals() {
     }
     
     return filtered;
-  }, [deals, filter, selectedSalesRep, isManagerOrAdmin]);
+  }, [deals, filter, selectedSalesRep, isManagerOrAdmin, rottenDeals]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;

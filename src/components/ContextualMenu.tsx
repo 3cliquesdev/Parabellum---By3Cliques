@@ -42,6 +42,7 @@ const menuItems: Record<string, { title: string; items: { label: string; value: 
       { label: "Abertos", value: "open" },
       { label: "Ganhos", value: "won" },
       { label: "Perdidos", value: "lost" },
+      { label: "Estagnados", value: "rotten" },
     ],
   },
   "/forms": {

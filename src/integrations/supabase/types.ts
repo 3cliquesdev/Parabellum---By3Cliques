@@ -256,6 +256,7 @@ export type Database = {
           created_at: string
           currency: string | null
           id: string
+          lost_reason: string | null
           organization_id: string | null
           probability: number | null
           stage_id: string | null
@@ -271,6 +272,7 @@ export type Database = {
           created_at?: string
           currency?: string | null
           id?: string
+          lost_reason?: string | null
           organization_id?: string | null
           probability?: number | null
           stage_id?: string | null
@@ -286,6 +288,7 @@ export type Database = {
           created_at?: string
           currency?: string | null
           id?: string
+          lost_reason?: string | null
           organization_id?: string | null
           probability?: number | null
           stage_id?: string | null

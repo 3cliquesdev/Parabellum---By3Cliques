@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useCreateDeal, useUpdateDeal } from "@/hooks/useDeals";
 import { useContacts } from "@/hooks/useContacts";
@@ -42,6 +43,15 @@ const dealSchema = z.object({
   stage_id: z.string().uuid(),
   status: z.enum(["open", "won", "lost"]),
   assigned_to: z.string().uuid().optional().nullable(),
+  lost_reason: z.string().optional().nullable(),
+}).refine((data) => {
+  if (data.status === "lost" && (!data.lost_reason || data.lost_reason.trim() === "")) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Motivo da perda é obrigatório ao marcar negócio como perdido",
+  path: ["lost_reason"],
 });
 
 type DealFormData = z.infer<typeof dealSchema>;
@@ -75,8 +85,11 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       stage_id: deal?.stage_id || "",
       status: deal?.status || "open",
       assigned_to: (deal as any)?.assigned_to || "",
+      lost_reason: (deal as any)?.lost_reason || "",
     },
   });
+
+  const watchStatus = form.watch("status");
 
   useEffect(() => {
     if (stages && stages.length > 0 && !deal) {
@@ -111,6 +124,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       stage_id: data.stage_id,
       status: data.status,
       assigned_to: data.assigned_to || null,
+      lost_reason: data.lost_reason || null,
     };
 
     console.log("[DealDialog] Payload to submit:", payload);
@@ -320,6 +334,27 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
                 </FormItem>
               )}
             />
+
+            {watchStatus === "lost" && (
+              <FormField
+                control={form.control}
+                name="lost_reason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Motivo da Perda *</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Descreva o motivo da perda do negócio..."
+                        className="min-h-[100px]"
+                        {...field}
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <div className="flex justify-end gap-3">
               <Button
