@@ -14,6 +14,8 @@ import { MySalesWidget } from "@/components/widgets/MySalesWidget";
 import { MyActivitiesWidget } from "@/components/widgets/MyActivitiesWidget";
 import { MyLeadsWidget } from "@/components/widgets/MyLeadsWidget";
 import { MyPerformanceWidget } from "@/components/widgets/MyPerformanceWidget";
+import RottenDealsWidget from "@/components/widgets/RottenDealsWidget";
+import LostReasonsWidget from "@/components/widgets/LostReasonsWidget";
 
 export default function Dashboard() {
   const [searchParams] = useSearchParams();
@@ -46,6 +48,10 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <MyActivitiesWidget />
           <MyPerformanceWidget userId={user?.id} />
+        </div>
+
+        <div className="w-full">
+          <RottenDealsWidget />
         </div>
       </div>
     );
@@ -108,6 +114,15 @@ export default function Dashboard() {
             </div>
             <div className="min-h-[400px]">
               <ConversionRateWidget />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="min-h-[400px]">
+              <RottenDealsWidget />
+            </div>
+            <div className="min-h-[400px]">
+              <LostReasonsWidget />
             </div>
           </div>
 
