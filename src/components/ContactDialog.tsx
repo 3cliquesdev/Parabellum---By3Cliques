@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useCreateContact, useUpdateContact } from "@/hooks/useContacts";
+import { useUpsertContact } from "@/hooks/useUpsertContact";
 import { useOrganizations } from "@/hooks/useOrganizations";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -48,8 +49,8 @@ interface ContactDialogProps {
 
 export default function ContactDialog({ contact, trigger, onOpenChange }: ContactDialogProps) {
   const [open, setOpen] = useState(false);
-  const createContact = useCreateContact();
   const updateContact = useUpdateContact();
+  const upsertContact = useUpsertContact();
   const { data: organizations } = useOrganizations();
 
   const form = useForm<ContactFormData>({
@@ -76,18 +77,34 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
   }, [contact, form]);
 
   const onSubmit = async (data: ContactFormData) => {
-    const payload = {
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email || null,
-      phone: data.phone || null,
-      organization_id: data.organization_id || null,
-    };
-
     if (contact) {
+      // Modo edição: usar update normal
+      const payload = {
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email || null,
+        phone: data.phone || null,
+        organization_id: data.organization_id || null,
+      };
       await updateContact.mutateAsync({ id: contact.id, updates: payload });
     } else {
-      await createContact.mutateAsync(payload);
+      // Modo criação: usar upsert com validação de email
+      if (!data.email) {
+        form.setError("email", {
+          type: "manual",
+          message: "Email é obrigatório para criar novo contato",
+        });
+        return;
+      }
+
+      await upsertContact.mutateAsync({
+        email: data.email,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        phone: data.phone || undefined,
+        organization_id: data.organization_id || undefined,
+        source: 'manual',
+      });
     }
 
     setOpen(false);
@@ -137,7 +154,10 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>E-mail (opcional)</FormLabel>
+                  <FormLabel>
+                    E-mail
+                    {!contact && <span className="text-destructive ml-1">*</span>}
+                  </FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="joao@exemplo.com" {...field} />
                   </FormControl>
@@ -191,7 +211,7 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createContact.isPending || updateContact.isPending}>
+              <Button type="submit" disabled={upsertContact.isPending || updateContact.isPending}>
                 {contact ? "Salvar" : "Criar"}
               </Button>
             </div>

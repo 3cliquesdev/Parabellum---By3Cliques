@@ -168,33 +168,49 @@ export function useDeleteForm() {
 }
 
 export function useSubmitForm() {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
     mutationFn: async (submission: {
       first_name: string;
       last_name: string;
-      email?: string;
+      email: string;
       phone?: string;
+      company?: string;
     }) => {
-      const { data, error } = await supabase
-        .from("contacts")
-        .insert({
+      // Validar email antes de enviar
+      if (!submission.email) {
+        throw new Error('Email é obrigatório');
+      }
+
+      const { data: result, error } = await supabase.functions.invoke('upsert-contact', {
+        body: {
+          email: submission.email,
           first_name: submission.first_name,
           last_name: submission.last_name,
-          email: submission.email || null,
-          phone: submission.phone || null,
-        })
-        .select()
-        .single();
+          phone: submission.phone,
+          company: submission.company,
+          source: 'form',
+        },
+      });
 
       if (error) throw error;
-      return data;
+      if (!result.success) throw new Error(result.error || 'Erro ao processar contato');
+
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-timeline", result.contact_id] });
+
+      const message = result.is_new_contact
+        ? "Obrigado pelo seu interesse. Entraremos em contato em breve."
+        : "Obrigado por voltar! Atualizamos suas informações.";
+
       toast({
         title: "Formulário enviado!",
-        description: "Obrigado pelo seu interesse. Entraremos em contato em breve.",
+        description: message,
       });
     },
     onError: (error: Error) => {

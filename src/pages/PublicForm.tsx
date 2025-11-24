@@ -23,12 +23,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useForm, useSubmitForm } from "@/hooks/useForms";
 import { CheckCircle2 } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function PublicForm() {
   const { formId } = useParams<{ formId: string }>();
   const { data: formData, isLoading } = useForm(formId);
   const submitForm = useSubmitForm();
   const [submitted, setSubmitted] = useState(false);
+  const [isNewContact, setIsNewContact] = useState(true);
+  const { toast } = useToast();
 
   // Build dynamic schema based on form fields
   const buildSchema = () => {
@@ -41,18 +44,22 @@ export default function PublicForm() {
 
       switch (field.type) {
         case "email":
-          validator = z.string().email("E-mail inválido");
+          // Email sempre obrigatório para anti-duplicidade
+          validator = z.string().email("E-mail inválido").min(1, "E-mail é obrigatório");
           break;
         case "phone":
-          validator = z.string().min(1, "Telefone é obrigatório");
+          validator = z.string();
+          if (field.required) {
+            validator = validator.min(1, "Telefone é obrigatório");
+          }
           break;
         default:
           validator = z.string();
       }
 
-      if (field.required) {
+      if (field.type !== "email" && field.required) {
         validator = validator.min(1, `${field.label} é obrigatório`);
-      } else {
+      } else if (field.type !== "email") {
         validator = validator.optional().or(z.literal(""));
       }
 
@@ -71,24 +78,33 @@ export default function PublicForm() {
   });
 
   const onSubmit = async (data: any) => {
+    // Find email field
+    const emailField = formData?.schema.fields.find(f => f.type === "email");
+    
+    if (!emailField || !data[emailField.id]) {
+      toast({
+        title: "Email obrigatório",
+        description: "Por favor, forneça um email válido.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Map form data to contact fields
     const submission: any = {
+      email: data[emailField.id],
       first_name: data[formData?.schema.fields.find(f => f.label.toLowerCase().includes("nome"))?.id || ""] || "Lead",
       last_name: data[formData?.schema.fields.find(f => f.label.toLowerCase().includes("sobrenome"))?.id || ""] || "Formulário",
     };
 
-    // Find email and phone fields
-    const emailField = formData?.schema.fields.find(f => f.type === "email");
+    // Find phone field
     const phoneField = formData?.schema.fields.find(f => f.type === "phone");
-
-    if (emailField && data[emailField.id]) {
-      submission.email = data[emailField.id];
-    }
     if (phoneField && data[phoneField.id]) {
       submission.phone = data[phoneField.id];
     }
 
-    await submitForm.mutateAsync(submission);
+    const result = await submitForm.mutateAsync(submission);
+    setIsNewContact(result.is_new_contact);
     setSubmitted(true);
   };
 
@@ -118,9 +134,13 @@ export default function PublicForm() {
         <Card className="w-full max-w-md">
           <CardContent className="p-12 text-center space-y-4">
             <CheckCircle2 className="h-16 w-16 text-[#22c55e] mx-auto" />
-            <h2 className="text-2xl font-bold text-white">Formulário enviado!</h2>
+            <h2 className="text-2xl font-bold text-white">
+              {isNewContact ? "Formulário enviado!" : "Bem-vindo de volta!"}
+            </h2>
             <p className="text-[#999999]">
-              Obrigado pelo seu interesse. Entraremos em contato em breve.
+              {isNewContact 
+                ? "Obrigado pelo seu interesse. Entraremos em contato em breve."
+                : "Atualizamos suas informações. Entraremos em contato em breve."}
             </p>
           </CardContent>
         </Card>
@@ -149,7 +169,7 @@ export default function PublicForm() {
                     <FormItem>
                       <FormLabel>
                         {field.label}
-                        {field.required && <span className="text-destructive ml-1">*</span>}
+                        {(field.required || field.type === "email") && <span className="text-destructive ml-1">*</span>}
                       </FormLabel>
                       <FormControl>
                         {field.type === "select" && field.options ? (
