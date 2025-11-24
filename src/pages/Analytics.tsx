@@ -1,3 +1,5 @@
+import { ConversionRateWidget } from "@/components/widgets/ConversionRateWidget";
+
 export default function Analytics() {
   return (
     <div className="container mx-auto p-6">
@@ -9,12 +11,18 @@ export default function Analytics() {
           </p>
         </div>
         
+        {/* FASE 12B: Conversion Rate Trend Widget */}
+        <div className="grid gap-6">
+          <ConversionRateWidget />
+        </div>
+
+        {/* Placeholder para próximas subfases */}
         <div className="rounded-lg border border-border bg-card p-8 text-center">
           <p className="text-lg text-muted-foreground">
-            🚧 Em construção - FASE 12B em andamento
+            🚧 Mais widgets serão adicionados nas próximas subfases
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            Widgets de análise serão adicionados nas próximas subfases
+            FASE 12C: AI Insights | FASE 12D: YoY Comparison | FASE 12E: Channel Quality
           </p>
         </div>
       </div>

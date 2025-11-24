@@ -3,7 +3,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useConversionStats } from "@/hooks/useConversionStats";
+import { useConversionMetrics } from "@/hooks/useConversionMetrics";
 import { useFinancialStats } from "@/hooks/useFinancialStats";
 
 // Widgets BI - KPIs
@@ -36,7 +36,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   
   // ✅ Todos os hooks no topo - antes de qualquer return condicional
-  const { data: conversionStats } = useConversionStats();
+  const { data: conversionStats } = useConversionMetrics();
   const financialStats = useFinancialStats();
 
   // Helper function

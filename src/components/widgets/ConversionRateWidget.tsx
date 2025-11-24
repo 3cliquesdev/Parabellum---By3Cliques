@@ -1,120 +1,133 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Target, TrendingUp, TrendingDown } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConversionStats } from "@/hooks/useConversionStats";
-import { Skeleton } from "@/components/ui/skeleton";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 export function ConversionRateWidget() {
-  const { data: stats, isLoading } = useConversionStats();
+  const { data: conversionData, isLoading } = useConversionStats(90);
+
+  // Calcular métricas resumidas
+  const avgConversionRate = conversionData && conversionData.length > 0
+    ? (conversionData.reduce((sum, item) => sum + item.conversion_rate, 0) / conversionData.length).toFixed(1)
+    : "0.0";
+
+  const latestConversionRate = conversionData && conversionData.length > 0
+    ? conversionData[conversionData.length - 1].conversion_rate.toFixed(1)
+    : "0.0";
+
+  const oldestConversionRate = conversionData && conversionData.length > 0
+    ? conversionData[0].conversion_rate.toFixed(1)
+    : "0.0";
+
+  const trend = parseFloat(latestConversionRate) - parseFloat(oldestConversionRate);
+
+  const getTrendIcon = () => {
+    if (trend > 5) return <TrendingUp className="h-4 w-4 text-green-500" />;
+    if (trend < -5) return <TrendingDown className="h-4 w-4 text-red-500" />;
+    return <Minus className="h-4 w-4 text-muted-foreground" />;
+  };
+
+  const getTrendText = () => {
+    if (trend > 5) return `+${trend.toFixed(1)}% vs. início`;
+    if (trend < -5) return `${trend.toFixed(1)}% vs. início`;
+    return "Estável";
+  };
+
+  // Formatar dados para o gráfico
+  const chartData = conversionData?.map((item) => ({
+    date: format(parseISO(item.date), "dd/MM", { locale: ptBR }),
+    fullDate: format(parseISO(item.date), "dd/MM/yyyy", { locale: ptBR }),
+    rate: item.conversion_rate,
+    won: item.won_deals,
+    lost: item.lost_deals,
+    total: item.total_deals,
+  })) || [];
 
   if (isLoading) {
     return (
       <Card>
         <CardHeader>
-          <Skeleton className="h-6 w-48" />
+          <CardTitle>Taxa de Conversão - Tendência</CardTitle>
+          <CardDescription>Últimos 90 dias</CardDescription>
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-[300px] w-full" />
+          <div className="h-[300px] flex items-center justify-center">
+            <p className="text-muted-foreground">Carregando...</p>
+          </div>
         </CardContent>
       </Card>
     );
   }
 
-  const chartData = [
-    { name: "Ganhos", value: stats?.wonDeals || 0, color: "hsl(var(--chart-1))" },
-    { name: "Perdidos", value: stats?.lostDeals || 0, color: "hsl(var(--chart-2))" },
-    { name: "Em Aberto", value: stats?.openDeals || 0, color: "hsl(var(--chart-3))" },
-  ];
-
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <Target className="h-5 w-5 text-primary" />
-          <CardTitle className="text-base">Taxa de Conversão</CardTitle>
-        </div>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>Taxa de Conversão - Tendência</span>
+          <div className="flex items-center gap-2 text-sm font-normal">
+            {getTrendIcon()}
+            <span className="text-muted-foreground">{getTrendText()}</span>
+          </div>
+        </CardTitle>
+        <CardDescription>
+          Média: <span className="font-semibold text-foreground">{avgConversionRate}%</span> | 
+          Atual: <span className="font-semibold text-foreground">{latestConversionRate}%</span>
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Taxa de Conversão Central */}
-        <div className="relative">
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={chartData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={90}
-                paddingAngle={5}
-                dataKey="value"
-              >
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
+      <CardContent>
+        {chartData.length === 0 ? (
+          <div className="h-[300px] flex items-center justify-center">
+            <p className="text-muted-foreground">Nenhum dado disponível para os últimos 90 dias</p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis 
+                dataKey="date" 
+                className="text-xs"
+                tick={{ fill: 'hsl(var(--muted-foreground))' }}
+              />
+              <YAxis 
+                className="text-xs"
+                tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                domain={[0, 100]}
+                tickFormatter={(value) => `${value}%`}
+              />
               <Tooltip 
-                contentStyle={{
-                  backgroundColor: 'hsl(var(--popover))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <div className="rounded-lg border border-border bg-card p-3 shadow-lg">
+                        <p className="font-semibold text-foreground">{data.fullDate}</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Taxa de Conversão: <span className="font-semibold text-primary">{data.rate.toFixed(1)}%</span>
+                        </p>
+                        <div className="mt-2 space-y-1 text-xs">
+                          <p className="text-green-600">✓ Ganhos: {data.won}</p>
+                          <p className="text-red-600">✗ Perdidos: {data.lost}</p>
+                          <p className="text-muted-foreground">Total: {data.total}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
                 }}
               />
-              <Legend 
-                verticalAlign="bottom" 
-                height={36}
-                formatter={(value) => <span className="text-sm">{value}</span>}
+              <Line 
+                type="monotone" 
+                dataKey="rate" 
+                stroke="hsl(var(--primary))" 
+                strokeWidth={2}
+                dot={{ fill: 'hsl(var(--primary))', r: 3 }}
+                activeDot={{ r: 5 }}
               />
-            </PieChart>
+            </LineChart>
           </ResponsiveContainer>
-
-          {/* Taxa de Conversão no Centro */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={{ top: '35%' }}>
-            <p className="text-4xl font-bold text-primary">
-              {stats?.conversionRate.toFixed(1)}%
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Conversão</p>
-          </div>
-        </div>
-
-        {/* Métricas Detalhadas */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="text-center p-3 bg-muted/50 rounded-lg">
-            <div className="flex items-center justify-center gap-1 mb-1">
-              <TrendingUp className="h-3 w-3 text-green-500" />
-              <p className="text-xs text-muted-foreground">Ganhos</p>
-            </div>
-            <p className="text-lg font-semibold text-green-500">{stats?.wonDeals || 0}</p>
-          </div>
-
-          <div className="text-center p-3 bg-muted/50 rounded-lg">
-            <div className="flex items-center justify-center gap-1 mb-1">
-              <TrendingDown className="h-3 w-3 text-red-500" />
-              <p className="text-xs text-muted-foreground">Perdidos</p>
-            </div>
-            <p className="text-lg font-semibold text-red-500">{stats?.lostDeals || 0}</p>
-          </div>
-
-          <div className="text-center p-3 bg-muted/50 rounded-lg">
-            <div className="flex items-center justify-center gap-1 mb-1">
-              <Target className="h-3 w-3 text-blue-500" />
-              <p className="text-xs text-muted-foreground">Abertos</p>
-            </div>
-            <p className="text-lg font-semibold text-blue-500">{stats?.openDeals || 0}</p>
-          </div>
-        </div>
-
-        {/* Resumo Textual */}
-        <div className="text-center text-sm text-muted-foreground">
-          <p>
-            <span className="font-semibold text-foreground">{stats?.wonDeals || 0}</span> ganhos de{" "}
-            <span className="font-semibold text-foreground">{stats?.totalDeals || 0}</span> negócios totais
-          </p>
-          {stats && stats.lossRate > 0 && (
-            <p className="mt-1">
-              Taxa de perda: <span className="font-semibold text-red-500">{stats.lossRate.toFixed(1)}%</span>
-            </p>
-          )}
-        </div>
+        )}
       </CardContent>
     </Card>
   );
