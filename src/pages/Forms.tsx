@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,11 +23,18 @@ import { Switch } from "@/components/ui/switch";
 
 export default function Forms() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const filter = searchParams.get("filter") || "all";
   const { data: forms, isLoading } = useForms();
   const deleteForm = useDeleteForm();
   const updateForm = useUpdateForm();
   const { toast } = useToast();
+
+  const handleFilterChange = (value: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("filter", value);
+    navigate(`/forms?${params.toString()}`);
+  };
 
   const filteredForms = useMemo(() => {
     if (!forms) return [];
@@ -69,19 +77,28 @@ export default function Forms() {
 
   return (
     <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-foreground">Formulários</h2>
-          <p className="text-muted-foreground">Crie formulários para captar leads</p>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-3xl font-bold text-foreground">Formulários</h2>
+            <p className="text-muted-foreground">Crie formulários para captar leads</p>
+          </div>
+          <FormDialog
+            trigger={
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Novo Formulário
+              </Button>
+            }
+          />
         </div>
-        <FormDialog
-          trigger={
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Novo Formulário
-            </Button>
-          }
-        />
+        
+        <Tabs value={filter} onValueChange={handleFilterChange}>
+          <TabsList>
+            <TabsTrigger value="active">Ativos</TabsTrigger>
+            <TabsTrigger value="inactive">Inativos</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {!filteredForms || filteredForms.length === 0 ? (

@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,9 +20,16 @@ import OrganizationDialog from "@/components/OrganizationDialog";
 
 export default function Organizations() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const filter = searchParams.get("filter") || "all";
   const { data: organizations, isLoading } = useOrganizations();
   const deleteOrganization = useDeleteOrganization();
+
+  const handleFilterChange = (value: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("filter", value);
+    navigate(`/organizations?${params.toString()}`);
+  };
 
   const filteredOrganizations = useMemo(() => {
     if (!organizations) return [];
@@ -46,19 +54,28 @@ export default function Organizations() {
 
   return (
     <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-foreground">Organizações</h2>
-          <p className="text-muted-foreground">Gerencie relacionamentos empresariais</p>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-3xl font-bold text-foreground">Organizações</h2>
+            <p className="text-muted-foreground">Gerencie relacionamentos empresariais</p>
+          </div>
+          <OrganizationDialog
+            trigger={
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Adicionar Organização
+              </Button>
+            }
+          />
         </div>
-        <OrganizationDialog
-          trigger={
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Adicionar Organização
-            </Button>
-          }
-        />
+        
+        <Tabs value={filter} onValueChange={handleFilterChange}>
+          <TabsList>
+            <TabsTrigger value="all">Todas</TabsTrigger>
+            <TabsTrigger value="partners">Parceiras</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {!filteredOrganizations || filteredOrganizations.length === 0 ? (

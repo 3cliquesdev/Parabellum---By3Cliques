@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -39,6 +40,12 @@ export default function Contacts() {
   const { data: contacts, isLoading } = useContacts(searchQuery);
   const deleteContact = useDeleteContact();
 
+  const handleFilterChange = (value: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("filter", value);
+    navigate(`/contacts?${params.toString()}`);
+  };
+
   const filteredContacts = useMemo(() => {
     if (!contacts) return [];
     
@@ -64,19 +71,29 @@ export default function Contacts() {
 
   return (
     <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-foreground">Contatos</h2>
-          <p className="text-muted-foreground">Gerencie seus contatos e relacionamentos</p>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-3xl font-bold text-foreground">Contatos</h2>
+            <p className="text-muted-foreground">Gerencie seus contatos e relacionamentos</p>
+          </div>
+          <ContactDialog
+            trigger={
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Adicionar Contato
+              </Button>
+            }
+          />
         </div>
-        <ContactDialog
-          trigger={
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Adicionar Contato
-            </Button>
-          }
-        />
+        
+        <Tabs value={filter} onValueChange={handleFilterChange} className="mb-6">
+          <TabsList>
+            <TabsTrigger value="all">Todos</TabsTrigger>
+            <TabsTrigger value="active">Ativos</TabsTrigger>
+            <TabsTrigger value="inactive">Inativos</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       <div className="mb-6 flex items-center gap-4">

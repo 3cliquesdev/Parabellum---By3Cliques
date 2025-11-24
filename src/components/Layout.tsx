@@ -1,19 +1,24 @@
-import { IconSidebar } from "@/components/IconSidebar";
-import { ContextualMenu } from "@/components/ContextualMenu";
+import { AppSidebar } from "@/components/AppSidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen w-full bg-black overflow-hidden">
-      {/* Coluna 1: Icon Sidebar - 80px */}
-      <IconSidebar />
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full bg-background">
+        <AppSidebar />
+        
+        <div className="flex-1 flex flex-col">
+          {/* Header com trigger */}
+          <header className="h-14 border-b border-border flex items-center px-4 bg-card">
+            <SidebarTrigger />
+          </header>
 
-      {/* Coluna 2: Contextual Menu - 256px */}
-      <ContextualMenu />
-
-      {/* Coluna 3: Main Content - Flex Grow */}
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
-    </div>
+          {/* Main content */}
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }
