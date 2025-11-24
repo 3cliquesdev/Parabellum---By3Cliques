@@ -8,16 +8,11 @@ export function useSalesReps() {
     queryKey: ["sales-reps"],
     queryFn: async () => {
       console.log("[useSalesReps] Fetching sales reps...");
+      // SOLUÇÃO SIMPLIFICADA: Query direta na tabela profiles
+      // Evita erro PGRST200 com join implícito em user_roles
       const { data, error } = await supabase
         .from("profiles")
-        .select(`
-          id, 
-          full_name, 
-          job_title, 
-          avatar_url,
-          user_roles!inner(role)
-        `)
-        // .eq("user_roles.role", "sales_rep") // COMENTADO TEMPORARIAMENTE
+        .select("id, full_name, job_title, avatar_url")
         .order("full_name");
 
       if (error) {
