@@ -35,10 +35,10 @@ import type { Tables } from "@/integrations/supabase/types";
 const contactSchema = z.object({
   first_name: z.string().min(1, "Nome é obrigatório").max(100),
   last_name: z.string().min(1, "Sobrenome é obrigatório").max(100),
-  email: z.string().email("E-mail inválido").max(255).optional().or(z.literal("")),
-  phone: z.string().max(20).optional().or(z.literal("")),
-  organization_id: z.string().uuid().optional().or(z.literal("")),
-  assigned_to: z.string().uuid().optional().or(z.literal("")),
+  email: z.string().email("E-mail inválido").max(255).optional().nullable(),
+  phone: z.string().max(20).optional().nullable(),
+  organization_id: z.string().uuid().optional().nullable(),
+  assigned_to: z.string().uuid().optional().nullable(),
 });
 
 type ContactFormData = z.infer<typeof contactSchema>;
@@ -82,7 +82,10 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
   }, [contact, form]);
 
   const onSubmit = async (data: ContactFormData) => {
+    console.log("[ContactDialog] onSubmit called with data:", data);
+    
     if (contact) {
+      console.log("[ContactDialog] UPDATE mode for contact:", contact.id);
       // Modo edição: usar update normal
       const payload = {
         first_name: data.first_name,
@@ -92,10 +95,13 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
         organization_id: data.organization_id || null,
         assigned_to: data.assigned_to || null,
       };
+      console.log("[ContactDialog] Update payload:", payload);
       await updateContact.mutateAsync({ id: contact.id, updates: payload });
     } else {
+      console.log("[ContactDialog] CREATE mode with upsert");
       // Modo criação: usar upsert com validação de email
       if (!data.email) {
+        console.error("[ContactDialog] Email is required for creating new contact");
         form.setError("email", {
           type: "manual",
           message: "Email é obrigatório para criar novo contato",
@@ -103,15 +109,17 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
         return;
       }
 
-      await upsertContact.mutateAsync({
+      const upsertPayload = {
         email: data.email,
         first_name: data.first_name,
         last_name: data.last_name,
         phone: data.phone || undefined,
         organization_id: data.organization_id || undefined,
         assigned_to: data.assigned_to || undefined,
-        source: 'manual',
-      });
+        source: 'manual' as const,
+      };
+      console.log("[ContactDialog] Upsert payload:", upsertPayload);
+      await upsertContact.mutateAsync(upsertPayload);
     }
 
     setOpen(false);
@@ -191,14 +199,13 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Organização (opcional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma organização" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Nenhuma</SelectItem>
                       {organizations?.map((org) => (
                         <SelectItem key={org.id} value={org.id}>
                           {org.name}
@@ -216,14 +223,13 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Responsável (opcional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione um responsável" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Não atribuído</SelectItem>
                       {salesReps?.map((rep) => (
                         <SelectItem key={rep.id} value={rep.id}>
                           {rep.full_name} {rep.job_title && `(${rep.job_title})`}

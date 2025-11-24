@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,10 +29,12 @@ export default function Users() {
   const { data: users, isLoading } = useUsers();
 
   // Redirect if not admin
-  if (!roleLoading && !isAdmin) {
-    navigate("/");
-    return null;
-  }
+  useEffect(() => {
+    if (!roleLoading && !isAdmin) {
+      console.log("[Users] User is not admin, redirecting to dashboard");
+      navigate("/");
+    }
+  }, [isAdmin, roleLoading, navigate]);
 
   const handleSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ["users"] });

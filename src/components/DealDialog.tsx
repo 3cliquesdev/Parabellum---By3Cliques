@@ -35,13 +35,13 @@ import type { Tables } from "@/integrations/supabase/types";
 
 const dealSchema = z.object({
   title: z.string().min(1, "Título é obrigatório").max(100),
-  value: z.string().optional().or(z.literal("")),
+  value: z.string().optional().nullable(),
   currency: z.string().optional(),
-  contact_id: z.string().uuid().optional().or(z.literal("")),
-  organization_id: z.string().uuid().optional().or(z.literal("")),
-  stage_id: z.string().uuid().optional().or(z.literal("")),
+  contact_id: z.string().uuid().optional().nullable(),
+  organization_id: z.string().uuid().optional().nullable(),
+  stage_id: z.string().uuid(),
   status: z.enum(["open", "won", "lost"]),
-  assigned_to: z.string().uuid().optional().or(z.literal("")),
+  assigned_to: z.string().uuid().optional().nullable(),
 });
 
 type DealFormData = z.infer<typeof dealSchema>;
@@ -86,13 +86,19 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
   }, [stages, deal, form]);
 
   const onSubmit = async (data: DealFormData) => {
+    console.log("[DealDialog] onSubmit called with data:", data);
+    
     // Validação: garantir que stage_id existe
-    if (!data.stage_id || data.stage_id === "") {
+    if (!data.stage_id) {
       console.error("[DealDialog] stage_id is required but missing", data);
+      form.setError("stage_id", {
+        type: "manual",
+        message: "Etapa é obrigatória",
+      });
       return;
     }
 
-    console.log("[DealDialog] Submitting deal with data:", data);
+    console.log("[DealDialog] All validations passed");
 
     const payload = {
       title: data.title,
@@ -105,9 +111,13 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       assigned_to: data.assigned_to || null,
     };
 
+    console.log("[DealDialog] Payload to submit:", payload);
+
     if (deal) {
+      console.log("[DealDialog] UPDATE mode for deal:", deal.id);
       await updateDeal.mutateAsync({ id: deal.id, updates: payload });
     } else {
+      console.log("[DealDialog] CREATE mode");
       await createDeal.mutateAsync(payload);
     }
 
@@ -186,14 +196,13 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Contato (opcional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione um contato" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Nenhum</SelectItem>
                       {contacts?.map((contact) => (
                         <SelectItem key={contact.id} value={contact.id}>
                           {contact.first_name} {contact.last_name}
@@ -212,14 +221,13 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Organização (opcional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma organização" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Nenhuma</SelectItem>
                       {organizations?.map((org) => (
                         <SelectItem key={org.id} value={org.id}>
                           {org.name}
@@ -263,14 +271,13 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Atribuir para (opcional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione um vendedor" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Não atribuído</SelectItem>
                       {salesReps?.map((rep) => (
                         <SelectItem key={rep.id} value={rep.id}>
                           {rep.full_name} {rep.job_title && `(${rep.job_title})`}
