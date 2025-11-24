@@ -16,13 +16,18 @@ export interface AIInsightsData {
   generatedAt: string;
 }
 
-export function useAIInsights() {
+export function useAIInsights(startDate?: Date, endDate?: Date) {
   return useQuery({
-    queryKey: ["ai-insights"],
+    queryKey: ["ai-insights", startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
-      console.log("📊 useAIInsights: Chamando edge function generate-sales-insights");
+      console.log("📊 useAIInsights: Chamando edge function generate-sales-insights", { startDate, endDate });
 
-      const { data, error } = await supabase.functions.invoke("generate-sales-insights");
+      const { data, error } = await supabase.functions.invoke("generate-sales-insights", {
+        body: {
+          startDate: startDate?.toISOString(),
+          endDate: endDate?.toISOString()
+        }
+      });
 
       if (error) {
         console.error("❌ useAIInsights: Erro ao gerar insights:", error);

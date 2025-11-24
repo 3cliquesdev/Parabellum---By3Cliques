@@ -4,8 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { useChannelQuality } from "@/hooks/useChannelQuality";
 import { TrendingUp, TrendingDown, Circle } from "lucide-react";
 
-export function ChannelQualityWidget() {
-  const { data: channels, isLoading } = useChannelQuality();
+interface ChannelQualityWidgetProps {
+  startDate?: Date;
+  endDate?: Date;
+}
+
+export function ChannelQualityWidget({ startDate, endDate }: ChannelQualityWidgetProps) {
+  const { data: channels, isLoading } = useChannelQuality(startDate, endDate);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {

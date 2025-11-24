@@ -5,8 +5,13 @@ import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export function AIInsightsWidget() {
-  const { data, isLoading, refetch, isFetching } = useAIInsights();
+interface AIInsightsWidgetProps {
+  startDate?: Date;
+  endDate?: Date;
+}
+
+export function AIInsightsWidget({ startDate, endDate }: AIInsightsWidgetProps) {
+  const { data, isLoading, refetch, isFetching } = useAIInsights(startDate, endDate);
 
   if (isLoading) {
     return (

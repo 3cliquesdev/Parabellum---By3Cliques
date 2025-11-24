@@ -22,18 +22,21 @@ export interface YoYComparisonData {
   };
 }
 
-export function useYoYComparison() {
+export function useYoYComparison(startDate?: Date, endDate?: Date) {
   return useQuery({
-    queryKey: ["yoy-comparison"],
+    queryKey: ["yoy-comparison", startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
-      console.log("📊 useYoYComparison: Buscando dados de 2025");
+      const start = startDate?.toISOString() || "2025-01-01";
+      const end = endDate?.toISOString() || new Date().toISOString();
+      
+      console.log("📊 useYoYComparison: Buscando dados do período", { start, end });
 
-      // Buscar dados reais de 2025
+      // Buscar dados reais do período selecionado
       const { data: deals2025, error } = await supabase
         .from("deals")
         .select("status, value, created_at")
-        .gte("created_at", "2025-01-01")
-        .lt("created_at", "2026-01-01");
+        .gte("created_at", start)
+        .lte("created_at", end);
 
       if (error) {
         console.error("❌ useYoYComparison: Erro ao buscar deals 2025:", error);

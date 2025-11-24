@@ -5,8 +5,12 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export function ConversionRateWidget() {
-  const { data: conversionData, isLoading } = useConversionStats(90);
+interface ConversionRateWidgetProps {
+  daysBack?: number;
+}
+
+export function ConversionRateWidget({ daysBack = 90 }: ConversionRateWidgetProps) {
+  const { data: conversionData, isLoading } = useConversionStats(daysBack);
 
   // Calcular métricas resumidas
   const avgConversionRate = conversionData && conversionData.length > 0
@@ -50,7 +54,7 @@ export function ConversionRateWidget() {
       <Card>
         <CardHeader>
           <CardTitle>Taxa de Conversão - Tendência</CardTitle>
-          <CardDescription>Últimos 90 dias</CardDescription>
+          <CardDescription>Últimos {daysBack} dias</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[300px] flex items-center justify-center">
@@ -72,7 +76,7 @@ export function ConversionRateWidget() {
           </div>
         </CardTitle>
         <CardDescription>
-          Média: <span className="font-semibold text-foreground">{avgConversionRate}%</span> | 
+          Últimos {daysBack} dias | Média: <span className="font-semibold text-foreground">{avgConversionRate}%</span> | 
           Atual: <span className="font-semibold text-foreground">{latestConversionRate}%</span>
         </CardDescription>
       </CardHeader>

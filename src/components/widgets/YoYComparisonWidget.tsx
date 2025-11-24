@@ -3,8 +3,13 @@ import { useYoYComparison } from "@/hooks/useYoYComparison";
 import { TrendingUp, TrendingDown, DollarSign, Target, Award, BarChart3 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export function YoYComparisonWidget() {
-  const { data, isLoading, error } = useYoYComparison();
+interface YoYComparisonWidgetProps {
+  startDate?: Date;
+  endDate?: Date;
+}
+
+export function YoYComparisonWidget({ startDate, endDate }: YoYComparisonWidgetProps) {
+  const { data, isLoading, error } = useYoYComparison(startDate, endDate);
 
   if (isLoading) {
     return (

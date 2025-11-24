@@ -14,15 +14,28 @@ serve(async (req) => {
   try {
     console.log('[generate-sales-insights] Iniciando geração de insights...');
 
+    // Extrair parâmetros de período do body
+    const { startDate, endDate } = await req.json().catch(() => ({}));
+    console.log('[generate-sales-insights] Período recebido:', { startDate, endDate });
+
     // Criar cliente Supabase com service role para buscar dados
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Buscar dados de vendas
-    const { data: deals, error: dealsError } = await supabase
+    // Buscar dados de vendas com filtro de período
+    let dealsQuery = supabase
       .from('deals')
       .select('status, value, created_at, closed_at, stage_id, stages(name)');
+    
+    if (startDate) {
+      dealsQuery = dealsQuery.gte('created_at', startDate);
+    }
+    if (endDate) {
+      dealsQuery = dealsQuery.lte('created_at', endDate);
+    }
+
+    const { data: deals, error: dealsError } = await dealsQuery;
 
     if (dealsError) {
       console.error('[generate-sales-insights] Erro ao buscar deals:', dealsError);

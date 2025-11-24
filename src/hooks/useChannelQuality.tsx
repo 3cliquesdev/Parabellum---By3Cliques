@@ -10,24 +10,33 @@ export interface ChannelQualityData {
   totalRevenue: number;
 }
 
-export function useChannelQuality() {
+export function useChannelQuality(startDate?: Date, endDate?: Date) {
   const { user } = useAuth();
   const { role } = useUserRole();
 
   return useQuery({
-    queryKey: ["channel-quality", user?.id, role],
+    queryKey: ["channel-quality", user?.id, role, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       let query = supabase
         .from("deals")
         .select(`
           value,
           assigned_to,
+          closed_at,
           contacts!deals_contact_id_fkey (
             source
           )
         `)
         .eq("status", "won")
         .not("value", "is", null);
+
+      // Aplicar filtro de data se fornecido
+      if (startDate) {
+        query = query.gte("closed_at", startDate.toISOString());
+      }
+      if (endDate) {
+        query = query.lte("closed_at", endDate.toISOString());
+      }
 
       // Sales rep vê apenas seus próprios deals
       if (role === "sales_rep" && user?.id) {
