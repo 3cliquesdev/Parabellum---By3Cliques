@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserPlus, Edit } from "lucide-react";
 import UserDialog from "@/components/UserDialog";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -15,6 +16,9 @@ interface UserWithRole {
   email: string;
   created_at: string;
   role: "admin" | "user";
+  full_name?: string;
+  job_title?: string;
+  avatar_url?: string;
 }
 
 export default function Users() {
@@ -32,13 +36,19 @@ export default function Users() {
   const { data: users, isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
-      // Fetch all users from auth.users via RPC or admin API
-      // For now, we'll fetch from user_roles and join with auth metadata
+      // Fetch users with roles and profiles
       const { data: rolesData, error: rolesError } = await supabase
         .from("user_roles")
         .select("user_id, role, created_at");
 
       if (rolesError) throw rolesError;
+
+      // Fetch profiles
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("*");
+
+      const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
 
       // Fetch user emails from auth.users using admin API
       const usersWithEmails = await Promise.all(
@@ -50,16 +60,21 @@ export default function Users() {
             return null;
           }
 
+          const profile = profilesMap.get(role.user_id);
+
           return {
             id: role.user_id,
             email: userData.user.email || "N/A",
             created_at: role.created_at,
             role: role.role as "admin" | "user",
-          };
+            full_name: profile?.full_name,
+            job_title: profile?.job_title,
+            avatar_url: profile?.avatar_url,
+          } as UserWithRole;
         })
       );
 
-      return usersWithEmails.filter((u): u is UserWithRole => u !== null);
+      return usersWithEmails.filter((u) => u !== null) as UserWithRole[];
     },
   });
 
@@ -104,8 +119,10 @@ export default function Users() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Usuário</TableHead>
+                <TableHead>Cargo</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Perfil</TableHead>
+                <TableHead>Perfil de Acesso</TableHead>
                 <TableHead>Data de Criação</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -113,7 +130,26 @@ export default function Users() {
             <TableBody>
               {users?.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.email}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar>
+                        <AvatarImage src={user.avatar_url || undefined} />
+                        <AvatarFallback>
+                          {user.full_name
+                            ?.split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2) || "??"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="font-medium">{user.full_name || "Sem nome"}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {user.job_title || "—"}
+                  </TableCell>
+                  <TableCell>{user.email}</TableCell>
                   <TableCell>
                     <Badge variant={user.role === "admin" ? "default" : "secondary"}>
                       {user.role === "admin" ? "Administrador" : "Usuário"}

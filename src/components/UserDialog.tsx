@@ -12,6 +12,8 @@ const userSchema = z.object({
   email: z.string().email({ message: "Email inválido" }),
   password: z.string().min(8, { message: "Senha deve ter no mínimo 8 caracteres" }),
   role: z.enum(["admin", "user"], { message: "Role inválida" }),
+  full_name: z.string().min(1, { message: "Nome completo é obrigatório" }),
+  job_title: z.string().optional(),
 });
 
 interface UserDialogProps {
@@ -24,6 +26,8 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
+  const [fullName, setFullName] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -33,13 +37,17 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
 
     try {
       // Validate input
-      userSchema.parse({ email, password, role });
+      userSchema.parse({ email, password, role, full_name: fullName, job_title: jobTitle });
 
-      // Create user via Supabase Auth Admin API
+      // Create user via Supabase Auth Admin API with metadata
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
+        user_metadata: {
+          full_name: fullName,
+          job_title: jobTitle || "Vendedor",
+        },
       });
 
       if (authError) throw authError;
@@ -62,6 +70,8 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
       setEmail("");
       setPassword("");
       setRole("user");
+      setFullName("");
+      setJobTitle("");
       onOpenChange(false);
       onSuccess();
     } catch (error) {
@@ -97,6 +107,17 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
+              <Label htmlFor="full_name">Nome Completo</Label>
+              <Input
+                id="full_name"
+                type="text"
+                placeholder="João Silva"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -119,7 +140,17 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="role">Perfil</Label>
+              <Label htmlFor="job_title">Cargo (opcional)</Label>
+              <Input
+                id="job_title"
+                type="text"
+                placeholder="Vendedor, Gerente de Vendas, etc."
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role">Perfil de Acesso</Label>
               <Select value={role} onValueChange={(value) => setRole(value as "admin" | "user")}>
                 <SelectTrigger>
                   <SelectValue />
