@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Suspense, lazy } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,8 +25,10 @@ import { useCreatePlaybook } from "@/hooks/useCreatePlaybook";
 import { useUpdatePlaybook } from "@/hooks/useUpdatePlaybook";
 import { useDeletePlaybook } from "@/hooks/useDeletePlaybook";
 import { useProducts } from "@/hooks/useProducts";
-import PlaybookEditor from "@/components/playbook/PlaybookEditor";
 import { Switch } from "@/components/ui/switch";
+
+// Lazy load do editor para não bloquear o carregamento da página
+const PlaybookEditor = lazy(() => import("@/components/playbook/PlaybookEditor"));
 
 export default function OnboardingBuilder() {
   const { data: playbooks, isLoading } = usePlaybooks();
@@ -121,14 +123,23 @@ export default function OnboardingBuilder() {
             {name || "Configure o nome e produto antes de desenhar o fluxo"}
           </p>
         </div>
-        <PlaybookEditor
-          initialFlow={flowDefinition}
-          onSave={handleSaveFlow}
-          onCancel={() => {
-            setShowEditor(false);
-            resetForm();
-          }}
-        />
+        <Suspense fallback={
+          <Card className="p-8">
+            <div className="text-center">
+              <Workflow className="h-12 w-12 mx-auto mb-4 text-muted-foreground animate-pulse" />
+              <p className="text-muted-foreground">Carregando editor visual...</p>
+            </div>
+          </Card>
+        }>
+          <PlaybookEditor
+            initialFlow={flowDefinition}
+            onSave={handleSaveFlow}
+            onCancel={() => {
+              setShowEditor(false);
+              resetForm();
+            }}
+          />
+        </Suspense>
       </div>
     );
   }
