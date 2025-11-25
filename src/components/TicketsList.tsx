@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AlertCircle, Clock, CheckCircle } from "lucide-react";
+import { SLABadge } from "./SLABadge";
 
 interface Ticket {
   id: string;
@@ -12,6 +13,7 @@ interface Ticket {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed';
   created_at: string;
+  due_date: string | null;
   customer: {
     first_name: string;
     last_name: string;
@@ -109,14 +111,20 @@ export function TicketsList({ tickets, selectedTicketId, onSelectTicket }: Ticke
                   {ticket.description}
                 </p>
 
+                {/* SLA Visual Alert */}
+                <div className="mb-2">
+                  <SLABadge 
+                    dueDate={ticket.due_date} 
+                    priority={ticket.priority}
+                    size="sm"
+                  />
+                </div>
+
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant="outline" className="text-xs flex items-center gap-1">
                     {statusIcons[ticket.status]}
                     {statusLabels[ticket.status]}
                   </Badge>
-
-                  <div className={`w-2 h-2 rounded-full ${priorityColors[ticket.priority]}`} 
-                       title={priorityLabels[ticket.priority]} />
 
                   {ticket.assigned_user && (
                     <span className="text-xs text-muted-foreground">
