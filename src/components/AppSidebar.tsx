@@ -49,6 +49,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ModeToggle } from "@/components/ModeToggle";
 import ProfileEditDialog from "@/components/ProfileEditDialog";
+import { AvailabilityToggle } from "@/components/AvailabilityToggle";
 
 // ============= SUPPORT AGENT MENU (🛡️) =============
 const supportAgentMainItems = [
@@ -357,6 +358,11 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-border p-4">
         {!collapsed ? (
           <div className="space-y-3">
+            {/* Availability Toggle for Consultants and Support Agents */}
+            {(isConsultant || isSupportAgent) && (
+              <AvailabilityToggle />
+            )}
+            
             <div className="flex items-center gap-3 px-2">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
@@ -386,6 +392,11 @@ export function AppSidebar() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
+            {/* Availability Toggle for Consultants and Support Agents (collapsed) */}
+            {(isConsultant || isSupportAgent) && (
+              <AvailabilityToggle />
+            )}
+            
             <ModeToggle />
             <ProfileEditDialog
               trigger={

@@ -542,6 +542,38 @@ export type Database = {
           },
         ]
       }
+      conversation_queue: {
+        Row: {
+          assigned_at: string | null
+          conversation_id: string
+          id: string
+          priority: number | null
+          queued_at: string | null
+        }
+        Insert: {
+          assigned_at?: string | null
+          conversation_id: string
+          id?: string
+          priority?: number | null
+          queued_at?: string | null
+        }
+        Update: {
+          assigned_at?: string | null
+          conversation_id?: string
+          id?: string
+          priority?: number | null
+          queued_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_queue_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_ratings: {
         Row: {
           ai_analysis: string | null
@@ -1470,30 +1502,36 @@ export type Database = {
       }
       profiles: {
         Row: {
+          availability_status: Database["public"]["Enums"]["availability_status"]
           avatar_url: string | null
           created_at: string | null
           department: string
           full_name: string
           id: string
           job_title: string | null
+          last_status_change: string | null
           updated_at: string | null
         }
         Insert: {
+          availability_status?: Database["public"]["Enums"]["availability_status"]
           avatar_url?: string | null
           created_at?: string | null
           department: string
           full_name: string
           id: string
           job_title?: string | null
+          last_status_change?: string | null
           updated_at?: string | null
         }
         Update: {
+          availability_status?: Database["public"]["Enums"]["availability_status"]
           avatar_url?: string | null
           created_at?: string | null
           department?: string
           full_name?: string
           id?: string
           job_title?: string | null
+          last_status_change?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1958,6 +1996,7 @@ export type Database = {
         | "activity_overdue"
         | "contact_created"
         | "contact_inactive"
+      availability_status: "online" | "busy" | "offline"
       communication_channel:
         | "email"
         | "phone"
@@ -2155,6 +2194,7 @@ export const Constants = {
         "contact_created",
         "contact_inactive",
       ],
+      availability_status: ["online", "busy", "offline"],
       communication_channel: [
         "email",
         "phone",

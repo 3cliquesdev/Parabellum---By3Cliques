@@ -110,62 +110,83 @@ serve(async (req) => {
       });
     }
 
-    // 4. GERAR RESUMO INTELIGENTE via analyze-ticket
-    console.log('[auto-handoff] Gerando resumo contextual...');
-    const { data: summaryData, error: summaryError } = await supabaseClient.functions.invoke('analyze-ticket', {
-      body: { 
+    // ✅ HANDOFF NECESSÁRIO
+    console.log(`[auto-handoff] ✅ Executando handoff. Motivo: ${handoffReason}`);
+
+    // Gerar resumo da conversa para contexto do agente humano
+    const summaryResult = await supabaseClient.functions.invoke('analyze-ticket', {
+      body: {
         mode: 'summary',
         description: messagesText
       }
     });
 
-    if (!summaryError && summaryData?.result) {
-      internalNote += `\n\n**Resumo da Conversa:**\n${summaryData.result}`;
-    }
+    const summary = summaryResult.data?.result || 'Resumo não disponível';
 
-    // 5. EXECUTAR HANDOFF: Mudar para copilot
-    console.log(`[auto-handoff] Executando handoff (motivo: ${handoffReason})...`);
+    // 1. Chamar route-conversation para atribuição inteligente
+    const routingPriority = handoffReason === 'critical_sentiment' ? 1 : 0;
     
-    const { error: updateError } = await supabaseClient
-      .from('conversations')
-      .update({ ai_mode: 'copilot' })
-      .eq('id', conversationId);
+    console.log(`[auto-handoff] Calling route-conversation with priority: ${routingPriority}`);
+    
+    const { data: routingResult, error: routingError } = await supabaseClient.functions.invoke('route-conversation', {
+      body: {
+        conversationId,
+        priority: routingPriority
+      }
+    });
 
-    if (updateError) {
-      console.error('[auto-handoff] Erro ao atualizar conversa:', updateError);
-      throw updateError;
+    if (routingError) {
+      console.error('[auto-handoff] Error in routing:', routingError);
+      // Fallback: apenas mudar para copilot sem atribuir agente
+      await supabaseClient
+        .from('conversations')
+        .update({ ai_mode: 'copilot' })
+        .eq('id', conversationId);
+    } else {
+      console.log('[auto-handoff] Routing result:', routingResult);
     }
 
-    // 6. INSERIR NOTA INTERNA NA TIMELINE
-    console.log('[auto-handoff] Criando nota interna...');
-    const { error: noteError } = await supabaseClient
+    // 2. Registrar nota interna com contexto do handoff
+    const handoffReasons: Record<string, string> = {
+      critical_sentiment: '😡 Cliente com sentimento crítico/irritado detectado',
+      error_loop: '🔄 IA não conseguiu resolver após múltiplas tentativas'
+    };
+
+    const noteContent = `🤖 → 👤 Handoff Automático
+
+**Motivo:** ${handoffReasons[handoffReason] || handoffReason}
+
+**Resumo da Conversa:**
+${summary}
+
+**Atribuição:** ${routingResult?.agent_name || 'Fila de espera'}`;
+
+    await supabaseClient
       .from('interactions')
       .insert({
         customer_id: conversation.contact_id,
         type: 'note',
-        content: internalNote,
+        content: noteContent,
         channel: 'other',
         metadata: {
-          auto_handoff: true,
-          reason: handoffReason,
-          conversation_id: conversationId,
-          timestamp: new Date().toISOString()
+          handoff_reason: handoffReason,
+          handoff_timestamp: new Date().toISOString(),
+          ai_summary: summary,
+          routing_result: routingResult
         }
       });
 
-    if (noteError) {
-      console.error('[auto-handoff] Erro ao criar nota interna:', noteError);
-    }
-
     console.log('[auto-handoff] ✅ Handoff executado com sucesso!');
 
-    return new Response(JSON.stringify({ 
-      status: 'handoff_executed',
-      reason: handoffReason,
-      internal_note: internalNote
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        status: 'handoff_executed',
+        reason: handoffReason,
+        summary,
+        routing: routingResult
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error) {
     console.error('[auto-handoff] Erro geral:', error);

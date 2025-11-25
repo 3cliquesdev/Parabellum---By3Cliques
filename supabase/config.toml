@@ -60,3 +60,6 @@ verify_jwt = false
 
 [functions.message-listener]
 verify_jwt = false
+
+[functions.route-conversation]
+verify_jwt = true
