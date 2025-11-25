@@ -1,9 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import type { Database } from "@/integrations/supabase/types";
-
-type DepartmentType = Database["public"]["Enums"]["department_type"];
 
 export const useCreateRoutingRule = () => {
   const queryClient = useQueryClient();
@@ -12,14 +9,14 @@ export const useCreateRoutingRule = () => {
   return useMutation({
     mutationFn: async (data: {
       channel: string;
-      department?: DepartmentType;
+      department?: string;
       persona_id?: string;
       priority?: number;
       is_active?: boolean;
     }) => {
       const { data: rule, error } = await supabase
         .from("ai_routing_rules")
-        .insert(data)
+        .insert(data as any)
         .select()
         .single();
 

@@ -8,16 +8,14 @@ import { Switch } from "@/components/ui/switch";
 import { useCreateRoutingRule } from "@/hooks/useCreateRoutingRule";
 import { useUpdateRoutingRule } from "@/hooks/useUpdateRoutingRule";
 import { usePersonas } from "@/hooks/usePersonas";
-import type { Database } from "@/integrations/supabase/types";
-
-type DepartmentType = Database["public"]["Enums"]["department_type"];
+import { useDepartments } from "@/hooks/useDepartments";
 
 interface RoutingRuleDialogProps {
   trigger: React.ReactNode;
   rule?: {
     id: string;
     channel: string;
-    department: DepartmentType | null;
+    department: string | null;
     persona_id: string | null;
     priority: number | null;
     is_active: boolean | null;
@@ -28,12 +26,13 @@ interface RoutingRuleDialogProps {
 export function RoutingRuleDialog({ trigger, rule, onOpenChange }: RoutingRuleDialogProps) {
   const [open, setOpen] = useState(false);
   const [channel, setChannel] = useState<string>("whatsapp");
-  const [department, setDepartment] = useState<DepartmentType | undefined>(undefined);
+  const [department, setDepartment] = useState<string | undefined>(undefined);
   const [personaId, setPersonaId] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState(0);
   const [isActive, setIsActive] = useState(true);
 
   const { data: personas } = usePersonas();
+  const { data: departments } = useDepartments();
   const createRule = useCreateRoutingRule();
   const updateRule = useUpdateRoutingRule();
 
@@ -98,7 +97,7 @@ export function RoutingRuleDialog({ trigger, rule, onOpenChange }: RoutingRuleDi
               <SelectContent>
                 <SelectItem value="whatsapp">WhatsApp</SelectItem>
                 <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="chat">Chat</SelectItem>
+                <SelectItem value="web_chat">Chat</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
@@ -108,16 +107,17 @@ export function RoutingRuleDialog({ trigger, rule, onOpenChange }: RoutingRuleDi
 
           <div className="space-y-2">
             <Label htmlFor="department">Departamento (Opcional)</Label>
-            <Select value={department || "none"} onValueChange={(val) => setDepartment(val === "none" ? undefined : val as DepartmentType)}>
+            <Select value={department || "none"} onValueChange={(val) => setDepartment(val === "none" ? undefined : val)}>
               <SelectTrigger id="department">
                 <SelectValue placeholder="Qualquer departamento" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Qualquer departamento</SelectItem>
-                <SelectItem value="comercial">Comercial</SelectItem>
-                <SelectItem value="suporte">Suporte</SelectItem>
-                <SelectItem value="marketing">Marketing</SelectItem>
-                <SelectItem value="operacional">Operacional</SelectItem>
+                {departments?.filter(d => d.is_active).map((dept) => (
+                  <SelectItem key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
