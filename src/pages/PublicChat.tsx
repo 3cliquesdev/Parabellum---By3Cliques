@@ -123,23 +123,18 @@ export default function PublicChat() {
 
     setIsCreating(true);
     try {
-      // Primeiro, fazer upsert do contato
-      const contactData = {
-        email: storedIdentity.email,
-        first_name: storedIdentity.first_name,
-        last_name: storedIdentity.last_name,
-        phone: storedIdentity.phone,
-        company: storedIdentity.company,
-        source: 'form' as const,
-      };
-
-      const contactResult = await upsertContact.mutateAsync(contactData);
-
-      // Depois, criar conversa com o contact_id real
+      // FASE 2: Identity Resolution
+      // Enviar dados do cliente diretamente para a Edge Function
       const { data, error } = await supabase.functions.invoke("create-public-conversation", {
         body: { 
           department_id: departmentId,
-          contact_id: contactResult.contact_id,
+          customer_data: {
+            email: storedIdentity.email,
+            first_name: storedIdentity.first_name,
+            last_name: storedIdentity.last_name,
+            phone: storedIdentity.phone,
+            company: storedIdentity.company,
+          },
         },
       });
 
@@ -150,10 +145,19 @@ export default function PublicChat() {
           ? `Conectado com ${departmentName}` 
           : `Você está falando com o time de ${departmentName}`;
         
-        toast({
-          title: "Conversa iniciada",
-          description: toastMsg,
-        });
+        // FASE 2: Exibir badge de cliente recorrente
+        if (data.is_returning_customer) {
+          toast({
+            title: "Bem-vindo de volta! 🔄",
+            description: `${toastMsg} - Identificamos seu histórico anterior.`,
+          });
+        } else {
+          toast({
+            title: "Conversa iniciada",
+            description: toastMsg,
+          });
+        }
+        
         navigate(`/public-chat/${data.conversation_id}`);
       }
     } catch (error: any) {

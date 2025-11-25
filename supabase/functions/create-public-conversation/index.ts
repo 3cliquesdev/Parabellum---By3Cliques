@@ -17,7 +17,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { department_id, contact_id } = await req.json();
+    const { department_id, contact_id, customer_data } = await req.json();
 
     if (!department_id) {
       return new Response(
@@ -41,11 +41,64 @@ serve(async (req) => {
       );
     }
 
-    // Usar contact_id fornecido ou criar contato provisório (guest)
     let finalContactId = contact_id;
+    let customerMetadata: {
+      is_returning_customer?: boolean;
+      previous_interactions_count?: number;
+      identified_at?: string;
+    } = {};
     
-    if (!finalContactId) {
-      // Criar contato provisório (guest) - backward compatibility
+    // FASE 2: Identity Resolution
+    // Se customer_data foi fornecido, fazer upsert do contato
+    if (customer_data && customer_data.email) {
+      console.log('[create-public-conversation] Identity Resolution - upserting contact:', customer_data.email);
+      
+      // Chamar função upsert_contact_with_interaction
+      const { data: upsertResult, error: upsertError } = await supabase
+        .rpc('upsert_contact_with_interaction', {
+          p_email: customer_data.email,
+          p_first_name: customer_data.first_name || 'Visitante',
+          p_last_name: customer_data.last_name || '',
+          p_phone: customer_data.phone || null,
+          p_company: customer_data.company || null,
+          p_source: 'chat_widget',
+        });
+
+      if (upsertError) {
+        console.error('[create-public-conversation] Upsert error:', upsertError);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Erro ao processar contato' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      finalContactId = upsertResult[0].contact_id;
+      const isNewContact = upsertResult[0].is_new_contact;
+
+      // Contar interações anteriores se é cliente recorrente
+      let previousInteractionsCount = 0;
+      if (!isNewContact) {
+        const { count } = await supabase
+          .from('interactions')
+          .select('*', { count: 'exact', head: true })
+          .eq('customer_id', finalContactId);
+        
+        previousInteractionsCount = count || 0;
+      }
+
+      customerMetadata = {
+        is_returning_customer: !isNewContact,
+        previous_interactions_count: previousInteractionsCount,
+        identified_at: new Date().toISOString(),
+      };
+
+      console.log('[create-public-conversation] Identity resolved:', {
+        contact_id: finalContactId,
+        is_returning_customer: !isNewContact,
+        previous_interactions_count: previousInteractionsCount,
+      });
+    } else if (!finalContactId) {
+      // Fallback: criar contato provisório (guest) - backward compatibility
       const { data: contact, error: contactError } = await supabase
         .from('contacts')
         .insert({
@@ -68,7 +121,7 @@ serve(async (req) => {
       finalContactId = contact.id;
     }
 
-    // Criar conversa pública
+    // Criar conversa pública com customer_metadata
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
       .insert({
@@ -76,7 +129,8 @@ serve(async (req) => {
         department: department_id,
         channel: 'web_chat',
         status: 'open',
-        ai_mode: 'autopilot', // Inicia no modo autopilot
+        ai_mode: 'autopilot',
+        customer_metadata: customerMetadata,
       })
       .select()
       .single();
@@ -102,10 +156,15 @@ serve(async (req) => {
           department_id: department_id,
           department_name: department.name,
           source: 'public_chat_widget',
+          customer_metadata: customerMetadata,
         },
       });
 
-    console.log('[create-public-conversation] Success:', { conversation_id: conversation.id, contact_id: finalContactId });
+    console.log('[create-public-conversation] Success:', { 
+      conversation_id: conversation.id, 
+      contact_id: finalContactId,
+      is_returning_customer: customerMetadata.is_returning_customer || false,
+    });
 
     return new Response(
       JSON.stringify({
@@ -113,6 +172,7 @@ serve(async (req) => {
         conversation_id: conversation.id,
         contact_id: finalContactId,
         department_name: department.name,
+        is_returning_customer: customerMetadata.is_returning_customer || false,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

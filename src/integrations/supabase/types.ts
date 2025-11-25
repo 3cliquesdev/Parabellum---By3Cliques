@@ -542,6 +542,7 @@ export type Database = {
           channel: Database["public"]["Enums"]["conversation_channel"]
           contact_id: string
           created_at: string
+          customer_metadata: Json | null
           department: string | null
           id: string
           last_message_at: string
@@ -554,6 +555,7 @@ export type Database = {
           channel: Database["public"]["Enums"]["conversation_channel"]
           contact_id: string
           created_at?: string
+          customer_metadata?: Json | null
           department?: string | null
           id?: string
           last_message_at?: string
@@ -566,6 +568,7 @@ export type Database = {
           channel?: Database["public"]["Enums"]["conversation_channel"]
           contact_id?: string
           created_at?: string
+          customer_metadata?: Json | null
           department?: string | null
           id?: string
           last_message_at?: string
