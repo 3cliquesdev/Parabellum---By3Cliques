@@ -213,7 +213,33 @@ Deno.serve(async (req) => {
       console.log('✅ Bidirectional link established');
     }
 
-    // 8. Return created ticket
+    // 8. Create interaction in timeline
+    console.log('📝 Creating interaction in customer timeline...');
+    const { error: interactionError } = await supabase
+      .from('interactions')
+      .insert({
+        customer_id: conversation.contact_id,
+        type: 'note',
+        channel: 'other',
+        content: `🎫 Ticket criado: ${subject}`,
+        metadata: {
+          ticket_id: ticket.id,
+          ticket_subject: subject,
+          ticket_priority: priority,
+          ticket_category: category,
+          source: 'ticket_generation',
+          conversation_id: conversation_id,
+        },
+      });
+
+    if (interactionError) {
+      console.error('⚠️ Warning: Failed to create interaction:', interactionError);
+      // Don't fail the request, ticket was created successfully
+    } else {
+      console.log('✅ Interaction created in timeline');
+    }
+
+    // 9. Return created ticket
     console.log('🎉 Ticket generation completed successfully');
     return new Response(
       JSON.stringify({
