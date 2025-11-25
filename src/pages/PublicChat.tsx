@@ -12,6 +12,7 @@ export default function PublicChat() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const deptParam = searchParams.get("dept");
+  const sourceParam = searchParams.get("source");
   const [isCreating, setIsCreating] = useState(false);
   const { data: departments, isLoading } = useDepartments();
 
@@ -40,9 +41,13 @@ export default function PublicChat() {
       if (error) throw error;
 
       if (data.success) {
+        const toastMsg = sourceParam === "widget" 
+          ? `Conectado com ${departmentName}` 
+          : `Você está falando com o time de ${departmentName}`;
+        
         toast({
           title: "Conversa iniciada",
-          description: `Você está falando com o time de ${departmentName}`,
+          description: toastMsg,
         });
         // Redirecionar para interface de chat (pode ser desenvolvida depois)
         navigate(`/public-chat/${data.conversation_id}`);

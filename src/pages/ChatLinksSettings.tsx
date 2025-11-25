@@ -127,6 +127,79 @@ export default function ChatLinksSettings() {
           <li>Compartilhe links diretos em redes sociais para triagem automática</li>
         </ul>
       </div>
+
+      {/* Widget Embarcável */}
+      <div className="mt-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              🎨 Widget Embarcável (Menu Híbrido)
+            </CardTitle>
+            <CardDescription>
+              Adicione um botão flutuante no seu site com menu WhatsApp + Chat + Ticket
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-900 font-medium mb-2">✨ Novidade: Menu Inteligente</p>
+              <ul className="text-xs text-blue-800 space-y-1 list-disc list-inside">
+                <li>Prioriza WhatsApp no mobile, Chat no desktop</li>
+                <li>Botão flutuante fixo no canto inferior direito</li>
+                <li>Menu com 3 opções: WhatsApp, Chat ao Vivo, Abrir Ticket</li>
+              </ul>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  1. Copie o código abaixo e cole antes do {"</body>"} do seu site:
+                </label>
+                <div className="relative">
+                  <code className="block p-4 bg-muted rounded text-xs overflow-x-auto">
+{`<script>
+  (function() {
+    var script = document.createElement('script');
+    script.src = '${baseUrl}/public-chat-widget.js';
+    document.head.appendChild(script);
+  })();
+</script>`}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="absolute top-2 right-2"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `<script>\n  (function() {\n    var script = document.createElement('script');\n    script.src = '${baseUrl}/public-chat-widget.js';\n    document.head.appendChild(script);\n  })();\n</script>`
+                      );
+                      toast({
+                        title: "Código copiado!",
+                        description: "Cole no seu site antes do </body>",
+                      });
+                    }}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded">
+                <p className="text-xs text-amber-900">
+                  <strong>💡 Dica:</strong> Para vincular o widget a um departamento específico (ex: mostrar WhatsApp do Suporte), 
+                  adicione <code className="bg-amber-100 px-1 rounded">script.dataset.department = 'suporte';</code> antes do appendChild.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t">
+              <Button variant="outline" onClick={() => window.open(`${baseUrl}/public-chat`, "_blank")}>
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Preview do Widget
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

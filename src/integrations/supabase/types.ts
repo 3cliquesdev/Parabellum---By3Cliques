@@ -818,6 +818,7 @@ export type Database = {
           is_active: boolean
           name: string
           updated_at: string
+          whatsapp_number: string | null
         }
         Insert: {
           color?: string | null
@@ -827,6 +828,7 @@ export type Database = {
           is_active?: boolean
           name: string
           updated_at?: string
+          whatsapp_number?: string | null
         }
         Update: {
           color?: string | null
@@ -836,6 +838,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           updated_at?: string
+          whatsapp_number?: string | null
         }
         Relationships: []
       }

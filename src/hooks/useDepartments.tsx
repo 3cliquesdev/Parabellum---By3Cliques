@@ -7,6 +7,7 @@ export interface Department {
   description: string | null;
   color: string;
   is_active: boolean;
+  whatsapp_number?: string | null;
   created_at: string;
   updated_at: string;
 }

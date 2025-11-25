@@ -6,6 +6,7 @@ interface CreateDepartmentParams {
   name: string;
   description?: string;
   color?: string;
+  whatsapp_number?: string;
 }
 
 export function useCreateDepartment() {
@@ -20,6 +21,7 @@ export function useCreateDepartment() {
           name: params.name,
           description: params.description,
           color: params.color || "#3B82F6",
+          whatsapp_number: params.whatsapp_number,
         })
         .select()
         .single();

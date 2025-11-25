@@ -18,6 +18,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState("#3B82F6");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
 
   const createMutation = useCreateDepartment();
   const updateMutation = useUpdateDepartment();
@@ -27,10 +28,12 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
       setName(department.name);
       setDescription(department.description || "");
       setColor(department.color);
+      setWhatsappNumber(department.whatsapp_number || "");
     } else {
       setName("");
       setDescription("");
       setColor("#3B82F6");
+      setWhatsappNumber("");
     }
   }, [department, open]);
 
@@ -43,12 +46,14 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
         name,
         description,
         color,
+        whatsapp_number: whatsappNumber || undefined,
       });
     } else {
       await createMutation.mutateAsync({
         name,
         description,
         color,
+        whatsapp_number: whatsappNumber || undefined,
       });
     }
 
@@ -106,6 +111,20 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
                   className="flex-1"
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp">Número WhatsApp (com DDI)</Label>
+              <Input
+                id="whatsapp"
+                type="text"
+                placeholder="Ex: 5511999999999"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, ""))}
+                maxLength={13}
+              />
+              <p className="text-xs text-muted-foreground">
+                Apenas números (DDI + DDD + número). Ex: 5511999999999
+              </p>
             </div>
           </div>
           <DialogFooter>

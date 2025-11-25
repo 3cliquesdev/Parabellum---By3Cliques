@@ -8,6 +8,7 @@ interface UpdateDepartmentParams {
   description?: string;
   color?: string;
   is_active?: boolean;
+  whatsapp_number?: string;
 }
 
 export function useUpdateDepartment() {
