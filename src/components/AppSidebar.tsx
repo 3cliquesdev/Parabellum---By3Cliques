@@ -47,6 +47,17 @@ const mainItems = [
   { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase, requiresRole: true },
 ];
 
+// Consultant-only navigation items
+const consultantMainItems = [
+  { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase },
+  { title: "Clientes", href: "/contacts", icon: Users },
+  { title: "Inbox", href: "/inbox", icon: Inbox },
+];
+
+const consultantSupportItems = [
+  { title: "Tickets", href: "/support", icon: Headphones },
+];
+
 const crmItems = [
   { title: "Contatos", href: "/contacts", icon: Users },
   { title: "Organizações", href: "/organizations", icon: Building2 },
@@ -124,179 +135,234 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="px-2">
-        {/* Principal */}
-        <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainItems.map((item) => {
-                // Hide "Minha Carteira" for users without consultant/sales_rep/manager/admin role
-                if (item.requiresRole && !isAdmin && !isManager && !isSalesRep && !isConsultant) return null;
-                
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.href}
-                        end={item.href === "/"}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                        activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                      >
-                        <item.icon className="h-5 w-5 flex-shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Consultant-only simplified navigation */}
+        {isConsultant && !isAdmin && !isManager ? (
+          <>
+            {/* Gestão de Carteira */}
+            <SidebarGroup>
+              {!collapsed && <SidebarGroupLabel>Gestão de Carteira</SidebarGroupLabel>}
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {consultantMainItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.href}
+                          end={item.href === "/"}
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                          activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+                        >
+                          <item.icon className="h-5 w-5 flex-shrink-0" />
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-        {/* CRM */}
-        <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel>CRM</SidebarGroupLabel>}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {crmItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.href}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                      activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                    >
-                      <item.icon className="h-5 w-5 flex-shrink-0" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+            {/* Suporte */}
+            <SidebarGroup>
+              {!collapsed && <SidebarGroupLabel>Suporte</SidebarGroupLabel>}
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {consultantSupportItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.href}
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                          activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+                        >
+                          <item.icon className="h-5 w-5 flex-shrink-0" />
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        ) : (
+          <>
+            {/* Standard navigation for admin/manager/sales_rep */}
+            {/* Principal */}
+            <SidebarGroup>
+              {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {mainItems.map((item) => {
+                    // Hide "Minha Carteira" for users without consultant/sales_rep/manager/admin role
+                    if (item.requiresRole && !isAdmin && !isManager && !isSalesRep && !isConsultant) return null;
+                    
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton asChild>
+                          <NavLink
+                            to={item.href}
+                            end={item.href === "/"}
+                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+                          >
+                            <item.icon className="h-5 w-5 flex-shrink-0" />
+                            {!collapsed && <span>{item.title}</span>}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-        {/* Automação - apenas admin/manager */}
-        {(isAdmin || isManager) && (
-          <SidebarGroup>
-            {!collapsed && <SidebarGroupLabel>Automação</SidebarGroupLabel>}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {automationItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.href}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                        activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                      >
-                        <item.icon className="h-5 w-5 flex-shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+            {/* CRM */}
+            <SidebarGroup>
+              {!collapsed && <SidebarGroupLabel>CRM</SidebarGroupLabel>}
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {crmItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.href}
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                          activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+                        >
+                          <item.icon className="h-5 w-5 flex-shrink-0" />
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-        {/* Relatórios - apenas admin/manager */}
-        {(isAdmin || isManager) && (
-          <SidebarGroup>
-            {!collapsed && <SidebarGroupLabel>Relatórios</SidebarGroupLabel>}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {reportItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.href}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                        activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                      >
-                        <item.icon className="h-5 w-5 flex-shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+            {/* Automação - apenas admin/manager */}
+            {(isAdmin || isManager) && (
+              <SidebarGroup>
+                {!collapsed && <SidebarGroupLabel>Automação</SidebarGroupLabel>}
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {automationItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton asChild>
+                          <NavLink
+                            to={item.href}
+                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+                          >
+                            <item.icon className="h-5 w-5 flex-shrink-0" />
+                            {!collapsed && <span>{item.title}</span>}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
 
-        {/* Suporte - apenas admin/manager */}
-        {(isAdmin || isManager) && (
-          <SidebarGroup>
-            {!collapsed && <SidebarGroupLabel>Suporte</SidebarGroupLabel>}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {supportItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.href}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                        activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                      >
-                        <item.icon className="h-5 w-5 flex-shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+            {/* Relatórios - apenas admin/manager */}
+            {(isAdmin || isManager) && (
+              <SidebarGroup>
+                {!collapsed && <SidebarGroupLabel>Relatórios</SidebarGroupLabel>}
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {reportItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton asChild>
+                          <NavLink
+                            to={item.href}
+                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+                          >
+                            <item.icon className="h-5 w-5 flex-shrink-0" />
+                            {!collapsed && <span>{item.title}</span>}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
 
-        {/* Formulários */}
-        <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel>Formulários</SidebarGroupLabel>}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {formsItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.href}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                      activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                    >
-                      <item.icon className="h-5 w-5 flex-shrink-0" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+            {/* Suporte - apenas admin/manager */}
+            {(isAdmin || isManager) && (
+              <SidebarGroup>
+                {!collapsed && <SidebarGroupLabel>Suporte</SidebarGroupLabel>}
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {supportItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton asChild>
+                          <NavLink
+                            to={item.href}
+                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+                          >
+                            <item.icon className="h-5 w-5 flex-shrink-0" />
+                            {!collapsed && <span>{item.title}</span>}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
 
-        {/* Gestão - apenas admin */}
-        {isAdmin && (
-          <SidebarGroup>
-            {!collapsed && <SidebarGroupLabel>Gestão</SidebarGroupLabel>}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {managementItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.href}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                        activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                      >
-                        <item.icon className="h-5 w-5 flex-shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+            {/* Formulários */}
+            <SidebarGroup>
+              {!collapsed && <SidebarGroupLabel>Formulários</SidebarGroupLabel>}
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {formsItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.href}
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                          activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+                        >
+                          <item.icon className="h-5 w-5 flex-shrink-0" />
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {/* Gestão - apenas admin */}
+            {isAdmin && (
+              <SidebarGroup>
+                {!collapsed && <SidebarGroupLabel>Gestão</SidebarGroupLabel>}
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {managementItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton asChild>
+                          <NavLink
+                            to={item.href}
+                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+                          >
+                            <item.icon className="h-5 w-5 flex-shrink-0" />
+                            {!collapsed && <span>{item.title}</span>}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+          </>
         )}
       </SidebarContent>
 
