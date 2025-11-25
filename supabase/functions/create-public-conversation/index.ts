@@ -123,8 +123,11 @@ serve(async (req) => {
       finalContactId = contact.id;
     }
 
-    // SINGLETON: Verificar se já existe conversa aberta para este contato
-    const { data: existingConversation } = await supabase
+    // SINGLETON: Verificar se já existe conversa para este contato
+    // Prioridade: 1) aberta, 2) fechada mais recente (reabrir)
+
+    // 1. Verificar se existe conversa ABERTA
+    const { data: openConversation } = await supabase
       .from('conversations')
       .select('*')
       .eq('contact_id', finalContactId)
@@ -132,19 +135,76 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    if (existingConversation) {
-      console.log('[create-public-conversation] Reusing existing conversation:', existingConversation.id);
+    if (openConversation) {
+      console.log('[create-public-conversation] Reusing OPEN conversation:', openConversation.id);
       return new Response(
         JSON.stringify({
           success: true,
-          conversation_id: existingConversation.id,
+          conversation_id: openConversation.id,
           contact_id: finalContactId,
           department_name: department.name,
           is_returning_customer: customerMetadata.is_returning_customer || false,
-          is_existing_conversation: true, // Flag para frontend saber que é retomada
+          is_existing_conversation: true,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // 2. Verificar se existe conversa FECHADA para REABRIR
+    const { data: closedConversation } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('contact_id', finalContactId)
+      .eq('status', 'closed')
+      .order('closed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (closedConversation) {
+      // REABRIR a conversa fechada
+      const { error: reopenError } = await supabase
+        .from('conversations')
+        .update({
+          status: 'open',
+          closed_at: null,
+          closed_by: null,
+          auto_closed: false,
+          last_message_at: new Date().toISOString(),
+          department: department_id, // Atualizar departamento se mudou
+        })
+        .eq('id', closedConversation.id);
+
+      if (reopenError) {
+        console.error('[create-public-conversation] Error reopening conversation:', reopenError);
+      } else {
+        console.log('[create-public-conversation] REOPENED closed conversation:', closedConversation.id);
+        
+        // Registrar nota de reabertura no timeline
+        await supabase.from('interactions').insert({
+          customer_id: finalContactId,
+          type: 'note',
+          content: `Conversa reaberta pelo cliente via chat widget (Departamento: ${department.name})`,
+          channel: 'other',
+          metadata: {
+            conversation_id: closedConversation.id,
+            reopened_at: new Date().toISOString(),
+            department_name: department.name,
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            conversation_id: closedConversation.id,
+            contact_id: finalContactId,
+            department_name: department.name,
+            is_returning_customer: true,
+            is_existing_conversation: true,
+            was_reopened: true, // Flag especial para indicar reabertura
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Criar conversa pública com customer_metadata
