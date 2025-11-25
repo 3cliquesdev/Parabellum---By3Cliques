@@ -6,19 +6,50 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { usePersonas } from "@/hooks/usePersonas";
-import { useSandboxChat } from "@/hooks/useSandboxChat";
-import { Bot, Send, Trash2, Activity, Zap } from "lucide-react";
+import { useSandboxChat, SandboxMessage } from "@/hooks/useSandboxChat";
+import { useCreateRLHFFeedback } from "@/hooks/useCreateRLHFFeedback";
+import { Bot, Send, Trash2, Activity, Zap, ThumbsUp, ThumbsDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function SandboxTest() {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [feedbackGiven, setFeedbackGiven] = useState<Set<number>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: personas } = usePersonas();
   const { messages, isLoading, debugInfo, sendMessage, clearChat } = useSandboxChat();
+  const createFeedback = useCreateRLHFFeedback();
 
   const selectedPersona = personas?.find(p => p.id === selectedPersonaId);
+
+  const handleFeedback = async (
+    messageIndex: number,
+    message: SandboxMessage,
+    feedbackType: "positive" | "negative"
+  ) => {
+    if (!selectedPersonaId || feedbackGiven.has(messageIndex)) return;
+
+    // Find the previous user message for context
+    const userMessageIndex = messageIndex - 1;
+    const userMessage = messages[userMessageIndex];
+
+    if (!userMessage || userMessage.role !== "user") {
+      toast.error("Não foi possível encontrar a mensagem do usuário");
+      return;
+    }
+
+    await createFeedback.mutateAsync({
+      personaId: selectedPersonaId,
+      messageContent: message.content,
+      userMessage: userMessage.content,
+      feedbackType,
+      toolCalls: message.tool_calls || [],
+    });
+
+    setFeedbackGiven((prev) => new Set(prev).add(messageIndex));
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -111,15 +142,16 @@ export function SandboxTest() {
                         <Bot className="h-5 w-5 text-primary" />
                       </div>
                     )}
-                    <div
-                      className={cn(
-                        "rounded-lg px-4 py-3 max-w-[80%]",
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                      )}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <div className="flex flex-col gap-2 max-w-[80%]">
+                      <div
+                        className={cn(
+                          "rounded-lg px-4 py-3",
+                          message.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
+                        )}
+                      >
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                       
                       {message.tool_calls && message.tool_calls.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
@@ -140,10 +172,41 @@ export function SandboxTest() {
                           ))}
                         </div>
                       )}
-                      
-                      <p className="text-xs opacity-60 mt-2">
-                        {message.timestamp.toLocaleTimeString()}
-                      </p>
+                        
+                        <p className="text-xs opacity-60 mt-2">
+                          {message.timestamp.toLocaleTimeString()}
+                        </p>
+                      </div>
+
+                      {/* Feedback buttons for assistant messages */}
+                      {message.role === "assistant" && (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                              "h-8 px-2",
+                              feedbackGiven.has(index) && "opacity-50"
+                            )}
+                            onClick={() => handleFeedback(index, message, "positive")}
+                            disabled={feedbackGiven.has(index)}
+                          >
+                            <ThumbsUp className="h-4 w-4 text-green-500" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                              "h-8 px-2",
+                              feedbackGiven.has(index) && "opacity-50"
+                            )}
+                            onClick={() => handleFeedback(index, message, "negative")}
+                            disabled={feedbackGiven.has(index)}
+                          >
+                            <ThumbsDown className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     {message.role === "user" && (
                       <div className="p-2 rounded-full bg-primary/10 h-fit">

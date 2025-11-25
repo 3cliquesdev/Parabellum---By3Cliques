@@ -986,6 +986,57 @@ export type Database = {
         }
         Relationships: []
       }
+      rlhf_feedback: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          feedback_comment: string | null
+          feedback_type: string
+          id: string
+          message_content: string
+          persona_id: string
+          tool_calls: Json | null
+          user_message: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          feedback_comment?: string | null
+          feedback_type: string
+          id?: string
+          message_content: string
+          persona_id: string
+          tool_calls?: Json | null
+          user_message: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          feedback_comment?: string | null
+          feedback_type?: string
+          id?: string
+          message_content?: string
+          persona_id?: string
+          tool_calls?: Json | null
+          user_message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rlhf_feedback_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rlhf_feedback_persona_id_fkey"
+            columns: ["persona_id"]
+            isOneToOne: false
+            referencedRelation: "ai_personas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_goals: {
         Row: {
           assigned_to: string | null

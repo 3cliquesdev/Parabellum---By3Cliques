@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Edit, Trash2, Brain, Zap, Wrench, FlaskConical } from "lucide-react";
 import { SandboxTest } from "@/components/SandboxTest";
+import { RLHFMetricsCard } from "@/components/RLHFMetricsCard";
 import { usePersonas } from "@/hooks/usePersonas";
 import { useDeletePersona } from "@/hooks/useDeletePersona";
 import { useUpdatePersona } from "@/hooks/useUpdatePersona";
@@ -93,15 +94,20 @@ export default function AIStudio() {
 
         {/* PERSONAS TAB */}
         <TabsContent value="personas" className="space-y-6 mt-6">
-          <div className="flex justify-end">
-            <PersonaDialog
-              trigger={
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Nova Persona
-                </Button>
-              }
-            />
+          <div className="flex justify-between items-start gap-6">
+            <div className="flex-1">
+              <PersonaDialog
+                trigger={
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Nova Persona
+                  </Button>
+                }
+              />
+            </div>
+            <div className="w-full max-w-md">
+              <RLHFMetricsCard />
+            </div>
           </div>
 
           {/* Personas Grid */}
