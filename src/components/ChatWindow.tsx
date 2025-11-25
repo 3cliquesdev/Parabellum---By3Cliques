@@ -148,8 +148,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
       )}
       
       {conversation ? (
-        <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950">
-          <div className="border-b border-slate-200 dark:border-slate-800 px-4 py-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur flex items-center gap-3 justify-between">
+        <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
+          <div className="flex-none border-b border-slate-200 dark:border-slate-800 px-4 py-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur flex items-center gap-3 justify-between">
             <div className="flex items-center gap-3">
               <Avatar className="w-10 h-10 shrink-0">
                 {contact?.avatar_url ? (
@@ -275,7 +275,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             </Alert>
           )}
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 overflow-hidden">
             <div className="p-4 md:p-6">
               <div className="max-w-3xl mx-auto w-full">
                 {conversation.status === "closed" && (
@@ -398,7 +398,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           </ScrollArea>
 
           {isCopilot && conversation && (
-            <div className="mx-4 mb-2">
+            <div className="flex-none mx-4 mb-2">
               <CopilotSuggestionCard 
                 conversationId={conversation.id}
                 onUseSuggestion={handleUseSuggestion}
@@ -407,7 +407,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           )}
 
           {isAutopilot ? (
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">
+            <div className="flex-none p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">
               <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                 <Bot className="h-4 w-4" />
                 <span>Modo Piloto Automático - Digite mensagens desabilitado</span>
@@ -416,7 +416,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           ) : (
             <>
               {isEmailMode ? (
-                <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4 space-y-2">
+                <div className="flex-none bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4 space-y-2">
                   <div className="max-w-3xl mx-auto space-y-2">
                     <Input
                       placeholder="Assunto do e-mail"
@@ -441,7 +441,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   </div>
                 </div>
               ) : (
-                <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4">
+                <div className="flex-none bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4">
                   <div className="max-w-3xl mx-auto flex gap-2">
                     <Input
                       placeholder={
