@@ -101,6 +101,20 @@ function ConversationItem({
               Aberta
             </Badge>
           )}
+          {conversation.ai_mode && (
+            <Badge 
+              variant={
+                conversation.ai_mode === 'autopilot' ? "default" : 
+                conversation.ai_mode === 'copilot' ? "outline" : 
+                "secondary"
+              }
+              className="text-xs"
+            >
+              {conversation.ai_mode === 'autopilot' && "🤖"}
+              {conversation.ai_mode === 'copilot' && "🧠"}
+              {conversation.ai_mode === 'disabled' && "👤"}
+            </Badge>
+          )}
           {sentiment && <SentimentBadge sentiment={sentiment} className="text-xs" />}
           {conversation.assigned_user && (
             <Badge variant="secondary" className="text-xs">
