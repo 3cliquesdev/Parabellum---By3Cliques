@@ -145,8 +145,13 @@ export default function PublicChat() {
           ? `Conectado com ${departmentName}` 
           : `Você está falando com o time de ${departmentName}`;
         
-        // FASE 2: Exibir badge de cliente recorrente
-        if (data.is_returning_customer) {
+        // SINGLETON: Identificar se é retomada de conversa existente
+        if (data.is_existing_conversation) {
+          toast({
+            title: "Conversa retomada! 🔄",
+            description: `Continuando sua conversa anterior com ${departmentName}`,
+          });
+        } else if (data.is_returning_customer) {
           toast({
             title: "Bem-vindo de volta! 🔄",
             description: `${toastMsg} - Identificamos seu histórico anterior.`,

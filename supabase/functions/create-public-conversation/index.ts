@@ -123,6 +123,30 @@ serve(async (req) => {
       finalContactId = contact.id;
     }
 
+    // SINGLETON: Verificar se já existe conversa aberta para este contato
+    const { data: existingConversation } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('contact_id', finalContactId)
+      .eq('status', 'open')
+      .limit(1)
+      .maybeSingle();
+
+    if (existingConversation) {
+      console.log('[create-public-conversation] Reusing existing conversation:', existingConversation.id);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          conversation_id: existingConversation.id,
+          contact_id: finalContactId,
+          department_name: department.name,
+          is_returning_customer: customerMetadata.is_returning_customer || false,
+          is_existing_conversation: true, // Flag para frontend saber que é retomada
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Criar conversa pública com customer_metadata
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
