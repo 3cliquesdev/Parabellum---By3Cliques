@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.analyze-ticket]
 verify_jwt = true
+
+[functions.auto-handoff]
+verify_jwt = true
