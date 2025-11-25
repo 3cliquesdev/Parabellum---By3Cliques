@@ -8,10 +8,12 @@ import { Plus, Edit, Trash2, Brain, Zap, Wrench, FlaskConical } from "lucide-rea
 import { SandboxTest } from "@/components/SandboxTest";
 import { RLHFMetricsCard } from "@/components/RLHFMetricsCard";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RoutingRuleDialog } from "@/components/RoutingRuleDialog";
 import { usePersonas } from "@/hooks/usePersonas";
 import { useDeletePersona } from "@/hooks/useDeletePersona";
 import { useUpdatePersona } from "@/hooks/useUpdatePersona";
 import { useRoutingRules } from "@/hooks/useRoutingRules";
+import { useDeleteRoutingRule } from "@/hooks/useDeleteRoutingRule";
 import { useAITools } from "@/hooks/useAITools";
 import { useUpdateAITool } from "@/hooks/useUpdateAITool";
 import { usePersonaTools } from "@/hooks/usePersonaTools";
@@ -22,6 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 export default function AIStudio() {
   const { data: personas, isLoading: loadingPersonas } = usePersonas();
   const { data: routingRules, isLoading: loadingRules } = useRoutingRules();
+  const deleteRoutingRule = useDeleteRoutingRule();
   const { data: tools, isLoading: loadingTools } = useAITools();
   
   const [selectedPersonaForTools, setSelectedPersonaForTools] = useState<string | null>(null);
@@ -241,10 +244,23 @@ export default function AIStudio() {
           {/* Routing Rules Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold flex items-center gap-2">
-                <Zap className="h-6 w-6 text-primary" />
-                Regras de Roteamento
-              </h2>
+              <div>
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <Zap className="h-6 w-6 text-primary" />
+                  Regras de Roteamento
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Defina qual persona responde em cada canal e departamento
+                </p>
+              </div>
+              <RoutingRuleDialog
+                trigger={
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Nova Regra
+                  </Button>
+                }
+              />
             </div>
 
             <Card className="p-6">
@@ -253,34 +269,79 @@ export default function AIStudio() {
                   {routingRules.map((rule) => (
                     <div
                       key={rule.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
+                      className="flex items-center justify-between p-4 border rounded-lg hover:shadow-md transition-all duration-300"
                     >
                       <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <Badge variant="outline">{rule.channel}</Badge>
+                        <div className="flex items-center gap-3 mb-2">
+                          <Badge variant="outline" className="font-mono">
+                            {rule.channel}
+                          </Badge>
                           {rule.department && (
                             <Badge variant="secondary">{rule.department}</Badge>
                           )}
-                          <span className="text-sm text-muted-foreground">
-                            → {rule.ai_personas?.name || "Sem persona"}
+                          {!rule.department && (
+                            <Badge variant="outline" className="text-muted-foreground">
+                              Todos departamentos
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">→</span>
+                          <span className="text-sm font-semibold text-primary">
+                            {rule.ai_personas?.name || "Sem persona"}
                           </span>
+                          {rule.ai_personas?.role && (
+                            <span className="text-xs text-muted-foreground">
+                              ({rule.ai_personas.role})
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Prioridade: {rule.priority}
+                          Prioridade: {rule.priority ?? 0}
                         </p>
                       </div>
-                      <Badge variant={rule.is_active ? "default" : "secondary"}>
-                        {rule.is_active ? "Ativa" : "Inativa"}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={rule.is_active ? "default" : "secondary"}>
+                          {rule.is_active ? "Ativa" : "Inativa"}
+                        </Badge>
+                        <RoutingRuleDialog
+                          trigger={
+                            <Button variant="ghost" size="sm">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          }
+                          rule={rule}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Deletar esta regra de roteamento?')) {
+                              deleteRoutingRule.mutate(rule.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8">
-                  <Zap className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
-                  <p className="text-muted-foreground">
-                    Nenhuma regra de roteamento configurada
+                <div className="text-center py-12">
+                  <Zap className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                  <h3 className="text-lg font-medium mb-2">Nenhuma regra configurada</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Crie regras para rotear conversas automaticamente para personas específicas
                   </p>
+                  <RoutingRuleDialog
+                    trigger={
+                      <Button className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Criar Primeira Regra
+                      </Button>
+                    }
+                  />
                 </div>
               )}
             </Card>

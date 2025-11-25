@@ -29,7 +29,17 @@ serve(async (req) => {
     // 1. Buscar conversa e verificar modo
     const { data: conversation, error: convError } = await supabaseClient
       .from('conversations')
-      .select('ai_mode, contact_id, contacts!inner(first_name, last_name, company)')
+      .select(`
+        ai_mode, 
+        contact_id, 
+        channel,
+        contacts!inner(
+          first_name, 
+          last_name, 
+          company,
+          assigned_user:profiles!contacts_assigned_to_fkey(department)
+        )
+      `)
       .eq('id', conversationId)
       .single();
 
@@ -91,30 +101,69 @@ serve(async (req) => {
 
     console.log('[generate-smart-reply] Chamando Lovable AI para gerar sugestão...');
 
-    // 4. Chamar Lovable AI para gerar resposta sugerida
-    const { data: aiResponse, error: aiError } = await supabaseClient.functions.invoke('analyze-ticket', {
-      body: { 
-        mode: 'reply',
-        description: lastCustomerMessage,
-        ticketSubject: `Conversa com ${contactName}${contactCompany}`,
-        messages: conversationContext
-      }
-    });
+    // 4. Buscar persona baseada em routing rules
+    const channel = conversation.channel || 'whatsapp';
+    const department = (conversation.contacts as any)?.assigned_user?.department || null;
 
-    if (aiError || !aiResponse?.result) {
-      console.error('[generate-smart-reply] Erro ao gerar sugestão:', aiError);
-      return new Response(JSON.stringify({ 
-        error: 'Erro ao gerar sugestão de resposta' 
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    const { data: routingRules } = await supabaseClient
+      .from('ai_routing_rules')
+      .select(`*, ai_personas!inner(*)`)
+      .eq('channel', channel)
+      .eq('is_active', true)
+      .order('priority', { ascending: false });
+
+    let persona = null;
+    if (routingRules && routingRules.length > 0) {
+      const matchedRule = routingRules.find(r => r.department === department) || 
+                          routingRules.find(r => r.department === null);
+      if (matchedRule) {
+        persona = matchedRule.ai_personas;
+      }
     }
 
-    const suggestedReply = aiResponse.result;
+    const systemPrompt = persona 
+      ? `${persona.system_prompt}\n\n**Contexto:** Você está ajudando ${contactName}${contactCompany} em modo Copilot. Sugira respostas profissionais e úteis.`
+      : `Você é um assistente em modo Copilot ajudando ${contactName}${contactCompany}. Sugira respostas profissionais e úteis.`;
+
+    // 5. Chamar Lovable AI para gerar resposta sugerida
+    console.log('[generate-smart-reply] Chamando Lovable AI para gerar sugestão...');
+    
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY não configurada');
+    }
+
+    const aiPayload = {
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Contexto da conversa:\n${conversationContext}\n\nGere uma resposta sugerida profissional para o atendente usar.` }
+      ],
+      temperature: persona?.temperature || 0.7,
+      max_tokens: persona?.max_tokens || 300
+    };
+
+    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(aiPayload),
+    });
+
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error('[generate-smart-reply] Erro na chamada AI:', aiResponse.status, errorText);
+      throw new Error(`Lovable AI error: ${aiResponse.status}`);
+    }
+
+    const aiData = await aiResponse.json();
+    const suggestedReply = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui gerar uma sugestão.';
+
     console.log(`[generate-smart-reply] Sugestão gerada (${suggestedReply.length} chars)`);
 
-    // 5. Salvar sugestão na tabela ai_suggestions
+    // 6. Salvar sugestão na tabela ai_suggestions
     const { data: savedSuggestion, error: saveError } = await supabaseClient
       .from('ai_suggestions')
       .insert({

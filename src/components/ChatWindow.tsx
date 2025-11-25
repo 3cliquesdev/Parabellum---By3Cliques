@@ -12,6 +12,7 @@ import { useMessages, useSendMessage } from "@/hooks/useMessages";
 import { useSendEmail } from "@/hooks/useSendEmail";
 import { useAuth } from "@/hooks/useAuth";
 import { useAIMode } from "@/hooks/useAIMode";
+import { useActivePersona } from "@/hooks/useActivePersona";
 import { useTakeControl } from "@/hooks/useTakeControl";
 import { useReturnToAutopilot } from "@/hooks/useReturnToAutopilot";
 import TransferConversationDialog from "@/components/TransferConversationDialog";
@@ -47,6 +48,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const { user } = useAuth();
   const { data: messages, isLoading } = useMessages(conversation?.id || null);
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
+  const { data: activePersona } = useActivePersona(conversation?.id || null);
   const sendMessage = useSendMessage();
   const sendEmail = useSendEmail();
   const takeControl = useTakeControl();
@@ -163,14 +165,21 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   </Badge>
                 )}
                 {!aiModeLoading && (
-                  <Badge 
-                    variant={isAutopilot ? "default" : isCopilot ? "outline" : "secondary"}
-                    className="text-xs"
-                  >
-                    {isAutopilot && "🤖 Autopilot"}
-                    {isCopilot && "🧠 Copilot"}
-                    {isDisabled && "👤 Manual"}
-                  </Badge>
+                  <>
+                    <Badge 
+                      variant={isAutopilot ? "default" : isCopilot ? "outline" : "secondary"}
+                      className="text-xs"
+                    >
+                      {isAutopilot && "🤖 Autopilot"}
+                      {isCopilot && "🧠 Copilot"}
+                      {isDisabled && "👤 Manual"}
+                    </Badge>
+                    {activePersona && isAutopilot && (
+                      <Badge variant="secondary" className="text-xs">
+                        AI: {activePersona.name}
+                      </Badge>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -259,7 +268,12 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           <Alert className="m-4 border-primary/50 bg-primary/5">
             <Bot className="h-4 w-4 text-primary" />
             <AlertDescription className="text-sm">
-              🤖 <strong>IA está respondendo automaticamente</strong> nesta conversa. 
+              🤖 <strong>{activePersona ? `Persona "${activePersona.name}"` : 'IA'} está respondendo automaticamente</strong> nesta conversa. 
+              {activePersona && (
+                <span className="block mt-1 text-xs text-muted-foreground">
+                  Papel: {activePersona.role}
+                </span>
+              )}
               Clique em "Assumir Controle" para entrar no modo Copilot e receber sugestões de resposta.
             </AlertDescription>
           </Alert>

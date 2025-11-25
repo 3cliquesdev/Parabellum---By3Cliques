@@ -41,3 +41,6 @@ verify_jwt = true
 
 [functions.sandbox-chat]
 verify_jwt = true
+
+[functions.ai-autopilot-chat]
+verify_jwt = false
