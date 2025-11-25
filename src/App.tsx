@@ -102,19 +102,19 @@ const App = () => {
             <Route path="/public/form/:formId" element={<PublicForm />} />
             <Route path="/open-ticket" element={<PublicTicketForm />} />
             <Route path="/tv" element={<TVMode />} />
-            <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
-            <Route path="/inbox" element={<ProtectedRoute><Layout><Inbox /></Layout></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><Dashboard /></Layout></ProtectedRoute>} />
+            <Route path="/inbox" element={<ProtectedRoute allowedRoles={["support_agent", "consultant", "sales_rep", "admin", "manager"]}><Layout><Inbox /></Layout></ProtectedRoute>} />
             <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["consultant", "sales_rep", "manager", "admin"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
-            <Route path="/contacts" element={<ProtectedRoute><Layout><Contacts /></Layout></ProtectedRoute>} />
-            <Route path="/contacts/:id" element={<ProtectedRoute><Layout><ContactDetails /></Layout></ProtectedRoute>} />
-            <Route path="/organizations" element={<ProtectedRoute><Layout><Organizations /></Layout></ProtectedRoute>} />
-            <Route path="/deals" element={<ProtectedRoute><Layout><Deals /></Layout></ProtectedRoute>} />
-            <Route path="/forms" element={<ProtectedRoute><Layout><Forms /></Layout></ProtectedRoute>} />
+            <Route path="/contacts" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "admin", "manager"]}><Layout><Contacts /></Layout></ProtectedRoute>} />
+            <Route path="/contacts/:id" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "admin", "manager"]}><Layout><ContactDetails /></Layout></ProtectedRoute>} />
+            <Route path="/organizations" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "manager"]}><Layout><Organizations /></Layout></ProtectedRoute>} />
+            <Route path="/deals" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><Deals /></Layout></ProtectedRoute>} />
+            <Route path="/forms" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Forms /></Layout></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Users /></Layout></ProtectedRoute>} />
             <Route path="/automations" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Automations /></Layout></ProtectedRoute>} />
             <Route path="/email-templates" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><EmailTemplates /></Layout></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Analytics /></Layout></ProtectedRoute>} />
-            <Route path="/goals" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Goals /></Layout></ProtectedRoute>} />
+            <Route path="/goals" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><Goals /></Layout></ProtectedRoute>} />
             <Route path="/support" element={<ProtectedRoute allowedRoles={["support_agent", "consultant", "admin", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />
             <Route path="/knowledge" element={<ProtectedRoute allowedRoles={["support_agent", "admin", "manager"]}><Layout><Knowledge /></Layout></ProtectedRoute>} />
             <Route path="/ai-studio/personas" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><AIStudio /></Layout></ProtectedRoute>} />
