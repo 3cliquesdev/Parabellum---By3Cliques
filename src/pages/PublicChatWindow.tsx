@@ -186,36 +186,92 @@ export default function PublicChatWindow() {
 
           {messages?.map((msg) => {
             const isCustomer = msg.sender_type === "contact";
+            const isSystem = msg.sender_type === "system";
+            const isAI = msg.is_ai_generated;
+            const isHuman = msg.sender_type === "user" && !msg.is_ai_generated;
+
+            // FASE 5: Mensagem de Sistema (centralizada)
+            if (isSystem) {
+              return (
+                <div key={msg.id} className="flex justify-center py-2">
+                  <p className="text-xs text-muted-foreground text-center max-w-md">
+                    📢 {msg.content}
+                  </p>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={msg.id}
-                className={`flex ${isCustomer ? "justify-end" : "justify-start"}`}
+                className={`flex gap-2 ${isCustomer ? "justify-end" : "justify-start"}`}
               >
-                <Card
-                  className={`max-w-[80%] ${
-                    isCustomer
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card"
-                  }`}
-                >
-                  <CardContent className="p-3">
-                    <p className="text-sm whitespace-pre-wrap break-words">
-                      {msg.content}
-                    </p>
-                    <p
-                      className={`text-xs mt-1 ${
-                        isCustomer
-                          ? "text-primary-foreground/70"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {formatDistanceToNow(new Date(msg.created_at), {
-                        addSuffix: true,
-                        locale: ptBR,
-                      })}
-                    </p>
-                  </CardContent>
-                </Card>
+                {/* FASE 5: Avatar e Nome para mensagens não-cliente */}
+                {!isCustomer && (
+                  <div className="flex flex-col items-center gap-1">
+                    {isAI ? (
+                      <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-accent-foreground">
+                        🤖
+                      </div>
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold">
+                        {msg.sender?.full_name
+                          ?.split(" ")
+                          .map((n: string) => n[0])
+                          .join("")
+                          .toUpperCase() || "?"}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1">
+                  {/* FASE 5: Nome do Remetente */}
+                  {!isCustomer && (
+                    <div className="text-xs text-muted-foreground px-1">
+                      {isAI ? (
+                        <span className="font-medium">Assistente Virtual</span>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium">{msg.sender?.full_name || "Atendente"}</span>
+                          {msg.sender?.job_title && (
+                            <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                              {msg.sender.job_title}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <Card
+                    className={`max-w-[80%] ${
+                      isCustomer
+                        ? "bg-primary text-primary-foreground"
+                        : isAI
+                        ? "bg-accent/50 border-accent"
+                        : "bg-card"
+                    }`}
+                  >
+                    <CardContent className="p-3">
+                      <p className="text-sm whitespace-pre-wrap break-words">
+                        {msg.content}
+                      </p>
+                      <p
+                        className={`text-xs mt-1 ${
+                          isCustomer
+                            ? "text-primary-foreground/70"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {formatDistanceToNow(new Date(msg.created_at), {
+                          addSuffix: true,
+                          locale: ptBR,
+                        })}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             );
           })}

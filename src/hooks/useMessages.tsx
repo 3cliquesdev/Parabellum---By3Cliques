@@ -15,14 +15,23 @@ export function useMessages(conversationId: string | null) {
     queryFn: async () => {
       if (!conversationId) return [];
 
+      // FASE 4: Join com profiles para buscar nome/avatar do remetente
       const { data, error } = await supabase
         .from("messages")
-        .select("*")
+        .select(`
+          *,
+          sender:profiles!sender_id(
+            id,
+            full_name,
+            avatar_url,
+            job_title
+          )
+        `)
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-      return data as Message[];
+      return data as any[];
     },
     enabled: !!conversationId,
   });

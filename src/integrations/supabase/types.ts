@@ -1059,8 +1059,10 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          is_ai_generated: boolean | null
           is_read: boolean | null
           message_type: string | null
+          sender_id: string | null
           sender_type: Database["public"]["Enums"]["sender_type"]
         }
         Insert: {
@@ -1070,8 +1072,10 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
+          is_ai_generated?: boolean | null
           is_read?: boolean | null
           message_type?: string | null
+          sender_id?: string | null
           sender_type: Database["public"]["Enums"]["sender_type"]
         }
         Update: {
@@ -1081,8 +1085,10 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
+          is_ai_generated?: boolean | null
           is_read?: boolean | null
           message_type?: string | null
+          sender_id?: string | null
           sender_type?: Database["public"]["Enums"]["sender_type"]
         }
         Relationships: [
@@ -1091,6 +1097,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1900,7 +1913,7 @@ export type Database = {
         | "meeting"
         | "form_submission"
         | "conversation_transferred"
-      sender_type: "user" | "contact"
+      sender_type: "user" | "contact" | "system"
       ticket_category: "financeiro" | "tecnico" | "bug" | "outro"
       ticket_priority: "low" | "medium" | "high" | "urgent"
       ticket_status:
@@ -2094,7 +2107,7 @@ export const Constants = {
         "form_submission",
         "conversation_transferred",
       ],
-      sender_type: ["user", "contact"],
+      sender_type: ["user", "contact", "system"],
       ticket_category: ["financeiro", "tecnico", "bug", "outro"],
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status: [

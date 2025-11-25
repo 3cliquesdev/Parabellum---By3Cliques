@@ -199,7 +199,9 @@ Lembre-se de usar essas informações de forma natural e personalizada em suas r
         conversation_id: conversationId,
         content: assistantMessage,
         sender_type: 'user', // 'user' = sistema/agente interno
-        message_type: 'text'
+        message_type: 'text',
+        is_ai_generated: true, // FASE 2: Marcar como mensagem da IA
+        sender_id: null // FASE 2: IA não tem profile
       });
 
     if (saveError) {

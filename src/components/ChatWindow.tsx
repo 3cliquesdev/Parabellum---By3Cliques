@@ -291,31 +291,90 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             </div>
           ) : (
             <div className="space-y-4">
-              {messages?.map((message) => (
-                <div
-                  key={message.id}
-                  className={cn(
-                    "flex",
-                    message.sender_type === "user" ? "justify-end" : "justify-start"
-                  )}
-                >
+              {messages?.map((message) => {
+                const isUser = message.sender_type === "user" && !message.is_ai_generated;
+                const isContact = message.sender_type === "contact";
+                const isSystem = message.sender_type === "system";
+                const isAI = message.is_ai_generated;
+
+                // FASE 5: Mensagem de Sistema (centralizada)
+                if (isSystem) {
+                  return (
+                    <div key={message.id} className="flex justify-center py-2">
+                      <p className="text-xs text-muted-foreground text-center max-w-md">
+                        📢 {message.content}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
                   <div
+                    key={message.id}
                     className={cn(
-                      "max-w-[70%] rounded-lg px-4 py-2",
-                      message.sender_type === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-foreground"
+                      "flex gap-2",
+                      isContact ? "justify-start" : "justify-end"
                     )}
                   >
-                    <p className="text-sm whitespace-pre-wrap break-words">
-                      {message.content}
-                    </p>
-                    <span className="text-xs opacity-70 mt-1 block">
-                      {format(new Date(message.created_at), "HH:mm")}
-                    </span>
+                    {/* FASE 5: Avatar e Nome para mensagens não-contato */}
+                    {!isContact && (
+                      <div className="flex flex-col items-center gap-1">
+                        {isAI ? (
+                          <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-accent-foreground">
+                            🤖
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold">
+                            {message.sender?.full_name
+                              ?.split(" ")
+                              .map((n: string) => n[0])
+                              .join("")
+                              .toUpperCase() || "?"}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-1">
+                      {/* FASE 5: Nome do Remetente */}
+                      {!isContact && (
+                        <div className="text-xs text-muted-foreground px-1">
+                          {isAI ? (
+                            <span className="font-medium">Assistente Virtual</span>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium">{message.sender?.full_name || "Atendente"}</span>
+                              {message.sender?.job_title && (
+                                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                                  {message.sender.job_title}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div
+                        className={cn(
+                          "max-w-[70%] rounded-lg px-4 py-2",
+                          isContact
+                            ? "bg-muted text-foreground"
+                            : isAI
+                            ? "bg-accent/50 border border-accent"
+                            : "bg-primary text-primary-foreground"
+                        )}
+                      >
+                        <p className="text-sm whitespace-pre-wrap break-words">
+                          {message.content}
+                        </p>
+                        <span className="text-xs opacity-70 mt-1 block">
+                          {format(new Date(message.created_at), "HH:mm")}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div ref={scrollRef} />
             </div>
           )}

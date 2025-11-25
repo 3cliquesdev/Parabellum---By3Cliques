@@ -34,7 +34,29 @@ export function useTakeControl() {
 
       if (updateError) throw updateError;
 
-      // 2. Gerar nota interna via auto-handoff (opcional - pode ser feito manualmente)
+      // 2. Buscar perfil do usuário para mensagem de sistema
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, job_title')
+        .eq('id', user.id)
+        .single();
+
+      // FASE 3: Inserir mensagem de sistema no chat (visível para cliente)
+      const { error: systemMsgError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          content: `O atendente **${profile?.full_name || 'Suporte'}** entrou na conversa.`,
+          sender_type: 'system',
+          sender_id: user.id,
+          is_ai_generated: false
+        });
+
+      if (systemMsgError) {
+        console.error('[useTakeControl] Erro ao criar mensagem de sistema:', systemMsgError);
+      }
+
+      // 3. Gerar nota interna via auto-handoff (opcional - pode ser feito manualmente)
       // Buscar últimas mensagens
       const { data: messages } = await supabase
         .from('messages')
@@ -56,14 +78,7 @@ export function useTakeControl() {
         });
       }
 
-      // 3. Registrar interação de tomada de controle
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .single();
-
+      // 4. Registrar interação de tomada de controle
       const { error: interactionError } = await supabase
         .from('interactions')
         .insert({
