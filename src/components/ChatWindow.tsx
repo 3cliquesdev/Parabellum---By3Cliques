@@ -48,7 +48,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const [createTicketDialogOpen, setCreateTicketDialogOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
-  const { data: messages, isLoading: isMessagesLoading } = useMessages(conversation?.id || null);
+  const { data: messages = [], isLoading: isMessagesLoading } = useMessages(conversation?.id || null);
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
   const { data: activePersona } = useActivePersona(conversation?.id || null);
   const sendMessage = useSendMessage();
@@ -144,7 +144,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   <AvatarImage src={contact.avatar_url} alt={`${contact.first_name} ${contact.last_name}`} />
                 ) : null}
                 <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-semibold">
-                  {contact?.first_name[0]}{contact?.last_name[0]}
+                  {contact?.first_name?.[0] || ''}{contact?.last_name?.[0] || ''}
                 </AvatarFallback>
               </Avatar>
               <div>
@@ -292,7 +292,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                           {isCustomer && (
                             <Avatar className="w-9 h-9 shrink-0 shadow-sm">
                               <AvatarFallback className="bg-gradient-to-br from-slate-400 to-slate-600 text-white text-sm font-semibold">
-                                {contact?.first_name[0]}{contact?.last_name[0]}
+                                {contact?.first_name?.[0] || ''}{contact?.last_name?.[0] || ''}
                               </AvatarFallback>
                             </Avatar>
                           )}

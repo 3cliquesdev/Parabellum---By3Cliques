@@ -22,7 +22,7 @@ export default function PublicChatWindow() {
   const [isAITyping, setIsAITyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: messages, refetch, isLoading } = useMessages(conversationId || "");
+  const { data: messages = [], refetch, isLoading } = useMessages(conversationId || "");
   
   useAutopilotTrigger(conversationId || null);
 
