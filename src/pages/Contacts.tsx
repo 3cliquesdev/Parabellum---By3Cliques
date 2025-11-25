@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -23,7 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Search, Plus, Mail, Phone, Pencil, Trash2, Eye } from "lucide-react";
+import { Search, Plus, Mail, Phone, Pencil, Trash2, Eye, Filter } from "lucide-react";
 import { useContacts, useDeleteContact } from "@/hooks/useContacts";
 import ContactDialog from "@/components/ContactDialog";
 import type { Tables } from "@/integrations/supabase/types";
@@ -37,7 +44,16 @@ export default function Contacts() {
   const navigate = useNavigate();
   const filter = searchParams.get("filter") || "all";
   const [searchQuery, setSearchQuery] = useState("");
-  const { data: contacts, isLoading } = useContacts(searchQuery);
+  const [customerType, setCustomerType] = useState("all");
+  const [blocked, setBlocked] = useState("all");
+  const [subscriptionPlan, setSubscriptionPlan] = useState("all");
+  
+  const { data: contacts, isLoading } = useContacts({
+    searchQuery,
+    customerType,
+    blocked,
+    subscriptionPlan,
+  });
   const deleteContact = useDeleteContact();
 
   const handleFilterChange = (value: string) => {
@@ -96,7 +112,7 @@ export default function Contacts() {
         </Tabs>
       </div>
 
-      <div className="mb-6 flex items-center gap-4">
+      <div className="mb-6 space-y-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -105,6 +121,62 @@ export default function Contacts() {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
           />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
+          
+          <Select value={customerType} onValueChange={setCustomerType}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Tipo de Cliente" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Tipos</SelectItem>
+              <SelectItem value="Cliente">Cliente</SelectItem>
+              <SelectItem value="Vendedor">Vendedor</SelectItem>
+              <SelectItem value="Fornecedor">Fornecedor</SelectItem>
+              <SelectItem value="Parceiro">Parceiro</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={blocked} onValueChange={setBlocked}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Status</SelectItem>
+              <SelectItem value="false">Ativos</SelectItem>
+              <SelectItem value="true">Bloqueados</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={subscriptionPlan} onValueChange={setSubscriptionPlan}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Plano" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Planos</SelectItem>
+              <SelectItem value="Free">Free</SelectItem>
+              <SelectItem value="Basic">Basic</SelectItem>
+              <SelectItem value="Premium">Premium</SelectItem>
+              <SelectItem value="Enterprise">Enterprise</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {(customerType !== 'all' || blocked !== 'all' || subscriptionPlan !== 'all') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setCustomerType('all');
+                setBlocked('all');
+                setSubscriptionPlan('all');
+              }}
+            >
+              Limpar Filtros
+            </Button>
+          )}
         </div>
       </div>
 
@@ -122,7 +194,9 @@ export default function Contacts() {
                 <TableHead>Nome</TableHead>
                 <TableHead>E-mail</TableHead>
                 <TableHead>Telefone</TableHead>
-                <TableHead>Organização</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Plano</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="w-[150px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -162,10 +236,24 @@ export default function Contacts() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {contact.organizations ? (
-                      <Badge variant="secondary">{contact.organizations.name}</Badge>
+                    {contact.customer_type ? (
+                      <Badge variant="outline">{contact.customer_type}</Badge>
                     ) : (
                       <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {contact.subscription_plan ? (
+                      <Badge variant="secondary">{contact.subscription_plan}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {contact.blocked ? (
+                      <Badge variant="destructive">Bloqueado</Badge>
+                    ) : (
+                      <Badge variant="default" className="bg-green-500">Ativo</Badge>
                     )}
                   </TableCell>
                   <TableCell>

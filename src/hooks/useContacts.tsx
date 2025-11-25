@@ -9,22 +9,42 @@ type Contact = Tables<"contacts">;
 type ContactInsert = TablesInsert<"contacts">;
 type ContactUpdate = TablesUpdate<"contacts">;
 
-export function useContacts(searchQuery?: string) {
+interface ContactFilters {
+  searchQuery?: string;
+  customerType?: string;
+  blocked?: string;
+  subscriptionPlan?: string;
+}
+
+export function useContacts(filters?: ContactFilters) {
   const { user } = useAuth();
   const { role } = useUserRole();
 
   return useQuery({
-    queryKey: ["contacts", searchQuery, user?.id, role],
+    queryKey: ["contacts", filters, user?.id, role],
     queryFn: async () => {
       let query = supabase
         .from("contacts")
         .select("*, organizations(name)")
         .order("created_at", { ascending: false });
 
-      if (searchQuery) {
+      if (filters?.searchQuery) {
         query = query.or(
-          `first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
+          `first_name.ilike.%${filters.searchQuery}%,last_name.ilike.%${filters.searchQuery}%,email.ilike.%${filters.searchQuery}%`
         );
+      }
+
+      // Filtros avançados
+      if (filters?.customerType && filters.customerType !== 'all') {
+        query = query.eq("customer_type", filters.customerType);
+      }
+
+      if (filters?.blocked && filters.blocked !== 'all') {
+        query = query.eq("blocked", filters.blocked === 'true');
+      }
+
+      if (filters?.subscriptionPlan && filters.subscriptionPlan !== 'all') {
+        query = query.eq("subscription_plan", filters.subscriptionPlan);
       }
 
       // Filtrar por assigned_to se for sales_rep
