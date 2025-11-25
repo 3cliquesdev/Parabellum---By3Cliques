@@ -55,8 +55,8 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   
   if (!conversation) {
     return (
-      <div className="w-96 border-l border-border bg-card p-6">
-        <p className="text-muted-foreground text-center">
+      <div className="w-96 border-l bg-slate-50 dark:bg-card border-slate-200 dark:border-border p-6">
+        <p className="text-slate-500 dark:text-muted-foreground text-center">
           Selecione uma conversa
         </p>
       </div>
@@ -90,8 +90,8 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   };
 
   return (
-    <div className="w-96 flex-none border-l border-border bg-card flex flex-col h-full overflow-hidden">
-      <div className="flex-none p-6 border-b border-border">
+    <div className="w-96 flex-none border-l bg-slate-50 dark:bg-card border-slate-200 dark:border-border flex flex-col h-full overflow-hidden">
+      <div className="flex-none p-6 border-b border-slate-200 dark:border-border">
           {/* Contact Info */}
           <div className="flex flex-col items-center mb-6">
             <Avatar className="h-20 w-20 bg-primary/10 flex items-center justify-center mb-3">

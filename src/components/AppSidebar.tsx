@@ -1,5 +1,6 @@
 import { useLocation } from "react-router-dom";
-import { 
+import { cn } from "@/lib/utils";
+import {
   LayoutDashboard, 
   Inbox,
   Users, 
@@ -171,9 +172,12 @@ export function AppSidebar() {
   );
 
   return (
-    <Sidebar className={collapsed ? "w-[60px]" : "w-[280px]"} collapsible="icon">
+    <Sidebar className={cn(
+      collapsed ? "w-[60px]" : "w-[280px]",
+      "bg-slate-50 dark:bg-card border-r border-slate-200 dark:border-border"
+    )} collapsible="icon">
       {/* Header com Logo e Badge de Modo */}
-      <SidebarHeader className="border-b border-border p-4">
+      <SidebarHeader className="border-b border-slate-200 dark:border-border p-4">
         {!collapsed ? (
           <div className="space-y-3">
             <div className="flex items-center gap-3">

@@ -86,7 +86,7 @@ function ConversationItem({
       onClick={onClick}
       className={cn(
         "w-full p-4 flex items-start gap-3 hover:bg-accent transition-colors text-left",
-        isActive && "bg-accent"
+        isActive && "bg-primary text-primary-foreground"
       )}
     >
       <Avatar className="h-12 w-12 bg-primary/10 flex items-center justify-center">
@@ -97,11 +97,17 @@ function ConversationItem({
       </Avatar>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
-          <p className="font-medium text-foreground truncate">
+          <p className={cn(
+            "font-medium truncate",
+            isActive ? "text-primary-foreground" : "text-foreground"
+          )}>
             {conversation.contacts?.first_name || 'Cliente'}{" "}
             {conversation.contacts?.last_name || ''}
           </p>
-          <span className="text-xs text-muted-foreground">
+          <span className={cn(
+            "text-xs",
+            isActive ? "text-primary-foreground/70" : "text-slate-500 dark:text-muted-foreground"
+          )}>
             {formatDistanceToNow(new Date(conversation.last_message_at), {
               addSuffix: true,
               locale: ptBR,
@@ -164,8 +170,8 @@ export default function ConversationList({
   onSelectConversation,
 }: ConversationListProps) {
   return (
-    <div className="w-80 flex-none border-r border-border bg-card flex flex-col h-full overflow-hidden">
-      <div className="flex-none p-4 border-b border-border">
+    <div className="w-80 flex-none border-r bg-white dark:bg-card border-slate-200 dark:border-border flex flex-col h-full overflow-hidden">
+      <div className="flex-none p-4 border-b border-slate-200 dark:border-border">
         <h2 className="text-lg font-semibold text-foreground">Conversas</h2>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
