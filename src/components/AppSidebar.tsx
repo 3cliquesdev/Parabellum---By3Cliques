@@ -17,7 +17,12 @@ import {
   Headphones,
   Brain,
   Package,
-  Briefcase
+  Briefcase,
+  Book,
+  Ticket,
+  MessageCircle,
+  DollarSign,
+  CheckSquare
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -39,54 +44,80 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import ProfileEditDialog from "@/components/ProfileEditDialog";
 
-const mainItems = [
-  { title: "Dashboard", href: "/", icon: LayoutDashboard },
-  { title: "Inbox", href: "/inbox", icon: Inbox },
-  { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase, requiresRole: true },
+// ============= SUPPORT AGENT MENU (🛡️) =============
+const supportAgentMainItems = [
+  { title: "Inbox", href: "/inbox", icon: MessageCircle },
+  { title: "Fila de Tickets", href: "/support", icon: Ticket },
 ];
 
-// Consultant-only navigation items
+const supportAgentToolsItems = [
+  { title: "Base de Conhecimento", href: "/knowledge", icon: Book },
+  { title: "Contatos", href: "/contacts", icon: Users },
+];
+
+// ============= CONSULTANT MENU (🤝) =============
 const consultantMainItems = [
   { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase },
-  { title: "Clientes", href: "/contacts", icon: Users },
-  { title: "Inbox", href: "/inbox", icon: Inbox },
+  { title: "Inbox", href: "/inbox", icon: MessageCircle },
 ];
 
-const consultantSupportItems = [
+const consultantClientItems = [
+  { title: "Contatos", href: "/contacts", icon: Users },
   { title: "Tickets", href: "/support", icon: Headphones },
 ];
 
-const crmItems = [
+// ============= SALES REP MENU (🎯) =============
+const salesRepMainItems = [
+  { title: "Dashboard", href: "/", icon: LayoutDashboard },
+  { title: "Inbox", href: "/inbox", icon: MessageCircle },
+];
+
+const salesRepSalesItems = [
+  { title: "Negócios", href: "/deals", icon: DollarSign },
   { title: "Contatos", href: "/contacts", icon: Users },
   { title: "Organizações", href: "/organizations", icon: Building2 },
-  { title: "Negócios", href: "/deals", icon: TrendingUp },
 ];
 
-const automationItems = [
-  { title: "Automações", href: "/automations", icon: Zap },
-  { title: "Templates de Email", href: "/email-templates", icon: Mail },
-  { title: "AI Studio", href: "/ai-studio/personas", icon: Brain },
+const salesRepMetricsItems = [
+  { title: "Minhas Metas", href: "/goals", icon: Target },
 ];
 
-const reportItems = [
+// ============= ADMIN/MANAGER MENU (👑) =============
+const adminOverviewItems = [
+  { title: "Dashboard", href: "/", icon: LayoutDashboard },
   { title: "Analytics", href: "/analytics", icon: BarChart3 },
-  { title: "Metas", href: "/goals", icon: Target },
 ];
 
-const supportItems = [
+const adminOperationItems = [
+  { title: "Inbox", href: "/inbox", icon: MessageCircle },
   { title: "Tickets", href: "/support", icon: Headphones },
-  { title: "Importar Clientes", href: "/import-clients", icon: Upload },
+  { title: "Negócios", href: "/deals", icon: TrendingUp },
+  { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase },
 ];
 
-const formsItems = [
+const adminCrmItems = [
+  { title: "Contatos", href: "/contacts", icon: Users },
+  { title: "Organizações", href: "/organizations", icon: Building2 },
+];
+
+const adminStrategyItems = [
+  { title: "Automações", href: "/automations", icon: Zap },
+  { title: "AI Studio", href: "/ai-studio/personas", icon: Brain },
+  { title: "Templates de Email", href: "/email-templates", icon: Mail },
   { title: "Formulários", href: "/forms", icon: FileText },
 ];
 
-const managementItems = [
+const adminReportsItems = [
+  { title: "Metas", href: "/goals", icon: Target },
+];
+
+const adminSystemItems = [
   { title: "Produtos", href: "/settings/products", icon: Package },
   { title: "Usuários", href: "/users", icon: UserCog },
+  { title: "Importar Clientes", href: "/import-clients", icon: Upload },
   { title: "Configurações", href: "/settings", icon: Settings },
 ];
 
@@ -94,15 +125,21 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { isAdmin, isManager, isSalesRep, isConsultant, loading } = useUserRole();
+  const { isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, loading } = useUserRole();
   const { signOut, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const isActive = (path: string) => {
-    if (path === "/") return location.pathname === "/";
-    return location.pathname.startsWith(path);
+  // Determine mode label and color
+  const getModeInfo = () => {
+    if (isSupportAgent) return { label: "🛡️ Modo Suporte", color: "bg-blue-500" };
+    if (isConsultant && !isAdmin && !isManager) return { label: "🤝 Modo Consultor", color: "bg-green-500" };
+    if (isSalesRep && !isAdmin && !isManager) return { label: "🎯 Modo Vendas", color: "bg-orange-500" };
+    if (isAdmin || isManager) return { label: "👑 Modo Admin", color: "bg-purple-500" };
+    return { label: "Sistema", color: "bg-gray-500" };
   };
+
+  const modeInfo = getModeInfo();
 
   const handleSignOut = async () => {
     await signOut();
@@ -113,264 +150,197 @@ export function AppSidebar() {
     navigate("/auth");
   };
 
+  const renderMenuItem = (item: { title: string; href: string; icon: any }) => (
+    <SidebarMenuItem key={item.title}>
+      <SidebarMenuButton asChild>
+        <NavLink
+          to={item.href}
+          end={item.href === "/"}
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+        >
+          <item.icon className="h-5 w-5 flex-shrink-0" />
+          {!collapsed && <span>{item.title}</span>}
+        </NavLink>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+
   return (
     <Sidebar className={collapsed ? "w-[60px]" : "w-[280px]"} collapsible="icon">
-      {/* Header com Logo */}
+      {/* Header com Logo e Badge de Modo */}
       <SidebarHeader className="border-b border-border p-4">
         {!collapsed ? (
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary">
-              <span className="text-xl font-bold text-primary-foreground">C</span>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary">
+                <span className="text-xl font-bold text-primary-foreground">C</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">CRM</h2>
+                <p className="text-xs text-muted-foreground">Sistema de Vendas</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-foreground">CRM</h2>
-              <p className="text-xs text-muted-foreground">Sistema de Vendas</p>
-            </div>
+            <Badge variant="secondary" className="w-full justify-center text-xs font-medium">
+              {modeInfo.label}
+            </Badge>
           </div>
         ) : (
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary mx-auto">
-            <span className="text-xl font-bold text-primary-foreground">C</span>
+          <div className="space-y-2">
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary mx-auto">
+              <span className="text-xl font-bold text-primary-foreground">C</span>
+            </div>
+            <div className={`h-1 w-8 rounded mx-auto ${modeInfo.color}`} />
           </div>
         )}
       </SidebarHeader>
 
       <SidebarContent className="px-2">
-        {/* Loading state - prevent flickering */}
+        {/* Loading state */}
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-sm text-muted-foreground">Carregando menu...</div>
           </div>
         ) : (
           <>
-            {/* Consultant-only simplified navigation */}
+            {/* ============= SUPPORT AGENT VIEW (🛡️) ============= */}
+            {isSupportAgent && !isAdmin && !isManager ? (
+              <>
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {supportAgentMainItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Ferramentas</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {supportAgentToolsItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            ) : null}
+
+            {/* ============= CONSULTANT VIEW (🤝) ============= */}
             {isConsultant && !isAdmin && !isManager ? (
-          <>
-            {/* Gestão de Carteira */}
-            <SidebarGroup>
-              {!collapsed && <SidebarGroupLabel>Gestão de Carteira</SidebarGroupLabel>}
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {consultantMainItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <NavLink
-                          to={item.href}
-                          end={item.href === "/"}
-                          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                          activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                        >
-                          <item.icon className="h-5 w-5 flex-shrink-0" />
-                          {!collapsed && <span>{item.title}</span>}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+              <>
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {consultantMainItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
 
-            {/* Suporte */}
-            <SidebarGroup>
-              {!collapsed && <SidebarGroupLabel>Suporte</SidebarGroupLabel>}
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {consultantSupportItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <NavLink
-                          to={item.href}
-                          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                          activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                        >
-                          <item.icon className="h-5 w-5 flex-shrink-0" />
-                          {!collapsed && <span>{item.title}</span>}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </>
-        ) : (
-          <>
-            {/* Standard navigation for admin/manager/sales_rep */}
-            {/* Principal */}
-            <SidebarGroup>
-              {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {mainItems.map((item) => {
-                    // Hide "Minha Carteira" for users without consultant/sales_rep/manager/admin role
-                    if (item.requiresRole && !isAdmin && !isManager && !isSalesRep && !isConsultant) return null;
-                    
-                    return (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild>
-                          <NavLink
-                            to={item.href}
-                            end={item.href === "/"}
-                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                          >
-                            <item.icon className="h-5 w-5 flex-shrink-0" />
-                            {!collapsed && <span>{item.title}</span>}
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Clientes</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {consultantClientItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            ) : null}
 
-            {/* CRM */}
-            <SidebarGroup>
-              {!collapsed && <SidebarGroupLabel>CRM</SidebarGroupLabel>}
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {crmItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <NavLink
-                          to={item.href}
-                          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                          activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                        >
-                          <item.icon className="h-5 w-5 flex-shrink-0" />
-                          {!collapsed && <span>{item.title}</span>}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+            {/* ============= SALES REP VIEW (🎯) ============= */}
+            {isSalesRep && !isAdmin && !isManager && !isConsultant ? (
+              <>
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {salesRepMainItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
 
-            {/* Automação - apenas admin/manager */}
-            {(isAdmin || isManager) && (
-              <SidebarGroup>
-                {!collapsed && <SidebarGroupLabel>Automação</SidebarGroupLabel>}
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {automationItems.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild>
-                          <NavLink
-                            to={item.href}
-                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                          >
-                            <item.icon className="h-5 w-5 flex-shrink-0" />
-                            {!collapsed && <span>{item.title}</span>}
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Vendas</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {salesRepSalesItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
 
-            {/* Relatórios - apenas admin/manager */}
-            {(isAdmin || isManager) && (
-              <SidebarGroup>
-                {!collapsed && <SidebarGroupLabel>Relatórios</SidebarGroupLabel>}
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {reportItems.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild>
-                          <NavLink
-                            to={item.href}
-                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                          >
-                            <item.icon className="h-5 w-5 flex-shrink-0" />
-                            {!collapsed && <span>{item.title}</span>}
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Métricas</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {salesRepMetricsItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            ) : null}
 
-            {/* Suporte - apenas admin/manager */}
-            {(isAdmin || isManager) && (
-              <SidebarGroup>
-                {!collapsed && <SidebarGroupLabel>Suporte</SidebarGroupLabel>}
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {supportItems.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild>
-                          <NavLink
-                            to={item.href}
-                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                          >
-                            <item.icon className="h-5 w-5 flex-shrink-0" />
-                            {!collapsed && <span>{item.title}</span>}
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
+            {/* ============= ADMIN/MANAGER VIEW (👑) ============= */}
+            {isAdmin || isManager ? (
+              <>
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Visão Geral</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {adminOverviewItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
 
-            {/* Formulários */}
-            <SidebarGroup>
-              {!collapsed && <SidebarGroupLabel>Formulários</SidebarGroupLabel>}
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {formsItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <NavLink
-                          to={item.href}
-                          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                          activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                        >
-                          <item.icon className="h-5 w-5 flex-shrink-0" />
-                          {!collapsed && <span>{item.title}</span>}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Operação</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {adminOperationItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
 
-            {/* Gestão - apenas admin */}
-            {isAdmin && (
-              <SidebarGroup>
-                {!collapsed && <SidebarGroupLabel>Gestão</SidebarGroupLabel>}
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {managementItems.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild>
-                          <NavLink
-                            to={item.href}
-                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                          >
-                            <item.icon className="h-5 w-5 flex-shrink-0" />
-                            {!collapsed && <span>{item.title}</span>}
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
-          </>
-            )}
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>CRM</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {adminCrmItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Estratégia</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {adminStrategyItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Relatórios</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {adminReportsItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                {isAdmin && (
+                  <SidebarGroup>
+                    {!collapsed && <SidebarGroupLabel>Sistema</SidebarGroupLabel>}
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {adminSystemItems.map(renderMenuItem)}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                )}
+              </>
+            ) : null}
           </>
         )}
       </SidebarContent>
