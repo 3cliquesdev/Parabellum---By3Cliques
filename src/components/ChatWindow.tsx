@@ -139,7 +139,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                 {contact?.avatar_url ? (
                   <AvatarImage src={contact.avatar_url} alt={`${contact.first_name} ${contact.last_name}`} />
                 ) : null}
-                <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-green-600 text-white text-sm font-semibold">
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-semibold">
                   {contact?.first_name[0]}{contact?.last_name[0]}
                 </AvatarFallback>
               </Avatar>
