@@ -148,7 +148,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
       )}
       
       {conversation ? (
-        <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
+        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-slate-50 dark:bg-slate-950">
           <div className="flex-none border-b border-slate-200 dark:border-slate-800 px-4 py-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur flex items-center gap-3 justify-between">
             <div className="flex items-center gap-3">
               <Avatar className="w-10 h-10 shrink-0">
@@ -275,8 +275,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             </Alert>
           )}
 
-          <ScrollArea className="flex-1 overflow-hidden">
-            <div className="p-4 md:p-6 min-h-full">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="p-4 md:p-6">
               <div className="max-w-3xl mx-auto w-full">
                 {conversation.status === "closed" && (
                   <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 text-center">
@@ -395,7 +395,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                 )}
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
           {isCopilot && conversation && (
             <div className="flex-none mx-4 mb-2">
@@ -407,7 +407,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           )}
 
           {isAutopilot ? (
-            <div className="flex-none p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">
+            <div className="flex-none p-4 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur">
               <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                 <Bot className="h-4 w-4" />
                 <span>Modo Piloto Automático - Digite mensagens desabilitado</span>

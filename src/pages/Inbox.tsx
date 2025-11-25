@@ -120,8 +120,8 @@ export default function Inbox() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="border-b border-border px-6 py-4">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex-none border-b border-border px-6 py-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-foreground">Caixa de Entrada</h2>
           <div className="text-sm text-muted-foreground">
@@ -186,7 +186,7 @@ export default function Inbox() {
         </div>
       </div>
       
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         <ConversationList
           conversations={filteredConversations}
           activeConversationId={activeConversation?.id || null}

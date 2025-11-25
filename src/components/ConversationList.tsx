@@ -164,11 +164,11 @@ export default function ConversationList({
   onSelectConversation,
 }: ConversationListProps) {
   return (
-    <div className="w-80 border-r border-border bg-card flex flex-col">
-      <div className="p-4 border-b border-border">
+    <div className="w-80 flex-none border-r border-border bg-card flex flex-col h-full overflow-hidden">
+      <div className="flex-none p-4 border-b border-border">
         <h2 className="text-lg font-semibold text-foreground">Conversas</h2>
       </div>
-      <ScrollArea className="flex-1">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {conversations.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground">
             Nenhuma conversa ainda
@@ -186,7 +186,7 @@ export default function ConversationList({
             ))}
           </div>
         )}
-      </ScrollArea>
+      </div>
     </div>
   );
 }

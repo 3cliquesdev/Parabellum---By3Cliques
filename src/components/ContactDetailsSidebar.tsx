@@ -90,9 +90,8 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   };
 
   return (
-    <div className="w-96 border-l border-border bg-card flex flex-col">
-      <ScrollArea className="flex-1">
-        <div className="p-6">
+    <div className="w-96 flex-none border-l border-border bg-card flex flex-col h-full overflow-hidden">
+      <div className="flex-none p-6 border-b border-border">
           {/* Contact Info */}
           <div className="flex flex-col items-center mb-6">
             <Avatar className="h-20 w-20 bg-primary/10 flex items-center justify-center mb-3">
@@ -122,8 +121,11 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
               </div>
             )}
           </div>
+        </div>
 
-          <Separator className="my-4" />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="p-6 pt-4">
+          <Separator className="mb-4" />
 
           {/* Contact Details */}
           <div className="space-y-4">
@@ -165,7 +167,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
             <Separator />
 
             {/* Tabs Navigation */}
-            <Tabs defaultValue="tickets" className="w-full">
+            <Tabs defaultValue="tickets" className="w-full -mx-6 px-6">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="tickets" className="text-xs">
                   <Ticket className="h-3 w-3 mr-1" />
@@ -182,7 +184,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
               </TabsList>
 
               {/* Tickets Tab */}
-              <TabsContent value="tickets" className="mt-4">
+              <TabsContent value="tickets" className="mt-4 space-y-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-medium text-muted-foreground uppercase">
                     Tickets Ativos ({openTickets.length})
@@ -243,7 +245,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
               </TabsContent>
 
               {/* Deals Tab */}
-              <TabsContent value="deals" className="mt-4">
+              <TabsContent value="deals" className="mt-4 space-y-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-medium text-muted-foreground uppercase">
                     Negócios ({contactDeals?.length || 0})
@@ -304,7 +306,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
               </TabsContent>
 
               {/* Timeline Tab */}
-              <TabsContent value="timeline" className="mt-4">
+              <TabsContent value="timeline" className="mt-4 space-y-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-medium text-muted-foreground uppercase">
                     Últimas Interações
@@ -338,7 +340,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
             </Tabs>
           </div>
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
