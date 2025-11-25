@@ -3,9 +3,53 @@
   if (window.__PUBLIC_CHAT_WIDGET_LOADED__) return;
   window.__PUBLIC_CHAT_WIDGET_LOADED__ = true;
 
+  // Constantes
+  const IDENTITY_STORAGE_KEY = "public_chat_identity";
+  const IDENTITY_EXPIRES_DAYS = 30;
+
   // Detectar departamento via data-attribute
   const scriptTag = document.currentScript;
   const department = scriptTag?.dataset?.department || '';
+
+  // Verificar identidade armazenada
+  function getStoredIdentity() {
+    const stored = localStorage.getItem(IDENTITY_STORAGE_KEY);
+    if (!stored) return null;
+
+    try {
+      const identity = JSON.parse(stored);
+      const expiresAt = new Date(identity.expires_at);
+      const now = new Date();
+
+      if (expiresAt > now) {
+        return identity;
+      } else {
+        localStorage.removeItem(IDENTITY_STORAGE_KEY);
+        return null;
+      }
+    } catch (error) {
+      console.error("Erro ao ler identidade:", error);
+      localStorage.removeItem(IDENTITY_STORAGE_KEY);
+      return null;
+    }
+  }
+
+  // Salvar identidade
+  function saveIdentity(email, firstName) {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + IDENTITY_EXPIRES_DAYS);
+
+    const identity = {
+      email,
+      first_name: firstName,
+      last_name: "",
+      identified_at: new Date().toISOString(),
+      expires_at: expiresAt.toISOString(),
+    };
+
+    localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(identity));
+    return identity;
+  }
 
   // Criar container do widget
   const container = document.createElement('div');
@@ -89,6 +133,49 @@
       opacity: 1;
     }
     
+    .pcw-identity-form {
+      margin-bottom: 16px;
+    }
+    
+    .pcw-form-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    
+    .pcw-input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid hsl(var(--border, 240 5% 84%));
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    
+    .pcw-input:focus {
+      outline: none;
+      border-color: hsl(var(--primary, 221 83% 53%));
+    }
+    
+    .pcw-submit-btn {
+      width: 100%;
+      background: hsl(var(--primary, 221 83% 53%));
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: opacity 0.2s;
+    }
+    
+    .pcw-submit-btn:hover {
+      opacity: 0.9;
+    }
+    
     .pcw-option {
       display: flex;
       align-items: center;
@@ -146,6 +233,12 @@
           </svg>
         </button>
       </div>
+      <div class="pcw-identity-form" id="pcw-identity-form" style="display: none;">
+        <div class="pcw-form-title">Identifique-se para começar</div>
+        <input type="email" id="pcw-email-input" class="pcw-input" placeholder="Seu email" required />
+        <input type="text" id="pcw-name-input" class="pcw-input" placeholder="Seu nome" required />
+        <button id="pcw-submit-identity" class="pcw-submit-btn">Continuar</button>
+      </div>
       <div id="pcw-options"></div>
     </div>
     <button class="pcw-button" id="pcw-toggle">
@@ -154,6 +247,79 @@
       </svg>
     </button>
   `;
+
+  // Event listeners
+  const toggleBtn = document.getElementById('pcw-toggle');
+  const closeBtn = document.getElementById('pcw-close');
+  const menu = document.getElementById('pcw-menu');
+  const identityForm = document.getElementById('pcw-identity-form');
+  const emailInput = document.getElementById('pcw-email-input');
+  const nameInput = document.getElementById('pcw-name-input');
+  const submitIdentityBtn = document.getElementById('pcw-submit-identity');
+  const optionsContainer = document.getElementById('pcw-options');
+
+  // Toggle menu
+  toggleBtn.addEventListener('click', () => {
+    const isOpen = menu.classList.contains('open');
+    const storedIdentity = getStoredIdentity();
+    
+    if (!isOpen) {
+      // Abrindo menu
+      menu.classList.add('open');
+      
+      if (!storedIdentity) {
+        // Mostrar formulário de identificação
+        identityForm.style.display = 'block';
+        optionsContainer.style.display = 'none';
+      } else {
+        // Já identificado, mostrar opções de chat
+        identityForm.style.display = 'none';
+        optionsContainer.style.display = 'block';
+      }
+    } else {
+      // Fechando menu
+      menu.classList.remove('open');
+    }
+  });
+
+  // Submit identity
+  submitIdentityBtn.addEventListener('click', () => {
+    const email = emailInput.value.trim();
+    const name = nameInput.value.trim();
+
+    if (!email || !name) {
+      alert('Por favor, preencha email e nome');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      alert('Por favor, digite um email válido');
+      return;
+    }
+
+    // Salvar identidade
+    saveIdentity(email, name);
+
+    // Esconder formulário e mostrar opções
+    identityForm.style.display = 'none';
+    optionsContainer.style.display = 'block';
+
+    // Limpar inputs
+    emailInput.value = '';
+    nameInput.value = '';
+  });
+
+  // Close menu
+  closeBtn.addEventListener('click', () => {
+    menu.classList.remove('open');
+  });
+
+  // Fechar ao clicar fora
+  document.addEventListener('click', (e) => {
+    if (!container.contains(e.target)) {
+      menu.classList.remove('open');
+    }
+  });
 
   // Fetch configuração do departamento para pegar WhatsApp
   fetch(window.location.origin + '/api/departments?dept=' + department)
@@ -203,26 +369,6 @@
         </button>
       `;
       
-      document.getElementById('pcw-options').innerHTML = optionsHtml;
+      optionsContainer.innerHTML = optionsHtml;
     });
-
-  // Event listeners
-  const toggleBtn = document.getElementById('pcw-toggle');
-  const closeBtn = document.getElementById('pcw-close');
-  const menu = document.getElementById('pcw-menu');
-
-  toggleBtn.addEventListener('click', () => {
-    menu.classList.toggle('open');
-  });
-
-  closeBtn.addEventListener('click', () => {
-    menu.classList.remove('open');
-  });
-
-  // Fechar ao clicar fora
-  document.addEventListener('click', (e) => {
-    if (!container.contains(e.target)) {
-      menu.classList.remove('open');
-    }
-  });
 })();

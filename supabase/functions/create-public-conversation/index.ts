@@ -17,7 +17,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { department_id } = await req.json();
+    const { department_id, contact_id } = await req.json();
 
     if (!department_id) {
       return new Response(
@@ -41,31 +41,38 @@ serve(async (req) => {
       );
     }
 
-    // Criar contato provisório (guest)
-    const { data: contact, error: contactError } = await supabase
-      .from('contacts')
-      .insert({
-        first_name: 'Visitante',
-        last_name: `#${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        email: `guest-${Date.now()}@temp.com`,
-        source: 'chat_widget',
-      })
-      .select()
-      .single();
+    // Usar contact_id fornecido ou criar contato provisório (guest)
+    let finalContactId = contact_id;
+    
+    if (!finalContactId) {
+      // Criar contato provisório (guest) - backward compatibility
+      const { data: contact, error: contactError } = await supabase
+        .from('contacts')
+        .insert({
+          first_name: 'Visitante',
+          last_name: `#${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+          email: `guest-${Date.now()}@temp.com`,
+          source: 'chat_widget',
+        })
+        .select()
+        .single();
 
-    if (contactError || !contact) {
-      console.error('[create-public-conversation] Error creating contact:', contactError);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Erro ao criar contato' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
+      if (contactError || !contact) {
+        console.error('[create-public-conversation] Error creating contact:', contactError);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Erro ao criar contato' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+      
+      finalContactId = contact.id;
     }
 
     // Criar conversa pública
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
       .insert({
-        contact_id: contact.id,
+        contact_id: finalContactId,
         department: department_id,
         channel: 'web_chat',
         status: 'open',
@@ -86,7 +93,7 @@ serve(async (req) => {
     await supabase
       .from('interactions')
       .insert({
-        customer_id: contact.id,
+        customer_id: finalContactId,
         type: 'note',
         content: `Conversa pública iniciada via widget de chat (Departamento: ${department.name})`,
         channel: 'other',
@@ -98,13 +105,13 @@ serve(async (req) => {
         },
       });
 
-    console.log('[create-public-conversation] Success:', { conversation_id: conversation.id });
+    console.log('[create-public-conversation] Success:', { conversation_id: conversation.id, contact_id: finalContactId });
 
     return new Response(
       JSON.stringify({
         success: true,
         conversation_id: conversation.id,
-        contact_id: contact.id,
+        contact_id: finalContactId,
         department_name: department.name,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
