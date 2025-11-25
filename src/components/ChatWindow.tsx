@@ -4,13 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Send, Mail, MessageCircle, ArrowRightLeft } from "lucide-react";
+import { Send, Mail, MessageCircle, ArrowRightLeft, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
 import { useSendEmail } from "@/hooks/useSendEmail";
 import { useAuth } from "@/hooks/useAuth";
 import TransferConversationDialog from "@/components/TransferConversationDialog";
+import { CreateTicketFromInboxDialog } from "@/components/CreateTicketFromInboxDialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -36,6 +37,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const [emailSubject, setEmailSubject] = useState("");
   const [isEmailMode, setIsEmailMode] = useState(false);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [createTicketDialogOpen, setCreateTicketDialogOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { data: messages, isLoading } = useMessages(conversation?.id || null);
@@ -99,6 +101,12 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
         conversation={conversation}
         currentUserId={user?.id || ""}
       />
+      <CreateTicketFromInboxDialog
+        open={createTicketDialogOpen}
+        onOpenChange={setCreateTicketDialogOpen}
+        conversationId={conversation?.id || null}
+        contactName={`${conversation?.contacts.first_name} ${conversation?.contacts.last_name}`}
+      />
       <div className="flex-1 flex flex-col bg-black">
         {/* Header */}
         <div className="h-16 border-b border-border bg-card flex items-center px-4 gap-3 justify-between">
@@ -125,6 +133,17 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           </div>
           
           <div className="flex items-center gap-2">
+            {/* Generate Ticket Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCreateTicketDialogOpen(true)}
+              className="h-8 gap-1 bg-primary/10 border-primary/20 hover:bg-primary/20"
+            >
+              <FileText className="h-4 w-4" />
+              <span className="text-xs">Gerar Ticket</span>
+            </Button>
+            
             {/* Transfer Button */}
             <Button
               variant="outline"
