@@ -174,7 +174,7 @@ export function AppSidebar() {
   return (
     <Sidebar className={cn(
       collapsed ? "w-[60px]" : "w-[280px]",
-      "bg-slate-50 dark:bg-card border-r border-slate-200 dark:border-border"
+      "bg-[hsl(var(--sidebar-background))] dark:bg-card border-r border-slate-200 dark:border-border"
     )} collapsible="icon">
       {/* Header com Logo e Badge de Modo */}
       <SidebarHeader className="border-b border-slate-200 dark:border-border p-4">

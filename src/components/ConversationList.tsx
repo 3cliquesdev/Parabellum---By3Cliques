@@ -89,8 +89,14 @@ function ConversationItem({
         isActive && "bg-primary text-primary-foreground"
       )}
     >
-      <Avatar className="h-12 w-12 bg-primary/10 flex items-center justify-center">
-        <span className="text-sm font-semibold text-primary">
+      <Avatar className={cn(
+        "h-12 w-12 flex items-center justify-center",
+        isActive ? "bg-primary-foreground/20" : "bg-primary/10"
+      )}>
+        <span className={cn(
+          "text-sm font-semibold",
+          isActive ? "text-primary-foreground" : "text-primary"
+        )}>
           {conversation.contacts?.first_name?.[0] || ''}
           {conversation.contacts?.last_name?.[0] || ''}
         </span>
@@ -106,7 +112,7 @@ function ConversationItem({
           </p>
           <span className={cn(
             "text-xs",
-            isActive ? "text-primary-foreground/70" : "text-slate-500 dark:text-muted-foreground"
+            isActive ? "text-primary-foreground/70" : "text-slate-600 dark:text-muted-foreground"
           )}>
             {formatDistanceToNow(new Date(conversation.last_message_at), {
               addSuffix: true,
