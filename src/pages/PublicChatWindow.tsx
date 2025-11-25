@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Send, ArrowLeft, MessageSquare } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useAutopilotTrigger } from "@/hooks/useAutopilotTrigger";
 
 export default function PublicChatWindow() {
   const { conversationId } = useParams();
@@ -18,9 +19,13 @@ export default function PublicChatWindow() {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [conversation, setConversation] = useState<any>(null);
+  const [isAITyping, setIsAITyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: messages, refetch } = useMessages(conversationId || "");
+  
+  // FASE 3: Ativar autopilot trigger (fallback se webhook falhar)
+  useAutopilotTrigger(conversationId || null);
 
   // Carregar dados da conversa
   useEffect(() => {
@@ -36,7 +41,7 @@ export default function PublicChatWindow() {
     }
   }, [messages]);
 
-  // Realtime subscription para novas mensagens
+  // Realtime subscription para novas mensagens + AI typing indicator
   useEffect(() => {
     if (!conversationId) return;
 
@@ -50,7 +55,18 @@ export default function PublicChatWindow() {
           table: "messages",
           filter: `conversation_id=eq.${conversationId}`,
         },
-        () => {
+        (payload) => {
+          const newMsg = payload.new as any;
+          
+          // FASE 4: Controlar indicator "IA digitando..."
+          if (newMsg.sender_type === 'contact') {
+            setIsAITyping(true);
+          }
+          
+          if (newMsg.sender_type === 'user') {
+            setIsAITyping(false);
+          }
+          
           refetch();
         }
       )
@@ -208,23 +224,37 @@ export default function PublicChatWindow() {
 
       {/* Input Area */}
       <div className="bg-card border-t border-border p-4">
-        <div className="max-w-4xl mx-auto flex gap-2">
-          <Input
-            placeholder="Digite sua mensagem..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={isSending}
-            className="flex-1"
-          />
-          <Button
-            onClick={handleSendMessage}
-            disabled={!message.trim() || isSending}
-            className="gap-2"
-          >
-            <Send className="h-4 w-4" />
-            Enviar
-          </Button>
+        <div className="max-w-4xl mx-auto">
+          {/* FASE 4: AI Typing Indicator */}
+          {isAITyping && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground pb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex gap-1">
+                <span className="animate-bounce" style={{ animationDelay: '0ms' }}>●</span>
+                <span className="animate-bounce" style={{ animationDelay: '150ms' }}>●</span>
+                <span className="animate-bounce" style={{ animationDelay: '300ms' }}>●</span>
+              </div>
+              <span>Assistente Virtual está digitando...</span>
+            </div>
+          )}
+          
+          <div className="flex gap-2">
+            <Input
+              placeholder="Digite sua mensagem..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              disabled={isSending}
+              className="flex-1"
+            />
+            <Button
+              onClick={handleSendMessage}
+              disabled={!message.trim() || isSending}
+              className="gap-2"
+            >
+              <Send className="h-4 w-4" />
+              Enviar
+            </Button>
+          </div>
         </div>
       </div>
     </div>

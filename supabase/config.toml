@@ -57,3 +57,6 @@ verify_jwt = true
 
 [functions.ai-autopilot-chat]
 verify_jwt = false
+
+[functions.message-listener]
+verify_jwt = false
