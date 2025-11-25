@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Edit, Trash2, Brain, Zap, Wrench, FlaskConical } from "lucide-react";
 import { SandboxTest } from "@/components/SandboxTest";
 import { RLHFMetricsCard } from "@/components/RLHFMetricsCard";
+import { Skeleton } from "@/components/ui/skeleton";
 import { usePersonas } from "@/hooks/usePersonas";
 import { useDeletePersona } from "@/hooks/useDeletePersona";
 import { useUpdatePersona } from "@/hooks/useUpdatePersona";
@@ -77,23 +78,23 @@ export default function AIStudio() {
       </div>
 
       <Tabs defaultValue="personas" className="w-full">
-        <TabsList>
-          <TabsTrigger value="personas">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="personas" className="transition-all data-[state=active]:scale-105">
             <Brain className="mr-2 h-4 w-4" />
             Personas
           </TabsTrigger>
-          <TabsTrigger value="tools">
+          <TabsTrigger value="tools" className="transition-all data-[state=active]:scale-105">
             <Wrench className="mr-2 h-4 w-4" />
             AI Tools
           </TabsTrigger>
-          <TabsTrigger value="sandbox">
+          <TabsTrigger value="sandbox" className="transition-all data-[state=active]:scale-105">
             <FlaskConical className="mr-2 h-4 w-4" />
             Sandbox
           </TabsTrigger>
         </TabsList>
 
         {/* PERSONAS TAB */}
-        <TabsContent value="personas" className="space-y-6 mt-6">
+        <TabsContent value="personas" className="space-y-6 mt-6 animate-fade-in">
           <div className="flex justify-between items-start gap-6">
             <div className="flex-1">
               <PersonaDialog
@@ -112,8 +113,37 @@ export default function AIStudio() {
 
           {/* Personas Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {personas?.map((persona) => (
-              <Card key={persona.id} className="p-6 space-y-4 hover:shadow-lg transition-shadow">
+            {loadingPersonas ? (
+              // Loading Skeletons
+              Array.from({ length: 3 }).map((_, idx) => (
+                <Card key={idx} className="p-6 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-6 w-32" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                    <Skeleton className="h-6 w-16" />
+                  </div>
+                  <div className="space-y-3">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                    <div className="flex gap-4">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-4 w-20" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-4 border-t">
+                    <Skeleton className="h-6 w-24" />
+                    <div className="flex gap-2">
+                      <Skeleton className="h-8 w-8" />
+                      <Skeleton className="h-8 w-8" />
+                    </div>
+                  </div>
+                </Card>
+              ))
+            ) : personas?.map((persona) => (
+              <Card key={persona.id} className="p-6 space-y-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <h3 className="text-xl font-bold">{persona.name}</h3>
@@ -189,7 +219,7 @@ export default function AIStudio() {
               </Card>
             ))}
 
-            {(!personas || personas.length === 0) && (
+            {!loadingPersonas && (!personas || personas.length === 0) && (
               <Card className="p-12 col-span-full text-center">
                 <Brain className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-lg font-medium mb-2">Nenhuma Persona Criada</h3>
@@ -258,7 +288,7 @@ export default function AIStudio() {
         </TabsContent>
 
         {/* AI TOOLS TAB */}
-        <TabsContent value="tools" className="space-y-6 mt-6">
+        <TabsContent value="tools" className="space-y-6 mt-6 animate-fade-in">
           {/* Persona Selector */}
           <Card className="p-6">
             <div className="space-y-4">
@@ -287,14 +317,32 @@ export default function AIStudio() {
           {/* AI Tools Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {loadingTools ? (
-              <p className="text-muted-foreground col-span-2 text-center py-8">
-                Carregando tools...
-              </p>
+              // Loading Skeletons for Tools
+              Array.from({ length: 4 }).map((_, idx) => (
+                <Card key={idx} className="p-6 space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-3">
+                      <Skeleton className="h-10 w-10 rounded-lg" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-5 w-32" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-2/3" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-3 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-6 w-12" />
+                    </div>
+                  </div>
+                </Card>
+              ))
             ) : tools && tools.length > 0 ? (
               tools.map((tool) => {
                 const isLinked = isToolLinkedToPersona(tool.id);
                 return (
-                  <Card key={tool.id} className="p-6 space-y-4">
+                  <Card key={tool.id} className="p-6 space-y-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
                     <div className="space-y-2">
                       <div className="flex items-start gap-3">
                         <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
@@ -378,7 +426,7 @@ export default function AIStudio() {
         </TabsContent>
 
         {/* SANDBOX TAB */}
-        <TabsContent value="sandbox" className="mt-6">
+        <TabsContent value="sandbox" className="mt-6 animate-fade-in">
           <SandboxTest />
         </TabsContent>
       </Tabs>

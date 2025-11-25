@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useRLHFMetrics } from "@/hooks/useRLHFMetrics";
 import { TrendingUp, TrendingDown, Award } from "lucide-react";
 
@@ -9,8 +10,26 @@ export function RLHFMetricsCard() {
 
   if (isLoading) {
     return (
-      <Card className="p-6">
-        <p className="text-muted-foreground text-center">Carregando métricas...</p>
+      <Card className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-6 w-24" />
+        </div>
+        <div className="space-y-4">
+          {Array.from({ length: 2 }).map((_, idx) => (
+            <div key={idx} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-32" />
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-6 w-12" />
+                </div>
+              </div>
+              <Skeleton className="h-2 w-full" />
+            </div>
+          ))}
+        </div>
       </Card>
     );
   }
