@@ -20,5 +20,16 @@ export function useSentimentAnalysis() {
       const sentiment = data.result.toLowerCase().trim() as Sentiment;
       return sentiment;
     },
+    onSuccess: async (sentiment) => {
+      // Log AI usage
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('ai_usage_logs').insert({
+          user_id: user.id,
+          feature_type: 'sentiment',
+          result_data: { sentiment }
+        });
+      }
+    },
   });
 }

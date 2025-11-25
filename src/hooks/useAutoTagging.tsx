@@ -18,5 +18,16 @@ export function useAutoTagging() {
       const tags = data.result.split(',').map((tag: string) => tag.trim());
       return tags as string[];
     },
+    onSuccess: async (tags) => {
+      // Log AI usage
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('ai_usage_logs').insert({
+          user_id: user.id,
+          feature_type: 'tags',
+          result_data: { tags, tags_count: tags.length }
+        });
+      }
+    },
   });
 }

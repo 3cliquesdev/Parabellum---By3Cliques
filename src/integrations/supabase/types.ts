@@ -91,6 +91,51 @@ export type Database = {
           },
         ]
       }
+      ai_usage_logs: {
+        Row: {
+          conversation_id: string | null
+          created_at: string | null
+          feature_type: string
+          id: string
+          result_data: Json | null
+          ticket_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string | null
+          feature_type: string
+          id?: string
+          result_data?: Json | null
+          ticket_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string | null
+          feature_type?: string
+          id?: string
+          result_data?: Json | null
+          ticket_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_logs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_usage_logs_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_logs: {
         Row: {
           automation_id: string
@@ -1029,6 +1074,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_ai_usage_metrics: {
+        Args: { p_end_date: string; p_start_date: string; p_user_id?: string }
+        Returns: {
+          feature_type: string
+          sentiment_breakdown: Json
+          unique_users: number
+          usage_count: number
+        }[]
+      }
       get_conversion_rate_timeline: {
         Args: { p_days_back?: number }
         Returns: {

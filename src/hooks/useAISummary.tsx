@@ -19,6 +19,17 @@ export function useAISummary() {
       if (error) throw error;
       return data.result as string;
     },
+    onSuccess: async (result) => {
+      // Log AI usage
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('ai_usage_logs').insert({
+          user_id: user.id,
+          feature_type: 'summary',
+          result_data: { summary_length: result.length }
+        });
+      }
+    },
     onError: (error: Error) => {
       toast({
         title: "Erro ao gerar resumo AI",

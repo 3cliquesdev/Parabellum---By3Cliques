@@ -18,7 +18,17 @@ export function useSmartReply() {
       if (error) throw error;
       return data.result as string;
     },
-    onSuccess: () => {
+    onSuccess: async (result) => {
+      // Log AI usage
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('ai_usage_logs').insert({
+          user_id: user.id,
+          feature_type: 'reply',
+          result_data: { reply_length: result.length }
+        });
+      }
+
       toast({
         title: "✨ Resposta gerada com sucesso",
         description: "Revise e personalize antes de enviar",

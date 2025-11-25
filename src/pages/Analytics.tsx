@@ -3,6 +3,8 @@ import { AIInsightsWidget } from "@/components/widgets/AIInsightsWidget";
 import { YoYComparisonWidget } from "@/components/widgets/YoYComparisonWidget";
 import { ChannelQualityWidget } from "@/components/widgets/ChannelQualityWidget";
 import { SalesLeaderboard } from "@/components/widgets/SalesLeaderboard";
+import { AIUsageWidget } from "@/components/widgets/AIUsageWidget";
+import { SentimentDistributionWidget } from "@/components/widgets/SentimentDistributionWidget";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
@@ -169,6 +171,18 @@ export default function Analytics() {
         {/* Sales Leaderboard - Full Width */}
         <div className="w-full">
           <SalesLeaderboard />
+        </div>
+
+        {/* AI Metrics Section - 2 Columns */}
+        <div className="w-full border-t pt-6 mt-6">
+          <div className="flex items-center gap-2 mb-6">
+            <Sparkles className="h-6 w-6 text-primary" />
+            <h2 className="text-2xl font-bold">Métricas de Inteligência Artificial</h2>
+          </div>
+          <div className="grid gap-6 md:grid-cols-2">
+            <AIUsageWidget startDate={startDate} endDate={endDate} />
+            <SentimentDistributionWidget startDate={startDate} endDate={endDate} />
+          </div>
         </div>
       </div>
     </div>
