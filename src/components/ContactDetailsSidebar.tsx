@@ -3,9 +3,14 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Mail, Phone, Building2, Plus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Mail, Phone, Building2, Plus, FileText, Clock, AlertCircle, TrendingUp, Ticket } from "lucide-react";
 import { useDeals } from "@/hooks/useDeals";
+import { useContactTickets } from "@/hooks/useContactTickets";
+import { useCustomerTimeline } from "@/hooks/useCustomerTimeline";
 import DealDialog from "./DealDialog";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Conversation = Tables<"conversations"> & {
@@ -20,10 +25,12 @@ interface ContactDetailsSidebarProps {
 
 export default function ContactDetailsSidebar({ conversation }: ContactDetailsSidebarProps) {
   const { data: allDeals } = useDeals();
+  const { data: contactTickets = [] } = useContactTickets(conversation?.contacts.id || null);
+  const { data: timeline = [] } = useCustomerTimeline(conversation?.contacts.id || null);
   
   if (!conversation) {
     return (
-      <div className="w-80 border-l border-border bg-card p-6">
+      <div className="w-96 border-l border-border bg-card p-6">
         <p className="text-muted-foreground text-center">
           Selecione uma conversa
         </p>
@@ -36,8 +43,32 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
     (deal) => deal.contact_id === contact.id
   );
 
+  const openTickets = contactTickets.filter(t => t.status !== 'closed' && t.status !== 'resolved');
+  const recentInteractions = timeline.slice(0, 5);
+
+  const getPriorityColor = (priority: string) => {
+    switch(priority) {
+      case 'urgent': return 'text-destructive';
+      case 'high': return 'text-orange-600';
+      case 'medium': return 'text-yellow-600';
+      case 'low': return 'text-green-600';
+      default: return 'text-muted-foreground';
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch(status) {
+      case 'open': return { label: 'Aberto', variant: 'secondary' as const };
+      case 'in_progress': return { label: 'Em Progresso', variant: 'default' as const };
+      case 'waiting_customer': return { label: 'Aguardando Cliente', variant: 'outline' as const };
+      case 'resolved': return { label: 'Resolvido', variant: 'default' as const };
+      case 'closed': return { label: 'Fechado', variant: 'secondary' as const };
+      default: return { label: status, variant: 'secondary' as const };
+    }
+  };
+
   return (
-    <div className="w-80 border-l border-border bg-card flex flex-col">
+    <div className="w-96 border-l border-border bg-card flex flex-col">
       <ScrollArea className="flex-1">
         <div className="p-6">
           {/* Contact Info */}
@@ -51,6 +82,23 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
             <h3 className="text-lg font-semibold text-foreground text-center">
               {contact.first_name} {contact.last_name}
             </h3>
+            <Badge variant="secondary" className="mt-2">
+              {contact.status === 'lead' ? '🎯 Lead' :
+               contact.status === 'qualified' ? '✅ Qualificado' :
+               contact.status === 'customer' ? '⭐ Cliente' :
+               contact.status === 'inactive' ? '😴 Inativo' : '❌ Churned'}
+            </Badge>
+            {contact.total_ltv && contact.total_ltv > 0 && (
+              <div className="mt-3 text-center">
+                <p className="text-xs text-muted-foreground uppercase mb-1">Lifetime Value</p>
+                <p className="text-lg font-bold text-success">
+                  {new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(contact.total_ltv)}
+                </p>
+              </div>
+            )}
           </div>
 
           <Separator className="my-4" />
@@ -94,66 +142,185 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
 
             <Separator />
 
-            {/* Deals */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase">
-                  Negócios ({contactDeals?.length || 0})
-                </p>
-                <DealDialog
-                  prefilledContactId={contact.id}
-                  trigger={
-                    <Button variant="ghost" size="sm" className="h-7 gap-1">
-                      <Plus className="h-3 w-3" />
-                      Criar
-                    </Button>
-                  }
-                  onOpenChange={(open) => {}}
-                />
-              </div>
-              {contactDeals && contactDeals.length > 0 ? (
-                <div className="space-y-2">
-                  {contactDeals.map((deal) => (
-                    <div
-                      key={deal.id}
-                      className="p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
-                    >
-                      <p className="text-sm font-medium text-foreground mb-1">
-                        {deal.title}
-                      </p>
-                      {deal.value && (
-                        <p className="text-sm font-bold text-success">
-                          {new Intl.NumberFormat("pt-BR", {
-                            style: "currency",
-                            currency: deal.currency || "BRL",
-                          }).format(deal.value)}
-                        </p>
-                      )}
-                      <Badge
-                        variant={
-                          deal.status === "won"
-                            ? "default"
-                            : deal.status === "lost"
-                            ? "destructive"
-                            : "secondary"
-                        }
-                        className="mt-2"
-                      >
-                        {deal.status === "open"
-                          ? "Aberto"
-                          : deal.status === "won"
-                          ? "Ganho"
-                          : "Perdido"}
-                      </Badge>
-                    </div>
-                  ))}
+            {/* Tabs Navigation */}
+            <Tabs defaultValue="tickets" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="tickets" className="text-xs">
+                  <Ticket className="h-3 w-3 mr-1" />
+                  Tickets
+                </TabsTrigger>
+                <TabsTrigger value="deals" className="text-xs">
+                  <TrendingUp className="h-3 w-3 mr-1" />
+                  Negócios
+                </TabsTrigger>
+                <TabsTrigger value="timeline" className="text-xs">
+                  <Clock className="h-3 w-3 mr-1" />
+                  Timeline
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Tickets Tab */}
+              <TabsContent value="tickets" className="mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase">
+                    Tickets Ativos ({openTickets.length})
+                  </p>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Nenhum negócio associado
-                </p>
-              )}
-            </div>
+                {openTickets.length > 0 ? (
+                  <div className="space-y-2">
+                    {openTickets.map((ticket) => (
+                      <div
+                        key={ticket.id}
+                        className="p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-primary" />
+                            <p className="text-sm font-medium text-foreground line-clamp-1">
+                              {ticket.subject}
+                            </p>
+                          </div>
+                          <Badge {...getStatusBadge(ticket.status)} className="text-xs">
+                            {getStatusBadge(ticket.status).label}
+                          </Badge>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                          <AlertCircle className={`h-3 w-3 ${getPriorityColor(ticket.priority)}`} />
+                          <span className={getPriorityColor(ticket.priority)}>
+                            {ticket.priority === 'urgent' ? 'Urgente' :
+                             ticket.priority === 'high' ? 'Alta' :
+                             ticket.priority === 'medium' ? 'Média' : 'Baixa'}
+                          </span>
+                          <span>•</span>
+                          <span>{format(new Date(ticket.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}</span>
+                        </div>
+
+                        {ticket.assigned_user && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <Avatar className="h-5 w-5 bg-primary/10">
+                              <span className="text-[10px] text-primary">
+                                {ticket.assigned_user.full_name[0]}
+                              </span>
+                            </Avatar>
+                            <span className="text-xs text-muted-foreground">
+                              {ticket.assigned_user.full_name}
+                            </span>
+                          </div>
+                        )}
+
+                        {ticket.due_date && (
+                          <div className="mt-2 flex items-center gap-1 text-xs">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">
+                              Vence: {format(new Date(ticket.due_date), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhum ticket ativo
+                  </p>
+                )}
+              </TabsContent>
+
+              {/* Deals Tab */}
+              <TabsContent value="deals" className="mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase">
+                    Negócios ({contactDeals?.length || 0})
+                  </p>
+                  <DealDialog
+                    prefilledContactId={contact.id}
+                    trigger={
+                      <Button variant="ghost" size="sm" className="h-7 gap-1">
+                        <Plus className="h-3 w-3" />
+                        Criar
+                      </Button>
+                    }
+                    onOpenChange={(open) => {}}
+                  />
+                </div>
+                {contactDeals && contactDeals.length > 0 ? (
+                  <div className="space-y-2">
+                    {contactDeals.map((deal) => (
+                      <div
+                        key={deal.id}
+                        className="p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+                      >
+                        <p className="text-sm font-medium text-foreground mb-1">
+                          {deal.title}
+                        </p>
+                        {deal.value && (
+                          <p className="text-sm font-bold text-success">
+                            {new Intl.NumberFormat("pt-BR", {
+                              style: "currency",
+                              currency: deal.currency || "BRL",
+                            }).format(deal.value)}
+                          </p>
+                        )}
+                        <Badge
+                          variant={
+                            deal.status === "won"
+                              ? "default"
+                              : deal.status === "lost"
+                              ? "destructive"
+                              : "secondary"
+                          }
+                          className="mt-2"
+                        >
+                          {deal.status === "open"
+                            ? "Aberto"
+                            : deal.status === "won"
+                            ? "Ganho"
+                            : "Perdido"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhum negócio associado
+                  </p>
+                )}
+              </TabsContent>
+
+              {/* Timeline Tab */}
+              <TabsContent value="timeline" className="mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase">
+                    Últimas Interações
+                  </p>
+                </div>
+                {recentInteractions.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentInteractions.map((interaction) => (
+                      <div
+                        key={interaction.id}
+                        className="p-3 rounded-lg border-l-2 border-primary/30 bg-muted/50"
+                      >
+                        <p className="text-xs font-medium text-foreground mb-1">
+                          {interaction.type.replace(/_/g, ' ')}
+                        </p>
+                        <p className="text-xs text-muted-foreground line-clamp-2 mb-1">
+                          {interaction.content}
+                        </p>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(interaction.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhuma interação registrada
+                  </p>
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </ScrollArea>
