@@ -17,9 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Activity, CheckCircle, XCircle, Clock, AlertCircle, Eye } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, AlertCircle, Eye, Play } from "lucide-react";
 import { usePlaybookExecutions } from "@/hooks/usePlaybookExecutions";
 import { useExecutionQueue } from "@/hooks/useExecutionQueue";
+import { useProcessPlaybookQueue } from "@/hooks/useProcessPlaybookQueue";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -27,6 +28,7 @@ export default function PlaybookExecutions() {
   const { data: executions, isLoading } = usePlaybookExecutions();
   const [selectedExecution, setSelectedExecution] = useState<any>(null);
   const { data: queueItems } = useExecutionQueue(selectedExecution?.id);
+  const processQueue = useProcessPlaybookQueue();
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -79,14 +81,24 @@ export default function PlaybookExecutions() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Activity className="h-8 w-8" />
-          Execuções de Playbooks
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Monitore o progresso e histórico de execuções dos playbooks
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Activity className="h-8 w-8" />
+            Execuções de Playbooks
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Monitore o progresso e histórico de execuções dos playbooks
+          </p>
+        </div>
+        <Button
+          onClick={() => processQueue.mutate()}
+          disabled={processQueue.isPending}
+          className="gap-2"
+        >
+          <Play className="h-4 w-4" />
+          {processQueue.isPending ? "Processando..." : "Processar Fila Agora"}
+        </Button>
       </div>
 
       {/* Métricas Resumidas */}
