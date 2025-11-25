@@ -34,8 +34,8 @@
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 40%; /* Contraste aumentado */
     
-    --accent: 221.2 83.2% 53.3%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 210 40% 96.1%;            /* Hover cinza claro */
+    --accent-foreground: 222.2 84% 4.9%; /* Texto ESCURO no hover */
     
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
@@ -77,8 +77,8 @@
     --muted: 0 0% 10%;
     --muted-foreground: 0 0% 60%;
     
-    --accent: 221.2 83.2% 53.3%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 0 0% 12%;                  /* Hover cinza escuro */
+    --accent-foreground: 0 0% 100%;      /* Texto BRANCO no hover */
     
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;

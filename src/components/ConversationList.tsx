@@ -112,7 +112,7 @@ function ConversationItem({
           </p>
           <span className={cn(
             "text-xs",
-            isActive ? "text-primary-foreground/70" : "text-slate-600 dark:text-muted-foreground"
+            isActive ? "text-primary-foreground/70" : "text-muted-foreground"
           )}>
             {formatDistanceToNow(new Date(conversation.last_message_at), {
               addSuffix: true,
@@ -176,8 +176,8 @@ export default function ConversationList({
   onSelectConversation,
 }: ConversationListProps) {
   return (
-    <div className="w-80 flex-none border-r bg-white dark:bg-card border-slate-200 dark:border-border flex flex-col h-full overflow-hidden">
-      <div className="flex-none p-4 border-b border-slate-200 dark:border-border">
+    <div className="w-80 flex-none border-r bg-card border-border flex flex-col h-full overflow-hidden">
+      <div className="flex-none p-4 border-b border-border">
         <h2 className="text-lg font-semibold text-foreground">Conversas</h2>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
