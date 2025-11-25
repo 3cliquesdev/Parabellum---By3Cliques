@@ -103,7 +103,7 @@ const App = () => {
             <Route path="/tv" element={<TVMode />} />
             <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
             <Route path="/inbox" element={<ProtectedRoute><Layout><Inbox /></Layout></ProtectedRoute>} />
-            <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["sales_rep", "manager", "admin"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
+            <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["consultant", "sales_rep", "manager", "admin"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute><Layout><Contacts /></Layout></ProtectedRoute>} />
             <Route path="/contacts/:id" element={<ProtectedRoute><Layout><ContactDetails /></Layout></ProtectedRoute>} />
             <Route path="/organizations" element={<ProtectedRoute><Layout><Organizations /></Layout></ProtectedRoute>} />
@@ -114,7 +114,7 @@ const App = () => {
             <Route path="/email-templates" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><EmailTemplates /></Layout></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Analytics /></Layout></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Goals /></Layout></ProtectedRoute>} />
-            <Route path="/support" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />
+            <Route path="/support" element={<ProtectedRoute allowedRoles={["consultant", "admin", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />
             <Route path="/ai-studio/personas" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><AIStudio /></Layout></ProtectedRoute>} />
             <Route path="/import-clients" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><ImportClients /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Settings /></Layout></ProtectedRoute>} />
