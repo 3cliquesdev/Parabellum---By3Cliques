@@ -40,6 +40,7 @@ export default function OnboardingBuilder() {
   const [showEditor, setShowEditor] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingPlaybook, setEditingPlaybook] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -64,25 +65,41 @@ export default function OnboardingBuilder() {
   };
 
   const handleSaveFlow = (flow: any) => {
+    setIsSaving(true);
+
+    const onSuccess = () => {
+      setIsSaving(false);
+      setShowEditor(false);
+      setShowCreateDialog(false);
+      resetForm();
+    };
+
+    const onError = () => {
+      setIsSaving(false);
+    };
+
     if (editingPlaybook) {
-      updatePlaybook.mutate({
-        id: editingPlaybook.id,
-        name,
-        description,
-        product_id: productId,
-        flow_definition: flow,
-      });
+      updatePlaybook.mutate(
+        {
+          id: editingPlaybook.id,
+          name,
+          description,
+          product_id: productId,
+          flow_definition: flow,
+        },
+        { onSuccess, onError }
+      );
     } else {
-      createPlaybook.mutate({
-        name,
-        description,
-        product_id: productId,
-        flow_definition: flow,
-      });
+      createPlaybook.mutate(
+        {
+          name,
+          description,
+          product_id: productId,
+          flow_definition: flow,
+        },
+        { onSuccess, onError }
+      );
     }
-    setShowEditor(false);
-    setShowCreateDialog(false);
-    resetForm();
   };
 
   const handleCreateNew = () => {
@@ -138,6 +155,7 @@ export default function OnboardingBuilder() {
               setShowEditor(false);
               resetForm();
             }}
+            isSaving={isSaving}
           />
         </Suspense>
       </div>

@@ -34,9 +34,10 @@ interface PlaybookEditorProps {
   initialFlow?: { nodes: Node[]; edges: Edge[] };
   onSave: (flow: { nodes: Node[]; edges: Edge[] }) => void;
   onCancel: () => void;
+  isSaving?: boolean;
 }
 
-export default function PlaybookEditor({ initialFlow, onSave, onCancel }: PlaybookEditorProps) {
+export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving }: PlaybookEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialFlow?.nodes || []);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlow?.edges || []);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -164,11 +165,11 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel }: Playbo
 
         {/* Ações */}
         <div className="mt-6 pt-6 border-t space-y-2">
-          <Button onClick={handleSave} className="w-full gap-2">
+          <Button onClick={handleSave} className="w-full gap-2" disabled={isSaving}>
             <Save className="h-4 w-4" />
-            Salvar Playbook
+            {isSaving ? "Salvando..." : "Salvar Playbook"}
           </Button>
-          <Button onClick={onCancel} variant="outline" className="w-full gap-2">
+          <Button onClick={onCancel} variant="outline" className="w-full gap-2" disabled={isSaving}>
             <X className="h-4 w-4" />
             Cancelar
           </Button>
