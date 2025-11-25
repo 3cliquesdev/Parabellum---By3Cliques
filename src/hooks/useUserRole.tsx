@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
-type AppRole = "admin" | "user" | "manager" | "sales_rep" | null;
+type AppRole = "admin" | "user" | "manager" | "sales_rep" | "consultant" | null;
 
 export function useUserRole() {
   const { user } = useAuth();
@@ -74,5 +74,6 @@ export function useUserRole() {
     isUser: role === "user",
     isManager: role === "manager",
     isSalesRep: role === "sales_rep",
+    isConsultant: role === "consultant",
   };
 }

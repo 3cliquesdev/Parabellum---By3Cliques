@@ -1523,7 +1523,7 @@ export type Database = {
     Enums: {
       activity_type: "call" | "meeting" | "email" | "task" | "lunch"
       ai_mode: "autopilot" | "copilot" | "disabled"
-      app_role: "admin" | "user" | "manager" | "sales_rep"
+      app_role: "admin" | "user" | "manager" | "sales_rep" | "consultant"
       automation_action:
         | "assign_to_user"
         | "create_activity"
@@ -1711,7 +1711,7 @@ export const Constants = {
     Enums: {
       activity_type: ["call", "meeting", "email", "task", "lunch"],
       ai_mode: ["autopilot", "copilot", "disabled"],
-      app_role: ["admin", "user", "manager", "sales_rep"],
+      app_role: ["admin", "user", "manager", "sales_rep", "consultant"],
       automation_action: [
         "assign_to_user",
         "create_activity",
