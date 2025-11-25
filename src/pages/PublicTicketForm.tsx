@@ -12,6 +12,7 @@ import { useUpsertContact } from "@/hooks/useUpsertContact";
 import { useCreateTicket } from "@/hooks/useCreateTicket";
 import { CheckCircle, Loader2, TicketIcon, AlertCircle } from "lucide-react";
 import { usePublicTicketPortalConfig } from "@/hooks/usePublicTicketPortal";
+import { supabase } from "@/integrations/supabase/client";
 
 const ticketSchema = z.object({
   first_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -66,7 +67,27 @@ export default function PublicTicketForm() {
         priority: data.priority,
       });
 
-      setTicketId(ticketResult.id.substring(0, 8));
+      // Step 3: Send notification email
+      const ticketNumber = ticketResult.id.substring(0, 8).toUpperCase();
+      try {
+        await supabase.functions.invoke("send-ticket-notification", {
+          body: {
+            ticket_id: ticketResult.id,
+            ticket_number: ticketNumber,
+            customer_email: data.email,
+            customer_name: `${data.first_name} ${data.last_name}`,
+            subject: data.subject,
+            description: data.description,
+            priority: data.priority,
+          },
+        });
+        console.log("Email de notificação enviado com sucesso");
+      } catch (emailError) {
+        console.error("Erro ao enviar email de notificação:", emailError);
+        // Não bloquear o fluxo se o email falhar
+      }
+
+      setTicketId(ticketNumber);
       setSubmitted(true);
     } catch (error) {
       console.error("Erro ao criar ticket:", error);
