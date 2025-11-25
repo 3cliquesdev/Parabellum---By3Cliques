@@ -124,24 +124,28 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
 
   return (
     <>
-      <TransferConversationDialog
-        open={transferDialogOpen}
-        onOpenChange={setTransferDialogOpen}
-        conversation={conversation}
-        currentUserId={user?.id || ""}
-      />
-      <CreateTicketFromInboxDialog
-        open={createTicketDialogOpen}
-        onOpenChange={setCreateTicketDialogOpen}
-        conversationId={conversation?.id || null}
-        contactName={`${conversation?.contacts.first_name} ${conversation?.contacts.last_name}`}
-      />
-      <CloseConversationDialog
-        open={closeDialogOpen}
-        onOpenChange={setCloseDialogOpen}
-        conversation={conversation}
-        userId={user?.id || ""}
-      />
+      {conversation && (
+        <>
+          <TransferConversationDialog
+            open={transferDialogOpen}
+            onOpenChange={setTransferDialogOpen}
+            conversation={conversation}
+            currentUserId={user?.id || ""}
+          />
+          <CreateTicketFromInboxDialog
+            open={createTicketDialogOpen}
+            onOpenChange={setCreateTicketDialogOpen}
+            conversationId={conversation.id}
+            contactName={`${conversation.contacts?.first_name || ''} ${conversation.contacts?.last_name || ''}`}
+          />
+          <CloseConversationDialog
+            open={closeDialogOpen}
+            onOpenChange={setCloseDialogOpen}
+            conversation={conversation}
+            userId={user?.id || ""}
+          />
+        </>
+      )}
       
       {conversation ? (
         <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950">

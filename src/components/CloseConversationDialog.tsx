@@ -26,7 +26,7 @@ interface Conversation {
 interface CloseConversationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  conversation: Conversation;
+  conversation: Conversation | null;
   userId: string;
 }
 
@@ -38,6 +38,8 @@ export default function CloseConversationDialog({
 }: CloseConversationDialogProps) {
   const [sendSurvey, setSendSurvey] = useState(true);
   const closeConversation = useCloseConversation();
+
+  if (!conversation) return null;
 
   const handleClose = () => {
     closeConversation.mutate(
