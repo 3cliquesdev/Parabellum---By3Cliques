@@ -35,7 +35,7 @@ type Conversation = Tables<"conversations"> & {
 interface TransferConversationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  conversation: Conversation;
+  conversation: Conversation | null;
   currentUserId: string;
 }
 
@@ -45,6 +45,11 @@ export default function TransferConversationDialog({
   conversation,
   currentUserId,
 }: TransferConversationDialogProps) {
+  // Early return se não há conversa selecionada
+  if (!conversation) {
+    return null;
+  }
+
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [transferNote, setTransferNote] = useState("");
