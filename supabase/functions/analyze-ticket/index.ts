@@ -83,38 +83,21 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
 
     console.log(`[analyze-ticket] Mode: ${mode}, Processing request`);
 
-    // Retry logic with exponential backoff for rate limiting
-    let retries = 0;
-    const maxRetries = 3;
-    let response: Response | null = null;
-    
-    while (retries <= maxRetries) {
-      response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-          ],
-        }),
-      });
-
-      // If not rate limited or max retries reached, break
-      if (response.status !== 429 || retries === maxRetries) {
-        break;
-      }
-
-      // Exponential backoff: 1s, 2s, 4s
-      const delay = Math.pow(2, retries) * 1000;
-      console.log(`[analyze-ticket] Rate limited, retrying in ${delay}ms (attempt ${retries + 1}/${maxRetries})`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      retries++;
-    }
+    // Call AI Gateway directly - no retry logic, let client handle rate limits
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+      }),
+    });
 
     if (!response || !response.ok) {
       if (!response) {
