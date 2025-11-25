@@ -17,13 +17,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch } from "lucide-react";
+import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmailNode } from "./EmailNode";
 import { DelayNode } from "./DelayNode";
 import { TaskNode } from "./TaskNode";
 import { CallNode } from "./CallNode";
 import { ConditionNode } from "./ConditionNode";
+import { ApprovalNode } from "./ApprovalNode";
 
 const nodeTypes = {
   email: EmailNode,
@@ -31,6 +32,7 @@ const nodeTypes = {
   task: TaskNode,
   call: CallNode,
   condition: ConditionNode,
+  approval: ApprovalNode,
 };
 
 interface PlaybookEditorProps {
@@ -62,6 +64,7 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
         ...(type === "task" && { task_type: "task", description: "Descrição da tarefa" }),
         ...(type === "call" && { description: "Descrição da ligação" }),
         ...(type === "condition" && { condition_type: "email_opened", condition_value: "" }),
+        ...(type === "approval" && { approver_role: "consultant", approval_message: "Revisar antes de continuar" }),
       },
     };
     setNodes((nds) => [...nds, newNode]);
@@ -132,6 +135,14 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
           <GitBranch className="h-4 w-4" />
           Condição (Se/Então)
         </Button>
+        <Button
+          variant="outline"
+          className="w-full justify-start gap-2"
+          onClick={() => addNode("approval")}
+        >
+          <UserCheck className="h-4 w-4" />
+          Aprovação Humana
+        </Button>
 
         {/* Painel de propriedades */}
         {selectedNode && (
@@ -198,6 +209,34 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
                     value={selectedNode.data.condition_value || ""}
                     onChange={(e) => updateNodeData("condition_value", e.target.value)}
                     placeholder="Ex: nome do email, tag, etc"
+                  />
+                </div>
+              </>
+            )}
+            {selectedNode.type === "approval" && (
+              <>
+                <div>
+                  <Label>Quem Aprova</Label>
+                  <Select
+                    value={selectedNode.data.approver_role || "consultant"}
+                    onValueChange={(value) => updateNodeData("approver_role", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="consultant">Consultor</SelectItem>
+                      <SelectItem value="manager">Gerente</SelectItem>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Mensagem de Aprovação</Label>
+                  <Textarea
+                    value={selectedNode.data.approval_message || ""}
+                    onChange={(e) => updateNodeData("approval_message", e.target.value)}
+                    placeholder="Mensagem a ser exibida ao aprovador..."
                   />
                 </div>
               </>
