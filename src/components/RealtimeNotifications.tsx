@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MessageSquare } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useNotificationSound } from "@/hooks/useNotificationSound";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Message = Tables<"messages">;
@@ -15,7 +16,14 @@ export default function RealtimeNotifications() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { play, requestPermission, showBrowserNotification } = useNotificationSound();
 
+  // Request notification permission on mount
+  useEffect(() => {
+    requestPermission();
+  }, [requestPermission]);
+
+  // Listen for new messages from contacts
   useEffect(() => {
     // Don't set up realtime listener if user is not authenticated
     if (!user) {
@@ -90,6 +98,94 @@ export default function RealtimeNotifications() {
       console.error("RealtimeNotifications: Error setting up listener", error);
     }
   }, [user, location.pathname, navigate, queryClient]);
+
+  // Listen for conversation assignments (FASE 4: Advanced Notifications)
+  useEffect(() => {
+    if (!user) return;
+
+    console.log("[RealtimeNotifications] Setting up conversation assignment listener");
+
+    try {
+      const channel = supabase
+        .channel("conversation-assignments")
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "conversations",
+            filter: `assigned_to=eq.${user.id}`,
+          },
+          async (payload) => {
+            console.log("[RealtimeNotifications] Conversation assigned:", payload);
+
+            // Fetch conversation details
+            const { data: conversation, error } = await supabase
+              .from("conversations")
+              .select(`
+                id,
+                contacts (
+                  first_name,
+                  last_name
+                )
+              `)
+              .eq("id", payload.new.id)
+              .single();
+
+            if (error || !conversation) {
+              console.error("Error fetching conversation:", error);
+              return;
+            }
+
+            const contact = Array.isArray(conversation.contacts) 
+              ? conversation.contacts[0] 
+              : conversation.contacts;
+
+            if (contact) {
+              const contactName = `${contact.first_name} ${contact.last_name}`;
+
+              // Play notification sound
+              play();
+
+              // Show persistent toast
+              toast(
+                "🔔 Nova conversa atribuída",
+                {
+                  description: `Cliente: ${contactName}`,
+                  icon: <MessageSquare className="h-4 w-4" />,
+                  action: {
+                    label: "Ver agora",
+                    onClick: () => navigate("/inbox"),
+                  },
+                  duration: 10000, // 10 seconds
+                }
+              );
+
+              // Show browser notification if user is in another tab
+              if (document.hidden) {
+                showBrowserNotification(
+                  "Nova conversa atribuída",
+                  `Cliente: ${contactName}`
+                );
+              }
+            }
+
+            // Invalidate conversations to update the list
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          }
+        )
+        .subscribe((status) => {
+          console.log("RealtimeNotifications assignment subscription status:", status);
+        });
+
+      return () => {
+        console.log("[RealtimeNotifications] Cleaning up assignment listener");
+        supabase.removeChannel(channel);
+      };
+    } catch (error) {
+      console.error("[RealtimeNotifications] Error setting up assignment listener", error);
+    }
+  }, [user, navigate, play, showBrowserNotification, queryClient]);
 
   return null;
 }
