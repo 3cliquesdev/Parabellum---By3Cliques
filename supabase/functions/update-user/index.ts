@@ -7,7 +7,7 @@ const corsHeaders = {
 
 interface UpdateUserRequest {
   user_id: string;
-  role?: 'admin' | 'manager' | 'sales_rep' | 'consultant';
+  role?: 'admin' | 'manager' | 'sales_rep' | 'consultant' | 'support_agent';
   department?: string;
   full_name?: string;
   job_title?: string;
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
     }
 
     // Validate role if provided
-    const allowedRoles = ['admin', 'manager', 'sales_rep', 'consultant'];
+    const allowedRoles = ['admin', 'manager', 'sales_rep', 'consultant', 'support_agent'];
     if (role && !allowedRoles.includes(role)) {
       throw new Error(`Invalid role. Must be one of: ${allowedRoles.join(', ')}`);
     }
