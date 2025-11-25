@@ -13,7 +13,8 @@ import {
   LogOut,
   BarChart3,
   Target,
-  Upload
+  Upload,
+  Headphones
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -59,6 +60,7 @@ const reportItems = [
 ];
 
 const supportItems = [
+  { title: "Tickets", href: "/support", icon: Headphones },
   { title: "Importar Clientes", href: "/import-clients", icon: Upload },
 ];
 
@@ -213,8 +215,8 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Suporte - apenas admin */}
-        {isAdmin && (
+        {/* Suporte - apenas admin/manager */}
+        {(isAdmin || isManager) && (
           <SidebarGroup>
             {!collapsed && <SidebarGroupLabel>Suporte</SidebarGroupLabel>}
             <SidebarGroupContent>
