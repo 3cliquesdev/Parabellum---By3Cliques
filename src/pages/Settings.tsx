@@ -81,6 +81,21 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Database className="h-5 w-5" />
+              Departamentos
+            </CardTitle>
+            <CardDescription>Configure departamentos organizacionais</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => navigate('/settings/departments')}>
+              Gerenciar Departamentos
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
               Produtos
             </CardTitle>
             <CardDescription>Configure produtos e regras de distribuição</CardDescription>

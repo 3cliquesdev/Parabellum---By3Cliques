@@ -799,6 +799,36 @@ export type Database = {
           },
         ]
       }
+      departments: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_templates: {
         Row: {
           created_at: string
@@ -1079,7 +1109,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string | null
-          department: Database["public"]["Enums"]["department_type"] | null
+          department: string
           full_name: string
           id: string
           job_title: string | null
@@ -1088,7 +1118,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
-          department?: Database["public"]["Enums"]["department_type"] | null
+          department: string
           full_name: string
           id: string
           job_title?: string | null
@@ -1097,13 +1127,21 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string | null
-          department?: Database["public"]["Enums"]["department_type"] | null
+          department?: string
           full_name?: string
           id?: string
           job_title?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_department_id_fkey"
+            columns: ["department"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       public_ticket_portal_config: {
         Row: {

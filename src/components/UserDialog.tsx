@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useDepartments } from "@/hooks/useDepartments";
 import { z } from "zod";
 
 const userSchema = z.object({
@@ -13,7 +14,7 @@ const userSchema = z.object({
   password: z.string().min(8, { message: "Senha deve ter no mínimo 8 caracteres" }),
   role: z.enum(["admin", "manager", "sales_rep", "consultant"], { message: "Role inválida" }),
   full_name: z.string().min(1, { message: "Nome completo é obrigatório" }),
-  department: z.enum(["comercial", "suporte", "marketing", "operacional"], { message: "Departamento inválido" }),
+  department: z.string().uuid({ message: "Departamento inválido" }),
 });
 
 interface UserDialogProps {
@@ -27,9 +28,10 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "manager" | "sales_rep" | "consultant">("sales_rep");
   const [fullName, setFullName] = useState("");
-  const [department, setDepartment] = useState<"comercial" | "suporte" | "marketing" | "operacional">("comercial");
+  const [department, setDepartment] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { data: departments } = useDepartments();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,7 +81,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
       setPassword("");
       setRole("sales_rep");
       setFullName("");
-      setDepartment("comercial");
+      setDepartment("");
       onOpenChange(false);
       onSuccess();
     } catch (error) {
@@ -184,15 +186,22 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
 
             <div className="space-y-2">
               <Label htmlFor="department">Departamento *</Label>
-              <Select value={department} onValueChange={(value: any) => setDepartment(value)} required>
+              <Select value={department || undefined} onValueChange={setDepartment} required>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o departamento..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="comercial">Comercial</SelectItem>
-                  <SelectItem value="suporte">Suporte</SelectItem>
-                  <SelectItem value="marketing">Marketing</SelectItem>
-                  <SelectItem value="operacional">Operacional</SelectItem>
+                  {departments?.filter(d => d.is_active).map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: dept.color }}
+                        />
+                        {dept.name}
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

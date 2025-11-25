@@ -18,6 +18,7 @@ import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import EmailTemplates from "./pages/EmailTemplates";
 import Products from "./pages/Products";
+import Departments from "./pages/Departments";
 import PublicForm from "./pages/PublicForm";
 import Auth from "./pages/Auth";
 import Setup from "./pages/Setup";
@@ -119,6 +120,7 @@ const App = () => {
             <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Settings /></Layout></ProtectedRoute>} />
             <Route path="/settings/email-templates" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><EmailTemplates /></ProtectedRoute>} />
             <Route path="/settings/products" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Products /></Layout></ProtectedRoute>} />
+            <Route path="/settings/departments" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Departments /></Layout></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
