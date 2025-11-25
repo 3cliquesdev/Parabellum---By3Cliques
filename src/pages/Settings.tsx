@@ -80,6 +80,21 @@ export default function Settings() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Produtos
+            </CardTitle>
+            <CardDescription>Configure produtos e regras de distribuição</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => navigate('/settings/products')}>
+              Gerenciar Produtos
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
               <Webhook className="h-5 w-5" />
               Webhooks
             </CardTitle>

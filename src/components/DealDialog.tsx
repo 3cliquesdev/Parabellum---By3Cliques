@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { useCreateDeal, useUpdateDeal } from "@/hooks/useDeals";
 import { useContacts } from "@/hooks/useContacts";
 import { useOrganizations } from "@/hooks/useOrganizations";
+import { useProducts } from "@/hooks/useProducts";
 import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useSalesReps } from "@/hooks/useSalesReps";
@@ -47,6 +48,7 @@ const dealSchema = z.object({
   status: z.enum(["open", "won", "lost"]),
   assigned_to: z.string().uuid().optional().nullable(),
   lost_reason: z.string().optional().nullable(),
+  product_id: z.string().uuid().optional().nullable(),
 }).refine((data) => {
   if (data.status === "lost" && (!data.lost_reason || data.lost_reason.trim() === "")) {
     return false;
@@ -74,6 +76,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
   const { data: organizations } = useOrganizations();
   const { data: pipelines } = usePipelines();
   const { data: salesReps, isLoading: salesRepsLoading } = useSalesReps();
+  const { data: products } = useProducts();
   const { role } = useUserRole();
 
   console.log("[DealDialog] Sales reps data:", { salesReps, salesRepsLoading });
@@ -96,6 +99,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       status: deal?.status || "open",
       assigned_to: (deal as any)?.assigned_to || "",
       lost_reason: (deal as any)?.lost_reason || "",
+      product_id: (deal as any)?.product_id || "",
     },
   });
 
@@ -152,6 +156,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       status: data.status,
       assigned_to: data.assigned_to || null,
       lost_reason: data.lost_reason || null,
+      product_id: data.product_id || null,
     };
 
     console.log("[DealDialog] Payload to submit:", payload);
@@ -410,6 +415,32 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
                 )}
               />
             )}
+
+            <FormField
+              control={form.control}
+              name="product_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Produto (Opcional)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um produto..." />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {products?.filter(p => p.is_active).map((product) => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name}
+                          {product.requires_account_manager && " 🎯"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="flex justify-end gap-3">
               <Button

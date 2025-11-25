@@ -642,6 +642,7 @@ export type Database = {
           organization_id: string | null
           pipeline_id: string
           probability: number | null
+          product_id: string | null
           stage_id: string | null
           status: Database["public"]["Enums"]["deal_status"]
           title: string
@@ -660,6 +661,7 @@ export type Database = {
           organization_id?: string | null
           pipeline_id: string
           probability?: number | null
+          product_id?: string | null
           stage_id?: string | null
           status?: Database["public"]["Enums"]["deal_status"]
           title: string
@@ -678,6 +680,7 @@ export type Database = {
           organization_id?: string | null
           pipeline_id?: string
           probability?: number | null
+          product_id?: string | null
           stage_id?: string | null
           status?: Database["public"]["Enums"]["deal_status"]
           title?: string
@@ -711,6 +714,13 @@ export type Database = {
             columns: ["pipeline_id"]
             isOneToOne: false
             referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
           {
@@ -965,6 +975,36 @@ export type Database = {
           id?: string
           is_default?: boolean | null
           name?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          requires_account_manager: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          requires_account_manager?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          requires_account_manager?: boolean
+          updated_at?: string
         }
         Relationships: []
       }
