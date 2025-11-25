@@ -91,6 +91,119 @@ export type Database = {
           },
         ]
       }
+      ai_persona_tools: {
+        Row: {
+          created_at: string | null
+          persona_id: string
+          tool_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          persona_id: string
+          tool_id: string
+        }
+        Update: {
+          created_at?: string | null
+          persona_id?: string
+          tool_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_persona_tools_persona_id_fkey"
+            columns: ["persona_id"]
+            isOneToOne: false
+            referencedRelation: "ai_personas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_persona_tools_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "ai_tools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_personas: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          knowledge_base_paths: string[] | null
+          max_tokens: number | null
+          name: string
+          role: string
+          system_prompt: string
+          temperature: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          knowledge_base_paths?: string[] | null
+          max_tokens?: number | null
+          name: string
+          role: string
+          system_prompt: string
+          temperature?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          knowledge_base_paths?: string[] | null
+          max_tokens?: number | null
+          name?: string
+          role?: string
+          system_prompt?: string
+          temperature?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ai_routing_rules: {
+        Row: {
+          channel: string
+          created_at: string | null
+          department: Database["public"]["Enums"]["department_type"] | null
+          id: string
+          is_active: boolean | null
+          persona_id: string | null
+          priority: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          channel: string
+          created_at?: string | null
+          department?: Database["public"]["Enums"]["department_type"] | null
+          id?: string
+          is_active?: boolean | null
+          persona_id?: string | null
+          priority?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          channel?: string
+          created_at?: string | null
+          department?: Database["public"]["Enums"]["department_type"] | null
+          id?: string
+          is_active?: boolean | null
+          persona_id?: string | null
+          priority?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_routing_rules_persona_id_fkey"
+            columns: ["persona_id"]
+            isOneToOne: false
+            referencedRelation: "ai_personas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_suggestions: {
         Row: {
           context: Json | null
@@ -125,6 +238,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ai_tools: {
+        Row: {
+          created_at: string | null
+          description: string
+          function_schema: Json
+          id: string
+          is_enabled: boolean | null
+          name: string
+          requires_auth: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          function_schema: Json
+          id?: string
+          is_enabled?: boolean | null
+          name: string
+          requires_auth?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          function_schema?: Json
+          id?: string
+          is_enabled?: boolean | null
+          name?: string
+          requires_auth?: boolean | null
+        }
+        Relationships: []
       }
       ai_usage_logs: {
         Row: {
