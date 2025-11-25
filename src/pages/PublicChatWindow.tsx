@@ -221,7 +221,7 @@ export default function PublicChatWindow() {
                           className={cn(
                             "max-w-[80%] px-4 py-3 shadow-sm",
                             isCustomer
-                              ? "bg-emerald-600 text-white rounded-2xl rounded-tr-none"
+                              ? "bg-blue-700 dark:bg-blue-800 text-white rounded-2xl rounded-tr-none"
                               : isAI
                               ? "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
                               : "bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
