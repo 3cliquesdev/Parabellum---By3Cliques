@@ -61,7 +61,9 @@ serve(async (req) => {
           p_last_name: customer_data.last_name || '',
           p_phone: customer_data.phone || null,
           p_company: customer_data.company || null,
+          p_organization_id: null,
           p_source: 'chat_widget',
+          p_assigned_to: null,
         });
 
       if (upsertError) {
