@@ -144,7 +144,7 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        <CustomerInfoCard customer={ticket.customer} />
+        {ticket.customer && <CustomerInfoCard customer={ticket.customer} />}
         <TicketChat ticketId={ticket.id} />
       </div>
     </div>
