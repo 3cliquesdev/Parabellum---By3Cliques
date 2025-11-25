@@ -33,8 +33,7 @@ serve(async (req) => {
       .select(`
         *,
         contacts!inner(
-          id, first_name, last_name, email, phone, company, status,
-          assigned_user:profiles!contacts_assigned_to_fkey(department)
+          id, first_name, last_name, email, phone, company, status
         )
       `)
       .eq('id', conversationId)
@@ -50,7 +49,7 @@ serve(async (req) => {
 
     const contact = conversation.contacts as any;
     const channel = conversation.channel;
-    const department = contact.assigned_user?.department || null;
+    const department = conversation.department || null;
 
     console.log(`[ai-autopilot-chat] Canal: ${channel}, Departamento: ${department}`);
 
