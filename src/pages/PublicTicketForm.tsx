@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUpsertContact } from "@/hooks/useUpsertContact";
 import { useCreateTicket } from "@/hooks/useCreateTicket";
-import { CheckCircle, Loader2, TicketIcon } from "lucide-react";
+import { CheckCircle, Loader2, TicketIcon, AlertCircle } from "lucide-react";
+import { usePublicTicketPortalConfig } from "@/hooks/usePublicTicketPortal";
 
 const ticketSchema = z.object({
   first_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -30,6 +31,7 @@ export default function PublicTicketForm() {
   const [ticketId, setTicketId] = useState<string>("");
   const upsertContact = useUpsertContact();
   const createTicket = useCreateTicket();
+  const { data: portalConfig, isLoading: portalLoading } = usePublicTicketPortalConfig();
 
   const form = useForm<TicketFormData>({
     resolver: zodResolver(ticketSchema),
@@ -70,6 +72,35 @@ export default function PublicTicketForm() {
       console.error("Erro ao criar ticket:", error);
     }
   };
+
+  // Loading state
+  if (portalLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Portal disabled
+  if (!portalConfig?.is_active) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-yellow-500/10 rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="w-6 h-6 text-yellow-500" />
+            </div>
+            <CardTitle>Portal Desabilitado</CardTitle>
+            <CardDescription>
+              O portal de abertura de tickets está temporariamente desabilitado.
+              Entre em contato conosco através dos canais oficiais.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (
