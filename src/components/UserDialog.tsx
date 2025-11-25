@@ -212,7 +212,8 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
+          <div className="grid grid-cols-2 gap-4 py-4">
+            {/* Nome Completo */}
             <div className="space-y-2">
               <Label htmlFor="full_name">Nome Completo</Label>
               <Input
@@ -224,18 +225,8 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
                 required
               />
             </div>
-            
-            {/* Avatar Upload */}
-            <div className="space-y-2">
-              <Label>Foto do Perfil</Label>
-              <AvatarUploader
-                currentAvatarUrl={editUser?.avatar_url}
-                userName={fullName || "Usuário"}
-                onFileSelect={setAvatarFile}
-                uploading={uploadingAvatar}
-              />
-            </div>
 
+            {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -248,6 +239,31 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
                 required={!isEditMode}
               />
             </div>
+            
+            {/* Avatar Upload - Span 2 columns */}
+            <div className="col-span-2 space-y-2">
+              <Label>Foto do Perfil</Label>
+              <AvatarUploader
+                currentAvatarUrl={editUser?.avatar_url}
+                userName={fullName || "Usuário"}
+                onFileSelect={setAvatarFile}
+                uploading={uploadingAvatar}
+              />
+            </div>
+
+            {/* Cargo */}
+            <div className="space-y-2">
+              <Label htmlFor="job_title">Cargo (opcional)</Label>
+              <Input
+                id="job_title"
+                type="text"
+                placeholder="Vendedor Senior"
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+              />
+            </div>
+
+            {/* Senha (apenas para criação) */}
             {!isEditMode && (
               <div className="space-y-2">
                 <Label htmlFor="password">Senha Temporária</Label>
@@ -261,16 +277,8 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
                 />
               </div>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="job_title">Cargo (opcional)</Label>
-              <Input
-                id="job_title"
-                type="text"
-                placeholder="Vendedor Senior"
-                value={jobTitle}
-                onChange={(e) => setJobTitle(e.target.value)}
-              />
-            </div>
+
+            {/* Perfil de Acesso */}
             <div className="space-y-2">
               <Label htmlFor="role">Perfil de Acesso *</Label>
               <Select value={role} onValueChange={(value: any) => setRole(value)} required>
@@ -281,31 +289,32 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
                   <SelectItem value="admin">
                     <div className="flex flex-col">
                       <span className="font-medium">Administrador</span>
-                      <span className="text-xs text-muted-foreground">Acesso total ao sistema</span>
+                      <span className="text-xs text-muted-foreground">Acesso total</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="manager">
                     <div className="flex flex-col">
                       <span className="font-medium">Gerente de Vendas</span>
-                      <span className="text-xs text-muted-foreground">Vê todo o time e métricas gerais</span>
+                      <span className="text-xs text-muted-foreground">Vê todo o time</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="sales_rep">
                     <div className="flex flex-col">
                       <span className="font-medium">Vendedor</span>
-                      <span className="text-xs text-muted-foreground">Apenas seus leads e métricas pessoais</span>
+                      <span className="text-xs text-muted-foreground">Apenas seus leads</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="consultant">
                     <div className="flex flex-col">
                       <span className="font-medium">Consultor / Account Manager</span>
-                      <span className="text-xs text-muted-foreground">Gerencia carteira de clientes pós-venda</span>
+                      <span className="text-xs text-muted-foreground">Carteira pós-venda</span>
                     </div>
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
+            {/* Departamento */}
             <div className="space-y-2">
               <Label htmlFor="department">Departamento *</Label>
               <Select value={department || undefined} onValueChange={setDepartment} required>
