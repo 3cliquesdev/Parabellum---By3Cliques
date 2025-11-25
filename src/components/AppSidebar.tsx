@@ -16,7 +16,8 @@ import {
   Upload,
   Headphones,
   Brain,
-  Package
+  Package,
+  Briefcase
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -43,6 +44,7 @@ import ProfileEditDialog from "@/components/ProfileEditDialog";
 const mainItems = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard },
   { title: "Inbox", href: "/inbox", icon: Inbox },
+  { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase, requiresRole: true },
 ];
 
 const crmItems = [
@@ -127,21 +129,26 @@ export function AppSidebar() {
           {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.href}
-                      end={item.href === "/"}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                      activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-                    >
-                      <item.icon className="h-5 w-5 flex-shrink-0" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {mainItems.map((item) => {
+                // Hide "Minha Carteira" for users without sales_rep/manager/admin role
+                if (item.requiresRole && !isAdmin && !isManager) return null;
+                
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        to={item.href}
+                        end={item.href === "/"}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                        activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+                      >
+                        <item.icon className="h-5 w-5 flex-shrink-0" />
+                        {!collapsed && <span>{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
