@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit, Trash2, Brain, Zap, Wrench } from "lucide-react";
+import { Plus, Edit, Trash2, Brain, Zap, Wrench, FlaskConical } from "lucide-react";
+import { SandboxTest } from "@/components/SandboxTest";
 import { usePersonas } from "@/hooks/usePersonas";
 import { useDeletePersona } from "@/hooks/useDeletePersona";
 import { useUpdatePersona } from "@/hooks/useUpdatePersona";
@@ -83,6 +84,10 @@ export default function AIStudio() {
           <TabsTrigger value="tools">
             <Wrench className="mr-2 h-4 w-4" />
             AI Tools
+          </TabsTrigger>
+          <TabsTrigger value="sandbox">
+            <FlaskConical className="mr-2 h-4 w-4" />
+            Sandbox
           </TabsTrigger>
         </TabsList>
 
@@ -364,6 +369,11 @@ export default function AIStudio() {
               </Card>
             )}
           </div>
+        </TabsContent>
+
+        {/* SANDBOX TAB */}
+        <TabsContent value="sandbox" className="mt-6">
+          <SandboxTest />
         </TabsContent>
       </Tabs>
 
