@@ -34,7 +34,7 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
       <div className="bg-muted/50 rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-white">{stage.name}</h3>
+            <h3 className="font-semibold text-foreground">{stage.name}</h3>
             {isAdmin && (
               <StageDialog
                 trigger={
@@ -46,7 +46,7 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
               />
             )}
           </div>
-          <span className="text-sm text-[#999999] bg-[#0d0d0d] rounded-full px-2 py-1">
+          <span className="text-sm text-muted-foreground bg-muted rounded-full px-2 py-1">
             {deals.length}
           </span>
         </div>
