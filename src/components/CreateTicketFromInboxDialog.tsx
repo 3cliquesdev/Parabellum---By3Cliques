@@ -73,7 +73,7 @@ export function CreateTicketFromInboxDialog({
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<'financeiro' | 'tecnico' | 'bug' | 'outro'>('outro');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
-  const [assignedTo, setAssignedTo] = useState<string>("");
+  const [assignedTo, setAssignedTo] = useState<string | undefined>(undefined);
   const [internalNote, setInternalNote] = useState("");
 
   const generateTicket = useGenerateTicketFromConversation();
@@ -87,7 +87,7 @@ export function CreateTicketFromInboxDialog({
       setDescription("");
       setCategory('outro');
       setPriority('medium');
-      setAssignedTo("");
+      setAssignedTo(undefined);
       setInternalNote("");
     }
   }, [open]);
@@ -215,12 +215,11 @@ export function CreateTicketFromInboxDialog({
                 <User className="h-4 w-4" />
                 Atribuir a (Opcional)
               </Label>
-              <Select value={assignedTo} onValueChange={setAssignedTo}>
+              <Select value={assignedTo || undefined} onValueChange={(val) => setAssignedTo(val || undefined)}>
                 <SelectTrigger id="assignee" className="mt-1 bg-background">
-                  <SelectValue placeholder="Selecione um agente..." />
+                  <SelectValue placeholder="Selecione um agente (opcional)..." />
                 </SelectTrigger>
                 <SelectContent className="bg-popover z-50">
-                  <SelectItem value="">Sem atribuição</SelectItem>
                   {availableUsers.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       <div className="flex items-center gap-2">
