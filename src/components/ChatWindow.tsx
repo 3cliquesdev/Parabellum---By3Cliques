@@ -16,6 +16,7 @@ import { useAIMode } from "@/hooks/useAIMode";
 import { useActivePersona } from "@/hooks/useActivePersona";
 import { useTakeControl } from "@/hooks/useTakeControl";
 import { useReturnToAutopilot } from "@/hooks/useReturnToAutopilot";
+import { useAutopilotTrigger } from "@/hooks/useAutopilotTrigger";
 import TransferConversationDialog from "@/components/TransferConversationDialog";
 import { CreateTicketFromInboxDialog } from "@/components/CreateTicketFromInboxDialog";
 import CopilotSuggestionCard from "@/components/CopilotSuggestionCard";
@@ -54,6 +55,9 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const sendEmail = useSendEmail();
   const takeControl = useTakeControl();
   const returnToAutopilot = useReturnToAutopilot();
+  
+  // Ativa Autopilot trigger para responder automaticamente
+  useAutopilotTrigger(conversation?.id || null);
 
   const contact = conversation?.contacts;
 
