@@ -414,6 +414,7 @@ export type Database = {
           blocked: boolean | null
           city: string | null
           company: string | null
+          consultant_id: string | null
           created_at: string
           customer_type: string | null
           document: string | null
@@ -449,6 +450,7 @@ export type Database = {
           blocked?: boolean | null
           city?: string | null
           company?: string | null
+          consultant_id?: string | null
           created_at?: string
           customer_type?: string | null
           document?: string | null
@@ -484,6 +486,7 @@ export type Database = {
           blocked?: boolean | null
           city?: string | null
           company?: string | null
+          consultant_id?: string | null
           created_at?: string
           customer_type?: string | null
           document?: string | null
@@ -512,6 +515,13 @@ export type Database = {
           {
             foreignKeyName: "contacts_assigned_to_fkey"
             columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_consultant_id_fkey"
+            columns: ["consultant_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1442,6 +1452,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      distribute_client_to_consultant: {
+        Args: { p_contact_id: string }
+        Returns: Json
+      }
       get_ai_usage_metrics: {
         Args: { p_end_date: string; p_start_date: string; p_user_id?: string }
         Returns: {
@@ -1461,6 +1475,7 @@ export type Database = {
           won_deals: number
         }[]
       }
+      get_least_loaded_consultant: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
