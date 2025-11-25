@@ -38,3 +38,6 @@ verify_jwt = true
 
 [functions.generate-smart-reply]
 verify_jwt = true
+
+[functions.sandbox-chat]
+verify_jwt = true
