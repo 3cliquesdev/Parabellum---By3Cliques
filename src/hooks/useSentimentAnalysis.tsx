@@ -9,6 +9,20 @@ interface Message {
 
 export type Sentiment = 'critico' | 'neutro' | 'promotor';
 
+// Normaliza valores similares para os 3 tipos válidos
+const normalizeSentiment = (raw: string): Sentiment => {
+  const normalized = raw.toLowerCase().trim();
+  
+  // Mapa de valores similares para crítico
+  const negativeMatches = ['critico', 'crítico', 'negativo', 'irritado', 'raiva', 'frustrado', 'angry', 'negative'];
+  // Mapa de valores similares para promotor
+  const positiveMatches = ['promotor', 'positivo', 'satisfeito', 'feliz', 'happy', 'positive'];
+  
+  if (negativeMatches.includes(normalized)) return 'critico';
+  if (positiveMatches.includes(normalized)) return 'promotor';
+  return 'neutro'; // Default seguro
+};
+
 export function useSentimentAnalysis() {
   const { enqueue } = useAIQueue();
 
@@ -30,7 +44,9 @@ export function useSentimentAnalysis() {
           throw error;
         }
         
-        const sentiment = data.result.toLowerCase().trim() as Sentiment;
+        const rawSentiment = data.result.toLowerCase().trim();
+        const sentiment = normalizeSentiment(rawSentiment);
+        console.log('[Sentiment] AI returned:', rawSentiment, '→ normalized to:', sentiment);
         return sentiment;
       });
     },

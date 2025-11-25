@@ -41,12 +41,18 @@ Categoria sugerida: [categoria]`;
         break;
 
       case 'sentiment':
-        systemPrompt = 'Você é um especialista em análise de sentimento. Analise o tom emocional das mensagens e classifique como "critico", "neutro" ou "promotor".';
+        systemPrompt = `Você é um analisador de sentimento especializado em atendimento ao cliente.
+Analise o tom e sentimento das mensagens do cliente e classifique em uma das categorias:
+
+IMPORTANTE: Responda APENAS com uma destas palavras exatas (sem acentos):
+- "critico" = cliente irritado, frustrado, negativo, insatisfeito, com raiva
+- "neutro" = cliente neutro, sem emoção forte, informativo
+- "promotor" = cliente satisfeito, feliz, positivo, agradecido, entusiasmado
+
+Responda SOMENTE com uma das três palavras: critico, neutro ou promotor`;
         userPrompt = `Analise o sentimento destas mensagens do cliente:
 
-${messages.map((m: any) => m.content).join('\n')}
-
-Responda apenas com uma das palavras: critico, neutro ou promotor`;
+${messages.map((m: any) => m.content).join('\n')}`;
         break;
 
       case 'reply':

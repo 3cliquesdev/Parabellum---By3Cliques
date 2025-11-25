@@ -27,6 +27,20 @@ const sentimentConfig = {
 
 export function SentimentBadge({ sentiment, className }: SentimentBadgeProps) {
   const config = sentimentConfig[sentiment];
+  
+  // Guard: se config não existir, fallback para neutro
+  if (!config) {
+    console.warn(`[SentimentBadge] Sentiment desconhecido: ${sentiment}, usando fallback 'neutro'`);
+    const fallbackConfig = sentimentConfig.neutro;
+    const FallbackIcon = fallbackConfig.icon;
+    return (
+      <Badge variant="secondary" className={`${fallbackConfig.color} ${className}`}>
+        <FallbackIcon className="h-3 w-3 mr-1" />
+        {fallbackConfig.label}
+      </Badge>
+    );
+  }
+  
   const Icon = config.icon;
 
   return (
