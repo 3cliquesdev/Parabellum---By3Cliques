@@ -375,7 +375,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                                   ? "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
                                   : isAI
                                   ? "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tr-none text-slate-800 dark:text-slate-100"
-                                  : "bg-blue-700 dark:bg-blue-800 text-white rounded-2xl rounded-tr-none"
+                                  : "bg-primary text-primary-foreground rounded-2xl rounded-tr-none"
                               )}
                             >
                               <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
