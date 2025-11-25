@@ -4,28 +4,28 @@
 
 @layer base {
   :root {
-    /* PALETA SAAS NEON (PRETO E VERDE) */
+    /* PALETA TECH BLUE ENTERPRISE (PRETO E AZUL) */
     --background: 0 0% 0%;      /* #000000 (Preto Puro) */
     --foreground: 0 0% 100%;    /* #ffffff (Texto Branco) */
     
     --card: 0 0% 5%;            /* #0d0d0d (Cinza Quase Preto) */
     --card-foreground: 0 0% 100%;
     
-    --primary: 142 70% 50%;     /* #22c55e (Verde Neon Brilhante) */
-    --primary-foreground: 0 0% 0%;
+    --primary: 221.2 83.2% 53.3%;     /* #2563EB (Tech Blue 600) */
+    --primary-foreground: 210 40% 98%; /* #F8FAFC (Texto Branco) */
     
     --secondary: 0 0% 12%;      /* #202020 (Cinza Chumbo) */
     --secondary-foreground: 0 0% 100%;
     
     --border: 0 0% 15%;         /* #262626 (Borda sutil) */
     --input: 0 0% 15%;
-    --ring: 142 70% 50%;
+    --ring: 221.2 83.2% 53.3%;  /* #2563EB (Tech Blue) */
     
     --muted: 0 0% 10%;
     --muted-foreground: 0 0% 60%;
     
-    --accent: 142 70% 50%;
-    --accent-foreground: 0 0% 0%;
+    --accent: 221.2 83.2% 53.3%;     /* #2563EB (Tech Blue) */
+    --accent-foreground: 210 40% 98%; /* #F8FAFC (Texto Branco) */
     
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
