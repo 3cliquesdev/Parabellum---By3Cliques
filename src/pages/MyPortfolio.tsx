@@ -14,6 +14,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import FocusTodayWidget from "@/components/FocusTodayWidget";
 import ExpansionRadarWidget from "@/components/widgets/ExpansionRadarWidget";
+import CommissionTrackerWidget from "@/components/widgets/CommissionTrackerWidget";
 
 export default function MyPortfolio() {
   const navigate = useNavigate();
@@ -139,10 +140,11 @@ export default function MyPortfolio() {
         </Card>
       </div>
 
-      {/* Widgets Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <FocusTodayWidget />
+      {/* Widgets Row - Bento Box Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <ExpansionRadarWidget />
+        <CommissionTrackerWidget />
+        <FocusTodayWidget />
       </div>
 
       {/* Filters and Search */}
