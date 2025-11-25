@@ -27,6 +27,7 @@ export default function KnowledgeImport() {
   });
   const [mode, setMode] = useState<'raw_history' | 'ready_faq'>('ready_faq');
   const [importResult, setImportResult] = useState<any>(null);
+  const [hasManualMapping, setHasManualMapping] = useState(false);
 
   const importMutation = useImportKnowledge();
 
@@ -41,47 +42,47 @@ export default function KnowledgeImport() {
     }
   }, [isAdmin, isManager, roleLoading, navigate, toast]);
 
-  // Auto-detect column mapping
+  // Auto-detect column mapping (only if user hasn't manually mapped)
   useEffect(() => {
-    if (csvHeaders.length > 0) {
-      const newMapping = { ...mapping };
+    if (csvHeaders.length === 0 || hasManualMapping) return;
+
+    const newMapping = { ...mapping };
+    
+    csvHeaders.forEach(header => {
+      const lowerHeader = header.toLowerCase();
       
-      csvHeaders.forEach(header => {
-        const lowerHeader = header.toLowerCase();
-        
-        if (!newMapping.input || newMapping.input === '__none__') {
-          if (lowerHeader.includes('pergunta') || lowerHeader.includes('problema') || 
-              lowerHeader.includes('duvida') || lowerHeader.includes('entrada') ||
-              lowerHeader.includes('msg cliente') || lowerHeader.includes('assunto')) {
-            newMapping.input = header;
-          }
+      if (!newMapping.input || newMapping.input === '__none__') {
+        if (lowerHeader.includes('pergunta') || lowerHeader.includes('problema') || 
+            lowerHeader.includes('duvida') || lowerHeader.includes('entrada') ||
+            lowerHeader.includes('msg cliente') || lowerHeader.includes('assunto')) {
+          newMapping.input = header;
         }
-        
-        if (!newMapping.output || newMapping.output === '__none__') {
-          if (lowerHeader.includes('resposta') || lowerHeader.includes('solucao') || 
-              lowerHeader.includes('saida') || lowerHeader.includes('resolucao') ||
-              lowerHeader.includes('msg agente')) {
-            newMapping.output = header;
-          }
-        }
-        
-        if (!newMapping.category || newMapping.category === '__none__') {
-          if (lowerHeader.includes('categoria') || lowerHeader.includes('category') ||
-              lowerHeader.includes('tipo')) {
-            newMapping.category = header;
-          }
-        }
-        
-        if (!newMapping.tags || newMapping.tags === '__none__') {
-          if (lowerHeader.includes('tag') || lowerHeader.includes('etiqueta')) {
-            newMapping.tags = header;
-          }
-        }
-      });
+      }
       
-      setMapping(newMapping);
-    }
-  }, [csvHeaders]);
+      if (!newMapping.output || newMapping.output === '__none__') {
+        if (lowerHeader.includes('resposta') || lowerHeader.includes('solucao') || 
+            lowerHeader.includes('saida') || lowerHeader.includes('resolucao') ||
+            lowerHeader.includes('msg agente')) {
+          newMapping.output = header;
+        }
+      }
+      
+      if (!newMapping.category || newMapping.category === '__none__') {
+        if (lowerHeader.includes('categoria') || lowerHeader.includes('category') ||
+            lowerHeader.includes('tipo')) {
+          newMapping.category = header;
+        }
+      }
+      
+      if (!newMapping.tags || newMapping.tags === '__none__') {
+        if (lowerHeader.includes('tag') || lowerHeader.includes('etiqueta')) {
+          newMapping.tags = header;
+        }
+      }
+    });
+    
+    setMapping(newMapping);
+  }, [csvHeaders, hasManualMapping]);
 
   const handleDataParsed = (data: any[], headers: string[]) => {
     setCsvData(data);
@@ -90,6 +91,7 @@ export default function KnowledgeImport() {
   };
 
   const handleMappingChange = (field: string, csvColumn: string) => {
+    setHasManualMapping(true);
     setMapping(prev => ({ ...prev, [field]: csvColumn }));
   };
 
@@ -103,6 +105,7 @@ export default function KnowledgeImport() {
       tags: '__none__',
     });
     setImportResult(null);
+    setHasManualMapping(false);
   };
 
   const handleImport = async () => {
