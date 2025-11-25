@@ -1069,6 +1069,63 @@ export type Database = {
           },
         ]
       }
+      onboarding_playbooks: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          execution_count: number | null
+          flow_definition: Json
+          id: string
+          is_active: boolean | null
+          is_template: boolean | null
+          name: string
+          product_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          execution_count?: number | null
+          flow_definition?: Json
+          id?: string
+          is_active?: boolean | null
+          is_template?: boolean | null
+          name: string
+          product_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          execution_count?: number | null
+          flow_definition?: Json
+          id?: string
+          is_active?: boolean | null
+          is_template?: boolean | null
+          name?: string
+          product_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_playbooks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_playbooks_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string

@@ -1,0 +1,329 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, Workflow, Edit, Trash2, Copy, BarChart3, Sparkles } from "lucide-react";
+import { usePlaybooks } from "@/hooks/usePlaybooks";
+import { useCreatePlaybook } from "@/hooks/useCreatePlaybook";
+import { useUpdatePlaybook } from "@/hooks/useUpdatePlaybook";
+import { useDeletePlaybook } from "@/hooks/useDeletePlaybook";
+import { useProducts } from "@/hooks/useProducts";
+import PlaybookEditor from "@/components/playbook/PlaybookEditor";
+import { Switch } from "@/components/ui/switch";
+
+export default function OnboardingBuilder() {
+  const { data: playbooks, isLoading } = usePlaybooks();
+  const { data: products } = useProducts();
+  const createPlaybook = useCreatePlaybook();
+  const updatePlaybook = useUpdatePlaybook();
+  const deletePlaybook = useDeletePlaybook();
+
+  const [showEditor, setShowEditor] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editingPlaybook, setEditingPlaybook] = useState<any>(null);
+
+  // Form state
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [productId, setProductId] = useState<string>();
+  const [flowDefinition, setFlowDefinition] = useState<any>(null);
+
+  const handleCreateFromTemplate = (template: any) => {
+    setName(`Cópia: ${template.name}`);
+    setDescription(template.description);
+    setFlowDefinition(template.flow_definition);
+    setShowCreateDialog(true);
+  };
+
+  const handleEdit = (playbook: any) => {
+    setEditingPlaybook(playbook);
+    setName(playbook.name);
+    setDescription(playbook.description || "");
+    setProductId(playbook.product_id);
+    setFlowDefinition(playbook.flow_definition);
+    setShowEditor(true);
+  };
+
+  const handleSaveFlow = (flow: any) => {
+    if (editingPlaybook) {
+      updatePlaybook.mutate({
+        id: editingPlaybook.id,
+        name,
+        description,
+        product_id: productId,
+        flow_definition: flow,
+      });
+    } else {
+      createPlaybook.mutate({
+        name,
+        description,
+        product_id: productId,
+        flow_definition: flow,
+      });
+    }
+    setShowEditor(false);
+    setShowCreateDialog(false);
+    resetForm();
+  };
+
+  const handleCreateNew = () => {
+    setShowCreateDialog(true);
+  };
+
+  const handleStartEditor = () => {
+    setShowCreateDialog(false);
+    setShowEditor(true);
+  };
+
+  const resetForm = () => {
+    setName("");
+    setDescription("");
+    setProductId(undefined);
+    setFlowDefinition(null);
+    setEditingPlaybook(null);
+  };
+
+  const handleToggleActive = (playbook: any) => {
+    updatePlaybook.mutate({
+      id: playbook.id,
+      is_active: !playbook.is_active,
+    });
+  };
+
+  const templates = playbooks?.filter((p) => p.is_template) || [];
+  const customPlaybooks = playbooks?.filter((p) => !p.is_template) || [];
+
+  if (showEditor) {
+    return (
+      <div className="p-6">
+        <div className="mb-4">
+          <h1 className="text-2xl font-bold">
+            {editingPlaybook ? "Editar Playbook" : "Criar Novo Playbook"}
+          </h1>
+          <p className="text-muted-foreground">
+            {name || "Configure o nome e produto antes de desenhar o fluxo"}
+          </p>
+        </div>
+        <PlaybookEditor
+          initialFlow={flowDefinition}
+          onSave={handleSaveFlow}
+          onCancel={() => {
+            setShowEditor(false);
+            resetForm();
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Workflow className="h-8 w-8" />
+            Playbooks de Onboarding
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Desenhe fluxos visuais que executam automaticamente quando clientes compram
+          </p>
+        </div>
+        <Button onClick={handleCreateNew} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Novo Playbook
+        </Button>
+      </div>
+
+      {/* Biblioteca de Templates */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            Biblioteca de Templates
+          </CardTitle>
+          <CardDescription>
+            Comece rápido com templates pré-configurados
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {templates.map((template) => (
+              <Card key={template.id} className="relative">
+                <CardHeader>
+                  <Badge variant="secondary" className="w-fit">Template</Badge>
+                  <CardTitle className="text-lg mt-2">{template.name}</CardTitle>
+                  <CardDescription className="text-xs">
+                    {template.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCreateFromTemplate(template)}
+                      className="flex-1 gap-2"
+                    >
+                      <Copy className="h-3 w-3" />
+                      Usar Template
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Playbooks Customizados */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Meus Playbooks</CardTitle>
+          <CardDescription>
+            Playbooks personalizados associados aos seus produtos
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+          ) : customPlaybooks.length === 0 ? (
+            <div className="text-center py-12">
+              <Workflow className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+              <p className="text-muted-foreground">
+                Nenhum playbook customizado ainda. Crie um novo!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {customPlaybooks.map((playbook) => (
+                <Card key={playbook.id}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg">{playbook.name}</CardTitle>
+                        {playbook.product && (
+                          <Badge variant="outline" className="mt-2">
+                            {playbook.product.name}
+                          </Badge>
+                        )}
+                      </div>
+                      <Switch
+                        checked={playbook.is_active}
+                        onCheckedChange={() => handleToggleActive(playbook)}
+                      />
+                    </div>
+                    <CardDescription className="text-xs mt-2">
+                      {playbook.description || "Sem descrição"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+                      <BarChart3 className="h-4 w-4" />
+                      <span>{playbook.execution_count || 0} execuções</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEdit(playbook)}
+                        className="flex-1 gap-2"
+                      >
+                        <Edit className="h-3 w-3" />
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          if (confirm("Deletar este playbook?")) {
+                            deletePlaybook.mutate(playbook.id);
+                          }
+                        }}
+                        className="gap-2"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dialog de criação */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Configurar Novo Playbook</DialogTitle>
+            <DialogDescription>
+              Defina as informações básicas antes de desenhar o fluxo
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Nome do Playbook *</Label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ex: Onboarding Premium"
+              />
+            </div>
+            <div>
+              <Label>Descrição</Label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Descreva quando este playbook deve ser usado..."
+              />
+            </div>
+            <div>
+              <Label>Produto (Opcional)</Label>
+              <Select value={productId} onValueChange={setProductId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um produto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products?.map((product) => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Quando associado a um produto, executa automaticamente quando deal é ganho
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleStartEditor} disabled={!name}>
+              Continuar para Editor
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

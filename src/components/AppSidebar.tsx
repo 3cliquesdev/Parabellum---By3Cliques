@@ -22,7 +22,8 @@ import {
   Ticket,
   MessageCircle,
   DollarSign,
-  CheckSquare
+  CheckSquare,
+  Workflow
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -103,12 +104,13 @@ const adminCrmItems = [
   { title: "Organizações", href: "/organizations", icon: Building2 },
 ];
 
-const adminStrategyItems = [
-  { title: "Automações", href: "/automations", icon: Zap },
-  { title: "AI Studio", href: "/ai-studio/personas", icon: Brain },
-  { title: "Templates de Email", href: "/email-templates", icon: Mail },
-  { title: "Formulários", href: "/forms", icon: FileText },
-];
+  const adminStrategyItems = [
+    { title: "Automações", href: "/automations", icon: Zap },
+    { title: "AI Studio", href: "/ai-studio/personas", icon: Brain },
+    { title: "Templates de Email", href: "/email-templates", icon: Mail },
+    { title: "Formulários", href: "/forms", icon: FileText },
+    { title: "Playbooks de Onboarding", href: "/onboarding-builder", icon: Workflow },
+  ];
 
 const adminReportsItems = [
   { title: "Metas", href: "/goals", icon: Target },
