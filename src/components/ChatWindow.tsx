@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot } from "lucide-react";
+import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
@@ -39,14 +40,14 @@ interface ChatWindowProps {
 }
 
 export default function ChatWindow({ conversation }: ChatWindowProps) {
-  const [messageText, setMessageText] = useState("");
+  const [message, setMessage] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [isEmailMode, setIsEmailMode] = useState(false);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [createTicketDialogOpen, setCreateTicketDialogOpen] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
-  const { data: messages, isLoading } = useMessages(conversation?.id || null);
+  const { data: messages, isLoading: isMessagesLoading } = useMessages(conversation?.id || null);
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
   const { data: activePersona } = useActivePersona(conversation?.id || null);
   const sendMessage = useSendMessage();
@@ -54,42 +55,38 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const takeControl = useTakeControl();
   const returnToAutopilot = useReturnToAutopilot();
 
-  // Auto-scroll to bottom when messages change
+  const contact = conversation?.contacts;
+
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!messageText.trim() || !conversation) return;
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!message.trim() || !conversation) return;
 
     if (isEmailMode) {
-      // Modo Email
-      if (!emailSubject.trim()) {
-        return;
-      }
+      if (!emailSubject.trim()) return;
 
       await sendEmail.mutateAsync({
         to: conversation.contacts.email || '',
         to_name: `${conversation.contacts.first_name} ${conversation.contacts.last_name}`,
         subject: emailSubject.trim(),
-        html: `<p>${messageText.trim().replace(/\n/g, '<br>')}</p>`,
+        html: `<p>${message.trim().replace(/\n/g, '<br>')}</p>`,
         customer_id: conversation.contacts.id,
       });
 
-      setMessageText("");
+      setMessage("");
       setEmailSubject("");
     } else {
-      // Modo Chat
       await sendMessage.mutateAsync({
         conversation_id: conversation.id,
-        content: messageText.trim(),
+        content: message.trim(),
         sender_type: "user",
+        sender_id: user?.id || null,
       });
 
-      setMessageText("");
+      setMessage("");
     }
   };
 
@@ -110,22 +107,14 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   };
 
   const handleUseSuggestion = (text: string) => {
-    setMessageText(text);
+    setMessage(text);
   };
-
-  if (!conversation) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-black">
-        <p className="text-[#999999]">
-          Selecione uma conversa para começar
-        </p>
-      </div>
-    );
-  }
 
   const isAutopilot = aiMode === 'autopilot';
   const isCopilot = aiMode === 'copilot';
   const isDisabled = aiMode === 'disabled';
+
+  const isSending = sendMessage.isPending || sendEmail.isPending;
 
   return (
     <>
@@ -141,319 +130,313 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
         conversationId={conversation?.id || null}
         contactName={`${conversation?.contacts.first_name} ${conversation?.contacts.last_name}`}
       />
-      <div className="flex-1 flex flex-col bg-black">
-        {/* Header */}
-        <div className="h-16 border-b border-border bg-card flex items-center px-4 gap-3 justify-between">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10 bg-primary/10 flex items-center justify-center">
-              <span className="text-sm font-semibold text-primary">
-                {conversation.contacts.first_name[0]}
-                {conversation.contacts.last_name[0]}
-              </span>
-            </Avatar>
-            <div>
-              <p className="font-medium text-foreground">
-                {conversation.contacts.first_name} {conversation.contacts.last_name}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {conversation.contacts.email || conversation.contacts.phone}
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                {conversation.assigned_user && (
-                  <Badge variant="secondary" className="text-xs">
-                    Atribuído: {conversation.assigned_user.full_name}
-                  </Badge>
-                )}
-                {!aiModeLoading && (
-                  <>
-                    <Badge 
-                      variant={isAutopilot ? "default" : isCopilot ? "outline" : "secondary"}
-                      className="text-xs"
-                    >
-                      {isAutopilot && "🤖 Autopilot"}
-                      {isCopilot && "🧠 Copilot"}
-                      {isDisabled && "👤 Manual"}
+      
+      {conversation ? (
+        <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950">
+          <div className="border-b border-slate-200 dark:border-slate-800 px-4 py-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur flex items-center gap-3 justify-between">
+            <div className="flex items-center gap-3">
+              <Avatar className="w-10 h-10 shrink-0">
+                {contact?.avatar_url ? (
+                  <AvatarImage src={contact.avatar_url} alt={`${contact.first_name} ${contact.last_name}`} />
+                ) : null}
+                <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-green-600 text-white text-sm font-semibold">
+                  {contact?.first_name[0]}{contact?.last_name[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium text-slate-900 dark:text-slate-100">
+                  {contact?.first_name} {contact?.last_name}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {contact?.email || contact?.phone}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  {conversation.assigned_user && (
+                    <Badge variant="secondary" className="text-xs">
+                      {conversation.assigned_user.full_name}
                     </Badge>
-                    {activePersona && isAutopilot && (
-                      <Badge variant="secondary" className="text-xs">
-                        AI: {activePersona.name}
+                  )}
+                  {!aiModeLoading && (
+                    <>
+                      <Badge 
+                        variant={isAutopilot ? "default" : isCopilot ? "outline" : "secondary"}
+                        className="text-xs"
+                      >
+                        {isAutopilot && "🤖 Autopilot"}
+                        {isCopilot && "🧠 Copilot"}
+                        {isDisabled && "👤 Manual"}
                       </Badge>
-                    )}
-                  </>
-                )}
+                      {activePersona && isAutopilot && (
+                        <Badge variant="secondary" className="text-xs">
+                          {activePersona.name}
+                        </Badge>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {/* Botão Assumir Controle (só em autopilot) */}
-            {isAutopilot && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleTakeControl}
-                disabled={takeControl.isPending}
-                className="h-8 gap-1 bg-primary"
-              >
-                <Hand className="h-4 w-4" />
-                <span className="text-xs">Assumir Controle</span>
-              </Button>
-            )}
+            
+            <div className="flex items-center gap-2">
+              {isAutopilot && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleTakeControl}
+                  disabled={takeControl.isPending}
+                  className="h-8 gap-1"
+                >
+                  <Hand className="h-4 w-4" />
+                  <span className="text-xs">Assumir Controle</span>
+                </Button>
+              )}
 
-            {/* Botão Devolver para Autopilot (só em copilot) */}
-            {isCopilot && (
+              {isCopilot && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleReturnToAutopilot}
+                  disabled={returnToAutopilot.isPending}
+                  className="h-8 gap-1"
+                >
+                  <Bot className="h-4 w-4" />
+                  <span className="text-xs">Devolver para IA</span>
+                </Button>
+              )}
+
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleReturnToAutopilot}
-                disabled={returnToAutopilot.isPending}
+                onClick={() => setCreateTicketDialogOpen(true)}
                 className="h-8 gap-1"
               >
-                <Bot className="h-4 w-4" />
-                <span className="text-xs">Devolver para IA</span>
+                <FileText className="h-4 w-4" />
+                <span className="text-xs">Ticket</span>
               </Button>
-            )}
-
-            {/* Generate Ticket Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCreateTicketDialogOpen(true)}
-              className="h-8 gap-1 bg-primary/10 border-primary/20 hover:bg-primary/20"
-            >
-              <FileText className="h-4 w-4" />
-              <span className="text-xs">Gerar Ticket</span>
-            </Button>
-            
-            {/* Transfer Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setTransferDialogOpen(true)}
-              className="h-8 gap-1"
-            >
-              <ArrowRightLeft className="h-4 w-4" />
-              <span className="text-xs">Transferir</span>
-            </Button>
-            
-            {/* Toggle Email/Chat */}
-            {!isAutopilot && (
-              <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTransferDialogOpen(true)}
+                className="h-8 gap-1"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+                <span className="text-xs">Transferir</span>
+              </Button>
+              
+              {!isAutopilot && (
                 <Button
-                  variant={!isEmailMode ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setIsEmailMode(false)}
-                  className="h-8 gap-1"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsEmailMode(!isEmailMode)}
+                  title={isEmailMode ? "Chat" : "Email"}
+                  className="h-8 w-8"
                 >
-                  <MessageCircle className="h-4 w-4" />
-                  <span className="text-xs">Chat</span>
+                  {isEmailMode ? <MessageCircle className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
                 </Button>
-                <Button
-                  variant={isEmailMode ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setIsEmailMode(true)}
-                  className="h-8 gap-1"
-                  disabled={!conversation.contacts.email}
-                >
-                  <Mail className="h-4 w-4" />
-                  <span className="text-xs">Email</span>
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Alerta de Autopilot */}
-        {isAutopilot && (
-          <Alert className="m-4 border-primary/50 bg-primary/5">
-            <Bot className="h-4 w-4 text-primary" />
-            <AlertDescription className="text-sm">
-              🤖 <strong>{activePersona ? `Persona "${activePersona.name}"` : 'IA'} está respondendo automaticamente</strong> nesta conversa. 
-              {activePersona && (
-                <span className="block mt-1 text-xs text-muted-foreground">
-                  Papel: {activePersona.role}
-                </span>
               )}
-              Clique em "Assumir Controle" para entrar no modo Copilot e receber sugestões de resposta.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
-          ) : messages?.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">Nenhuma mensagem ainda</p>
+          </div>
+
+          {isAutopilot && (
+            <Alert className="m-4 mb-0 border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/50">
+              <Bot className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+              <AlertDescription className="text-violet-800 dark:text-violet-300">
+                {activePersona ? `Persona "${activePersona.name}"` : 'IA'} está respondendo automaticamente.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <ScrollArea className="flex-1">
+            <div className="p-4 md:p-6">
+              <div className="max-w-3xl mx-auto w-full">
+                {isMessagesLoading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="text-slate-500 dark:text-slate-400">Carregando mensagens...</div>
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="text-slate-500 dark:text-slate-400">Nenhuma mensagem ainda</div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {messages.map((message) => {
+                      const isCustomer = message.sender_type === 'contact';
+                      const isSystem = message.sender_type === 'system';
+                      const isAI = message.is_ai_generated;
+
+                      if (isSystem) {
+                        return (
+                          <div key={message.id} className="flex justify-center py-3">
+                            <div className="bg-slate-200/50 dark:bg-slate-800/50 px-4 py-2 rounded-full">
+                              <p className="text-xs text-slate-600 dark:text-slate-400 text-center">
+                                📢 {message.content}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={message.id}
+                          className={cn(
+                            "flex gap-2",
+                            isCustomer ? "justify-start" : "justify-end"
+                          )}
+                        >
+                          {isCustomer && (
+                            <Avatar className="w-9 h-9 shrink-0 shadow-sm">
+                              <AvatarFallback className="bg-gradient-to-br from-slate-400 to-slate-600 text-white text-sm font-semibold">
+                                {contact?.first_name[0]}{contact?.last_name[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
+
+                          {!isCustomer && (
+                            <Avatar className="w-9 h-9 shrink-0 shadow-sm order-2">
+                              {isAI ? (
+                                <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600">
+                                  <Bot className="h-5 w-5 text-white" />
+                                </AvatarFallback>
+                              ) : message.sender ? (
+                                <>
+                                  {message.sender.avatar_url ? (
+                                    <AvatarImage src={message.sender.avatar_url} alt={message.sender.full_name} />
+                                  ) : null}
+                                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-semibold">
+                                    {message.sender.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                  </AvatarFallback>
+                                </>
+                              ) : (
+                                <AvatarFallback>?</AvatarFallback>
+                              )}
+                            </Avatar>
+                          )}
+                          
+                          <div className={cn("flex flex-col", isCustomer ? "items-start" : "items-end")}>
+                            {isCustomer && (
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 px-1 font-medium">
+                                {contact?.first_name} {contact?.last_name}
+                              </p>
+                            )}
+                            
+                            {!isCustomer && (
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 px-1 font-medium">
+                                {isAI ? "Assistente Virtual" : message.sender?.full_name}
+                                {message.sender?.job_title && (
+                                  <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+                                    {message.sender.job_title}
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                            
+                            <div
+                              className={cn(
+                                "max-w-[80%] px-4 py-3 shadow-sm",
+                                isCustomer
+                                  ? "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
+                                  : isAI
+                                  ? "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tr-none text-slate-800 dark:text-slate-100"
+                                  : "bg-blue-600 text-white rounded-2xl rounded-tr-none"
+                              )}
+                            >
+                              <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                              <span className={cn(
+                                "text-[10px] mt-1 block",
+                                isCustomer || isAI ? "text-slate-400 dark:text-slate-500" : "text-white/70"
+                              )}>
+                                {format(new Date(message.created_at), "HH:mm")}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div ref={messagesEndRef} />
+                  </div>
+                )}
+              </div>
+            </div>
+          </ScrollArea>
+
+          {isCopilot && conversation && (
+            <div className="mx-4 mb-2">
+              <CopilotSuggestionCard 
+                conversationId={conversation.id}
+                onUseSuggestion={handleUseSuggestion}
+              />
+            </div>
+          )}
+
+          {isAutopilot ? (
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">
+              <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <Bot className="h-4 w-4" />
+                <span>Modo Piloto Automático - Digite mensagens desabilitado</span>
+              </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              {messages?.map((message) => {
-                const isUser = message.sender_type === "user" && !message.is_ai_generated;
-                const isContact = message.sender_type === "contact";
-                const isSystem = message.sender_type === "system";
-                const isAI = message.is_ai_generated;
-
-                // FASE 5: Mensagem de Sistema (centralizada)
-                if (isSystem) {
-                  return (
-                    <div key={message.id} className="flex justify-center py-2">
-                      <p className="text-xs text-muted-foreground text-center max-w-md">
-                        📢 {message.content}
-                      </p>
+            <>
+              {isEmailMode ? (
+                <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4 space-y-2">
+                  <div className="max-w-3xl mx-auto space-y-2">
+                    <Input
+                      placeholder="Assunto do e-mail"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                    />
+                    <div className="flex gap-2">
+                      <Textarea
+                        placeholder="Digite sua mensagem de e-mail..."
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        className="flex-1 min-h-[80px] bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                      />
                     </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={message.id}
-                    className={cn(
-                      "flex gap-2",
-                      isContact ? "justify-start" : "justify-end"
-                    )}
-                  >
-                    {/* FASE 5: Avatar e Nome para mensagens não-contato */}
-                    {!isContact && (
-                      <div className="flex flex-col items-center gap-1">
-                        {isAI ? (
-                          <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-accent-foreground">
-                            🤖
-                          </div>
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold">
-                            {message.sender?.full_name
-                              ?.split(" ")
-                              .map((n: string) => n[0])
-                              .join("")
-                              .toUpperCase() || "?"}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex flex-col gap-1">
-                      {/* FASE 5: Nome do Remetente */}
-                      {!isContact && (
-                        <div className="text-xs text-muted-foreground px-1">
-                          {isAI ? (
-                            <span className="font-medium">Assistente Virtual</span>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <span className="font-medium">{message.sender?.full_name || "Atendente"}</span>
-                              {message.sender?.job_title && (
-                                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                                  {message.sender.job_title}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div
-                        className={cn(
-                          "max-w-[70%] rounded-lg px-4 py-2",
-                          isContact
-                            ? "bg-muted text-foreground"
-                            : isAI
-                            ? "bg-accent/50 border border-accent"
-                            : "bg-primary text-primary-foreground"
-                        )}
-                      >
-                        <p className="text-sm whitespace-pre-wrap break-words">
-                          {message.content}
-                        </p>
-                        <span className="text-xs opacity-70 mt-1 block">
-                          {format(new Date(message.created_at), "HH:mm")}
-                        </span>
-                      </div>
+                    <div className="flex justify-end items-center gap-2">
+                      <Button onClick={handleSendMessage} disabled={isSending || !message.trim() || !emailSubject.trim()}>
+                        <Mail className="h-4 w-4 mr-2" />
+                        Enviar E-mail
+                      </Button>
                     </div>
                   </div>
-                );
-              })}
-              <div ref={scrollRef} />
-            </div>
-          )}
-        </ScrollArea>
-
-        {/* Input */}
-        <div className="border-t border-border bg-card p-4 space-y-3">
-          {/* Card de Sugestão Copilot */}
-          {isCopilot && conversation && (
-            <CopilotSuggestionCard 
-              conversationId={conversation.id}
-              onUseSuggestion={handleUseSuggestion}
-            />
-          )}
-
-          {!isEmailMode && !isAutopilot && (
-            <p className="text-xs text-muted-foreground px-1">
-              💬 Mensagens do chat são apenas internas (WhatsApp não configurado)
-            </p>
-          )}
-          
-          {/* Input bloqueado em autopilot */}
-          {isAutopilot ? (
-            <div className="relative">
-              <div className="absolute inset-0 bg-muted/50 backdrop-blur-sm rounded-lg flex items-center justify-center z-10">
-                <p className="text-sm font-medium text-foreground">
-                  🤖 IA está respondendo automaticamente
-                </p>
-              </div>
-              <form className="flex flex-col gap-2 opacity-50 pointer-events-none">
-                <div className="flex gap-2">
-                  <Input
-                    value=""
-                    placeholder="Digite uma mensagem..."
-                    className="flex-1"
-                    disabled
-                  />
-                  <Button type="submit" size="icon" disabled>
-                    <Send className="h-4 w-4" />
-                  </Button>
                 </div>
-              </form>
-            </div>
-          ) : (
-            <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
-              {isEmailMode && (
-                <Input
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  placeholder="Assunto do email..."
-                  className="w-full"
-                  disabled={sendEmail.isPending}
-                />
+              ) : (
+                <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4">
+                  <div className="max-w-3xl mx-auto flex gap-2">
+                    <Input
+                      placeholder="Digite sua mensagem..."
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      disabled={isSending}
+                      className="flex-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                    />
+                    <Button onClick={handleSendMessage} disabled={isSending || !message.trim()}>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               )}
-              <div className="flex gap-2">
-                <Input
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  placeholder={isEmailMode ? "Corpo do email..." : "Digite uma mensagem..."}
-                  className="flex-1"
-                  disabled={sendMessage.isPending || sendEmail.isPending}
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={
-                    !messageText.trim() || 
-                    (isEmailMode && !emailSubject.trim()) ||
-                    sendMessage.isPending || 
-                    sendEmail.isPending
-                  }
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-            </form>
+            </>
           )}
         </div>
-      </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+          <div className="text-center text-slate-500 dark:text-slate-400">
+            <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>Selecione uma conversa para começar</p>
+          </div>
+        </div>
+      )}
     </>
   );
 }
