@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useConversations } from "@/hooks/useConversations";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useDepartments } from "@/hooks/useDepartments";
 import ConversationList from "@/components/ConversationList";
 import ChatWindow from "@/components/ChatWindow";
@@ -29,7 +30,12 @@ export default function Inbox() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const filter = searchParams.get("filter") || "ai_queue";
+  const { role } = useUserRole();
+  
+  // Filtro padrão inteligente baseado em role
+  const defaultFilter = (role === 'admin' || role === 'manager') ? 'all' : 'human_queue';
+  const filter = searchParams.get("filter") || defaultFilter;
+  
   const departmentFilter = searchParams.get("dept");
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const { data: conversations, isLoading } = useConversations();
@@ -94,6 +100,14 @@ export default function Inbox() {
     (!departmentFilter || c.department === departmentFilter)
   ).length || 0;
 
+  const totalActiveCount = conversations?.filter(c => 
+    c.status !== 'closed' &&
+    (!departmentFilter || c.department === departmentFilter)
+  ).length || 0;
+
+  const currentFilterCount = filteredConversations.length;
+  const hasHiddenConversations = currentFilterCount === 0 && totalActiveCount > 0;
+
   const activeDepartments = departments?.filter((d) => d.is_active) || [];
 
   if (isLoading) {
@@ -107,7 +121,20 @@ export default function Inbox() {
   return (
     <div className="flex flex-col h-full">
       <div className="border-b border-border px-6 py-4">
-        <h2 className="text-2xl font-bold text-foreground mb-4">Caixa de Entrada</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-foreground">Caixa de Entrada</h2>
+          <div className="text-sm text-muted-foreground">
+            {totalActiveCount} {totalActiveCount === 1 ? 'conversa ativa' : 'conversas ativas'}
+          </div>
+        </div>
+        
+        {hasHiddenConversations && (
+          <div className="mb-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              ⚠️ Nenhuma conversa neste filtro, mas há <strong>{totalActiveCount}</strong> conversa(s) em outras abas
+            </p>
+          </div>
+        )}
         
         {/* Filtros de Modo AI */}
         <Tabs value={filter} onValueChange={handleFilterChange} className="mb-3">
