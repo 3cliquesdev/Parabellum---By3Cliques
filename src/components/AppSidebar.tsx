@@ -14,7 +14,8 @@ import {
   BarChart3,
   Target,
   Upload,
-  Headphones
+  Headphones,
+  Brain
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -52,6 +53,7 @@ const crmItems = [
 const automationItems = [
   { title: "Automações", href: "/automations", icon: Zap },
   { title: "Templates de Email", href: "/email-templates", icon: Mail },
+  { title: "AI Studio", href: "/ai-studio/personas", icon: Brain },
 ];
 
 const reportItems = [
