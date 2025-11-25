@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare } from "lucide-react";
+import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
@@ -20,6 +20,7 @@ import { useAutopilotTrigger } from "@/hooks/useAutopilotTrigger";
 import TransferConversationDialog from "@/components/TransferConversationDialog";
 import { CreateTicketFromInboxDialog } from "@/components/CreateTicketFromInboxDialog";
 import CopilotSuggestionCard from "@/components/CopilotSuggestionCard";
+import CloseConversationDialog from "@/components/CloseConversationDialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -46,6 +47,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const [isEmailMode, setIsEmailMode] = useState(false);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [createTicketDialogOpen, setCreateTicketDialogOpen] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { data: messages = [], isLoading: isMessagesLoading } = useMessages(conversation?.id || null);
@@ -133,6 +135,12 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
         onOpenChange={setCreateTicketDialogOpen}
         conversationId={conversation?.id || null}
         contactName={`${conversation?.contacts.first_name} ${conversation?.contacts.last_name}`}
+      />
+      <CloseConversationDialog
+        open={closeDialogOpen}
+        onOpenChange={setCloseDialogOpen}
+        conversation={conversation}
+        userId={user?.id || ""}
       />
       
       {conversation ? (
@@ -223,9 +231,21 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                 size="sm"
                 onClick={() => setTransferDialogOpen(true)}
                 className="h-8 gap-1"
+                disabled={conversation.status === "closed"}
               >
                 <ArrowRightLeft className="h-4 w-4" />
                 <span className="text-xs">Transferir</span>
+              </Button>
+              
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setCloseDialogOpen(true)}
+                className="h-8 gap-1 bg-green-600 hover:bg-green-700"
+                disabled={conversation.status === "closed"}
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span className="text-xs">Encerrar</span>
               </Button>
               
               {!isAutopilot && (
@@ -254,6 +274,14 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           <ScrollArea className="flex-1">
             <div className="p-4 md:p-6">
               <div className="max-w-3xl mx-auto w-full">
+                {conversation.status === "closed" && (
+                  <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 text-center">
+                    <p className="text-sm text-green-700 dark:text-green-400 font-medium">
+                      ✅ Esta conversa foi encerrada
+                    </p>
+                  </div>
+                )}
+                
                 {isMessagesLoading ? (
                   <div className="flex items-center justify-center h-32">
                     <div className="text-slate-500 dark:text-slate-400">Carregando mensagens...</div>
@@ -412,7 +440,11 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                 <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4">
                   <div className="max-w-3xl mx-auto flex gap-2">
                     <Input
-                      placeholder="Digite sua mensagem..."
+                      placeholder={
+                        conversation.status === "closed"
+                          ? "Conversa encerrada - não é possível enviar mensagens"
+                          : "Digite sua mensagem..."
+                      }
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       onKeyPress={(e) => {
@@ -421,10 +453,10 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                           handleSendMessage();
                         }
                       }}
-                      disabled={isSending}
+                      disabled={isSending || conversation.status === "closed"}
                       className="flex-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                     />
-                    <Button onClick={handleSendMessage} disabled={isSending || !message.trim()}>
+                    <Button onClick={handleSendMessage} disabled={isSending || !message.trim() || conversation.status === "closed"}>
                       <Send className="h-4 w-4" />
                     </Button>
                   </div>
