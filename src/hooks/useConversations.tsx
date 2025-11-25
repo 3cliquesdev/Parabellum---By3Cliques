@@ -11,6 +11,11 @@ type Contact = Tables<"contacts"> & {
 
 type Conversation = Tables<"conversations"> & {
   contacts: Contact;
+  department_data?: {
+    id: string;
+    name: string;
+    color: string | null;
+  } | null;
   assigned_user?: {
     id: string;
     full_name: string;
@@ -32,6 +37,7 @@ export function useConversations() {
         .select(`
           *,
           contacts(*, organizations(*)),
+          department_data:departments!department(id, name, color),
           assigned_user:profiles!assigned_to(id, full_name, avatar_url, job_title, department)
         `);
 

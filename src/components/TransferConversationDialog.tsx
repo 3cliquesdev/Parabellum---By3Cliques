@@ -9,7 +9,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useSalesReps } from "@/hooks/useSalesReps";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { useTransferConversation } from "@/hooks/useTransferConversation";
 import { ArrowRightLeft } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
@@ -41,15 +45,20 @@ export default function TransferConversationDialog({
   conversation,
   currentUserId,
 }: TransferConversationDialogProps) {
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const { data: users, isLoading } = useSalesReps();
+  const [transferNote, setTransferNote] = useState("");
+  
+  const { data: departments } = useDepartments();
+  const { data: users, isLoading } = useUsersByDepartment(selectedDepartmentId || undefined);
   const transferMutation = useTransferConversation();
 
   const handleTransfer = () => {
-    if (!selectedUserId) return;
+    if (!selectedUserId || !selectedDepartmentId || !transferNote.trim()) return;
 
     const toUser = users?.find((u) => u.id === selectedUserId);
-    if (!toUser) return;
+    const toDepartment = departments?.find((d) => d.id === selectedDepartmentId);
+    if (!toUser || !toDepartment) return;
 
     const fromUser = conversation.assigned_user || {
       id: currentUserId,
@@ -64,11 +73,16 @@ export default function TransferConversationDialog({
         fromUserName: fromUser.full_name,
         toUserName: toUser.full_name,
         contactId: conversation.contact_id,
+        departmentId: selectedDepartmentId,
+        departmentName: toDepartment.name,
+        transferNote: transferNote.trim(),
       },
       {
         onSuccess: () => {
           onOpenChange(false);
           setSelectedUserId(null);
+          setSelectedDepartmentId(null);
+          setTransferNote("");
         },
       }
     );
@@ -78,6 +92,8 @@ export default function TransferConversationDialog({
   const availableUsers = users?.filter(
     (user) => user.id !== conversation.assigned_to
   );
+
+  const activeDepartments = departments?.filter((d) => d.is_active) || [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -93,15 +109,43 @@ export default function TransferConversationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="space-y-4">
+          {/* Select de Departamento */}
+          <div className="space-y-2">
+            <Label htmlFor="department">Departamento de Destino *</Label>
+            <Select
+              value={selectedDepartmentId || ""}
+              onValueChange={(value) => {
+                setSelectedDepartmentId(value);
+                setSelectedUserId(null); // Reset user selection when department changes
+              }}
+            >
+              <SelectTrigger id="department">
+                <SelectValue placeholder="Selecione o departamento" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeDepartments.map((dept) => (
+                  <SelectItem key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        ) : (
-          <>
-            <ScrollArea className="max-h-[300px] pr-4">
+
+          {/* Lista de Usuários (só aparece após selecionar departamento) */}
+          {selectedDepartmentId && (
+            <>
               <div className="space-y-2">
-                {availableUsers?.map((user) => (
+                <Label>Agente de Destino *</Label>
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <ScrollArea className="max-h-[200px] pr-4">
+                    <div className="space-y-2">
+                      {availableUsers?.map((user) => (
                   <button
                     key={user.id}
                     onClick={() => setSelectedUserId(user.id)}
@@ -135,31 +179,55 @@ export default function TransferConversationDialog({
                   </button>
                 ))}
 
-                {(!availableUsers || availableUsers.length === 0) && (
-                  <p className="text-center text-muted-foreground py-4">
-                    Nenhum usuário disponível para transferência
-                  </p>
+                      {(!availableUsers || availableUsers.length === 0) && (
+                        <p className="text-center text-muted-foreground py-4">
+                          Nenhum usuário disponível neste departamento
+                        </p>
+                      )}
+                    </div>
+                  </ScrollArea>
                 )}
               </div>
-            </ScrollArea>
 
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={transferMutation.isPending}
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleTransfer}
-                disabled={!selectedUserId || transferMutation.isPending}
-              >
-                {transferMutation.isPending ? "Transferindo..." : "Confirmar Transferência"}
-              </Button>
-            </div>
-          </>
-        )}
+              {/* Campo de Nota de Transferência */}
+              <div className="space-y-2">
+                <Label htmlFor="transferNote">Nota de Transferência *</Label>
+                <Textarea
+                  id="transferNote"
+                  placeholder="Ex: Cliente está irritado com atraso na entrega, precisa atenção urgente..."
+                  value={transferNote}
+                  onChange={(e) => setTransferNote(e.target.value)}
+                  rows={3}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Esta nota será visível apenas para a equipe interna
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4">
+          <Button
+            variant="outline"
+            onClick={() => {
+              onOpenChange(false);
+              setSelectedDepartmentId(null);
+              setSelectedUserId(null);
+              setTransferNote("");
+            }}
+            disabled={transferMutation.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleTransfer}
+            disabled={!selectedUserId || !selectedDepartmentId || !transferNote.trim() || transferMutation.isPending}
+          >
+            {transferMutation.isPending ? "Transferindo..." : "Confirmar Transferência"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

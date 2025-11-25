@@ -16,6 +16,11 @@ type Contact = Tables<"contacts"> & {
 
 type Conversation = Tables<"conversations"> & {
   contacts: Contact;
+  department_data?: {
+    id: string;
+    name: string;
+    color: string | null;
+  } | null;
   assigned_user?: {
     id: string;
     full_name: string;
@@ -110,6 +115,18 @@ function ConversationItem({
           >
             {conversation.channel}
           </Badge>
+          {conversation.department_data && (
+            <Badge 
+              variant="outline" 
+              className="text-xs"
+              style={{
+                borderColor: conversation.department_data.color || undefined,
+                color: conversation.department_data.color || undefined,
+              }}
+            >
+              🏢 {conversation.department_data.name}
+            </Badge>
+          )}
           {conversation.status === "open" && (
             <Badge variant="outline" className="text-xs">
               Aberta

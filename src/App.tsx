@@ -20,6 +20,8 @@ import EmailTemplates from "./pages/EmailTemplates";
 import Products from "./pages/Products";
 import Departments from "./pages/Departments";
 import PublicForm from "./pages/PublicForm";
+import PublicChat from "./pages/PublicChat";
+import ChatLinksSettings from "./pages/ChatLinksSettings";
 import Auth from "./pages/Auth";
 import Setup from "./pages/Setup";
 import Automations from "./pages/Automations";
@@ -102,6 +104,7 @@ const App = () => {
             <Route path="/auth" element={<Auth />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/public/form/:formId" element={<PublicForm />} />
+            <Route path="/public-chat" element={<PublicChat />} />
             <Route path="/open-ticket" element={<PublicTicketForm />} />
             <Route path="/tv" element={<TVMode />} />
             <Route path="/" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><Dashboard /></Layout></ProtectedRoute>} />
@@ -127,6 +130,7 @@ const App = () => {
             <Route path="/settings/email-templates" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><EmailTemplates /></ProtectedRoute>} />
             <Route path="/settings/products" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Products /></Layout></ProtectedRoute>} />
             <Route path="/settings/departments" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Departments /></Layout></ProtectedRoute>} />
+            <Route path="/settings/chat-links" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><ChatLinksSettings /></Layout></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

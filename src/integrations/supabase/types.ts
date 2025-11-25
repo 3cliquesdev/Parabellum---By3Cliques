@@ -542,6 +542,7 @@ export type Database = {
           channel: Database["public"]["Enums"]["conversation_channel"]
           contact_id: string
           created_at: string
+          department: string | null
           id: string
           last_message_at: string
           related_ticket_id: string | null
@@ -553,6 +554,7 @@ export type Database = {
           channel: Database["public"]["Enums"]["conversation_channel"]
           contact_id: string
           created_at?: string
+          department?: string | null
           id?: string
           last_message_at?: string
           related_ticket_id?: string | null
@@ -564,6 +566,7 @@ export type Database = {
           channel?: Database["public"]["Enums"]["conversation_channel"]
           contact_id?: string
           created_at?: string
+          department?: string | null
           id?: string
           last_message_at?: string
           related_ticket_id?: string | null
@@ -582,6 +585,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_department_fkey"
+            columns: ["department"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
           {
