@@ -15,11 +15,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, ExternalLink, Pencil, Trash2, Copy } from "lucide-react";
+import { Plus, ExternalLink, Pencil, Trash2, Copy, Ticket } from "lucide-react";
 import { useForms, useDeleteForm, useUpdateForm } from "@/hooks/useForms";
 import FormDialog from "@/components/FormDialog";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
+import { usePublicTicketPortalConfig, useTogglePortal } from "@/hooks/usePublicTicketPortal";
 
 export default function Forms() {
   const [searchParams] = useSearchParams();
@@ -29,6 +30,8 @@ export default function Forms() {
   const deleteForm = useDeleteForm();
   const updateForm = useUpdateForm();
   const { toast } = useToast();
+  const { data: portalConfig, isLoading: portalLoading } = usePublicTicketPortalConfig();
+  const togglePortal = useTogglePortal();
 
   const handleFilterChange = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -65,7 +68,16 @@ export default function Forms() {
     });
   };
 
-  if (isLoading) {
+  const copyPortalLink = () => {
+    const url = `${window.location.origin}/open-ticket`;
+    navigator.clipboard.writeText(url);
+    toast({
+      title: "Link copiado!",
+      description: "Link do portal público copiado para a área de transferência.",
+    });
+  };
+
+  if (isLoading || portalLoading) {
     return (
       <div className="p-8">
         <div className="flex items-center justify-center h-64">
@@ -100,6 +112,54 @@ export default function Forms() {
           </TabsList>
         </Tabs>
       </div>
+
+      {/* Portal Público de Tickets - Always visible */}
+      {portalConfig && (
+        <Card className="border-primary/50 bg-primary/5 mb-6">
+          <CardHeader>
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex items-center gap-3 flex-1">
+                <Ticket className="h-6 w-6 text-primary" />
+                <div>
+                  <CardTitle className="text-lg">{portalConfig.name}</CardTitle>
+                  <CardDescription className="mt-1">
+                    {portalConfig.description}
+                  </CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                  PÚBLICO
+                </Badge>
+                <Switch
+                  checked={portalConfig.is_active}
+                  onCheckedChange={() => togglePortal.mutate(portalConfig.is_active)}
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 gap-2"
+                onClick={copyPortalLink}
+              >
+                <Copy className="h-4 w-4" />
+                Copiar Link
+              </Button>
+              <Button
+                variant="outline"
+                asChild
+              >
+                <a href="/open-ticket" target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {!filteredForms || filteredForms.length === 0 ? (
         <Card>
