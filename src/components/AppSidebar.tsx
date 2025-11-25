@@ -15,7 +15,8 @@ import {
   Target,
   Upload,
   Headphones,
-  Brain
+  Brain,
+  Package
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -71,6 +72,7 @@ const formsItems = [
 ];
 
 const managementItems = [
+  { title: "Produtos", href: "/settings/products", icon: Package },
   { title: "Usuários", href: "/users", icon: UserCog },
   { title: "Configurações", href: "/settings", icon: Settings },
 ];
