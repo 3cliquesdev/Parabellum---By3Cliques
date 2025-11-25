@@ -15,7 +15,7 @@ interface UserWithRole {
   id: string;
   email: string;
   created_at: string;
-  role: "admin" | "user";
+  role: "admin" | "manager" | "sales_rep" | "consultant";
   full_name?: string;
   job_title?: string;
   avatar_url?: string;
@@ -53,6 +53,19 @@ export default function Users() {
       </div>
     );
   }
+
+  const roleLabels: Record<string, string> = {
+    admin: "Administrador",
+    manager: "Gerente de Vendas",
+    sales_rep: "Vendedor",
+    consultant: "Consultor",
+  };
+
+  const getRoleBadgeVariant = (role: string): "default" | "secondary" | "outline" => {
+    if (role === "admin") return "default";
+    if (role === "manager") return "secondary";
+    return "outline";
+  };
 
   return (
     <div className="p-8 space-y-8">
@@ -112,8 +125,8 @@ export default function Users() {
                   </TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <Badge variant={user.role === "admin" ? "default" : "secondary"}>
-                      {user.role === "admin" ? "Administrador" : "Usuário"}
+                    <Badge variant={getRoleBadgeVariant(user.role)}>
+                      {roleLabels[user.role] || user.role}
                     </Badge>
                   </TableCell>
                   <TableCell>
