@@ -11,7 +11,7 @@ import { z } from "zod";
 const userSchema = z.object({
   email: z.string().email({ message: "Email inválido" }),
   password: z.string().min(8, { message: "Senha deve ter no mínimo 8 caracteres" }),
-  role: z.enum(["admin", "manager", "sales_rep"], { message: "Role inválida" }),
+  role: z.enum(["admin", "manager", "sales_rep", "consultant"], { message: "Role inválida" }),
   full_name: z.string().min(1, { message: "Nome completo é obrigatório" }),
   department: z.enum(["comercial", "suporte", "marketing", "operacional"], { message: "Departamento inválido" }),
 });
@@ -25,7 +25,7 @@ interface UserDialogProps {
 export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialogProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"admin" | "manager" | "sales_rep">("sales_rep");
+  const [role, setRole] = useState<"admin" | "manager" | "sales_rep" | "consultant">("sales_rep");
   const [fullName, setFullName] = useState("");
   const [department, setDepartment] = useState<"comercial" | "suporte" | "marketing" | "operacional">("comercial");
   const [loading, setLoading] = useState(false);
@@ -67,6 +67,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
         admin: "Administrador",
         manager: "Gerente de Vendas",
         sales_rep: "Vendedor",
+        consultant: "Consultor",
       };
 
       toast({
@@ -169,6 +170,12 @@ export default function UserDialog({ open, onOpenChange, onSuccess }: UserDialog
                     <div className="flex flex-col">
                       <span className="font-medium">Vendedor</span>
                       <span className="text-xs text-muted-foreground">Apenas seus leads e métricas pessoais</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="consultant">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Consultor / Account Manager</span>
+                      <span className="text-xs text-muted-foreground">Gerencia carteira de clientes pós-venda</span>
                     </div>
                   </SelectItem>
                 </SelectContent>

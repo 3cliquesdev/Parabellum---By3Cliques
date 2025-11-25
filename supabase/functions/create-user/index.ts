@@ -72,6 +72,15 @@ serve(async (req) => {
       );
     }
 
+    // Validate role
+    const allowedRoles = ['admin', 'manager', 'sales_rep', 'consultant'];
+    if (!allowedRoles.includes(role)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid role' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Creating user:', { email, role, full_name, department });
 
     // Create the new user with admin privileges

@@ -83,7 +83,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { isAdmin, isManager } = useUserRole();
+  const { isAdmin, isManager, isSalesRep, isConsultant } = useUserRole();
   const { signOut, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -130,8 +130,8 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {mainItems.map((item) => {
-                // Hide "Minha Carteira" for users without sales_rep/manager/admin role
-                if (item.requiresRole && !isAdmin && !isManager) return null;
+                // Hide "Minha Carteira" for users without consultant/sales_rep/manager/admin role
+                if (item.requiresRole && !isAdmin && !isManager && !isSalesRep && !isConsultant) return null;
                 
                 return (
                   <SidebarMenuItem key={item.title}>

@@ -4,7 +4,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: ("admin" | "manager" | "sales_rep")[];
+  allowedRoles?: ("admin" | "manager" | "sales_rep" | "consultant")[];
 }
 
 export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
@@ -31,7 +31,7 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
   }
 
   // Check role permissions (if allowedRoles is specified)
-  if (allowedRoles && role && !allowedRoles.includes(role as "admin" | "manager" | "sales_rep")) {
+  if (allowedRoles && role && !allowedRoles.includes(role as "admin" | "manager" | "sales_rep" | "consultant")) {
     console.log("ProtectedRoute: User lacks required role, redirecting to /");
     return <Navigate to="/" replace />;
   }
