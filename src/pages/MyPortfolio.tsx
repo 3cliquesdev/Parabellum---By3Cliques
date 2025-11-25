@@ -9,13 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { Search, Briefcase, AlertCircle, CheckCircle, Clock, DollarSign, Users, TrendingDown, UserPlus, Phone, Mail } from "lucide-react";
+import { Search, Briefcase, AlertCircle, CheckCircle, Clock, DollarSign, Users, TrendingDown, UserPlus, Phone, Mail, FileText } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import FocusTodayWidget from "@/components/FocusTodayWidget";
 import ExpansionRadarWidget from "@/components/widgets/ExpansionRadarWidget";
 import CommissionTrackerWidget from "@/components/widgets/CommissionTrackerWidget";
 import EarlyWarningWidget from "@/components/widgets/EarlyWarningWidget";
+import QBRGeneratorDialog from "@/components/QBRGeneratorDialog";
 import { useChurnPrediction } from "@/hooks/useChurnPrediction";
 
 export default function MyPortfolio() {
@@ -25,6 +26,12 @@ export default function MyPortfolio() {
   const { data: churnRisks } = useChurnPrediction();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [qbrDialogOpen, setQbrDialogOpen] = useState(false);
+  const [selectedClientForQBR, setSelectedClientForQBR] = useState<{
+    id: string;
+    name: string;
+    company: string | null;
+  } | null>(null);
 
   // Filter clients based on tab
   const filteredClients = clients?.filter((client) => {
@@ -307,6 +314,21 @@ export default function MyPortfolio() {
                           </Button>
                         )}
                         <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedClientForQBR({
+                              id: client.id,
+                              name: `${client.first_name} ${client.last_name}`,
+                              company: client.company,
+                            });
+                            setQbrDialogOpen(true);
+                          }}
+                          title="Gerar Relatório QBR"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                        <Button
                           variant="default"
                           size="sm"
                           onClick={() => navigate(`/contacts/${client.id}`)}
@@ -331,6 +353,17 @@ export default function MyPortfolio() {
           </div>
         </CardContent>
       </Card>
+
+      {/* QBR Generator Dialog */}
+      {selectedClientForQBR && (
+        <QBRGeneratorDialog
+          open={qbrDialogOpen}
+          onOpenChange={setQbrDialogOpen}
+          contactId={selectedClientForQBR.id}
+          contactName={selectedClientForQBR.name}
+          companyName={selectedClientForQBR.company}
+        />
+      )}
     </div>
   );
 }
