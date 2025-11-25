@@ -1877,6 +1877,18 @@ export type Database = {
         }[]
       }
       get_least_loaded_consultant: { Args: never; Returns: string }
+      get_or_create_conversation: {
+        Args: {
+          p_channel?: string
+          p_contact_id: string
+          p_department_id?: string
+        }
+        Returns: {
+          conversation_id: string
+          is_existing: boolean
+          was_reopened: boolean
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
