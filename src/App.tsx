@@ -33,6 +33,7 @@ import PublicTicketForm from "./pages/PublicTicketForm";
 import AIStudio from "./pages/AIStudio";
 import MyPortfolio from "./pages/MyPortfolio";
 import OnboardingBuilder from "./pages/OnboardingBuilder";
+import PlaybookExecutions from "./pages/PlaybookExecutions";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -115,6 +116,7 @@ const App = () => {
             <Route path="/automations" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Automations /></Layout></ProtectedRoute>} />
             <Route path="/email-templates" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><EmailTemplates /></Layout></ProtectedRoute>} />
             <Route path="/onboarding-builder" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><OnboardingBuilder /></Layout></ProtectedRoute>} />
+            <Route path="/playbook-executions" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Analytics /></Layout></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><Goals /></Layout></ProtectedRoute>} />
             <Route path="/support" element={<ProtectedRoute allowedRoles={["support_agent", "consultant", "admin", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />

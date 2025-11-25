@@ -110,6 +110,7 @@ const adminCrmItems = [
     { title: "Templates de Email", href: "/email-templates", icon: Mail },
     { title: "Formulários", href: "/forms", icon: FileText },
     { title: "Playbooks de Onboarding", href: "/onboarding-builder", icon: Workflow },
+    { title: "Execuções de Playbooks", href: "/playbook-executions", icon: CheckSquare },
   ];
 
 const adminReportsItems = [
