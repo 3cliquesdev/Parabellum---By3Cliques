@@ -167,7 +167,7 @@ export type Database = {
         Row: {
           channel: string
           created_at: string | null
-          department: Database["public"]["Enums"]["department_type"] | null
+          department: string | null
           id: string
           is_active: boolean | null
           persona_id: string | null
@@ -177,7 +177,7 @@ export type Database = {
         Insert: {
           channel: string
           created_at?: string | null
-          department?: Database["public"]["Enums"]["department_type"] | null
+          department?: string | null
           id?: string
           is_active?: boolean | null
           persona_id?: string | null
@@ -187,7 +187,7 @@ export type Database = {
         Update: {
           channel?: string
           created_at?: string | null
-          department?: Database["public"]["Enums"]["department_type"] | null
+          department?: string | null
           id?: string
           is_active?: boolean | null
           persona_id?: string | null
@@ -200,6 +200,13 @@ export type Database = {
             columns: ["persona_id"]
             isOneToOne: false
             referencedRelation: "ai_personas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_routing_rules_department"
+            columns: ["department"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]
