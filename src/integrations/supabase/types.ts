@@ -542,11 +542,58 @@ export type Database = {
           },
         ]
       }
+      conversation_ratings: {
+        Row: {
+          ai_analysis: string | null
+          channel: Database["public"]["Enums"]["conversation_channel"]
+          conversation_id: string
+          created_at: string
+          feedback_text: string | null
+          id: string
+          manager_alert_sent: boolean
+          rating: number
+          sentiment_score: string | null
+        }
+        Insert: {
+          ai_analysis?: string | null
+          channel: Database["public"]["Enums"]["conversation_channel"]
+          conversation_id: string
+          created_at?: string
+          feedback_text?: string | null
+          id?: string
+          manager_alert_sent?: boolean
+          rating: number
+          sentiment_score?: string | null
+        }
+        Update: {
+          ai_analysis?: string | null
+          channel?: Database["public"]["Enums"]["conversation_channel"]
+          conversation_id?: string
+          created_at?: string
+          feedback_text?: string | null
+          id?: string
+          manager_alert_sent?: boolean
+          rating?: number
+          sentiment_score?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_ratings_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           ai_mode: Database["public"]["Enums"]["ai_mode"]
           assigned_to: string | null
+          auto_closed: boolean | null
           channel: Database["public"]["Enums"]["conversation_channel"]
+          closed_at: string | null
+          closed_by: string | null
           contact_id: string
           created_at: string
           customer_metadata: Json | null
@@ -559,7 +606,10 @@ export type Database = {
         Insert: {
           ai_mode?: Database["public"]["Enums"]["ai_mode"]
           assigned_to?: string | null
+          auto_closed?: boolean | null
           channel: Database["public"]["Enums"]["conversation_channel"]
+          closed_at?: string | null
+          closed_by?: string | null
           contact_id: string
           created_at?: string
           customer_metadata?: Json | null
@@ -572,7 +622,10 @@ export type Database = {
         Update: {
           ai_mode?: Database["public"]["Enums"]["ai_mode"]
           assigned_to?: string | null
+          auto_closed?: boolean | null
           channel?: Database["public"]["Enums"]["conversation_channel"]
+          closed_at?: string | null
+          closed_by?: string | null
           contact_id?: string
           created_at?: string
           customer_metadata?: Json | null
@@ -586,6 +639,13 @@ export type Database = {
           {
             foreignKeyName: "conversations_assigned_to_fkey"
             columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_closed_by_fkey"
+            columns: ["closed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
