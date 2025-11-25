@@ -109,7 +109,6 @@ export default function Users() {
               <TableRow>
                 <TableHead>Usuário</TableHead>
                 <TableHead>Cargo</TableHead>
-                <TableHead>Email</TableHead>
                 <TableHead>Perfil de Acesso</TableHead>
                 <TableHead>Data de Criação</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -120,9 +119,9 @@ export default function Users() {
                 <TableRow key={user.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <Avatar>
+                      <Avatar className="h-12 w-12 border-2 border-primary/20 transition-all hover:border-primary hover:scale-105">
                         <AvatarImage src={user.avatar_url || undefined} />
-                        <AvatarFallback>
+                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">
                           {user.full_name
                             ?.split(" ")
                             .map((n) => n[0])
@@ -131,13 +130,15 @@ export default function Users() {
                             .slice(0, 2) || "??"}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="font-medium">{user.full_name || "Sem nome"}</span>
+                      <div>
+                        <span className="font-medium block">{user.full_name || "Sem nome"}</span>
+                        <span className="text-xs text-muted-foreground">{user.email}</span>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {user.job_title || "—"}
                   </TableCell>
-                  <TableCell>{user.email}</TableCell>
                   <TableCell>
                     <Badge variant={getRoleBadgeVariant(user.role)}>
                       {roleLabels[user.role] || user.role}

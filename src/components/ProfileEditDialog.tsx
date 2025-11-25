@@ -22,11 +22,12 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useAvatarUpload } from "@/hooks/useAvatarUpload";
+import AvatarUploader from "@/components/AvatarUploader";
 
 const profileSchema = z.object({
   full_name: z.string().min(1, "Nome é obrigatório").max(100),
   job_title: z.string().max(100).optional().or(z.literal("")),
-  avatar_url: z.string().url("URL inválida").optional().or(z.literal("")),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -38,15 +39,16 @@ interface ProfileEditDialogProps {
 export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const { profile, user } = useAuth();
   const { toast } = useToast();
+  const { uploadAvatar, uploading: uploadingAvatar } = useAvatarUpload();
 
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       full_name: profile?.full_name || "",
       job_title: profile?.job_title || "",
-      avatar_url: profile?.avatar_url || "",
     },
   });
 
@@ -55,7 +57,6 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
       form.reset({
         full_name: profile.full_name,
         job_title: profile.job_title || "",
-        avatar_url: profile.avatar_url || "",
       });
     }
   }, [profile, form]);
@@ -65,12 +66,21 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
 
     setLoading(true);
     try {
+      // Upload avatar se houver arquivo selecionado
+      let avatarUrl = profile?.avatar_url;
+      if (avatarFile) {
+        const uploadedUrl = await uploadAvatar(avatarFile, user.id);
+        if (uploadedUrl) {
+          avatarUrl = uploadedUrl;
+        }
+      }
+
       const { error } = await supabase
         .from("profiles")
         .update({
           full_name: data.full_name,
           job_title: data.job_title || null,
-          avatar_url: data.avatar_url || null,
+          avatar_url: avatarUrl || null,
         })
         .eq("id", user.id);
 
@@ -119,6 +129,18 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
                 </FormItem>
               )}
             />
+
+            {/* Avatar Upload */}
+            <div className="space-y-2">
+              <FormLabel>Foto do Perfil</FormLabel>
+              <AvatarUploader
+                currentAvatarUrl={profile?.avatar_url}
+                userName={form.watch("full_name") || "Usuário"}
+                onFileSelect={setAvatarFile}
+                uploading={uploadingAvatar}
+              />
+            </div>
+
             <FormField
               control={form.control}
               name="job_title"
@@ -132,30 +154,17 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="avatar_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>URL da Foto (opcional)</FormLabel>
-                  <FormControl>
-                    <Input type="url" placeholder="https://api.dicebear.com/7.x/avataaars/svg?seed=Usuario" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <div className="flex justify-end gap-3">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={loading}
+                disabled={loading || uploadingAvatar}
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? "Salvando..." : "Salvar"}
+              <Button type="submit" disabled={loading || uploadingAvatar}>
+                {loading || uploadingAvatar ? "Salvando..." : "Salvar"}
               </Button>
             </div>
           </form>

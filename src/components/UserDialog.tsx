@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUpdateUser } from "@/hooks/useUpdateUser";
+import { useAvatarUpload } from "@/hooks/useAvatarUpload";
+import AvatarUploader from "@/components/AvatarUploader";
 import { z } from "zod";
 
 const userSchema = z.object({
@@ -49,10 +51,12 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
   const [fullName, setFullName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [department, setDepartment] = useState<string>("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { data: departments } = useDepartments();
   const updateUserMutation = useUpdateUser();
+  const { uploadAvatar, uploading: uploadingAvatar } = useAvatarUpload();
 
   const isEditMode = !!editUser;
 
@@ -85,6 +89,21 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
         editUserSchema.parse({ role, full_name: fullName, department });
 
         console.log("Atualizando usuário:", { user_id: editUser.id, role, full_name: fullName, job_title: jobTitle, department });
+
+        // Upload avatar se houver arquivo selecionado
+        let avatarUrl = editUser.avatar_url;
+        if (avatarFile) {
+          const uploadedUrl = await uploadAvatar(avatarFile, editUser.id);
+          if (uploadedUrl) {
+            avatarUrl = uploadedUrl;
+            
+            // Atualizar avatar_url no perfil
+            await supabase
+              .from("profiles")
+              .update({ avatar_url: uploadedUrl })
+              .eq("id", editUser.id);
+          }
+        }
 
         await updateUserMutation.mutateAsync({
           user_id: editUser.id,
@@ -125,6 +144,18 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
 
         console.log("Usuário criado com sucesso:", data.user);
 
+        // Upload avatar se houver arquivo selecionado
+        if (avatarFile && data.user?.id) {
+          const uploadedUrl = await uploadAvatar(avatarFile, data.user.id);
+          if (uploadedUrl) {
+            // Atualizar avatar_url no perfil
+            await supabase
+              .from("profiles")
+              .update({ avatar_url: uploadedUrl })
+              .eq("id", data.user.id);
+          }
+        }
+
         const roleLabels = {
           admin: "Administrador",
           manager: "Gerente de Vendas",
@@ -143,6 +174,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
         setFullName("");
         setJobTitle("");
         setDepartment("");
+        setAvatarFile(null);
         onOpenChange(false);
         onSuccess();
       }
@@ -192,6 +224,18 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
                 required
               />
             </div>
+            
+            {/* Avatar Upload */}
+            <div className="space-y-2">
+              <Label>Foto do Perfil</Label>
+              <AvatarUploader
+                currentAvatarUrl={editUser?.avatar_url}
+                userName={fullName || "Usuário"}
+                onFileSelect={setAvatarFile}
+                uploading={uploadingAvatar}
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -285,11 +329,11 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading || uploadingAvatar}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? (isEditMode ? "Salvando..." : "Criando...") : (isEditMode ? "Salvar Alterações" : "Criar Usuário")}
+            <Button type="submit" disabled={loading || uploadingAvatar}>
+              {loading || uploadingAvatar ? (isEditMode ? "Salvando..." : "Criando...") : (isEditMode ? "Salvar Alterações" : "Criar Usuário")}
             </Button>
           </DialogFooter>
         </form>
