@@ -4,14 +4,19 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Send, Mail, MessageCircle, ArrowRightLeft, FileText } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
 import { useSendEmail } from "@/hooks/useSendEmail";
 import { useAuth } from "@/hooks/useAuth";
+import { useAIMode } from "@/hooks/useAIMode";
+import { useTakeControl } from "@/hooks/useTakeControl";
+import { useReturnToAutopilot } from "@/hooks/useReturnToAutopilot";
 import TransferConversationDialog from "@/components/TransferConversationDialog";
 import { CreateTicketFromInboxDialog } from "@/components/CreateTicketFromInboxDialog";
+import CopilotSuggestionCard from "@/components/CopilotSuggestionCard";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -41,8 +46,11 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { data: messages, isLoading } = useMessages(conversation?.id || null);
+  const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
   const sendMessage = useSendMessage();
   const sendEmail = useSendEmail();
+  const takeControl = useTakeControl();
+  const returnToAutopilot = useReturnToAutopilot();
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -83,6 +91,26 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
     }
   };
 
+  const handleTakeControl = () => {
+    if (!conversation) return;
+    takeControl.mutate({
+      conversationId: conversation.id,
+      contactId: conversation.contacts.id
+    });
+  };
+
+  const handleReturnToAutopilot = () => {
+    if (!conversation) return;
+    returnToAutopilot.mutate({
+      conversationId: conversation.id,
+      contactId: conversation.contacts.id
+    });
+  };
+
+  const handleUseSuggestion = (text: string) => {
+    setMessageText(text);
+  };
+
   if (!conversation) {
     return (
       <div className="flex-1 flex items-center justify-center bg-black">
@@ -92,6 +120,10 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
       </div>
     );
   }
+
+  const isAutopilot = aiMode === 'autopilot';
+  const isCopilot = aiMode === 'copilot';
+  const isDisabled = aiMode === 'disabled';
 
   return (
     <>
@@ -124,15 +156,55 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
               <p className="text-xs text-muted-foreground">
                 {conversation.contacts.email || conversation.contacts.phone}
               </p>
-              {conversation.assigned_user && (
-                <Badge variant="secondary" className="text-xs mt-1">
-                  Atribuído: {conversation.assigned_user.full_name}
-                </Badge>
-              )}
+              <div className="flex items-center gap-2 mt-1">
+                {conversation.assigned_user && (
+                  <Badge variant="secondary" className="text-xs">
+                    Atribuído: {conversation.assigned_user.full_name}
+                  </Badge>
+                )}
+                {!aiModeLoading && (
+                  <Badge 
+                    variant={isAutopilot ? "default" : isCopilot ? "outline" : "secondary"}
+                    className="text-xs"
+                  >
+                    {isAutopilot && "🤖 Autopilot"}
+                    {isCopilot && "🧠 Copilot"}
+                    {isDisabled && "👤 Manual"}
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
           
           <div className="flex items-center gap-2">
+            {/* Botão Assumir Controle (só em autopilot) */}
+            {isAutopilot && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleTakeControl}
+                disabled={takeControl.isPending}
+                className="h-8 gap-1 bg-primary"
+              >
+                <Hand className="h-4 w-4" />
+                <span className="text-xs">Assumir Controle</span>
+              </Button>
+            )}
+
+            {/* Botão Devolver para Autopilot (só em copilot) */}
+            {isCopilot && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReturnToAutopilot}
+                disabled={returnToAutopilot.isPending}
+                className="h-8 gap-1"
+              >
+                <Bot className="h-4 w-4" />
+                <span className="text-xs">Devolver para IA</span>
+              </Button>
+            )}
+
             {/* Generate Ticket Button */}
             <Button
               variant="outline"
@@ -156,112 +228,158 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             </Button>
             
             {/* Toggle Email/Chat */}
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-              <Button
-                variant={!isEmailMode ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setIsEmailMode(false)}
-                className="h-8 gap-1"
-              >
-                <MessageCircle className="h-4 w-4" />
-                <span className="text-xs">Chat</span>
-              </Button>
-              <Button
-                variant={isEmailMode ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setIsEmailMode(true)}
-                className="h-8 gap-1"
-                disabled={!conversation.contacts.email}
-              >
-                <Mail className="h-4 w-4" />
-                <span className="text-xs">Email</span>
-              </Button>
-            </div>
+            {!isAutopilot && (
+              <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                <Button
+                  variant={!isEmailMode ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setIsEmailMode(false)}
+                  className="h-8 gap-1"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  <span className="text-xs">Chat</span>
+                </Button>
+                <Button
+                  variant={isEmailMode ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setIsEmailMode(true)}
+                  className="h-8 gap-1"
+                  disabled={!conversation.contacts.email}
+                >
+                  <Mail className="h-4 w-4" />
+                  <span className="text-xs">Email</span>
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        ) : messages?.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">Nenhuma mensagem ainda</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {messages?.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex",
-                  message.sender_type === "user" ? "justify-end" : "justify-start"
-                )}
-              >
+        {/* Alerta de Autopilot */}
+        {isAutopilot && (
+          <Alert className="m-4 border-primary/50 bg-primary/5">
+            <Bot className="h-4 w-4 text-primary" />
+            <AlertDescription className="text-sm">
+              🤖 <strong>IA está respondendo automaticamente</strong> nesta conversa. 
+              Clique em "Assumir Controle" para entrar no modo Copilot e receber sugestões de resposta.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Messages */}
+        <ScrollArea className="flex-1 p-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : messages?.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground">Nenhuma mensagem ainda</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {messages?.map((message) => (
                 <div
+                  key={message.id}
                   className={cn(
-                    "max-w-[70%] rounded-lg px-4 py-2",
-                    message.sender_type === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-foreground"
+                    "flex",
+                    message.sender_type === "user" ? "justify-end" : "justify-start"
                   )}
                 >
-                  <p className="text-sm whitespace-pre-wrap break-words">
-                    {message.content}
-                  </p>
-                  <span className="text-xs opacity-70 mt-1 block">
-                    {format(new Date(message.created_at), "HH:mm")}
-                  </span>
+                  <div
+                    className={cn(
+                      "max-w-[70%] rounded-lg px-4 py-2",
+                      message.sender_type === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-foreground"
+                    )}
+                  >
+                    <p className="text-sm whitespace-pre-wrap break-words">
+                      {message.content}
+                    </p>
+                    <span className="text-xs opacity-70 mt-1 block">
+                      {format(new Date(message.created_at), "HH:mm")}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
-            <div ref={scrollRef} />
-          </div>
-        )}
-      </ScrollArea>
+              ))}
+              <div ref={scrollRef} />
+            </div>
+          )}
+        </ScrollArea>
 
-      {/* Input */}
-      <div className="border-t border-border bg-card p-4">
-        {!isEmailMode && (
-          <p className="text-xs text-muted-foreground mb-2 px-1">
-            💬 Mensagens do chat são apenas internas (WhatsApp não configurado)
-          </p>
-        )}
-        <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
-          {isEmailMode && (
-            <Input
-              value={emailSubject}
-              onChange={(e) => setEmailSubject(e.target.value)}
-              placeholder="Assunto do email..."
-              className="w-full"
-              disabled={sendEmail.isPending}
+        {/* Input */}
+        <div className="border-t border-border bg-card p-4 space-y-3">
+          {/* Card de Sugestão Copilot */}
+          {isCopilot && conversation && (
+            <CopilotSuggestionCard 
+              conversationId={conversation.id}
+              onUseSuggestion={handleUseSuggestion}
             />
           )}
-          <div className="flex gap-2">
-            <Input
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder={isEmailMode ? "Corpo do email..." : "Digite uma mensagem..."}
-              className="flex-1"
-              disabled={sendMessage.isPending || sendEmail.isPending}
-            />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={
-                !messageText.trim() || 
-                (isEmailMode && !emailSubject.trim()) ||
-                sendMessage.isPending || 
-                sendEmail.isPending
-              }
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
-        </form>
-      </div>
+
+          {!isEmailMode && !isAutopilot && (
+            <p className="text-xs text-muted-foreground px-1">
+              💬 Mensagens do chat são apenas internas (WhatsApp não configurado)
+            </p>
+          )}
+          
+          {/* Input bloqueado em autopilot */}
+          {isAutopilot ? (
+            <div className="relative">
+              <div className="absolute inset-0 bg-muted/50 backdrop-blur-sm rounded-lg flex items-center justify-center z-10">
+                <p className="text-sm font-medium text-foreground">
+                  🤖 IA está respondendo automaticamente
+                </p>
+              </div>
+              <form className="flex flex-col gap-2 opacity-50 pointer-events-none">
+                <div className="flex gap-2">
+                  <Input
+                    value=""
+                    placeholder="Digite uma mensagem..."
+                    className="flex-1"
+                    disabled
+                  />
+                  <Button type="submit" size="icon" disabled>
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
+              {isEmailMode && (
+                <Input
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder="Assunto do email..."
+                  className="w-full"
+                  disabled={sendEmail.isPending}
+                />
+              )}
+              <div className="flex gap-2">
+                <Input
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  placeholder={isEmailMode ? "Corpo do email..." : "Digite uma mensagem..."}
+                  className="flex-1"
+                  disabled={sendMessage.isPending || sendEmail.isPending}
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={
+                    !messageText.trim() || 
+                    (isEmailMode && !emailSubject.trim()) ||
+                    sendMessage.isPending || 
+                    sendEmail.isPending
+                  }
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </>
   );
