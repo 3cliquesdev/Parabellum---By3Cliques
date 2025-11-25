@@ -3,6 +3,9 @@ project_id = "zaeozfdjhrmblfaxsyuu"
 [functions.create-first-admin]
 verify_jwt = false
 
+[functions.execute-playbook]
+verify_jwt = true
+
 [functions.upsert-contact]
 verify_jwt = false
 
