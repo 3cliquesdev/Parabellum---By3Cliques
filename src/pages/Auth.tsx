@@ -27,12 +27,25 @@ export default function Auth() {
   // Redirect based on role after authentication
   useEffect(() => {
     if (!authLoading && !roleLoading && user && role) {
-      // Redirect consultants to their portfolio
-      if (role === "consultant") {
-        navigate("/my-portfolio");
-      } else {
-        // Admin, manager, sales_rep go to dashboard
-        navigate("/dashboard");
+      // Role-based intelligent routing
+      switch (role) {
+        case "support_agent":
+          navigate("/support");
+          break;
+        case "consultant":
+          navigate("/my-portfolio");
+          break;
+        case "sales_rep":
+          navigate("/dashboard");
+          break;
+        case "admin":
+          navigate("/analytics");
+          break;
+        case "manager":
+          navigate("/analytics");
+          break;
+        default:
+          navigate("/dashboard");
       }
     }
   }, [user, role, authLoading, roleLoading, navigate]);
