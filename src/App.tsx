@@ -28,6 +28,7 @@ import TVMode from "./pages/TVMode";
 import Goals from "./pages/Goals";
 import ImportClients from "./pages/ImportClients";
 import Support from "./pages/Support";
+import Knowledge from "./pages/Knowledge";
 import PublicTicketForm from "./pages/PublicTicketForm";
 import AIStudio from "./pages/AIStudio";
 import MyPortfolio from "./pages/MyPortfolio";
@@ -114,7 +115,8 @@ const App = () => {
             <Route path="/email-templates" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><EmailTemplates /></Layout></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Analytics /></Layout></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Goals /></Layout></ProtectedRoute>} />
-            <Route path="/support" element={<ProtectedRoute allowedRoles={["consultant", "admin", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />
+            <Route path="/support" element={<ProtectedRoute allowedRoles={["support_agent", "consultant", "admin", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />
+            <Route path="/knowledge" element={<ProtectedRoute allowedRoles={["support_agent", "admin", "manager"]}><Layout><Knowledge /></Layout></ProtectedRoute>} />
             <Route path="/ai-studio/personas" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><AIStudio /></Layout></ProtectedRoute>} />
             <Route path="/import-clients" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><ImportClients /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Settings /></Layout></ProtectedRoute>} />
