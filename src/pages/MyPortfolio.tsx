@@ -15,11 +15,14 @@ import { ptBR } from "date-fns/locale";
 import FocusTodayWidget from "@/components/FocusTodayWidget";
 import ExpansionRadarWidget from "@/components/widgets/ExpansionRadarWidget";
 import CommissionTrackerWidget from "@/components/widgets/CommissionTrackerWidget";
+import EarlyWarningWidget from "@/components/widgets/EarlyWarningWidget";
+import { useChurnPrediction } from "@/hooks/useChurnPrediction";
 
 export default function MyPortfolio() {
   const navigate = useNavigate();
   const { data: clients, isLoading } = usePortfolioClients();
   const { data: kpis, isLoading: isLoadingKPIs } = usePortfolioKPIs();
+  const { data: churnRisks } = useChurnPrediction();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
@@ -45,6 +48,16 @@ export default function MyPortfolio() {
     if (score === "green") return <CheckCircle className="h-5 w-5 text-green-500" />;
     if (score === "yellow") return <Clock className="h-5 w-5 text-yellow-500" />;
     return <AlertCircle className="h-5 w-5 text-red-500" />;
+  };
+
+  // Calcular tendência de health score para cada cliente
+  const getHealthTrend = (clientId: string) => {
+    const risk = churnRisks?.find(r => r.id === clientId);
+    if (!risk) return null;
+    
+    if (risk.trend === "down") return "↘️";
+    if (risk.trend === "up") return "↗️";
+    return "→";
   };
 
   if (isLoading) {
@@ -140,11 +153,11 @@ export default function MyPortfolio() {
         </Card>
       </div>
 
-      {/* Widgets Row - Bento Box Layout */}
+      {/* Widgets Row - Bento Box Layout: Attack | Meta | Defense */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <ExpansionRadarWidget />
         <CommissionTrackerWidget />
-        <FocusTodayWidget />
+        <EarlyWarningWidget />
       </div>
 
       {/* Filters and Search */}
@@ -258,10 +271,17 @@ export default function MyPortfolio() {
                         </p>
                       </div>
 
-                      {/* Health Score */}
+                      {/* Health Score with Trend Arrow */}
                       <div className="flex flex-col items-center gap-1">
                         <span className="text-xs text-muted-foreground">Saúde</span>
-                        {getHealthIcon(client.health_score)}
+                        <div className="flex items-center gap-1">
+                          {getHealthIcon(client.health_score)}
+                          {getHealthTrend(client.id) && (
+                            <span className="text-lg" title="Tendência de saúde">
+                              {getHealthTrend(client.id)}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Quick Actions */}
