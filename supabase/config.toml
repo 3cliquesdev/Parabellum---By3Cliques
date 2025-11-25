@@ -35,3 +35,6 @@ verify_jwt = true
 
 [functions.auto-handoff]
 verify_jwt = true
+
+[functions.generate-smart-reply]
+verify_jwt = true
