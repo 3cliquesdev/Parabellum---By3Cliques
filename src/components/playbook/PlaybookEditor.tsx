@@ -17,17 +17,20 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Clock, CheckSquare, Phone, Save, X } from "lucide-react";
+import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmailNode } from "./EmailNode";
 import { DelayNode } from "./DelayNode";
 import { TaskNode } from "./TaskNode";
 import { CallNode } from "./CallNode";
+import { ConditionNode } from "./ConditionNode";
 
 const nodeTypes = {
   email: EmailNode,
   delay: DelayNode,
   task: TaskNode,
   call: CallNode,
+  condition: ConditionNode,
 };
 
 interface PlaybookEditorProps {
@@ -58,6 +61,7 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
         ...(type === "delay" && { duration_days: 1 }),
         ...(type === "task" && { task_type: "task", description: "Descrição da tarefa" }),
         ...(type === "call" && { description: "Descrição da ligação" }),
+        ...(type === "condition" && { condition_type: "email_opened", condition_value: "" }),
       },
     };
     setNodes((nds) => [...nds, newNode]);
@@ -120,6 +124,14 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
           <Phone className="h-4 w-4" />
           Ligação
         </Button>
+        <Button
+          variant="outline"
+          className="w-full justify-start gap-2"
+          onClick={() => addNode("condition")}
+        >
+          <GitBranch className="h-4 w-4" />
+          Condição (Se/Então)
+        </Button>
 
         {/* Painel de propriedades */}
         {selectedNode && (
@@ -159,6 +171,36 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
                   onChange={(e) => updateNodeData("description", e.target.value)}
                 />
               </div>
+            )}
+            {selectedNode.type === "condition" && (
+              <>
+                <div>
+                  <Label>Tipo de Condição</Label>
+                  <Select
+                    value={selectedNode.data.condition_type || "email_opened"}
+                    onValueChange={(value) => updateNodeData("condition_type", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="email_opened">Email Aberto</SelectItem>
+                      <SelectItem value="email_clicked">Email Clicado</SelectItem>
+                      <SelectItem value="meeting_booked">Reunião Agendada</SelectItem>
+                      <SelectItem value="tag_exists">Tag Existe</SelectItem>
+                      <SelectItem value="status_change">Mudança de Status</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Valor da Condição</Label>
+                  <Input
+                    value={selectedNode.data.condition_value || ""}
+                    onChange={(e) => updateNodeData("condition_value", e.target.value)}
+                    placeholder="Ex: nome do email, tag, etc"
+                  />
+                </div>
+              </>
             )}
           </div>
         )}
