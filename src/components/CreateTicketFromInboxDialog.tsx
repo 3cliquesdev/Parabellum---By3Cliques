@@ -128,8 +128,8 @@ export function CreateTicketFromInboxDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
             Criar Ticket a partir da Conversa
@@ -139,180 +139,182 @@ export function CreateTicketFromInboxDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Subject */}
-            <div className="col-span-2">
-              <Label htmlFor="subject" className="flex items-center gap-2">
-                <Tag className="h-4 w-4" />
-                Assunto *
-              </Label>
-              <Input
-                id="subject"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="Ex: Problema com pagamento de fatura"
-                required
-                className="mt-1"
-              />
-            </div>
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+          <ScrollArea className="flex-1 pr-4">
+            <div className="grid grid-cols-2 gap-4 pb-4">
+              {/* Subject */}
+              <div className="col-span-2">
+                <Label htmlFor="subject" className="flex items-center gap-2">
+                  <Tag className="h-4 w-4" />
+                  Assunto *
+                </Label>
+                <Input
+                  id="subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Ex: Problema com pagamento de fatura"
+                  required
+                  className="mt-1"
+                />
+              </div>
 
-            {/* Category */}
-            <div>
-              <Label htmlFor="category" className="flex items-center gap-2">
-                <Tag className="h-4 w-4" />
-                Categoria *
-              </Label>
-              <Select value={category} onValueChange={(value: any) => setCategory(value)}>
-                <SelectTrigger id="category" className="mt-1 bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-popover z-50">
-                  {CATEGORY_OPTIONS.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              {/* Category */}
+              <div>
+                <Label htmlFor="category" className="flex items-center gap-2">
+                  <Tag className="h-4 w-4" />
+                  Categoria *
+                </Label>
+                <Select value={category} onValueChange={(value: any) => setCategory(value)}>
+                  <SelectTrigger id="category" className="mt-1 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {CATEGORY_OPTIONS.map((cat) => (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Priority with SLA Visual */}
-            <div>
-              <Label htmlFor="priority" className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" />
-                Prioridade * (SLA)
-              </Label>
-              <Select value={priority} onValueChange={(value: any) => setPriority(value)}>
-                <SelectTrigger id="priority" className="mt-1 bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-popover z-50">
-                  {PRIORITY_OPTIONS.map((prio) => (
-                    <SelectItem key={prio.value} value={prio.value}>
-                      <div className="flex items-center justify-between w-full gap-2">
-                        <span>{prio.icon} {prio.label}</span>
-                        <Badge variant="outline" className={`${prio.bgColor} ${prio.color} text-xs`}>
-                          <Clock className="h-3 w-3 mr-1" />
-                          {prio.sla}
-                        </Badge>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedPriority && (
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  SLA: Resolver em até <strong>{selectedPriority.sla}</strong>
-                </p>
-              )}
-            </div>
-
-            {/* Assignee (Intelligent) */}
-            <div className="col-span-2">
-              <Label htmlFor="assignee" className="flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Atribuir a (Opcional)
-              </Label>
-              <Select value={assignedTo || undefined} onValueChange={(val) => setAssignedTo(val || undefined)}>
-                <SelectTrigger id="assignee" className="mt-1 bg-background">
-                  <SelectValue placeholder="Selecione um agente (opcional)..." />
-                </SelectTrigger>
-                <SelectContent className="bg-popover z-50">
-                  {availableUsers.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      <div className="flex items-center gap-2">
-                        <span>{user.full_name}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {user.role || 'user'}
-                        </Badge>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Description */}
-            <div className="col-span-2">
-              <Label htmlFor="description" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Descrição Adicional (Opcional)
-              </Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Adicione detalhes sobre o problema..."
-                rows={3}
-                className="mt-1 resize-none"
-              />
-            </div>
-
-            {/* Internal Note (Yellow Field) */}
-            <div className="col-span-2">
-              <Label htmlFor="internal-note" className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
-                <StickyNote className="h-4 w-4" />
-                Nota Interna (Visível apenas para equipe)
-              </Label>
-              <Textarea
-                id="internal-note"
-                value={internalNote}
-                onChange={(e) => setInternalNote(e.target.value)}
-                placeholder="Ex: Cliente está muito irritado, cuidado no atendimento..."
-                rows={2}
-                className="mt-1 resize-none bg-yellow-50 dark:bg-yellow-900/10 border-yellow-300 dark:border-yellow-700 focus-visible:ring-yellow-500"
-              />
-              <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-                ⚠️ Esta nota não será visível para o cliente
-              </p>
-            </div>
-          </div>
-
-          {/* Messages Preview */}
-          <div className="border rounded-lg p-3 bg-muted/30">
-            <Label className="flex items-center gap-2 mb-2">
-              <MessageSquare className="h-4 w-4" />
-              Preview das Últimas Mensagens ({recentMessages.length})
-            </Label>
-            <ScrollArea className="h-40">
-              <div className="space-y-2 pr-3">
-                {recentMessages.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">
-                    Nenhuma mensagem disponível
+              {/* Priority with SLA Visual */}
+              <div>
+                <Label htmlFor="priority" className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  Prioridade * (SLA)
+                </Label>
+                <Select value={priority} onValueChange={(value: any) => setPriority(value)}>
+                  <SelectTrigger id="priority" className="mt-1 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {PRIORITY_OPTIONS.map((prio) => (
+                      <SelectItem key={prio.value} value={prio.value}>
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <span>{prio.icon} {prio.label}</span>
+                          <Badge variant="outline" className={`${prio.bgColor} ${prio.color} text-xs`}>
+                            <Clock className="h-3 w-3 mr-1" />
+                            {prio.sla}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedPriority && (
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    SLA: Resolver em até <strong>{selectedPriority.sla}</strong>
                   </p>
-                ) : (
-                  recentMessages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`text-xs p-2 rounded ${
-                        msg.sender_type === 'contact'
-                          ? 'bg-primary/10 text-primary-foreground/90'
-                          : 'bg-secondary text-secondary-foreground'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold">
-                          {msg.sender_type === 'contact' ? '👤 Cliente' : '👨‍💼 Agente'}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {format(new Date(msg.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
-                        </span>
-                      </div>
-                      <p className="text-foreground/90">{msg.content}</p>
-                    </div>
-                  ))
                 )}
               </div>
-            </ScrollArea>
-            <p className="text-xs text-muted-foreground mt-2">
-              💡 Estas mensagens serão incluídas automaticamente no ticket
-            </p>
-          </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-2 border-t">
+              {/* Assignee (Intelligent) */}
+              <div className="col-span-2">
+                <Label htmlFor="assignee" className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Atribuir a (Opcional)
+                </Label>
+                <Select value={assignedTo || undefined} onValueChange={(val) => setAssignedTo(val || undefined)}>
+                  <SelectTrigger id="assignee" className="mt-1 bg-background">
+                    <SelectValue placeholder="Selecione um agente (opcional)..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {availableUsers.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{user.full_name}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {user.role || 'user'}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Description */}
+              <div className="col-span-2">
+                <Label htmlFor="description" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Descrição Adicional (Opcional)
+                </Label>
+                <Textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Adicione detalhes sobre o problema..."
+                  rows={3}
+                  className="mt-1 resize-none"
+                />
+              </div>
+
+              {/* Internal Note (Yellow Field) */}
+              <div className="col-span-2">
+                <Label htmlFor="internal-note" className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+                  <StickyNote className="h-4 w-4" />
+                  Nota Interna (Visível apenas para equipe)
+                </Label>
+                <Textarea
+                  id="internal-note"
+                  value={internalNote}
+                  onChange={(e) => setInternalNote(e.target.value)}
+                  placeholder="Ex: Cliente está muito irritado, cuidado no atendimento..."
+                  rows={2}
+                  className="mt-1 resize-none bg-yellow-50 dark:bg-yellow-900/10 border-yellow-300 dark:border-yellow-700 focus-visible:ring-yellow-500"
+                />
+                <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+                  ⚠️ Esta nota não será visível para o cliente
+                </p>
+              </div>
+
+              {/* Messages Preview */}
+              <div className="col-span-2 border rounded-lg p-3 bg-muted/30">
+                <Label className="flex items-center gap-2 mb-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Preview das Últimas Mensagens ({recentMessages.length})
+                </Label>
+                <ScrollArea className="h-40">
+                  <div className="space-y-2 pr-3">
+                    {recentMessages.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic">
+                        Nenhuma mensagem disponível
+                      </p>
+                    ) : (
+                      recentMessages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`text-xs p-2 rounded ${
+                            msg.sender_type === 'contact'
+                              ? 'bg-primary/10 text-primary-foreground/90'
+                              : 'bg-secondary text-secondary-foreground'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-semibold">
+                              {msg.sender_type === 'contact' ? '👤 Cliente' : '👨‍💼 Agente'}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {format(new Date(msg.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                            </span>
+                          </div>
+                          <p className="text-foreground/90">{msg.content}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+                <p className="text-xs text-muted-foreground mt-2">
+                  💡 Estas mensagens serão incluídas automaticamente no ticket
+                </p>
+              </div>
+            </div>
+          </ScrollArea>
+
+          {/* Actions - Fixed Footer */}
+          <div className="flex-shrink-0 flex justify-end gap-2 pt-4 border-t mt-2">
             <Button
               type="button"
               variant="outline"
