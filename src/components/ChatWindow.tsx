@@ -276,7 +276,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           )}
 
           <ScrollArea className="flex-1 overflow-hidden">
-            <div className="p-4 md:p-6">
+            <div className="p-4 md:p-6 min-h-full">
               <div className="max-w-3xl mx-auto w-full">
                 {conversation.status === "closed" && (
                   <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 text-center">

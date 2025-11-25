@@ -85,7 +85,8 @@ export default function Inbox() {
         return result.filter(c => c.status === "closed");
       
       default:
-        return result;
+        // Mostrar todas EXCETO arquivadas (status !== 'closed')
+        return result.filter(c => c.status !== 'closed');
     }
   }, [conversations, filter, departmentFilter, user?.id]);
 
