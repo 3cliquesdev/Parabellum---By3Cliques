@@ -46,6 +46,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ModeToggle } from "@/components/ModeToggle";
 import ProfileEditDialog from "@/components/ProfileEditDialog";
 
 // ============= SUPPORT AGENT MENU (🛡️) =============
@@ -364,6 +365,7 @@ export function AppSidebar() {
               </div>
             </div>
             <div className="flex gap-2">
+              <ModeToggle />
               <ProfileEditDialog
                 trigger={
                   <Button variant="ghost" size="sm" className="flex-1 gap-2">
@@ -380,6 +382,7 @@ export function AppSidebar() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
+            <ModeToggle />
             <ProfileEditDialog
               trigger={
                 <Button variant="ghost" size="sm" className="w-full">

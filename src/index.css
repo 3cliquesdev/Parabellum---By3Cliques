@@ -4,53 +4,74 @@
 
 @layer base {
   :root {
-    /* PALETA TECH BLUE ENTERPRISE (PRETO E AZUL) */
-    --background: 0 0% 0%;      /* #000000 (Preto Puro) */
-    --foreground: 0 0% 100%;    /* #ffffff (Texto Branco) */
+    /* LIGHT MODE - Alto Contraste Enterprise */
+    --background: 0 0% 100%;           /* Branco Puro */
+    --foreground: 222.2 84% 4.9%;      /* Azul Quase Preto */
     
-    --card: 0 0% 5%;            /* #0d0d0d (Cinza Quase Preto) */
+    --card: 0 0% 100%;                 /* Branco */
+    --card-foreground: 222.2 84% 4.9%;
+    
+    --primary: 221.2 83.2% 53.3%;      /* Tech Blue */
+    --primary-foreground: 210 40% 98%; /* Texto Branco */
+    
+    --secondary: 210 40% 96.1%;        /* Cinza muito suave */
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    
+    --border: 214.3 31.8% 91.4%;       /* Bordas sutis */
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    
+    --accent: 221.2 83.2% 53.3%;
+    --accent-foreground: 210 40% 98%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    
+    --radius: 1rem;
+  }
+
+  .dark {
+    /* DARK MODE - PALETA TECH BLUE ENTERPRISE */
+    --background: 0 0% 0%;             /* Preto Puro */
+    --foreground: 0 0% 100%;           /* Texto Branco */
+    
+    --card: 0 0% 5%;                   /* Cinza Quase Preto */
     --card-foreground: 0 0% 100%;
     
-    --primary: 221.2 83.2% 53.3%;     /* #2563EB (Tech Blue 600) */
-    --primary-foreground: 210 40% 98%; /* #F8FAFC (Texto Branco) */
+    --primary: 221.2 83.2% 53.3%;      /* Tech Blue */
+    --primary-foreground: 210 40% 98%;
     
-    --secondary: 0 0% 12%;      /* #202020 (Cinza Chumbo) */
+    --secondary: 0 0% 12%;             /* Cinza Chumbo */
     --secondary-foreground: 0 0% 100%;
     
-    --border: 0 0% 15%;         /* #262626 (Borda sutil) */
+    --border: 0 0% 15%;                /* Borda sutil */
     --input: 0 0% 15%;
-    --ring: 221.2 83.2% 53.3%;  /* #2563EB (Tech Blue) */
+    --ring: 221.2 83.2% 53.3%;
     
     --muted: 0 0% 10%;
     --muted-foreground: 0 0% 60%;
     
-    --accent: 221.2 83.2% 53.3%;     /* #2563EB (Tech Blue) */
-    --accent-foreground: 210 40% 98%; /* #F8FAFC (Texto Branco) */
+    --accent: 221.2 83.2% 53.3%;
+    --accent-foreground: 210 40% 98%;
     
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     
     --popover: 0 0% 5%;
     --popover-foreground: 0 0% 100%;
-    
-    /* Arredondamento estilo Dashboard Moderno */
-    --radius: 1rem; 
   }
 
-  /* FORÇAR O PRETO (Trava de Segurança) */
   * {
-    border-color: #262626;
-  }
-
-  html, body, #root {
-    background-color: #000000 !important;
-    color: #ffffff !important;
-    min-height: 100vh;
+    border-color: hsl(var(--border));
   }
 
   body {
-    background-color: #000000 !important;
-    color: #ffffff !important;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 }

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -63,17 +63,17 @@ class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-black p-4">
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-white mb-2">
+            <h1 className="text-2xl font-bold text-foreground mb-2">
               Algo deu errado
             </h1>
-            <p className="text-[#999999] mb-4">
+            <p className="text-muted-foreground mb-4">
               Por favor, recarregue a página
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-[#3B82F6] text-white rounded-md hover:bg-[#2563EB]"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
             >
               Recarregar
             </button>
@@ -87,12 +87,6 @@ class ErrorBoundary extends React.Component<
 }
 
 const App = () => {
-  // FORÇA DARK MODE - NUNCA DEIXA SAIR
-  useEffect(() => {
-    document.documentElement.classList.add("dark");
-    document.documentElement.classList.remove("light");
-  }, []);
-
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>

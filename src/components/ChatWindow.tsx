@@ -275,7 +275,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             </Alert>
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 dark:bg-slate-950">
             <div className="p-4 md:p-6">
               <div className="max-w-3xl mx-auto w-full">
                 {conversation.status === "closed" && (
@@ -372,9 +372,9 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                               className={cn(
                                 "max-w-[80%] px-4 py-3 shadow-sm",
                                 isCustomer
-                                  ? "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
+                                  ? "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
                                   : isAI
-                                  ? "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tr-none text-slate-800 dark:text-slate-100"
+                                  ? "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tr-none text-slate-800 dark:text-slate-100"
                                   : "bg-blue-700 dark:bg-blue-800 text-white rounded-2xl rounded-tr-none"
                               )}
                             >
