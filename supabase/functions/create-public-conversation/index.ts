@@ -123,113 +123,64 @@ serve(async (req) => {
       finalContactId = contact.id;
     }
 
-    // SINGLETON: Verificar se já existe conversa para este contato
-    // Prioridade: 1) aberta, 2) fechada mais recente (reabrir)
+    // NUCLEAR FIX: Usar RPC atômica para Get or Create (com reabertura automática)
+    const { data: rpcResult, error: rpcError } = await supabase
+      .rpc('get_or_create_conversation', {
+        p_contact_id: finalContactId,
+        p_department_id: department_id,
+        p_channel: 'web_chat'
+      })
+      .single();
 
-    // 1. Verificar se existe conversa ABERTA
-    const { data: openConversation } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('contact_id', finalContactId)
-      .eq('status', 'open')
-      .limit(1)
-      .maybeSingle();
+    if (rpcError) {
+      console.error('[create-public-conversation] RPC error:', rpcError);
+      throw new Error(`Failed to get or create conversation: ${rpcError.message}`);
+    }
 
-    if (openConversation) {
-      console.log('[create-public-conversation] Reusing OPEN conversation:', openConversation.id);
+    const { conversation_id, is_existing, was_reopened } = rpcResult as {
+      conversation_id: string;
+      is_existing: boolean;
+      was_reopened: boolean;
+    };
+
+    console.log('[create-public-conversation] RPC result:', { 
+      conversation_id, 
+      is_existing, 
+      was_reopened 
+    });
+
+    // Se foi reaberta, registrar nota no timeline
+    if (was_reopened) {
+      await supabase.from('interactions').insert({
+        customer_id: finalContactId,
+        type: 'note',
+        content: `Conversa reaberta pelo cliente via chat widget (Departamento: ${department.name})`,
+        channel: 'other',
+        metadata: {
+          conversation_id,
+          reopened_at: new Date().toISOString(),
+          department_name: department.name,
+        },
+      });
+    }
+
+    // Se conversa já existia (aberta ou reaberta), retornar ela
+    if (is_existing) {
       return new Response(
         JSON.stringify({
           success: true,
-          conversation_id: openConversation.id,
+          conversation_id,
           contact_id: finalContactId,
           department_name: department.name,
           is_returning_customer: customerMetadata.is_returning_customer || false,
           is_existing_conversation: true,
+          was_reopened,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. Verificar se existe conversa FECHADA para REABRIR
-    const { data: closedConversation } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('contact_id', finalContactId)
-      .eq('status', 'closed')
-      .order('closed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (closedConversation) {
-      // REABRIR a conversa fechada
-      const { error: reopenError } = await supabase
-        .from('conversations')
-        .update({
-          status: 'open',
-          closed_at: null,
-          closed_by: null,
-          auto_closed: false,
-          last_message_at: new Date().toISOString(),
-          department: department_id, // Atualizar departamento se mudou
-        })
-        .eq('id', closedConversation.id);
-
-      if (reopenError) {
-        console.error('[create-public-conversation] Error reopening conversation:', reopenError);
-      } else {
-        console.log('[create-public-conversation] REOPENED closed conversation:', closedConversation.id);
-        
-        // Registrar nota de reabertura no timeline
-        await supabase.from('interactions').insert({
-          customer_id: finalContactId,
-          type: 'note',
-          content: `Conversa reaberta pelo cliente via chat widget (Departamento: ${department.name})`,
-          channel: 'other',
-          metadata: {
-            conversation_id: closedConversation.id,
-            reopened_at: new Date().toISOString(),
-            department_name: department.name,
-          },
-        });
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            conversation_id: closedConversation.id,
-            contact_id: finalContactId,
-            department_name: department.name,
-            is_returning_customer: true,
-            is_existing_conversation: true,
-            was_reopened: true, // Flag especial para indicar reabertura
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
-
-    // Criar conversa pública com customer_metadata
-    const { data: conversation, error: convError } = await supabase
-      .from('conversations')
-      .insert({
-        contact_id: finalContactId,
-        department: department_id,
-        channel: 'web_chat',
-        status: 'open',
-        ai_mode: 'autopilot',
-        customer_metadata: customerMetadata,
-      })
-      .select()
-      .single();
-
-    if (convError || !conversation) {
-      console.error('[create-public-conversation] Error creating conversation:', convError);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Erro ao criar conversa' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
-    // Registrar interaction inicial
+    // Nova conversa criada pela RPC - registrar interaction inicial
     await supabase
       .from('interactions')
       .insert({
@@ -238,7 +189,7 @@ serve(async (req) => {
         content: `Conversa pública iniciada via widget de chat (Departamento: ${department.name})`,
         channel: 'other',
         metadata: {
-          conversation_id: conversation.id,
+          conversation_id,
           department_id: department_id,
           department_name: department.name,
           source: 'public_chat_widget',
@@ -247,7 +198,7 @@ serve(async (req) => {
       });
 
     console.log('[create-public-conversation] Success:', { 
-      conversation_id: conversation.id, 
+      conversation_id, 
       contact_id: finalContactId,
       is_returning_customer: customerMetadata.is_returning_customer || false,
     });
@@ -255,7 +206,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        conversation_id: conversation.id,
+        conversation_id,
         contact_id: finalContactId,
         department_name: department.name,
         is_returning_customer: customerMetadata.is_returning_customer || false,
