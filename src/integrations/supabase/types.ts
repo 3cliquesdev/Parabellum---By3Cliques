@@ -91,6 +91,41 @@ export type Database = {
           },
         ]
       }
+      ai_suggestions: {
+        Row: {
+          context: Json | null
+          conversation_id: string
+          created_at: string
+          id: string
+          suggested_reply: string
+          used: boolean
+        }
+        Insert: {
+          context?: Json | null
+          conversation_id: string
+          created_at?: string
+          id?: string
+          suggested_reply: string
+          used?: boolean
+        }
+        Update: {
+          context?: Json | null
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          suggested_reply?: string
+          used?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_suggestions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_usage_logs: {
         Row: {
           conversation_id: string | null
@@ -310,6 +345,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          ai_mode: Database["public"]["Enums"]["ai_mode"]
           assigned_to: string | null
           channel: Database["public"]["Enums"]["conversation_channel"]
           contact_id: string
@@ -320,6 +356,7 @@ export type Database = {
           status: Database["public"]["Enums"]["conversation_status"]
         }
         Insert: {
+          ai_mode?: Database["public"]["Enums"]["ai_mode"]
           assigned_to?: string | null
           channel: Database["public"]["Enums"]["conversation_channel"]
           contact_id: string
@@ -330,6 +367,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["conversation_status"]
         }
         Update: {
+          ai_mode?: Database["public"]["Enums"]["ai_mode"]
           assigned_to?: string | null
           channel?: Database["public"]["Enums"]["conversation_channel"]
           contact_id?: string
@@ -1139,6 +1177,7 @@ export type Database = {
     }
     Enums: {
       activity_type: "call" | "meeting" | "email" | "task" | "lunch"
+      ai_mode: "autopilot" | "copilot" | "disabled"
       app_role: "admin" | "user" | "manager" | "sales_rep"
       automation_action:
         | "assign_to_user"
@@ -1326,6 +1365,7 @@ export const Constants = {
   public: {
     Enums: {
       activity_type: ["call", "meeting", "email", "task", "lunch"],
+      ai_mode: ["autopilot", "copilot", "disabled"],
       app_role: ["admin", "user", "manager", "sales_rep"],
       automation_action: [
         "assign_to_user",
