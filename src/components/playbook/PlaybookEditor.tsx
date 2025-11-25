@@ -17,7 +17,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmailNode } from "./EmailNode";
 import { DelayNode } from "./DelayNode";
@@ -25,6 +27,10 @@ import { TaskNode } from "./TaskNode";
 import { CallNode } from "./CallNode";
 import { ConditionNode } from "./ConditionNode";
 import { ApprovalNode } from "./ApprovalNode";
+import { RichTextEditor } from "./RichTextEditor";
+import { VideoEmbedField } from "./VideoEmbedField";
+import { AttachmentsUploader } from "./AttachmentsUploader";
+import { PlaybookStepViewer } from "./PlaybookStepViewer";
 
 const nodeTypes = {
   email: EmailNode,
@@ -46,6 +52,7 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
   const [nodes, setNodes, onNodesChange] = useNodesState(initialFlow?.nodes || []);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlow?.edges || []);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [previewNode, setPreviewNode] = useState<Node | null>(null);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -61,7 +68,13 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
         label: `Novo ${type}`,
         ...(type === "email" && { subject: "Assunto do email" }),
         ...(type === "delay" && { duration_days: 1 }),
-        ...(type === "task" && { task_type: "task", description: "Descrição da tarefa" }),
+        ...(type === "task" && { 
+          task_type: "task", 
+          description: "Descrição da tarefa",
+          rich_content: "",
+          video_url: "",
+          attachments: []
+        }),
         ...(type === "call" && { description: "Descrição da ligação" }),
         ...(type === "condition" && { condition_type: "email_opened", condition_value: "" }),
         ...(type === "approval" && { approver_role: "consultant", approval_message: "Revisar antes de continuar" }),
@@ -91,7 +104,8 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
   }, []);
 
   return (
-    <div className="flex h-[600px] gap-4">
+    <>
+      <div className="flex h-[600px] gap-4">
       {/* Sidebar de blocos */}
       <Card className="w-64 p-4 space-y-2">
         <h3 className="font-semibold mb-3">Blocos Disponíveis</h3>
@@ -174,7 +188,41 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
                 />
               </div>
             )}
-            {(selectedNode.type === "task" || selectedNode.type === "call") && (
+            {selectedNode.type === "task" && (
+              <>
+                <div className="space-y-4 pt-4 border-t">
+                  <VideoEmbedField
+                    url={selectedNode.data.video_url || ""}
+                    onChange={(value) => updateNodeData("video_url", value)}
+                  />
+                  
+                  <div>
+                    <Label className="mb-2 block">✍️ Conteúdo da Aula</Label>
+                    <RichTextEditor
+                      content={selectedNode.data.rich_content || ""}
+                      onChange={(value) => updateNodeData("rich_content", value)}
+                      placeholder="Escreva o conteúdo da aula com formatação rica..."
+                    />
+                  </div>
+
+                  <AttachmentsUploader
+                    attachments={selectedNode.data.attachments || []}
+                    onChange={(value) => updateNodeData("attachments", value)}
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={() => setPreviewNode(selectedNode)}
+                  >
+                    <Eye className="h-4 w-4" />
+                    👁️ Preview - Ver como Cliente
+                  </Button>
+                </div>
+              </>
+            )}
+            {selectedNode.type === "call" && (
               <div>
                 <Label>Descrição</Label>
                 <Textarea
@@ -275,5 +323,25 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
         </ReactFlow>
       </div>
     </div>
+
+    {/* Preview Modal */}
+    <Dialog open={!!previewNode} onOpenChange={() => setPreviewNode(null)}>
+      <DialogContent className="max-w-4xl max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle>👁️ Preview - Visualização do Cliente</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="max-h-[calc(90vh-8rem)]">
+          {previewNode && (
+            <PlaybookStepViewer
+              label={previewNode.data.label}
+              video_url={previewNode.data.video_url}
+              rich_content={previewNode.data.rich_content}
+              attachments={previewNode.data.attachments}
+            />
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
