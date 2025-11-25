@@ -15,7 +15,13 @@ export function useSentimentAnalysis() {
         body: { mode: 'sentiment', messages }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle rate limiting gracefully
+        if (error.message?.includes('429') || error.message?.includes('Rate limit')) {
+          throw new Error('Muitas requisições. Aguarde alguns segundos e tente novamente.');
+        }
+        throw error;
+      }
       
       const sentiment = data.result.toLowerCase().trim() as Sentiment;
       return sentiment;

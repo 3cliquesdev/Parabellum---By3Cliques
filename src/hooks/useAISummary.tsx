@@ -16,7 +16,12 @@ export function useAISummary() {
         body: { mode: 'summary', messages }
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes('429') || error.message?.includes('Rate limit')) {
+          throw new Error('Muitas requisições AI. Aguarde alguns segundos e tente novamente.');
+        }
+        throw error;
+      }
       return data.result as string;
     },
     onSuccess: async (result) => {

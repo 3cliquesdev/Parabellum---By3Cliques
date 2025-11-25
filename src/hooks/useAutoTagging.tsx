@@ -12,7 +12,12 @@ export function useAutoTagging() {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes('429') || error.message?.includes('Rate limit')) {
+          throw new Error('Muitas requisições AI. Aguarde alguns segundos e tente novamente.');
+        }
+        throw error;
+      }
       
       // Parse comma-separated tags
       const tags = data.result.split(',').map((tag: string) => tag.trim());
