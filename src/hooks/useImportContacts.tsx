@@ -8,11 +8,24 @@ interface ContactRow {
   last_name?: string;
   phone?: string;
   company?: string;
+  document?: string;
+  state_registration?: string;
   address?: string;
+  address_number?: string;
+  address_complement?: string;
+  neighborhood?: string;
   city?: string;
   state?: string;
   zip_code?: string;
   birth_date?: string;
+  customer_type?: string;
+  blocked?: string | boolean;
+  subscription_plan?: string;
+  registration_date?: string;
+  last_payment_date?: string;
+  next_payment_date?: string;
+  recent_orders_count?: string | number;
+  account_balance?: string | number;
   assigned_to?: string;
 }
 
