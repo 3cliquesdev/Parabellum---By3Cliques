@@ -271,6 +271,7 @@ export type Database = {
           created_at: string
           id: string
           last_message_at: string
+          related_ticket_id: string | null
           status: Database["public"]["Enums"]["conversation_status"]
         }
         Insert: {
@@ -280,6 +281,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_message_at?: string
+          related_ticket_id?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
         }
         Update: {
@@ -289,6 +291,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_message_at?: string
+          related_ticket_id?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
         }
         Relationships: [
@@ -304,6 +307,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_related_ticket_id_fkey"
+            columns: ["related_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
         ]
@@ -609,6 +619,8 @@ export type Database = {
       }
       messages: {
         Row: {
+          attachment_type: string | null
+          attachment_url: string | null
           content: string
           conversation_id: string
           created_at: string
@@ -618,6 +630,8 @@ export type Database = {
           sender_type: Database["public"]["Enums"]["sender_type"]
         }
         Insert: {
+          attachment_type?: string | null
+          attachment_url?: string | null
           content: string
           conversation_id: string
           created_at?: string
@@ -627,6 +641,8 @@ export type Database = {
           sender_type: Database["public"]["Enums"]["sender_type"]
         }
         Update: {
+          attachment_type?: string | null
+          attachment_url?: string | null
           content?: string
           conversation_id?: string
           created_at?: string
@@ -885,12 +901,16 @@ export type Database = {
         Row: {
           assigned_to: string | null
           attachment_url: string | null
+          category: Database["public"]["Enums"]["ticket_category"] | null
           created_at: string
           customer_id: string
           description: string
+          due_date: string | null
           id: string
+          internal_note: string | null
           priority: Database["public"]["Enums"]["ticket_priority"]
           resolved_at: string | null
+          source_conversation_id: string | null
           status: Database["public"]["Enums"]["ticket_status"]
           subject: string
           updated_at: string
@@ -898,12 +918,16 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           attachment_url?: string | null
+          category?: Database["public"]["Enums"]["ticket_category"] | null
           created_at?: string
           customer_id: string
           description: string
+          due_date?: string | null
           id?: string
+          internal_note?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolved_at?: string | null
+          source_conversation_id?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
           subject: string
           updated_at?: string
@@ -911,12 +935,16 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           attachment_url?: string | null
+          category?: Database["public"]["Enums"]["ticket_category"] | null
           created_at?: string
           customer_id?: string
           description?: string
+          due_date?: string | null
           id?: string
+          internal_note?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolved_at?: string | null
+          source_conversation_id?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
           subject?: string
           updated_at?: string
@@ -934,6 +962,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_source_conversation_id_fkey"
+            columns: ["source_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
         ]
@@ -1074,6 +1109,7 @@ export type Database = {
         | "form_submission"
         | "conversation_transferred"
       sender_type: "user" | "contact"
+      ticket_category: "financeiro" | "tecnico" | "bug" | "outro"
       ticket_priority: "low" | "medium" | "high" | "urgent"
       ticket_status:
         | "open"
@@ -1259,6 +1295,7 @@ export const Constants = {
         "conversation_transferred",
       ],
       sender_type: ["user", "contact"],
+      ticket_category: ["financeiro", "tecnico", "bug", "outro"],
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status: [
         "open",
