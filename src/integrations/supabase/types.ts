@@ -181,8 +181,11 @@ export type Database = {
       }
       contacts: {
         Row: {
+          address: string | null
           assigned_to: string | null
           avatar_url: string | null
+          birth_date: string | null
+          city: string | null
           company: string | null
           created_at: string
           email: string | null
@@ -193,13 +196,18 @@ export type Database = {
           organization_id: string | null
           phone: string | null
           source: string | null
+          state: string | null
           status: Database["public"]["Enums"]["customer_status"] | null
           total_ltv: number | null
           whatsapp_id: string | null
+          zip_code: string | null
         }
         Insert: {
+          address?: string | null
           assigned_to?: string | null
           avatar_url?: string | null
+          birth_date?: string | null
+          city?: string | null
           company?: string | null
           created_at?: string
           email?: string | null
@@ -210,13 +218,18 @@ export type Database = {
           organization_id?: string | null
           phone?: string | null
           source?: string | null
+          state?: string | null
           status?: Database["public"]["Enums"]["customer_status"] | null
           total_ltv?: number | null
           whatsapp_id?: string | null
+          zip_code?: string | null
         }
         Update: {
+          address?: string | null
           assigned_to?: string | null
           avatar_url?: string | null
+          birth_date?: string | null
+          city?: string | null
           company?: string | null
           created_at?: string
           email?: string | null
@@ -227,9 +240,11 @@ export type Database = {
           organization_id?: string | null
           phone?: string | null
           source?: string | null
+          state?: string | null
           status?: Database["public"]["Enums"]["customer_status"] | null
           total_ltv?: number | null
           whatsapp_id?: string | null
+          zip_code?: string | null
         }
         Relationships: [
           {
@@ -824,6 +839,105 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_comments: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_internal: boolean | null
+          ticket_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_internal?: boolean | null
+          ticket_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_internal?: boolean | null
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_comments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_comments_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tickets: {
+        Row: {
+          assigned_to: string | null
+          attachment_url: string | null
+          created_at: string
+          customer_id: string
+          description: string
+          id: string
+          priority: Database["public"]["Enums"]["ticket_priority"]
+          resolved_at: string | null
+          status: Database["public"]["Enums"]["ticket_status"]
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          attachment_url?: string | null
+          created_at?: string
+          customer_id: string
+          description: string
+          id?: string
+          priority?: Database["public"]["Enums"]["ticket_priority"]
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["ticket_status"]
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          attachment_url?: string | null
+          created_at?: string
+          customer_id?: string
+          description?: string
+          id?: string
+          priority?: Database["public"]["Enums"]["ticket_priority"]
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["ticket_status"]
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tickets_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -960,6 +1074,13 @@ export type Database = {
         | "form_submission"
         | "conversation_transferred"
       sender_type: "user" | "contact"
+      ticket_priority: "low" | "medium" | "high" | "urgent"
+      ticket_status:
+        | "open"
+        | "in_progress"
+        | "waiting_customer"
+        | "resolved"
+        | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1138,6 +1259,14 @@ export const Constants = {
         "conversation_transferred",
       ],
       sender_type: ["user", "contact"],
+      ticket_priority: ["low", "medium", "high", "urgent"],
+      ticket_status: [
+        "open",
+        "in_progress",
+        "waiting_customer",
+        "resolved",
+        "closed",
+      ],
     },
   },
 } as const
