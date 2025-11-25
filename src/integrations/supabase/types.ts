@@ -950,6 +950,7 @@ export type Database = {
           customer_id: string
           id: string
           metadata: Json | null
+          playbook_execution_id: string | null
           type: Database["public"]["Enums"]["interaction_type"]
         }
         Insert: {
@@ -960,6 +961,7 @@ export type Database = {
           customer_id: string
           id?: string
           metadata?: Json | null
+          playbook_execution_id?: string | null
           type: Database["public"]["Enums"]["interaction_type"]
         }
         Update: {
@@ -970,6 +972,7 @@ export type Database = {
           customer_id?: string
           id?: string
           metadata?: Json | null
+          playbook_execution_id?: string | null
           type?: Database["public"]["Enums"]["interaction_type"]
         }
         Relationships: [
@@ -985,6 +988,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interactions_playbook_execution_id_fkey"
+            columns: ["playbook_execution_id"]
+            isOneToOne: false
+            referencedRelation: "playbook_executions"
             referencedColumns: ["id"]
           },
         ]
@@ -1167,6 +1177,170 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      playbook_execution_queue: {
+        Row: {
+          created_at: string | null
+          executed_at: string | null
+          execution_id: string
+          id: string
+          last_error: string | null
+          max_retries: number
+          next_retry_at: string | null
+          node_data: Json
+          node_id: string
+          node_type: string
+          retry_count: number
+          scheduled_for: string
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          executed_at?: string | null
+          execution_id: string
+          id?: string
+          last_error?: string | null
+          max_retries?: number
+          next_retry_at?: string | null
+          node_data?: Json
+          node_id: string
+          node_type: string
+          retry_count?: number
+          scheduled_for: string
+          status?: string
+        }
+        Update: {
+          created_at?: string | null
+          executed_at?: string | null
+          execution_id?: string
+          id?: string
+          last_error?: string | null
+          max_retries?: number
+          next_retry_at?: string | null
+          node_data?: Json
+          node_id?: string
+          node_type?: string
+          retry_count?: number
+          scheduled_for?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playbook_execution_queue_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "playbook_executions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      playbook_executions: {
+        Row: {
+          completed_at: string | null
+          completion_reason: Json | null
+          contact_id: string
+          created_at: string | null
+          current_node_id: string | null
+          errors: Json | null
+          id: string
+          nodes_executed: Json | null
+          playbook_id: string
+          started_at: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          completion_reason?: Json | null
+          contact_id: string
+          created_at?: string | null
+          current_node_id?: string | null
+          errors?: Json | null
+          id?: string
+          nodes_executed?: Json | null
+          playbook_id: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          completion_reason?: Json | null
+          contact_id?: string
+          created_at?: string | null
+          current_node_id?: string | null
+          errors?: Json | null
+          id?: string
+          nodes_executed?: Json | null
+          playbook_id?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playbook_executions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playbook_executions_playbook_id_fkey"
+            columns: ["playbook_id"]
+            isOneToOne: false
+            referencedRelation: "onboarding_playbooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      playbook_goals: {
+        Row: {
+          contact_id: string
+          created_at: string | null
+          description: string | null
+          goal_conditions: Json | null
+          goal_type: string
+          id: string
+          is_active: boolean | null
+          playbook_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string | null
+          description?: string | null
+          goal_conditions?: Json | null
+          goal_type: string
+          id?: string
+          is_active?: boolean | null
+          playbook_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string | null
+          description?: string | null
+          goal_conditions?: Json | null
+          goal_type?: string
+          id?: string
+          is_active?: boolean | null
+          playbook_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playbook_goals_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playbook_goals_playbook_id_fkey"
+            columns: ["playbook_id"]
+            isOneToOne: false
+            referencedRelation: "onboarding_playbooks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {
