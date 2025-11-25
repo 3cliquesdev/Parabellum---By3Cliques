@@ -29,3 +29,6 @@ verify_jwt = true
 
 [functions.send-ticket-notification]
 verify_jwt = false
+
+[functions.analyze-ticket]
+verify_jwt = true

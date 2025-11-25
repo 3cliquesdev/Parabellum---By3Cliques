@@ -1,10 +1,14 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { SentimentBadge } from "@/components/SentimentBadge";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
+import { useSentimentAnalysis, type Sentiment } from "@/hooks/useSentimentAnalysis";
+import { useMessages } from "@/hooks/useMessages";
+import { useEffect, useState } from "react";
 
 type Contact = Tables<"contacts"> & {
   organizations: Tables<"organizations"> | null;
@@ -26,6 +30,89 @@ interface ConversationListProps {
   onSelectConversation: (conversation: Conversation) => void;
 }
 
+function ConversationItem({ 
+  conversation, 
+  isActive, 
+  onClick 
+}: { 
+  conversation: Conversation; 
+  isActive: boolean; 
+  onClick: () => void;
+}) {
+  const { data: messages } = useMessages(conversation.id);
+  const sentimentAnalysis = useSentimentAnalysis();
+  const [sentiment, setSentiment] = useState<Sentiment | null>(null);
+
+  useEffect(() => {
+    if (messages && messages.length > 0 && !sentiment) {
+      const customerMessages = messages
+        .filter(m => m.sender_type === 'contact')
+        .slice(-5);
+
+      if (customerMessages.length > 0) {
+        const formattedMessages = customerMessages.map(m => ({
+          content: m.content,
+          sender_type: m.sender_type as 'user' | 'contact'
+        }));
+
+        sentimentAnalysis.mutate(formattedMessages, {
+          onSuccess: (result) => setSentiment(result)
+        });
+      }
+    }
+  }, [messages, sentiment]);
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full p-4 flex items-start gap-3 hover:bg-accent transition-colors text-left",
+        isActive && "bg-accent"
+      )}
+    >
+      <Avatar className="h-12 w-12 bg-primary/10 flex items-center justify-center">
+        <span className="text-sm font-semibold text-primary">
+          {conversation.contacts.first_name[0]}
+          {conversation.contacts.last_name[0]}
+        </span>
+      </Avatar>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <p className="font-medium text-foreground truncate">
+            {conversation.contacts.first_name}{" "}
+            {conversation.contacts.last_name}
+          </p>
+          <span className="text-xs text-muted-foreground">
+            {formatDistanceToNow(new Date(conversation.last_message_at), {
+              addSuffix: true,
+              locale: ptBR,
+            })}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge
+            variant={conversation.channel === "whatsapp" ? "default" : "secondary"}
+            className="text-xs"
+          >
+            {conversation.channel}
+          </Badge>
+          {conversation.status === "open" && (
+            <Badge variant="outline" className="text-xs">
+              Aberta
+            </Badge>
+          )}
+          {sentiment && <SentimentBadge sentiment={sentiment} className="text-xs" />}
+          {conversation.assigned_user && (
+            <Badge variant="secondary" className="text-xs">
+              {conversation.assigned_user.full_name}
+            </Badge>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export default function ConversationList({
   conversations,
   activeConversationId,
@@ -44,53 +131,12 @@ export default function ConversationList({
         ) : (
           <div className="divide-y divide-border">
             {conversations.map((conversation) => (
-              <button
+              <ConversationItem
                 key={conversation.id}
+                conversation={conversation}
+                isActive={activeConversationId === conversation.id}
                 onClick={() => onSelectConversation(conversation)}
-                className={cn(
-                  "w-full p-4 flex items-start gap-3 hover:bg-accent transition-colors text-left",
-                  activeConversationId === conversation.id && "bg-accent"
-                )}
-              >
-                <Avatar className="h-12 w-12 bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-semibold text-primary">
-                    {conversation.contacts.first_name[0]}
-                    {conversation.contacts.last_name[0]}
-                  </span>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-medium text-foreground truncate">
-                      {conversation.contacts.first_name}{" "}
-                      {conversation.contacts.last_name}
-                    </p>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(conversation.last_message_at), {
-                        addSuffix: true,
-                        locale: ptBR,
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge
-                      variant={conversation.channel === "whatsapp" ? "default" : "secondary"}
-                      className="text-xs"
-                    >
-                      {conversation.channel}
-                    </Badge>
-                    {conversation.status === "open" && (
-                      <Badge variant="outline" className="text-xs">
-                        Aberta
-                      </Badge>
-                    )}
-                    {conversation.assigned_user && (
-                      <Badge variant="secondary" className="text-xs">
-                        {conversation.assigned_user.full_name}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </button>
+              />
             ))}
           </div>
         )}

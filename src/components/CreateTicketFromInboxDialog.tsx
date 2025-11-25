@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useGenerateTicketFromConversation } from "@/hooks/useGenerateTicketFromConversation";
 import { useUsers } from "@/hooks/useUsers";
 import { useMessages } from "@/hooks/useMessages";
-import { Clock, AlertCircle, MessageSquare, User, Tag, FileText, StickyNote } from "lucide-react";
+import { useAISummary } from "@/hooks/useAISummary";
+import { Clock, AlertCircle, MessageSquare, User, Tag, FileText, StickyNote, Sparkles } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -79,6 +80,7 @@ export function CreateTicketFromInboxDialog({
   const generateTicket = useGenerateTicketFromConversation();
   const { data: users } = useUsers();
   const { data: messages } = useMessages(conversationId);
+  const aiSummary = useAISummary();
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -100,6 +102,34 @@ export function CreateTicketFromInboxDialog({
 
   // Filter online/active users (in real scenario, you'd check actual status)
   const availableUsers = users?.filter(u => u.id) || [];
+
+  const handleAISummary = () => {
+    if (!messages || messages.length === 0) return;
+
+    const formattedMessages = messages.map(m => ({
+      content: m.content,
+      sender_type: m.sender_type as 'user' | 'contact'
+    }));
+
+    aiSummary.mutate(formattedMessages, {
+      onSuccess: (result) => {
+        // Extract category suggestion from AI response
+        const categoryMatch = result.match(/Categoria sugerida:\s*(\w+)/i);
+        if (categoryMatch) {
+          const suggestedCategory = categoryMatch[1].toLowerCase();
+          if (['financeiro', 'tecnico', 'bug', 'outro'].includes(suggestedCategory)) {
+            setCategory(suggestedCategory as any);
+          }
+        }
+
+        // Extract summary and set as description
+        const summaryMatch = result.match(/Resumo:([\s\S]*?)(?=Categoria sugerida:|$)/i);
+        if (summaryMatch) {
+          setDescription(summaryMatch[1].trim());
+        }
+      }
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,17 +265,30 @@ export function CreateTicketFromInboxDialog({
                 </Select>
               </div>
 
-              {/* Description */}
+              {/* Description with AI Summary */}
               <div className="col-span-2">
-                <Label htmlFor="description" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Descrição Adicional (Opcional)
-                </Label>
+                <div className="flex items-center justify-between mb-1">
+                  <Label htmlFor="description" className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Descrição Adicional (Opcional)
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAISummary}
+                    disabled={aiSummary.isPending || !messages || messages.length === 0}
+                    className="h-8"
+                  >
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    {aiSummary.isPending ? "Resumindo..." : "Resumir com AI"}
+                  </Button>
+                </div>
                 <Textarea
                   id="description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Adicione detalhes sobre o problema..."
+                  placeholder="Adicione detalhes sobre o problema ou clique em 'Resumir com AI'..."
                   rows={3}
                   className="mt-1 resize-none"
                 />

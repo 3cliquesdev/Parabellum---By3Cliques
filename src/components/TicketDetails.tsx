@@ -5,7 +5,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useUpdateTicket } from "@/hooks/useUpdateTicket";
 import { CustomerInfoCard } from "@/components/CustomerInfoCard";
 import { TicketChat } from "@/components/TicketChat";
-import { AlertCircle, Clock, CheckCircle, User } from "lucide-react";
+import { useSmartReply } from "@/hooks/useSmartReply";
+import { Textarea } from "@/components/ui/textarea";
+import { AlertCircle, Clock, CheckCircle, User, Sparkles, Copy } from "lucide-react";
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useUsers } from "@/hooks/useUsers";
@@ -47,6 +50,8 @@ const statusLabels = {
 export function TicketDetails({ ticket }: TicketDetailsProps) {
   const updateTicket = useUpdateTicket();
   const { data: users = [] } = useUsers();
+  const smartReply = useSmartReply();
+  const [suggestedReply, setSuggestedReply] = useState<string>("");
 
   const handleStatusChange = (status: string) => {
     updateTicket.mutate({
@@ -67,6 +72,21 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
       id: ticket.id,
       updates: { assigned_to: userId === 'unassigned' ? null : userId },
     });
+  };
+
+  const handleSmartReply = () => {
+    smartReply.mutate(
+      { description: ticket.description, subject: ticket.subject },
+      {
+        onSuccess: (reply) => {
+          setSuggestedReply(reply);
+        }
+      }
+    );
+  };
+
+  const handleCopyReply = () => {
+    navigator.clipboard.writeText(suggestedReply);
   };
 
   return (
@@ -145,6 +165,50 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {ticket.customer && <CustomerInfoCard customer={ticket.customer} />}
+        
+        {/* Smart Reply Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Sparkles className="h-4 w-4" />
+                Sugestão de Resposta AI
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSmartReply}
+                disabled={smartReply.isPending}
+              >
+                {smartReply.isPending ? "Gerando..." : "✨ Sugerir Resposta"}
+              </Button>
+            </div>
+          </CardHeader>
+          {suggestedReply && (
+            <CardContent>
+              <div className="relative">
+                <Textarea
+                  value={suggestedReply}
+                  onChange={(e) => setSuggestedReply(e.target.value)}
+                  rows={6}
+                  className="pr-10 bg-muted/50"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute top-2 right-2"
+                  onClick={handleCopyReply}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                💡 Revise e personalize a resposta antes de enviar ao cliente
+              </p>
+            </CardContent>
+          )}
+        </Card>
+
         <TicketChat ticketId={ticket.id} />
       </div>
     </div>
