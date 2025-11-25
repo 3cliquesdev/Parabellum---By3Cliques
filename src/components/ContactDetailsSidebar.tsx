@@ -9,6 +9,7 @@ import { useDeals } from "@/hooks/useDeals";
 import { useContactTickets } from "@/hooks/useContactTickets";
 import { useCustomerTimeline } from "@/hooks/useCustomerTimeline";
 import DealDialog from "./DealDialog";
+import { SLABadge } from "./SLABadge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
@@ -173,26 +174,28 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
                         key={ticket.id}
                         className="p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
                       >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-primary" />
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <FileText className="h-4 w-4 text-primary flex-shrink-0" />
                             <p className="text-sm font-medium text-foreground line-clamp-1">
                               {ticket.subject}
                             </p>
                           </div>
-                          <Badge {...getStatusBadge(ticket.status)} className="text-xs">
+                          <Badge {...getStatusBadge(ticket.status)} className="text-xs ml-2 flex-shrink-0">
                             {getStatusBadge(ticket.status).label}
                           </Badge>
                         </div>
                         
+                        {/* SLA Visual Alert */}
+                        <div className="mb-3">
+                          <SLABadge 
+                            dueDate={ticket.due_date} 
+                            priority={ticket.priority}
+                            size="sm"
+                          />
+                        </div>
+
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                          <AlertCircle className={`h-3 w-3 ${getPriorityColor(ticket.priority)}`} />
-                          <span className={getPriorityColor(ticket.priority)}>
-                            {ticket.priority === 'urgent' ? 'Urgente' :
-                             ticket.priority === 'high' ? 'Alta' :
-                             ticket.priority === 'medium' ? 'Média' : 'Baixa'}
-                          </span>
-                          <span>•</span>
                           <span>{format(new Date(ticket.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}</span>
                         </div>
 
@@ -205,15 +208,6 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
                             </Avatar>
                             <span className="text-xs text-muted-foreground">
                               {ticket.assigned_user.full_name}
-                            </span>
-                          </div>
-                        )}
-
-                        {ticket.due_date && (
-                          <div className="mt-2 flex items-center gap-1 text-xs">
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-muted-foreground">
-                              Vence: {format(new Date(ticket.due_date), "dd/MM 'às' HH:mm", { locale: ptBR })}
                             </span>
                           </div>
                         )}
