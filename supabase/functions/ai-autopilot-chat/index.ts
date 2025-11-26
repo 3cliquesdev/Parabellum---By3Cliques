@@ -163,6 +163,22 @@ serve(async (req) => {
       throw new Error('Nenhuma API key configurada (OPENAI_API_KEY ou LOVABLE_API_KEY)');
     }
     
+    // Helper: Fetch com timeout de 60 segundos
+    const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs = 60000) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      
+      try {
+        const response = await fetch(url, { 
+          ...options, 
+          signal: controller.signal 
+        });
+        return response;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
     // Helper: Chamar IA com fallback resiliente OpenAI → Lovable AI
     const callAIWithFallback = async (payload: any) => {
       // Tentar OpenAI primeiro (se disponível)
@@ -170,17 +186,17 @@ serve(async (req) => {
         try {
           console.log('[ai-autopilot-chat] Tentando OpenAI GPT-4o-mini...');
           
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${OPENAI_API_KEY}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ model: 'gpt-4o-mini', ...payload }),
-          });
+          }, 60000);
           
           if (response.ok) {
-            console.log('[ai-autopilot-chat] ✅ Usando OpenAI GPT-4o-mini');
+            console.log('[ai-autopilot-chat] ✅ Saldo OK - Resposta Gerada via OpenAI GPT-4o-mini');
             return await response.json();
           }
           
@@ -206,22 +222,29 @@ serve(async (req) => {
       
       console.log('[ai-autopilot-chat] Usando Lovable AI Gateway (Gemini 2.5 Flash)...');
       
-      const fallbackResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const fallbackResponse = await fetchWithTimeout('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${LOVABLE_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ model: 'google/gemini-2.5-flash', ...payload }),
-      });
+      }, 60000);
       
       if (!fallbackResponse.ok) {
         const errorText = await fallbackResponse.text();
         console.error('[ai-autopilot-chat] ❌ Lovable AI também falhou:', errorText);
+        
+        // Verificar se é erro de quota
+        if (fallbackResponse.status === 429) {
+          console.error('[ai-autopilot-chat] ❌ ERRO DE QUOTA em AMBOS providers!');
+          throw new Error('QUOTA_ERROR: Erro de Saldo/Cota na IA. Verifique o faturamento.');
+        }
+        
         throw new Error(`Lovable AI fallback failed: ${fallbackResponse.status}`);
       }
       
-      console.log('[ai-autopilot-chat] ✅ Resposta gerada via Lovable AI (Gemini 2.5 Flash)');
+      console.log('[ai-autopilot-chat] ✅ Saldo OK - Resposta Gerada via Lovable AI (Gemini 2.5 Flash)');
       return await fallbackResponse.json();
     }
     
@@ -432,8 +455,22 @@ Lembre-se de usar essas informações de forma natural e personalizada em suas r
 
   } catch (error) {
     console.error('[ai-autopilot-chat] Erro geral:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+    
+    // Detectar erro de quota e retornar mensagem específica
+    if (errorMessage.includes('QUOTA_ERROR') || errorMessage.includes('429')) {
+      return new Response(JSON.stringify({ 
+        error: 'Erro de Saldo/Cota na IA. Verifique o faturamento.',
+        code: 'QUOTA_EXCEEDED'
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Erro desconhecido' 
+      error: errorMessage
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
