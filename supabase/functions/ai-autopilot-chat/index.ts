@@ -148,12 +148,53 @@ serve(async (req) => {
       content: m.content
     })) || [];
 
+    // 4.5. Buscar artigos relevantes da Base de Conhecimento (RAG)
+    console.log('[ai-autopilot-chat] Buscando artigos relevantes na base de conhecimento...');
+    
+    // Extrair termos-chave da mensagem do cliente (removendo palavras comuns)
+    const stopWords = ['o', 'a', 'de', 'da', 'do', 'para', 'com', 'em', 'é', 'como', 'qual', 'onde', 'quando', 'por', 'que', 'quero', 'gostaria', 'pode', 'poderia'];
+    const searchTerms = customerMessage
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length > 3 && !stopWords.includes(word))
+      .slice(0, 3) // Pegar até 3 termos-chave
+      .join(' ');
+
+    let knowledgeContext = '';
+    
+    if (searchTerms.length > 0) {
+      // Buscar artigos publicados que contenham os termos na pergunta ou resposta
+      const { data: relevantArticles, error: articlesError } = await supabaseClient
+        .from('knowledge_articles')
+        .select('title, content')
+        .eq('is_published', true)
+        .or(`title.ilike.%${searchTerms}%,content.ilike.%${searchTerms}%`)
+        .limit(5);
+
+      if (articlesError) {
+        console.error('[ai-autopilot-chat] Erro ao buscar artigos:', articlesError);
+      }
+
+      if (relevantArticles && relevantArticles.length > 0) {
+        console.log(`[ai-autopilot-chat] ✅ ${relevantArticles.length} artigos relevantes encontrados`);
+        
+        knowledgeContext = `\n\n**📚 Base de Conhecimento Disponível:**\n${relevantArticles.map(a => 
+          `**${a.title}**\n${a.content}`
+        ).join('\n\n---\n\n')}
+
+**IMPORTANTE:** Use as informações acima da Base de Conhecimento para responder com precisão. Se a resposta estiver na base de conhecimento, responda baseado nela.`;
+      } else {
+        console.log('[ai-autopilot-chat] Nenhum artigo relevante encontrado');
+      }
+    }
+
     // 5. Preparar contexto do cliente para o system prompt
     const contactName = `${contact.first_name} ${contact.last_name}`.trim();
     const contactCompany = contact.company ? ` da empresa ${contact.company}` : '';
     const contactStatus = contact.status || 'lead';
     
     const contextualizedSystemPrompt = `${persona.system_prompt}
+${knowledgeContext}
 
 **Contexto do Cliente:**
 - Nome: ${contactName}${contactCompany}
