@@ -151,24 +151,43 @@ serve(async (req) => {
     // 4.5. Buscar artigos relevantes da Base de Conhecimento (RAG)
     console.log('[ai-autopilot-chat] Buscando artigos relevantes na base de conhecimento...');
     
+    // Função para remover acentos e normalizar texto
+    const removeAccents = (str: string) => 
+      str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    
     // Extrair termos-chave da mensagem do cliente (removendo palavras comuns)
-    const stopWords = ['o', 'a', 'de', 'da', 'do', 'para', 'com', 'em', 'é', 'como', 'qual', 'onde', 'quando', 'por', 'que', 'quero', 'gostaria', 'pode', 'poderia'];
-    const searchTerms = customerMessage
+    const stopWords = ['o', 'a', 'de', 'da', 'do', 'para', 'com', 'em', 'e', 'ou', 'é', 'como', 'qual', 'onde', 'quando', 'por', 'que', 'quero', 'gostaria', 'pode', 'poderia', 'não', 'nao'];
+    
+    const words = customerMessage
       .toLowerCase()
       .split(/\s+/)
-      .filter(word => word.length > 3 && !stopWords.includes(word))
-      .slice(0, 3) // Pegar até 3 termos-chave
-      .join(' ');
+      .filter(word => word.length > 1 && !stopWords.includes(word)) // Manter números como "50"
+      .slice(0, 5); // Pegar até 5 termos-chave
+    
+    console.log('[ai-autopilot-chat] Termos de busca extraídos:', words);
 
     let knowledgeContext = '';
     
-    if (searchTerms.length > 0) {
-      // Buscar artigos publicados que contenham os termos na pergunta ou resposta
+    if (words.length > 0) {
+      // Criar termos de busca com e sem acentos
+      const searchTerms = words.flatMap(word => [
+        word,
+        removeAccents(word)
+      ]).filter((v, i, a) => a.indexOf(v) === i); // Remover duplicatas
+      
+      console.log('[ai-autopilot-chat] Termos normalizados:', searchTerms);
+      
+      // Construir busca OR para cada termo (title OU content)
+      const orConditions = searchTerms.map(term => 
+        `title.ilike.%${term}%,content.ilike.%${term}%`
+      ).join(',');
+      
+      // Buscar artigos publicados que contenham qualquer um dos termos
       const { data: relevantArticles, error: articlesError } = await supabaseClient
         .from('knowledge_articles')
         .select('title, content')
         .eq('is_published', true)
-        .or(`title.ilike.%${searchTerms}%,content.ilike.%${searchTerms}%`)
+        .or(orConditions)
         .limit(5);
 
       if (articlesError) {
@@ -176,7 +195,8 @@ serve(async (req) => {
       }
 
       if (relevantArticles && relevantArticles.length > 0) {
-        console.log(`[ai-autopilot-chat] ✅ ${relevantArticles.length} artigos relevantes encontrados`);
+        console.log(`[ai-autopilot-chat] ✅ ${relevantArticles.length} artigos relevantes encontrados:`, 
+          relevantArticles.map(a => a.title));
         
         knowledgeContext = `\n\n**📚 Base de Conhecimento Disponível:**\n${relevantArticles.map(a => 
           `**${a.title}**\n${a.content}`
@@ -184,7 +204,7 @@ serve(async (req) => {
 
 **IMPORTANTE:** Use as informações acima da Base de Conhecimento para responder com precisão. Se a resposta estiver na base de conhecimento, responda baseado nela.`;
       } else {
-        console.log('[ai-autopilot-chat] Nenhum artigo relevante encontrado');
+        console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo relevante encontrado para os termos:', searchTerms);
       }
     }
 
