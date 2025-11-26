@@ -127,28 +127,19 @@ serve(async (req) => {
         is_returning_customer: !isNewContact,
         previous_interactions_count: previousInteractionsCount,
       });
-    } else if (!finalContactId) {
-      // Fallback: criar contato provisório (guest) - backward compatibility
-      const { data: contact, error: contactError } = await supabase
-        .from('contacts')
-        .insert({
-          first_name: 'Visitante',
-          last_name: `#${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-          email: `guest-${Date.now()}@temp.com`,
-          source: 'chat_widget',
-        })
-        .select()
-        .single();
-
-      if (contactError || !contact) {
-        console.error('[create-public-conversation] Error creating contact:', contactError);
-        return new Response(
-          JSON.stringify({ success: false, error: 'Erro ao criar contato' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
-      }
-      
-      finalContactId = contact.id;
+    } else if (!finalContactId && !customer_data?.email) {
+      // BLOQUEIO: Não permitir conversas anônimas - Email é obrigatório
+      console.error('[create-public-conversation] BLOCKED: No contact_id or email provided');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Identificação obrigatória. Por favor, informe seu e-mail para iniciar o chat.' 
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
     // NUCLEAR FIX: Usar RPC atômica para Get or Create (com reabertura automática)

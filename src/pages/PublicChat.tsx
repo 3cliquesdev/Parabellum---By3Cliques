@@ -161,7 +161,16 @@ export default function PublicChat() {
   };
 
   const handleCreateConversation = async (departmentId: string, departmentName: string) => {
-    if (!storedIdentity) return;
+    // Validação: Identidade é obrigatória
+    if (!storedIdentity || !storedIdentity.email) {
+      toast({
+        title: "Identificação necessária",
+        description: "Por favor, complete o formulário de identificação antes de iniciar o chat.",
+        variant: "destructive",
+      });
+      setIsIdentified(false);
+      return;
+    }
 
     try {
       setIsCreating(true);
