@@ -28,6 +28,7 @@ interface Contact {
   id: string;
   first_name: string;
   last_name: string;
+  email: string; // ADICIONADO: Email necessário
   avatar_url: string | null;
   assigned_to: string | null;
   consultant_id: string | null;
@@ -72,13 +73,29 @@ export default function PublicChat() {
 
   // Auto-roteamento quando departamento está definido
   useEffect(() => {
-    if (!isIdentified || !storedIdentity || !autoRouteDepartment) return;
+    console.log('[PublicChat] Auto-route check:', { 
+      isIdentified, 
+      hasStoredIdentity: !!storedIdentity, 
+      autoRouteDepartment,
+      activeDepartmentsCount: activeDepartments.length,
+      isCreating 
+    });
+
+    if (!isIdentified || !storedIdentity || !autoRouteDepartment) {
+      console.log('[PublicChat] Auto-route blocked - missing requirements');
+      return;
+    }
     
     if (activeDepartments.length > 0 && !isCreating) {
       const dept = activeDepartments.find(d => d.id === autoRouteDepartment);
+      console.log('[PublicChat] Found department for auto-route:', dept?.name);
       if (dept) {
         handleCreateConversation(dept.id, dept.name);
+      } else {
+        console.error('[PublicChat] Department not found:', autoRouteDepartment);
       }
+    } else {
+      console.log('[PublicChat] Auto-route waiting - departments not ready or already creating');
     }
   }, [autoRouteDepartment, activeDepartments, isIdentified, storedIdentity]);
 
@@ -98,12 +115,18 @@ export default function PublicChat() {
 
   const handleExistingCustomerVerified = async (contact: Contact, departmentId: string, sessionVerified: boolean = true) => {
     try {
+      console.log('[PublicChat] handleExistingCustomerVerified called:', { 
+        contactId: contact.id, 
+        departmentId,
+        sessionVerified 
+      });
+
       // Cliente verificado (ou não verificado) - salvar identidade e rotear automaticamente
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + IDENTITY_EXPIRES_DAYS);
 
       const identity: StoredIdentity = {
-        email: contact.id, // Usaremos o ID como referência
+        email: contact.email, // CORRIGIDO: Usar o email real do contato
         first_name: contact.first_name,
         last_name: contact.last_name,
         identified_at: new Date().toISOString(),
@@ -116,6 +139,8 @@ export default function PublicChat() {
       setStoredIdentity(identity);
       setIsIdentified(true);
       setAutoRouteDepartment(departmentId); // Rotear automaticamente
+
+      console.log('[PublicChat] Identity saved, will auto-route to:', departmentId);
 
     } catch (error: any) {
       console.error('[PublicChat] Erro ao processar cliente existente:', error);
@@ -161,8 +186,11 @@ export default function PublicChat() {
   };
 
   const handleCreateConversation = async (departmentId: string, departmentName: string) => {
+    console.log('[PublicChat] handleCreateConversation called:', { departmentId, departmentName });
+
     // Validação: Identidade é obrigatória
     if (!storedIdentity || !storedIdentity.email) {
+      console.error('[PublicChat] No stored identity found');
       toast({
         title: "Identificação necessária",
         description: "Por favor, complete o formulário de identificação antes de iniciar o chat.",
@@ -174,6 +202,7 @@ export default function PublicChat() {
 
     try {
       setIsCreating(true);
+      console.log('[PublicChat] Creating conversation with identity:', storedIdentity);
 
       // Upsert do contato
       let contactId = storedIdentity.contact_id;

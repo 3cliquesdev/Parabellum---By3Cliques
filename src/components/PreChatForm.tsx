@@ -32,6 +32,7 @@ interface Contact {
   id: string;
   first_name: string;
   last_name: string;
+  email: string; // ADICIONADO: Email necessário
   avatar_url: string | null;
   assigned_to: string | null;
   consultant_id: string | null;

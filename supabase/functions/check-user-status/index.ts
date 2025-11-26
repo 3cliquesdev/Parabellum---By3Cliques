@@ -41,7 +41,7 @@ serve(async (req) => {
     // Buscar contato pelo email
     const { data: contact, error } = await supabase
       .from('contacts')
-      .select('id, first_name, last_name, avatar_url, assigned_to, consultant_id, status')
+      .select('id, first_name, last_name, email, avatar_url, assigned_to, consultant_id, status')
       .eq('email', email)
       .single();
 
@@ -84,6 +84,7 @@ serve(async (req) => {
           id: contact.id,
           first_name: contact.first_name,
           last_name: contact.last_name,
+          email: contact.email, // ADICIONADO: Email necessário para identity
           avatar_url: contact.avatar_url,
           assigned_to: contact.assigned_to,
           consultant_id: contact.consultant_id,
