@@ -31,7 +31,15 @@ export default function KnowledgeImport() {
 
   const importMutation = useImportKnowledge();
 
-  // Permission check moved to render section for better control
+  // Debug: Log role status
+  useEffect(() => {
+    console.log('[KnowledgeImport] Role check:', { 
+      roleLoading, 
+      isAdmin, 
+      isManager,
+      hasAccess: isAdmin || isManager 
+    });
+  }, [roleLoading, isAdmin, isManager]);
 
   // Auto-detect column mapping (only if user hasn't manually mapped)
   useEffect(() => {
