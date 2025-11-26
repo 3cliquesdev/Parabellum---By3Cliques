@@ -4,11 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, Phone, Building2, Plus, FileText, Clock, AlertCircle, TrendingUp, Ticket } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useContactTickets } from "@/hooks/useContactTickets";
-import { useCustomerTimeline } from "@/hooks/useCustomerTimeline";
+import { useUnifiedTimeline } from "@/hooks/useUnifiedTimeline";
 import DealDialog from "./DealDialog";
 import { SLABadge } from "./SLABadge";
 import { format } from "date-fns";
@@ -51,7 +52,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   });
 
   const { data: contactTickets = [] } = useContactTickets(contactId);
-  const { data: timeline = [] } = useCustomerTimeline(contactId);
+  const { data: unifiedTimeline = [] } = useUnifiedTimeline(contactId);
   
   if (!conversation) {
     return (
@@ -66,7 +67,11 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   const contact = conversation.contacts;
 
   const openTickets = contactTickets.filter(t => t.status !== 'closed' && t.status !== 'resolved');
-  const recentInteractions = timeline.slice(0, 5);
+  const recentTimeline = unifiedTimeline.slice(0, 10);
+  
+  // Verificar se sessão está verificada
+  const metadata = conversation.customer_metadata as any;
+  const isSessionVerified = metadata?.session_verified ?? true;
 
   const getPriorityColor = (priority: string) => {
     switch(priority) {
@@ -121,6 +126,16 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
               </div>
             )}
           </div>
+
+          {/* Badge de Sessão Não Verificada */}
+          {!isSessionVerified && (
+            <Alert variant="default" className="mt-3 border-yellow-600 bg-yellow-50 dark:bg-yellow-950/20">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-xs text-yellow-700 dark:text-yellow-400">
+                ⚠️ Sessão não verificada - não compartilhe dados sensíveis como senhas ou dados bancários
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -305,35 +320,36 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
                 )}
               </TabsContent>
 
-              {/* Timeline Tab */}
+              {/* Timeline Tab - Unified Timeline */}
               <TabsContent value="timeline" className="mt-4 space-y-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-medium text-muted-foreground uppercase">
-                    Últimas Interações
+                    Histórico Unificado
                   </p>
                 </div>
-                {recentInteractions.length > 0 ? (
+                {recentTimeline.length > 0 ? (
                   <div className="space-y-3">
-                    {recentInteractions.map((interaction) => (
+                    {recentTimeline.map((event) => (
                       <div
-                        key={interaction.id}
+                        key={event.id}
                         className="p-3 rounded-lg border-l-2 border-primary/30 bg-muted/50"
                       >
-                        <p className="text-xs font-medium text-foreground mb-1">
-                          {interaction.type.replace(/_/g, ' ')}
+                        <p className="text-xs font-medium text-foreground mb-1 flex items-center gap-1">
+                          <span>{event.icon}</span>
+                          <span>{event.title}</span>
                         </p>
                         <p className="text-xs text-muted-foreground line-clamp-2 mb-1">
-                          {interaction.content}
+                          {event.description}
                         </p>
                         <span className="text-xs text-muted-foreground">
-                          {format(new Date(interaction.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                          {format(new Date(event.date), "dd/MM 'às' HH:mm", { locale: ptBR })}
                         </span>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    Nenhuma interação registrada
+                    Nenhum histórico registrado
                   </p>
                 )}
               </TabsContent>

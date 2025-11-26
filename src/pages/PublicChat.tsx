@@ -21,6 +21,7 @@ interface StoredIdentity {
   identified_at: string;
   expires_at: string;
   contact_id?: string;
+  sessionVerified?: boolean;
 }
 
 interface Contact {
@@ -95,9 +96,9 @@ export default function PublicChat() {
     }
   }, [deptParam, activeDepartments, isIdentified, storedIdentity]);
 
-  const handleExistingCustomerVerified = async (contact: Contact, departmentId: string) => {
+  const handleExistingCustomerVerified = async (contact: Contact, departmentId: string, sessionVerified: boolean = true) => {
     try {
-      // Cliente verificado via OTP - salvar identidade e rotear automaticamente
+      // Cliente verificado (ou não verificado) - salvar identidade e rotear automaticamente
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + IDENTITY_EXPIRES_DAYS);
 
@@ -108,6 +109,7 @@ export default function PublicChat() {
         identified_at: new Date().toISOString(),
         expires_at: expiresAt.toISOString(),
         contact_id: contact.id,
+        sessionVerified, // Flag de verificação
       };
 
       localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(identity));
@@ -195,6 +197,7 @@ export default function PublicChat() {
             phone: storedIdentity.phone,
             company: storedIdentity.company,
           },
+          session_verified: storedIdentity.sessionVerified ?? true,
         },
       });
 

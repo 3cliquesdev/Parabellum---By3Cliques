@@ -17,7 +17,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { department_id, contact_id, customer_data } = await req.json();
+    const { department_id, contact_id, customer_data, session_verified } = await req.json();
 
     // FASE 4: Rate Limiting por IP (10 conversas por minuto por IP anônimo)
     const ip = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'unknown';
@@ -70,7 +70,10 @@ serve(async (req) => {
       is_returning_customer?: boolean;
       previous_interactions_count?: number;
       identified_at?: string;
-    } = {};
+      session_verified?: boolean;
+    } = {
+      session_verified: session_verified ?? true,
+    };
     
     // FASE 2: Identity Resolution
     // Se customer_data foi fornecido, fazer upsert do contato
@@ -116,6 +119,7 @@ serve(async (req) => {
         is_returning_customer: !isNewContact,
         previous_interactions_count: previousInteractionsCount,
         identified_at: new Date().toISOString(),
+        session_verified: session_verified ?? true,
       };
 
       console.log('[create-public-conversation] Identity resolved:', {
