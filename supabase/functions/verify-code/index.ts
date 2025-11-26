@@ -24,7 +24,7 @@ serve(async (req) => {
         success: false,
         error: 'Email e código são obrigatórios' 
       }), {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -69,7 +69,7 @@ serve(async (req) => {
           success: false,
           error: 'Nenhum código encontrado para este e-mail' 
         }), {
-          status: 404,
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -82,7 +82,7 @@ serve(async (req) => {
           success: false,
           error: 'Este código já foi utilizado. Solicite um novo código.' 
         }), {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -92,7 +92,7 @@ serve(async (req) => {
           success: false,
           error: 'Código expirado. Solicite um novo.' 
         }), {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -102,7 +102,7 @@ serve(async (req) => {
           success: false,
           error: 'Máximo de tentativas excedido. Solicite um novo código.' 
         }), {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -112,7 +112,7 @@ serve(async (req) => {
         success: false,
         error: 'Código incorreto. Verifique e tente novamente.' 
       }), {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -138,6 +138,7 @@ serve(async (req) => {
       success: true,
       contact_id: contact?.id || null
     }), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
