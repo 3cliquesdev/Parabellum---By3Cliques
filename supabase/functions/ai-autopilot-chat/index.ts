@@ -155,32 +155,60 @@ serve(async (req) => {
     const removeAccents = (str: string) => 
       str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     
-    // Extrair termos-chave da mensagem do cliente (removendo palavras comuns)
-    const stopWords = [
-      // Artigos
-      'o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas',
-      // Preposições
-      'de', 'da', 'do', 'das', 'dos', 'para', 'com', 'em', 'na', 'no', 'nas', 'nos', 'ao', 'aos',
-      // Pronomes
-      'eu', 'meu', 'minha', 'meus', 'minhas', 'seu', 'sua', 'seus', 'suas', 'me', 'te', 'se',
-      // Conjunções
-      'e', 'ou', 'mas', 'porem', 'porém',
-      // Verbos comuns
-      'é', 'ser', 'estar', 'ter', 'fazer', 'quero', 'gostaria', 'pode', 'poderia', 'devo', 'preciso',
-      // Interrogativos
-      'como', 'qual', 'quais', 'onde', 'quando', 'por', 'que', 'porque', 'pq',
-      // Outros
-      'não', 'nao', 'sim'
-    ];
+    // Obter API key antecipadamente
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY não configurada');
+    }
     
-    const words = customerMessage
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(word => word.length > 1 && !stopWords.includes(word)) // Manter números como "50"
-      .sort((a, b) => b.length - a.length) // Priorizar termos mais longos (mais específicos)
-      .slice(0, 5); // Pegar até 5 termos-chave
+    // Extrair termos-chave usando LLM (Smart Extraction)
+    let words: string[] = [];
     
-    console.log('[ai-autopilot-chat] Termos de busca extraídos:', words);
+    try {
+      console.log('[ai-autopilot-chat] Usando LLM para extrair palavras-chave...');
+      
+      const keywordExtractionResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-5-mini',
+          messages: [
+            { 
+              role: 'system', 
+              content: 'Você é um extrator de palavras-chave para busca em banco de dados (Full Text Search). Receba a frase do usuário, remova stop words (artigos, pronomes, saudações) e retorne APENAS os substantivos e verbos principais separados por espaço. Se houver sinônimos óbvios, inclua-os. Exemplo: "Qual endereço para devoluções" → "endereço devoluções devolução remetente"'
+            },
+            { 
+              role: 'user', 
+              content: customerMessage 
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 50
+        }),
+      });
+
+      if (keywordExtractionResponse.ok) {
+        const keywordData = await keywordExtractionResponse.json();
+        const extractedKeywords = keywordData.choices?.[0]?.message?.content?.trim() || '';
+        words = extractedKeywords.toLowerCase().split(/\s+/).filter((w: string) => w.length > 1);
+        console.log('[ai-autopilot-chat] Palavras-chave extraídas via LLM:', words);
+      } else {
+        console.warn('[ai-autopilot-chat] Falha na extração LLM, usando fallback manual');
+        throw new Error('LLM extraction failed');
+      }
+    } catch (error) {
+      console.error('[ai-autopilot-chat] Erro na extração LLM, usando fallback:', error);
+      // Fallback: extração manual simples
+      words = customerMessage
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(word => word.length > 3)
+        .slice(0, 5);
+      console.log('[ai-autopilot-chat] Termos fallback:', words);
+    }
 
     let knowledgeContext = '';
     
@@ -244,10 +272,7 @@ Lembre-se de usar essas informações de forma natural e personalizada em suas r
     // 6. Chamar Lovable AI com persona e tools
     console.log('[ai-autopilot-chat] Chamando Lovable AI...');
     
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY não configurada');
-    }
+    // API key já obtida anteriormente
 
     const aiPayload: any = {
       model: 'google/gemini-2.5-flash',
