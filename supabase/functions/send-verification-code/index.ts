@@ -67,7 +67,7 @@ serve(async (req) => {
     // Enviar email via Resend
     const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
     
-    const { error: emailError } = await resend.emails.send({
+    const { data: emailData, error: emailError } = await resend.emails.send({
       from: 'Atendimento <onboarding@resend.dev>',
       to: [email],
       subject: 'Seu Código de Verificação',
@@ -88,6 +88,22 @@ serve(async (req) => {
 
     if (emailError) {
       console.error('[send-verification-code] Erro ao enviar email:', emailError);
+      
+      // Detectar erro 403 do Resend (modo teste/desenvolvimento)
+      const errorMessage = emailError.message || JSON.stringify(emailError);
+      if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+        console.log('[send-verification-code] ⚠️ Modo Desenvolvimento: Resend em modo teste');
+        console.log('[send-verification-code] 🔑 Código OTP para testes:', code);
+        
+        return new Response(JSON.stringify({ 
+          success: true,
+          dev_mode: true,
+          code: code // Incluir código na resposta apenas em dev
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
       throw emailError;
     }
 

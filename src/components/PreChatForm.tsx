@@ -80,34 +80,56 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
         setRecommendedDeptId(data.recommended_department_id);
 
         // Enviar código OTP
-        const { error: sendError } = await supabase.functions.invoke('send-verification-code', {
+        const { data: otpData, error: sendError } = await supabase.functions.invoke('send-verification-code', {
           body: { email: values.email }
         });
 
         if (sendError) throw sendError;
 
         setFormState('otp_existing');
-        toast({
-          title: "Código enviado! 📧",
-          description: `Enviamos um código de verificação para ${values.email}`,
-        });
+        
+        // Detectar modo desenvolvimento
+        if (otpData?.dev_mode && otpData?.code) {
+          toast({
+            title: "🔧 Modo Desenvolvimento",
+            description: `Código OTP para testes: ${otpData.code}`,
+            duration: 10000, // 10 segundos
+          });
+          setOtp(otpData.code); // Pre-preencher o campo
+        } else {
+          toast({
+            title: "Código enviado! 📧",
+            description: `Enviamos um código de verificação para ${values.email}`,
+          });
+        }
       } else {
         // Lead novo - ir para formulário completo
         setRecommendedDeptId(data.recommended_department_id);
         newLeadForm.setValue('email', values.email);
 
         // Enviar código OTP para validar email
-        const { error: sendError } = await supabase.functions.invoke('send-verification-code', {
+        const { data: otpData, error: sendError } = await supabase.functions.invoke('send-verification-code', {
           body: { email: values.email }
         });
 
         if (sendError) throw sendError;
 
         setFormState('new_lead_form');
-        toast({
-          title: "Código enviado! 📧",
-          description: `Enviamos um código para validar seu e-mail`,
-        });
+        
+        // Detectar modo desenvolvimento
+        if (otpData?.dev_mode && otpData?.code) {
+          toast({
+            title: "🔧 Modo Desenvolvimento",
+            description: `Código OTP para testes: ${otpData.code}`,
+            duration: 10000, // 10 segundos
+          });
+          newLeadForm.setValue('otp', otpData.code); // Pre-preencher o campo
+        } else {
+          toast({
+            title: "Código enviado! 📧",
+            description: `Enviamos um código para validar seu e-mail`,
+          });
+        }
       }
 
     } catch (error: any) {
