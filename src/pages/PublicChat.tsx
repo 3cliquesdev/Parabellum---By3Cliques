@@ -7,7 +7,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUpsertContact } from "@/hooks/useUpsertContact";
 import { PreChatForm } from "@/components/PreChatForm";
-import { OTPVerificationModal } from "@/components/OTPVerificationModal";
 import { MessageSquare, Loader2 } from "lucide-react";
 
 const IDENTITY_STORAGE_KEY = "public_chat_identity";
@@ -24,6 +23,16 @@ interface StoredIdentity {
   contact_id?: string;
 }
 
+interface Contact {
+  id: string;
+  first_name: string;
+  last_name: string;
+  avatar_url: string | null;
+  assigned_to: string | null;
+  consultant_id: string | null;
+  status: string;
+}
+
 export default function PublicChat() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -34,9 +43,7 @@ export default function PublicChat() {
   const upsertContact = useUpsertContact();
   const [isIdentified, setIsIdentified] = useState(false);
   const [storedIdentity, setStoredIdentity] = useState<StoredIdentity | null>(null);
-  const [showOTPModal, setShowOTPModal] = useState(false);
-  const [pendingEmail, setPendingEmail] = useState("");
-  const [pendingFormData, setPendingFormData] = useState<any>(null);
+  const [autoRouteDepartment, setAutoRouteDepartment] = useState<string | null>(null);
 
   const activeDepartments = departments?.filter((d) => d.is_active) || [];
 
@@ -53,7 +60,6 @@ export default function PublicChat() {
           setStoredIdentity(identity);
           setIsIdentified(true);
         } else {
-          // Identidade expirada, remover
           localStorage.removeItem(IDENTITY_STORAGE_KEY);
         }
       } catch (error) {
@@ -63,7 +69,19 @@ export default function PublicChat() {
     }
   }, []);
 
-  // Detectar parâmetro de departamento na URL e iniciar conversa automaticamente
+  // Auto-roteamento quando departamento está definido
+  useEffect(() => {
+    if (!isIdentified || !storedIdentity || !autoRouteDepartment) return;
+    
+    if (activeDepartments.length > 0 && !isCreating) {
+      const dept = activeDepartments.find(d => d.id === autoRouteDepartment);
+      if (dept) {
+        handleCreateConversation(dept.id, dept.name);
+      }
+    }
+  }, [autoRouteDepartment, activeDepartments, isIdentified, storedIdentity]);
+
+  // Detectar parâmetro de departamento na URL
   useEffect(() => {
     if (!isIdentified || !storedIdentity) return;
     
@@ -77,45 +95,28 @@ export default function PublicChat() {
     }
   }, [deptParam, activeDepartments, isIdentified, storedIdentity]);
 
-  const handlePreChatSubmit = async (formData: any) => {
+  const handleExistingCustomerVerified = async (contact: Contact, departmentId: string) => {
     try {
-      // FASE 3: Verificar se email já existe
-      const { data: existingContact } = await supabase
-        .from('contacts')
-        .select('id, email')
-        .eq('email', formData.email)
-        .single();
+      // Cliente verificado via OTP - salvar identidade e rotear automaticamente
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + IDENTITY_EXPIRES_DAYS);
 
-      if (existingContact) {
-        // Email já existe - solicitar OTP
-        console.log('[PublicChat] Email existente detectado, iniciando OTP');
-        setPendingEmail(formData.email);
-        setPendingFormData(formData);
-        
-        // Enviar código de verificação
-        const { error: sendError } = await supabase.functions.invoke('send-verification-code', {
-          body: { email: formData.email }
-        });
+      const identity: StoredIdentity = {
+        email: contact.id, // Usaremos o ID como referência
+        first_name: contact.first_name,
+        last_name: contact.last_name,
+        identified_at: new Date().toISOString(),
+        expires_at: expiresAt.toISOString(),
+        contact_id: contact.id,
+      };
 
-        if (sendError) {
-          console.error('[PublicChat] Erro ao enviar código:', sendError);
-          toast({
-            title: "Erro ao enviar código",
-            description: sendError.message,
-            variant: "destructive",
-          });
-          return;
-        }
-
-        setShowOTPModal(true);
-        return;
-      }
-
-      // Email novo - continuar normalmente
-      await proceedWithIdentity(formData, null);
+      localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(identity));
+      setStoredIdentity(identity);
+      setIsIdentified(true);
+      setAutoRouteDepartment(departmentId); // Rotear automaticamente
 
     } catch (error: any) {
-      console.error('[PublicChat] Erro no pré-chat:', error);
+      console.error('[PublicChat] Erro ao processar cliente existente:', error);
       toast({
         title: "Erro",
         description: error.message,
@@ -124,59 +125,36 @@ export default function PublicChat() {
     }
   };
 
-  const handleOTPVerified = async (contactId: string) => {
-    if (!pendingFormData) return;
-    
-    setShowOTPModal(false);
-    await proceedWithIdentity(pendingFormData, contactId);
-  };
-
-  const handleOTPCancel = async () => {
-    setShowOTPModal(false);
-    
-    if (!pendingFormData) return;
-
-    // Criar nova conversa sem histórico (como visitante não verificado)
-    await proceedWithIdentity(pendingFormData, null);
-  };
-
-  const proceedWithIdentity = async (formData: any, verifiedContactId: string | null) => {
+  const handleNewLeadCreated = async (
+    data: { email: string; first_name: string; last_name: string; phone?: string },
+    departmentId: string
+  ) => {
     try {
-      setIsCreating(true);
-
-      // Salvar identidade no localStorage
+      // Lead novo - salvar identidade e rotear automaticamente
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + IDENTITY_EXPIRES_DAYS);
 
       const identity: StoredIdentity = {
-        email: formData.email,
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        company: formData.company,
-        phone: formData.phone,
+        email: data.email,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        phone: data.phone,
         identified_at: new Date().toISOString(),
         expires_at: expiresAt.toISOString(),
-        contact_id: verifiedContactId || undefined,
       };
 
       localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(identity));
       setStoredIdentity(identity);
       setIsIdentified(true);
-
-      toast({
-        title: "Bem-vindo! 👋",
-        description: `Olá, ${formData.first_name}! Suas informações foram salvas.`,
-      });
+      setAutoRouteDepartment(departmentId); // Rotear automaticamente
 
     } catch (error: any) {
-      console.error('[PublicChat] Erro ao processar identidade:', error);
+      console.error('[PublicChat] Erro ao processar novo lead:', error);
       toast({
         title: "Erro",
         description: error.message,
         variant: "destructive",
       });
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -200,7 +178,6 @@ export default function PublicChat() {
         });
         contactId = result.contact_id;
 
-        // Atualizar identidade armazenada com contact_id
         const updatedIdentity = { ...storedIdentity, contact_id: contactId };
         localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(updatedIdentity));
         setStoredIdentity(updatedIdentity);
@@ -251,7 +228,7 @@ export default function PublicChat() {
     }
   };
 
-  // Mostrar loading enquanto verifica localStorage
+  // Loading inicial
   if (!isIdentified && isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -260,18 +237,23 @@ export default function PublicChat() {
     );
   }
 
-  // Mostrar PreChat Form se não identificado
+  // PreChat Form Progressivo (se não identificado)
   if (!isIdentified) {
     return (
-      <>
-        <PreChatForm onSubmit={handlePreChatSubmit} isLoading={isCreating} />
-        <OTPVerificationModal 
-          open={showOTPModal}
-          email={pendingEmail}
-          onVerified={handleOTPVerified}
-          onCancel={handleOTPCancel}
-        />
-      </>
+      <PreChatForm
+        onExistingCustomerVerified={handleExistingCustomerVerified}
+        onNewLeadCreated={handleNewLeadCreated}
+        isLoading={isCreating}
+      />
+    );
+  }
+
+  // Skip concierge se auto-roteamento ativo
+  if (autoRouteDepartment) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
     );
   }
 
