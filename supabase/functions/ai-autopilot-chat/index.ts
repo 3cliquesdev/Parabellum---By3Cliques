@@ -155,59 +155,109 @@ serve(async (req) => {
     const removeAccents = (str: string) => 
       str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     
-    // Obter API key antecipadamente
+    // Obter API keys antecipadamente
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY não configurada');
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    
+    if (!OPENAI_API_KEY && !LOVABLE_API_KEY) {
+      throw new Error('Nenhuma API key configurada (OPENAI_API_KEY ou LOVABLE_API_KEY)');
     }
     
-    // Extrair termos-chave usando OpenAI GPT-4o-mini (Smart Extraction)
+    // Helper: Chamar IA com fallback resiliente OpenAI → Lovable AI
+    const callAIWithFallback = async (payload: any) => {
+      // Tentar OpenAI primeiro (se disponível)
+      if (OPENAI_API_KEY) {
+        try {
+          console.log('[ai-autopilot-chat] Tentando OpenAI GPT-4o-mini...');
+          
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ model: 'gpt-4o-mini', ...payload }),
+          });
+          
+          if (response.ok) {
+            console.log('[ai-autopilot-chat] ✅ Usando OpenAI GPT-4o-mini');
+            return await response.json();
+          }
+          
+          // Se erro 429 (quota) ou 401 (auth), fallback para Lovable AI
+          if (response.status === 429 || response.status === 401) {
+            const errorText = await response.text();
+            console.warn(`[ai-autopilot-chat] ⚠️ OpenAI falhou (${response.status}): ${errorText}`);
+            console.log('[ai-autopilot-chat] Fallback para Lovable AI...');
+            throw new Error('OpenAI unavailable');
+          }
+          
+          throw new Error(`OpenAI error: ${response.status}`);
+        } catch (error) {
+          console.warn('[ai-autopilot-chat] OpenAI indisponível, tentando Lovable AI fallback...');
+          // Continue para o fallback abaixo
+        }
+      }
+      
+      // Fallback para Lovable AI Gateway
+      if (!LOVABLE_API_KEY) {
+        throw new Error('Lovable AI também não configurada');
+      }
+      
+      console.log('[ai-autopilot-chat] Usando Lovable AI Gateway (Gemini 2.5 Flash)...');
+      
+      const fallbackResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: 'google/gemini-2.5-flash', ...payload }),
+      });
+      
+      if (!fallbackResponse.ok) {
+        const errorText = await fallbackResponse.text();
+        console.error('[ai-autopilot-chat] ❌ Lovable AI também falhou:', errorText);
+        throw new Error(`Lovable AI fallback failed: ${fallbackResponse.status}`);
+      }
+      
+      console.log('[ai-autopilot-chat] ✅ Resposta gerada via Lovable AI (Gemini 2.5 Flash)');
+      return await fallbackResponse.json();
+    }
+    
+    // Extrair termos-chave usando IA com fallback resiliente
     let words: string[] = [];
     
     try {
-      console.log('[ai-autopilot-chat] Usando OpenAI GPT-4o-mini para extrair palavras-chave...');
+      console.log('[ai-autopilot-chat] Extraindo palavras-chave...');
       
-      const keywordExtractionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { 
-              role: 'system', 
-              content: 'Você é um extrator de palavras-chave para busca em banco de dados (Full Text Search). Receba a frase do usuário, remova stop words (artigos, pronomes, saudações) e retorne APENAS os substantivos e verbos principais separados por espaço. Se houver sinônimos óbvios, inclua-os. Exemplo: "Qual endereço para devoluções" → "endereço devoluções devolução remetente"'
-            },
-            { 
-              role: 'user', 
-              content: customerMessage 
-            }
-          ],
-          temperature: 0.3,
-          max_tokens: 50
-        }),
+      const keywordData = await callAIWithFallback({
+        messages: [
+          { 
+            role: 'system', 
+            content: 'Você é um extrator de palavras-chave para busca em banco de dados (Full Text Search). Receba a frase do usuário, remova stop words (artigos, pronomes, saudações) e retorne APENAS os substantivos e verbos principais separados por espaço. Se houver sinônimos óbvios, inclua-os. Exemplo: "Qual endereço para devoluções" → "endereço devoluções devolução remetente"'
+          },
+          { 
+            role: 'user', 
+            content: customerMessage 
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 50
       });
 
-      if (keywordExtractionResponse.ok) {
-        const keywordData = await keywordExtractionResponse.json();
-        const extractedKeywords = keywordData.choices?.[0]?.message?.content?.trim() || '';
-        words = extractedKeywords.toLowerCase().split(/\s+/).filter((w: string) => w.length > 1);
-        console.log('[ai-autopilot-chat] ✅ Palavras-chave extraídas via OpenAI:', words);
-      } else {
-        console.warn('[ai-autopilot-chat] Falha na extração OpenAI, usando fallback manual');
-        throw new Error('OpenAI extraction failed');
-      }
+      const extractedKeywords = keywordData.choices?.[0]?.message?.content?.trim() || '';
+      words = extractedKeywords.toLowerCase().split(/\s+/).filter((w: string) => w.length > 1);
+      console.log('[ai-autopilot-chat] ✅ Palavras-chave extraídas:', words);
     } catch (error) {
-      console.error('[ai-autopilot-chat] Erro na extração OpenAI, usando fallback:', error);
+      console.error('[ai-autopilot-chat] ⚠️ Erro na extração de palavras-chave, usando fallback manual:', error);
       // Fallback: extração manual simples
       words = customerMessage
         .toLowerCase()
         .split(/\s+/)
         .filter(word => word.length > 3)
         .slice(0, 5);
-      console.log('[ai-autopilot-chat] Termos fallback:', words);
+      console.log('[ai-autopilot-chat] Termos fallback manual:', words);
     }
 
     let knowledgeContext = '';
@@ -305,11 +355,10 @@ ${contact.phone ? `- Telefone: ${contact.phone}` : ''}
 
 Lembre-se de usar essas informações de forma natural e personalizada em suas respostas.`;
 
-    // 6. Chamar OpenAI GPT-4o-mini com persona e tools
-    console.log('[ai-autopilot-chat] Chamando OpenAI GPT-4o-mini para resposta final...');
+    // 6. Chamar IA com persona e tools (com fallback resiliente)
+    console.log('[ai-autopilot-chat] Gerando resposta final...');
 
     const aiPayload: any = {
-      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: contextualizedSystemPrompt },
         ...messageHistory,
@@ -327,26 +376,11 @@ Lembre-se de usar essas informações de forma natural e personalizada em suas r
       }));
     }
 
-    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(aiPayload),
-    });
-
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('[ai-autopilot-chat] Erro na chamada OpenAI:', aiResponse.status, errorText);
-      throw new Error(`OpenAI API error: ${aiResponse.status}`);
-    }
-
-    const aiData = await aiResponse.json();
+    const aiData = await callAIWithFallback(aiPayload);
     const assistantMessage = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui processar sua mensagem.';
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
 
-    console.log(`[ai-autopilot-chat] ✅ Resposta OpenAI gerada (${assistantMessage.length} chars)`);
+    console.log(`[ai-autopilot-chat] ✅ Resposta gerada (${assistantMessage.length} chars)`);
     if (toolCalls.length > 0) {
       console.log(`[ai-autopilot-chat] ${toolCalls.length} tool calls detectadas`);
     }
