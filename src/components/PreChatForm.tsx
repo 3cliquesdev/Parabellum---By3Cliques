@@ -191,15 +191,6 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
     }
   };
 
-  const handleContinueWithoutHistory = () => {
-    // Cliente decide não verificar - vincular ao cliente existente mas sem verificação
-    toast({
-      title: "Conectando...",
-      description: "Iniciando conversa sem verificação de histórico",
-    });
-    
-    onExistingCustomerVerified(existingContact!, recommendedDeptId, false);
-  };
 
   const handleCreateNewLead = async (values: z.infer<typeof newLeadSchema>) => {
     try {
@@ -361,15 +352,6 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
                 >
                   {isLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                   Verificar
-                </Button>
-
-                <Button 
-                  onClick={handleContinueWithoutHistory} 
-                  variant="ghost" 
-                  className="w-full"
-                  disabled={isLoading}
-                >
-                  Continuar sem histórico
                 </Button>
               </CardContent>
             </Card>
