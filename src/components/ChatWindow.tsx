@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle } from "lucide-react";
+import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
@@ -187,14 +187,21 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                         <Badge variant="secondary" className="text-xs">
                           {activePersona.name}
                         </Badge>
-                      )}
-                    </>
                   )}
-                </div>
-              </div>
+                </>
+              )}
+              {/* Badge de Sessão Não Verificada */}
+              {!((conversation.customer_metadata as any)?.session_verified ?? true) && (
+                <Badge variant="outline" className="text-yellow-600 border-yellow-600 text-xs">
+                  <AlertCircle className="h-3 w-3 mr-1" />
+                  Não verificado
+                </Badge>
+              )}
             </div>
-            
-            <div className="flex items-center gap-2">
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
               {isAutopilot && (
                 <Button
                   variant="default"

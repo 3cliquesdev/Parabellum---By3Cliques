@@ -31,22 +31,52 @@ serve(async (req) => {
 
     console.log('[verify-code] Verificando código para:', email);
 
-    // Buscar código mais recente não verificado
-    const { data: verification, error: fetchError } = await supabase
+    // Buscar código mais recente (incluindo já verificados para melhor UX)
+    const { data: verifications, error: fetchError } = await supabase
       .from('email_verifications')
       .select('*')
       .eq('email', email)
-      .eq('verified', false)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
-    if (fetchError || !verification) {
+    if (fetchError || !verifications || verifications.length === 0) {
       return new Response(JSON.stringify({ 
         success: false,
-        error: 'Nenhum código pendente encontrado' 
+        error: 'Nenhum código encontrado para este e-mail' 
       }), {
         status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const verification = verifications[0];
+
+    // Se código já foi verificado anteriormente, permitir login direto
+    if (verification.verified && verification.code === code) {
+      const { data: contact } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+      console.log('[verify-code] ✅ Código já verificado - login direto');
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        already_verified: true,
+        contact_id: contact?.id || null
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Se código já verificado mas código diferente, rejeitar
+    if (verification.verified) {
+      return new Response(JSON.stringify({ 
+        success: false,
+        error: 'Este código já foi utilizado. Solicite um novo código.' 
+      }), {
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

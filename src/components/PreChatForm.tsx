@@ -39,7 +39,7 @@ interface Contact {
 }
 
 interface PreChatFormProps {
-  onExistingCustomerVerified: (contact: Contact, departmentId: string) => void;
+  onExistingCustomerVerified: (contact: Contact, departmentId: string, sessionVerified?: boolean) => void;
   onNewLeadCreated: (data: { email: string; first_name: string; last_name: string; phone?: string }, departmentId: string) => void;
   isLoading?: boolean;
 }
@@ -140,10 +140,10 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
 
       if (error) throw error;
 
-      if (!data.valid) {
+      if (!data.success) {
         toast({
           title: "Código inválido",
-          description: "Verifique o código e tente novamente",
+          description: data.error || "Verifique o código e tente novamente",
           variant: "destructive",
         });
         setFormState('otp_existing');
@@ -156,7 +156,7 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
         description: `Olá, ${existingContact?.first_name}! Seu histórico está disponível.`,
       });
 
-      onExistingCustomerVerified(existingContact!, recommendedDeptId);
+      onExistingCustomerVerified(existingContact!, recommendedDeptId, true);
 
     } catch (error: any) {
       console.error('[PreChatForm] Erro ao verificar OTP:', error);
@@ -170,16 +170,13 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
   };
 
   const handleContinueWithoutHistory = () => {
-    // Cliente decide não verificar - criar conversa sem histórico
-    const [firstName, ...lastNameParts] = (existingContact?.first_name + ' ' + existingContact?.last_name).split(' ');
-    onNewLeadCreated(
-      {
-        email,
-        first_name: firstName,
-        last_name: lastNameParts.join(' ') || firstName,
-      },
-      recommendedDeptId
-    );
+    // Cliente decide não verificar - vincular ao cliente existente mas sem verificação
+    toast({
+      title: "Conectando...",
+      description: "Iniciando conversa sem verificação de histórico",
+    });
+    
+    onExistingCustomerVerified(existingContact!, recommendedDeptId, false);
   };
 
   const handleCreateNewLead = async (values: z.infer<typeof newLeadSchema>) => {
@@ -193,10 +190,10 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
 
       if (error) throw error;
 
-      if (!data.valid) {
+      if (!data.success) {
         toast({
           title: "Código inválido",
-          description: "Verifique o código e tente novamente",
+          description: data.error || "Verifique o código e tente novamente",
           variant: "destructive",
         });
         setFormState('new_lead_form');
