@@ -3,27 +3,30 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useMessages } from "@/hooks/useMessages";
+import { useMessagesOffline, usePendingMessages } from "@/hooks/useMessagesOffline";
+import { useSendMessageOffline } from "@/hooks/useSendMessageOffline";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Send, ArrowLeft, MessageSquare, Bot } from "lucide-react";
+import { Send, ArrowLeft, MessageSquare, Bot, Clock, Check, WifiOff } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAutopilotTrigger } from "@/hooks/useAutopilotTrigger";
 import { cn } from "@/lib/utils";
 import { SafeHTML } from "@/components/SafeHTML";
+import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 
 export default function PublicChatWindow() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [message, setMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
   const [conversation, setConversation] = useState<any>(null);
   const [isAITyping, setIsAITyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: messages = [], refetch, isLoading } = useMessages(conversationId || "");
+  const { messages = [], isOffline } = useMessagesOffline(conversationId || null);
+  const pendingMessages = usePendingMessages(conversationId || null);
+  const sendMessageMutation = useSendMessageOffline();
   
   useAutopilotTrigger(conversationId || null);
 
@@ -60,8 +63,6 @@ export default function PublicChatWindow() {
           if (newMsg.sender_type === 'user') {
             setIsAITyping(false);
           }
-          
-          refetch();
         }
       )
       .subscribe();
@@ -69,7 +70,7 @@ export default function PublicChatWindow() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId, refetch]);
+  }, [conversationId]);
 
   const loadConversation = async () => {
     const { data, error } = await supabase
@@ -96,31 +97,15 @@ export default function PublicChatWindow() {
   };
 
   const handleSendMessage = async () => {
-    if (!message.trim() || !conversationId || isSending) return;
+    if (!message.trim() || !conversationId || sendMessageMutation.isPending) return;
 
-    setIsSending(true);
-    try {
-      const { error } = await supabase
-        .from("messages")
-        .insert({
-          conversation_id: conversationId,
-          content: message.trim(),
-          sender_type: "contact",
-        });
-
-      if (error) throw error;
-
-      setMessage("");
-      refetch();
-    } catch (error: any) {
-      toast({
-        title: "Erro ao enviar mensagem",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsSending(false);
-    }
+    const messageContent = message.trim();
+    setMessage("");
+    
+    await sendMessageMutation.mutateAsync({
+      conversationId,
+      content: messageContent
+    });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -146,18 +131,23 @@ export default function PublicChatWindow() {
         </Button>
         <div>
           <h1 className="font-semibold text-lg text-slate-900 dark:text-slate-100">{conversation.department_data?.name || 'Chat'}</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Online</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+            {isOffline ? (
+              <>
+                <WifiOff className="h-3 w-3" />
+                Modo Offline
+              </>
+            ) : (
+              'Online'
+            )}
+          </p>
         </div>
       </div>
 
       <ScrollArea className="flex-1">
         <div className="p-4 md:p-6">
           <div className="max-w-3xl mx-auto w-full">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="text-slate-500 dark:text-slate-400">Carregando mensagens...</div>
-              </div>
-            ) : messages.length === 0 ? (
+            {messages.length === 0 ? (
               <div className="flex items-center justify-center h-32">
                 <div className="text-slate-500 dark:text-slate-400">Nenhuma mensagem ainda. Comece a conversar!</div>
               </div>
@@ -232,12 +222,20 @@ export default function PublicChatWindow() {
                             html={message.content}
                             className="text-sm whitespace-pre-wrap break-words"
                           />
-                          <span className={cn(
-                            "text-[10px] mt-1 block",
+                          <div className={cn(
+                            "text-[10px] mt-1 flex items-center gap-1",
                             isCustomer ? "text-white/70" : "text-slate-400 dark:text-slate-500"
                           )}>
-                            {formatDistanceToNow(new Date(message.created_at), { addSuffix: true, locale: ptBR })}
-                          </span>
+                            <span>
+                              {formatDistanceToNow(new Date(message.created_at), { addSuffix: true, locale: ptBR })}
+                            </span>
+                            {isCustomer && message.id.startsWith('temp-') && (
+                              <Clock className="h-3 w-3 animate-pulse" />
+                            )}
+                            {isCustomer && !message.id.startsWith('temp-') && (
+                              <Check className="h-3 w-3" />
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -266,14 +264,16 @@ export default function PublicChatWindow() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            disabled={isSending}
+            disabled={sendMessageMutation.isPending}
             className="flex-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
           />
-          <Button onClick={handleSendMessage} disabled={isSending || !message.trim()}>
+          <Button onClick={handleSendMessage} disabled={sendMessageMutation.isPending || !message.trim()}>
             <Send className="h-4 w-4" />
           </Button>
         </div>
       </div>
+      
+      <PWAInstallPrompt />
     </div>
   );
 }
