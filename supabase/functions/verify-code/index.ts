@@ -31,94 +31,93 @@ serve(async (req) => {
 
     console.log('[verify-code] Verificando código para:', email);
 
-    // Buscar código mais recente (incluindo já verificados para melhor UX)
+    // Buscar QUALQUER código válido que bata com o código digitado
     const { data: verifications, error: fetchError } = await supabase
       .from('email_verifications')
       .select('*')
       .eq('email', email)
+      .eq('code', code)
+      .eq('verified', false)
+      .gt('expires_at', new Date().toISOString())
+      .lt('attempts', 3)
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (fetchError || !verifications || verifications.length === 0) {
+    if (fetchError) {
+      console.error('[verify-code] Erro ao buscar código:', fetchError);
       return new Response(JSON.stringify({ 
         success: false,
-        error: 'Nenhum código encontrado para este e-mail' 
+        error: 'Erro ao verificar código' 
       }), {
-        status: 404,
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Se não encontrou nenhum código válido, verificar por que
+    if (!verifications || verifications.length === 0) {
+      // Verificar se existe algum código para este email
+      const { data: anyCode } = await supabase
+        .from('email_verifications')
+        .select('code, verified, expires_at, attempts')
+        .eq('email', email)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!anyCode || anyCode.length === 0) {
+        return new Response(JSON.stringify({ 
+          success: false,
+          error: 'Nenhum código encontrado para este e-mail' 
+        }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const lastCode = anyCode[0];
+      
+      // Dar feedback específico do problema
+      if (lastCode.verified) {
+        return new Response(JSON.stringify({ 
+          success: false,
+          error: 'Este código já foi utilizado. Solicite um novo código.' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (new Date(lastCode.expires_at) < new Date()) {
+        return new Response(JSON.stringify({ 
+          success: false,
+          error: 'Código expirado. Solicite um novo.' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (lastCode.attempts >= 3) {
+        return new Response(JSON.stringify({ 
+          success: false,
+          error: 'Máximo de tentativas excedido. Solicite um novo código.' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Se chegou aqui, o código está errado
+      return new Response(JSON.stringify({ 
+        success: false,
+        error: 'Código incorreto. Verifique e tente novamente.' 
+      }), {
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     const verification = verifications[0];
-
-    // Se código já foi verificado anteriormente, permitir login direto
-    if (verification.verified && verification.code === code) {
-      const { data: contact } = await supabase
-        .from('contacts')
-        .select('id')
-        .eq('email', email)
-        .single();
-
-      console.log('[verify-code] ✅ Código já verificado - login direto');
-
-      return new Response(JSON.stringify({ 
-        success: true,
-        already_verified: true,
-        contact_id: contact?.id || null
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Se código já verificado mas código diferente, rejeitar
-    if (verification.verified) {
-      return new Response(JSON.stringify({ 
-        success: false,
-        error: 'Este código já foi utilizado. Solicite um novo código.' 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Verificar se código expirou
-    if (new Date(verification.expires_at) < new Date()) {
-      return new Response(JSON.stringify({ 
-        success: false,
-        error: 'Código expirado. Solicite um novo.' 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Verificar tentativas máximas
-    if (verification.attempts >= 3) {
-      return new Response(JSON.stringify({ 
-        success: false,
-        error: 'Máximo de tentativas excedido. Solicite um novo código.' 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Verificar código
-    if (verification.code !== code) {
-      // Incrementar tentativas
-      await supabase
-        .from('email_verifications')
-        .update({ attempts: verification.attempts + 1 })
-        .eq('id', verification.id);
-
-      return new Response(JSON.stringify({ 
-        success: false,
-        error: `Código incorreto. Tentativas restantes: ${2 - verification.attempts}` 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     // Código correto! Marcar como verificado
     await supabase
