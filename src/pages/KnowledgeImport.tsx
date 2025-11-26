@@ -31,16 +31,7 @@ export default function KnowledgeImport() {
 
   const importMutation = useImportKnowledge();
 
-  useEffect(() => {
-    if (!roleLoading && !isAdmin && !isManager) {
-      toast({
-        title: "Acesso negado",
-        description: "Apenas administradores e gerentes podem importar conhecimento.",
-        variant: "destructive",
-      });
-      navigate('/knowledge');
-    }
-  }, [isAdmin, isManager, roleLoading, navigate, toast]);
+  // Permission check moved to render section for better control
 
   // Auto-detect column mapping (only if user hasn't manually mapped)
   useEffect(() => {
@@ -155,6 +146,27 @@ export default function KnowledgeImport() {
     return (
       <div className="min-h-screen p-6 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAdmin && !isManager) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="text-destructive">Acesso Negado</CardTitle>
+            <CardDescription>
+              Apenas administradores e gerentes podem acessar esta página.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => navigate('/knowledge')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar para Base de Conhecimento
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
