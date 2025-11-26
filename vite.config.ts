@@ -47,6 +47,7 @@ export default defineConfig(({ mode }) => ({
         ]
       },
       workbox: {
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 4 MB limit
         runtimeCaching: [
           {
             urlPattern: /\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/,
