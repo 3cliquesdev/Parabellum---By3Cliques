@@ -156,12 +156,28 @@ serve(async (req) => {
       str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     
     // Extrair termos-chave da mensagem do cliente (removendo palavras comuns)
-    const stopWords = ['o', 'a', 'de', 'da', 'do', 'para', 'com', 'em', 'e', 'ou', 'é', 'como', 'qual', 'onde', 'quando', 'por', 'que', 'quero', 'gostaria', 'pode', 'poderia', 'não', 'nao'];
+    const stopWords = [
+      // Artigos
+      'o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas',
+      // Preposições
+      'de', 'da', 'do', 'das', 'dos', 'para', 'com', 'em', 'na', 'no', 'nas', 'nos', 'ao', 'aos',
+      // Pronomes
+      'eu', 'meu', 'minha', 'meus', 'minhas', 'seu', 'sua', 'seus', 'suas', 'me', 'te', 'se',
+      // Conjunções
+      'e', 'ou', 'mas', 'porem', 'porém',
+      // Verbos comuns
+      'é', 'ser', 'estar', 'ter', 'fazer', 'quero', 'gostaria', 'pode', 'poderia', 'devo', 'preciso',
+      // Interrogativos
+      'como', 'qual', 'quais', 'onde', 'quando', 'por', 'que', 'porque', 'pq',
+      // Outros
+      'não', 'nao', 'sim'
+    ];
     
     const words = customerMessage
       .toLowerCase()
       .split(/\s+/)
       .filter(word => word.length > 1 && !stopWords.includes(word)) // Manter números como "50"
+      .sort((a, b) => b.length - a.length) // Priorizar termos mais longos (mais específicos)
       .slice(0, 5); // Pegar até 5 termos-chave
     
     console.log('[ai-autopilot-chat] Termos de busca extraídos:', words);
