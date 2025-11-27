@@ -15,34 +15,33 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt', 'pwa-192x192.png', 'pwa-512x512.png'],
+      includeAssets: ['favicon.ico', 'robots.txt', 'pwa-icon.svg'],
       manifest: {
-        name: 'CRM - Portal do Cliente',
-        short_name: 'CRM Chat',
-        description: 'Suporte e atendimento ao cliente',
+        name: 'Suporte - Atendimento ao Cliente',
+        short_name: 'Suporte',
+        description: 'Chat de suporte e atendimento ao cliente',
         theme_color: '#2563EB',
-        background_color: '#000000',
+        background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/public-chat',
         scope: '/',
         icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+          { src: 'pwa-icon.svg', sizes: 'any', type: 'image/svg+xml' },
+          { src: 'pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' }
         ],
         shortcuts: [
           {
             name: 'Novo Ticket',
             short_name: 'Ticket',
             url: '/open-ticket',
-            icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }]
+            icons: [{ src: 'pwa-icon.svg', sizes: 'any', type: 'image/svg+xml' }]
           },
           {
-            name: 'Minhas Conversas',
+            name: 'Chat de Suporte',
             short_name: 'Chat',
             url: '/public-chat',
-            icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }]
+            icons: [{ src: 'pwa-icon.svg', sizes: 'any', type: 'image/svg+xml' }]
           }
         ]
       },

@@ -23,6 +23,7 @@ export default function PublicChatWindow() {
   const [conversation, setConversation] = useState<any>(null);
   const [isAITyping, setIsAITyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { messages = [], isOffline } = useMessagesOffline(conversationId || null);
   const pendingMessages = usePendingMessages(conversationId || null);
@@ -33,12 +34,36 @@ export default function PublicChatWindow() {
   useEffect(() => {
     if (conversationId) {
       loadConversation();
+      // Salvar conversationId no localStorage para persistir sessão
+      localStorage.setItem('active_conversation_id', conversationId);
     }
   }, [conversationId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Timeout de segurança para isAITyping (15 segundos)
+  useEffect(() => {
+    if (isAITyping) {
+      // Limpar timeout anterior se existir
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      // Criar novo timeout de 15 segundos
+      typingTimeoutRef.current = setTimeout(() => {
+        console.warn('[PublicChatWindow] Typing timeout - forçando isAITyping = false');
+        setIsAITyping(false);
+      }, 15000);
+      
+      return () => {
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+      };
+    }
+  }, [isAITyping]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -60,7 +85,7 @@ export default function PublicChatWindow() {
             setIsAITyping(true);
           }
           
-          if (newMsg.sender_type === 'user') {
+          if (newMsg.sender_type === 'user' || newMsg.is_ai_generated) {
             setIsAITyping(false);
           }
         }

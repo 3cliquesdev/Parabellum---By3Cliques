@@ -61,15 +61,24 @@ export default function PublicChat() {
         if (expiresAt > now) {
           setStoredIdentity(identity);
           setIsIdentified(true);
+          
+          // Verificar se há conversa ativa salva no localStorage
+          const activeConversationId = localStorage.getItem('active_conversation_id');
+          if (activeConversationId) {
+            console.log('[PublicChat] Retomando conversa salva:', activeConversationId);
+            navigate(`/public-chat/${activeConversationId}`);
+          }
         } else {
           localStorage.removeItem(IDENTITY_STORAGE_KEY);
+          localStorage.removeItem('active_conversation_id');
         }
       } catch (error) {
         console.error("Erro ao ler identidade:", error);
         localStorage.removeItem(IDENTITY_STORAGE_KEY);
+        localStorage.removeItem('active_conversation_id');
       }
     }
-  }, []);
+  }, [navigate]);
 
   // Auto-roteamento quando departamento está definido
   useEffect(() => {
@@ -250,6 +259,9 @@ export default function PublicChat() {
         data.conversation_id,
         data.is_existing_conversation ? "(existente)" : "(nova)"
       );
+
+      // Salvar conversationId no localStorage
+      localStorage.setItem('active_conversation_id', data.conversation_id);
 
       toast({
         title: data.is_existing_conversation ? "Conversa reaberta!" : "Conversa iniciada!",
