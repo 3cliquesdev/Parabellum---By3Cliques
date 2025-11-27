@@ -113,11 +113,35 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
       const errorText = await response.text();
       console.error(`[analyze-ticket] AI Gateway error:`, response.status, errorText);
       
+      // GRACEFUL DEGRADATION: Return fallback values on 429 instead of failing
       if (response.status === 429) {
+        console.warn(`[analyze-ticket] ⚠️ Rate limit hit, returning fallback for mode: ${mode}`);
+        
+        let fallbackResult = '';
+        switch (mode) {
+          case 'sentiment':
+            fallbackResult = 'neutro'; // Safe default sentiment
+            break;
+          case 'summary':
+            fallbackResult = 'Resumo indisponível devido a limite de requisições. Por favor, revise a conversa manualmente.';
+            break;
+          case 'reply':
+            fallbackResult = 'Obrigado pela sua mensagem. Nossa equipe irá analisar seu caso e retornar em breve.';
+            break;
+          case 'tags':
+            fallbackResult = ''; // Empty tags
+            break;
+          default:
+            fallbackResult = 'Resultado não disponível';
+        }
+        
         return new Response(JSON.stringify({ 
-          error: 'Rate limit exceeded. Please try again in a moment.' 
+          result: fallbackResult,
+          mode,
+          fallback: true,
+          reason: 'rate_limit'
         }), {
-          status: 429,
+          status: 200, // ✅ Return 200 with fallback instead of 429 error
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
