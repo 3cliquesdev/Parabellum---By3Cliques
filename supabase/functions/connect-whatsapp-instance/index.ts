@@ -74,7 +74,11 @@ Deno.serve(async (req) => {
         console.log('[connect-whatsapp-instance] Existing instances result:', instances);
 
         if (Array.isArray(instances)) {
-          const existing = instances.find((item: any) => item.instance?.instanceName === instance.instance_name);
+          const existing = instances.find((item: any) => {
+            // Evolution API may return name in different shapes
+            const itemName = item.instance?.instanceName || item.name || item.instanceName;
+            return itemName === instance.instance_name;
+          });
 
           if (existing) {
             shouldCreateInstance = false;
