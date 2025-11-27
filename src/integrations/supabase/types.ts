@@ -1236,12 +1236,14 @@ export type Database = {
           content: string
           conversation_id: string
           created_at: string
+          delivery_error: string | null
           id: string
           is_ai_generated: boolean | null
           is_read: boolean | null
           message_type: string | null
           sender_id: string | null
           sender_type: Database["public"]["Enums"]["sender_type"]
+          status: Database["public"]["Enums"]["message_status"] | null
         }
         Insert: {
           attachment_type?: string | null
@@ -1249,12 +1251,14 @@ export type Database = {
           content: string
           conversation_id: string
           created_at?: string
+          delivery_error?: string | null
           id?: string
           is_ai_generated?: boolean | null
           is_read?: boolean | null
           message_type?: string | null
           sender_id?: string | null
           sender_type: Database["public"]["Enums"]["sender_type"]
+          status?: Database["public"]["Enums"]["message_status"] | null
         }
         Update: {
           attachment_type?: string | null
@@ -1262,12 +1266,14 @@ export type Database = {
           content?: string
           conversation_id?: string
           created_at?: string
+          delivery_error?: string | null
           id?: string
           is_ai_generated?: boolean | null
           is_read?: boolean | null
           message_type?: string | null
           sender_id?: string | null
           sender_type?: Database["public"]["Enums"]["sender_type"]
+          status?: Database["public"]["Enums"]["message_status"] | null
         }
         Relationships: [
           {
@@ -2210,6 +2216,7 @@ export type Database = {
         | "meeting"
         | "form_submission"
         | "conversation_transferred"
+      message_status: "sending" | "sent" | "delivered" | "failed"
       sender_type: "user" | "contact" | "system"
       ticket_category: "financeiro" | "tecnico" | "bug" | "outro"
       ticket_priority: "low" | "medium" | "high" | "urgent"
@@ -2405,6 +2412,7 @@ export const Constants = {
         "form_submission",
         "conversation_transferred",
       ],
+      message_status: ["sending", "sent", "delivered", "failed"],
       sender_type: ["user", "contact", "system"],
       ticket_category: ["financeiro", "tecnico", "bug", "outro"],
       ticket_priority: ["low", "medium", "high", "urgent"],

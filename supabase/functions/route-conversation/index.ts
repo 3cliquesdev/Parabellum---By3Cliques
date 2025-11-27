@@ -105,19 +105,21 @@ serve(async (req) => {
       console.log('[route-conversation] Consultant offline or unavailable');
     }
 
-    // 3. PRIORIDADE 2: BALANCEAMENTO DE CARGA (Support Agents)
+    // 3. PRIORIDADE 2: BALANCEAMENTO DE CARGA (Support Agents ONLY)
     console.log('[route-conversation] Searching for available support agents');
 
-    // Buscar agentes de suporte online, filtrados por departamento se houver
+    // Buscar agentes de suporte online (role='support_agent'), filtrados por departamento se houver
     let agentsQuery = supabase
       .from('profiles')
       .select(`
         id,
         full_name,
         availability_status,
-        department
+        department,
+        user_roles!inner(role)
       `)
-      .eq('availability_status', 'online');
+      .eq('availability_status', 'online')
+      .eq('user_roles.role', 'support_agent');
 
     // Filtrar por departamento se a conversa tiver um
     if (conversation.department) {

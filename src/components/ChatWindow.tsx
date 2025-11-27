@@ -22,6 +22,7 @@ import { CreateTicketFromInboxDialog } from "@/components/CreateTicketFromInboxD
 import CopilotSuggestionCard from "@/components/CopilotSuggestionCard";
 import CloseConversationDialog from "@/components/CloseConversationDialog";
 import { SafeHTML } from "@/components/SafeHTML";
+import { MessageStatusIndicator } from "@/components/MessageStatusIndicator";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -87,18 +88,10 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
       setMessage("");
       setEmailSubject("");
     } else {
-      // FASE 3: Se for WhatsApp, enviar via Evolution API
       const isWhatsApp = conversation.channel === 'whatsapp';
+      const messageContent = message.trim();
       
-      // Salvar mensagem no banco primeiro
-      await sendMessage.mutateAsync({
-        conversation_id: conversation.id,
-        content: message.trim(),
-        sender_type: "user",
-        sender_id: user?.id || null,
-      });
-
-      // Se for WhatsApp, enviar via API também
+      // CRITICAL: Send to WhatsApp API FIRST, only save to DB if successful
       if (isWhatsApp && conversation.whatsapp_instance_id) {
         try {
           // Buscar instância para verificar dono
@@ -108,7 +101,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             .eq('id', conversation.whatsapp_instance_id)
             .single();
           
-          let finalMessage = message.trim();
+          let finalMessage = messageContent;
           
           // Se quem envia não é o dono, adicionar assinatura
           if (instance?.user_id && instance.user_id !== user?.id) {
@@ -116,18 +109,53 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             finalMessage += `\n\n*^${userName}*`;
           }
           
-          // Enviar via WhatsApp
-          await supabase.functions.invoke('send-whatsapp-message', {
+          // 1. FIRST: Send to Evolution API
+          const { data: evolutionResponse, error: evolutionError } = await supabase.functions.invoke('send-whatsapp-message', {
             body: {
               instance_id: conversation.whatsapp_instance_id,
               phone_number: conversation.contacts.phone || conversation.contacts.whatsapp_id,
               message: finalMessage,
-              delay: 1000, // Delay menor para respostas humanas
+              delay: 1000,
             }
           });
+
+          if (evolutionError) {
+            throw new Error(evolutionError.message || 'Failed to send WhatsApp message');
+          }
+
+          // 2. ONLY IF SUCCESS: Save to database with status='sent'
+          await sendMessage.mutateAsync({
+            conversation_id: conversation.id,
+            content: messageContent,
+            sender_type: "user",
+            sender_id: user?.id || null,
+            status: 'sent',
+          });
+
         } catch (error) {
-          console.error('[ChatWindow] Error sending WhatsApp message:', error);
+          console.error('[ChatWindow] WhatsApp send failed:', error);
+          
+          // Save to database with status='failed' for visibility
+          await sendMessage.mutateAsync({
+            conversation_id: conversation.id,
+            content: messageContent,
+            sender_type: "user",
+            sender_id: user?.id || null,
+            status: 'failed',
+            delivery_error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          
+          // Don't throw - message is saved with failed status for retry
         }
+      } else {
+        // Web chat - save directly (no external API)
+        await sendMessage.mutateAsync({
+          conversation_id: conversation.id,
+          content: messageContent,
+          sender_type: "user",
+          sender_id: user?.id || null,
+          status: 'sent',
+        });
       }
 
       setMessage("");
@@ -433,12 +461,21 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                                 html={message.content}
                                 className="text-sm whitespace-pre-wrap break-words"
                               />
-                              <span className={cn(
-                                "text-[10px] mt-1 block",
+                              <div className={cn(
+                                "flex items-center gap-1.5 mt-1",
                                 isCustomer || isAI ? "text-slate-400 dark:text-slate-500" : "text-white/70"
                               )}>
-                                {format(new Date(message.created_at), "HH:mm")}
-                              </span>
+                                <span className="text-[10px]">
+                                  {format(new Date(message.created_at), "HH:mm")}
+                                </span>
+                                {/* Status indicator for user/agent messages */}
+                                {!isCustomer && (message as any).status && (
+                                  <MessageStatusIndicator 
+                                    status={(message as any).status}
+                                    className={isCustomer || isAI ? "" : "text-white/70"}
+                                  />
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>

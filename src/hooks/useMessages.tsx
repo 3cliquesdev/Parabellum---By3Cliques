@@ -79,7 +79,7 @@ export function useSendMessage() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (message: MessageInsert) => {
+    mutationFn: async (message: MessageInsert & { status?: 'sending' | 'sent' | 'failed'; delivery_error?: string | null }) => {
       const { data, error } = await supabase
         .from("messages")
         .insert(message)

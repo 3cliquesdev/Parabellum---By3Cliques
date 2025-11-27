@@ -374,24 +374,29 @@ Use essas informações de forma natural e personalizada.`;
     const assistantMessage = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui processar sua mensagem.';
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
 
-    // 7. Salvar resposta da IA como mensagem
-    const { error: saveError } = await supabaseClient
+    // 7. Salvar resposta da IA como mensagem (PRIMEIRO salvar para visibilidade interna)
+    const { data: savedMessage, error: saveError } = await supabaseClient
       .from('messages')
       .insert({
         conversation_id: conversationId,
         content: assistantMessage,
         sender_type: 'user', // 'user' = sistema/agente interno
         message_type: 'text',
-        is_ai_generated: true, // FASE 2: Marcar como mensagem da IA
-        sender_id: null // FASE 2: IA não tem profile
-      });
+        is_ai_generated: true,
+        sender_id: null,
+        status: 'sending' // CRITICAL: Start with 'sending' status
+      })
+      .select()
+      .single();
 
     if (saveError) {
       console.error('[ai-autopilot-chat] Erro ao salvar mensagem:', saveError);
     }
 
-    // 8. Se WhatsApp, enviar via Evolution API
-    if (channel === 'whatsapp' && contact.phone) {
+    const messageId = savedMessage?.id;
+
+    // 8. Se WhatsApp, enviar via Evolution API e atualizar status
+    if (channel === 'whatsapp' && contact.phone && messageId) {
       try {
         const { data: whatsappInstance } = await supabaseClient
           .from('whatsapp_instances')
@@ -402,17 +407,44 @@ Use essas informações de forma natural e personalizada.`;
           .single();
 
         if (whatsappInstance) {
-          await supabaseClient.functions.invoke('send-whatsapp-message', {
+          const { data: whatsappResponse, error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
             body: {
               instance_id: whatsappInstance.id,
               phone_number: contact.phone,
               message: assistantMessage,
             },
           });
+
+          if (whatsappError) {
+            throw whatsappError;
+          }
+
+          // SUCCESS: Update message status to 'sent'
+          await supabaseClient
+            .from('messages')
+            .update({ status: 'sent' })
+            .eq('id', messageId);
+
+          console.log('[ai-autopilot-chat] ✅ WhatsApp message sent successfully');
         }
       } catch (whatsappError) {
-        console.error('[ai-autopilot-chat] Erro WhatsApp:', whatsappError);
+        console.error('[ai-autopilot-chat] ❌ WhatsApp send failed:', whatsappError);
+        
+        // FAILURE: Update message status to 'failed'
+        await supabaseClient
+          .from('messages')
+          .update({ 
+            status: 'failed',
+            delivery_error: whatsappError instanceof Error ? whatsappError.message : 'Unknown error'
+          })
+          .eq('id', messageId);
       }
+    } else if (messageId) {
+      // Web chat - mark as sent immediately (no external API)
+      await supabaseClient
+        .from('messages')
+        .update({ status: 'sent' })
+        .eq('id', messageId);
     }
 
     // 9. Registrar uso de IA nos logs
