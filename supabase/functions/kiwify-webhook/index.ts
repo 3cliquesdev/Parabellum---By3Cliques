@@ -192,11 +192,11 @@ async function handlePaidOrder(
   // 3. Buscar produto por external_id (Kiwify product_id)
   const { data: product } = await supabase
     .from('products')
-    .select('id, name, external_id')
+    .select('id, name, external_id, delivery_group_id')
     .eq('external_id', Product.product_id)
     .single();
 
-  let playbook_id = null;
+  let playbook_ids: string[] = [];
   
   if (!product) {
     console.warn(`[kiwify-webhook] ⚠️ Produto não mapeado - ID Kiwify: ${Product.product_id}`);
@@ -214,6 +214,18 @@ async function handlePaidOrder(
           unmapped: true
         }
       });
+  } else if (product.delivery_group_id) {
+    const { data: groupPlaybooks } = await supabase
+      .from('group_playbooks')
+      .select('playbook_id, playbook:onboarding_playbooks(id, is_active)')
+      .eq('group_id', product.delivery_group_id)
+      .order('position');
+    
+    if (groupPlaybooks) {
+      playbook_ids = groupPlaybooks
+        .filter((gp: any) => gp.playbook?.is_active)
+        .map((gp: any) => gp.playbook_id);
+    }
   } else {
     const { data: playbook } = await supabase
       .from('onboarding_playbooks')
@@ -222,25 +234,21 @@ async function handlePaidOrder(
       .eq('is_active', true)
       .single();
     
-    playbook_id = playbook?.id;
+    if (playbook) playbook_ids = [playbook.id];
   }
 
-  // 4. 🎯 Iniciar Playbook de Onboarding COMPLETO (com etapa de login)
-  if (playbook_id) {
-    const { data: execution } = await supabase
+  // 4. 🎯 Iniciar TODOS os Playbooks
+  for (const playbook_id of playbook_ids) {
+    await supabase
       .from('playbook_executions')
       .insert({
         playbook_id,
         contact_id: contact.id,
         status: 'pending',
-      })
-      .select()
-      .single();
-
-    console.log('[kiwify-webhook] 🎯 Playbook completo iniciado:', execution?.id);
-  } else {
-    console.log('[kiwify-webhook] ⚠️ Nenhum playbook encontrado para produto:', Product.product_name);
+      });
   }
+  
+  console.log(`[kiwify-webhook] 🎯 ${playbook_ids.length} playbook(s) iniciado(s)`);
 
   // 5. Registrar interação na timeline
   await supabase
@@ -263,8 +271,9 @@ async function handlePaidOrder(
     success: true,
     action: 'new_customer_onboarding',
     contact_id: contact.id,
-    playbook_id,
-    message: 'Novo cliente criado, Auth configurado, onboarding completo iniciado'
+    playbook_ids,
+    playbooks_count: playbook_ids.length,
+    message: `Novo cliente criado, Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)`
   };
 }
 
@@ -296,34 +305,66 @@ async function handleUpsellOrder(
     })
     .eq('id', existingContact.id);
 
-  // 3. Buscar produto e playbook
+  // 3. Buscar produto e playbooks via grupo de entrega
   const { data: product } = await supabase
     .from('products')
-    .select('id, name, external_id')
+    .select('id, name, external_id, delivery_group_id')
     .eq('external_id', Product.product_id)
     .single();
 
-  // 4. Iniciar playbook do novo produto (pular etapa de login)
-  let playbook_id = null;
+  // 4. Iniciar playbook(s) do novo produto (pular etapa de login)
+  let playbook_ids: string[] = [];
+  
   if (product) {
-    const { data: playbook } = await supabase
-      .from('onboarding_playbooks')
-      .select('id')
-      .eq('product_id', product.id)
-      .eq('is_active', true)
-      .single();
-    
-    if (playbook) {
-      playbook_id = playbook.id;
-      await supabase
-        .from('playbook_executions')
-        .insert({
-          playbook_id: playbook.id,
-          contact_id: existingContact.id,
-          status: 'pending',
-        });
+    if (product.delivery_group_id) {
+      // NOVA LÓGICA: Buscar todos playbooks do grupo
+      const { data: groupPlaybooks } = await supabase
+        .from('group_playbooks')
+        .select(`
+          playbook_id,
+          playbook:onboarding_playbooks(id, name, is_active)
+        `)
+        .eq('group_id', product.delivery_group_id)
+        .order('position');
       
-      console.log('[kiwify-webhook] 🎯 Playbook de upsell iniciado (sem login)');
+      if (groupPlaybooks && groupPlaybooks.length > 0) {
+        playbook_ids = groupPlaybooks
+          .filter((gp: any) => gp.playbook?.is_active)
+          .map((gp: any) => gp.playbook_id);
+        
+        for (const playbook_id of playbook_ids) {
+          await supabase
+            .from('playbook_executions')
+            .insert({
+              playbook_id,
+              contact_id: existingContact.id,
+              status: 'pending',
+            });
+        }
+        
+        console.log(`[kiwify-webhook] 🎯 ${playbook_ids.length} playbook(s) de upsell iniciado(s)`);
+      }
+    } else {
+      // FALLBACK: Lógica antiga (product_id direto)
+      const { data: playbook } = await supabase
+        .from('onboarding_playbooks')
+        .select('id')
+        .eq('product_id', product.id)
+        .eq('is_active', true)
+        .single();
+      
+      if (playbook) {
+        playbook_ids = [playbook.id];
+        await supabase
+          .from('playbook_executions')
+          .insert({
+            playbook_id: playbook.id,
+            contact_id: existingContact.id,
+            status: 'pending',
+          });
+        
+        console.log('[kiwify-webhook] 🎯 Playbook de upsell iniciado (sem login)');
+      }
     }
   }
 
@@ -361,9 +402,10 @@ async function handleUpsellOrder(
     action: 'upsell_processed',
     contact_id: existingContact.id,
     new_ltv: newLtv,
-    playbook_id,
+    playbook_ids,
+    playbooks_count: playbook_ids.length,
     consultant_notified: !!existingContact.consultant_id,
-    message: 'Upsell processado, LTV atualizado, consultor notificado'
+    message: `Upsell processado, LTV atualizado, ${playbook_ids.length} playbook(s) iniciado(s)`
   };
 }
 

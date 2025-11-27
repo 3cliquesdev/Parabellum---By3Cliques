@@ -29,14 +29,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useCreateProduct, useUpdateProduct } from "@/hooks/useProducts";
-import { usePlaybooks } from "@/hooks/usePlaybooks";
-import { supabase } from "@/integrations/supabase/client";
+import { useDeliveryGroups } from "@/hooks/useDeliveryGroups";
 
 const productSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   description: z.string().optional(),
   external_id: z.string().optional(),
-  playbook_id: z.string().optional(),
+  delivery_group_id: z.string().optional(),
   requires_account_manager: z.boolean(),
   is_active: z.boolean(),
 });
@@ -51,26 +50,20 @@ interface ProductDialogProps {
     name: string;
     description: string | null;
     external_id: string | null;
+    delivery_group_id: string | null;
     requires_account_manager: boolean;
     is_active: boolean;
-    onboarding_playbooks?: Array<{
+    delivery_groups?: {
       id: string;
       name: string;
-      is_active: boolean;
-    }>;
-    // Compatibilidade com versões antigas
-    playbook?: Array<{
-      id: string;
-      name: string;
-      is_active: boolean;
-    }>;
+    };
   };
 }
 
 export function ProductDialog({ open, onOpenChange, product }: ProductDialogProps) {
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
-  const { data: playbooks } = usePlaybooks();
+  const { data: deliveryGroups } = useDeliveryGroups();
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
@@ -78,10 +71,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       name: product?.name || "",
       description: product?.description || "",
       external_id: product?.external_id || "",
-      playbook_id:
-        product?.onboarding_playbooks?.[0]?.id ||
-        product?.playbook?.[0]?.id ||
-        "none",
+      delivery_group_id: product?.delivery_group_id || "none",
       requires_account_manager: product?.requires_account_manager || false,
       is_active: product?.is_active ?? true,
     },
@@ -93,16 +83,15 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       name: product?.name || "",
       description: product?.description || "",
       external_id: product?.external_id || "",
-      playbook_id:
-        product?.onboarding_playbooks?.[0]?.id ||
-        product?.playbook?.[0]?.id ||
-        "none",
+      delivery_group_id: product?.delivery_group_id || "none",
       requires_account_manager: product?.requires_account_manager || false,
       is_active: product?.is_active ?? true,
     });
   }, [product, form]);
 
   const onSubmit = async (data: ProductFormData) => {
+    const delivery_group_id = data.delivery_group_id === "none" ? null : data.delivery_group_id;
+
     if (product) {
       await updateProduct.mutateAsync({
         id: product.id,
@@ -110,6 +99,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
           name: data.name,
           description: data.description || undefined,
           external_id: data.external_id || undefined,
+          delivery_group_id: delivery_group_id || undefined,
           requires_account_manager: data.requires_account_manager,
           is_active: data.is_active,
         },
@@ -119,17 +109,10 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
         name: data.name,
         description: data.description || undefined,
         external_id: data.external_id || undefined,
+        delivery_group_id: delivery_group_id || undefined,
         requires_account_manager: data.requires_account_manager,
         is_active: data.is_active,
       });
-    }
-
-    // Update playbook link if changed
-    if (data.playbook_id && data.playbook_id !== "none" && product) {
-      await supabase
-        .from("onboarding_playbooks")
-        .update({ product_id: product.id })
-        .eq("id", data.playbook_id);
     }
 
     onOpenChange(false);
@@ -200,27 +183,27 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
 
             <FormField
               control={form.control}
-              name="playbook_id"
+              name="delivery_group_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Playbook de Onboarding</FormLabel>
+                  <FormLabel>Grupo de Entrega</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione um playbook (opcional)" />
+                        <SelectValue placeholder="Selecione um grupo (opcional)" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="none">Nenhum</SelectItem>
-                      {playbooks?.filter(p => p.is_active).map((playbook) => (
-                        <SelectItem key={playbook.id} value={playbook.id}>
-                          {playbook.name}
+                      {deliveryGroups?.filter(g => g.is_active).map((group) => (
+                        <SelectItem key={group.id} value={group.id}>
+                          {group.name} ({group.group_playbooks?.length || 0} playbooks)
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <FormDescription>
-                    Playbook automático disparado quando este produto for vendido
+                    Conjunto de automações disparado quando este produto for vendido
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

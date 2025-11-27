@@ -972,6 +972,33 @@ export type Database = {
           },
         ]
       }
+      delivery_groups: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       departments: {
         Row: {
           color: string | null
@@ -1143,6 +1170,45 @@ export type Database = {
             columns: ["goal_id"]
             isOneToOne: false
             referencedRelation: "sales_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_playbooks: {
+        Row: {
+          created_at: string | null
+          group_id: string
+          id: string
+          playbook_id: string
+          position: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          group_id: string
+          id?: string
+          playbook_id: string
+          position?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          group_id?: string
+          id?: string
+          playbook_id?: string
+          position?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_playbooks_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_playbooks_playbook_id_fkey"
+            columns: ["playbook_id"]
+            isOneToOne: false
+            referencedRelation: "onboarding_playbooks"
             referencedColumns: ["id"]
           },
         ]
@@ -1570,6 +1636,7 @@ export type Database = {
       products: {
         Row: {
           created_at: string
+          delivery_group_id: string | null
           description: string | null
           external_id: string | null
           id: string
@@ -1580,6 +1647,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          delivery_group_id?: string | null
           description?: string | null
           external_id?: string | null
           id?: string
@@ -1590,6 +1658,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          delivery_group_id?: string | null
           description?: string | null
           external_id?: string | null
           id?: string
@@ -1598,7 +1667,15 @@ export type Database = {
           requires_account_manager?: boolean
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "products_delivery_group_id_fkey"
+            columns: ["delivery_group_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_groups"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

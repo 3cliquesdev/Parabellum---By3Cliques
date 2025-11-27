@@ -10,6 +10,10 @@ export function useProducts() {
         .from("products")
         .select(`
           *,
+          delivery_groups(
+            id,
+            name
+          ),
           onboarding_playbooks(
             id,
             name,
@@ -33,6 +37,7 @@ export function useCreateProduct() {
       name: string;
       description?: string;
       external_id?: string;
+      delivery_group_id?: string | null;
       requires_account_manager: boolean;
       is_active: boolean;
     }) => {
@@ -75,6 +80,7 @@ export function useUpdateProduct() {
         name: string;
         description: string;
         external_id: string;
+        delivery_group_id: string | null;
         requires_account_manager: boolean;
         is_active: boolean;
       }>;

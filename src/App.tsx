@@ -38,6 +38,7 @@ import MyPortfolio from "./pages/MyPortfolio";
 import OnboardingBuilder from "./pages/OnboardingBuilder";
 import PlaybookExecutions from "./pages/PlaybookExecutions";
 import KnowledgeImport from "./pages/KnowledgeImport";
+import DeliveryGroups from "./pages/DeliveryGroups";
 import NotFound from "./pages/NotFound";
 import AuditLogs from "./pages/AuditLogs";
 import WhatsAppSettings from "./pages/WhatsAppSettings";
@@ -129,6 +130,7 @@ const App = () => {
             <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Settings /></Layout></ProtectedRoute>} />
             <Route path="/settings/email-templates" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><EmailTemplates /></ProtectedRoute>} />
             <Route path="/settings/products" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Products /></Layout></ProtectedRoute>} />
+            <Route path="/settings/delivery-groups" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><DeliveryGroups /></Layout></ProtectedRoute>} />
             <Route path="/settings/departments" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Departments /></Layout></ProtectedRoute>} />
             <Route path="/settings/chat-links" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><ChatLinksSettings /></Layout></ProtectedRoute>} />
             <Route path="/settings/knowledge-import" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><KnowledgeImport /></Layout></ProtectedRoute>} />
