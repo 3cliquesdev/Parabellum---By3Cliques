@@ -363,16 +363,28 @@ serve(async (req) => {
     // FASE 1: Identity Wall - Se não tem email, pedir PRIMEIRO
     let identityWallNote = '';
     if (!contactHasEmail && channel === 'whatsapp') {
-      identityWallNote = `\n\n**🚨 REGRA CRÍTICA DE IDENTIFICAÇÃO (Identity Wall):**
-Este cliente NÃO tem email cadastrado. Antes de prosseguir com qualquer atendimento:
-1. Cumprimente-o educadamente pelo nome (${contactName})
-2. Explique que para melhor atendê-lo, você precisa do email
-3. Solicite: "Para garantir um atendimento personalizado, poderia me informar seu email?"
-4. AGUARDE o cliente fornecer o email
-5. Quando o cliente fornecer um email, confirme: "Email registrado com sucesso! Agora posso te ajudar."
-6. Só após confirmar o email, prossiga com o atendimento normal
+      identityWallNote = `\n\n**🚨 REGRA CRÍTICA DE IDENTIFICAÇÃO (Identity Wall) - OBRIGATÓRIO:**
+Este cliente NÃO tem email cadastrado no sistema.
 
-NÃO prossiga com atendimento técnico ou criação de tickets sem o email.`;
+**FLUXO OBRIGATÓRIO DE IDENTIFICAÇÃO:**
+1. PRIMEIRA MENSAGEM: Cumprimente "${contactName}" e solicite o email de forma educada e direta:
+   "Olá ${contactName}! Para garantir um atendimento personalizado e seguro, preciso que você me informe seu email."
+   
+2. AGUARDE o cliente fornecer o email
+
+3. QUANDO cliente fornecer email: Use a ferramenta update_customer_email para registrar e enviar código de verificação
+
+4. APÓS enviar código: Informe ao cliente:
+   "📧 Perfeito! Enviamos um código de 6 dígitos para [email]. Por favor, digite o código que você recebeu."
+
+5. AGUARDE o cliente enviar o código de 6 dígitos
+
+6. QUANDO cliente enviar código: Use a ferramenta verify_otp_code para validar
+
+7. SÓ APÓS verificação bem-sucedida: Prossiga com atendimento normal
+
+**IMPORTANTE:** NÃO atenda dúvidas técnicas, NÃO crie tickets, NÃO responda perguntas até o email estar verificado.
+Se o cliente insistir em pular a verificação, explique que é uma política de segurança obrigatória.`;
     } else if (customer_context?.isVerified || contactHasEmail) {
       identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.`;
     }
@@ -424,18 +436,33 @@ Use essas informações de forma natural e personalizada.`;
           }
         }
       },
-      // FASE 2: Email Capture Tool
+      // FASE 2: Email Capture Tool (envia OTP automaticamente)
       {
         type: 'function',
         function: {
           name: 'update_customer_email',
-          description: 'Atualiza o email do cliente no sistema quando ele fornecer.',
+          description: 'Registra o email do cliente e envia código de verificação OTP automaticamente.',
           parameters: {
             type: 'object',
             properties: {
               email: { type: 'string', description: 'O email fornecido pelo cliente.' }
             },
             required: ['email']
+          }
+        }
+      },
+      // FASE 2: OTP Verification Tool
+      {
+        type: 'function',
+        function: {
+          name: 'verify_otp_code',
+          description: 'Verifica o código de 6 dígitos enviado por email ao cliente.',
+          parameters: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'O código de 6 dígitos fornecido pelo cliente.' }
+            },
+            required: ['code']
           }
         }
       },
@@ -458,11 +485,11 @@ Use essas informações de forma natural e personalizada.`;
       console.log('[ai-autopilot-chat] 🛠️ AI solicitou execução de ferramenta:', toolCalls);
       
       for (const toolCall of toolCalls) {
-        // FASE 2: Handle email update
+        // FASE 2: Handle email update and send OTP
         if (toolCall.function.name === 'update_customer_email') {
           try {
             const args = JSON.parse(toolCall.function.arguments);
-            console.log('[ai-autopilot-chat] 📧 Atualizando email do cliente:', args.email);
+            console.log('[ai-autopilot-chat] 📧 Capturando email e enviando OTP:', args.email);
 
             // Validar formato do email
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -472,7 +499,7 @@ Use essas informações de forma natural e personalizada.`;
               continue;
             }
 
-            // Update contact email
+            // Update contact email (temporarily)
             const { error: updateError } = await supabaseClient
               .from('contacts')
               .update({ email: args.email })
@@ -481,24 +508,106 @@ Use essas informações de forma natural e personalizada.`;
             if (updateError) {
               console.error('[ai-autopilot-chat] ❌ Erro ao atualizar email:', updateError);
               assistantMessage = 'Não consegui registrar o email. Por favor, tente novamente.';
-            } else {
-              console.log('[ai-autopilot-chat] ✅ Email atualizado com sucesso');
-              assistantMessage = `✅ Email registrado com sucesso! Obrigado, ${contactName}. Agora posso te ajudar melhor!`;
-              
-              // Log interaction
-              await supabaseClient.from('interactions').insert({
-                customer_id: contact.id,
-                type: 'note',
-                content: `Email capturado via WhatsApp Identity Wall: ${args.email}`,
-                channel: 'whatsapp',
-                metadata: { source: 'ai_autopilot_identity_wall' }
-              });
+              continue;
             }
+
+            // Send OTP code via Edge Function
+            const { data: otpData, error: otpError } = await supabaseClient.functions.invoke('send-verification-code', {
+              body: { email: args.email }
+            });
+
+            if (otpError || !otpData?.success) {
+              console.error('[ai-autopilot-chat] ❌ Erro ao enviar OTP:', otpError);
+              assistantMessage = 'Não consegui enviar o código de verificação. Por favor, verifique o email e tente novamente.';
+              continue;
+            }
+
+            console.log('[ai-autopilot-chat] ✅ Email registrado e OTP enviado');
+            
+            // Dev mode: include code in message
+            if (otpData.dev_mode && otpData.code) {
+              assistantMessage = `📧 Perfeito! Enviamos um código de 6 dígitos para ${args.email}.\n\n🔧 **Modo Desenvolvimento:** Seu código é ${otpData.code}\n\nPor favor, digite o código para confirmar sua identidade.`;
+            } else {
+              assistantMessage = `📧 Perfeito! Enviamos um código de 6 dígitos para ${args.email}. Por favor, digite o código que você recebeu para confirmar sua identidade.`;
+            }
+            
+            // Log interaction
+            await supabaseClient.from('interactions').insert({
+              customer_id: contact.id,
+              type: 'note',
+              content: `Email capturado via WhatsApp Identity Wall: ${args.email} - OTP enviado`,
+              channel: 'whatsapp',
+              metadata: { source: 'ai_autopilot_identity_wall', otp_sent: true }
+            });
           } catch (error) {
             console.error('[ai-autopilot-chat] ❌ Erro ao processar email:', error);
             assistantMessage = 'Ocorreu um erro. Poderia me enviar o email novamente?';
           }
-        } else if (toolCall.function.name === 'create_ticket') {
+        } 
+        // FASE 2: Handle OTP verification
+        else if (toolCall.function.name === 'verify_otp_code') {
+          try {
+            const args = JSON.parse(toolCall.function.arguments);
+            console.log('[ai-autopilot-chat] 🔐 Verificando código OTP:', args.code);
+
+            // Buscar email do contato
+            const contactEmail = contact.email;
+            if (!contactEmail) {
+              assistantMessage = 'Por favor, primeiro me informe seu email.';
+              continue;
+            }
+
+            // Buscar código mais recente não expirado
+            const { data: verification, error: verifyError } = await supabaseClient
+              .from('email_verifications')
+              .select('*')
+              .eq('email', contactEmail)
+              .eq('code', args.code)
+              .eq('verified', false)
+              .gte('expires_at', new Date().toISOString())
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+
+            if (verifyError || !verification) {
+              console.error('[ai-autopilot-chat] ❌ Código inválido ou expirado');
+              
+              // Incrementar tentativas
+              if (verification) {
+                await supabaseClient
+                  .from('email_verifications')
+                  .update({ attempts: verification.attempts + 1 })
+                  .eq('id', verification.id);
+              }
+              
+              assistantMessage = '❌ Código inválido ou expirado. Por favor, verifique o código ou solicite um novo informando seu email novamente.';
+              continue;
+            }
+
+            // Marcar como verificado
+            await supabaseClient
+              .from('email_verifications')
+              .update({ verified: true })
+              .eq('id', verification.id);
+
+            console.log('[ai-autopilot-chat] ✅ OTP verificado com sucesso');
+            
+            assistantMessage = `✅ Identidade verificada com sucesso! Seja bem-vindo de volta, ${contactName}! Agora posso te ajudar com o que precisar. 😊`;
+            
+            // Log interaction
+            await supabaseClient.from('interactions').insert({
+              customer_id: contact.id,
+              type: 'note',
+              content: `Identidade verificada via OTP WhatsApp - Email: ${contactEmail}`,
+              channel: 'whatsapp',
+              metadata: { source: 'ai_autopilot_identity_wall', otp_verified: true }
+            });
+          } catch (error) {
+            console.error('[ai-autopilot-chat] ❌ Erro ao verificar OTP:', error);
+            assistantMessage = 'Ocorreu um erro ao verificar o código. Por favor, tente novamente.';
+          }
+        } 
+        else if (toolCall.function.name === 'create_ticket') {
           try {
             const args = JSON.parse(toolCall.function.arguments);
             console.log('[ai-autopilot-chat] 🎫 Criando ticket automaticamente:', args);
