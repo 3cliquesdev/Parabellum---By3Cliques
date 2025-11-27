@@ -51,33 +51,51 @@ export default function PublicChat() {
 
   // Verificar identidade armazenada no localStorage
   useEffect(() => {
-    const stored = localStorage.getItem(IDENTITY_STORAGE_KEY);
-    if (stored) {
-      try {
-        const identity: StoredIdentity = JSON.parse(stored);
-        const expiresAt = new Date(identity.expires_at);
-        const now = new Date();
+    const validateAndResumeSession = async () => {
+      const stored = localStorage.getItem(IDENTITY_STORAGE_KEY);
+      const activeConversationId = localStorage.getItem('active_conversation_id');
+      
+      if (stored) {
+        try {
+          const identity: StoredIdentity = JSON.parse(stored);
+          const expiresAt = new Date(identity.expires_at);
+          const now = new Date();
 
-        if (expiresAt > now) {
-          setStoredIdentity(identity);
-          setIsIdentified(true);
-          
-          // Verificar se há conversa ativa salva no localStorage
-          const activeConversationId = localStorage.getItem('active_conversation_id');
-          if (activeConversationId) {
-            console.log('[PublicChat] Retomando conversa salva:', activeConversationId);
-            navigate(`/public-chat/${activeConversationId}`);
+          if (expiresAt > now) {
+            setStoredIdentity(identity);
+            setIsIdentified(true);
+            
+            // ✅ FIX: Validar se a conversa existe e está aberta antes de redirecionar
+            if (activeConversationId) {
+              const { data, error } = await supabase
+                .from('conversations')
+                .select('id, status')
+                .eq('id', activeConversationId)
+                .maybeSingle();
+              
+              if (data && data.status === 'open') {
+                console.log('[PublicChat] Retomando conversa válida:', activeConversationId);
+                navigate(`/public-chat/${activeConversationId}`);
+              } else {
+                // Conversa não existe ou está fechada - limpar
+                console.log('[PublicChat] Conversa expirada ou inválida, limpando...');
+                localStorage.removeItem('active_conversation_id');
+              }
+            }
+          } else {
+            // Identidade expirada
+            localStorage.removeItem(IDENTITY_STORAGE_KEY);
+            localStorage.removeItem('active_conversation_id');
           }
-        } else {
+        } catch (error) {
+          console.error("Erro ao validar sessão:", error);
           localStorage.removeItem(IDENTITY_STORAGE_KEY);
           localStorage.removeItem('active_conversation_id');
         }
-      } catch (error) {
-        console.error("Erro ao ler identidade:", error);
-        localStorage.removeItem(IDENTITY_STORAGE_KEY);
-        localStorage.removeItem('active_conversation_id');
       }
-    }
+    };
+    
+    validateAndResumeSession();
   }, [navigate]);
 
   // Auto-roteamento quando departamento está definido

@@ -109,9 +109,12 @@ export default function PublicChatWindow() {
       .single();
 
     if (error) {
+      // ✅ FIX: Limpar localStorage para evitar loop infinito
+      localStorage.removeItem('active_conversation_id');
+      
       toast({
-        title: "Erro ao carregar conversa",
-        description: error.message,
+        title: "Conversa não encontrada",
+        description: "Iniciando nova conversa...",
         variant: "destructive",
       });
       navigate("/public-chat");
@@ -289,7 +292,6 @@ export default function PublicChatWindow() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            disabled={sendMessageMutation.isPending}
             className="flex-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
           />
           <Button onClick={handleSendMessage} disabled={sendMessageMutation.isPending || !message.trim()}>

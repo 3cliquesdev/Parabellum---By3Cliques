@@ -16,44 +16,52 @@ export function useMessagesOffline(conversationId: string | null) {
   );
 
   // 2. Sincronizar com Supabase em background
-  const { data: serverMessages } = useQuery({
+  const { data: serverMessages, error: serverError } = useQuery({
     queryKey: ["messages", conversationId],
     queryFn: async () => {
       if (!conversationId) return [];
       
-      const { data, error } = await supabase
-        .from("messages")
-        .select(`
-          *,
-          sender:profiles!sender_id(
-            id,
-            full_name,
-            avatar_url,
-            job_title
-          )
-        `)
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
+      try {
+        const { data, error } = await supabase
+          .from("messages")
+          .select(`
+            *,
+            sender:profiles!sender_id(
+              id,
+              full_name,
+              avatar_url,
+              job_title
+            )
+          `)
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: true });
 
-      if (error) throw error;
+        if (error) {
+          console.error('[useMessagesOffline] Erro ao buscar mensagens:', error);
+          return null; // ✅ Retorna null ao invés de throw - fallback para cache
+        }
 
-      // Salvar no IndexedDB para próximo acesso offline
-      if (data) {
-        await db.messages.bulkPut(
-          data.map(m => ({ 
-            id: m.id,
-            conversation_id: m.conversation_id,
-            content: m.content,
-            sender_type: m.sender_type,
-            sender_id: m.sender_id || undefined,
-            is_ai_generated: m.is_ai_generated || false,
-            created_at: m.created_at,
-            synced: true 
-          }))
-        );
+        // Salvar no IndexedDB para próximo acesso offline
+        if (data) {
+          await db.messages.bulkPut(
+            data.map(m => ({ 
+              id: m.id,
+              conversation_id: m.conversation_id,
+              content: m.content,
+              sender_type: m.sender_type,
+              sender_id: m.sender_id || undefined,
+              is_ai_generated: m.is_ai_generated || false,
+              created_at: m.created_at,
+              synced: true 
+            }))
+          );
+        }
+
+        return data;
+      } catch (err) {
+        console.error('[useMessagesOffline] Erro ao sincronizar:', err);
+        return null; // ✅ Fallback para cache em caso de erro
       }
-
-      return data;
     },
     enabled: !!conversationId && navigator.onLine,
   });
@@ -87,8 +95,9 @@ export function useMessagesOffline(conversationId: string | null) {
 
   // 3. Retornar dados mais recentes (server > cache)
   return {
-    messages: serverMessages || cachedMessages || [],
-    isOffline: !navigator.onLine
+    messages: serverMessages ?? cachedMessages ?? [],
+    isOffline: !navigator.onLine,
+    hasError: !!serverError
   };
 }
 
