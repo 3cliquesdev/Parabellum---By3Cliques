@@ -166,3 +166,80 @@ export function useConnectWhatsAppInstance() {
     },
   });
 }
+
+export function useResetWhatsAppInstance() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (instanceId: string) => {
+      const { data, error } = await supabase.functions.invoke('reset-whatsapp-instance', {
+        body: { instance_id: instanceId }
+      });
+
+      if (error) {
+        console.error('Reset error:', error);
+        throw error;
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-instances"] });
+      toast({
+        title: "🔄 Instância Resetada",
+        description: "Sessão limpa. Pode criar uma nova conexão agora.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao resetar",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useWhatsAppAPIStatus(apiUrl: string, apiToken: string) {
+  return useQuery({
+    queryKey: ["whatsapp-api-status", apiUrl],
+    queryFn: async () => {
+      if (!apiUrl || !apiToken) return { status: 'unknown', latency: 0 };
+
+      let baseUrl = apiUrl;
+      if (baseUrl.includes('/manager')) {
+        baseUrl = baseUrl.split('/manager')[0];
+      }
+      baseUrl = baseUrl.replace(/\/$/, '');
+
+      const startTime = Date.now();
+      
+      try {
+        const response = await fetch(`${baseUrl}/instance/fetchInstances`, {
+          method: "GET",
+          headers: { "apikey": apiToken.trim() },
+          signal: AbortSignal.timeout(5000), // 5s timeout
+        });
+
+        const latency = Date.now() - startTime;
+
+        if (!response.ok) {
+          return { status: 'error', latency };
+        }
+
+        return { 
+          status: latency > 2000 ? 'slow' : 'online', 
+          latency 
+        };
+      } catch (error) {
+        return { 
+          status: 'offline', 
+          latency: Date.now() - startTime 
+        };
+      }
+    },
+    refetchInterval: 10000, // Refresh every 10 seconds
+    retry: false,
+  });
+}

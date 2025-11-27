@@ -17,19 +17,28 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Smartphone, Settings, Trash2, QrCode } from "lucide-react";
-import { useWhatsAppInstances, useDeleteWhatsAppInstance, useConnectWhatsAppInstance } from "@/hooks/useWhatsAppInstances";
+import { Plus, MoreVertical, Smartphone, Settings, Trash2, QrCode, AlertTriangle, Zap } from "lucide-react";
+import { useWhatsAppInstances, useDeleteWhatsAppInstance, useConnectWhatsAppInstance, useResetWhatsAppInstance, useWhatsAppAPIStatus } from "@/hooks/useWhatsAppInstances";
 import { WhatsAppInstanceDialog } from "@/components/WhatsAppInstanceDialog";
 import { QRCodeModal } from "@/components/QRCodeModal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function WhatsAppSettings() {
   const { data: instances, isLoading } = useWhatsAppInstances();
   const deleteMutation = useDeleteWhatsAppInstance();
   const connectMutation = useConnectWhatsAppInstance();
+  const resetMutation = useResetWhatsAppInstance();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selectedInstance, setSelectedInstance] = useState<any>(null);
+
+  // API Status for first instance (for demonstration)
+  const firstInstance = instances?.[0];
+  const { data: apiStatus } = useWhatsAppAPIStatus(
+    firstInstance?.api_url || '',
+    firstInstance?.api_token || ''
+  );
 
   const handleEdit = (instance: any) => {
     setSelectedInstance(instance);
@@ -52,9 +61,45 @@ export default function WhatsAppSettings() {
     }
   };
 
+  const handleHardReset = async (instance: any) => {
+    if (confirm("⚠️ RESET FORÇADO\n\nIsso vai:\n1. Desconectar (logout)\n2. Deletar a instância na API\n3. Limpar status no banco\n\nConfirma?")) {
+      await resetMutation.mutateAsync(instance.id);
+    }
+  };
+
   const handleNewInstance = () => {
     setSelectedInstance(null);
     setDialogOpen(true);
+  };
+
+  const getStatusIndicator = () => {
+    if (!apiStatus) return null;
+    
+    switch (apiStatus.status) {
+      case 'online':
+        return (
+          <div className="flex items-center gap-2 text-green-600 text-sm">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            API Online ({apiStatus.latency}ms)
+          </div>
+        );
+      case 'slow':
+        return (
+          <div className="flex items-center gap-2 text-yellow-600 text-sm">
+            <AlertTriangle className="w-3 h-3" />
+            Alta Latência ({apiStatus.latency}ms)
+          </div>
+        );
+      case 'offline':
+        return (
+          <div className="flex items-center gap-2 text-red-600 text-sm">
+            <AlertTriangle className="w-3 h-3" />
+            API Offline
+          </div>
+        );
+      default:
+        return null;
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -91,12 +136,32 @@ export default function WhatsAppSettings() {
             <p className="text-muted-foreground mt-1">
               Configure instâncias WhatsApp com Evolution API
             </p>
+            {getStatusIndicator()}
           </div>
           <Button onClick={handleNewInstance}>
             <Plus className="w-4 h-4 mr-2" />
             Nova Instância
           </Button>
         </div>
+
+        {/* API Status Warning */}
+        {apiStatus?.status === 'offline' && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              ⚠️ API Evolution inacessível ou offline. Certifique-se de que a URL é pública (HTTPS) e não localhost.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {apiStatus?.status === 'slow' && (
+          <Alert>
+            <Zap className="h-4 w-4" />
+            <AlertDescription>
+              ⚠️ Alta latência detectada ({apiStatus.latency}ms). A conexão pode estar lenta.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Instances Table */}
         <Card>
@@ -169,6 +234,13 @@ export default function WhatsAppSettings() {
                           <DropdownMenuItem onClick={() => handleEdit(instance)}>
                             <Settings className="w-4 h-4 mr-2" />
                             Configurar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleHardReset(instance)}
+                            className="text-orange-600"
+                          >
+                            <Zap className="w-4 h-4 mr-2" />
+                            🔄 Reset Forçado
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleDelete(instance.id)}
