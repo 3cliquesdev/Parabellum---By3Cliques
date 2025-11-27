@@ -340,7 +340,8 @@ serve(async (req) => {
 **REGRAS DE RESPOSTA:**
 1. **Small Talk (Saudações/Elogios):** Se o usuário disser "Oi", "Bom dia", "Obrigado" ou fizer elogios, responda de forma educada e breve usando seu conhecimento geral. Não busque na base de dados para isso.
 2. **Dúvidas Técnicas:** Se o usuário fizer uma pergunta sobre produtos, entregas ou suporte, USE O CONTEXTO ABAIXO se disponível.
-3. **Falha:** Se a resposta não estiver no contexto e não for conversa fiada, diga: "Vou chamar um especialista para te ajudar" e pare.
+3. **Casos de Devolução/Reembolso/Troca:** Se o cliente relatar problema com pedido (defeito, arrependimento, produto errado), colete: número do pedido, tipo do problema, e descrição. Depois use a ferramenta create_ticket para registrar automaticamente. NÃO transfira para humano nesses casos básicos.
+4. **Falha:** Se a resposta não estiver no contexto e não for conversa fiada nem caso de ticket, diga: "Vou chamar um especialista para te ajudar" e pare.
 ${knowledgeContext}
 
 **Contexto do Cliente:**
@@ -363,16 +364,94 @@ Use essas informações de forma natural e personalizada.`;
       max_tokens: persona.max_tokens || 500
     };
 
-    if (enabledTools.length > 0) {
-      aiPayload.tools = enabledTools.map((tool: any) => ({
+    // Add built-in tools + persona tools
+    const allTools = [
+      {
+        type: 'function',
+        function: {
+          name: 'create_ticket',
+          description: 'Cria um ticket de suporte para devolução, troca, reembolso ou defeito.',
+          parameters: {
+            type: 'object',
+            properties: {
+              order_id: { type: 'string', description: 'O número do pedido informado pelo cliente.' },
+              issue_type: { type: 'string', enum: ['devolucao', 'reembolso', 'troca', 'defeito'], description: 'O tipo de problema.' },
+              description: { type: 'string', description: 'O motivo detalhado do problema relatado pelo cliente.' }
+            },
+            required: ['order_id', 'issue_type', 'description']
+          }
+        }
+      },
+      ...enabledTools.map((tool: any) => ({
         type: 'function',
         function: tool.function_schema
-      }));
+      }))
+    ];
+
+    if (allTools.length > 0) {
+      aiPayload.tools = allTools;
     }
 
     const aiData = await callAIWithFallback(aiPayload);
-    const assistantMessage = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui processar sua mensagem.';
+    let assistantMessage = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui processar sua mensagem.';
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
+
+    // Handle tool calls (Function Calling)
+    if (toolCalls.length > 0) {
+      console.log('[ai-autopilot-chat] 🛠️ AI solicitou execução de ferramenta:', toolCalls);
+      
+      for (const toolCall of toolCalls) {
+        if (toolCall.function.name === 'create_ticket') {
+          try {
+            const args = JSON.parse(toolCall.function.arguments);
+            console.log('[ai-autopilot-chat] 🎫 Criando ticket automaticamente:', args);
+
+            // Create ticket in database
+            const { data: ticket, error: ticketError } = await supabaseClient
+              .from('tickets')
+              .insert({
+                contact_id: contact.id,
+                subject: `${args.issue_type.toUpperCase()} - Pedido ${args.order_id}`,
+                description: args.description,
+                priority: 'medium',
+                status: 'open',
+                source_conversation_id: conversationId,
+                category: args.issue_type === 'defeito' ? 'tecnico' : 'financeiro',
+                internal_note: `Ticket criado automaticamente pela IA. Pedido: ${args.order_id}`
+              })
+              .select()
+              .single();
+
+            if (ticketError) {
+              console.error('[ai-autopilot-chat] ❌ Erro ao criar ticket:', ticketError);
+              assistantMessage = 'Desculpe, não consegui registrar seu atendimento. Vou chamar um especialista.';
+              
+              // Fallback to human
+              await supabaseClient.from('conversations').update({ ai_mode: 'copilot' }).eq('id', conversationId);
+              await supabaseClient.functions.invoke('route-conversation', { body: { conversationId } });
+            } else {
+              console.log('[ai-autopilot-chat] ✅ Ticket criado com sucesso:', ticket.id);
+              
+              // Link conversation to ticket
+              await supabaseClient
+                .from('conversations')
+                .update({ related_ticket_id: ticket.id })
+                .eq('id', conversationId);
+
+              // Generate confirmation message
+              assistantMessage = `✅ Protocolo registrado com sucesso!\n\n📋 **Número do Ticket:** #${ticket.id.slice(0, 8).toUpperCase()}\n🔢 **Pedido:** ${args.order_id}\n📦 **Tipo:** ${args.issue_type.charAt(0).toUpperCase() + args.issue_type.slice(1)}\n\nNossa equipe vai analisar seu caso e retornar em breve. Você pode acompanhar o status através deste chat.`;
+            }
+          } catch (error) {
+            console.error('[ai-autopilot-chat] ❌ Erro ao processar tool call:', error);
+            assistantMessage = 'Ocorreu um erro ao processar sua solicitação. Vou chamar um especialista.';
+            
+            // Fallback to human
+            await supabaseClient.from('conversations').update({ ai_mode: 'copilot' }).eq('id', conversationId);
+            await supabaseClient.functions.invoke('route-conversation', { body: { conversationId } });
+          }
+        }
+      }
+    }
 
     // 7. Salvar resposta da IA como mensagem (PRIMEIRO salvar para visibilidade interna)
     const { data: savedMessage, error: saveError } = await supabaseClient
