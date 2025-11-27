@@ -325,20 +325,37 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       // 🚨 EMAIL JÁ EXISTE - INICIAR DESAFIO OTP
       console.log('[handle-whatsapp-event] 🚨 Email belongs to existing customer - triggering OTP challenge');
       
-      // Gerar código OTP
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
-
-      // Salvar código no banco
-      await supabase
-        .from('email_verifications')
-        .insert({
-          email: claimedEmail,
-          code: otpCode,
-          expires_at: expiresAt.toISOString(),
+      // FASE 2: Enviar OTP via email e capturar código retornado (código único gerado pelo send-verification-code)
+      let otpSentViaEmail = false;
+      let otpCode: string | null = null;
+      let devMode = false;
+      
+      try {
+        console.log('[handle-whatsapp-event] 📤 Invocando send-verification-code...');
+        const { data: otpResponse, error: otpError } = await supabase.functions.invoke('send-verification-code', {
+          body: { email: claimedEmail },
         });
+        
+        console.log('[handle-whatsapp-event] 📥 Resposta:', JSON.stringify(otpResponse));
+        
+        if (!otpError && otpResponse?.success) {
+          otpSentViaEmail = true;
+          otpCode = otpResponse.code; // FASE 2: Usar o código ÚNICO gerado pelo send-verification-code
+          devMode = otpResponse.dev_mode || false;
+          
+          console.log('[handle-whatsapp-event] ✅ OTP gerado e salvo pelo send-verification-code');
+          console.log('[handle-whatsapp-event] 🔑 Código OTP:', otpCode);
+          console.log('[handle-whatsapp-event] 📧 Email enviado:', otpSentViaEmail);
+          console.log('[handle-whatsapp-event] 🔧 Dev mode:', devMode);
+        } else {
+          console.error('[handle-whatsapp-event] ❌ Erro ao enviar OTP:', otpError);
+        }
+      } catch (emailError) {
+        console.error('[handle-whatsapp-event] ❌ Exceção ao enviar OTP:', emailError);
+      }
 
-      // Atualizar metadata da conversa
+      // Calcular expiration e atualizar metadata da conversa
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
       await supabase
         .from('conversations')
         .update({
@@ -353,45 +370,25 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         })
         .eq('id', conversationId);
 
-      // FASE 2 & 3: Enviar OTP via email E incluir no WhatsApp se DEV MODE
-      let otpSentViaEmail = false;
-      let devModeCode: string | null = null;
-      
-      try {
-        const { data: otpResponse, error: otpError } = await supabase.functions.invoke('send-verification-code', {
-          body: { email: claimedEmail },
-        });
-        
-        if (!otpError && otpResponse?.success) {
-          otpSentViaEmail = true;
-          
-          // FASE 2: Se em dev mode, pegar o código para mostrar
-          if (otpResponse.dev_mode && otpResponse.code) {
-            devModeCode = otpResponse.code;
-            console.log('[handle-whatsapp-event] 🔧 DEV MODE: OTP code =', devModeCode);
-          }
-          
-          console.log('[handle-whatsapp-event] ✅ OTP email sent successfully');
-        } else {
-          console.error('[handle-whatsapp-event] ❌ Error sending OTP email:', otpError);
-        }
-      } catch (emailError) {
-        console.error('[handle-whatsapp-event] ❌ Exception sending OTP email:', emailError);
-      }
-
-      // FASE 2 & 3: Mensagem WhatsApp com código se DEV MODE ou fallback se email falhou
+      // FASE 2 & 3: Mensagem WhatsApp adaptada ao contexto
       let whatsappMessage: string;
       
-      if (devModeCode) {
+      if (devMode && otpCode) {
         // FASE 2: DEV MODE - incluir código na mensagem
-        whatsappMessage = `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail.\n\n📧 Código enviado para *${claimedEmail}*\n\n🔧 **MODO DEV:** Seu código é *${devModeCode}*\n\nDigite o código aqui para confirmar sua identidade.`;
-      } else if (!otpSentViaEmail) {
+        whatsappMessage = `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail.\n\n📧 Código enviado para *${claimedEmail}*\n\n🔧 **MODO DEV:** Seu código é *${otpCode}*\n\nDigite o código aqui para confirmar sua identidade.`;
+        console.log('[handle-whatsapp-event] 🔧 DEV MODE: Incluindo código no WhatsApp');
+      } else if (!otpSentViaEmail && otpCode) {
         // FASE 3: Email falhou - enviar código via WhatsApp como fallback
         whatsappMessage = `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail.\n\n⚠️ O envio por email falhou.\n\n🔑 Seu código de verificação é: *${otpCode}*\n\nDigite o código aqui para confirmar sua identidade.`;
-        console.log('[handle-whatsapp-event] 📱 FALLBACK: Enviando OTP via WhatsApp');
-      } else {
+        console.log('[handle-whatsapp-event] 📱 FALLBACK: Enviando OTP via WhatsApp porque email falhou');
+      } else if (otpSentViaEmail) {
         // Modo normal: email enviado com sucesso
         whatsappMessage = `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail. Por segurança, enviei um código de 6 dígitos para *${claimedEmail}*.\n\nDigite o código aqui para confirmar sua identidade e acessar seu histórico.`;
+        console.log('[handle-whatsapp-event] ✅ Modo normal: OTP enviado via email');
+      } else {
+        // Erro crítico: nem email nem código disponível
+        whatsappMessage = `🔐 *Verificação de Identidade*\n\n❌ Houve um erro ao gerar o código de verificação. Por favor, tente novamente em alguns minutos.`;
+        console.error('[handle-whatsapp-event] ❌ ERRO CRÍTICO: Nem email nem código disponível');
       }
       
       await sendWhatsAppMessage(

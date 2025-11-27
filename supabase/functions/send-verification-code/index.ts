@@ -115,8 +115,12 @@ serve(async (req) => {
     console.log('[send-verification-code] ✅ Email enviado com SUCESSO via Resend');
     console.log('[send-verification-code] Destinatário:', email);
     console.log('[send-verification-code] ID do email:', emailData?.id);
+    console.log('[send-verification-code] 🔑 Código OTP gerado:', code);
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ 
+      success: true,
+      code: code // FASE 1: Sempre retornar o código para uso interno
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
