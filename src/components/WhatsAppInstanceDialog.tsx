@@ -235,11 +235,11 @@ export function WhatsAppInstanceDialog({
               name="user_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Consultor (Opcional)</FormLabel>
+                  <FormLabel>Atribuir ao Usuário (Dono do Número)</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione um consultor" />
+                        <SelectValue placeholder="Selecione o dono" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -252,7 +252,7 @@ export function WhatsAppInstanceDialog({
                     </SelectContent>
                   </Select>
                   <FormDescription>
-                    Se preenchido, conversas serão atribuídas automaticamente a este consultor
+                    Mensagens recebidas serão atribuídas diretamente a este usuário. Deixe vazio para roteamento geral.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

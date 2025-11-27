@@ -197,24 +197,22 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   const conversationId = conversationData[0].conversation_id;
   console.log('[handle-whatsapp-event] Conversation ID:', conversationId);
 
-  // 3. Se instância tem user_id, atribuir conversa automaticamente
+  // 3. FASE 2: Vincular instância e atribuir conversa
+  const updateData: any = {
+    whatsapp_instance_id: instance.id, // Vincular instância para roteamento de saída
+    ai_mode: instance.ai_mode,
+  };
+
+  // Se instância tem user_id (Dono), atribuir conversa automaticamente
   if (instance.user_id) {
-    await supabase
-      .from('conversations')
-      .update({
-        assigned_to: instance.user_id,
-        ai_mode: instance.ai_mode,
-      })
-      .eq('id', conversationId);
-    
-    console.log('[handle-whatsapp-event] Assigned to user:', instance.user_id);
-  } else {
-    // Atualizar ai_mode da conversa baseado na instância
-    await supabase
-      .from('conversations')
-      .update({ ai_mode: instance.ai_mode })
-      .eq('id', conversationId);
+    updateData.assigned_to = instance.user_id;
+    console.log('[handle-whatsapp-event] Assigned to owner:', instance.user_id);
   }
+
+  await supabase
+    .from('conversations')
+    .update(updateData)
+    .eq('id', conversationId);
 
   // 4. Inserir mensagem do cliente
   const { error: messageError } = await supabase
