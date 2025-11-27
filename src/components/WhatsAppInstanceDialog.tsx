@@ -33,7 +33,20 @@ import { useUsers } from "@/hooks/useUsers";
 const formSchema = z.object({
   name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
   instance_name: z.string().min(3, "Nome da instância deve ter pelo menos 3 caracteres"),
-  api_url: z.string().url("URL inválida"),
+  api_url: z.string()
+    .url("URL inválida")
+    .refine((url) => {
+      try {
+        const hostname = new URL(url).hostname;
+        // Validar que o domínio tem pelo menos um ponto (TLD)
+        // Exemplos válidos: example.com, api.evolution.com
+        // Exemplos inválidos: localhost, cloudfy (sem extensão)
+        const parts = hostname.split('.');
+        return parts.length >= 2 && parts[parts.length - 1].length >= 2;
+      } catch {
+        return false;
+      }
+    }, "Domínio inválido. Use formato: https://dominio.com (com extensão como .com, .net, etc)"),
   api_token: z.string().min(10, "Token inválido"),
   ai_mode: z.enum(["autopilot", "copilot", "disabled"]),
   department_id: z.string().optional(),
@@ -194,6 +207,29 @@ export function WhatsAppInstanceDialog({
                       <code className="text-foreground font-mono break-all block">
                         {field.value}
                       </code>
+                      {(() => {
+                        try {
+                          const url = new URL(field.value);
+                          const hostname = url.hostname;
+                          const parts = hostname.split('.');
+                          
+                          if (parts.length < 2 || parts[parts.length - 1].length < 2) {
+                            return (
+                              <p className="text-red-600 dark:text-red-400 font-medium">
+                                ❌ Erro: Domínio incompleto "{hostname}". 
+                                Adicione a extensão correta (exemplo: {hostname}.com)
+                              </p>
+                            );
+                          }
+                        } catch (e) {
+                          return (
+                            <p className="text-red-600 dark:text-red-400 font-medium">
+                              ❌ URL inválida
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
                       {field.value.startsWith('http:') && window.location.protocol === 'https:' && (
                         <p className="text-red-600 dark:text-red-400 font-medium">
                           ⚠️ Atenção: Você está usando HTTP em um site HTTPS. Isso será bloqueado pelo navegador (Mixed Content).
