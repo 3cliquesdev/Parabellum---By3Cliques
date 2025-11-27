@@ -55,7 +55,10 @@ serve(async (req) => {
       }
     );
 
-    const payload: EvolutionWebhook = await req.json();
+    const body = await req.json();
+    console.log('[handle-whatsapp-event] 🔥 Raw payload:', JSON.stringify(body, null, 2));
+    
+    const payload: EvolutionWebhook = body as EvolutionWebhook;
     console.log('[handle-whatsapp-event] Received event:', payload.event);
     console.log('[handle-whatsapp-event] Instance:', payload.instance);
 
@@ -74,8 +77,12 @@ serve(async (req) => {
       );
     }
 
+    // Normalizar formato do evento (Evolution API v2 usa minúsculas com pontos)
+    const normalizedEvent = normalizeEventType(payload.event);
+    console.log('[handle-whatsapp-event] Normalized event:', normalizedEvent);
+
     // Processar diferentes tipos de eventos
-    switch (payload.event) {
+    switch (normalizedEvent) {
       case 'MESSAGES_UPSERT':
         await handleMessageUpsert(supabase, payload, instance);
         break;
@@ -106,6 +113,27 @@ serve(async (req) => {
     );
   }
 });
+
+// Função auxiliar: normalizar formato de eventos da Evolution API v2
+function normalizeEventType(event: string): string {
+  // Evolution API v2 usa formato: messages.upsert, connection.update, qrcode.updated
+  // Normalizar para: MESSAGES_UPSERT, CONNECTION_UPDATE, QRCODE_UPDATED
+  
+  const eventMap: Record<string, string> = {
+    'messages.upsert': 'MESSAGES_UPSERT',
+    'connection.update': 'CONNECTION_UPDATE',
+    'qrcode.updated': 'QRCODE_UPDATED',
+  };
+  
+  // Retornar o evento normalizado ou tentar conversão genérica
+  const normalized = eventMap[event.toLowerCase()];
+  if (normalized) {
+    return normalized;
+  }
+  
+  // Fallback: converter para maiúsculas e trocar ponto por underscore
+  return event.toUpperCase().replace(/\./g, '_');
+}
 
 async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, instance: any) {
   const { data, event } = payload;
