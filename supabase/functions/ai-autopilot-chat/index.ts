@@ -148,13 +148,6 @@ serve(async (req) => {
       content: m.content
     })) || [];
 
-    // 4.5. Buscar artigos relevantes da Base de Conhecimento (RAG)
-    console.log('[ai-autopilot-chat] Buscando artigos relevantes na base de conhecimento...');
-    
-    // Função para remover acentos e normalizar texto
-    const removeAccents = (str: string) => 
-      str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    
     // Obter API keys antecipadamente
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -181,11 +174,8 @@ serve(async (req) => {
 
     // Helper: Chamar IA com fallback resiliente OpenAI → Lovable AI
     const callAIWithFallback = async (payload: any) => {
-      // Tentar OpenAI primeiro (se disponível)
       if (OPENAI_API_KEY) {
         try {
-          console.log('[ai-autopilot-chat] Tentando OpenAI GPT-4o-mini...');
-          
           const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -196,31 +186,22 @@ serve(async (req) => {
           }, 60000);
           
           if (response.ok) {
-            console.log('[ai-autopilot-chat] ✅ Saldo OK - Resposta Gerada via OpenAI GPT-4o-mini');
             return await response.json();
           }
           
-          // Se erro 429 (quota) ou 401 (auth), fallback para Lovable AI
           if (response.status === 429 || response.status === 401) {
-            const errorText = await response.text();
-            console.warn(`[ai-autopilot-chat] ⚠️ OpenAI falhou (${response.status}): ${errorText}`);
-            console.log('[ai-autopilot-chat] Fallback para Lovable AI...');
             throw new Error('OpenAI unavailable');
           }
           
           throw new Error(`OpenAI error: ${response.status}`);
         } catch (error) {
-          console.warn('[ai-autopilot-chat] OpenAI indisponível, tentando Lovable AI fallback...');
-          // Continue para o fallback abaixo
+          // Continue para fallback
         }
       }
       
-      // Fallback para Lovable AI Gateway
       if (!LOVABLE_API_KEY) {
-        throw new Error('Lovable AI também não configurada');
+        throw new Error('Nenhuma API key configurada');
       }
-      
-      console.log('[ai-autopilot-chat] Usando Lovable AI Gateway (Gemini 2.5 Flash)...');
       
       const fallbackResponse = await fetchWithTimeout('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
@@ -232,141 +213,134 @@ serve(async (req) => {
       }, 60000);
       
       if (!fallbackResponse.ok) {
-        const errorText = await fallbackResponse.text();
-        console.error('[ai-autopilot-chat] ❌ Lovable AI também falhou:', errorText);
-        
-        // Verificar se é erro de quota
         if (fallbackResponse.status === 429) {
-          console.error('[ai-autopilot-chat] ❌ ERRO DE QUOTA em AMBOS providers!');
-          throw new Error('QUOTA_ERROR: Erro de Saldo/Cota na IA. Verifique o faturamento.');
+          throw new Error('QUOTA_ERROR: Erro de Saldo/Cota na IA.');
         }
-        
-        throw new Error(`Lovable AI fallback failed: ${fallbackResponse.status}`);
+        throw new Error(`Lovable AI failed: ${fallbackResponse.status}`);
       }
       
-      console.log('[ai-autopilot-chat] ✅ Saldo OK - Resposta Gerada via Lovable AI (Gemini 2.5 Flash)');
       return await fallbackResponse.json();
     }
+
+    // OTIMIZAÇÃO 1: Classificar intenção ANTES da busca pesada
+    console.log('[ai-autopilot-chat] Classificando intenção da mensagem...');
     
-    // Extrair termos-chave usando IA com fallback resiliente
-    let words: string[] = [];
+    let intentType = 'technical'; // Default
+    let knowledgeArticles: any[] = [];
     
     try {
-      console.log('[ai-autopilot-chat] Extraindo palavras-chave...');
-      
-      const keywordData = await callAIWithFallback({
+      const intentData = await callAIWithFallback({
         messages: [
           { 
             role: 'system', 
-            content: 'Você é um extrator de palavras-chave para busca em banco de dados (Full Text Search). Receba a frase do usuário, remova stop words (artigos, pronomes, saudações) e retorne APENAS os substantivos e verbos principais separados por espaço. Se houver sinônimos óbvios, inclua-os. Exemplo: "Qual endereço para devoluções" → "endereço devoluções devolução remetente"'
+            content: 'Classifique a mensagem em uma categoria: "greeting" (saudações, oi, bom dia, obrigado, elogios), "technical" (dúvidas, problemas, pedidos de ajuda), ou "other". Responda APENAS com uma palavra: greeting, technical ou other.'
           },
-          { 
-            role: 'user', 
-            content: customerMessage 
-          }
+          { role: 'user', content: customerMessage }
         ],
-        temperature: 0.3,
-        max_tokens: 50
+        temperature: 0.1,
+        max_tokens: 10
       });
 
-      const extractedKeywords = keywordData.choices?.[0]?.message?.content?.trim() || '';
-      words = extractedKeywords.toLowerCase().split(/\s+/).filter((w: string) => w.length > 1);
-      console.log('[ai-autopilot-chat] ✅ Palavras-chave extraídas:', words);
+      intentType = intentData.choices?.[0]?.message?.content?.trim().toLowerCase() || 'technical';
+      console.log(`[ai-autopilot-chat] Intenção detectada: ${intentType}`);
     } catch (error) {
-      console.error('[ai-autopilot-chat] ⚠️ Erro na extração de palavras-chave, usando fallback manual:', error);
-      // Fallback: extração manual simples
-      words = customerMessage
-        .toLowerCase()
-        .split(/\s+/)
-        .filter(word => word.length > 3)
-        .slice(0, 5);
-      console.log('[ai-autopilot-chat] Termos fallback manual:', words);
+      console.error('[ai-autopilot-chat] Erro na classificação de intenção:', error);
+      // Fallback para busca técnica em caso de erro
     }
-
-    let knowledgeContext = '';
     
-    if (words.length > 0) {
-      // Criar termos de busca com e sem acentos
-      const searchTerms = words.flatMap(word => [
-        word,
-        removeAccents(word)
-      ]).filter((v, i, a) => a.indexOf(v) === i); // Remover duplicatas
+    // OTIMIZAÇÃO 2: Se for greeting, pular busca vetorial e responder direto
+    if (intentType === 'greeting') {
+      console.log('[ai-autopilot-chat] ⚡ Greeting detectado - pulando busca na base');
+    } else {
+      // OTIMIZAÇÃO 3: Buscar na base APENAS para dúvidas técnicas
+      console.log('[ai-autopilot-chat] 🔍 Busca técnica - consultando base de conhecimento...');
       
-      console.log('[ai-autopilot-chat] Termos normalizados:', searchTerms);
+      const removeAccents = (str: string) => 
+        str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       
-      // Construir busca OR para cada termo (title OU content)
-      const orConditions = searchTerms.map(term => 
-        `title.ilike.%${term}%,content.ilike.%${term}%`
-      ).join(',');
-      
-      // Buscar artigos publicados que contenham qualquer um dos termos
-      const { data: relevantArticles, error: articlesError } = await supabaseClient
-        .from('knowledge_articles')
-        .select('title, content')
-        .eq('is_published', true)
-        .or(orConditions)
-        .limit(5);
-
-      if (articlesError) {
-        console.error('[ai-autopilot-chat] Erro ao buscar artigos:', articlesError);
-      }
-
-      if (relevantArticles && relevantArticles.length > 0) {
-        console.log(`[ai-autopilot-chat] ✅ ${relevantArticles.length} artigos relevantes encontrados:`, 
-          relevantArticles.map(a => a.title));
-        
-        knowledgeContext = `\n\n**📚 Base de Conhecimento Disponível:**\n${relevantArticles.map(a => 
-          `**${a.title}**\n${a.content}`
-        ).join('\n\n---\n\n')}
-
-**IMPORTANTE:** Use as informações acima da Base de Conhecimento para responder com precisão. Se a resposta estiver na base de conhecimento, responda baseado nela.`;
-      } else {
-        console.log('[ai-autopilot-chat] ⚠️ NENHUM artigo relevante encontrado - ACIONANDO TRANSBORDO AUTOMÁTICO');
-        
-        // TRANSBORDO AUTOMÁTICO: Nenhum artigo encontrado
-        const fallbackMessage = "Não encontrei essa informação na nossa base de conhecimento. Vou chamar um atendente humano para te ajudar! 🤝";
-        
-        // Salvar mensagem de fallback
-        await supabaseClient
-          .from('messages')
-          .insert({
-            conversation_id: conversationId,
-            content: fallbackMessage,
-            sender_type: 'user',
-            message_type: 'text',
-            is_ai_generated: true,
-            sender_id: null
-          });
-        
-        // Mudar ai_mode para 'copilot' (transbordo)
-        await supabaseClient
-          .from('conversations')
-          .update({ ai_mode: 'copilot' })
-          .eq('id', conversationId);
-        
-        // Chamar route-conversation para distribuir para agente disponível
-        await supabaseClient.functions.invoke('route-conversation', {
-          body: { conversationId }
+      try {
+        const keywordData = await callAIWithFallback({
+          messages: [
+            { 
+              role: 'system', 
+              content: 'Extraia palavras-chave (substantivos e verbos) da mensagem. Responda apenas as palavras separadas por espaço.'
+            },
+            { role: 'user', content: customerMessage }
+          ],
+          temperature: 0.3,
+          max_tokens: 50
         });
+
+        const extractedKeywords = keywordData.choices?.[0]?.message?.content?.trim() || '';
+        const words = extractedKeywords.toLowerCase().split(/\s+/).filter((w: string) => w.length > 1);
         
-        console.log('[ai-autopilot-chat] ✅ Transbordo automático executado');
-        
-        return new Response(JSON.stringify({ 
-          status: 'handoff',
-          message: fallbackMessage,
-          reason: 'no_knowledge_found'
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        if (words.length > 0) {
+          const searchTerms = words.flatMap((word: string) => [word, removeAccents(word)])
+            .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
+          
+          const orConditions = searchTerms.map((term: string) =>
+            `title.ilike.%${term}%,content.ilike.%${term}%`
+          ).join(',');
+          
+          const { data: relevantArticles } = await supabaseClient
+            .from('knowledge_articles')
+            .select('title, content')
+            .eq('is_published', true)
+            .or(orConditions)
+            .limit(5);
+
+          if (relevantArticles && relevantArticles.length > 0) {
+            knowledgeArticles = relevantArticles;
+            console.log(`[ai-autopilot-chat] ✅ ${relevantArticles.length} artigos encontrados`);
+          } else {
+            console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo encontrado - transbordo automático');
+            
+            const fallbackMessage = "Não encontrei essa informação na nossa base de conhecimento. Vou chamar um atendente humano para te ajudar! 🤝";
+            
+            await supabaseClient.from('messages').insert({
+              conversation_id: conversationId,
+              content: fallbackMessage,
+              sender_type: 'user',
+              message_type: 'text',
+              is_ai_generated: true,
+              sender_id: null
+            });
+            
+            await supabaseClient.from('conversations').update({ ai_mode: 'copilot' }).eq('id', conversationId);
+            await supabaseClient.functions.invoke('route-conversation', { body: { conversationId } });
+            
+            return new Response(JSON.stringify({ 
+              status: 'handoff',
+              message: fallbackMessage,
+              reason: 'no_knowledge_found'
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        }
+      } catch (error) {
+        console.error('[ai-autopilot-chat] Erro na busca de conhecimento:', error);
       }
     }
 
-    // 5. Preparar contexto do cliente para o system prompt
+    // 5. Preparar system prompt inteligente baseado na intenção
     const contactName = `${contact.first_name} ${contact.last_name}`.trim();
     const contactCompany = contact.company ? ` da empresa ${contact.company}` : '';
     const contactStatus = contact.status || 'lead';
     
-    const contextualizedSystemPrompt = `${persona.system_prompt}
+    let knowledgeContext = '';
+    if (knowledgeArticles.length > 0) {
+      knowledgeContext = `\n\n**📚 BASE DE CONHECIMENTO:**\n${knowledgeArticles.map(a => 
+        `**${a.title}**\n${a.content}`
+      ).join('\n\n---\n\n')}`;
+    }
+    
+    const contextualizedSystemPrompt = `Você é o assistente virtual da empresa.
+
+**REGRAS DE RESPOSTA:**
+1. **Small Talk (Saudações/Elogios):** Se o usuário disser "Oi", "Bom dia", "Obrigado" ou fizer elogios, responda de forma educada e breve usando seu conhecimento geral. Não busque na base de dados para isso.
+2. **Dúvidas Técnicas:** Se o usuário fizer uma pergunta sobre produtos, entregas ou suporte, USE O CONTEXTO ABAIXO se disponível.
+3. **Falha:** Se a resposta não estiver no contexto e não for conversa fiada, diga: "Vou chamar um especialista para te ajudar" e pare.
 ${knowledgeContext}
 
 **Contexto do Cliente:**
@@ -376,11 +350,9 @@ ${knowledgeContext}
 ${contact.email ? `- Email: ${contact.email}` : ''}
 ${contact.phone ? `- Telefone: ${contact.phone}` : ''}
 
-Lembre-se de usar essas informações de forma natural e personalizada em suas respostas.`;
+Use essas informações de forma natural e personalizada.`;
 
-    // 6. Chamar IA com persona e tools (com fallback resiliente)
-    console.log('[ai-autopilot-chat] Gerando resposta final...');
-
+    // 6. Gerar resposta final
     const aiPayload: any = {
       messages: [
         { role: 'system', content: contextualizedSystemPrompt },
@@ -391,7 +363,6 @@ Lembre-se de usar essas informações de forma natural e personalizada em suas r
       max_tokens: persona.max_tokens || 500
     };
 
-    // Adicionar tools se disponíveis
     if (enabledTools.length > 0) {
       aiPayload.tools = enabledTools.map((tool: any) => ({
         type: 'function',
@@ -402,11 +373,6 @@ Lembre-se de usar essas informações de forma natural e personalizada em suas r
     const aiData = await callAIWithFallback(aiPayload);
     const assistantMessage = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui processar sua mensagem.';
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
-
-    console.log(`[ai-autopilot-chat] ✅ Resposta gerada (${assistantMessage.length} chars)`);
-    if (toolCalls.length > 0) {
-      console.log(`[ai-autopilot-chat] ${toolCalls.length} tool calls detectadas`);
-    }
 
     // 7. Salvar resposta da IA como mensagem
     const { error: saveError } = await supabaseClient
@@ -424,18 +390,14 @@ Lembre-se de usar essas informações de forma natural e personalizada em suas r
       console.error('[ai-autopilot-chat] Erro ao salvar mensagem:', saveError);
     }
 
-    // 8. Se o canal for WhatsApp, enviar via Evolution API
+    // 8. Se WhatsApp, enviar via Evolution API
     if (channel === 'whatsapp' && contact.phone) {
-      console.log('[ai-autopilot-chat] Canal WhatsApp detectado, enviando via Evolution API...');
-      
       try {
-        // Buscar instância WhatsApp vinculada ao departamento ou número geral
         const { data: whatsappInstance } = await supabaseClient
           .from('whatsapp_instances')
           .select('*')
           .eq('status', 'connected')
           .or(`department_id.eq.${department},department_id.is.null`)
-          .order('user_id', { ascending: false, nullsFirst: false }) // Priorizar instâncias específicas
           .limit(1)
           .single();
 
@@ -447,13 +409,9 @@ Lembre-se de usar essas informações de forma natural e personalizada em suas r
               message: assistantMessage,
             },
           });
-          console.log('[ai-autopilot-chat] ✅ Mensagem enviada via WhatsApp');
-        } else {
-          console.warn('[ai-autopilot-chat] ⚠️ Nenhuma instância WhatsApp conectada para este departamento');
         }
       } catch (whatsappError) {
-        console.error('[ai-autopilot-chat] Erro ao enviar via WhatsApp:', whatsappError);
-        // Não propagar erro - mensagem já foi salva no banco
+        console.error('[ai-autopilot-chat] Erro WhatsApp:', whatsappError);
       }
     }
 
@@ -481,7 +439,12 @@ Lembre-se de usar essas informações de forma natural e personalizada em suas r
         id: persona.id,
         name: persona.name
       },
-      tool_calls: toolCalls
+      tool_calls: toolCalls,
+      debug: {
+        intent: intentType,
+        articles_found: knowledgeArticles.map((a: any) => a.title),
+        search_performed: intentType === 'technical'
+      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
