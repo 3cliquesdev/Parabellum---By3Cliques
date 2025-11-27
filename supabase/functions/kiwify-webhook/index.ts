@@ -150,15 +150,34 @@ async function handlePaidOrder(
     console.warn('[kiwify-webhook] Auth error (may already exist):', authErr);
   }
 
-  // 3. Buscar playbook associado ao produto
+  // 3. Buscar produto por external_id (Kiwify product_id)
   const { data: product } = await supabase
     .from('products')
-    .select('id, name')
-    .ilike('name', `%${Product.product_name}%`)
+    .select('id, name, external_id')
+    .eq('external_id', Product.product_id)
     .single();
 
   let playbook_id = null;
-  if (product) {
+  
+  if (!product) {
+    console.warn(`[kiwify-webhook] ⚠️ Produto não mapeado - ID Kiwify: ${Product.product_id} - Configure em /settings/products`);
+    
+    // Log interaction alerting about unmapped product
+    await supabase
+      .from('interactions')
+      .insert({
+        customer_id: contact.id,
+        type: 'note',
+        channel: 'other',
+        content: `⚠️ Produto não mapeado no sistema - ID Kiwify: ${Product.product_id}. Configure o mapeamento em /settings/products`,
+        metadata: {
+          product_name: Product.product_name,
+          product_id: Product.product_id,
+          unmapped: true
+        }
+      });
+  } else {
+    // Product found, get linked playbook
     const { data: playbook } = await supabase
       .from('onboarding_playbooks')
       .select('id')
@@ -248,12 +267,16 @@ async function handleRecoveryOrder(
     throw new Error('Failed to create/update contact');
   }
 
-  // 2. Buscar produto no sistema
+  // 2. Buscar produto por external_id (Kiwify product_id)
   const { data: product } = await supabase
     .from('products')
-    .select('id, name')
-    .ilike('name', `%${Product.product_name}%`)
+    .select('id, name, external_id')
+    .eq('external_id', Product.product_id)
     .single();
+
+  if (!product) {
+    console.warn(`[kiwify-webhook] ⚠️ Produto não mapeado para recuperação - ID Kiwify: ${Product.product_id}`);
+  }
 
   // 3. VERIFICAR DUPLICIDADE: Deal aberto já existe?
   if (product) {

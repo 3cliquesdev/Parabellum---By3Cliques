@@ -3,7 +3,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Loader2, Plus, Edit, Trash2, Package } from "lucide-react";
+import { Shield, Loader2, Plus, Edit, Trash2, Package, ExternalLink } from "lucide-react";
 import { useProducts, useDeleteProduct } from "@/hooks/useProducts";
 import { ProductDialog } from "@/components/ProductDialog";
 import {
@@ -108,7 +108,7 @@ export default function Products() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="flex items-center gap-2">
+                    <CardTitle className="flex items-center gap-2 flex-wrap">
                       {product.name}
                       {!product.is_active && (
                         <Badge variant="secondary">Inativo</Badge>
@@ -118,6 +118,25 @@ export default function Products() {
                       <CardDescription className="mt-2">
                         {product.description}
                       </CardDescription>
+                    )}
+                    
+                    {/* Kiwify ID Badge */}
+                    {product.external_id && (
+                      <div className="mt-2">
+                        <Badge variant="outline" className="text-xs">
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          Kiwify: {product.external_id}
+                        </Badge>
+                      </div>
+                    )}
+                    
+                    {/* Playbook Badge */}
+                    {product.playbook && product.playbook.length > 0 && (
+                      <div className="mt-2">
+                        <Badge className="bg-primary/10 text-primary border-primary/20">
+                          🎯 {product.playbook[0].name}
+                        </Badge>
+                      </div>
                     )}
                   </div>
                 </div>

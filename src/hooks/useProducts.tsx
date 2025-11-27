@@ -8,7 +8,14 @@ export function useProducts() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("*")
+        .select(`
+          *,
+          playbook:onboarding_playbooks!onboarding_playbooks_product_id_fkey(
+            id,
+            name,
+            is_active
+          )
+        `)
         .order("name", { ascending: true });
 
       if (error) throw error;
@@ -25,6 +32,7 @@ export function useCreateProduct() {
     mutationFn: async (product: {
       name: string;
       description?: string;
+      external_id?: string;
       requires_account_manager: boolean;
       is_active: boolean;
     }) => {
@@ -66,6 +74,7 @@ export function useUpdateProduct() {
       updates: Partial<{
         name: string;
         description: string;
+        external_id: string;
         requires_account_manager: boolean;
         is_active: boolean;
       }>;
