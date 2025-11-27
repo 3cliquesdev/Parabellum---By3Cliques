@@ -66,23 +66,31 @@ export function WhatsAppInstanceDialog({
       api_url: instance.api_url,
       api_token: instance.api_token,
       ai_mode: instance.ai_mode,
-      department_id: instance.department_id || undefined,
-      user_id: instance.user_id || undefined,
+      department_id: instance.department_id || "__none__",
+      user_id: instance.user_id || "__none__",
     } : {
       name: "",
       instance_name: "",
       api_url: "",
       api_token: "",
       ai_mode: "autopilot",
+      department_id: "__none__",
+      user_id: "__none__",
     },
   });
 
   const onSubmit = async (data: FormData) => {
     try {
+      const payload = {
+        ...data,
+        department_id: data.department_id === "__none__" ? null : data.department_id,
+        user_id: data.user_id === "__none__" ? null : data.user_id,
+      };
+      
       if (instance) {
-        await updateMutation.mutateAsync({ id: instance.id, ...data });
+        await updateMutation.mutateAsync({ id: instance.id, ...payload });
       } else {
-        await createMutation.mutateAsync(data as any);
+        await createMutation.mutateAsync(payload as any);
       }
       onOpenChange(false);
       form.reset();
@@ -206,7 +214,7 @@ export function WhatsAppInstanceDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Nenhum (Geral)</SelectItem>
+                      <SelectItem value="__none__">Nenhum (Geral)</SelectItem>
                       {departments?.map((dept) => (
                         <SelectItem key={dept.id} value={dept.id}>
                           {dept.name}
@@ -235,7 +243,7 @@ export function WhatsAppInstanceDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Nenhum (Número Geral)</SelectItem>
+                      <SelectItem value="__none__">Nenhum (Número Geral)</SelectItem>
                       {consultants?.map((consultant) => (
                         <SelectItem key={consultant.id} value={consultant.id}>
                           {consultant.full_name}
