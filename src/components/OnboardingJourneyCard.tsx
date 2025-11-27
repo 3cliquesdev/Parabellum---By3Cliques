@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Circle, AlertCircle } from "lucide-react";
+import { CheckCircle2, Circle, AlertCircle, Play } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useCustomerContext } from "@/hooks/useCustomerContext";
 import { Skeleton } from "@/components/ui/skeleton";
+import { OnboardingStepModal } from "@/components/OnboardingStepModal";
 
 interface OnboardingJourneyCardProps {
   contactId: string;
@@ -14,6 +16,7 @@ interface OnboardingJourneyCardProps {
 
 export default function OnboardingJourneyCard({ contactId }: OnboardingJourneyCardProps) {
   const { data: context, isLoading } = useCustomerContext(contactId);
+  const [selectedStep, setSelectedStep] = useState<any | null>(null);
 
   if (isLoading) {
     return (
@@ -52,7 +55,8 @@ export default function OnboardingJourneyCard({ contactId }: OnboardingJourneyCa
         {context.journeySteps.map((step) => (
           <div
             key={step.id}
-            className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+            className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+            onClick={() => setSelectedStep(step)}
           >
             {step.completed ? (
               <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
@@ -69,6 +73,12 @@ export default function OnboardingJourneyCard({ contactId }: OnboardingJourneyCa
                   <Badge variant="destructive" className="gap-1">
                     <AlertCircle className="h-3 w-3" />
                     Crítica
+                  </Badge>
+                )}
+                {step.video_url && (
+                  <Badge variant="outline" className="gap-1">
+                    <Play className="h-3 w-3" />
+                    Vídeo
                   </Badge>
                 )}
               </div>
@@ -105,6 +115,14 @@ export default function OnboardingJourneyCard({ contactId }: OnboardingJourneyCa
           </div>
         ))}
       </CardContent>
+
+      {/* Modal */}
+      {selectedStep && (
+        <OnboardingStepModal
+          step={selectedStep}
+          onClose={() => setSelectedStep(null)}
+        />
+      )}
     </Card>
   );
 }

@@ -1,6 +1,10 @@
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { FileText, FileSpreadsheet, File as FileIcon, ImageIcon, Download } from 'lucide-react';
+import ReactPlayer from 'react-player';
+import confetti from 'canvas-confetti';
 
 interface Attachment {
   name: string;
@@ -14,9 +18,12 @@ interface PlaybookStepViewerProps {
   video_url?: string;
   rich_content?: string;
   attachments?: Attachment[];
+  onVideoEnded?: () => void;
 }
 
-export function PlaybookStepViewer({ label, video_url, rich_content, attachments }: PlaybookStepViewerProps) {
+export function PlaybookStepViewer({ label, video_url, rich_content, attachments, onVideoEnded }: PlaybookStepViewerProps) {
+  const [videoCompleted, setVideoCompleted] = useState(false);
+
   const getFileIcon = (type: string) => {
     if (type.includes('pdf')) return <FileText className="h-5 w-5 text-red-500" />;
     if (type.includes('spreadsheet') || type.includes('excel')) return <FileSpreadsheet className="h-5 w-5 text-green-500" />;
@@ -25,51 +32,40 @@ export function PlaybookStepViewer({ label, video_url, rich_content, attachments
     return <FileIcon className="h-5 w-5 text-gray-500" />;
   };
 
-  const detectVideoEmbed = (url: string) => {
-    // YouTube
-    const youtubeMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    if (youtubeMatch) {
-      return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
-    }
-
-    // Vimeo
-    const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-    if (vimeoMatch) {
-      return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
-    }
-
-    // Loom
-    const loomMatch = url.match(/loom\.com\/(?:share|embed)\/([a-f0-9]+)/);
-    if (loomMatch) {
-      return `https://www.loom.com/embed/${loomMatch[1]}`;
-    }
-
-    // Google Drive
-    const gdriveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (gdriveMatch) {
-      return `https://drive.google.com/file/d/${gdriveMatch[1]}/preview`;
-    }
-
-    return null;
+  const handleVideoEnd = () => {
+    setVideoCompleted(true);
+    confetti({ 
+      particleCount: 100, 
+      spread: 70, 
+      origin: { y: 0.6 },
+      colors: ['#2563EB', '#3B82F6', '#60A5FA']
+    });
+    onVideoEnded?.();
   };
-
-  const embedUrl = video_url ? detectVideoEmbed(video_url) : null;
 
   return (
     <Card className="p-6 space-y-6">
       {/* Title */}
-      <h2 className="text-2xl font-bold text-foreground">{label}</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-foreground">{label}</h2>
+        {videoCompleted && (
+          <Badge className="bg-green-500 text-white animate-pulse">
+            🎉 Vídeo Concluído!
+          </Badge>
+        )}
+      </div>
 
-      {/* Video */}
-      {embedUrl && (
-        <div className="border rounded-lg overflow-hidden bg-black">
+      {/* Video Player */}
+      {video_url && (ReactPlayer as any).canPlay && (ReactPlayer as any).canPlay(video_url) && (
+        <div className="rounded-lg overflow-hidden bg-black shadow-lg">
           <div className="aspect-video">
-            <iframe
-              src={embedUrl}
-              className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
+            {React.createElement(ReactPlayer as any, {
+              url: video_url,
+              width: '100%',
+              height: '100%',
+              controls: true,
+              onEnded: handleVideoEnd,
+            })}
           </div>
         </div>
       )}

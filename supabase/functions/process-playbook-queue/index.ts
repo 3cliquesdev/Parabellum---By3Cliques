@@ -330,8 +330,27 @@ async function executeTaskNode(supabase: any, item: QueueItem, contact: any) {
   const taskData = item.node_data;
   const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Default 7 days
 
-  // Create activity
-  const { error } = await supabase
+  // Create customer journey step with video and content
+  const { error: journeyError } = await supabase
+    .from('customer_journey_steps')
+    .insert({
+      contact_id: contact.id,
+      step_name: taskData.label || 'Etapa do Onboarding',
+      video_url: taskData.video_url || null,
+      rich_content: taskData.rich_content || taskData.description || null,
+      attachments: taskData.attachments || [],
+      is_critical: taskData.is_critical || false,
+      notes: taskData.notes || null,
+      completed: false,
+    });
+
+  if (journeyError) {
+    console.error('Failed to create journey step:', journeyError);
+    return { success: false, error: journeyError.message };
+  }
+
+  // Create activity for assigned person
+  const { error: activityError } = await supabase
     .from('activities')
     .insert({
       contact_id: contact.id,
@@ -343,12 +362,12 @@ async function executeTaskNode(supabase: any, item: QueueItem, contact: any) {
       completed: false,
     });
 
-  if (error) {
-    console.error('Failed to create task:', error);
-    return { success: false, error: error.message };
+  if (activityError) {
+    console.error('Failed to create task:', activityError);
+    return { success: false, error: activityError.message };
   }
 
-  console.log('Task created successfully');
+  console.log('Task and journey step created successfully');
   return { success: true };
 }
 

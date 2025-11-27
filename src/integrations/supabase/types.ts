@@ -768,6 +768,7 @@ export type Database = {
       }
       customer_journey_steps: {
         Row: {
+          attachments: Json | null
           completed: boolean
           completed_at: string | null
           completed_by: string | null
@@ -777,10 +778,15 @@ export type Database = {
           is_critical: boolean
           notes: string | null
           position: number
+          rich_content: string | null
           step_name: string
           updated_at: string
+          video_completed: boolean | null
+          video_completed_at: string | null
+          video_url: string | null
         }
         Insert: {
+          attachments?: Json | null
           completed?: boolean
           completed_at?: string | null
           completed_by?: string | null
@@ -790,10 +796,15 @@ export type Database = {
           is_critical?: boolean
           notes?: string | null
           position?: number
+          rich_content?: string | null
           step_name: string
           updated_at?: string
+          video_completed?: boolean | null
+          video_completed_at?: string | null
+          video_url?: string | null
         }
         Update: {
+          attachments?: Json | null
           completed?: boolean
           completed_at?: string | null
           completed_by?: string | null
@@ -803,8 +814,12 @@ export type Database = {
           is_critical?: boolean
           notes?: string | null
           position?: number
+          rich_content?: string | null
           step_name?: string
           updated_at?: string
+          video_completed?: boolean | null
+          video_completed_at?: string | null
+          video_url?: string | null
         }
         Relationships: [
           {
