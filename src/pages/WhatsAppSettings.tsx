@@ -154,6 +154,28 @@ export default function WhatsAppSettings() {
               Configure instâncias WhatsApp com Evolution API
             </p>
             {getStatusIndicator()}
+            {/* Webhook URL Display */}
+            <div className="mt-3 p-3 bg-muted/50 rounded-lg border border-border">
+              <p className="text-xs font-semibold text-muted-foreground mb-1">
+                🔗 URL do Webhook (configurada automaticamente):
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="text-xs bg-background px-2 py-1 rounded border flex-1 font-mono">
+                  {import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-whatsapp-event
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-whatsapp-event`
+                    );
+                  }}
+                >
+                  Copiar
+                </Button>
+              </div>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button 
