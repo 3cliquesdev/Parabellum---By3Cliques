@@ -167,12 +167,12 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   console.log('[handle-whatsapp-event] Message from:', customerPhone);
   console.log('[handle-whatsapp-event] Text:', messageText);
 
-  // 1. Buscar ou criar contato
+  // 1. Buscar ou criar contato TEMPORÁRIO (visitante)
   let contactId: string;
   
   const { data: existingContact } = await supabase
     .from('contacts')
-    .select('id')
+    .select('id, email')
     .eq('phone', customerPhone)
     .single();
 
@@ -180,7 +180,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     contactId = existingContact.id;
     console.log('[handle-whatsapp-event] Existing contact found:', contactId);
   } else {
-    // Criar novo contato
+    // Criar contato temporário como "Visitante"
     const names = customerName.split(' ');
     const firstName = names[0] || customerName;
     const lastName = names.slice(1).join(' ') || '';
@@ -204,7 +204,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     }
 
     contactId = newContact.id;
-    console.log('[handle-whatsapp-event] New contact created:', contactId);
+    console.log('[handle-whatsapp-event] New temporary contact created:', contactId);
   }
 
   // 2. Buscar ou criar conversa usando RPC function
@@ -225,13 +225,105 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   const conversationId = conversationData[0].conversation_id;
   console.log('[handle-whatsapp-event] Conversation ID:', conversationId);
 
-  // 3. FASE 2: Vincular instância e atribuir conversa
+  // 3. Buscar conversa para checar metadata (estado OTP)
+  const { data: conversation } = await supabase
+    .from('conversations')
+    .select('customer_metadata')
+    .eq('id', conversationId)
+    .single();
+
+  const metadata = conversation?.customer_metadata || {};
+
+  // 🔐 FLUXO DE VERIFICAÇÃO OTP
+  if (metadata.awaiting_otp) {
+    console.log('[handle-whatsapp-event] 🔐 Validating OTP...');
+    await handleOTPValidation(supabase, conversationId, messageText, metadata, instance);
+    return; // Não processar mais nada após validação OTP
+  }
+
+  // 🔍 DETECÇÃO DE EMAIL NA MENSAGEM
+  const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
+  const emailMatch = messageText.match(emailRegex);
+
+  if (emailMatch) {
+    const claimedEmail = emailMatch[0].toLowerCase();
+    console.log('[handle-whatsapp-event] 📧 Email detected:', claimedEmail);
+
+    // Verificar se email já existe no banco
+    const { data: existingEmailContact } = await supabase
+      .from('contacts')
+      .select('id, first_name, last_name, email')
+      .eq('email', claimedEmail)
+      .single();
+
+    if (existingEmailContact && existingEmailContact.id !== contactId) {
+      // 🚨 EMAIL JÁ EXISTE - INICIAR DESAFIO OTP
+      console.log('[handle-whatsapp-event] 🚨 Email belongs to existing customer - triggering OTP challenge');
+      
+      // Gerar código OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
+
+      // Salvar código no banco
+      await supabase
+        .from('email_verifications')
+        .insert({
+          email: claimedEmail,
+          code: otpCode,
+          expires_at: expiresAt.toISOString(),
+        });
+
+      // Atualizar metadata da conversa
+      await supabase
+        .from('conversations')
+        .update({
+          customer_metadata: {
+            ...metadata,
+            awaiting_otp: true,
+            claimant_email: claimedEmail,
+            claimed_contact_id: existingEmailContact.id,
+            otp_attempts: 0,
+            otp_expires_at: expiresAt.toISOString(),
+          },
+        })
+        .eq('id', conversationId);
+
+      // Enviar email via Resend
+      try {
+        await supabase.functions.invoke('send-verification-code', {
+          body: { email: claimedEmail },
+        });
+        console.log('[handle-whatsapp-event] ✅ OTP email sent successfully');
+      } catch (emailError) {
+        console.error('[handle-whatsapp-event] ❌ Error sending OTP email:', emailError);
+      }
+
+      // Responder ao cliente no WhatsApp
+      await sendWhatsAppMessage(
+        supabase,
+        instance,
+        customerPhone,
+        `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail. Por segurança, enviei um código de 6 dígitos para *${claimedEmail}*.\n\nDigite o código aqui para confirmar sua identidade e acessar seu histórico.`
+      );
+
+      // Inserir mensagem do sistema
+      await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        content: messageText,
+        sender_type: 'contact',
+        sender_id: null,
+      });
+
+      return; // Não processar mais nada - aguardando OTP
+    }
+  }
+
+  // 4. FASE 2: Vincular instância e atribuir conversa (normal flow)
   const updateData: any = {
-    whatsapp_instance_id: instance.id, // Vincular instância para roteamento de saída
+    whatsapp_instance_id: instance.id,
     ai_mode: instance.ai_mode,
   };
 
-  // Se instância tem user_id (Dono), atribuir conversa automaticamente
   if (instance.user_id) {
     updateData.assigned_to = instance.user_id;
     console.log('[handle-whatsapp-event] Assigned to owner:', instance.user_id);
@@ -242,7 +334,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     .update(updateData)
     .eq('id', conversationId);
 
-  // 4. Inserir mensagem do cliente
+  // 5. Inserir mensagem do cliente
   const { error: messageError } = await supabase
     .from('messages')
     .insert({
@@ -260,11 +352,10 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
 
   console.log('[handle-whatsapp-event] Message inserted successfully');
 
-  // 5. Se ai_mode = 'autopilot', disparar AI
+  // 6. Se ai_mode = 'autopilot', disparar AI
   if (instance.ai_mode === 'autopilot') {
     console.log('[handle-whatsapp-event] Triggering AI autopilot...');
     
-    // Chamar função AI (será implementada na próxima fase)
     try {
       await supabase.functions.invoke('ai-autopilot-chat', {
         body: {
@@ -275,12 +366,10 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       console.log('[handle-whatsapp-event] AI triggered successfully');
     } catch (aiError) {
       console.error('[handle-whatsapp-event] Error triggering AI:', aiError);
-      // Não propagar erro - mensagem foi salva com sucesso
     }
   } else if (instance.ai_mode === 'copilot') {
     console.log('[handle-whatsapp-event] Copilot mode - generating suggestion...');
     
-    // Gerar sugestão da IA sem enviar (será implementado na próxima fase)
     try {
       await supabase.functions.invoke('generate-smart-reply', {
         body: {
@@ -291,6 +380,208 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     } catch (copilotError) {
       console.error('[handle-whatsapp-event] Error generating copilot suggestion:', copilotError);
     }
+  }
+}
+
+// 🔐 Função auxiliar: Validar código OTP
+async function handleOTPValidation(
+  supabase: any,
+  conversationId: string,
+  messageText: string,
+  metadata: any,
+  instance: any
+) {
+  const trimmedCode = messageText.trim();
+  const claimedEmail = metadata.claimant_email;
+  const claimedContactId = metadata.claimed_contact_id;
+  const attempts = metadata.otp_attempts || 0;
+
+  console.log(`[handle-whatsapp-event] 🔐 Validating OTP attempt ${attempts + 1}/3`);
+
+  // Verificar código no banco
+  const { data: verification } = await supabase
+    .from('email_verifications')
+    .select('*')
+    .eq('email', claimedEmail)
+    .eq('code', trimmedCode)
+    .eq('verified', false)
+    .gte('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (verification) {
+    // ✅ CÓDIGO CORRETO - VINCULAR CONTATO
+    console.log('[handle-whatsapp-event] ✅ OTP validated successfully');
+
+    // Obter phone da conversa atual
+    const { data: currentConversation } = await supabase
+      .from('conversations')
+      .select('contact_id, contacts(phone, whatsapp_id)')
+      .eq('id', conversationId)
+      .single();
+
+    const currentPhone = currentConversation.contacts.phone;
+    const currentWhatsAppId = currentConversation.contacts.whatsapp_id;
+
+    // Atualizar contato existente com phone do WhatsApp
+    await supabase
+      .from('contacts')
+      .update({
+        phone: currentPhone,
+        whatsapp_id: currentWhatsAppId,
+      })
+      .eq('id', claimedContactId);
+
+    // Deletar contato temporário
+    await supabase
+      .from('contacts')
+      .delete()
+      .eq('id', currentConversation.contact_id);
+
+    // Atualizar conversa para o contato correto
+    await supabase
+      .from('conversations')
+      .update({
+        contact_id: claimedContactId,
+        customer_metadata: {}, // Limpar metadata
+      })
+      .eq('id', conversationId);
+
+    // Marcar código como usado
+    await supabase
+      .from('email_verifications')
+      .update({ verified: true })
+      .eq('id', verification.id);
+
+    // Buscar nome do cliente
+    const { data: customer } = await supabase
+      .from('contacts')
+      .select('first_name')
+      .eq('id', claimedContactId)
+      .single();
+
+    // Responder ao cliente
+    const { data: conv } = await supabase
+      .from('conversations')
+      .select('contacts(phone)')
+      .eq('id', conversationId)
+      .single();
+
+    await sendWhatsAppMessage(
+      supabase,
+      instance,
+      conv.contacts.phone,
+      `✅ *Identidade Confirmada!*\n\nBem-vindo de volta, ${customer?.first_name || 'cliente'}! 👋\n\nAgora você tem acesso ao seu histórico completo de conversas.`
+    );
+
+    // Inserir mensagem de sistema
+    await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      content: `✅ Identidade verificada via OTP`,
+      sender_type: 'system',
+      sender_id: null,
+    });
+
+    console.log('[handle-whatsapp-event] ✅ Contact linked successfully');
+  } else {
+    // ❌ CÓDIGO INCORRETO
+    const newAttempts = attempts + 1;
+
+    if (newAttempts >= 3) {
+      // 🚨 BLOQUEIO POR EXCESSO DE TENTATIVAS
+      console.log('[handle-whatsapp-event] 🚨 Max OTP attempts reached - triggering fraud alert');
+
+      await supabase
+        .from('conversations')
+        .update({
+          customer_metadata: {
+            ...metadata,
+            otp_blocked: true,
+            awaiting_otp: false,
+          },
+          ai_mode: 'copilot', // Forçar handoff humano
+        })
+        .eq('id', conversationId);
+
+      // Chamar agente humano
+      await supabase.functions.invoke('route-conversation', {
+        body: { conversation_id: conversationId },
+      });
+
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('contacts(phone)')
+        .eq('id', conversationId)
+        .single();
+
+      await sendWhatsAppMessage(
+        supabase,
+        instance,
+        conv.contacts.phone,
+        `🚨 *Tentativas Excedidas*\n\nPor segurança, bloqueamos novas tentativas de verificação.\n\nUm atendente humano será acionado para confirmar sua identidade manualmente.`
+      );
+
+      // Inserir alerta de fraude
+      await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        content: `🚨 ALERTA DE SEGURANÇA: Cliente excedeu 3 tentativas de OTP. Email reivindicado: ${claimedEmail}`,
+        sender_type: 'system',
+        sender_id: null,
+      });
+    } else {
+      // Incrementar tentativas
+      await supabase
+        .from('conversations')
+        .update({
+          customer_metadata: {
+            ...metadata,
+            otp_attempts: newAttempts,
+          },
+        })
+        .eq('id', conversationId);
+
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('contacts(phone)')
+        .eq('id', conversationId)
+        .single();
+
+      await sendWhatsAppMessage(
+        supabase,
+        instance,
+        conv.contacts.phone,
+        `❌ *Código Incorreto*\n\nTentativa ${newAttempts} de 3.\n\nVerifique seu email e tente novamente.`
+      );
+    }
+
+    // Inserir mensagem
+    await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      content: messageText,
+      sender_type: 'contact',
+      sender_id: null,
+    });
+  }
+}
+
+// 📤 Função auxiliar: Enviar mensagem WhatsApp
+async function sendWhatsAppMessage(
+  supabase: any,
+  instance: any,
+  phone: string,
+  message: string
+) {
+  try {
+    await supabase.functions.invoke('send-whatsapp-message', {
+      body: {
+        instance_id: instance.id,
+        phone: phone,
+        message: message,
+      },
+    });
+  } catch (error) {
+    console.error('[handle-whatsapp-event] Error sending WhatsApp message:', error);
   }
 }
 
