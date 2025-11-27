@@ -13,8 +13,10 @@ interface EvolutionWebhook {
   data: {
     key: {
       remoteJid: string;
+      remoteJidAlt?: string;  // ✅ NOVO - Número real para usuários LID
       fromMe: boolean;
       id?: string;
+      addressingMode?: 'lid' | 'standard';  // ✅ NOVO - Modo de endereçamento
     };
     pushName?: string;
     message?: {
@@ -149,9 +151,10 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     return;
   }
 
-  // 🔧 FASE 1: Armazenamento Correto de JID + Telefone
-  // 1. Guardar JID original para envio (pode ser @lid, @s.whatsapp.net, etc.)
+  // 🔧 FASE 2 & 3: Detecção e Tratamento de LID (Linked Identity Devices)
   const originalJid = data.key.remoteJid;
+  const alternativeJid = data.key.remoteJidAlt;
+  const addressingMode = data.key.addressingMode;
   
   // Ignorar mensagens de grupos WhatsApp
   if (originalJid.endsWith('@g.us')) {
@@ -159,22 +162,45 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     return;
   }
   
-  // 2. Extrair telefone limpo (remove TODOS os sufixos JID)
-  const cleanPhone = originalJid
-    .replace(/@s\.whatsapp\.net$/i, '')
-    .replace(/@lid$/i, '')
-    .replace(/@g\.us$/i, '')
-    .replace(/@c\.us$/i, '');
+  // ✅ Determinar número de telefone REAL e JID para envio
+  let phoneForDatabase: string;
+  let jidForSending: string;
   
-  // 3. Normalizar número brasileiro (adicionar DDI 55 se necessário)
-  let normalizedPhone = cleanPhone.replace(/\D/g, '');
-  if (normalizedPhone.length === 10 || normalizedPhone.length === 11) {
-    if (!normalizedPhone.startsWith('55')) {
-      normalizedPhone = `55${normalizedPhone}`;
+  if (originalJid.endsWith('@lid') && alternativeJid) {
+    // 🔗 LID DETECTADO - Usar número alternativo como telefone real
+    console.log('[handle-whatsapp-event] 🔗 LID detectado!');
+    console.log('[handle-whatsapp-event] - Original JID (LID):', originalJid);
+    console.log('[handle-whatsapp-event] - Alternative JID (Real):', alternativeJid);
+    console.log('[handle-whatsapp-event] - Addressing Mode:', addressingMode);
+    
+    // Extrair número real do JID alternativo
+    phoneForDatabase = alternativeJid.replace(/@s\.whatsapp\.net$/i, '').replace(/\D/g, '');
+    jidForSending = alternativeJid; // ✅ Usar JID alternativo para envio
+  } else {
+    // 📱 Número normal - usar JID original
+    phoneForDatabase = originalJid
+      .replace(/@s\.whatsapp\.net$/i, '')
+      .replace(/@c\.us$/i, '')
+      .replace(/\D/g, '');
+    jidForSending = originalJid;
+  }
+  
+  // Normalizar número brasileiro (adicionar DDI 55 se necessário)
+  if (phoneForDatabase.length === 10 || phoneForDatabase.length === 11) {
+    if (!phoneForDatabase.startsWith('55')) {
+      phoneForDatabase = `55${phoneForDatabase}`;
     }
   }
   
-  const customerName = data.pushName || normalizedPhone;
+  console.log('[handle-whatsapp-event] 📱 Phone detection result:', {
+    originalJid,
+    alternativeJid,
+    isLID: originalJid.endsWith('@lid'),
+    phoneForDatabase,
+    jidForSending
+  });
+  
+  const customerName = data.pushName || phoneForDatabase;
 
   // Extrair texto da mensagem (suporta diferentes tipos de mensagem)
   let messageText = '';
@@ -192,7 +218,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     messageText = '[Mensagem não suportada]';
   }
 
-  console.log('[handle-whatsapp-event] Message from:', normalizedPhone);
+  console.log('[handle-whatsapp-event] Message from:', phoneForDatabase);
   console.log('[handle-whatsapp-event] Text:', messageText);
 
   // 1. Buscar ou criar contato TEMPORÁRIO (visitante)
@@ -203,7 +229,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   const { data: existingContact } = await supabase
     .from('contacts')
     .select('id, email, first_name, last_name')
-    .eq('phone', normalizedPhone)
+    .eq('phone', phoneForDatabase)
     .single();
 
   if (existingContact) {
@@ -227,8 +253,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       .insert({
         first_name: firstName,
         last_name: lastName,
-        phone: normalizedPhone,        // ✅ Telefone limpo normalizado
-        whatsapp_id: originalJid,       // ✅ JID original para envio
+        phone: phoneForDatabase,        // ✅ Número real (não LID)
+        whatsapp_id: jidForSending,     // ✅ JID para envio (alternativo se LID)
         source: 'whatsapp',
         status: 'lead',
       })
@@ -340,7 +366,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       await sendWhatsAppMessage(
         supabase,
         instance,
-        normalizedPhone,
+        phoneForDatabase,
+        jidForSending,
         `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail. Por segurança, enviei um código de 6 dígitos para *${claimedEmail}*.\n\nDigite o código aqui para confirmar sua identidade e acessar seu histórico.`
       );
 
@@ -518,6 +545,7 @@ async function handleOTPValidation(
       supabase,
       instance,
       conv.contacts.phone,
+      currentWhatsAppId,
       `✅ *Identidade Confirmada!*\n\nBem-vindo de volta, ${customer?.first_name || 'cliente'}! 👋\n\nAgora você tem acesso ao seu histórico completo de conversas.`
     );
 
@@ -557,7 +585,7 @@ async function handleOTPValidation(
 
       const { data: conv } = await supabase
         .from('conversations')
-        .select('contacts(phone)')
+        .select('contacts(phone, whatsapp_id)')
         .eq('id', conversationId)
         .single();
 
@@ -565,6 +593,7 @@ async function handleOTPValidation(
         supabase,
         instance,
         conv.contacts.phone,
+        conv.contacts.whatsapp_id,
         `🚨 *Tentativas Excedidas*\n\nPor segurança, bloqueamos novas tentativas de verificação.\n\nUm atendente humano será acionado para confirmar sua identidade manualmente.`
       );
 
@@ -589,7 +618,7 @@ async function handleOTPValidation(
 
       const { data: conv } = await supabase
         .from('conversations')
-        .select('contacts(phone)')
+        .select('contacts(phone, whatsapp_id)')
         .eq('id', conversationId)
         .single();
 
@@ -597,6 +626,7 @@ async function handleOTPValidation(
         supabase,
         instance,
         conv.contacts.phone,
+        conv.contacts.whatsapp_id,
         `❌ *Código Incorreto*\n\nTentativa ${newAttempts} de 3.\n\nVerifique seu email e tente novamente.`
       );
     }
@@ -616,13 +646,15 @@ async function sendWhatsAppMessage(
   supabase: any,
   instance: any,
   phone: string,
+  whatsappId: string | null,
   message: string
 ) {
   try {
     await supabase.functions.invoke('send-whatsapp-message', {
       body: {
         instance_id: instance.id,
-        phone: phone,
+        phone_number: phone,
+        whatsapp_id: whatsappId,
         message: message,
       },
     });
