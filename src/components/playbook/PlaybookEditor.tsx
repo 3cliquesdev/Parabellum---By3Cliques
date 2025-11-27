@@ -33,6 +33,7 @@ import { RichTextEditor } from "./RichTextEditor";
 import { VideoEmbedField } from "./VideoEmbedField";
 import { AttachmentsUploader } from "./AttachmentsUploader";
 import { PlaybookStepViewer } from "./PlaybookStepViewer";
+import { useEmailTemplates } from "@/hooks/useEmailTemplates";
 
 const nodeTypes = {
   email: EmailNode,
@@ -55,6 +56,7 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlow?.edges || []);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [previewNode, setPreviewNode] = useState<Node | null>(null);
+  const { data: emailTemplates } = useEmailTemplates();
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -202,13 +204,44 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
               />
             </div>
             {selectedNode.type === "email" && (
-              <div>
-                <Label>Assunto</Label>
-                <Input
-                  value={selectedNode.data.subject || ""}
-                  onChange={(e) => updateNodeData("subject", e.target.value)}
-                />
-              </div>
+              <>
+                <div>
+                  <Label>Template de Email</Label>
+                  <Select
+                    value={selectedNode.data.template_id || ""}
+                    onValueChange={(value) => {
+                      updateNodeData("template_id", value);
+                      const template = emailTemplates?.find(t => t.id === value);
+                      if (template) {
+                        updateNodeData("subject", template.subject);
+                        updateNodeData("label", template.name);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um template..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {emailTemplates?.filter(t => t.is_active).map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Gerencie templates em Configurações → Templates de Email
+                  </p>
+                </div>
+                <div>
+                  <Label>Assunto (sobrescrever)</Label>
+                  <Input
+                    value={selectedNode.data.subject || ""}
+                    onChange={(e) => updateNodeData("subject", e.target.value)}
+                    placeholder="Será preenchido pelo template"
+                  />
+                </div>
+              </>
             )}
             {selectedNode.type === "delay" && (
               <div>
