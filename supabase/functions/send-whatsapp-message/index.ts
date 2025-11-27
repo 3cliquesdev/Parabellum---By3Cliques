@@ -102,19 +102,15 @@ serve(async (req) => {
     const cleanNumber = sanitizePhoneNumber(body.phone_number, body.whatsapp_id);
     console.log('[send-whatsapp-message] Clean number for Evolution API:', cleanNumber);
 
-    // Enviar para Evolution API v2
+    // Enviar para Evolution API v2 (Formato Texto Simples - Mais Compatível)
     const evolutionUrl = `${instance.api_url}/message/sendText/${instance.instance_name}`;
     console.log('[send-whatsapp-message] Sending to Evolution API:', evolutionUrl);
 
     const evolutionPayload = {
       number: cleanNumber, // ✅ String pura: "5511999999999"
-      options: {
-        delay: body.delay || 1200,
-        presence: "composing"
-      },
-      textMessage: {
-        text: body.message
-      }
+      text: body.message,
+      delay: body.delay || 1000,
+      linkPreview: false
     };
     
     console.log('[send-whatsapp-message] Payload:', JSON.stringify(evolutionPayload, null, 2));
