@@ -50,19 +50,19 @@ export const ConditionNode = memo(({ data }: { data: ConditionNodeData }) => {
           </div>
         </div>
       </Card>
-      {/* Handle superior para o caminho "true" */}
+      {/* Handle direito superior para o caminho "true" (Sim) */}
       <Handle 
         type="source" 
-        position={Position.Top} 
+        position={Position.Right} 
         id="true"
-        style={{ background: '#16a34a' }}
+        style={{ background: '#16a34a', top: '35%' }}
       />
-      {/* Handle inferior para o caminho "false" */}
+      {/* Handle direito inferior para o caminho "false" (Não) */}
       <Handle 
         type="source" 
-        position={Position.Bottom} 
+        position={Position.Right} 
         id="false"
-        style={{ background: '#dc2626' }}
+        style={{ background: '#dc2626', top: '65%' }}
       />
     </>
   );
