@@ -68,47 +68,56 @@ serve(async (req) => {
       );
     }
 
-    // 🔧 FASE 2: Normalização Robusta com Prioridade de JID
-    function normalizeWhatsAppNumber(phone?: string, whatsappId?: string): string {
-      // 1. PRIORIDADE: Usar whatsapp_id (JID original) se disponível
+    // 🔧 SANITIZAÇÃO ROBUSTA: Limpar número para envio
+    function sanitizePhoneNumber(phone?: string, whatsappId?: string): string {
+      // 1. PRIORIDADE: Usar whatsapp_id se disponível (já validado pela Evolution)
       if (whatsappId) {
-        // Garantir que tem sufixo JID
-        if (!whatsappId.includes('@')) {
-          return `${whatsappId}@s.whatsapp.net`;
+        // Se já tem sufixo JID, usar direto
+        if (whatsappId.includes('@')) {
+          return whatsappId;
         }
-        return whatsappId; // Já tem sufixo correto (@lid, @s.whatsapp.net, etc.)
+        // Caso contrário, adicionar sufixo padrão
+        return `${whatsappId}@s.whatsapp.net`;
       }
       
-      // 2. FALLBACK: Normalizar phone number
+      // 2. FALLBACK: Normalizar phone_number
       if (!phone) {
         throw new Error('Nem whatsapp_id nem phone_number fornecidos');
       }
       
-      // Sanitizar (remover não-dígitos)
-      let normalized = phone.replace(/\D/g, '');
+      // Remover TODOS os caracteres não numéricos
+      let sanitized = phone.replace(/\D/g, '');
       
-      // 3. Regra do Brasil - adicionar DDI 55 se for número BR sem prefixo
-      if (normalized.length === 10 || normalized.length === 11) {
-        if (!normalized.startsWith('55')) {
-          normalized = `55${normalized}`;
+      // 3. Regra do Brasil - adicionar DDI 55 se necessário
+      if (sanitized.length === 10 || sanitized.length === 11) {
+        if (!sanitized.startsWith('55')) {
+          sanitized = `55${sanitized}`;
         }
       }
       
-      // 4. Adicionar sufixo padrão
-      return `${normalized}@s.whatsapp.net`;
+      console.log('[send-whatsapp-message] Sanitized phone:', sanitized);
+      return sanitized; // ✅ Retornar APENAS NÚMEROS (sem sufixo)
     }
 
-    const normalizedPhone = normalizeWhatsAppNumber(body.phone_number, body.whatsapp_id);
-    console.log('[send-whatsapp-message] Normalized number:', normalizedPhone);
+    const cleanNumber = sanitizePhoneNumber(body.phone_number, body.whatsapp_id);
+    console.log('[send-whatsapp-message] Clean number for Evolution API:', cleanNumber);
 
-    // Delay humanizado (1.2 segundos por padrão)
-    const delay = body.delay ?? 1200;
-    console.log(`[send-whatsapp-message] Waiting ${delay}ms to simulate typing...`);
-    await new Promise(resolve => setTimeout(resolve, delay));
-
-    // Enviar para Evolution API
+    // Enviar para Evolution API v2
     const evolutionUrl = `${instance.api_url}/message/sendText/${instance.instance_name}`;
     console.log('[send-whatsapp-message] Sending to Evolution API:', evolutionUrl);
+
+    const evolutionPayload = {
+      number: cleanNumber, // ✅ String pura: "5511999999999"
+      options: {
+        delay: body.delay || 1200,
+        presence: "composing"
+      },
+      textMessage: {
+        text: body.message
+      }
+    };
+    
+    console.log('[send-whatsapp-message] Payload:', JSON.stringify(evolutionPayload, null, 2));
 
     const response = await fetch(evolutionUrl, {
       method: 'POST',
@@ -116,12 +125,7 @@ serve(async (req) => {
         'apikey': instance.api_token,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        number: normalizedPhone,
-        text: body.message,
-        delay: 1200,           // ✅ Evolution API v2 - tempo de digitação
-        linkPreview: true,     // ✅ Habilitar preview de links
-      }),
+      body: JSON.stringify(evolutionPayload),
     });
 
     const responseData = await response.json();

@@ -273,11 +273,11 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     const emailMatch = messageText.match(emailRegex);
 
     if (emailMatch) {
-    const claimedEmail = emailMatch[0].toLowerCase();
-    console.log('[handle-whatsapp-event] 📧 Email detected:', claimedEmail);
+      const claimedEmail = emailMatch[0].toLowerCase();
+      console.log('[handle-whatsapp-event] 📧 Email detected:', claimedEmail);
 
-    // Verificar se email já existe no banco
-    const { data: existingEmailContact } = await supabase
+      // Verificar se email já existe no banco
+      const { data: existingEmailContact } = await supabase
       .from('contacts')
       .select('id, first_name, last_name, email')
       .eq('email', claimedEmail)
