@@ -129,6 +129,16 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
     updateNodeData('quiz_options', options);
   };
 
+  const deleteNode = () => {
+    if (!selectedNode) return;
+    
+    setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
+    setEdges((eds) => eds.filter(
+      (e) => e.source !== selectedNode.id && e.target !== selectedNode.id
+    ));
+    setSelectedNode(null);
+  };
+
   const handleSave = () => {
     onSave({ nodes, edges });
   };
@@ -195,7 +205,20 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
         {/* Painel de propriedades */}
         {selectedNode && (
           <div className="mt-6 pt-6 border-t space-y-3">
-            <h4 className="font-semibold">Propriedades</h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold">Propriedades</h4>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={deleteNode}
+                className="text-destructive hover:text-destructive h-8 w-8 p-0"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Editando: <span className="font-medium text-foreground">{selectedNode.data.label}</span>
+            </p>
             <div>
               <Label>Nome</Label>
               <Input
