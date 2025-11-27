@@ -101,6 +101,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   }
 
   const contact = conversation.contacts;
+  console.log('[ContactDetailsSidebar] Dados do Cliente:', contact);
 
   // 🚨 PREVENÇÃO DE STALE DATA: Mostrar skeleton durante transição
   if (isTransitioning) {
