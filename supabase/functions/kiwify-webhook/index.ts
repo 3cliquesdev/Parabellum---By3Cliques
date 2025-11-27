@@ -119,35 +119,53 @@ async function handlePaidOrder(
   Commissions: KiwifyCommissions,
   order_id: string
 ) {
-  console.log('[kiwify-webhook] 💚 PAID - Iniciando onboarding:', Customer.email);
+  console.log('[kiwify-webhook] 💚 PAID - Verificando existência:', Customer.email);
 
-  // 1. Criar/Atualizar contact como CUSTOMER
+  // 🔍 DIVISOR DE ÁGUAS: Verificar se cliente já existe
+  const { data: existingContact } = await supabase
+    .from('contacts')
+    .select('id, total_ltv, consultant_id, status, first_name')
+    .eq('email', Customer.email)
+    .single();
+  
+  const isReturningCustomer = existingContact && existingContact.status === 'customer';
+  
+  if (isReturningCustomer) {
+    console.log('[kiwify-webhook] 💰 UPSELL DETECTADO - Cliente recorrente');
+    return handleUpsellOrder(supabase, existingContact, Customer, Product, Commissions, order_id);
+  }
+
+  // ========================================
+  // FLUXO DE NOVO CLIENTE (Primeira Compra)
+  // ========================================
+  console.log('[kiwify-webhook] 🆕 NOVO CLIENTE - Iniciando onboarding:', Customer.email);
+
+  // 1. Criar contact como CUSTOMER
   const nameParts = Customer.full_name.split(' ');
   const { data: contact } = await supabase
     .from('contacts')
-    .upsert({
+    .insert({
       email: Customer.email,
       first_name: nameParts[0],
       last_name: nameParts.slice(1).join(' ') || nameParts[0],
       phone: Customer.mobile_phone,
       document: Customer.CPF,
       status: 'customer',
+      total_ltv: Commissions.product_base_price, // LTV inicial
       kiwify_customer_id: Customer.id,
       subscription_plan: Product.product_name,
       registration_date: new Date().toISOString(),
       last_kiwify_event: 'paid',
       last_kiwify_event_at: new Date().toISOString(),
-    }, {
-      onConflict: 'email'
     })
     .select()
     .single();
 
   if (!contact) {
-    throw new Error('Failed to create/update contact');
+    throw new Error('Failed to create contact');
   }
 
-  // 2. Criar usuário no Supabase Auth (senha = 5 primeiros dígitos CPF)
+  // 2. ✅ CRIAR Login no Supabase Auth (senha = 5 primeiros dígitos CPF)
   const password = Customer.CPF?.replace(/\D/g, '').substring(0, 5) || '12345';
   
   try {
@@ -168,7 +186,7 @@ async function handlePaidOrder(
       console.log('[kiwify-webhook] ✅ Auth user created:', authUser?.user?.id);
     }
   } catch (authErr) {
-    console.warn('[kiwify-webhook] Auth error (may already exist):', authErr);
+    console.warn('[kiwify-webhook] Auth error:', authErr);
   }
 
   // 3. Buscar produto por external_id (Kiwify product_id)
@@ -181,16 +199,15 @@ async function handlePaidOrder(
   let playbook_id = null;
   
   if (!product) {
-    console.warn(`[kiwify-webhook] ⚠️ Produto não mapeado - ID Kiwify: ${Product.product_id} - Configure em /settings/products`);
+    console.warn(`[kiwify-webhook] ⚠️ Produto não mapeado - ID Kiwify: ${Product.product_id}`);
     
-    // Log interaction alerting about unmapped product
     await supabase
       .from('interactions')
       .insert({
         customer_id: contact.id,
         type: 'note',
         channel: 'other',
-        content: `⚠️ Produto não mapeado no sistema - ID Kiwify: ${Product.product_id}. Configure o mapeamento em /settings/products`,
+        content: `⚠️ Produto não mapeado no sistema - ID Kiwify: ${Product.product_id}`,
         metadata: {
           product_name: Product.product_name,
           product_id: Product.product_id,
@@ -198,7 +215,6 @@ async function handlePaidOrder(
         }
       });
   } else {
-    // Product found, get linked playbook
     const { data: playbook } = await supabase
       .from('onboarding_playbooks')
       .select('id')
@@ -209,7 +225,7 @@ async function handlePaidOrder(
     playbook_id = playbook?.id;
   }
 
-  // 4. Iniciar customer_journey (playbook de onboarding)
+  // 4. 🎯 Iniciar Playbook de Onboarding COMPLETO (com etapa de login)
   if (playbook_id) {
     const { data: execution } = await supabase
       .from('playbook_executions')
@@ -221,7 +237,7 @@ async function handlePaidOrder(
       .select()
       .single();
 
-    console.log('[kiwify-webhook] 🎯 Playbook iniciado:', execution?.id);
+    console.log('[kiwify-webhook] 🎯 Playbook completo iniciado:', execution?.id);
   } else {
     console.log('[kiwify-webhook] ⚠️ Nenhum playbook encontrado para produto:', Product.product_name);
   }
@@ -233,22 +249,166 @@ async function handlePaidOrder(
       customer_id: contact.id,
       type: 'note',
       channel: 'other',
-      content: `✅ Venda aprovada via Kiwify: ${Product.product_name}`,
+      content: `✅ Venda aprovada via Kiwify: ${Product.product_name} (Novo Cliente)`,
       metadata: {
         product: Product.product_name,
         value: Commissions.product_base_price,
         order_id,
-        kiwify_customer_id: Customer.id
+        kiwify_customer_id: Customer.id,
+        new_customer: true
       }
     });
 
   return {
     success: true,
-    action: 'onboarding_started',
+    action: 'new_customer_onboarding',
     contact_id: contact.id,
     playbook_id,
-    message: 'Cliente criado, usuário Auth configurado, onboarding iniciado'
+    message: 'Novo cliente criado, Auth configurado, onboarding completo iniciado'
   };
+}
+
+// ============================================
+// CASE 1.2: UPSELL - Cliente Recorrente
+// ============================================
+async function handleUpsellOrder(
+  supabase: any,
+  existingContact: any,
+  Customer: KiwifyCustomer,
+  Product: KiwifyProduct,
+  Commissions: KiwifyCommissions,
+  order_id: string
+) {
+  console.log('[kiwify-webhook] 💰 UPSELL:', Customer.email);
+
+  // 1. ❌ NÃO criar usuário no Auth (já existe)
+  // 2. ✅ Atualizar LTV somando valor da nova compra
+  const newLtv = (existingContact.total_ltv || 0) + Commissions.product_base_price;
+  
+  await supabase
+    .from('contacts')
+    .update({
+      total_ltv: newLtv,
+      subscription_plan: Product.product_name,
+      last_payment_date: new Date().toISOString(),
+      last_kiwify_event: 'paid_upsell',
+      last_kiwify_event_at: new Date().toISOString(),
+    })
+    .eq('id', existingContact.id);
+
+  // 3. Buscar produto e playbook
+  const { data: product } = await supabase
+    .from('products')
+    .select('id, name, external_id')
+    .eq('external_id', Product.product_id)
+    .single();
+
+  // 4. Iniciar playbook do novo produto (pular etapa de login)
+  let playbook_id = null;
+  if (product) {
+    const { data: playbook } = await supabase
+      .from('onboarding_playbooks')
+      .select('id')
+      .eq('product_id', product.id)
+      .eq('is_active', true)
+      .single();
+    
+    if (playbook) {
+      playbook_id = playbook.id;
+      await supabase
+        .from('playbook_executions')
+        .insert({
+          playbook_id: playbook.id,
+          contact_id: existingContact.id,
+          status: 'pending',
+        });
+      
+      console.log('[kiwify-webhook] 🎯 Playbook de upsell iniciado (sem login)');
+    }
+  }
+
+  // 5. 📧 Registrar interação de UPSELL
+  await supabase
+    .from('interactions')
+    .insert({
+      customer_id: existingContact.id,
+      type: 'note',
+      channel: 'other',
+      content: `💰 UPSELL: ${Product.product_name} adicionado à conta - LTV: R$ ${newLtv.toFixed(2)}`,
+      metadata: {
+        product: Product.product_name,
+        value: Commissions.product_base_price,
+        order_id,
+        upsell: true,
+        previous_ltv: existingContact.total_ltv || 0,
+        new_ltv: newLtv
+      }
+    });
+
+  // 6. 🔔 NOTIFICAR CONSULTOR (se tiver)
+  if (existingContact.consultant_id) {
+    await notifyConsultantUpsell(
+      supabase, 
+      existingContact.consultant_id, 
+      existingContact, 
+      Product, 
+      Commissions
+    );
+  }
+
+  return {
+    success: true,
+    action: 'upsell_processed',
+    contact_id: existingContact.id,
+    new_ltv: newLtv,
+    playbook_id,
+    consultant_notified: !!existingContact.consultant_id,
+    message: 'Upsell processado, LTV atualizado, consultor notificado'
+  };
+}
+
+// ============================================
+// Notificação de Upsell ao Consultor
+// ============================================
+async function notifyConsultantUpsell(
+  supabase: any,
+  consultantId: string,
+  contact: any,
+  Product: KiwifyProduct,
+  Commissions: KiwifyCommissions
+) {
+  // 1. Criar interação especial para o consultor ver
+  await supabase
+    .from('interactions')
+    .insert({
+      customer_id: contact.id,
+      type: 'note',
+      channel: 'other',
+      content: `💰 UPSELL DETECTADO!
+Seu cliente ${contact.first_name} acabou de comprar ${Product.product_name} (R$ ${Commissions.product_base_price.toFixed(2)}).
+Entre em contato para agradecer e garantir boa experiência!`,
+      metadata: {
+        notification_type: 'upsell_alert',
+        consultant_id: consultantId,
+        product: Product.product_name,
+        value: Commissions.product_base_price
+      }
+    });
+
+  // 2. Criar atividade para o consultor
+  await supabase
+    .from('activities')
+    .insert({
+      title: `💰 Agradecer Upsell - ${contact.first_name}`,
+      description: `Cliente comprou ${Product.product_name}. Enviar mensagem de agradecimento.`,
+      type: 'call',
+      contact_id: contact.id,
+      assigned_to: consultantId,
+      due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // +24h
+      completed: false
+    });
+
+  console.log('[kiwify-webhook] 🔔 Consultor notificado:', consultantId);
 }
 
 // ============================================
