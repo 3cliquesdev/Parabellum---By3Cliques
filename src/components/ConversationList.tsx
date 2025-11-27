@@ -164,6 +164,12 @@ function ConversationItem({
               {conversation.assigned_user.full_name}
             </Badge>
           )}
+          {/* FASE 4: Badge de Sessão Não Verificada para WhatsApp sem email */}
+          {conversation.channel === 'whatsapp' && !conversation.contacts?.email && (
+            <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-600 dark:text-yellow-400">
+              ⚠️ Sem email
+            </Badge>
+          )}
         </div>
       </div>
     </button>

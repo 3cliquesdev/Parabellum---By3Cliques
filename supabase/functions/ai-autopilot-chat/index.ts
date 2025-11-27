@@ -341,10 +341,17 @@ serve(async (req) => {
       }
     }
 
-    // 5. Preparar system prompt inteligente baseado na intenção
+    // 5. FASE 1: Identity Wall - Verificar se contato tem email
+    const contactHasEmail = !!(customer_context?.email || contact.email);
     const contactName = customer_context?.name || `${contact.first_name} ${contact.last_name}`.trim();
     const contactCompany = contact.company ? ` da empresa ${contact.company}` : '';
     const contactStatus = contact.status || 'lead';
+    
+    console.log('[ai-autopilot-chat] 🔐 Identity Wall Check:', {
+      hasEmail: contactHasEmail,
+      email: customer_context?.email || contact.email,
+      channel
+    });
     
     let knowledgeContext = '';
     if (knowledgeArticles.length > 0) {
@@ -353,10 +360,22 @@ serve(async (req) => {
       ).join('\n\n---\n\n')}`;
     }
     
-    // Personalizar saudação se for cliente conhecido
-    const greetingNote = customer_context?.isVerified 
-      ? `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.`
-      : '';
+    // FASE 1: Identity Wall - Se não tem email, pedir PRIMEIRO
+    let identityWallNote = '';
+    if (!contactHasEmail && channel === 'whatsapp') {
+      identityWallNote = `\n\n**🚨 REGRA CRÍTICA DE IDENTIFICAÇÃO (Identity Wall):**
+Este cliente NÃO tem email cadastrado. Antes de prosseguir com qualquer atendimento:
+1. Cumprimente-o educadamente pelo nome (${contactName})
+2. Explique que para melhor atendê-lo, você precisa do email
+3. Solicite: "Para garantir um atendimento personalizado, poderia me informar seu email?"
+4. AGUARDE o cliente fornecer o email
+5. Quando o cliente fornecer um email, confirme: "Email registrado com sucesso! Agora posso te ajudar."
+6. Só após confirmar o email, prossiga com o atendimento normal
+
+NÃO prossiga com atendimento técnico ou criação de tickets sem o email.`;
+    } else if (customer_context?.isVerified || contactHasEmail) {
+      identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.`;
+    }
     
     const contextualizedSystemPrompt = `Você é o assistente virtual da empresa.
 
@@ -365,13 +384,13 @@ serve(async (req) => {
 2. **Dúvidas Técnicas:** Se o usuário fizer uma pergunta sobre produtos, entregas ou suporte, USE O CONTEXTO ABAIXO se disponível.
 3. **Casos de Devolução/Reembolso/Troca:** Se o cliente relatar problema com pedido (defeito, arrependimento, produto errado), colete: número do pedido, tipo do problema, e descrição. Depois use a ferramenta create_ticket para registrar automaticamente. NÃO transfira para humano nesses casos básicos.
 4. **Falha:** Se a resposta não estiver no contexto e não for conversa fiada nem caso de ticket, diga: "Vou chamar um especialista para te ajudar" e pare.
-${knowledgeContext}${greetingNote}
+${knowledgeContext}${identityWallNote}
 
 **Contexto do Cliente:**
 - Nome: ${contactName}${contactCompany}
 - Status: ${contactStatus}
 - Canal: ${channel}
-${customer_context?.email || contact.email ? `- Email: ${customer_context?.email || contact.email}` : ''}
+${customer_context?.email || contact.email ? `- Email: ${customer_context?.email || contact.email}` : '- Email: NÃO CADASTRADO - SOLICITAR'}
 ${contact.phone ? `- Telefone: ${contact.phone}` : ''}
 
 Use essas informações de forma natural e personalizada.`;
@@ -405,6 +424,21 @@ Use essas informações de forma natural e personalizada.`;
           }
         }
       },
+      // FASE 2: Email Capture Tool
+      {
+        type: 'function',
+        function: {
+          name: 'update_customer_email',
+          description: 'Atualiza o email do cliente no sistema quando ele fornecer.',
+          parameters: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', description: 'O email fornecido pelo cliente.' }
+            },
+            required: ['email']
+          }
+        }
+      },
       ...enabledTools.map((tool: any) => ({
         type: 'function',
         function: tool.function_schema
@@ -424,7 +458,47 @@ Use essas informações de forma natural e personalizada.`;
       console.log('[ai-autopilot-chat] 🛠️ AI solicitou execução de ferramenta:', toolCalls);
       
       for (const toolCall of toolCalls) {
-        if (toolCall.function.name === 'create_ticket') {
+        // FASE 2: Handle email update
+        if (toolCall.function.name === 'update_customer_email') {
+          try {
+            const args = JSON.parse(toolCall.function.arguments);
+            console.log('[ai-autopilot-chat] 📧 Atualizando email do cliente:', args.email);
+
+            // Validar formato do email
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(args.email)) {
+              console.error('[ai-autopilot-chat] ❌ Email inválido:', args.email);
+              assistantMessage = 'O email informado parece estar incorreto. Poderia verificar e me enviar novamente?';
+              continue;
+            }
+
+            // Update contact email
+            const { error: updateError } = await supabaseClient
+              .from('contacts')
+              .update({ email: args.email })
+              .eq('id', contact.id);
+
+            if (updateError) {
+              console.error('[ai-autopilot-chat] ❌ Erro ao atualizar email:', updateError);
+              assistantMessage = 'Não consegui registrar o email. Por favor, tente novamente.';
+            } else {
+              console.log('[ai-autopilot-chat] ✅ Email atualizado com sucesso');
+              assistantMessage = `✅ Email registrado com sucesso! Obrigado, ${contactName}. Agora posso te ajudar melhor!`;
+              
+              // Log interaction
+              await supabaseClient.from('interactions').insert({
+                customer_id: contact.id,
+                type: 'note',
+                content: `Email capturado via WhatsApp Identity Wall: ${args.email}`,
+                channel: 'whatsapp',
+                metadata: { source: 'ai_autopilot_identity_wall' }
+              });
+            }
+          } catch (error) {
+            console.error('[ai-autopilot-chat] ❌ Erro ao processar email:', error);
+            assistantMessage = 'Ocorreu um erro. Poderia me enviar o email novamente?';
+          }
+        } else if (toolCall.function.name === 'create_ticket') {
           try {
             const args = JSON.parse(toolCall.function.arguments);
             console.log('[ai-autopilot-chat] 🎫 Criando ticket automaticamente:', args);
@@ -474,6 +548,32 @@ Use essas informações de forma natural e personalizada.`;
           }
         }
       }
+    }
+
+    // FASE 3: Deduplicação - Verificar se mensagem similar foi enviada recentemente
+    const { data: recentMessages } = await supabaseClient
+      .from('messages')
+      .select('content, created_at')
+      .eq('conversation_id', conversationId)
+      .eq('sender_type', 'user')
+      .eq('is_ai_generated', true)
+      .gte('created_at', new Date(Date.now() - 10000).toISOString()) // Últimos 10 segundos
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    const isDuplicate = recentMessages?.some(msg => 
+      msg.content === assistantMessage && 
+      (Date.now() - new Date(msg.created_at).getTime()) < 5000 // Menos de 5 segundos
+    );
+
+    if (isDuplicate) {
+      console.warn('[ai-autopilot-chat] ⚠️ Mensagem duplicada detectada - ignorando envio');
+      return new Response(JSON.stringify({ 
+        status: 'duplicate',
+        message: 'Mensagem duplicada ignorada'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // 7. Salvar resposta da IA como mensagem (PRIMEIRO salvar para visibilidade interna)
