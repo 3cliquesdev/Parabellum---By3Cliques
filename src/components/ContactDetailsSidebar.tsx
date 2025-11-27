@@ -118,6 +118,31 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   const metadata = conversation.customer_metadata as any;
   const isSessionVerified = metadata?.session_verified ?? true;
 
+  // 📱 FORMATAÇÃO DE TELEFONE BR
+  const formatPhoneNumber = (phone: string | null): string => {
+    if (!phone) return '';
+    
+    // Remover caracteres não numéricos
+    const cleaned = phone.replace(/\D/g, '');
+    
+    // Remover DDI 55 se existir (apenas para formatação visual)
+    const withoutDDI = cleaned.startsWith('55') && cleaned.length > 11 
+      ? cleaned.substring(2) 
+      : cleaned;
+    
+    // Formatar conforme o tamanho
+    if (withoutDDI.length === 11) {
+      // Celular: (11) 91234-5678
+      return `(${withoutDDI.substring(0, 2)}) ${withoutDDI.substring(2, 7)}-${withoutDDI.substring(7)}`;
+    } else if (withoutDDI.length === 10) {
+      // Fixo: (11) 1234-5678
+      return `(${withoutDDI.substring(0, 2)}) ${withoutDDI.substring(2, 6)}-${withoutDDI.substring(6)}`;
+    }
+    
+    // Se não bater com formato BR, retornar como está
+    return phone;
+  };
+
   const getPriorityColor = (priority: string) => {
     switch(priority) {
       case 'urgent': return 'text-destructive';
@@ -193,18 +218,36 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
               <p className="text-xs font-medium text-muted-foreground uppercase mb-2">
                 Informações de Contato
               </p>
-              {contact.email && (
-                <div className="flex items-center gap-2 text-sm mb-2">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-foreground">{contact.email}</span>
-                </div>
-              )}
-              {contact.phone && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-foreground">{contact.phone}</span>
-                </div>
-              )}
+            {contact.email && (
+              <div className="flex items-center gap-2 text-sm mb-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <a 
+                  href={`mailto:${contact.email}`}
+                  className="text-foreground hover:text-primary hover:underline transition-colors"
+                >
+                  {contact.email}
+                </a>
+              </div>
+            )}
+            {contact.phone ? (
+              <div className="flex items-center gap-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <a 
+                  href={`https://wa.me/${contact.phone.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-foreground hover:text-primary hover:underline transition-colors"
+                  title="Abrir no WhatsApp"
+                >
+                  {formatPhoneNumber(contact.phone)}
+                </a>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground italic">Telefone não cadastrado</span>
+              </div>
+            )}
             </div>
 
             {contact.organizations && (
