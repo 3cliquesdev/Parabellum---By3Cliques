@@ -39,8 +39,17 @@ Deno.serve(async (req) => {
       instance_name: instance.instance_name
     });
 
+    // Normalizar a URL: remover /manager ou qualquer path extra
+    let baseUrl = instance.api_url;
+    if (baseUrl.includes('/manager')) {
+      baseUrl = baseUrl.split('/manager')[0];
+    }
+    // Garantir que não tem trailing slash
+    baseUrl = baseUrl.replace(/\/$/, '');
+
     // Chamar Evolution API (server-side, sem CORS)
-    const evolutionUrl = `${instance.api_url}/instance/create`;
+    const evolutionUrl = `${baseUrl}/instance/create`;
+    console.log('[connect-whatsapp-instance] Base URL normalizada:', baseUrl);
     console.log('[connect-whatsapp-instance] Calling Evolution API:', evolutionUrl);
 
     const response = await fetch(evolutionUrl, {
