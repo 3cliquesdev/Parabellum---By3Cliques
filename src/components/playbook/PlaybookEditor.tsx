@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye, HelpCircle, Plus, Trash2 } from "lucide-react";
+import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye, HelpCircle, Plus, Trash2, Play } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -39,9 +39,10 @@ import { RichTextEditor } from "./RichTextEditor";
 import { VideoEmbedField } from "./VideoEmbedField";
 import { AttachmentsUploader } from "./AttachmentsUploader";
 import { PlaybookStepViewer } from "./PlaybookStepViewer";
+import { PlaybookSimulator } from "./PlaybookSimulator";
 import { useEmailTemplates } from "@/hooks/useEmailTemplates";
 
-const nodeTypes = {
+export const nodeTypes = {
   email: EmailNode,
   delay: DelayNode,
   task: TaskNode,
@@ -66,6 +67,7 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlow?.edges || []);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [previewNode, setPreviewNode] = useState<Node | null>(null);
+  const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { data: emailTemplates } = useEmailTemplates();
@@ -200,6 +202,17 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
       {/* Sidebar de blocos */}
       <Card className="w-72 p-4 flex flex-col">
         <div className="space-y-3">
+          {/* Simulate Flow Button */}
+          <Button
+            onClick={() => setSimulatorOpen(true)}
+            variant="outline"
+            className="w-full gap-2 bg-gradient-to-r from-primary/10 to-primary/5 border-primary/30 hover:bg-primary/10"
+            disabled={nodes.length === 0}
+          >
+            <Play className="h-4 w-4" />
+            ▶️ Simular Fluxo
+          </Button>
+
           <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
             🧱 Blocos
           </h3>
@@ -561,6 +574,17 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
         </ScrollArea>
       </DialogContent>
     </Dialog>
+
+    {/* Simulator Modal */}
+    {simulatorOpen && (
+      <PlaybookSimulator
+        nodes={nodes}
+        edges={edges}
+        playbook_name="Playbook de Teste"
+        emailTemplates={emailTemplates}
+        onClose={() => setSimulatorOpen(false)}
+      />
+    )}
     </>
   );
 }
