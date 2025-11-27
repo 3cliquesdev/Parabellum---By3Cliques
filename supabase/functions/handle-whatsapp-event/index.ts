@@ -87,6 +87,10 @@ serve(async (req) => {
         await handleMessageUpsert(supabase, payload, instance);
         break;
       
+      case 'MESSAGES_SET':
+        console.log('[handle-whatsapp-event] Messages set event - skipping batch sync');
+        break;
+      
       case 'CONNECTION_UPDATE':
         await handleConnectionUpdate(supabase, payload, instance);
         break;
@@ -121,6 +125,7 @@ function normalizeEventType(event: string): string {
   
   const eventMap: Record<string, string> = {
     'messages.upsert': 'MESSAGES_UPSERT',
+    'messages.set': 'MESSAGES_SET',
     'connection.update': 'CONNECTION_UPDATE',
     'qrcode.updated': 'QRCODE_UPDATED',
   };
@@ -147,6 +152,12 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   // 🔧 FASE 1: Armazenamento Correto de JID + Telefone
   // 1. Guardar JID original para envio (pode ser @lid, @s.whatsapp.net, etc.)
   const originalJid = data.key.remoteJid;
+  
+  // Ignorar mensagens de grupos WhatsApp
+  if (originalJid.endsWith('@g.us')) {
+    console.log('[handle-whatsapp-event] ⏭️ Ignorando mensagem de grupo:', originalJid);
+    return;
+  }
   
   // 2. Extrair telefone limpo (remove TODOS os sufixos JID)
   const cleanPhone = originalJid
@@ -389,8 +400,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     try {
       await supabase.functions.invoke('ai-autopilot-chat', {
         body: {
-          conversation_id: conversationId,
-          customer_message: messageText,
+          conversationId: conversationId,
+          customerMessage: messageText,
           customer_context: isKnownCustomer ? {
             name: contactName,
             email: existingContact?.email,
@@ -408,7 +419,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     try {
       await supabase.functions.invoke('generate-smart-reply', {
         body: {
-          conversation_id: conversationId,
+          conversationId: conversationId,
         },
       });
       console.log('[handle-whatsapp-event] Copilot suggestion generated');

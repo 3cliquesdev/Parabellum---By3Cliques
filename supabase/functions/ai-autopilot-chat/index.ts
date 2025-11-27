@@ -30,6 +30,19 @@ serve(async (req) => {
 
     const { conversationId, customerMessage, maxHistory = 10, customer_context }: AutopilotChatRequest = await req.json();
     
+    // Validação defensiva
+    if (!conversationId || conversationId === 'undefined') {
+      console.error('[ai-autopilot-chat] ❌ conversationId inválido:', conversationId);
+      return new Response(JSON.stringify({ 
+        error: 'conversationId é obrigatório' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    console.log('[ai-autopilot-chat] Request received:', { conversationId, messagePreview: customerMessage?.substring(0, 50) });
+    
     // FASE 4: Rate Limiting (10 mensagens por minuto por conversa)
     const { data: rateLimitAllowed, error: rateLimitError } = await supabaseClient
       .rpc('check_rate_limit', {
