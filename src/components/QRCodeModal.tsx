@@ -26,17 +26,41 @@ export function QRCodeModal({ open, onOpenChange, instance }: QRCodeModalProps) 
     setStatus(instance.status ?? 'disconnected');
   }, [instance]);
 
-  // Auto-refresh QR Code a cada 15 segundos enquanto status for qr_pending
+  // Auto-refresh QR Code via polling a cada 5 segundos enquanto status for qr_pending
   useEffect(() => {
     if (!instance?.id || !open || status !== 'qr_pending') return;
 
-    const interval = setInterval(() => {
-      console.log('[QRCodeModal] Auto-refreshing QR code...');
-      handleRefreshQR();
-    }, 15000); // 15 segundos
+    const interval = setInterval(async () => {
+      console.log('[QRCodeModal] Polling QR code via proxy...');
+      
+      try {
+        const { data: result, error } = await supabase.functions.invoke('whatsapp-proxy', {
+          body: {
+            instance_id: instance.id,
+            endpoint: `/instance/connect/${encodeURIComponent(instance.instance_name)}`,
+            method: 'GET',
+          }
+        });
+
+        if (error) {
+          console.error('[QRCodeModal] Polling error:', error);
+          return;
+        }
+
+        // Evolution API retorna base64 diretamente no connect
+        const newQrCode = result?.base64;
+        
+        if (newQrCode && newQrCode !== qrCode) {
+          console.log('[QRCodeModal] QR Code updated via polling');
+          setQrCode(newQrCode);
+        }
+      } catch (error) {
+        console.error('[QRCodeModal] Polling failed:', error);
+      }
+    }, 5000); // 5 segundos
 
     return () => clearInterval(interval);
-  }, [instance?.id, open, status]);
+  }, [instance?.id, instance?.instance_name, open, status, qrCode]);
 
   // Realtime subscription para status da instância
   useEffect(() => {
@@ -76,17 +100,36 @@ export function QRCodeModal({ open, onOpenChange, instance }: QRCodeModalProps) 
   const handleRefreshQR = async () => {
     setIsRefreshing(true);
     try {
-      // Buscar QR Code atualizado do banco
-      const { data, error } = await supabase
-        .from('whatsapp_instances')
-        .select('qr_code_base64, status')
-        .eq('id', instance.id)
-        .single();
+      // Usar proxy server-side para buscar QR Code atualizado
+      const { data: result, error } = await supabase.functions.invoke('whatsapp-proxy', {
+        body: {
+          instance_id: instance.id,
+          endpoint: `/instance/connect/${encodeURIComponent(instance.instance_name)}`,
+          method: 'GET',
+        }
+      });
 
       if (error) throw error;
       
-      setQrCode(data.qr_code_base64);
-      setStatus(data.status);
+      // Extrair QR Code da resposta (Evolution API retorna base64 diretamente)
+      const qrCodeBase64 = result?.base64;
+      
+      if (qrCodeBase64) {
+        // Atualizar no banco
+        const { error: updateError } = await supabase
+          .from('whatsapp_instances')
+          .update({ qr_code_base64: qrCodeBase64 })
+          .eq('id', instance.id);
+
+        if (updateError) throw updateError;
+        
+        setQrCode(qrCodeBase64);
+      }
+
+      toast({
+        title: "✅ QR Code Atualizado",
+        description: "Escaneie o novo código no seu WhatsApp.",
+      });
     } catch (error) {
       console.error('[QRCodeModal] Error refreshing QR:', error);
       toast({
@@ -217,7 +260,7 @@ export function QRCodeModal({ open, onOpenChange, instance }: QRCodeModalProps) 
               {/* Auto-refresh indicator */}
               <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Atualizando automaticamente a cada 15s...</span>
+                <span>Polling automático a cada 5s via servidor...</span>
               </div>
 
               {/* Action Buttons */}
