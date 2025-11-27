@@ -305,6 +305,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   }
 
   // 🔍 DETECÇÃO DE EMAIL NA MENSAGEM - APENAS PARA VISITANTES
+  // FASE 4: Se cliente já tem email cadastrado, pular TODO o fluxo de verificação
   if (!isKnownCustomer) {
     const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
     const emailMatch = messageText.match(emailRegex);
@@ -352,23 +353,53 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         })
         .eq('id', conversationId);
 
-      // Enviar email via Resend
+      // FASE 2 & 3: Enviar OTP via email E incluir no WhatsApp se DEV MODE
+      let otpSentViaEmail = false;
+      let devModeCode: string | null = null;
+      
       try {
-        await supabase.functions.invoke('send-verification-code', {
+        const { data: otpResponse, error: otpError } = await supabase.functions.invoke('send-verification-code', {
           body: { email: claimedEmail },
         });
-        console.log('[handle-whatsapp-event] ✅ OTP email sent successfully');
+        
+        if (!otpError && otpResponse?.success) {
+          otpSentViaEmail = true;
+          
+          // FASE 2: Se em dev mode, pegar o código para mostrar
+          if (otpResponse.dev_mode && otpResponse.code) {
+            devModeCode = otpResponse.code;
+            console.log('[handle-whatsapp-event] 🔧 DEV MODE: OTP code =', devModeCode);
+          }
+          
+          console.log('[handle-whatsapp-event] ✅ OTP email sent successfully');
+        } else {
+          console.error('[handle-whatsapp-event] ❌ Error sending OTP email:', otpError);
+        }
       } catch (emailError) {
-        console.error('[handle-whatsapp-event] ❌ Error sending OTP email:', emailError);
+        console.error('[handle-whatsapp-event] ❌ Exception sending OTP email:', emailError);
       }
 
-      // Responder ao cliente no WhatsApp
+      // FASE 2 & 3: Mensagem WhatsApp com código se DEV MODE ou fallback se email falhou
+      let whatsappMessage: string;
+      
+      if (devModeCode) {
+        // FASE 2: DEV MODE - incluir código na mensagem
+        whatsappMessage = `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail.\n\n📧 Código enviado para *${claimedEmail}*\n\n🔧 **MODO DEV:** Seu código é *${devModeCode}*\n\nDigite o código aqui para confirmar sua identidade.`;
+      } else if (!otpSentViaEmail) {
+        // FASE 3: Email falhou - enviar código via WhatsApp como fallback
+        whatsappMessage = `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail.\n\n⚠️ O envio por email falhou.\n\n🔑 Seu código de verificação é: *${otpCode}*\n\nDigite o código aqui para confirmar sua identidade.`;
+        console.log('[handle-whatsapp-event] 📱 FALLBACK: Enviando OTP via WhatsApp');
+      } else {
+        // Modo normal: email enviado com sucesso
+        whatsappMessage = `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail. Por segurança, enviei um código de 6 dígitos para *${claimedEmail}*.\n\nDigite o código aqui para confirmar sua identidade e acessar seu histórico.`;
+      }
+      
       await sendWhatsAppMessage(
         supabase,
         instance,
         phoneForDatabase,
         jidForSending,
-        `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail. Por segurança, enviei um código de 6 dígitos para *${claimedEmail}*.\n\nDigite o código aqui para confirmar sua identidade e acessar seu histórico.`
+        whatsappMessage
       );
 
       // Inserir mensagem do sistema
@@ -383,7 +414,9 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       }
     }
   } else {
-    console.log('[handle-whatsapp-event] ⏭️ Cliente já verificado - pulando validação de email');
+    // FASE 4: Cliente conhecido - pular completamente a verificação
+    console.log('[handle-whatsapp-event] ✅ Cliente conhecido - email já verificado anteriormente');
+    console.log('[handle-whatsapp-event] ⏭️ Pulando Identity Wall - permitindo acesso direto');
   }
 
   // 4. FASE 2: Vincular instância e atribuir conversa (normal flow)
