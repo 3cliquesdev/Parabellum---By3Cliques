@@ -188,6 +188,24 @@ export function WhatsAppInstanceDialog({
                   <FormControl>
                     <Input placeholder="https://api.evolution.com" {...field} />
                   </FormControl>
+                  {field.value && (
+                    <div className="mt-2 p-2 bg-muted/50 rounded text-xs space-y-1">
+                      <p className="text-muted-foreground">🔧 Tentando conectar em:</p>
+                      <code className="text-foreground font-mono break-all block">
+                        {field.value}
+                      </code>
+                      {field.value.startsWith('http:') && window.location.protocol === 'https:' && (
+                        <p className="text-red-600 dark:text-red-400 font-medium">
+                          ⚠️ Atenção: Você está usando HTTP em um site HTTPS. Isso será bloqueado pelo navegador (Mixed Content).
+                        </p>
+                      )}
+                      {field.value.includes('localhost') && (
+                        <p className="text-yellow-600 dark:text-yellow-400 font-medium">
+                          ⚠️ Localhost detectado. Isso só funciona em desenvolvimento local.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
