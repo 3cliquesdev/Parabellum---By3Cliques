@@ -17,9 +17,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Smartphone, Settings, Trash2, QrCode, AlertTriangle, Zap, Activity } from "lucide-react";
+import { Plus, MoreVertical, Smartphone, Settings, Trash2, QrCode, AlertTriangle, Zap, Activity, RefreshCw } from "lucide-react";
 import { useWhatsAppInstances, useDeleteWhatsAppInstance, useConnectWhatsAppInstance, useResetWhatsAppInstance, useWhatsAppAPIStatus } from "@/hooks/useWhatsAppInstances";
 import { useTestWhatsAppConnection } from "@/hooks/useTestWhatsAppConnection";
+import { useSyncWhatsAppInstances } from "@/hooks/useSyncWhatsAppInstances";
 import { WhatsAppInstanceDialog } from "@/components/WhatsAppInstanceDialog";
 import { QRCodeModal } from "@/components/QRCodeModal";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -30,6 +31,7 @@ export default function WhatsAppSettings() {
   const connectMutation = useConnectWhatsAppInstance();
   const resetMutation = useResetWhatsAppInstance();
   const testConnectionMutation = useTestWhatsAppConnection();
+  const syncMutation = useSyncWhatsAppInstances();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -81,6 +83,10 @@ export default function WhatsAppSettings() {
   const handleNewInstance = () => {
     setSelectedInstance(null);
     setDialogOpen(true);
+  };
+
+  const handleSync = async () => {
+    await syncMutation.mutateAsync();
   };
 
   const getStatusIndicator = () => {
@@ -149,10 +155,20 @@ export default function WhatsAppSettings() {
             </p>
             {getStatusIndicator()}
           </div>
-          <Button onClick={handleNewInstance}>
-            <Plus className="w-4 h-4 mr-2" />
-            Nova Instância
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleSync}
+              disabled={syncMutation.isPending}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+              {syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar com API'}
+            </Button>
+            <Button onClick={handleNewInstance}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nova Instância
+            </Button>
+          </div>
         </div>
 
         {/* API Status Warning */}
