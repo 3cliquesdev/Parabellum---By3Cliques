@@ -136,20 +136,19 @@ export default function WhatsAppSettings() {
                     <TableCell>{getAIModeBadge(instance.ai_mode)}</TableCell>
                     <TableCell>
                       <div className="space-y-1">
+                        {instance.user ? (
+                          <Badge variant="default" className="text-xs bg-green-600">
+                            👤 Dono: {instance.user.full_name}
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">
+                            🏢 Geral
+                          </Badge>
+                        )}
                         {instance.department && (
                           <Badge variant="outline" className="text-xs">
                             📁 {instance.department.name}
                           </Badge>
-                        )}
-                        {instance.user && (
-                          <Badge variant="outline" className="text-xs">
-                            👤 {instance.user.full_name}
-                          </Badge>
-                        )}
-                        {!instance.department && !instance.user && (
-                          <span className="text-muted-foreground text-sm">
-                            Geral
-                          </span>
                         )}
                       </div>
                     </TableCell>

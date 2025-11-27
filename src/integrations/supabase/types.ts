@@ -673,6 +673,7 @@ export type Database = {
           last_message_at: string
           related_ticket_id: string | null
           status: Database["public"]["Enums"]["conversation_status"]
+          whatsapp_instance_id: string | null
         }
         Insert: {
           ai_mode?: Database["public"]["Enums"]["ai_mode"]
@@ -689,6 +690,7 @@ export type Database = {
           last_message_at?: string
           related_ticket_id?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
+          whatsapp_instance_id?: string | null
         }
         Update: {
           ai_mode?: Database["public"]["Enums"]["ai_mode"]
@@ -705,6 +707,7 @@ export type Database = {
           last_message_at?: string
           related_ticket_id?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
+          whatsapp_instance_id?: string | null
         }
         Relationships: [
           {
@@ -740,6 +743,13 @@ export type Database = {
             columns: ["related_ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
             referencedColumns: ["id"]
           },
         ]

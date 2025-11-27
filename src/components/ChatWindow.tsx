@@ -22,6 +22,7 @@ import { CreateTicketFromInboxDialog } from "@/components/CreateTicketFromInboxD
 import CopilotSuggestionCard from "@/components/CopilotSuggestionCard";
 import CloseConversationDialog from "@/components/CloseConversationDialog";
 import { SafeHTML } from "@/components/SafeHTML";
+import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -86,12 +87,48 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
       setMessage("");
       setEmailSubject("");
     } else {
+      // FASE 3: Se for WhatsApp, enviar via Evolution API
+      const isWhatsApp = conversation.channel === 'whatsapp';
+      
+      // Salvar mensagem no banco primeiro
       await sendMessage.mutateAsync({
         conversation_id: conversation.id,
         content: message.trim(),
         sender_type: "user",
         sender_id: user?.id || null,
       });
+
+      // Se for WhatsApp, enviar via API também
+      if (isWhatsApp && conversation.whatsapp_instance_id) {
+        try {
+          // Buscar instância para verificar dono
+          const { data: instance } = await supabase
+            .from('whatsapp_instances')
+            .select('user_id')
+            .eq('id', conversation.whatsapp_instance_id)
+            .single();
+          
+          let finalMessage = message.trim();
+          
+          // Se quem envia não é o dono, adicionar assinatura
+          if (instance?.user_id && instance.user_id !== user?.id) {
+            const userName = user?.user_metadata?.full_name || 'Agente';
+            finalMessage += `\n\n*^${userName}*`;
+          }
+          
+          // Enviar via WhatsApp
+          await supabase.functions.invoke('send-whatsapp-message', {
+            body: {
+              instance_id: conversation.whatsapp_instance_id,
+              phone_number: conversation.contacts.phone || conversation.contacts.whatsapp_id,
+              message: finalMessage,
+              delay: 1000, // Delay menor para respostas humanas
+            }
+          });
+        } catch (error) {
+          console.error('[ChatWindow] Error sending WhatsApp message:', error);
+        }
+      }
 
       setMessage("");
     }
@@ -168,6 +205,12 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   {contact?.email || contact?.phone}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
+                  {/* FASE 5: Badge WhatsApp */}
+                  {conversation.channel === 'whatsapp' && (
+                    <Badge variant="default" className="text-xs bg-green-600">
+                      📱 WhatsApp
+                    </Badge>
+                  )}
                   {conversation.assigned_user && (
                     <Badge variant="secondary" className="text-xs">
                       {conversation.assigned_user.full_name}
