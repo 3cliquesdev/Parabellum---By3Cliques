@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useCreateWhatsAppInstance, useUpdateWhatsAppInstance } from "@/hooks/useWhatsAppInstances";
 import { useDepartments } from "@/hooks/useDepartments";
-import { useConsultants } from "@/hooks/useConsultants";
+import { useUsers } from "@/hooks/useUsers";
 
 const formSchema = z.object({
   name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
@@ -56,7 +56,18 @@ export function WhatsAppInstanceDialog({
   const createMutation = useCreateWhatsAppInstance();
   const updateMutation = useUpdateWhatsAppInstance();
   const { data: departments } = useDepartments();
-  const { data: consultants } = useConsultants();
+  const { data: users } = useUsers();
+
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, string> = {
+      admin: "Admin",
+      manager: "Gerente",
+      sales_rep: "Vendedor",
+      consultant: "Consultor",
+      support_agent: "Suporte",
+    };
+    return labels[role] || role;
+  };
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -244,9 +255,9 @@ export function WhatsAppInstanceDialog({
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="__none__">Nenhum (Número Geral)</SelectItem>
-                      {consultants?.map((consultant) => (
-                        <SelectItem key={consultant.id} value={consultant.id}>
-                          {consultant.full_name}
+                      {users?.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.full_name || user.email} ({getRoleLabel(user.role)})
                         </SelectItem>
                       ))}
                     </SelectContent>
