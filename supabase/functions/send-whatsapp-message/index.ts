@@ -68,46 +68,61 @@ serve(async (req) => {
       );
     }
 
-    // 🔧 SANITIZAÇÃO OBRIGATÓRIA: Limpar número para Evolution API v2.2.2
+    // 🔧 FASE 4: Sanitização com Suporte para LID
     function sanitizePhoneNumber(phone?: string, whatsappId?: string): string {
-      // 1. PRIORIDADE: Extrair dígitos do whatsapp_id se disponível
-      if (whatsappId) {
-        // FASE 3: Tratamento especial para números LID (@lid)
-        if (whatsappId.endsWith('@lid')) {
-          const lidNumber = whatsappId.replace('@lid', '');
-          console.log('[send-whatsapp-message] 🔗 Número LID detectado:', lidNumber);
-          // Para LID, usar exatamente como está (Evolution API espera sem sufixo)
-          return lidNumber;
-        }
-        
-        // Remover qualquer sufixo JID (@s.whatsapp.net, @c.us, @g.us)
+      console.log('[send-whatsapp-message] Sanitizing:', { phone, whatsappId });
+      
+      // 1. Se whatsapp_id for @s.whatsapp.net ou @c.us (número normal), extrair dígitos
+      if (whatsappId && !whatsappId.endsWith('@lid')) {
         const digitsOnly = whatsappId.replace(/\D/g, '');
         
-        // Adicionar DDI 55 se necessário (números brasileiros com 10-11 dígitos)
+        // Normalizar brasileiro
         if (digitsOnly.length === 10 || digitsOnly.length === 11) {
-          return digitsOnly.startsWith('55') ? digitsOnly : `55${digitsOnly}`;
+          const normalized = digitsOnly.startsWith('55') ? digitsOnly : `55${digitsOnly}`;
+          console.log('[send-whatsapp-message] ✅ Normalized from whatsapp_id:', normalized);
+          return normalized;
         }
         
+        console.log('[send-whatsapp-message] ✅ Using whatsapp_id digits:', digitsOnly);
         return digitsOnly;
       }
       
-      // 2. FALLBACK: Normalizar phone_number
-      if (!phone) {
-        throw new Error('Nem whatsapp_id nem phone_number fornecidos');
-      }
-      
-      // Remover TODOS os caracteres não numéricos
-      let sanitized = phone.replace(/\D/g, '');
-      
-      // 3. Regra do Brasil - adicionar DDI 55 se necessário
-      if (sanitized.length === 10 || sanitized.length === 11) {
-        if (!sanitized.startsWith('55')) {
-          sanitized = `55${sanitized}`;
+      // 2. Se for LID (@lid), usar phone_number como fallback (que agora tem o número real)
+      if (whatsappId && whatsappId.endsWith('@lid')) {
+        console.log('[send-whatsapp-message] 🔗 LID detected - using phone as fallback');
+        
+        if (!phone) {
+          throw new Error('LID requer phone_number como fallback');
         }
+        
+        const sanitized = phone.replace(/\D/g, '');
+        
+        // Normalizar brasileiro
+        if (sanitized.length === 10 || sanitized.length === 11) {
+          const normalized = sanitized.startsWith('55') ? sanitized : `55${sanitized}`;
+          console.log('[send-whatsapp-message] ✅ LID fallback normalized:', normalized);
+          return normalized;
+        }
+        
+        console.log('[send-whatsapp-message] ✅ LID fallback:', sanitized);
+        return sanitized;
       }
       
-      console.log('[send-whatsapp-message] Sanitized phone (digits only):', sanitized);
-      return sanitized; // ✅ APENAS NÚMEROS (Ex: 5511999998888)
+      // 3. FALLBACK FINAL: phone_number apenas
+      if (phone) {
+        const sanitized = phone.replace(/\D/g, '');
+        
+        if (sanitized.length === 10 || sanitized.length === 11) {
+          const normalized = sanitized.startsWith('55') ? sanitized : `55${sanitized}`;
+          console.log('[send-whatsapp-message] ✅ Normalized from phone:', normalized);
+          return normalized;
+        }
+        
+        console.log('[send-whatsapp-message] ✅ Using phone:', sanitized);
+        return sanitized;
+      }
+      
+      throw new Error('Nenhum número válido para envio');
     }
 
     const cleanNumber = sanitizePhoneNumber(body.phone_number, body.whatsapp_id);
