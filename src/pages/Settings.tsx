@@ -1,7 +1,7 @@
 import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Shield, Database, Mail, Webhook, Loader2, FileText, MessageCircle, Brain } from "lucide-react";
+import { Shield, Database, Mail, Webhook, Loader2, FileText, MessageCircle, Brain, Smartphone } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function Settings() {
@@ -118,6 +118,21 @@ export default function Settings() {
           <CardContent>
             <Button variant="outline" onClick={() => navigate('/settings/chat-links')}>
               Gerenciar Links
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Smartphone className="h-5 w-5 text-green-600" />
+              WhatsApp Multi-Agente
+            </CardTitle>
+            <CardDescription>Configure instâncias WhatsApp com Evolution API</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => navigate('/settings/whatsapp')}>
+              Gerenciar Instâncias
             </Button>
           </CardContent>
         </Card>

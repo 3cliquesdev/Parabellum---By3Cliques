@@ -40,6 +40,7 @@ import PlaybookExecutions from "./pages/PlaybookExecutions";
 import KnowledgeImport from "./pages/KnowledgeImport";
 import NotFound from "./pages/NotFound";
 import AuditLogs from "./pages/AuditLogs";
+import WhatsAppSettings from "./pages/WhatsAppSettings";
 
 const queryClient = new QueryClient();
 
@@ -131,6 +132,7 @@ const App = () => {
             <Route path="/settings/chat-links" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><ChatLinksSettings /></Layout></ProtectedRoute>} />
             <Route path="/settings/knowledge-import" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><KnowledgeImport /></Layout></ProtectedRoute>} />
             <Route path="/settings/audit-logs" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><AuditLogs /></Layout></ProtectedRoute>} />
+            <Route path="/settings/whatsapp" element={<ProtectedRoute allowedRoles={["admin", "consultant"]}><WhatsAppSettings /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

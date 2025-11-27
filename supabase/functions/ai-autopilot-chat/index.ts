@@ -424,7 +424,40 @@ Lembre-se de usar essas informações de forma natural e personalizada em suas r
       console.error('[ai-autopilot-chat] Erro ao salvar mensagem:', saveError);
     }
 
-    // 8. Registrar uso de IA nos logs
+    // 8. Se o canal for WhatsApp, enviar via Evolution API
+    if (channel === 'whatsapp' && contact.phone) {
+      console.log('[ai-autopilot-chat] Canal WhatsApp detectado, enviando via Evolution API...');
+      
+      try {
+        // Buscar instância WhatsApp vinculada ao departamento ou número geral
+        const { data: whatsappInstance } = await supabaseClient
+          .from('whatsapp_instances')
+          .select('*')
+          .eq('status', 'connected')
+          .or(`department_id.eq.${department},department_id.is.null`)
+          .order('user_id', { ascending: false, nullsFirst: false }) // Priorizar instâncias específicas
+          .limit(1)
+          .single();
+
+        if (whatsappInstance) {
+          await supabaseClient.functions.invoke('send-whatsapp-message', {
+            body: {
+              instance_id: whatsappInstance.id,
+              phone_number: contact.phone,
+              message: assistantMessage,
+            },
+          });
+          console.log('[ai-autopilot-chat] ✅ Mensagem enviada via WhatsApp');
+        } else {
+          console.warn('[ai-autopilot-chat] ⚠️ Nenhuma instância WhatsApp conectada para este departamento');
+        }
+      } catch (whatsappError) {
+        console.error('[ai-autopilot-chat] Erro ao enviar via WhatsApp:', whatsappError);
+        // Não propagar erro - mensagem já foi salva no banco
+      }
+    }
+
+    // 9. Registrar uso de IA nos logs
     await supabaseClient
       .from('ai_usage_logs')
       .insert({

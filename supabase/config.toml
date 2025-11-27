@@ -67,6 +67,9 @@ verify_jwt = true
 [functions.ai-autopilot-chat]
 verify_jwt = false
 
+[functions.send-whatsapp-message]
+verify_jwt = true
+
 [functions.message-listener]
 verify_jwt = false
 
