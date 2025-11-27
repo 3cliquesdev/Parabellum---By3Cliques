@@ -54,8 +54,9 @@ export function PlaybookStepViewer({
   const [quizPassedLocal, setQuizPassedLocal] = useState(quiz_passed || false);
   const { toast } = useToast();
 
-  const canPlayVideo = ReactPlayer.canPlay && ReactPlayer.canPlay(video_url || '');
-  const hasValidVideo = video_url && canPlayVideo;
+  const trimmedUrl = video_url?.trim() || '';
+  const canPlayVideo = trimmedUrl && ReactPlayer.canPlay && ReactPlayer.canPlay(trimmedUrl);
+  const hasValidVideo = Boolean(trimmedUrl && canPlayVideo);
   
   const [contentConsumed, setContentConsumed] = useState(
     alreadyCompleted || quiz_passed || !hasValidVideo
@@ -109,7 +110,7 @@ export function PlaybookStepViewer({
       </div>
 
       {/* Premium Cinema Video Player */}
-      {video_url && canPlayVideo && (
+      {hasValidVideo ? (
         <div className="relative rounded-xl overflow-hidden shadow-2xl border border-border/50 bg-gradient-to-b from-background/80 to-muted">
           <div className="aspect-video relative bg-black">
             {React.createElement(ReactPlayer as any, {
@@ -155,6 +156,12 @@ export function PlaybookStepViewer({
               </Badge>
             </div>
           )}
+        </div>
+      ) : video_url !== undefined && (
+        <div className="aspect-video bg-muted rounded-xl flex items-center justify-center border border-border">
+          <div className="text-center text-muted-foreground">
+            <p className="text-sm">Nenhum vídeo configurado para esta etapa</p>
+          </div>
         </div>
       )}
 
