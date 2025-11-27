@@ -52,10 +52,14 @@ export function PlaybookStepViewer({
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [quizPassedLocal, setQuizPassedLocal] = useState(quiz_passed || false);
-  const [contentConsumed, setContentConsumed] = useState(alreadyCompleted || quiz_passed || false);
   const { toast } = useToast();
 
   const canPlayVideo = ReactPlayer.canPlay && ReactPlayer.canPlay(video_url || '');
+  const hasValidVideo = video_url && canPlayVideo;
+  
+  const [contentConsumed, setContentConsumed] = useState(
+    alreadyCompleted || quiz_passed || !hasValidVideo
+  );
 
   const getFileIcon = (type: string) => {
     if (type.includes('pdf')) return <FileText className="h-5 w-5 text-red-500" />;
