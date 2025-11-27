@@ -144,9 +144,26 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     return;
   }
 
-  // Extrair número do cliente (remover sufixo @s.whatsapp.net)
-  const customerPhone = data.key.remoteJid.replace('@s.whatsapp.net', '');
-  const customerName = data.pushName || customerPhone;
+  // 🔧 FASE 1: Armazenamento Correto de JID + Telefone
+  // 1. Guardar JID original para envio (pode ser @lid, @s.whatsapp.net, etc.)
+  const originalJid = data.key.remoteJid;
+  
+  // 2. Extrair telefone limpo (remove TODOS os sufixos JID)
+  const cleanPhone = originalJid
+    .replace(/@s\.whatsapp\.net$/i, '')
+    .replace(/@lid$/i, '')
+    .replace(/@g\.us$/i, '')
+    .replace(/@c\.us$/i, '');
+  
+  // 3. Normalizar número brasileiro (adicionar DDI 55 se necessário)
+  let normalizedPhone = cleanPhone.replace(/\D/g, '');
+  if (normalizedPhone.length === 10 || normalizedPhone.length === 11) {
+    if (!normalizedPhone.startsWith('55')) {
+      normalizedPhone = `55${normalizedPhone}`;
+    }
+  }
+  
+  const customerName = data.pushName || normalizedPhone;
 
   // Extrair texto da mensagem (suporta diferentes tipos de mensagem)
   let messageText = '';
@@ -164,7 +181,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     messageText = '[Mensagem não suportada]';
   }
 
-  console.log('[handle-whatsapp-event] Message from:', customerPhone);
+  console.log('[handle-whatsapp-event] Message from:', normalizedPhone);
   console.log('[handle-whatsapp-event] Text:', messageText);
 
   // 1. Buscar ou criar contato TEMPORÁRIO (visitante)
@@ -173,7 +190,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   const { data: existingContact } = await supabase
     .from('contacts')
     .select('id, email')
-    .eq('phone', customerPhone)
+    .eq('phone', normalizedPhone)
     .single();
 
   if (existingContact) {
@@ -190,8 +207,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       .insert({
         first_name: firstName,
         last_name: lastName,
-        phone: customerPhone,
-        whatsapp_id: data.key.remoteJid,
+        phone: normalizedPhone,        // ✅ Telefone limpo normalizado
+        whatsapp_id: originalJid,       // ✅ JID original para envio
         source: 'whatsapp',
         status: 'lead',
       })
@@ -302,7 +319,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       await sendWhatsAppMessage(
         supabase,
         instance,
-        customerPhone,
+        normalizedPhone,
         `🔐 *Verificação de Identidade*\n\nLocalizei um cadastro com este e-mail. Por segurança, enviei um código de 6 dígitos para *${claimedEmail}*.\n\nDigite o código aqui para confirmar sua identidade e acessar seu histórico.`
       );
 

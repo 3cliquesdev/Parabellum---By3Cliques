@@ -57,7 +57,7 @@ serve(async (req) => {
       .select(`
         *,
         contacts!inner(
-          id, first_name, last_name, email, phone, company, status
+          id, first_name, last_name, email, phone, whatsapp_id, company, status
         )
       `)
       .eq('id', conversationId)
@@ -490,6 +490,7 @@ Use essas informações de forma natural e personalizada.`;
             body: {
               instance_id: whatsappInstance.id,
               phone_number: contact.phone,
+              whatsapp_id: contact.whatsapp_id,  // ✅ FASE 3: Passar JID original
               message: assistantMessage,
             },
           });
