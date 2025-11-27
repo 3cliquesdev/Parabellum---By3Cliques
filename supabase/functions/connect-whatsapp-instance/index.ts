@@ -154,11 +154,16 @@ Deno.serve(async (req) => {
     }
 
     // Atualizar QR Code no banco (se disponível)
-    if (result?.qrcode?.base64) {
+    // Evolution API retorna QR Code em formatos diferentes:
+    // - /instance/create: result.qrcode.base64
+    // - /instance/connect: result.base64
+    const qrCodeBase64 = result?.qrcode?.base64 || result?.base64;
+    
+    if (qrCodeBase64) {
       const { error: updateError } = await supabase
         .from("whatsapp_instances")
         .update({
-          qr_code_base64: result.qrcode.base64,
+          qr_code_base64: qrCodeBase64,
           status: "qr_pending",
         })
         .eq("id", instance_id);
@@ -169,7 +174,7 @@ Deno.serve(async (req) => {
         console.log('[connect-whatsapp-instance] QR code updated successfully');
       }
     } else {
-      console.warn('[connect-whatsapp-instance] No qrcode.base64 found in Evolution response', result);
+      console.warn('[connect-whatsapp-instance] No QR code found in Evolution response', result);
     }
 
     return new Response(JSON.stringify(result), {
