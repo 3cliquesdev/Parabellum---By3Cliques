@@ -138,51 +138,17 @@ export function useConnectWhatsAppInstance() {
 
   return useMutation({
     mutationFn: async (instanceId: string) => {
-      // Buscar instância
-      const { data: instance, error: fetchError } = await supabase
-        .from("whatsapp_instances")
-        .select('*')
-        .eq('id', instanceId)
-        .single();
-
-      if (fetchError || !instance) throw new Error('Instance not found');
-
-      // Chamar Evolution API para criar/conectar instância
-      const response = await fetch(`${instance.api_url}/instance/create`, {
-        method: 'POST',
-        headers: {
-          'apikey': instance.api_token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          instanceName: instance.instance_name,
-          qrcode: true,
-          webhook: {
-            enabled: true,
-            events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
-          },
-        }),
+      // Chamar Edge Function para evitar CORS
+      const { data, error } = await supabase.functions.invoke('connect-whatsapp-instance', {
+        body: { instance_id: instanceId }
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create instance');
+      if (error) {
+        console.error('Edge Function error:', error);
+        throw error;
       }
 
-      const result = await response.json();
-      
-      // Atualizar instância com QR Code
-      if (result.qrcode?.base64) {
-        await supabase
-          .from('whatsapp_instances')
-          .update({
-            qr_code_base64: result.qrcode.base64,
-            status: 'qr_pending',
-          })
-          .eq('id', instanceId);
-      }
-
-      return result;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["whatsapp-instances"] });

@@ -75,3 +75,6 @@ verify_jwt = false
 
 [functions.route-conversation]
 verify_jwt = true
+
+[functions.connect-whatsapp-instance]
+verify_jwt = true
