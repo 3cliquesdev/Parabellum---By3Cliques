@@ -26,10 +26,19 @@ interface KiwifyCommissions {
 
 interface KiwifyWebhookPayload {
   order_id: string;
-  order_status: 'paid' | 'refused' | 'cart_abandoned' | 'refunded' | 'chargedback';
+  order_status: 
+    | 'paid' | 'order_approved'
+    | 'subscription_renewed'
+    | 'refused' | 'cart_abandoned' | 'payment_refused'
+    | 'subscription_late' | 'subscription_card_declined'
+    | 'refunded' | 'chargedback' | 'subscription_canceled';
   Customer: KiwifyCustomer;
   Product: KiwifyProduct;
   Commissions: KiwifyCommissions;
+  Subscription?: {
+    id: string;
+    status: string;
+  };
 }
 
 serve(async (req) => {
@@ -52,16 +61,28 @@ serve(async (req) => {
     let result;
     switch (order_status) {
       case 'paid':
+      case 'order_approved':
         result = await handlePaidOrder(supabase, Customer, Product, Commissions, order_id);
+        break;
+      
+      case 'subscription_renewed':
+        result = await handleSubscriptionRenewal(supabase, Customer, Product, Commissions);
         break;
       
       case 'refused':
       case 'cart_abandoned':
+      case 'payment_refused':
         result = await handleRecoveryOrder(supabase, Customer, Product, Commissions, order_status, order_id);
+        break;
+      
+      case 'subscription_late':
+      case 'subscription_card_declined':
+        result = await handleOverduePayment(supabase, Customer, Product, Commissions, order_status);
         break;
       
       case 'refunded':
       case 'chargedback':
+      case 'subscription_canceled':
         result = await handleChurnOrder(supabase, Customer, Product, order_status);
         break;
       
@@ -231,6 +252,68 @@ async function handlePaidOrder(
 }
 
 // ============================================
+// CASE 1.5: SUBSCRIPTION_RENEWED - Renovação
+// ============================================
+async function handleSubscriptionRenewal(
+  supabase: any,
+  Customer: KiwifyCustomer,
+  Product: KiwifyProduct,
+  Commissions: KiwifyCommissions
+) {
+  console.log('[kiwify-webhook] 🔄 RENOVAÇÃO:', Customer.email);
+
+  // 1. Find existing customer
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('id, total_ltv')
+    .eq('email', Customer.email)
+    .single();
+
+  if (!contact) {
+    console.warn('[kiwify-webhook] Customer not found for renewal, treating as new order');
+    return handlePaidOrder(supabase, Customer, Product, Commissions, 'renewal-fallback');
+  }
+
+  // 2. Update LTV
+  const newLtv = (contact.total_ltv || 0) + Commissions.product_base_price;
+  
+  await supabase
+    .from('contacts')
+    .update({
+      total_ltv: newLtv,
+      last_payment_date: new Date().toISOString(),
+      last_kiwify_event: 'subscription_renewed',
+      last_kiwify_event_at: new Date().toISOString(),
+    })
+    .eq('id', contact.id);
+
+  // 3. Log renewal interaction
+  await supabase
+    .from('interactions')
+    .insert({
+      customer_id: contact.id,
+      type: 'note',
+      channel: 'other',
+      content: `✅ Renovação com Sucesso: ${Product.product_name} - LTV atualizado para R$ ${newLtv.toFixed(2)}`,
+      metadata: { 
+        product: Product.product_name, 
+        value: Commissions.product_base_price,
+        new_ltv: newLtv 
+      }
+    });
+
+  console.log('[kiwify-webhook] ✅ LTV updated:', newLtv);
+
+  return {
+    success: true,
+    action: 'ltv_updated',
+    new_ltv: newLtv,
+    contact_id: contact.id,
+    message: 'Renovação processada, LTV atualizado'
+  };
+}
+
+// ============================================
 // CASE 2: REFUSED/CART_ABANDONED - Recuperação
 // ============================================
 async function handleRecoveryOrder(
@@ -378,6 +461,159 @@ async function handleRecoveryOrder(
 }
 
 // ============================================
+// CASE 2.5: SUBSCRIPTION_LATE/CARD_DECLINED - Inadimplência
+// ============================================
+async function handleOverduePayment(
+  supabase: any,
+  Customer: KiwifyCustomer,
+  Product: KiwifyProduct,
+  Commissions: KiwifyCommissions,
+  order_status: string
+) {
+  console.log('[kiwify-webhook] 🟠 INADIMPLÊNCIA:', order_status, Customer.email);
+
+  // 1. Update contact to OVERDUE status
+  const { data: contact } = await supabase
+    .from('contacts')
+    .update({
+      status: 'overdue',
+      last_kiwify_event: order_status,
+      last_kiwify_event_at: new Date().toISOString(),
+    })
+    .eq('email', Customer.email)
+    .select('id, consultant_id')
+    .single();
+
+  if (!contact) {
+    console.error('[kiwify-webhook] Contact not found for overdue:', Customer.email);
+    return {
+      success: false,
+      error: 'Contact not found',
+      message: 'Cliente não encontrado'
+    };
+  }
+
+  // 2. Find "Cobrança Ativa" stage
+  const { data: cobrancaStage } = await supabase
+    .from('stages')
+    .select('id, pipeline_id')
+    .eq('name', 'Cobrança Ativa')
+    .single();
+
+  if (!cobrancaStage) {
+    console.error('[kiwify-webhook] Cobrança Ativa stage not found');
+    return {
+      success: false,
+      error: 'Stage not found',
+      message: 'Stage "Cobrança Ativa" não encontrada'
+    };
+  }
+
+  // 3. Check for existing open overdue deal (prevent duplicates)
+  const { data: existingDeal } = await supabase
+    .from('deals')
+    .select('id')
+    .eq('contact_id', contact.id)
+    .eq('stage_id', cobrancaStage.id)
+    .eq('status', 'open')
+    .single();
+
+  if (existingDeal) {
+    console.log('[kiwify-webhook] Deal already exists, adding note');
+    
+    await supabase
+      .from('interactions')
+      .insert({
+        customer_id: contact.id,
+        type: 'note',
+        channel: 'other',
+        content: `⚠️ Nova tentativa de pagamento falhou: ${order_status}`,
+        metadata: { 
+          deal_id: existingDeal.id, 
+          order_status 
+        }
+      });
+
+    return {
+      success: true,
+      action: 'note_added',
+      deal_id: existingDeal.id,
+      message: 'Nota adicionada ao deal existente'
+    };
+  }
+
+  // 4. Determine responsible (consultant or support agent)
+  let assigned_to = contact.consultant_id;
+  
+  if (!assigned_to) {
+    // Fallback: find online support agent
+    const { data: supportAgent } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('availability_status', 'online')
+      .limit(1)
+      .single();
+    
+    assigned_to = supportAgent?.id;
+  }
+
+  // 5. Buscar produto por external_id
+  const { data: product } = await supabase
+    .from('products')
+    .select('id')
+    .eq('external_id', Product.product_id)
+    .single();
+
+  // 6. Create overdue deal
+  const { data: deal } = await supabase
+    .from('deals')
+    .insert({
+      title: `Cobrança - ${Product.product_name} - ${Customer.full_name}`,
+      value: Commissions.product_base_price,
+      currency: 'BRL',
+      status: 'open',
+      stage_id: cobrancaStage.id,
+      pipeline_id: cobrancaStage.pipeline_id,
+      contact_id: contact.id,
+      product_id: product?.id,
+      assigned_to,
+    })
+    .select()
+    .single();
+
+  // 7. Log urgent interaction
+  const statusMessage = order_status === 'subscription_late' 
+    ? 'Pagamento atrasado' 
+    : 'Cartão recusado';
+
+  await supabase
+    .from('interactions')
+    .insert({
+      customer_id: contact.id,
+      type: 'note',
+      channel: 'other',
+      content: `⚠️ INADIMPLÊNCIA: ${statusMessage} - ${Product.product_name} - Iniciar cobrança`,
+      metadata: { 
+        deal_id: deal?.id, 
+        product: Product.product_name, 
+        order_status,
+        assigned_to
+      }
+    });
+
+  console.log('[kiwify-webhook] 📞 Overdue deal created:', deal?.id, 'Assigned to:', assigned_to || 'Queue');
+
+  return {
+    success: true,
+    action: 'overdue_deal_created',
+    deal_id: deal?.id,
+    assigned_to,
+    contact_id: contact.id,
+    message: 'Deal de cobrança criado e atribuído'
+  };
+}
+
+// ============================================
 // CASE 3: REFUNDED/CHARGEDBACK - Churn
 // ============================================
 async function handleChurnOrder(
@@ -454,26 +690,64 @@ async function handleChurnOrder(
     console.log('[kiwify-webhook] ⏹️ Playbooks cancelados:', executionIds.length);
   }
 
-  // 5. Registrar interação de churn
+  // 5. Create Winback Deal in "Análise de Perda / Winback" stage
+  const { data: winbackStage } = await supabase
+    .from('stages')
+    .select('id, pipeline_id')
+    .eq('name', 'Análise de Perda / Winback')
+    .single();
+
+  let deal_id = null;
+
+  if (winbackStage) {
+    const { data: deal } = await supabase
+      .from('deals')
+      .insert({
+        title: `Winback - ${Product.product_name} - ${Customer.full_name}`,
+        value: 0, // No value since it's a winback opportunity
+        currency: 'BRL',
+        status: 'open',
+        stage_id: winbackStage.id,
+        pipeline_id: winbackStage.pipeline_id,
+        contact_id: contact.id,
+        lost_reason: order_status,
+      })
+      .select()
+      .single();
+
+    deal_id = deal?.id;
+    console.log('[kiwify-webhook] 🔄 Winback deal created:', deal_id);
+  }
+
+  // 6. Registrar interação de churn
+  const churnReason = order_status === 'refunded' 
+    ? 'Reembolso solicitado' 
+    : order_status === 'chargedback' 
+    ? 'Chargeback (contestação)' 
+    : 'Assinatura cancelada';
+
   await supabase
     .from('interactions')
     .insert({
       customer_id: contact.id,
       type: 'note',
       channel: 'other',
-      content: `⚠️ CHURN: ${order_status === 'refunded' ? 'Reembolso solicitado' : 'Chargeback recebido'} - Acesso revogado`,
+      content: `🔴 CHURN: ${churnReason} - ${Product.product_name} - Acesso revogado`,
       metadata: {
         product: Product.product_name,
         reason: order_status,
         blocked: true,
-        access_revoked: true
+        access_revoked: true,
+        deal_id
       }
     });
 
   return {
     success: true,
-    action: 'access_revoked',
+    action: 'churn_processed',
     contact_id: contact.id,
-    message: 'Cliente marcado como churned, acesso bloqueado, playbooks cancelados'
+    access_revoked: !!userToBlock,
+    winback_deal_id: deal_id,
+    message: 'Cliente marcado como churned, acesso bloqueado, playbooks cancelados, deal de winback criado'
   };
 }

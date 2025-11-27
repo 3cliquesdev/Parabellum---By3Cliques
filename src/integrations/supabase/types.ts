@@ -2214,6 +2214,7 @@ export type Database = {
         | "customer"
         | "inactive"
         | "churned"
+        | "overdue"
       deal_status: "open" | "won" | "lost"
       department_type: "comercial" | "suporte" | "marketing" | "operacional"
       interaction_type:
@@ -2408,7 +2409,14 @@ export const Constants = {
       ],
       conversation_channel: ["whatsapp", "email", "web_chat"],
       conversation_status: ["open", "closed"],
-      customer_status: ["lead", "qualified", "customer", "inactive", "churned"],
+      customer_status: [
+        "lead",
+        "qualified",
+        "customer",
+        "inactive",
+        "churned",
+        "overdue",
+      ],
       deal_status: ["open", "won", "lost"],
       department_type: ["comercial", "suporte", "marketing", "operacional"],
       interaction_type: [
