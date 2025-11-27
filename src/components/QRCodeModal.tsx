@@ -16,6 +16,13 @@ export function QRCodeModal({ open, onOpenChange, instance }: QRCodeModalProps) 
   const [status, setStatus] = useState<string>(instance?.status || 'disconnected');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Sempre sincroniza estado local com a instância mais recente
+  useEffect(() => {
+    if (!instance) return;
+    setQrCode(instance.qr_code_base64 ?? null);
+    setStatus(instance.status ?? 'disconnected');
+  }, [instance]);
+
   // Realtime subscription para status da instância
   useEffect(() => {
     if (!instance?.id || !open) return;
