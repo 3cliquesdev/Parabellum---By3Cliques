@@ -73,8 +73,7 @@ export default function WhatsAppSettings() {
   const handleTestConnection = async (instance: any) => {
     setTestResult(null); // Clear previous result
     const result = await testConnectionMutation.mutateAsync({
-      api_url: instance.api_url,
-      api_token: instance.api_token,
+      instance_id: instance.id,
     });
     setTestResult({ ...result, instanceId: instance.id });
   };

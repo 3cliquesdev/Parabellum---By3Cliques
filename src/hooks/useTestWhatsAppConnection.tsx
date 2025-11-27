@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TestConnectionParams {
-  api_url: string;
-  api_token: string;
+  instance_id: string;
 }
 
 interface TestResult {
@@ -19,106 +19,82 @@ export function useTestWhatsAppConnection() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ api_url, api_token }: TestConnectionParams): Promise<TestResult> => {
-      let baseUrl = api_url;
-      if (baseUrl.includes('/manager')) {
-        baseUrl = baseUrl.split('/manager')[0];
-      }
-      baseUrl = baseUrl.replace(/\/$/, '');
-
-      const testUrl = `${baseUrl}/instance/fetchInstances`;
+    mutationFn: async ({ instance_id }: TestConnectionParams): Promise<TestResult> => {
       const startTime = Date.now();
 
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
-        const response = await fetch(testUrl, {
-          method: "GET",
-          headers: {
-            "apikey": api_token.trim(),
-          },
-          signal: controller.signal,
+        // Usar proxy server-side para evitar CORS e Mixed Content
+        const { data: result, error } = await supabase.functions.invoke('whatsapp-proxy', {
+          body: {
+            instance_id,
+            endpoint: '/instance/fetchInstances',
+            method: 'GET',
+          }
         });
 
-        clearTimeout(timeoutId);
         const latency = Date.now() - startTime;
 
-        if (response.ok) {
-          return {
-            success: true,
-            status: response.status,
-            latency,
-          };
-        }
+        if (error) {
+          console.error('[useTestWhatsAppConnection] Proxy error:', error);
+          
+          // Erro de autenticação (token inválido)
+          if (error.message.includes('401') || error.message.includes('403')) {
+            return {
+              success: false,
+              latency,
+              errorType: 'auth',
+              errorMessage: 'Token de API inválido ou sem permissão',
+              technicalDetails: error.message,
+            };
+          }
 
-        // Erro HTTP específico
-        if (response.status === 401 || response.status === 403) {
+          // Erro 404 (endpoint não encontrado)
+          if (error.message.includes('404')) {
+            return {
+              success: false,
+              latency,
+              errorType: 'not_found',
+              errorMessage: 'Endpoint não encontrado',
+              technicalDetails: error.message,
+            };
+          }
+
+          // Timeout ou erro de rede
+          if (error.message.includes('timeout') || error.message.includes('fetch')) {
+            return {
+              success: false,
+              latency,
+              errorType: 'timeout',
+              errorMessage: 'Timeout: A API não respondeu',
+              technicalDetails: error.message,
+            };
+          }
+
+          // Erro genérico
           return {
             success: false,
-            status: response.status,
             latency,
-            errorType: 'auth',
-            errorMessage: 'Token de API inválido ou sem permissão',
-            technicalDetails: `HTTP ${response.status}: Chave de API rejeitada pelo servidor`,
+            errorType: 'network',
+            errorMessage: 'Erro de Conexão',
+            technicalDetails: error.message,
           };
         }
 
-        if (response.status === 404) {
-          return {
-            success: false,
-            status: response.status,
-            latency,
-            errorType: 'not_found',
-            errorMessage: 'Endpoint não encontrado',
-            technicalDetails: `HTTP 404: A URL ${testUrl} não existe na Evolution API`,
-          };
-        }
-
+        // Sucesso
         return {
-          success: false,
-          status: response.status,
+          success: true,
+          status: 200,
           latency,
-          errorType: 'network',
-          errorMessage: `Erro HTTP ${response.status}`,
-          technicalDetails: await response.text(),
         };
       } catch (error: any) {
         const latency = Date.now() - startTime;
-
-        // Timeout
-        if (error.name === 'AbortError') {
-          return {
-            success: false,
-            latency,
-            errorType: 'timeout',
-            errorMessage: 'Tempo limite de conexão excedido (>10s)',
-            technicalDetails: 'A API não respondeu dentro de 10 segundos. Servidor pode estar offline ou com alta latência.',
-          };
-        }
-
-        // Failed to fetch = CORS ou Mixed Content
-        if (error.message.includes('Failed to fetch')) {
-          const isMixedContent = window.location.protocol === 'https:' && baseUrl.startsWith('http:');
-          
-          return {
-            success: false,
-            latency,
-            errorType: isMixedContent ? 'mixed_content' : 'cors',
-            errorMessage: isMixedContent 
-              ? 'Bloqueio de Mixed Content (HTTPS → HTTP)'
-              : 'Bloqueio de CORS',
-            technicalDetails: isMixedContent
-              ? `Seu app está em HTTPS mas a API está em HTTP (${baseUrl}). Navegadores bloqueiam isso. Solução: Adicione SSL (HTTPS) na sua Evolution API.`
-              : `A API não permite requisições deste domínio. Configure CORS_ORIGIN=* no .env da Evolution API e reinicie.`,
-          };
-        }
-
+        console.error('[useTestWhatsAppConnection] Error:', error);
+        
         return {
           success: false,
           latency,
           errorType: 'network',
-          errorMessage: 'Erro de rede desconhecido',
+          errorMessage: 'Erro desconhecido',
           technicalDetails: error.message,
         };
       }
