@@ -6,6 +6,7 @@ import { FileText, FileSpreadsheet, File as FileIcon, ImageIcon, Download } from
 import ReactPlayer from 'react-player';
 import confetti from 'canvas-confetti';
 import { QuizComponent } from './QuizComponent';
+import { useToast } from '@/hooks/use-toast';
 
 interface Attachment {
   name: string;
@@ -29,6 +30,7 @@ interface PlaybookStepViewerProps {
   quiz_options?: QuizOption[];
   quiz_correct_option?: string;
   quiz_passed?: boolean;
+  alreadyCompleted?: boolean;
   onVideoEnded?: () => void;
   onQuizPassed?: () => void;
 }
@@ -43,12 +45,15 @@ export function PlaybookStepViewer({
   quiz_options,
   quiz_correct_option,
   quiz_passed,
+  alreadyCompleted,
   onVideoEnded,
   onQuizPassed,
 }: PlaybookStepViewerProps) {
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [quizPassedLocal, setQuizPassedLocal] = useState(quiz_passed || false);
+  const [contentConsumed, setContentConsumed] = useState(alreadyCompleted || quiz_passed || false);
+  const { toast } = useToast();
 
   const canPlayVideo = ReactPlayer.canPlay && ReactPlayer.canPlay(video_url || '');
 
@@ -62,6 +67,15 @@ export function PlaybookStepViewer({
 
   const handleVideoEnd = () => {
     setVideoCompleted(true);
+    setContentConsumed(true);
+    
+    toast({
+      title: "🎬 Vídeo Concluído!",
+      description: quiz_enabled 
+        ? "Responda a pergunta para avançar." 
+        : "Você pode marcar esta etapa como concluída.",
+    });
+    
     if (!quiz_enabled) {
       confetti({ 
         particleCount: 100, 
@@ -148,20 +162,22 @@ export function PlaybookStepViewer({
         />
       )}
 
-      {/* Quiz Gatekeeper */}
-      {quiz_enabled && quiz_question && quiz_options && quiz_correct_option && (
-        <QuizComponent
-          question={quiz_question}
-          options={quiz_options}
-          correctOption={quiz_correct_option}
-          onPass={handleQuizPassed}
-          disabled={!videoCompleted && !!video_url}
-          passed={quizPassedLocal}
-        />
+      {/* Quiz Gatekeeper - Only show after video ends */}
+      {contentConsumed && quiz_enabled && quiz_question && quiz_options && quiz_correct_option && (
+        <div className="animate-fade-in">
+          <QuizComponent
+            question={quiz_question}
+            options={quiz_options}
+            correctOption={quiz_correct_option}
+            onPass={handleQuizPassed}
+            passed={quizPassedLocal}
+          />
+        </div>
       )}
 
-      {/* Attachments */}
-      {attachments && attachments.length > 0 && (
+      {/* Attachments - Only show after video ends */}
+      {contentConsumed && attachments && attachments.length > 0 && (
+        <div className="animate-fade-in">
         <div className="space-y-3">
           <h3 className="text-lg font-semibold text-foreground">📎 Materiais Complementares</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -181,6 +197,7 @@ export function PlaybookStepViewer({
               </Card>
             ))}
           </div>
+        </div>
         </div>
       )}
     </Card>

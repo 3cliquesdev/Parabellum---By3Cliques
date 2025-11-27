@@ -27,9 +27,11 @@ interface JourneyStep {
 interface OnboardingStepModalProps {
   step: JourneyStep;
   onClose: () => void;
+  allSteps?: JourneyStep[];
+  onNavigateToStep?: (step: JourneyStep) => void;
 }
 
-export function OnboardingStepModal({ step, onClose }: OnboardingStepModalProps) {
+export function OnboardingStepModal({ step, onClose, allSteps, onNavigateToStep }: OnboardingStepModalProps) {
   const [videoCompleted, setVideoCompleted] = useState(step.video_completed || false);
   const [quizPassed, setQuizPassed] = useState(step.quiz_passed || false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -110,13 +112,29 @@ export function OnboardingStepModal({ step, onClose }: OnboardingStepModalProps)
 
       toast({
         title: '✅ Etapa Concluída',
-        description: 'Parabéns por completar esta etapa do onboarding!',
+        description: 'Parabéns por completar esta etapa!',
       });
 
       // Invalidate queries to refresh UI
       queryClient.invalidateQueries({ queryKey: ['journey-steps', step.contact_id] });
       queryClient.invalidateQueries({ queryKey: ['customer-timeline', step.contact_id] });
       queryClient.invalidateQueries({ queryKey: ['onboarding-progress', step.contact_id] });
+      queryClient.invalidateQueries({ queryKey: ['resume-onboarding', step.contact_id] });
+
+      // Navigate to next step automatically
+      if (allSteps && onNavigateToStep) {
+        const currentIndex = allSteps.findIndex((s) => s.id === step.id);
+        const nextStep = allSteps[currentIndex + 1];
+
+        if (nextStep && !nextStep.completed) {
+          toast({
+            title: '➡️ Próxima Aula',
+            description: `Carregando: ${nextStep.step_name}`,
+          });
+          onNavigateToStep(nextStep);
+          return;
+        }
+      }
 
       onClose();
     } catch (error: any) {
@@ -154,6 +172,7 @@ export function OnboardingStepModal({ step, onClose }: OnboardingStepModalProps)
           quiz_options={step.quiz_options}
           quiz_correct_option={step.quiz_correct_option}
           quiz_passed={quizPassed}
+          alreadyCompleted={step.completed || step.video_completed || step.quiz_passed}
           onVideoEnded={handleVideoEnded}
           onQuizPassed={handleQuizPassed}
         />
