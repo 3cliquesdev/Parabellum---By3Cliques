@@ -56,7 +56,11 @@ export function WhatsAppInstanceDialog({
   const createMutation = useCreateWhatsAppInstance();
   const updateMutation = useUpdateWhatsAppInstance();
   const { data: departments } = useDepartments();
-  const { data: users } = useUsers();
+  const { data: users, isLoading: usersLoading } = useUsers();
+
+  console.log('[WhatsAppInstanceDialog] Users data:', users);
+  console.log('[WhatsAppInstanceDialog] Users loading:', usersLoading);
+  console.log('[WhatsAppInstanceDialog] Instance:', instance);
 
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
@@ -255,11 +259,21 @@ export function WhatsAppInstanceDialog({
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="__none__">Nenhum (Número Geral)</SelectItem>
+                      {usersLoading && (
+                        <SelectItem value="__loading__" disabled>
+                          Carregando usuários...
+                        </SelectItem>
+                      )}
                       {users?.map((user) => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.full_name || user.email} ({getRoleLabel(user.role)})
                         </SelectItem>
                       ))}
+                      {!usersLoading && (!users || users.length === 0) && (
+                        <SelectItem value="__empty__" disabled>
+                          Nenhum usuário encontrado
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                   <FormDescription>
