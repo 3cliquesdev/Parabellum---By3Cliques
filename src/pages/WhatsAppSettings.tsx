@@ -366,7 +366,7 @@ export default function WhatsAppSettings() {
         <QRCodeModal
           open={qrModalOpen}
           onOpenChange={setQrModalOpen}
-          instance={selectedInstance}
+          instance={instances?.find((i: any) => i.id === selectedInstance.id) || selectedInstance}
         />
       )}
     </Layout>
