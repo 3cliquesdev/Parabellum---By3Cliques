@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import { useContactTickets } from "@/hooks/useContactTickets";
 import { useUnifiedTimeline } from "@/hooks/useUnifiedTimeline";
 import DealDialog from "./DealDialog";
 import { SLABadge } from "./SLABadge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
@@ -27,7 +29,30 @@ interface ContactDetailsSidebarProps {
 }
 
 export default function ContactDetailsSidebar({ conversation }: ContactDetailsSidebarProps) {
+  // 🔄 ESTADO DE TRANSIÇÃO: Detectar mudança de conversa
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [previousConversationId, setPreviousConversationId] = useState<string | null>(null);
+  
   const contactId = conversation?.contacts?.id || null;
+  const conversationId = conversation?.id || null;
+
+  // ✅ SINCRONIZAÇÃO OBRIGATÓRIA: Limpar dados antigos ao mudar conversa
+  useEffect(() => {
+    if (conversationId && conversationId !== previousConversationId) {
+      console.log('[ContactDetailsSidebar] 🔄 Conversa mudou:', { 
+        anterior: previousConversationId, 
+        nova: conversationId,
+        contactId 
+      });
+      
+      setIsTransitioning(true);
+      setPreviousConversationId(conversationId);
+      
+      // Delay mínimo para evitar flash de conteúdo
+      const timer = setTimeout(() => setIsTransitioning(false), 150);
+      return () => clearTimeout(timer);
+    }
+  }, [conversationId, previousConversationId, contactId]);
 
   const { data: contactDeals = [] } = useQuery({
     queryKey: ["contact-deals", contactId],
@@ -65,6 +90,26 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   }
 
   const contact = conversation.contacts;
+
+  // 🚨 PREVENÇÃO DE STALE DATA: Mostrar skeleton durante transição
+  if (isTransitioning) {
+    return (
+      <div className="w-96 flex-none border-l bg-slate-50 dark:bg-card border-slate-200 dark:border-border flex flex-col h-full overflow-hidden">
+        <div className="flex-none p-6 border-b border-slate-200 dark:border-border">
+          <div className="flex flex-col items-center mb-6">
+            <Skeleton className="h-20 w-20 rounded-full mb-3" />
+            <Skeleton className="h-6 w-32 mb-2" />
+            <Skeleton className="h-5 w-24" />
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 p-6">
+          <Skeleton className="h-4 w-full mb-4" />
+          <Skeleton className="h-4 w-3/4 mb-4" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      </div>
+    );
+  }
 
   const openTickets = contactTickets.filter(t => t.status !== 'closed' && t.status !== 'resolved');
   const recentTimeline = unifiedTimeline.slice(0, 10);
