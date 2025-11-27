@@ -347,6 +347,31 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           console.log('[handle-whatsapp-event] 🔑 Código OTP:', otpCode);
           console.log('[handle-whatsapp-event] 📧 Email enviado:', otpSentViaEmail);
           console.log('[handle-whatsapp-event] 🔧 Dev mode:', devMode);
+        } else if (otpError?.message?.includes('429') || otpError?.status === 429 || otpResponse?.error?.includes('Limite')) {
+          // FASE 1: Tratamento específico para rate limit (429)
+          console.error('[handle-whatsapp-event] ⏰ Rate limit atingido (429)');
+          
+          await sendWhatsAppMessage(
+            supabase,
+            instance,
+            phoneForDatabase,
+            jidForSending,
+            `⏰ *Limite de verificações atingido*\n\n` +
+            `Você solicitou muitos códigos recentemente. ` +
+            `Por favor, aguarde 1 hora antes de tentar novamente.\n\n` +
+            `Se precisar de ajuda urgente, um atendente humano vai te ajudar.`
+          );
+          
+          // Mudar para copilot para agente assumir
+          await supabase
+            .from('conversations')
+            .update({ ai_mode: 'copilot' })
+            .eq('id', conversationId);
+          
+          console.log('[handle-whatsapp-event] 🔄 Conversa mudou para Copilot devido ao rate limit');
+          return new Response(JSON.stringify({ success: true, rate_limited: true }), {
+            headers: { 'Content-Type': 'application/json' },
+          });
         } else {
           console.error('[handle-whatsapp-event] ❌ Erro ao enviar OTP:', otpError);
         }

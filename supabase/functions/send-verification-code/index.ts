@@ -29,7 +29,7 @@ serve(async (req) => {
 
     console.log('[send-verification-code] Gerando código para:', email);
 
-    // Rate limit: máximo 3 códigos por email por hora
+    // Rate limit: máximo 10 códigos por email por hora (aumentado para desenvolvimento)
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { count } = await supabase
       .from('email_verifications')
@@ -37,7 +37,7 @@ serve(async (req) => {
       .eq('email', email)
       .gte('created_at', oneHourAgo);
 
-    if (count && count >= 3) {
+    if (count && count >= 10) {
       return new Response(JSON.stringify({ 
         error: 'Limite de códigos atingido. Aguarde 1 hora.' 
       }), {
