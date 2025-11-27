@@ -467,7 +467,11 @@ export type Database = {
           email: string | null
           first_name: string
           id: string
+          kiwify_customer_id: string | null
+          kiwify_subscription_id: string | null
           last_contact_date: string | null
+          last_kiwify_event: string | null
+          last_kiwify_event_at: string | null
           last_name: string
           last_payment_date: string | null
           neighborhood: string | null
@@ -503,7 +507,11 @@ export type Database = {
           email?: string | null
           first_name: string
           id?: string
+          kiwify_customer_id?: string | null
+          kiwify_subscription_id?: string | null
           last_contact_date?: string | null
+          last_kiwify_event?: string | null
+          last_kiwify_event_at?: string | null
           last_name: string
           last_payment_date?: string | null
           neighborhood?: string | null
@@ -539,7 +547,11 @@ export type Database = {
           email?: string | null
           first_name?: string
           id?: string
+          kiwify_customer_id?: string | null
+          kiwify_subscription_id?: string | null
           last_contact_date?: string | null
+          last_kiwify_event?: string | null
+          last_kiwify_event_at?: string | null
           last_name?: string
           last_payment_date?: string | null
           neighborhood?: string | null
@@ -2100,6 +2112,7 @@ export type Database = {
         }[]
       }
       get_least_loaded_consultant: { Args: never; Returns: string }
+      get_least_loaded_sales_rep: { Args: never; Returns: string }
       get_or_create_conversation: {
         Args: {
           p_channel?: string
