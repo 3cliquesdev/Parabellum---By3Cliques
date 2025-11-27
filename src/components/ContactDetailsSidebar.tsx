@@ -89,6 +89,17 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
     );
   }
 
+  // ✅ NULL SAFETY: Verificar se contact existe
+  if (!conversation.contacts) {
+    return (
+      <div className="w-96 border-l bg-slate-50 dark:bg-card border-slate-200 dark:border-border p-6">
+        <p className="text-slate-500 dark:text-muted-foreground text-center">
+          ⚠️ Contato não encontrado
+        </p>
+      </div>
+    );
+  }
+
   const contact = conversation.contacts;
 
   // 🚨 PREVENÇÃO DE STALE DATA: Mostrar skeleton durante transição
@@ -166,25 +177,32 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
 
   return (
     <div className="w-96 flex-none border-l bg-slate-50 dark:bg-card border-slate-200 dark:border-border flex flex-col h-full overflow-hidden">
+      {/* 🐛 DEBUG BANNER - Temporário */}
+      <div className="bg-yellow-100 dark:bg-yellow-900/30 px-3 py-1 text-xs font-mono border-b border-yellow-300 dark:border-yellow-700">
+        🔍 Contact ID: {contactId || 'null'} | Conv ID: {conversationId || 'null'}
+        <br />
+        📱 Phone: {contact?.phone || 'não cadastrado'}
+      </div>
+      
       <div className="flex-none p-6 border-b border-slate-200 dark:border-border">
           {/* Contact Info */}
           <div className="flex flex-col items-center mb-6">
             <Avatar className="h-20 w-20 bg-primary/10 flex items-center justify-center mb-3">
               <span className="text-2xl font-semibold text-primary">
-                {contact.first_name[0]}
-                {contact.last_name[0]}
+                {contact?.first_name?.[0] || '?'}
+                {contact?.last_name?.[0] || '?'}
               </span>
             </Avatar>
             <h3 className="text-lg font-semibold text-foreground text-center">
-              {contact.first_name} {contact.last_name}
+              {contact?.first_name || 'Nome'} {contact?.last_name || 'Desconhecido'}
             </h3>
             <Badge variant="secondary" className="mt-2">
-              {contact.status === 'lead' ? '🎯 Lead' :
-               contact.status === 'qualified' ? '✅ Qualificado' :
-               contact.status === 'customer' ? '⭐ Cliente' :
-               contact.status === 'inactive' ? '😴 Inativo' : '❌ Churned'}
+              {contact?.status === 'lead' ? '🎯 Lead' :
+               contact?.status === 'qualified' ? '✅ Qualificado' :
+               contact?.status === 'customer' ? '⭐ Cliente' :
+               contact?.status === 'inactive' ? '😴 Inativo' : '❌ Churned'}
             </Badge>
-            {contact.total_ltv && contact.total_ltv > 0 && (
+            {contact?.total_ltv && contact.total_ltv > 0 && (
               <div className="mt-3 text-center">
                 <p className="text-xs text-muted-foreground uppercase mb-1">Lifetime Value</p>
                 <p className="text-lg font-bold text-success">
@@ -218,7 +236,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
               <p className="text-xs font-medium text-muted-foreground uppercase mb-2">
                 Informações de Contato
               </p>
-            {contact.email && (
+            {contact?.email && (
               <div className="flex items-center gap-2 text-sm mb-2">
                 <Mail className="h-4 w-4 text-muted-foreground" />
                 <a 
@@ -229,7 +247,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
                 </a>
               </div>
             )}
-            {contact.phone ? (
+            {contact?.phone ? (
               <div className="flex items-center gap-2 text-sm">
                 <Phone className="h-4 w-4 text-muted-foreground" />
                 <a 
@@ -250,7 +268,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
             )}
             </div>
 
-            {contact.organizations && (
+            {contact?.organizations && (
               <>
                 <Separator />
                 <div>
@@ -354,7 +372,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
                     Negócios ({contactDeals?.length || 0})
                   </p>
                   <DealDialog
-                    prefilledContactId={contact.id}
+                    prefilledContactId={contact?.id || ''}
                     trigger={
                       <Button variant="ghost" size="sm" className="h-7 gap-1">
                         <Plus className="h-3 w-3" />
