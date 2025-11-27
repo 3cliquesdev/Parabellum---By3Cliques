@@ -131,10 +131,10 @@ export default function Products() {
                     )}
                     
                     {/* Playbook Badge */}
-                    {product.playbook && product.playbook.length > 0 && (
+                    {product.onboarding_playbooks && product.onboarding_playbooks.length > 0 && (
                       <div className="mt-2">
                         <Badge className="bg-primary/10 text-primary border-primary/20">
-                          🎯 {product.playbook[0].name}
+                          🎯 {product.onboarding_playbooks[0].name}
                         </Badge>
                       </div>
                     )}

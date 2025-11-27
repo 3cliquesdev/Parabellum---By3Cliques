@@ -10,7 +10,7 @@ export function useProducts() {
         .from("products")
         .select(`
           *,
-          playbook:onboarding_playbooks!onboarding_playbooks_product_id_fkey(
+          onboarding_playbooks(
             id,
             name,
             is_active
