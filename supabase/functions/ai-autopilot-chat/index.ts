@@ -10,6 +10,11 @@ interface AutopilotChatRequest {
   conversationId: string;
   customerMessage: string;
   maxHistory?: number;
+  customer_context?: {
+    name: string;
+    email: string;
+    isVerified: boolean;
+  } | null;
 }
 
 serve(async (req) => {
@@ -23,7 +28,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, customerMessage, maxHistory = 10 }: AutopilotChatRequest = await req.json();
+    const { conversationId, customerMessage, maxHistory = 10, customer_context }: AutopilotChatRequest = await req.json();
     
     // FASE 4: Rate Limiting (10 mensagens por minuto por conversa)
     const { data: rateLimitAllowed, error: rateLimitError } = await supabaseClient
@@ -324,7 +329,7 @@ serve(async (req) => {
     }
 
     // 5. Preparar system prompt inteligente baseado na intenção
-    const contactName = `${contact.first_name} ${contact.last_name}`.trim();
+    const contactName = customer_context?.name || `${contact.first_name} ${contact.last_name}`.trim();
     const contactCompany = contact.company ? ` da empresa ${contact.company}` : '';
     const contactStatus = contact.status || 'lead';
     
@@ -335,6 +340,11 @@ serve(async (req) => {
       ).join('\n\n---\n\n')}`;
     }
     
+    // Personalizar saudação se for cliente conhecido
+    const greetingNote = customer_context?.isVerified 
+      ? `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.`
+      : '';
+    
     const contextualizedSystemPrompt = `Você é o assistente virtual da empresa.
 
 **REGRAS DE RESPOSTA:**
@@ -342,13 +352,13 @@ serve(async (req) => {
 2. **Dúvidas Técnicas:** Se o usuário fizer uma pergunta sobre produtos, entregas ou suporte, USE O CONTEXTO ABAIXO se disponível.
 3. **Casos de Devolução/Reembolso/Troca:** Se o cliente relatar problema com pedido (defeito, arrependimento, produto errado), colete: número do pedido, tipo do problema, e descrição. Depois use a ferramenta create_ticket para registrar automaticamente. NÃO transfira para humano nesses casos básicos.
 4. **Falha:** Se a resposta não estiver no contexto e não for conversa fiada nem caso de ticket, diga: "Vou chamar um especialista para te ajudar" e pare.
-${knowledgeContext}
+${knowledgeContext}${greetingNote}
 
 **Contexto do Cliente:**
 - Nome: ${contactName}${contactCompany}
 - Status: ${contactStatus}
 - Canal: ${channel}
-${contact.email ? `- Email: ${contact.email}` : ''}
+${customer_context?.email || contact.email ? `- Email: ${customer_context?.email || contact.email}` : ''}
 ${contact.phone ? `- Telefone: ${contact.phone}` : ''}
 
 Use essas informações de forma natural e personalizada.`;

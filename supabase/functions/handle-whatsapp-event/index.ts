@@ -186,16 +186,25 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
 
   // 1. Buscar ou criar contato TEMPORÁRIO (visitante)
   let contactId: string;
+  let isKnownCustomer = false;
+  let contactName = customerName;
   
   const { data: existingContact } = await supabase
     .from('contacts')
-    .select('id, email')
+    .select('id, email, first_name, last_name')
     .eq('phone', normalizedPhone)
     .single();
 
   if (existingContact) {
     contactId = existingContact.id;
     console.log('[handle-whatsapp-event] Existing contact found:', contactId);
+    
+    // ✅ SE TEM EMAIL VINCULADO = CLIENTE JÁ VERIFICADO
+    if (existingContact.email) {
+      isKnownCustomer = true;
+      contactName = `${existingContact.first_name || ''} ${existingContact.last_name || ''}`.trim() || customerName;
+      console.log(`[handle-whatsapp-event] 🎯 Cliente conhecido: ${contactName} (${existingContact.email})`);
+    }
   } else {
     // Criar contato temporário como "Visitante"
     const names = customerName.split(' ');
@@ -258,11 +267,12 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     return; // Não processar mais nada após validação OTP
   }
 
-  // 🔍 DETECÇÃO DE EMAIL NA MENSAGEM
-  const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
-  const emailMatch = messageText.match(emailRegex);
+  // 🔍 DETECÇÃO DE EMAIL NA MENSAGEM - APENAS PARA VISITANTES
+  if (!isKnownCustomer) {
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
+    const emailMatch = messageText.match(emailRegex);
 
-  if (emailMatch) {
+    if (emailMatch) {
     const claimedEmail = emailMatch[0].toLowerCase();
     console.log('[handle-whatsapp-event] 📧 Email detected:', claimedEmail);
 
@@ -332,7 +342,10 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       });
 
       return; // Não processar mais nada - aguardando OTP
+      }
     }
+  } else {
+    console.log('[handle-whatsapp-event] ⏭️ Cliente já verificado - pulando validação de email');
   }
 
   // 4. FASE 2: Vincular instância e atribuir conversa (normal flow)
@@ -378,6 +391,11 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         body: {
           conversation_id: conversationId,
           customer_message: messageText,
+          customer_context: isKnownCustomer ? {
+            name: contactName,
+            email: existingContact?.email,
+            isVerified: true
+          } : null
         },
       });
       console.log('[handle-whatsapp-event] AI triggered successfully');
