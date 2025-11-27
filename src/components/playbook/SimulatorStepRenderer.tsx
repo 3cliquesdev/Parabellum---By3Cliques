@@ -135,11 +135,13 @@ export function SimulatorStepRenderer({
 
   // TASK NODE (Video + Quiz + Rich Content)
   if (node.type === "task") {
+    const hasVideo = node.data.video_url?.trim();
+    
     return (
       <div className="space-y-4">
         <PlaybookStepViewer
           label={node.data.label}
-          video_url={node.data.video_url}
+          video_url={hasVideo ? node.data.video_url : undefined}
           rich_content={node.data.rich_content}
           attachments={node.data.attachments}
           quiz_enabled={node.data.quiz_enabled}
