@@ -778,6 +778,13 @@ export type Database = {
           is_critical: boolean
           notes: string | null
           position: number
+          quiz_attempts: number | null
+          quiz_correct_option: string | null
+          quiz_enabled: boolean | null
+          quiz_options: Json | null
+          quiz_passed: boolean | null
+          quiz_passed_at: string | null
+          quiz_question: string | null
           rich_content: string | null
           step_name: string
           updated_at: string
@@ -796,6 +803,13 @@ export type Database = {
           is_critical?: boolean
           notes?: string | null
           position?: number
+          quiz_attempts?: number | null
+          quiz_correct_option?: string | null
+          quiz_enabled?: boolean | null
+          quiz_options?: Json | null
+          quiz_passed?: boolean | null
+          quiz_passed_at?: string | null
+          quiz_question?: string | null
           rich_content?: string | null
           step_name: string
           updated_at?: string
@@ -814,6 +828,13 @@ export type Database = {
           is_critical?: boolean
           notes?: string | null
           position?: number
+          quiz_attempts?: number | null
+          quiz_correct_option?: string | null
+          quiz_enabled?: boolean | null
+          quiz_options?: Json | null
+          quiz_passed?: boolean | null
+          quiz_passed_at?: string | null
+          quiz_question?: string | null
           rich_content?: string | null
           step_name?: string
           updated_at?: string

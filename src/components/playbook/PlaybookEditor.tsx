@@ -19,8 +19,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye } from "lucide-react";
+import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye, HelpCircle, Plus, Trash2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { EmailNode } from "./EmailNode";
 import { DelayNode } from "./DelayNode";
 import { TaskNode } from "./TaskNode";
@@ -93,6 +95,36 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
           : node
       )
     );
+    
+    // Update selectedNode state to reflect changes
+    setSelectedNode({
+      ...selectedNode,
+      data: { ...selectedNode.data, [field]: value }
+    });
+  };
+
+  const addQuizOption = () => {
+    if (!selectedNode) return;
+    const options = selectedNode.data.quiz_options || [];
+    const newOption = {
+      id: String.fromCharCode(97 + options.length), // a, b, c, d...
+      text: ''
+    };
+    updateNodeData('quiz_options', [...options, newOption]);
+  };
+
+  const removeQuizOption = (index: number) => {
+    if (!selectedNode) return;
+    const options = [...(selectedNode.data.quiz_options || [])];
+    options.splice(index, 1);
+    updateNodeData('quiz_options', options);
+  };
+
+  const updateQuizOption = (index: number, text: string) => {
+    if (!selectedNode) return;
+    const options = [...(selectedNode.data.quiz_options || [])];
+    options[index] = { ...options[index], text };
+    updateNodeData('quiz_options', options);
   };
 
   const handleSave = () => {
@@ -209,6 +241,90 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
                     attachments={selectedNode.data.attachments || []}
                     onChange={(value) => updateNodeData("attachments", value)}
                   />
+
+                  {/* Quiz Gatekeeper Section */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-2 text-base font-semibold">
+                        <HelpCircle className="h-4 w-4 text-primary" />
+                        📝 Trava de Conhecimento (Quiz)
+                      </Label>
+                      <Switch
+                        checked={selectedNode.data.quiz_enabled || false}
+                        onCheckedChange={(checked) => {
+                          updateNodeData("quiz_enabled", checked);
+                          if (checked && !selectedNode.data.quiz_options) {
+                            updateNodeData("quiz_options", []);
+                          }
+                        }}
+                      />
+                    </div>
+
+                    {selectedNode.data.quiz_enabled && (
+                      <div className="space-y-4 pl-6 border-l-2 border-primary/30">
+                        {/* Pergunta */}
+                        <div>
+                          <Label>Pergunta do Quiz</Label>
+                          <Input
+                            value={selectedNode.data.quiz_question || ""}
+                            onChange={(e) => updateNodeData("quiz_question", e.target.value)}
+                            placeholder="O que você aprendeu nesta aula?"
+                          />
+                        </div>
+
+                        {/* Opções de Resposta */}
+                        <div className="space-y-3">
+                          <Label className="text-sm font-medium">Opções de Resposta</Label>
+                          <RadioGroup
+                            value={selectedNode.data.quiz_correct_option || ""}
+                            onValueChange={(value) => updateNodeData("quiz_correct_option", value)}
+                          >
+                            {(selectedNode.data.quiz_options || []).map((option: any, idx: number) => (
+                              <div key={option.id} className="flex items-center gap-2">
+                                <div className="flex items-center space-x-2">
+                                  <RadioGroupItem value={option.id} id={`quiz-${option.id}`} />
+                                  <Label htmlFor={`quiz-${option.id}`} className="sr-only">
+                                    Marcar como correta
+                                  </Label>
+                                </div>
+                                <Input
+                                  value={option.text}
+                                  onChange={(e) => updateQuizOption(idx, e.target.value)}
+                                  placeholder={`Opção ${option.id.toUpperCase()}`}
+                                  className="flex-1"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeQuizOption(idx)}
+                                  disabled={(selectedNode.data.quiz_options || []).length <= 2}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                          
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={addQuizOption}
+                            className="w-full"
+                            disabled={(selectedNode.data.quiz_options || []).length >= 6}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Adicionar Opção
+                          </Button>
+
+                          <p className="text-xs text-muted-foreground">
+                            ✅ Clique no círculo ao lado da opção para marcá-la como correta
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   <Button
                     type="button"
@@ -337,6 +453,10 @@ export default function PlaybookEditor({ initialFlow, onSave, onCancel, isSaving
               video_url={previewNode.data.video_url}
               rich_content={previewNode.data.rich_content}
               attachments={previewNode.data.attachments}
+              quiz_enabled={previewNode.data.quiz_enabled}
+              quiz_question={previewNode.data.quiz_question}
+              quiz_options={previewNode.data.quiz_options}
+              quiz_correct_option={previewNode.data.quiz_correct_option}
             />
           )}
         </ScrollArea>

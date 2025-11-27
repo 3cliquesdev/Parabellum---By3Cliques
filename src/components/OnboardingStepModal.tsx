@@ -15,6 +15,13 @@ interface JourneyStep {
   video_completed?: boolean;
   completed: boolean;
   contact_id: string;
+  quiz_enabled?: boolean;
+  quiz_question?: string;
+  quiz_options?: any[];
+  quiz_correct_option?: string;
+  quiz_passed?: boolean;
+  quiz_passed_at?: string;
+  quiz_attempts?: number;
 }
 
 interface OnboardingStepModalProps {
@@ -24,6 +31,7 @@ interface OnboardingStepModalProps {
 
 export function OnboardingStepModal({ step, onClose }: OnboardingStepModalProps) {
   const [videoCompleted, setVideoCompleted] = useState(step.video_completed || false);
+  const [quizPassed, setQuizPassed] = useState(step.quiz_passed || false);
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -49,6 +57,39 @@ export function OnboardingStepModal({ step, onClose }: OnboardingStepModalProps)
       queryClient.invalidateQueries({ queryKey: ['customer-timeline', step.contact_id] });
     } catch (error: any) {
       console.error('Error updating video completion:', error);
+    }
+  };
+
+  const handleQuizPassed = async () => {
+    setQuizPassed(true);
+    
+    try {
+      const { error } = await supabase
+        .from('customer_journey_steps')
+        .update({ 
+          quiz_passed: true, 
+          quiz_passed_at: new Date().toISOString(),
+          quiz_attempts: (step.quiz_attempts || 0) + 1
+        })
+        .eq('id', step.id);
+
+      if (error) throw error;
+
+      toast({
+        title: '🎉 Quiz Concluído',
+        description: 'Parabéns! Você acertou a resposta!',
+      });
+
+      // Invalidate queries to refresh UI
+      queryClient.invalidateQueries({ queryKey: ['journey-steps', step.contact_id] });
+      queryClient.invalidateQueries({ queryKey: ['customer-timeline', step.contact_id] });
+    } catch (error: any) {
+      console.error('Error updating quiz completion:', error);
+      toast({
+        title: 'Erro ao registrar quiz',
+        description: error.message,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -89,7 +130,16 @@ export function OnboardingStepModal({ step, onClose }: OnboardingStepModalProps)
     }
   };
 
-  const canMarkComplete = !step.video_url || videoCompleted;
+  // New blocking logic: video + quiz
+  const canMarkComplete = (() => {
+    // If has video, must be completed
+    const videoOk = !step.video_url || videoCompleted;
+    
+    // If has quiz, must be passed
+    const quizOk = !step.quiz_enabled || quizPassed;
+    
+    return videoOk && quizOk;
+  })();
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -99,7 +149,13 @@ export function OnboardingStepModal({ step, onClose }: OnboardingStepModalProps)
           video_url={step.video_url}
           rich_content={step.rich_content}
           attachments={step.attachments}
+          quiz_enabled={step.quiz_enabled}
+          quiz_question={step.quiz_question}
+          quiz_options={step.quiz_options}
+          quiz_correct_option={step.quiz_correct_option}
+          quiz_passed={quizPassed}
           onVideoEnded={handleVideoEnded}
+          onQuizPassed={handleQuizPassed}
         />
 
         {!step.completed && (
@@ -107,10 +163,11 @@ export function OnboardingStepModal({ step, onClose }: OnboardingStepModalProps)
             <Button 
               onClick={handleMarkComplete}
               disabled={!canMarkComplete || isUpdating}
-              className={videoCompleted ? 'animate-pulse bg-green-500 hover:bg-green-600' : ''}
+              className={canMarkComplete ? 'bg-green-500 hover:bg-green-600 text-white' : ''}
               size="lg"
             >
-              {!canMarkComplete && '🎬 Assista o vídeo primeiro'}
+              {!canMarkComplete && step.video_url && !videoCompleted && '🎬 Assista o vídeo primeiro'}
+              {!canMarkComplete && step.quiz_enabled && !quizPassed && '📝 Complete o quiz primeiro'}
               {canMarkComplete && !isUpdating && '✅ Marcar como Concluída'}
               {isUpdating && 'Salvando...'}
             </Button>

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, FileSpreadsheet, File as FileIcon, ImageIcon, Download } from 'lucide-react';
 import ReactPlayer from 'react-player';
 import confetti from 'canvas-confetti';
+import { QuizComponent } from './QuizComponent';
 
 interface Attachment {
   name: string;
@@ -13,16 +14,43 @@ interface Attachment {
   size?: number;
 }
 
+interface QuizOption {
+  id: string;
+  text: string;
+}
+
 interface PlaybookStepViewerProps {
   label: string;
   video_url?: string;
   rich_content?: string;
   attachments?: Attachment[];
+  quiz_enabled?: boolean;
+  quiz_question?: string;
+  quiz_options?: QuizOption[];
+  quiz_correct_option?: string;
+  quiz_passed?: boolean;
   onVideoEnded?: () => void;
+  onQuizPassed?: () => void;
 }
 
-export function PlaybookStepViewer({ label, video_url, rich_content, attachments, onVideoEnded }: PlaybookStepViewerProps) {
+export function PlaybookStepViewer({ 
+  label, 
+  video_url, 
+  rich_content, 
+  attachments, 
+  quiz_enabled,
+  quiz_question,
+  quiz_options,
+  quiz_correct_option,
+  quiz_passed,
+  onVideoEnded,
+  onQuizPassed,
+}: PlaybookStepViewerProps) {
   const [videoCompleted, setVideoCompleted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [quizPassedLocal, setQuizPassedLocal] = useState(quiz_passed || false);
+
+  const canPlayVideo = ReactPlayer.canPlay && ReactPlayer.canPlay(video_url || '');
 
   const getFileIcon = (type: string) => {
     if (type.includes('pdf')) return <FileText className="h-5 w-5 text-red-500" />;
@@ -34,13 +62,20 @@ export function PlaybookStepViewer({ label, video_url, rich_content, attachments
 
   const handleVideoEnd = () => {
     setVideoCompleted(true);
-    confetti({ 
-      particleCount: 100, 
-      spread: 70, 
-      origin: { y: 0.6 },
-      colors: ['#2563EB', '#3B82F6', '#60A5FA']
-    });
+    if (!quiz_enabled) {
+      confetti({ 
+        particleCount: 100, 
+        spread: 70, 
+        origin: { y: 0.6 },
+        colors: ['#2563EB', '#3B82F6', '#60A5FA']
+      });
+    }
     onVideoEnded?.();
+  };
+
+  const handleQuizPassed = () => {
+    setQuizPassedLocal(true);
+    onQuizPassed?.();
   };
 
   return (
@@ -55,18 +90,53 @@ export function PlaybookStepViewer({ label, video_url, rich_content, attachments
         )}
       </div>
 
-      {/* Video Player */}
-      {video_url && (ReactPlayer as any).canPlay && (ReactPlayer as any).canPlay(video_url) && (
-        <div className="rounded-lg overflow-hidden bg-black shadow-lg">
-          <div className="aspect-video">
+      {/* Premium Cinema Video Player */}
+      {video_url && canPlayVideo && (
+        <div className="relative rounded-xl overflow-hidden shadow-2xl border border-border/50 bg-gradient-to-b from-background/80 to-muted">
+          <div className="aspect-video relative bg-black">
             {React.createElement(ReactPlayer as any, {
               url: video_url,
               width: '100%',
               height: '100%',
               controls: true,
+              playing: false,
+              light: false,
               onEnded: handleVideoEnd,
+              onPlay: () => setIsPlaying(true),
+              onPause: () => setIsPlaying(false),
+              config: {
+                youtube: { 
+                  playerVars: { 
+                    modestbranding: 1, 
+                    rel: 0 
+                  } 
+                },
+                vimeo: { 
+                  playerOptions: { 
+                    byline: false, 
+                    portrait: false 
+                  } 
+                }
+              }
             })}
           </div>
+
+          {/* Status Badge */}
+          {isPlaying && (
+            <div className="absolute top-4 right-4 z-10">
+              <Badge className="bg-red-500 text-white animate-pulse shadow-lg">
+                🔴 Assistindo...
+              </Badge>
+            </div>
+          )}
+
+          {videoCompleted && !quiz_enabled && (
+            <div className="absolute top-4 left-4 z-10">
+              <Badge className="bg-green-500 text-white shadow-lg">
+                ✅ Vídeo Concluído!
+              </Badge>
+            </div>
+          )}
         </div>
       )}
 
@@ -75,6 +145,18 @@ export function PlaybookStepViewer({ label, video_url, rich_content, attachments
         <div 
           className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-a:text-primary"
           dangerouslySetInnerHTML={{ __html: rich_content }}
+        />
+      )}
+
+      {/* Quiz Gatekeeper */}
+      {quiz_enabled && quiz_question && quiz_options && quiz_correct_option && (
+        <QuizComponent
+          question={quiz_question}
+          options={quiz_options}
+          correctOption={quiz_correct_option}
+          onPass={handleQuizPassed}
+          disabled={!videoCompleted && !!video_url}
+          passed={quizPassedLocal}
         />
       )}
 

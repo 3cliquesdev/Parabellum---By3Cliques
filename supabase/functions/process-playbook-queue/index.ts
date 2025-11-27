@@ -330,7 +330,7 @@ async function executeTaskNode(supabase: any, item: QueueItem, contact: any) {
   const taskData = item.node_data;
   const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Default 7 days
 
-  // Create customer journey step with video and content
+  // Create customer journey step with video, content, and quiz
   const { error: journeyError } = await supabase
     .from('customer_journey_steps')
     .insert({
@@ -339,6 +339,10 @@ async function executeTaskNode(supabase: any, item: QueueItem, contact: any) {
       video_url: taskData.video_url || null,
       rich_content: taskData.rich_content || taskData.description || null,
       attachments: taskData.attachments || [],
+      quiz_enabled: taskData.quiz_enabled || false,
+      quiz_question: taskData.quiz_question || null,
+      quiz_options: taskData.quiz_options || [],
+      quiz_correct_option: taskData.quiz_correct_option || null,
       is_critical: taskData.is_critical || false,
       notes: taskData.notes || null,
       completed: false,
