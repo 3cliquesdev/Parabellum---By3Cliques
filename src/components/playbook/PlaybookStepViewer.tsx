@@ -1,12 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileText, FileSpreadsheet, File as FileIcon, ImageIcon, Download, AlertCircle } from 'lucide-react';
+import { FileText, FileSpreadsheet, File as FileIcon, ImageIcon, Download, AlertCircle, Lock, CheckCircle } from 'lucide-react';
 import ReactPlayer from 'react-player';
 import confetti from 'canvas-confetti';
 import { QuizComponent } from './QuizComponent';
 import { useToast } from '@/hooks/use-toast';
+
+/**
+ * Extrai URL de vídeo de diferentes formatos
+ * - URL direta: retorna como está
+ * - Iframe embed: extrai src do <iframe>
+ */
+const extractVideoUrl = (input: string): string | null => {
+  if (!input?.trim()) return null;
+  
+  const trimmed = input.trim();
+  
+  // Se for iframe, extrair src
+  const iframeMatch = trimmed.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+  if (iframeMatch) {
+    return iframeMatch[1];
+  }
+  
+  // Se for URL direta, retornar
+  if (trimmed.startsWith('http') || trimmed.startsWith('//')) {
+    return trimmed;
+  }
+  
+  return trimmed; // Tentar usar como está
+};
 
 interface Attachment {
   name: string;
@@ -33,6 +57,7 @@ interface PlaybookStepViewerProps {
   alreadyCompleted?: boolean;
   onVideoEnded?: () => void;
   onQuizPassed?: () => void;
+  onLockStateChange?: (isLocked: boolean) => void;
 }
 
 /**
@@ -54,20 +79,31 @@ export function PlaybookStepViewer({
   alreadyCompleted,
   onVideoEnded,
   onQuizPassed,
+  onLockStateChange,
 }: PlaybookStepViewerProps) {
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [quizPassedLocal, setQuizPassedLocal] = useState(quiz_passed || false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [errorTimeout, setErrorTimeout] = useState(false);
   const { toast } = useToast();
 
-  // FONTE DA VERDADE: sempre usa a URL real que veio do passo
-  const trimmedUrl = (video_url ?? '').trim();
+  // Smart Parser: extrai URL de iframe ou URL direta
+  const extractedUrl = extractVideoUrl(video_url || '');
+  const trimmedUrl = extractedUrl || '';
   const hasValidVideo = !!trimmedUrl;
+
+  // Video Lock State
+  const videoLocked = hasValidVideo && !videoCompleted && !errorTimeout && !alreadyCompleted;
 
   const [contentConsumed, setContentConsumed] = useState(
     alreadyCompleted || quiz_passed || !hasValidVideo
   );
+
+  // Comunicar estado de trava ao parent
+  useEffect(() => {
+    onLockStateChange?.(videoLocked);
+  }, [videoLocked, onLockStateChange]);
 
   const getFileIcon = (type: string) => {
     if (type.includes('pdf')) return <FileText className="h-5 w-5 text-red-500" />;
@@ -151,6 +187,21 @@ export function PlaybookStepViewer({
               onError: (e: any) => {
                 console.error('❌ Erro no ReactPlayer:', e);
                 setVideoError('Não foi possível carregar o vídeo');
+                
+                // Safety Net: liberar após 5 segundos
+                toast({
+                  title: '⚠️ Problema com o vídeo',
+                  description: 'Liberando avanço em 5 segundos...',
+                  variant: 'destructive',
+                });
+                
+                setTimeout(() => {
+                  setErrorTimeout(true);
+                  toast({
+                    title: '🔓 Avanço Liberado',
+                    description: 'Não foi possível rastrear o vídeo.',
+                  });
+                }, 5000);
               },
               onEnded: handleVideoEnd,
               onPlay: () => setIsPlaying(true),
@@ -195,6 +246,25 @@ export function PlaybookStepViewer({
           </div>
         </div>
       ) : null}
+
+      {/* Indicadores de Trava/Desbloqueio */}
+      {videoLocked && (
+        <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg border border-amber-200">
+          <Lock className="h-4 w-4" />
+          <span className="text-sm font-medium">
+            🔒 Assista o vídeo completo para desbloquear o próximo passo
+          </span>
+        </div>
+      )}
+
+      {videoCompleted && (
+        <div className="flex items-center gap-2 text-green-600 bg-green-50 dark:bg-green-950/30 p-3 rounded-lg border border-green-200 animate-fade-in">
+          <CheckCircle className="h-4 w-4" />
+          <span className="text-sm font-medium">
+            ✅ Vídeo concluído! Você pode avançar.
+          </span>
+        </div>
+      )}
 
       {/* Rich Content */}
       {rich_content && (
