@@ -18,10 +18,11 @@ import { useUpdateContact } from "@/hooks/useContacts";
 import { useCustomerTimeline } from "@/hooks/useCustomerTimeline";
 import { useCustomerTags } from "@/hooks/useCustomerTags";
 import TimelineItem from "@/components/TimelineItem";
-import { Phone, Mail, MessageSquare, Save, Loader2 } from "lucide-react";
+import { Phone, Mail, MessageSquare, Save, Loader2, ExternalLink } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import { format, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useNavigate } from "react-router-dom";
 
 interface ContactSheetProps {
   contact: Tables<"contacts"> & { organizations?: { name: string } | null } | null;
@@ -56,6 +57,7 @@ export default function ContactSheet({ contact, open, onOpenChange }: ContactShe
   const updateContact = useUpdateContact();
   const { data: timeline } = useCustomerTimeline(contact?.id || null);
   const { data: customerTags } = useCustomerTags(contact?.id || null);
+  const navigate = useNavigate();
 
   const onSubmit = (data: any) => {
     if (!contact) return;
@@ -165,6 +167,19 @@ export default function ContactSheet({ contact, open, onOpenChange }: ContactShe
             )}
           </div>
 
+          {/* Customer 360 Button */}
+          <Button
+            onClick={() => {
+              onOpenChange(false);
+              navigate(`/contacts/${contact.id}`);
+            }}
+            className="w-full mt-4"
+            variant="default"
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Ver Perfil 360°
+          </Button>
+
           <Separator className="my-4" />
 
           {/* Edit Form */}
@@ -211,7 +226,20 @@ export default function ContactSheet({ contact, open, onOpenChange }: ContactShe
 
           {/* Timeline */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Histórico de Interações</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Histórico de Interações</h3>
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => {
+                  onOpenChange(false);
+                  navigate(`/contacts/${contact.id}`);
+                }}
+                className="h-auto p-0 text-xs"
+              >
+                Ver timeline completa →
+              </Button>
+            </div>
             {timeline && timeline.length > 0 ? (
               <div className="space-y-3">
                 {timeline.map((interaction) => (
