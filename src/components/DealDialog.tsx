@@ -27,6 +27,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { Target } from "lucide-react";
 import { useCreateDeal, useUpdateDeal } from "@/hooks/useDeals";
 import { useContacts } from "@/hooks/useContacts";
 import { useOrganizations } from "@/hooks/useOrganizations";
@@ -49,6 +51,10 @@ const dealSchema = z.object({
   assigned_to: z.string().uuid().optional().nullable(),
   lost_reason: z.string().optional().nullable(),
   product_id: z.string().uuid().optional().nullable(),
+  probability: z.number().min(0).max(100).optional(),
+  expected_revenue: z.string().optional().nullable(),
+  success_criteria: z.string().optional().nullable(),
+  pain_points: z.string().optional().nullable(),
 }).refine((data) => {
   if (data.status === "lost" && (!data.lost_reason || data.lost_reason.trim() === "")) {
     return false;
@@ -100,6 +106,10 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       assigned_to: (deal as any)?.assigned_to || "",
       lost_reason: (deal as any)?.lost_reason || "",
       product_id: (deal as any)?.product_id || "",
+      probability: (deal as any)?.probability || 50,
+      expected_revenue: (deal as any)?.expected_revenue?.toString() || "",
+      success_criteria: (deal as any)?.success_criteria || "",
+      pain_points: (deal as any)?.pain_points || "",
     },
   });
 
@@ -157,6 +167,10 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       assigned_to: data.assigned_to || null,
       lost_reason: data.lost_reason || null,
       product_id: data.product_id || null,
+      probability: data.probability || null,
+      expected_revenue: data.expected_revenue ? parseFloat(data.expected_revenue) : null,
+      success_criteria: data.success_criteria || null,
+      pain_points: data.pain_points || null,
     };
 
     console.log("[DealDialog] Payload to submit:", payload);
@@ -441,6 +455,91 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
                 </FormItem>
               )}
             />
+
+            {/* ═══════════════════════════════════════════════════ */}
+            {/* SEÇÃO: QUALIFICAÇÃO & HANDOFF PARA CS             */}
+            {/* ═══════════════════════════════════════════════════ */}
+            <div className="border-t pt-4 mt-4">
+              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                Qualificação & Handoff
+              </h3>
+
+              {/* Slider: Probabilidade de Fechamento */}
+              <FormField
+                control={form.control}
+                name="probability"
+                render={({ field }) => (
+                  <FormItem className="mb-4">
+                    <FormLabel>Probabilidade de Fechamento: {field.value}%</FormLabel>
+                    <FormControl>
+                      <Slider
+                        value={[field.value || 50]}
+                        onValueChange={([val]) => field.onChange(val)}
+                        max={100}
+                        step={5}
+                        className="mt-2"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {/* Input: Expectativa de Faturamento Mensal */}
+              <FormField
+                control={form.control}
+                name="expected_revenue"
+                render={({ field }) => (
+                  <FormItem className="mb-4">
+                    <FormLabel>Expectativa Faturamento Mensal (R$)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" placeholder="Ex: 50000" {...field} value={field.value || ""} />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Meta de receita mensal que o cliente espera alcançar
+                    </p>
+                  </FormItem>
+                )}
+              />
+
+              {/* Textarea: Critério de Sucesso */}
+              <FormField
+                control={form.control}
+                name="success_criteria"
+                render={({ field }) => (
+                  <FormItem className="mb-4">
+                    <FormLabel>O que é Sucesso para esse Cliente?</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Ex: Reduzir churn em 20%, aumentar ticket médio, automatizar processos..."
+                        {...field}
+                        value={field.value || ""}
+                        rows={3}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {/* Textarea: Dores Principais */}
+              <FormField
+                control={form.control}
+                name="pain_points"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Principais Dores do Cliente</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Ex: Gestão manual de leads, falta de controle financeiro, equipe desorganizada..."
+                        {...field}
+                        value={field.value || ""}
+                        rows={3}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="flex justify-end gap-3">
               <Button

@@ -20,7 +20,7 @@ export function useCustomerContext(contactId: string | null) {
 
       if (contactError) throw contactError;
 
-      // Fetch won deal with product
+      // Fetch won deal with product and handoff fields
       const { data: deal, error: dealError } = await supabase
         .from("deals")
         .select(`
@@ -29,6 +29,10 @@ export function useCustomerContext(contactId: string | null) {
           value,
           currency,
           closed_at,
+          probability,
+          expected_revenue,
+          success_criteria,
+          pain_points,
           product:product_id(id, name)
         `)
         .eq("contact_id", contactId)
@@ -55,8 +59,8 @@ export function useCustomerContext(contactId: string | null) {
         contact,
         deal,
         journeySteps: journeySteps || [],
-        seller: contact.seller,
-        consultant: contact.consultant,
+        seller: contact?.seller || null,
+        consultant: contact?.consultant || null,
       };
     },
     enabled: !!contactId,
