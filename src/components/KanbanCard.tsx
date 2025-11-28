@@ -240,6 +240,7 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                   e.stopPropagation();
                   setShowContactSheet(true);
                 }}
+                onPointerDown={(e) => e.stopPropagation()}
                 className="text-sm text-primary hover:underline text-left mb-1 block"
               >
                 {deal.contacts.first_name} {deal.contacts.last_name}
@@ -273,7 +274,11 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
 
               {/* Quick Actions - Visible on Hover */}
               {isHovered && (
-                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <div 
+                  className="flex items-center gap-1" 
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
                   {/* Create Quote Button */}
                   <TooltipProvider>
                     <Tooltip>
@@ -286,6 +291,7 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                             e.stopPropagation();
                             navigate(`/quotes/new?deal_id=${deal.id}`);
                           }}
+                          onPointerDown={(e) => e.stopPropagation()}
                         >
                           <FileText className="h-4 w-4" />
                         </Button>
@@ -308,6 +314,7 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                                 const formattedPhone = formatWhatsAppNumber(deal.contacts?.phone || '');
                                 window.open(`https://wa.me/${formattedPhone}`, '_blank');
                               }}
+                              onPointerDown={(e) => e.stopPropagation()}
                             >
                               <MessageSquare className="h-4 w-4" />
                             </Button>
@@ -332,6 +339,7 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                                   window.open(`tel:${deal.contacts?.phone}`, '_blank');
                                 }
                               }}
+                              onPointerDown={(e) => e.stopPropagation()}
                             >
                               <Phone className="h-4 w-4" />
                             </Button>
