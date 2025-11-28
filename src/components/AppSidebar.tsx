@@ -26,7 +26,8 @@ import {
   CheckSquare,
   Workflow,
   Receipt,
-  RefreshCw
+  RefreshCw,
+  CheckCircle2
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -90,6 +91,7 @@ const salesRepSalesItems = [
 ];
 
 const salesRepProductivityItems = [
+  { title: "⚡ Workzone", href: "/sales-tasks", icon: CheckCircle2 },
   { title: "Cadências", href: "/cadences", icon: RefreshCw },
   { title: "Minhas Metas", href: "/goals", icon: Target },
 ];
