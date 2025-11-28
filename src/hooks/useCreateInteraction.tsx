@@ -30,6 +30,9 @@ export function useCreateInteraction() {
       queryClient.invalidateQueries({ 
         queryKey: ["customer-timeline", variables.customer_id] 
       });
+      queryClient.invalidateQueries({ 
+        queryKey: ["unified-timeline", variables.customer_id] 
+      });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       toast({ 
         title: "Interação registrada", 
