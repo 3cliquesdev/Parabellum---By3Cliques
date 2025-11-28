@@ -56,9 +56,9 @@ export function PlaybookStepViewer({
   const [videoReady, setVideoReady] = useState(false);
   const { toast } = useToast();
 
+  // CRÍTICO: Use o vídeo REAL do usuário, não fake!
   const trimmedUrl = video_url?.trim() || '';
-  const canPlayVideo = trimmedUrl && ReactPlayer.canPlay && ReactPlayer.canPlay(trimmedUrl);
-  const hasValidVideo = Boolean(trimmedUrl && canPlayVideo);
+  const hasValidVideo = Boolean(trimmedUrl); // Se existe URL, renderiza (erro handler cuida de URLs inválidos)
   
   const [contentConsumed, setContentConsumed] = useState(
     alreadyCompleted || quiz_passed || !hasValidVideo
