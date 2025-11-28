@@ -1,21 +1,22 @@
 import { useDraggable } from "@dnd-kit/core";
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { User, Pencil, AlertCircle, CheckCircle, AlertTriangle, Skull } from "lucide-react";
+import { Pencil, AlertCircle, CheckCircle, AlertTriangle, Skull, MessageSquare, Phone } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import DealDialog from "./DealDialog";
+import ContactSheet from "./ContactSheet";
 import { useNextActivity } from "@/hooks/useNextActivity";
+import { useCustomerTags } from "@/hooks/useCustomerTags";
+import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
-import confetti from "canvas-confetti";
-import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useState } from "react";
 
 type Deal = Tables<"deals"> & {
-  contacts: { first_name: string; last_name: string } | null;
+  contacts: { first_name: string; last_name: string; phone?: string | null } | null;
   organizations: { name: string } | null;
   assigned_user: { id: string; full_name: string; avatar_url: string | null } | null;
 };
@@ -25,7 +26,8 @@ interface KanbanCardProps {
 }
 
 export default function KanbanCard({ deal }: KanbanCardProps) {
-  const [previousStageId, setPreviousStageId] = useState(deal.stage_id);
+  const [showContactSheet, setShowContactSheet] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: deal.id,
@@ -35,38 +37,7 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
   });
 
   const { data: nextActivity } = useNextActivity(deal.id);
-
-  // Detect when deal is moved to "Won" stage and trigger confetti
-  useEffect(() => {
-    // Check if deal was just moved to a different stage
-    if (previousStageId !== deal.stage_id) {
-      // Query the stage name to check if it's "Fechado" (Won)
-      const checkIfWon = async () => {
-        const { data: stage } = await supabase
-          .from("stages")
-          .select("name")
-          .eq("id", deal.stage_id)
-          .single();
-
-        if (stage?.name === "Fechado") {
-          // Trigger confetti celebration
-          confetti({
-            particleCount: 150,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#FFD700', '#FFA500', '#FF6347', '#00FF00', '#1E90FF'],
-          });
-
-          // Optional: Play cash register sound
-          // const audio = new Audio('/sounds/cash-register.mp3');
-          // audio.play().catch(() => console.log('Audio playback failed'));
-        }
-      };
-
-      checkIfWon();
-      setPreviousStageId(deal.stage_id);
-    }
-  }, [deal.stage_id, previousStageId]);
+  const { data: customerTags } = useCustomerTags(deal.contact_id);
   
   const style = transform
     ? {
@@ -123,83 +94,110 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
   const isRotten = isRottenDeal();
 
   return (
-    <Card
-      ref={setNodeRef}
-      style={style}
-      className="cursor-grab active:cursor-grabbing mb-3 hover:border-primary transition-colors relative group"
-    >
-      <CardContent className="p-4">
-        <DealDialog
-          deal={deal}
-          trigger={
-            <Button
-              size="icon"
-              variant="ghost"
-              className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-          }
-        />
-        
-        {/* Ícone de Status de Atividade */}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="absolute top-2 left-2">
-                <ActivityIcon className={`h-5 w-5 ${activityStatus.color}`} />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="text-sm">{activityStatus.tooltip}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
-        {/* Indicador Rotten Deal */}
-        {isRotten && (
+    <>
+      <Card
+        ref={setNodeRef}
+        style={style}
+        className={cn(
+          "cursor-grab active:cursor-grabbing mb-3 hover:border-primary transition-all relative group",
+          isRotten && "border-destructive border-2"
+        )}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <CardContent className="p-4">
+          <DealDialog
+            deal={deal}
+            trigger={
+              <Button
+                size="icon"
+                variant="ghost"
+                className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            }
+          />
+          
+          {/* Ícone de Status de Atividade */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="absolute top-2 left-9">
-                  <Badge variant="destructive" className="gap-1 px-1.5 py-0.5">
-                    <Skull className="h-3 w-3" />
-                  </Badge>
+                <div className="absolute top-2 left-2">
+                  <ActivityIcon className={`h-5 w-5 ${activityStatus.color}`} />
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="text-sm">⚠️ Negócio estagnado há {differenceInDays(new Date(), new Date(deal.updated_at))} dias sem atividade</p>
+                <p className="text-sm">{activityStatus.tooltip}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        )}
 
-        {/* Badge Lost Reason */}
-        {deal.status === "lost" && (deal as any).lost_reason && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="mb-2">
-                  <Badge variant="destructive" className="text-xs">
-                    Perdido
+          {/* Indicador Rotten Deal */}
+          {isRotten && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="absolute top-2 left-9">
+                    <Badge variant="destructive" className="gap-1 px-1.5 py-0.5">
+                      <Skull className="h-3 w-3" />
+                    </Badge>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-sm">⚠️ Negócio estagnado há {differenceInDays(new Date(), new Date(deal.updated_at))} dias sem atividade</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {/* Badge Lost Reason */}
+          {deal.status === "lost" && (deal as any).lost_reason && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="mb-2">
+                    <Badge variant="destructive" className="text-xs">
+                      Perdido
+                    </Badge>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-sm font-semibold mb-1">Motivo da Perda:</p>
+                  <p className="text-sm">{(deal as any).lost_reason}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {/* Área draggable */}
+          <div {...listeners} {...attributes}>
+            <h4 className="font-semibold text-foreground mb-2 pl-8 pr-8">{deal.title}</h4>
+
+            {/* Customer Tags */}
+            {customerTags && customerTags.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap mb-2">
+                {customerTags.slice(0, 3).map((ct: any) => (
+                  <Badge
+                    key={ct.tag_id}
+                    variant="outline"
+                    className="text-xs"
+                    style={{ 
+                      borderColor: ct.tags.color,
+                      color: ct.tags.color,
+                      backgroundColor: `${ct.tags.color}10`
+                    }}
+                  >
+                    {ct.tags.name}
                   </Badge>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <p className="text-sm font-semibold mb-1">Motivo da Perda:</p>
-                <p className="text-sm">{(deal as any).lost_reason}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-
-        {/* Área draggable */}
-        <div {...listeners} {...attributes}>
-          <h4 className="font-semibold text-foreground mb-2 pl-8 pr-8">{deal.title}</h4>
+                ))}
+              </div>
+            )}
             
+            {/* Value - Destacado em Verde */}
             {deal.value && (
-              <p className="text-lg font-bold text-success mb-2">
+              <p className="text-lg font-bold text-green-600 mb-2">
                 {new Intl.NumberFormat('pt-BR', {
                   style: 'currency',
                   currency: deal.currency || 'BRL',
@@ -207,35 +205,100 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
               </p>
             )}
 
+            {/* Contact Info - Clickable */}
             {deal.contacts && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <User className="h-4 w-4" />
-                <span>{deal.contacts.first_name} {deal.contacts.last_name}</span>
-              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowContactSheet(true);
+                }}
+                className="text-sm text-primary hover:underline text-left mb-1 block"
+              >
+                {deal.contacts.first_name} {deal.contacts.last_name}
+              </button>
             )}
 
-          {deal.organizations && (
-            <Badge variant="secondary" className="mt-2">
-              {deal.organizations.name}
-            </Badge>
-          )}
+            {/* Organization */}
+            {deal.organizations && (
+              <Badge variant="secondary" className="mb-2">
+                {deal.organizations.name}
+              </Badge>
+            )}
 
-          {deal.assigned_user && (
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
-              <Avatar className="h-6 w-6">
-                <AvatarImage 
-                  src={deal.assigned_user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${deal.assigned_user.full_name}`} 
-                  alt={deal.assigned_user.full_name} 
-                />
-                <AvatarFallback className="text-xs">
-                  {deal.assigned_user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-xs text-muted-foreground">{deal.assigned_user.full_name}</span>
+            {/* Bottom Row: Salesperson + Quick Actions */}
+            <div className="flex items-center justify-between pt-3 mt-3 border-t border-border">
+              {/* Assigned User */}
+              {deal.assigned_user && (
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage 
+                      src={deal.assigned_user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${deal.assigned_user.full_name}`} 
+                      alt={deal.assigned_user.full_name} 
+                    />
+                    <AvatarFallback className="text-xs">
+                      {deal.assigned_user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-xs text-muted-foreground">{deal.assigned_user.full_name}</span>
+                </div>
+              )}
+
+              {/* Quick Actions - Visible on Hover */}
+              {isHovered && deal.contacts?.phone && (
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`https://wa.me/${deal.contacts?.phone?.replace(/\D/g, '')}`, '_blank');
+                          }}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>WhatsApp</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`tel:${deal.contacts?.phone}`, '_blank');
+                          }}
+                        >
+                          <Phone className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Ligar</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Contact Sheet */}
+      {deal.contacts && (
+        <ContactSheet
+          contact={deal.contacts as any}
+          open={showContactSheet}
+          onOpenChange={setShowContactSheet}
+        />
+      )}
+    </>
   );
 }

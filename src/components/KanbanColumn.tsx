@@ -29,6 +29,19 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
   const { role } = useUserRole();
   const isAdmin = role === "admin";
 
+  // Calculate financial metrics
+  const totalValue = deals.reduce((sum, deal) => sum + (deal.value || 0), 0);
+  const weightedValue = totalValue * ((stage.probability || 50) / 100);
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
   return (
     <div className="flex-shrink-0 w-80">
       <div className="bg-muted/50 rounded-lg p-4">
@@ -50,6 +63,22 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
             {deals.length}
           </span>
         </div>
+
+        {/* Financial Intelligence */}
+        {totalValue > 0 && (
+          <div className="mb-3 p-3 bg-background/50 rounded-lg border border-border">
+            <div className="space-y-1">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-muted-foreground">Total:</span>
+                <span className="text-sm font-bold text-foreground">{formatCurrency(totalValue)}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-muted-foreground">Previsto ({stage.probability}%):</span>
+                <span className="text-sm font-semibold text-primary">{formatCurrency(weightedValue)}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div
           ref={setNodeRef}
