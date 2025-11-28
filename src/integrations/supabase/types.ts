@@ -1693,6 +1693,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          price: number | null
           requires_account_manager: boolean
           updated_at: string
         }
@@ -1704,6 +1705,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          price?: number | null
           requires_account_manager?: boolean
           updated_at?: string
         }
@@ -1715,6 +1717,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          price?: number | null
           requires_account_manager?: boolean
           updated_at?: string
         }
@@ -1798,6 +1801,159 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      quote_items: {
+        Row: {
+          created_at: string
+          discount_amount: number | null
+          discount_percentage: number | null
+          id: string
+          position: number
+          product_id: string
+          quantity: number
+          quote_id: string
+          total: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          discount_amount?: number | null
+          discount_percentage?: number | null
+          id?: string
+          position?: number
+          product_id: string
+          quantity?: number
+          quote_id: string
+          total: number
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          discount_amount?: number | null
+          discount_percentage?: number | null
+          id?: string
+          position?: number
+          product_id?: string
+          quantity?: number
+          quote_id?: string
+          total?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_items_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quotes: {
+        Row: {
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          deal_id: string
+          discount_amount: number | null
+          discount_percentage: number | null
+          expiration_date: string
+          id: string
+          pdf_url: string | null
+          quote_number: string
+          rejected_at: string | null
+          rejection_reason: string | null
+          signature_data: string | null
+          signature_ip: string | null
+          signature_token: string | null
+          signed_at: string | null
+          signed_by_cpf: string | null
+          signed_by_name: string | null
+          signed_pdf_url: string | null
+          status: Database["public"]["Enums"]["quote_status"]
+          subtotal: number
+          total_amount: number
+          updated_at: string
+          view_count: number | null
+          viewed_at: string | null
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          deal_id: string
+          discount_amount?: number | null
+          discount_percentage?: number | null
+          expiration_date: string
+          id?: string
+          pdf_url?: string | null
+          quote_number: string
+          rejected_at?: string | null
+          rejection_reason?: string | null
+          signature_data?: string | null
+          signature_ip?: string | null
+          signature_token?: string | null
+          signed_at?: string | null
+          signed_by_cpf?: string | null
+          signed_by_name?: string | null
+          signed_pdf_url?: string | null
+          status?: Database["public"]["Enums"]["quote_status"]
+          subtotal?: number
+          total_amount?: number
+          updated_at?: string
+          view_count?: number | null
+          viewed_at?: string | null
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          deal_id?: string
+          discount_amount?: number | null
+          discount_percentage?: number | null
+          expiration_date?: string
+          id?: string
+          pdf_url?: string | null
+          quote_number?: string
+          rejected_at?: string | null
+          rejection_reason?: string | null
+          signature_data?: string | null
+          signature_ip?: string | null
+          signature_token?: string | null
+          signed_at?: string | null
+          signed_by_cpf?: string | null
+          signed_by_name?: string | null
+          signed_pdf_url?: string | null
+          status?: Database["public"]["Enums"]["quote_status"]
+          subtotal?: number
+          total_amount?: number
+          updated_at?: string
+          view_count?: number | null
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotes_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotes_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rate_limits: {
         Row: {
@@ -2229,6 +2385,7 @@ export type Database = {
         Args: { p_contact_id: string }
         Returns: Json
       }
+      generate_quote_number: { Args: never; Returns: string }
       get_ai_usage_metrics: {
         Args: { p_end_date: string; p_start_date: string; p_user_id?: string }
         Returns: {
@@ -2384,6 +2541,13 @@ export type Database = {
         | "form_submission"
         | "conversation_transferred"
       message_status: "sending" | "sent" | "delivered" | "failed"
+      quote_status:
+        | "draft"
+        | "sent"
+        | "viewed"
+        | "accepted"
+        | "rejected"
+        | "expired"
       sender_type: "user" | "contact" | "system"
       ticket_category: "financeiro" | "tecnico" | "bug" | "outro"
       ticket_priority: "low" | "medium" | "high" | "urgent"
@@ -2587,6 +2751,14 @@ export const Constants = {
         "conversation_transferred",
       ],
       message_status: ["sending", "sent", "delivered", "failed"],
+      quote_status: [
+        "draft",
+        "sent",
+        "viewed",
+        "accepted",
+        "rejected",
+        "expired",
+      ],
       sender_type: ["user", "contact", "system"],
       ticket_category: ["financeiro", "tecnico", "bug", "outro"],
       ticket_priority: ["low", "medium", "high", "urgent"],
