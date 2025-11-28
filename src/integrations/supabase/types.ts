@@ -1932,6 +1932,7 @@ export type Database = {
           name: string
           pipeline_id: string
           position: number
+          probability: number | null
         }
         Insert: {
           created_at?: string
@@ -1939,6 +1940,7 @@ export type Database = {
           name: string
           pipeline_id: string
           position: number
+          probability?: number | null
         }
         Update: {
           created_at?: string
@@ -1946,6 +1948,7 @@ export type Database = {
           name?: string
           pipeline_id?: string
           position?: number
+          probability?: number | null
         }
         Relationships: [
           {

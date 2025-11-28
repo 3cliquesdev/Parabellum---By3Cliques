@@ -30,9 +30,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Search, Plus, Mail, Phone, Pencil, Trash2, Eye, Filter } from "lucide-react";
+import { Search, Plus, Mail, Phone, Trash2, Eye, Filter } from "lucide-react";
 import { useContacts, useDeleteContact } from "@/hooks/useContacts";
 import ContactDialog from "@/components/ContactDialog";
+import ContactSheet from "@/components/ContactSheet";
 import type { Tables } from "@/integrations/supabase/types";
 
 type ContactWithOrg = Tables<"contacts"> & {
@@ -47,6 +48,8 @@ export default function Contacts() {
   const [customerType, setCustomerType] = useState("all");
   const [blocked, setBlocked] = useState("all");
   const [subscriptionPlan, setSubscriptionPlan] = useState("all");
+  const [selectedContact, setSelectedContact] = useState<ContactWithOrg | null>(null);
+  const [showContactSheet, setShowContactSheet] = useState(false);
   
   const { data: contacts, isLoading } = useContacts({
     searchQuery,
@@ -202,7 +205,14 @@ export default function Contacts() {
             </TableHeader>
             <TableBody>
               {filteredContacts.map((contact: ContactWithOrg) => (
-                <TableRow key={contact.id}>
+                <TableRow 
+                  key={contact.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => {
+                    setSelectedContact(contact);
+                    setShowContactSheet(true);
+                  }}
+                >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
@@ -261,25 +271,24 @@ export default function Contacts() {
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => navigate(`/contacts/${contact.id}`)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/contacts/${contact.id}`);
+                        }}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
-                      <ContactDialog
-                        contact={contact}
-                        trigger={
-                          <Button variant="ghost" size="sm">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        }
-                      />
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </AlertDialogTrigger>
-                        <AlertDialogContent>
+                        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
                             <AlertDialogDescription>
@@ -289,7 +298,10 @@ export default function Contacts() {
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={() => deleteContact.mutate(contact.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteContact.mutate(contact.id);
+                              }}
                             >
                               Excluir
                             </AlertDialogAction>
@@ -304,6 +316,13 @@ export default function Contacts() {
           </Table>
         </div>
       )}
+
+      {/* Contact Sheet */}
+      <ContactSheet
+        contact={selectedContact}
+        open={showContactSheet}
+        onOpenChange={setShowContactSheet}
+      />
     </div>
   );
 }

@@ -2,18 +2,23 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent } from "@dnd-kit/
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Plus, Settings } from "lucide-react";
-import { useDeals, useUpdateDealStage } from "@/hooks/useDeals";
+import { Card, CardContent } from "@/components/ui/card";
+import { Plus, TrendingUp, Flame, Skull, DollarSign } from "lucide-react";
+import { useDeals, useUpdateDeal, useUpdateDealStage } from "@/hooks/useDeals";
 import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useSalesReps } from "@/hooks/useSalesReps";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useRottenDeals } from "@/hooks/useRottenDeals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import confetti from "canvas-confetti";
 import KanbanColumn from "@/components/KanbanColumn";
 import KanbanCard from "@/components/KanbanCard";
 import DealDialog from "@/components/DealDialog";
 import PipelineDialog from "@/components/PipelineDialog";
+import DragDropActionBar from "@/components/DragDropActionBar";
+import LostReasonDialog from "@/components/LostReasonDialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Deal = Tables<"deals"> & {
@@ -28,6 +33,8 @@ export default function Deals() {
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
   const [selectedSalesRep, setSelectedSalesRep] = useState<string>("all");
   const [selectedPipeline, setSelectedPipeline] = useState<string>("");
+  const [showLostDialog, setShowLostDialog] = useState(false);
+  const [pendingLostDeal, setPendingLostDeal] = useState<Deal | null>(null);
   
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();
   const { data: stages, isLoading: stagesLoading } = useStages(selectedPipeline);
@@ -36,6 +43,8 @@ export default function Deals() {
   const { role } = useUserRole();
   const { data: rottenDeals } = useRottenDeals();
   const updateDealStage = useUpdateDealStage();
+  const updateDeal = useUpdateDeal();
+  const { toast } = useToast();
   
   const isManagerOrAdmin = role && (role === "admin" || role === "manager");
   const isAdmin = role === "admin";
@@ -89,19 +98,82 @@ export default function Deals() {
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    const dealId = active.id as string;
+    const deal = filteredDeals?.find((d) => d.id === dealId);
+    
     setActiveDeal(null);
 
-    if (!over) return;
+    if (!over || !deal) return;
 
-    const dealId = active.id as string;
+    // Check if dropped on action zones
+    if (over.id === "won-zone") {
+      // Mark as WON
+      updateDeal.mutate(
+        { 
+          id: dealId, 
+          updates: { 
+            status: "won", 
+            closed_at: new Date().toISOString() 
+          } 
+        },
+        {
+          onSuccess: () => {
+            // Trigger confetti
+            confetti({
+              particleCount: 150,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#FFD700', '#FFA500', '#FF6347', '#00FF00', '#1E90FF'],
+            });
+            
+            toast({
+              title: "🎉 Negócio Ganho!",
+              description: `${deal.title} foi marcado como ganho!`,
+            });
+          },
+        }
+      );
+      return;
+    }
+
+    if (over.id === "lost-zone") {
+      // Open modal for lost reason
+      setPendingLostDeal(deal);
+      setShowLostDialog(true);
+      return;
+    }
+
+    // Normal stage change
     const newStageId = over.id as string;
+    if (deal.stage_id === newStageId) return;
 
-    // Find the deal's current stage
-    const deal = filteredDeals?.find((d) => d.id === dealId);
-    if (!deal || deal.stage_id === newStageId) return;
-
-    // Optimistically update the stage
     updateDealStage.mutate({ id: dealId, stage_id: newStageId });
+  };
+
+  const handleLostReasonConfirm = (reason: string, notes?: string) => {
+    if (!pendingLostDeal) return;
+
+    updateDeal.mutate(
+      {
+        id: pendingLostDeal.id,
+        updates: {
+          status: "lost",
+          lost_reason: reason,
+          closed_at: new Date().toISOString(),
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Negócio marcado como perdido",
+            description: `Motivo: ${reason}`,
+            variant: "destructive",
+          });
+          setShowLostDialog(false);
+          setPendingLostDeal(null);
+        },
+      }
+    );
   };
 
   if (dealsLoading || stagesLoading || pipelinesLoading) {
@@ -126,6 +198,40 @@ export default function Deals() {
     );
   }
 
+  // Calculate pipeline metrics
+  const pipelineMetrics = useMemo(() => {
+    if (!filteredDeals || !stages) return null;
+
+    const totalValue = filteredDeals
+      .filter(d => d.status === "open")
+      .reduce((sum, d) => sum + (d.value || 0), 0);
+
+    let weightedForecast = 0;
+    stages.forEach(stage => {
+      const stageDeals = filteredDeals.filter(d => d.stage_id === stage.id && d.status === "open");
+      const stageValue = stageDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+      weightedForecast += stageValue * ((stage.probability || 50) / 100);
+    });
+
+    const hotDeals = filteredDeals.filter(d => {
+      if (d.status !== "open" || !d.value) return false;
+      return d.value > 10000; // Deals above 10k are "hot"
+    }).length;
+
+    const rottenCount = rottenDeals?.length || 0;
+
+    return { totalValue, weightedForecast, hotDeals, rottenCount };
+  }, [filteredDeals, stages, rottenDeals]);
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -133,7 +239,7 @@ export default function Deals() {
           <div>
             <h2 className="text-3xl font-bold text-foreground">Pipeline de Negócios</h2>
             <p className="text-muted-foreground">
-              Arraste e solte para mover negócios entre etapas
+              Arraste e solte para mover negócios entre etapas. Arraste para as zonas de ação para fechar.
             </p>
           </div>
           <div className="flex gap-2">
@@ -148,6 +254,75 @@ export default function Deals() {
             />
           </div>
         </div>
+
+        {/* Pipeline Metrics Bar */}
+        {pipelineMetrics && (
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <DollarSign className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Pipeline</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {formatCurrency(pipelineMetrics.totalValue)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-500/10 rounded-lg">
+                    <TrendingUp className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Forecast Ponderado</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {formatCurrency(pipelineMetrics.weightedForecast)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-500/10 rounded-lg">
+                    <Flame className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Deals Quentes</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {pipelineMetrics.hotDeals}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-destructive/10 rounded-lg">
+                    <Skull className="h-6 w-6 text-destructive" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Rotten Deals</p>
+                    <p className="text-2xl font-bold text-destructive">
+                      {pipelineMetrics.rottenCount}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center gap-4">
           {/* Pipeline Selector */}
@@ -207,7 +382,21 @@ export default function Deals() {
         <DragOverlay>
           {activeDeal ? <KanbanCard deal={activeDeal} /> : null}
         </DragOverlay>
+
+        {/* Drop Zones Action Bar */}
+        <DragDropActionBar isVisible={!!activeDeal} />
       </DndContext>
+
+      {/* Lost Reason Dialog */}
+      <LostReasonDialog
+        open={showLostDialog}
+        onClose={() => {
+          setShowLostDialog(false);
+          setPendingLostDeal(null);
+        }}
+        onConfirm={handleLostReasonConfirm}
+        dealTitle={pendingLostDeal?.title || ""}
+      />
     </div>
   );
 }
