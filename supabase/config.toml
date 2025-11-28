@@ -81,3 +81,6 @@ verify_jwt = true
 
 [functions.connect-whatsapp-instance]
 verify_jwt = true
+
+[functions.send-quote-email]
+verify_jwt = true

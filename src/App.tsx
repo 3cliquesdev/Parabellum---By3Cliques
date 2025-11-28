@@ -13,8 +13,9 @@ import Contacts from "./pages/Contacts";
 import ContactDetails from "./pages/ContactDetails";
 import Organizations from "./pages/Organizations";
 import Deals from "./pages/Deals";
-import Quotes from "./pages/Quotes";
-import QuoteBuilder from "./pages/QuoteBuilder";
+import Quotes from "@/pages/Quotes";
+import PublicQuote from "@/pages/PublicQuote";
+import QuoteBuilder from "@/pages/QuoteBuilder";
 import Forms from "./pages/Forms";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
@@ -117,8 +118,9 @@ const App = () => {
             <Route path="/contacts/:id" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "admin", "manager"]}><Layout><ContactDetails /></Layout></ProtectedRoute>} />
             <Route path="/organizations" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "manager"]}><Layout><Organizations /></Layout></ProtectedRoute>} />
             <Route path="/deals" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><Deals /></Layout></ProtectedRoute>} />
-            <Route path="/quotes" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><Quotes /></Layout></ProtectedRoute>} />
-            <Route path="/quotes/new" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><QuoteBuilder /></Layout></ProtectedRoute>} />
+            <Route path="/quotes" element={<ProtectedRoute allowedRoles={["admin", "manager", "sales_rep"]}><Layout><Quotes /></Layout></ProtectedRoute>} />
+            <Route path="/quotes/new" element={<ProtectedRoute allowedRoles={["admin", "manager", "sales_rep"]}><Layout><QuoteBuilder /></Layout></ProtectedRoute>} />
+            <Route path="/public-quote/:token" element={<PublicQuote />} />
             <Route path="/forms" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Forms /></Layout></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Users /></Layout></ProtectedRoute>} />
             <Route path="/automations" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Automations /></Layout></ProtectedRoute>} />

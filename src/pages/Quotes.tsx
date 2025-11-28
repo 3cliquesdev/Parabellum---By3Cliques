@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Plus, MoreVertical, Eye, Trash, Send, Copy } from "lucide-react";
 import { useQuotes, useDeleteQuote } from "@/hooks/useQuotes";
+import { useSendQuote } from "@/hooks/useSendQuote";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,6 +28,7 @@ export default function Quotes() {
   const navigate = useNavigate();
   const { data: quotes, isLoading } = useQuotes();
   const deleteQuote = useDeleteQuote();
+  const sendQuote = useSendQuote();
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const getStatusBadge = (status: string) => {
@@ -166,7 +168,7 @@ export default function Quotes() {
                             Ver Proposta
                           </DropdownMenuItem>
                           {quote.status === "draft" && (
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => sendQuote.mutate(quote.id)}>
                               <Send className="h-4 w-4 mr-2" />
                               Enviar
                             </DropdownMenuItem>

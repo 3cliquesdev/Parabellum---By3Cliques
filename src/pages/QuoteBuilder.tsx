@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, ArrowRight, Save, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useProducts } from "@/hooks/useProducts";
-import { useCreateQuote } from "@/hooks/useQuotes";
+import { useCreateQuote, useUpdateQuote } from "@/hooks/useQuotes";
+import { useSendQuote } from "@/hooks/useSendQuote";
 import { useCreateQuoteItem } from "@/hooks/useQuoteItems";
 import { useDeals } from "@/hooks/useDeals";
 import QuoteStepper from "@/components/quote/QuoteStepper";
@@ -40,6 +41,7 @@ export default function QuoteBuilder() {
   const { data: deals } = useDeals();
   const createQuote = useCreateQuote();
   const createQuoteItem = useCreateQuoteItem();
+  const sendQuote = useSendQuote();
 
   const deal = deals?.find((d) => d.id === dealId);
   
@@ -172,7 +174,7 @@ export default function QuoteBuilder() {
       const quote = await createQuote.mutateAsync({
         deal_id: deal.id,
         contact_id: deal.contact_id,
-        status: "sent",
+        status: "draft",
         subtotal,
         discount_percentage: null,
         discount_amount: totalDiscount,
@@ -196,10 +198,8 @@ export default function QuoteBuilder() {
         });
       }
 
-      toast({
-        title: "Proposta enviada",
-        description: "A proposta foi enviada para o cliente",
-      });
+      // Send quote via email
+      await sendQuote.mutateAsync(quote.id);
 
       navigate("/quotes");
     } catch (error) {

@@ -68,7 +68,14 @@ export const useQuoteByToken = (token?: string) => {
         .select(`
           *,
           deals:deal_id(id, title),
-          contacts:contact_id(id, first_name, last_name, email, phone, company)
+          contacts:contact_id(id, first_name, last_name, email, phone, company),
+          items:quote_items(
+            id,
+            quantity,
+            unit_price,
+            discount_percentage,
+            products:product_id(name, description)
+          )
         `)
         .eq("signature_token", token)
         .single();
@@ -179,37 +186,3 @@ export const useDeleteQuote = () => {
   });
 };
 
-// Send quote (change status to 'sent')
-export const useSendQuote = () => {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await supabase
-        .from("quotes")
-        .update({ status: "sent" })
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ["quotes"] });
-      queryClient.invalidateQueries({ queryKey: ["quote", id] });
-      toast({
-        title: "Proposta enviada",
-        description: "A proposta foi enviada para o cliente",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Erro ao enviar proposta",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-};
