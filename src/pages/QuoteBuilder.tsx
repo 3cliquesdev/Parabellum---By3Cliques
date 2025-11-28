@@ -96,10 +96,26 @@ export default function QuoteBuilder() {
   };
 
   const handleSaveDraft = async () => {
+    console.log("🔍 [QuoteBuilder] Iniciando handleSaveDraft");
+    console.log("📦 Deal:", deal);
+    console.log("📋 QuoteItems:", quoteItems);
+    console.log("📋 QuoteItems.length:", quoteItems.length);
+    
     if (!deal || !deal.contact_id) {
+      console.error("❌ Deal ou contact_id ausente:", { deal, contact_id: deal?.contact_id });
       toast({
         title: "Erro",
         description: "Deal ou contato não encontrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (quoteItems.length === 0) {
+      console.error("❌ Nenhum item na proposta");
+      toast({
+        title: "Erro",
+        description: "Adicione pelo menos um produto à proposta",
         variant: "destructive",
       });
       return;
@@ -112,6 +128,8 @@ export default function QuoteBuilder() {
         return sum + (itemSubtotal * item.discountPercentage) / 100;
       }, 0);
       const totalAmount = subtotal - totalDiscount;
+
+      console.log("💰 Cálculos:", { subtotal, totalDiscount, totalAmount });
 
       // Create quote
       const quote = await createQuote.mutateAsync({
@@ -146,9 +164,15 @@ export default function QuoteBuilder() {
         description: "A proposta foi salva como rascunho",
       });
 
+      console.log("✅ Proposta salva com sucesso");
       navigate("/quotes");
     } catch (error) {
-      console.error("Error saving draft:", error);
+      console.error("❌ Error saving draft:", error);
+      toast({
+        title: "Erro ao salvar proposta",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
     }
   };
 

@@ -2,6 +2,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -30,6 +31,30 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
   const [showContactSheet, setShowContactSheet] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  // Formatar número WhatsApp com código do país
+  const formatWhatsAppNumber = (phone: string) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    // Se não começa com 55 e tem 10-11 dígitos, adiciona 55
+    if (!cleanPhone.startsWith('55') && cleanPhone.length >= 10 && cleanPhone.length <= 11) {
+      return `55${cleanPhone}`;
+    }
+    return cleanPhone;
+  };
+
+  // Copiar telefone para clipboard
+  const copyPhoneToClipboard = async (phone: string) => {
+    try {
+      await navigator.clipboard.writeText(phone);
+      toast({
+        title: "Telefone copiado",
+        description: `${phone} copiado para a área de transferência`,
+      });
+    } catch (error) {
+      console.error('Erro ao copiar telefone:', error);
+    }
+  };
   
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: deal.id,
@@ -280,7 +305,8 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                               className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                window.open(`https://wa.me/${deal.contacts?.phone?.replace(/\D/g, '')}`, '_blank');
+                                const formattedPhone = formatWhatsAppNumber(deal.contacts?.phone || '');
+                                window.open(`https://wa.me/${formattedPhone}`, '_blank');
                               }}
                             >
                               <MessageSquare className="h-4 w-4" />
@@ -299,13 +325,20 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                               className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                window.open(`tel:${deal.contacts?.phone}`, '_blank');
+                                // Desktop: copiar para clipboard, Mobile: tel: link
+                                if (window.innerWidth > 768) {
+                                  copyPhoneToClipboard(deal.contacts?.phone || '');
+                                } else {
+                                  window.open(`tel:${deal.contacts?.phone}`, '_blank');
+                                }
                               }}
                             >
                               <Phone className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Ligar</TooltipContent>
+                          <TooltipContent>
+                            {window.innerWidth > 768 ? 'Copiar Telefone' : 'Ligar'}
+                          </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
                     </>
