@@ -14,6 +14,7 @@ import { TeamPerformanceTable } from "@/components/widgets/TeamPerformanceTable"
 import { ChurnAnalyticsWidget } from "@/components/widgets/ChurnAnalyticsWidget";
 import { CadencePerformanceWidget } from "@/components/widgets/CadencePerformanceWidget";
 import { ChannelPerformanceComparison } from "@/components/widgets/ChannelPerformanceComparison";
+import { AutomationROIWidget } from "@/components/widgets/AutomationROIWidget";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
@@ -207,6 +208,9 @@ export default function Analytics() {
             
             {/* Channel Performance Comparison - Full Width */}
             <ChannelPerformanceComparison startDate={startDate} endDate={endDate} />
+            
+            {/* Automation ROI - Full Width */}
+            <AutomationROIWidget />
             
             {/* Chat Conversion Funnel - Full Width */}
             <ChatConversionFunnel startDate={startDate} endDate={endDate} />
