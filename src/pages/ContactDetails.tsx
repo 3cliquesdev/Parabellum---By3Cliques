@@ -17,6 +17,7 @@ import ActivityDialog from "@/components/ActivityDialog";
 import ActivitiesList from "@/components/ActivitiesList";
 import OnboardingJourneyCard from "@/components/OnboardingJourneyCard";
 import OnboardingSummaryCard from "@/components/OnboardingSummaryCard";
+import SuccessVisionCard from "@/components/SuccessVisionCard";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
@@ -185,6 +186,9 @@ export default function ContactDetails() {
 
           {/* COLUNA DIREITA: 70% */}
           <div className="flex-1 space-y-6 overflow-auto">
+            {/* 🌟 Visão de Sucesso (primeira coisa para consultants) */}
+            {isConsultant && <SuccessVisionCard contactId={id || ""} />}
+            
             {/* Highlight Onboarding Journey for consultants */}
             {isConsultant && <OnboardingJourneyCard contactId={id || ""} />}
             

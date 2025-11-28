@@ -4,7 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useCustomerContext } from "@/hooks/useCustomerContext";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface OnboardingSummaryCardProps {
@@ -54,17 +54,17 @@ export default function OnboardingSummaryCard({ contactId }: OnboardingSummaryCa
           <Progress value={progress} className="h-2" />
         </div>
 
-        {firstStepDate && (
+        {firstStepDate && isValid(new Date(firstStepDate)) && (
           <div className="text-xs text-muted-foreground">
             <span className="font-medium">Início:</span>{" "}
             {format(new Date(firstStepDate), "dd/MM/yyyy", { locale: ptBR })}
           </div>
         )}
 
-        {lastCompletedStep && (
+        {lastCompletedStep && lastCompletedStep.completed_at && isValid(new Date(lastCompletedStep.completed_at)) && (
           <div className="text-xs text-muted-foreground">
             <span className="font-medium">Última etapa:</span>{" "}
-            {format(new Date(lastCompletedStep.completed_at!), "dd/MM/yyyy", { locale: ptBR })}
+            {format(new Date(lastCompletedStep.completed_at), "dd/MM/yyyy", { locale: ptBR })}
           </div>
         )}
 

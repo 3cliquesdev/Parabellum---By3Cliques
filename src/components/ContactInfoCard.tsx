@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Mail, Phone, Building2, Calendar } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -29,7 +29,7 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
         <div className="flex flex-col items-center mb-6">
           <Avatar className="h-24 w-24 mb-3">
             <AvatarFallback className="bg-primary/10 text-primary text-3xl font-bold">
-              {contact.first_name[0]}{contact.last_name[0]}
+              {contact.first_name?.[0] || "?"}{contact.last_name?.[0] || ""}
             </AvatarFallback>
           </Avatar>
           <h2 className="text-xl font-bold text-center text-foreground">
@@ -62,7 +62,7 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
             </div>
           )}
 
-          {contact.last_contact_date && (
+          {contact.last_contact_date && isValid(new Date(contact.last_contact_date)) && (
             <div className="flex items-center gap-3 text-sm">
               <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <span className="text-muted-foreground">
