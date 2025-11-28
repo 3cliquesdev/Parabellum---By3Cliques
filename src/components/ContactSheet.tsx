@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import {
   Sheet,
@@ -30,7 +30,7 @@ interface ContactSheetProps {
 }
 
 export default function ContactSheet({ contact, open, onOpenChange }: ContactSheetProps) {
-  const { register, handleSubmit, formState: { isDirty } } = useForm({
+  const { register, handleSubmit, formState: { isDirty }, reset } = useForm({
     defaultValues: {
       first_name: contact?.first_name || "",
       last_name: contact?.last_name || "",
@@ -39,6 +39,19 @@ export default function ContactSheet({ contact, open, onOpenChange }: ContactShe
       company: contact?.company || "",
     },
   });
+
+  // Reset form when contact changes
+  useEffect(() => {
+    if (contact) {
+      reset({
+        first_name: contact.first_name || "",
+        last_name: contact.last_name || "",
+        email: contact.email || "",
+        phone: contact.phone || "",
+        company: contact.company || "",
+      });
+    }
+  }, [contact, reset]);
 
   const updateContact = useUpdateContact();
   const { data: timeline } = useCustomerTimeline(contact?.id || null);
