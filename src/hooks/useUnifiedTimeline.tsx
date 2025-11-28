@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface TimelineEvent {
   id: string;
-  type: 'interaction' | 'ticket' | 'deal' | 'conversation';
+  type: 'interaction' | 'ticket' | 'deal' | 'conversation' | 'onboarding';
   date: string;
   title: string;
   description: string;
@@ -45,6 +45,14 @@ export function useUnifiedTimeline(contactId: string | null) {
         .select("id, channel, status, ai_mode, created_at, contact_id")
         .eq("contact_id", contactId)
         .order("created_at", { ascending: false });
+
+      // Buscar etapas de onboarding concluídas
+      const { data: journeySteps } = await supabase
+        .from("customer_journey_steps")
+        .select("*")
+        .eq("contact_id", contactId)
+        .eq("completed", true)
+        .order("completed_at", { ascending: false });
 
       // Mapear para formato unificado
       const timeline: TimelineEvent[] = [];
@@ -101,6 +109,19 @@ export function useUnifiedTimeline(contactId: string | null) {
           description: `Status: ${conversation.status}${conversation.ai_mode ? ` | Modo: ${conversation.ai_mode}` : ''}`,
           icon: '💬',
           metadata: conversation,
+        });
+      });
+
+      // Etapas de onboarding
+      (journeySteps || []).forEach((step) => {
+        timeline.push({
+          id: step.id,
+          type: 'onboarding',
+          date: step.completed_at || step.created_at,
+          title: `✅ Onboarding: ${step.step_name}`,
+          description: step.notes || 'Etapa concluída',
+          icon: '✅',
+          metadata: step,
         });
       });
 

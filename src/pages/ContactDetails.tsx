@@ -18,6 +18,10 @@ import ActivitiesList from "@/components/ActivitiesList";
 import OnboardingJourneyCard from "@/components/OnboardingJourneyCard";
 import OnboardingSummaryCard from "@/components/OnboardingSummaryCard";
 import SuccessVisionCard from "@/components/SuccessVisionCard";
+import UnifiedTimelineCard from "@/components/UnifiedTimelineCard";
+import DealsActiveCard from "@/components/DealsActiveCard";
+import ProductsPurchasedCard from "@/components/ProductsPurchasedCard";
+import NextActionsCard from "@/components/NextActionsCard";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
@@ -115,16 +119,13 @@ export default function ContactDetails() {
           {isConsultant ? "Voltar para Minha Carteira" : "Voltar para Contatos"}
         </Button>
 
-        <div className="flex gap-6 h-[calc(100vh-180px)]">
-          {/* COLUNA ESQUERDA: 30% */}
-          <div className="w-[30%] space-y-6 overflow-auto">
+        <div className="grid grid-cols-12 gap-6 h-[calc(100vh-180px)]">
+          {/* COLUNA ESQUERDA: PERFIL (25% = 3 colunas) */}
+          <div className="col-span-12 lg:col-span-3 space-y-4 overflow-auto">
             <ContactInfoCard contact={contact} />
             
             {/* Show LTV only for non-consultants (sales team) */}
             {!isConsultant && <ContactLTVCard contact={contact} deals={contactDeals} />}
-            
-            {/* Highlight Onboarding for consultants */}
-            <OnboardingSummaryCard contactId={id || ""} />
             
             <ContactTagsCard 
               customerId={id || ""} 
@@ -184,26 +185,22 @@ export default function ContactDetails() {
             )}
           </div>
 
-          {/* COLUNA DIREITA: 70% */}
-          <div className="flex-1 space-y-6 overflow-auto">
-            {/* 🌟 Dossiê de Sucesso - PRIMEIRA COISA PARA TODOS */}
+          {/* COLUNA CENTRAL: TIMELINE (50% = 6 colunas) */}
+          <div className="col-span-12 lg:col-span-6 overflow-auto">
+            <UnifiedTimelineCard contactId={id || ""} />
+          </div>
+
+          {/* COLUNA DIREITA: NEGÓCIOS (25% = 3 colunas) */}
+          <div className="col-span-12 lg:col-span-3 space-y-4 overflow-auto">
             <SuccessVisionCard contactId={id || ""} />
             
-            {/* Highlight Onboarding Journey for consultants */}
-            {isConsultant && <OnboardingJourneyCard contactId={id || ""} />}
+            <OnboardingSummaryCard contactId={id || ""} />
             
-            {/* Show Activities for all users */}
-            <ActivitiesList contactId={id || ""} />
+            <DealsActiveCard contactId={id || ""} />
             
-            {/* Show Onboarding Journey again for non-consultants (lower priority) */}
-            {!isConsultant && <OnboardingJourneyCard contactId={id || ""} />}
+            <ProductsPurchasedCard contactId={id || ""} />
             
-            {/* Timeline for all */}
-            <CustomerTimeline 
-              timeline={timeline || []} 
-              customerName={`${contact.first_name} ${contact.last_name}`}
-              isLoading={isLoadingTimeline}
-            />
+            <NextActionsCard contactId={id || ""} />
           </div>
         </div>
       </div>
