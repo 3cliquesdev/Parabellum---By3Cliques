@@ -20,21 +20,22 @@ export function useCustomerContext(contactId: string | null) {
 
       if (contactError) throw contactError;
 
-      // Fetch won deal with product and handoff fields
-      const { data: deal, error: dealError } = await supabase
-        .from("deals")
-        .select(`
-          id,
-          title,
-          value,
-          currency,
-          closed_at,
-          probability,
-          expected_revenue,
-          success_criteria,
-          pain_points,
-          product:product_id(id, name)
-        `)
+    // Fetch won deal with product and handoff fields
+    const { data: deal, error: dealError } = await supabase
+      .from("deals")
+      .select(`
+        id,
+        title,
+        value,
+        currency,
+        closed_at,
+        probability,
+        expected_revenue,
+        success_criteria,
+        pain_points,
+        churn_risk,
+        product:product_id(id, name)
+      `)
         .eq("contact_id", contactId)
         .eq("status", "won")
         .order("closed_at", { ascending: false })

@@ -55,6 +55,7 @@ const dealSchema = z.object({
   expected_revenue: z.string().optional().nullable(),
   success_criteria: z.string().optional().nullable(),
   pain_points: z.string().optional().nullable(),
+  churn_risk: z.enum(["low", "medium", "high"]).optional().nullable(),
 }).refine((data) => {
   if (data.status === "lost" && (!data.lost_reason || data.lost_reason.trim() === "")) {
     return false;
@@ -110,6 +111,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       expected_revenue: (deal as any)?.expected_revenue?.toString() || "",
       success_criteria: (deal as any)?.success_criteria || "",
       pain_points: (deal as any)?.pain_points || "",
+      churn_risk: (deal as any)?.churn_risk || "",
     },
   });
 
@@ -171,6 +173,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       expected_revenue: data.expected_revenue ? parseFloat(data.expected_revenue) : null,
       success_criteria: data.success_criteria || null,
       pain_points: data.pain_points || null,
+      churn_risk: data.churn_risk || null,
     };
 
     console.log("[DealDialog] Payload to submit:", payload);
@@ -536,6 +539,45 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
                         rows={3}
                       />
                     </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {/* Dropdown: Risco de Churn */}
+              <FormField
+                control={form.control}
+                name="churn_risk"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Risco de Churn</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o risco..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="low">
+                          <span className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-green-500" />
+                            Baixo
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="medium">
+                          <span className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                            Médio
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="high">
+                          <span className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-red-500" />
+                            Alto
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
                   </FormItem>
                 )}
               />

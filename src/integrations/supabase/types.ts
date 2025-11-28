@@ -908,6 +908,7 @@ export type Database = {
       deals: {
         Row: {
           assigned_to: string | null
+          churn_risk: string | null
           closed_at: string | null
           contact_id: string | null
           created_at: string
@@ -930,6 +931,7 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          churn_risk?: string | null
           closed_at?: string | null
           contact_id?: string | null
           created_at?: string
@@ -952,6 +954,7 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          churn_risk?: string | null
           closed_at?: string | null
           contact_id?: string | null
           created_at?: string

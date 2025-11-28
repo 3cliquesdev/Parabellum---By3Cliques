@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Target, AlertTriangle, DollarSign, Trophy } from "lucide-react";
 import { useCustomerContext } from "@/hooks/useCustomerContext";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 interface SuccessVisionCardProps {
   contactId: string;
@@ -30,12 +31,34 @@ export default function SuccessVisionCard({ contactId }: SuccessVisionCardProps)
     return null;
   }
 
+  // Determinar cor da borda baseado no risco de churn
+  const riskColor = deal?.churn_risk === "high" 
+    ? "border-red-500/50 bg-red-500/5" 
+    : deal?.churn_risk === "medium"
+    ? "border-yellow-500/30 bg-yellow-500/5"
+    : "border-primary/30 bg-primary/5";
+
+  // Badge de risco
+  const riskBadge = deal?.churn_risk && (
+    <Badge 
+      variant={deal.churn_risk === "high" ? "destructive" : "secondary"}
+      className={cn(
+        deal.churn_risk === "medium" && "bg-yellow-500/20 text-yellow-700 border-yellow-500/30"
+      )}
+    >
+      {deal.churn_risk === "high" && "⚠️ Risco Alto"}
+      {deal.churn_risk === "medium" && "⚡ Risco Médio"}
+      {deal.churn_risk === "low" && "✅ Risco Baixo"}
+    </Badge>
+  );
+
   return (
-    <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
+    <Card className={cn("border-2 bg-gradient-to-br to-transparent", riskColor)}>
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
           <Trophy className="h-5 w-5 text-primary" />
-          <CardTitle className="text-base">Visão de Sucesso</CardTitle>
+          <CardTitle className="text-base">Dossiê de Sucesso</CardTitle>
+          {riskBadge}
           <Badge variant="secondary" className="ml-auto text-xs">
             Handoff do Vendedor
           </Badge>

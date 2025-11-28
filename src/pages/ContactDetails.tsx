@@ -186,8 +186,8 @@ export default function ContactDetails() {
 
           {/* COLUNA DIREITA: 70% */}
           <div className="flex-1 space-y-6 overflow-auto">
-            {/* 🌟 Visão de Sucesso (primeira coisa para consultants) */}
-            {isConsultant && <SuccessVisionCard contactId={id || ""} />}
+            {/* 🌟 Dossiê de Sucesso - PRIMEIRA COISA PARA TODOS */}
+            <SuccessVisionCard contactId={id || ""} />
             
             {/* Highlight Onboarding Journey for consultants */}
             {isConsultant && <OnboardingJourneyCard contactId={id || ""} />}
