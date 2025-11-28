@@ -60,6 +60,14 @@ export function PlaybookStepViewer({
   const trimmedUrl = video_url?.trim() || '';
   const hasValidVideo = Boolean(trimmedUrl); // Se existe URL, renderiza (erro handler cuida de URLs inválidos)
   
+  console.log("🎥 PlaybookStepViewer - Video Config:", {
+    video_url,
+    trimmedUrl,
+    hasValidVideo,
+    videoReady,
+    videoError
+  });
+  
   const [contentConsumed, setContentConsumed] = useState(
     alreadyCompleted || quiz_passed || !hasValidVideo
   );

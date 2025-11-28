@@ -137,6 +137,15 @@ export function SimulatorStepRenderer({
   if (node.type === "task") {
     const hasVideo = node.data.video_url?.trim();
     
+    // DEBUG: Log para verificar se o vídeo está chegando
+    console.log("🎬 SimulatorStepRenderer - Task Node:", {
+      nodeId: node.id,
+      label: node.data.label,
+      video_url: node.data.video_url,
+      hasVideo,
+      fullNodeData: node.data
+    });
+    
     return (
       <div className="space-y-4">
         <PlaybookStepViewer
