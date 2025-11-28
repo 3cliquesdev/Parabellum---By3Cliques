@@ -13,6 +13,7 @@ import { RevenueByChannelWidget } from "@/components/widgets/RevenueByChannelWid
 import { TeamPerformanceTable } from "@/components/widgets/TeamPerformanceTable";
 import { ChurnAnalyticsWidget } from "@/components/widgets/ChurnAnalyticsWidget";
 import { CadencePerformanceWidget } from "@/components/widgets/CadencePerformanceWidget";
+import { ChannelPerformanceComparison } from "@/components/widgets/ChannelPerformanceComparison";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
@@ -203,6 +204,9 @@ export default function Analytics() {
           <TabsContent value="sales" className="space-y-6">
             {/* Cadence Performance - Full Width */}
             <CadencePerformanceWidget />
+            
+            {/* Channel Performance Comparison - Full Width */}
+            <ChannelPerformanceComparison startDate={startDate} endDate={endDate} />
             
             {/* Chat Conversion Funnel - Full Width */}
             <ChatConversionFunnel startDate={startDate} endDate={endDate} />
