@@ -35,11 +35,17 @@ interface PlaybookStepViewerProps {
   onQuizPassed?: () => void;
 }
 
-export function PlaybookStepViewer({ 
-  label, 
-  video_url, 
-  rich_content, 
-  attachments, 
+/**
+ * PlaybookStepViewer
+ *
+ * Responsável por renderizar a "aula": vídeo, conteúdo rico, quiz e materiais.
+ * Este componente **sempre** prioriza o vídeo real configurado pelo usuário.
+ */
+export function PlaybookStepViewer({
+  label,
+  video_url,
+  rich_content,
+  attachments,
   quiz_enabled,
   quiz_question,
   quiz_options,
@@ -53,21 +59,12 @@ export function PlaybookStepViewer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [quizPassedLocal, setQuizPassedLocal] = useState(quiz_passed || false);
   const [videoError, setVideoError] = useState<string | null>(null);
-  const [videoReady, setVideoReady] = useState(false);
   const { toast } = useToast();
 
-  // CRÍTICO: Use o vídeo REAL do usuário, não fake!
-  const trimmedUrl = video_url?.trim() || '';
-  const hasValidVideo = Boolean(trimmedUrl); // Se existe URL, renderiza (erro handler cuida de URLs inválidos)
-  
-  console.log("🎥 PlaybookStepViewer - Video Config:", {
-    video_url,
-    trimmedUrl,
-    hasValidVideo,
-    videoReady,
-    videoError
-  });
-  
+  // FONTE DA VERDADE: sempre usa a URL real que veio do passo
+  const trimmedUrl = (video_url ?? '').trim();
+  const hasValidVideo = !!trimmedUrl;
+
   const [contentConsumed, setContentConsumed] = useState(
     alreadyCompleted || quiz_passed || !hasValidVideo
   );
@@ -83,22 +80,23 @@ export function PlaybookStepViewer({
   const handleVideoEnd = () => {
     setVideoCompleted(true);
     setContentConsumed(true);
-    
+
     toast({
-      title: "🎬 Vídeo Concluído!",
-      description: quiz_enabled 
-        ? "Responda a pergunta para avançar." 
-        : "Você pode marcar esta etapa como concluída.",
+      title: '🎬 Vídeo Concluído!',
+      description: quiz_enabled
+        ? 'Responda a pergunta para avançar.'
+        : 'Você pode marcar esta etapa como concluída.',
     });
-    
+
     if (!quiz_enabled) {
-      confetti({ 
-        particleCount: 100, 
-        spread: 70, 
+      confetti({
+        particleCount: 100,
+        spread: 70,
         origin: { y: 0.6 },
-        colors: ['#2563EB', '#3B82F6', '#60A5FA']
+        colors: ['#2563EB', '#3B82F6', '#60A5FA'],
       });
     }
+
     onVideoEnded?.();
   };
 
@@ -124,27 +122,21 @@ export function PlaybookStepViewer({
         <div className="aspect-video bg-destructive/10 rounded-xl flex flex-col items-center justify-center border border-destructive/20">
           <AlertCircle className="h-12 w-12 text-destructive mb-2" />
           <p className="text-sm text-destructive font-medium">{videoError}</p>
-          <p className="text-xs text-muted-foreground mt-1 max-w-md truncate px-4">URL: {trimmedUrl}</p>
-          <button 
-            className="mt-3 px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors"
-            onClick={() => window.open(trimmedUrl, '_blank')}
-          >
-            Abrir vídeo em nova aba
-          </button>
+          {trimmedUrl && (
+            <>
+              <p className="text-xs text-muted-foreground mt-1 max-w-md truncate px-4">URL: {trimmedUrl}</p>
+              <button
+                className="mt-3 px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+                onClick={() => window.open(trimmedUrl, '_blank')}
+              >
+                Abrir vídeo em nova aba
+              </button>
+            </>
+          )}
         </div>
       ) : hasValidVideo ? (
         <div className="relative rounded-xl overflow-hidden shadow-2xl border border-border/50 bg-gradient-to-b from-background/80 to-muted">
-          {/* Loading overlay - aparece POR CIMA do player */}
-          {!videoReady && (
-            <div className="absolute inset-0 flex items-center justify-center bg-muted z-10 rounded-xl">
-              <div className="flex flex-col items-center gap-2">
-                <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm text-muted-foreground">Carregando vídeo...</span>
-              </div>
-            </div>
-          )}
-          
-          {/* Player SEMPRE renderizado (para disparar onReady) */}
+          {/* Player SEMPRE renderizado com o link real do usuário */}
           <div className="aspect-video relative bg-black">
             {React.createElement(ReactPlayer as any, {
               url: trimmedUrl,
@@ -155,7 +147,6 @@ export function PlaybookStepViewer({
               light: false,
               onReady: () => {
                 console.log('✅ ReactPlayer pronto para:', trimmedUrl);
-                setVideoReady(true);
               },
               onError: (e: any) => {
                 console.error('❌ Erro no ReactPlayer:', e);
@@ -165,20 +156,20 @@ export function PlaybookStepViewer({
               onPlay: () => setIsPlaying(true),
               onPause: () => setIsPlaying(false),
               config: {
-                youtube: { 
-                  playerVars: { 
-                    modestbranding: 1, 
+                youtube: {
+                  playerVars: {
+                    modestbranding: 1,
                     rel: 0,
-                    origin: window.location.origin
-                  } 
+                    origin: window.location.origin,
+                  },
                 },
-                vimeo: { 
-                  playerOptions: { 
-                    byline: false, 
-                    portrait: false 
-                  } 
-                }
-              }
+                vimeo: {
+                  playerOptions: {
+                    byline: false,
+                    portrait: false,
+                  },
+                },
+              },
             })}
           </div>
 
@@ -193,23 +184,21 @@ export function PlaybookStepViewer({
 
           {videoCompleted && !quiz_enabled && (
             <div className="absolute top-4 left-4 z-10">
-              <Badge className="bg-green-500 text-white shadow-lg">
-                ✅ Vídeo Concluído!
-              </Badge>
+              <Badge className="bg-green-500 text-white shadow-lg">✅ Vídeo Concluído!</Badge>
             </div>
           )}
         </div>
-      ) : video_url !== undefined && (
+      ) : video_url !== undefined ? (
         <div className="aspect-video bg-muted rounded-xl flex items-center justify-center border border-border">
           <div className="text-center text-muted-foreground">
             <p className="text-sm">Nenhum vídeo configurado para esta etapa</p>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Rich Content */}
       {rich_content && (
-        <div 
+        <div
           className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-a:text-primary"
           dangerouslySetInnerHTML={{ __html: rich_content }}
         />
@@ -231,26 +220,29 @@ export function PlaybookStepViewer({
       {/* Attachments - Only show after video ends */}
       {contentConsumed && attachments && attachments.length > 0 && (
         <div className="animate-fade-in">
-        <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-foreground">📎 Materiais Complementares</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {attachments.map((attachment, index) => (
-              <Card key={index} className="p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors">
-                {getFileIcon(attachment.type)}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{attachment.name}</p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => window.open(attachment.url, '_blank')}
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold text-foreground">📎 Materiais Complementares</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {attachments.map((attachment, index) => (
+                <Card
+                  key={index}
+                  className="p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors"
                 >
-                  <Download className="h-4 w-4" />
-                </Button>
-              </Card>
-            ))}
+                  {getFileIcon(attachment.type)}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{attachment.name}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(attachment.url, '_blank')}
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </Card>
+              ))}
+            </div>
           </div>
-        </div>
         </div>
       )}
     </Card>
