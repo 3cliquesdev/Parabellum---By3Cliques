@@ -46,6 +46,14 @@ interface VideoEmbedFieldProps {
 export function VideoEmbedField({ url, onChange }: VideoEmbedFieldProps) {
   const videoUrl = extractVideoUrl(url);
 
+  // Normalize iframe HTML to force 100% dimensions
+  const normalizeIframe = (iframeHtml: string): string => {
+    return iframeHtml
+      .replace(/width=["']\d+["']/gi, 'width="100%"')
+      .replace(/height=["']\d+["']/gi, 'height="100%"')
+      .replace(/<iframe/gi, '<iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"');
+  };
+
   return (
     <div className="space-y-3">
       <Label className="flex items-center gap-2">
@@ -81,8 +89,8 @@ export function VideoEmbedField({ url, onChange }: VideoEmbedFieldProps) {
         <div className="aspect-video rounded-lg overflow-hidden bg-black border">
           {url.includes('<iframe') ? (
             <div 
-              className="w-full h-full"
-              dangerouslySetInnerHTML={{ __html: url }} 
+              className="relative w-full h-full"
+              dangerouslySetInnerHTML={{ __html: normalizeIframe(url) }} 
             />
           ) : (
             React.createElement(ReactPlayer as any, {

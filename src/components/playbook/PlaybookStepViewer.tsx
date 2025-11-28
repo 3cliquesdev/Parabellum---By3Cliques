@@ -91,6 +91,14 @@ export function PlaybookStepViewer({
 
   const videoUrl = extractVideoUrl(video_url || "");
 
+  // Normalize iframe HTML to force 100% dimensions
+  const normalizeIframe = (iframeHtml: string): string => {
+    return iframeHtml
+      .replace(/width=["']\d+["']/gi, 'width="100%"')
+      .replace(/height=["']\d+["']/gi, 'height="100%"')
+      .replace(/<iframe/gi, '<iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"');
+  };
+
   // Timer countdown effect
   useEffect(() => {
     if (timerComplete || secondsRemaining <= 0) return;
@@ -150,10 +158,10 @@ export function PlaybookStepViewer({
       {videoUrl && (
         <div className="aspect-video rounded-xl overflow-hidden bg-black border-2 border-border mb-6">
           {video_url?.includes('<iframe') ? (
-            // Direct iframe embed
+            // Direct iframe embed with normalized dimensions
             <div 
-              className="w-full h-full"
-              dangerouslySetInnerHTML={{ __html: video_url }} 
+              className="relative w-full h-full"
+              dangerouslySetInnerHTML={{ __html: normalizeIframe(video_url) }} 
             />
           ) : (
             // URL-based player (no event listeners)
@@ -161,7 +169,8 @@ export function PlaybookStepViewer({
               url: videoUrl,
               width: '100%',
               height: '100%',
-              controls: true
+              controls: true,
+              light: true
             })
           )}
         </div>
