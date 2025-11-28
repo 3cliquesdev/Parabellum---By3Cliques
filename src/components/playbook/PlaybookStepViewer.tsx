@@ -180,7 +180,7 @@ export function PlaybookStepViewer({
             height: '100%',
             controls: true,
             playing: false,
-            light: true,
+            light: false,
               onReady: () => {
                 console.log('✅ ReactPlayer pronto para:', trimmedUrl);
               },
