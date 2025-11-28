@@ -150,6 +150,31 @@ export default function Deals() {
     updateDealStage.mutate({ id: dealId, stage_id: newStageId });
   };
 
+  // Calculate pipeline metrics (MUST be before early returns)
+  const pipelineMetrics = useMemo(() => {
+    if (!filteredDeals || !stages) return null;
+
+    const totalValue = filteredDeals
+      .filter(d => d.status === "open")
+      .reduce((sum, d) => sum + (d.value || 0), 0);
+
+    let weightedForecast = 0;
+    stages.forEach(stage => {
+      const stageDeals = filteredDeals.filter(d => d.stage_id === stage.id && d.status === "open");
+      const stageValue = stageDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+      weightedForecast += stageValue * ((stage.probability || 50) / 100);
+    });
+
+    const hotDeals = filteredDeals.filter(d => {
+      if (d.status !== "open" || !d.value) return false;
+      return d.value > 10000; // Deals above 10k are "hot"
+    }).length;
+
+    const rottenCount = rottenDeals?.length || 0;
+
+    return { totalValue, weightedForecast, hotDeals, rottenCount };
+  }, [filteredDeals, stages, rottenDeals]);
+
   const handleLostReasonConfirm = (reason: string, notes?: string) => {
     if (!pendingLostDeal) return;
 
@@ -197,31 +222,6 @@ export default function Deals() {
       </div>
     );
   }
-
-  // Calculate pipeline metrics
-  const pipelineMetrics = useMemo(() => {
-    if (!filteredDeals || !stages) return null;
-
-    const totalValue = filteredDeals
-      .filter(d => d.status === "open")
-      .reduce((sum, d) => sum + (d.value || 0), 0);
-
-    let weightedForecast = 0;
-    stages.forEach(stage => {
-      const stageDeals = filteredDeals.filter(d => d.stage_id === stage.id && d.status === "open");
-      const stageValue = stageDeals.reduce((sum, d) => sum + (d.value || 0), 0);
-      weightedForecast += stageValue * ((stage.probability || 50) / 100);
-    });
-
-    const hotDeals = filteredDeals.filter(d => {
-      if (d.status !== "open" || !d.value) return false;
-      return d.value > 10000; // Deals above 10k are "hot"
-    }).length;
-
-    const rottenCount = rottenDeals?.length || 0;
-
-    return { totalValue, weightedForecast, hotDeals, rottenCount };
-  }, [filteredDeals, stages, rottenDeals]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
