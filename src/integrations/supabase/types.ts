@@ -448,6 +448,245 @@ export type Database = {
           },
         ]
       }
+      cadence_enrollments: {
+        Row: {
+          cadence_id: string
+          completed_at: string | null
+          contact_id: string
+          created_at: string
+          current_step: number
+          enrolled_by: string | null
+          id: string
+          next_step_at: string | null
+          replied_at: string | null
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cadence_id: string
+          completed_at?: string | null
+          contact_id: string
+          created_at?: string
+          current_step?: number
+          enrolled_by?: string | null
+          id?: string
+          next_step_at?: string | null
+          replied_at?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cadence_id?: string
+          completed_at?: string | null
+          contact_id?: string
+          created_at?: string
+          current_step?: number
+          enrolled_by?: string | null
+          id?: string
+          next_step_at?: string | null
+          replied_at?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cadence_enrollments_cadence_id_fkey"
+            columns: ["cadence_id"]
+            isOneToOne: false
+            referencedRelation: "cadences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_enrollments_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_enrollments_enrolled_by_fkey"
+            columns: ["enrolled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cadence_steps: {
+        Row: {
+          cadence_id: string
+          created_at: string
+          day_offset: number
+          id: string
+          is_automated: boolean
+          message_template: string | null
+          position: number
+          step_type: string
+          task_description: string | null
+          task_title: string | null
+          template_id: string | null
+        }
+        Insert: {
+          cadence_id: string
+          created_at?: string
+          day_offset?: number
+          id?: string
+          is_automated?: boolean
+          message_template?: string | null
+          position?: number
+          step_type: string
+          task_description?: string | null
+          task_title?: string | null
+          template_id?: string | null
+        }
+        Update: {
+          cadence_id?: string
+          created_at?: string
+          day_offset?: number
+          id?: string
+          is_automated?: boolean
+          message_template?: string | null
+          position?: number
+          step_type?: string
+          task_description?: string | null
+          task_title?: string | null
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cadence_steps_cadence_id_fkey"
+            columns: ["cadence_id"]
+            isOneToOne: false
+            referencedRelation: "cadences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_steps_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cadence_tasks: {
+        Row: {
+          assigned_to: string
+          completed_at: string | null
+          contact_id: string
+          created_at: string
+          description: string | null
+          enrollment_id: string
+          id: string
+          scheduled_for: string
+          status: string
+          step_id: string
+          task_type: string
+          template_content: string | null
+          title: string
+        }
+        Insert: {
+          assigned_to: string
+          completed_at?: string | null
+          contact_id: string
+          created_at?: string
+          description?: string | null
+          enrollment_id: string
+          id?: string
+          scheduled_for: string
+          status?: string
+          step_id: string
+          task_type: string
+          template_content?: string | null
+          title: string
+        }
+        Update: {
+          assigned_to?: string
+          completed_at?: string | null
+          contact_id?: string
+          created_at?: string
+          description?: string | null
+          enrollment_id?: string
+          id?: string
+          scheduled_for?: string
+          status?: string
+          step_id?: string
+          task_type?: string
+          template_content?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cadence_tasks_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_tasks_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_tasks_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "cadence_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_tasks_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "cadence_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cadences: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cadences_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           account_balance: number | null
