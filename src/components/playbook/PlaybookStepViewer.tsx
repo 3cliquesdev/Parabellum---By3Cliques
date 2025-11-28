@@ -96,6 +96,17 @@ export function PlaybookStepViewer({
   // Video Lock State
   const videoLocked = hasValidVideo && !videoCompleted && !errorTimeout && !alreadyCompleted;
 
+  // DEBUG: Log estado da trava
+  console.log('🔒 PlaybookStepViewer - Estado da Trava:', {
+    video_url_original: video_url,
+    extractedUrl,
+    hasValidVideo,
+    videoCompleted,
+    errorTimeout,
+    alreadyCompleted,
+    videoLocked,
+  });
+
   const [contentConsumed, setContentConsumed] = useState(
     alreadyCompleted || quiz_passed || !hasValidVideo
   );
