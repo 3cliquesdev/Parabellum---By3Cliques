@@ -1,11 +1,12 @@
 import { useDraggable } from "@dnd-kit/core";
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Pencil, AlertCircle, CheckCircle, AlertTriangle, Skull, MessageSquare, Phone } from "lucide-react";
+import { Pencil, AlertCircle, CheckCircle, AlertTriangle, Skull, MessageSquare, Phone, FileText } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import DealDialog from "./DealDialog";
@@ -28,6 +29,7 @@ interface KanbanCardProps {
 export default function KanbanCard({ deal }: KanbanCardProps) {
   const [showContactSheet, setShowContactSheet] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const navigate = useNavigate();
   
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: deal.id,
@@ -245,45 +247,69 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
               )}
 
               {/* Quick Actions - Visible on Hover */}
-              {isHovered && deal.contacts?.phone && (
+              {isHovered && (
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  {/* Create Quote Button */}
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                          className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
                           onClick={(e) => {
                             e.stopPropagation();
-                            window.open(`https://wa.me/${deal.contacts?.phone?.replace(/\D/g, '')}`, '_blank');
+                            navigate(`/quotes/new?deal_id=${deal.id}`);
                           }}
                         >
-                          <MessageSquare className="h-4 w-4" />
+                          <FileText className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>WhatsApp</TooltipContent>
+                      <TooltipContent>Criar Proposta</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
 
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(`tel:${deal.contacts?.phone}`, '_blank');
-                          }}
-                        >
-                          <Phone className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Ligar</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  {deal.contacts?.phone && (
+                    <>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`https://wa.me/${deal.contacts?.phone?.replace(/\D/g, '')}`, '_blank');
+                              }}
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>WhatsApp</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`tel:${deal.contacts?.phone}`, '_blank');
+                              }}
+                            >
+                              <Phone className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Ligar</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </>
+                  )}
                 </div>
               )}
             </div>

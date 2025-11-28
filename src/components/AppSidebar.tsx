@@ -24,7 +24,8 @@ import {
   MessageCircle,
   DollarSign,
   CheckSquare,
-  Workflow
+  Workflow,
+  Receipt
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -82,6 +83,7 @@ const salesRepMainItems = [
 
 const salesRepSalesItems = [
   { title: "Negócios", href: "/deals", icon: DollarSign },
+  { title: "Propostas", href: "/quotes", icon: Receipt },
   { title: "Contatos", href: "/contacts", icon: Users },
   { title: "Organizações", href: "/organizations", icon: Building2 },
 ];
@@ -100,6 +102,7 @@ const adminOperationItems = [
   { title: "Inbox", href: "/inbox", icon: MessageCircle },
   { title: "Tickets", href: "/support", icon: Headphones },
   { title: "Negócios", href: "/deals", icon: TrendingUp },
+  { title: "Propostas", href: "/quotes", icon: Receipt },
   { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase },
 ];
 
