@@ -40,7 +40,7 @@ export function usePortfolioClients() {
         `)
         .eq("consultant_id", user.id)
         .eq("status", "customer")
-        .order("updated_at", { ascending: false });
+        .order("last_contact_date", { ascending: false, nullsFirst: false });
 
       if (error) throw error;
 
