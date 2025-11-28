@@ -1,3 +1,4 @@
+import React from "react";
 import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "next-themes";
 import { registerSW } from 'virtual:pwa-register';
@@ -17,7 +18,9 @@ const updateSW = registerSW({
 });
 
 createRoot(document.getElementById("root")!).render(
-  <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-    <App />
-  </ThemeProvider>
+  <React.StrictMode>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <App />
+    </ThemeProvider>
+  </React.StrictMode>
 );
