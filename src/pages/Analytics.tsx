@@ -15,11 +15,17 @@ import { ChurnAnalyticsWidget } from "@/components/widgets/ChurnAnalyticsWidget"
 import { CadencePerformanceWidget } from "@/components/widgets/CadencePerformanceWidget";
 import { ChannelPerformanceComparison } from "@/components/widgets/ChannelPerformanceComparison";
 import { AutomationROIWidget } from "@/components/widgets/AutomationROIWidget";
+import { SLAComplianceWidget } from "@/components/widgets/SLAComplianceWidget";
+import { TeamEfficiencyWidget } from "@/components/widgets/TeamEfficiencyWidget";
+import { AIEconomyWidget } from "@/components/widgets/AIEconomyWidget";
+import { TopTopicsWidget } from "@/components/widgets/TopTopicsWidget";
+import { OnboardingFunnelWidget } from "@/components/widgets/OnboardingFunnelWidget";
+import { WhatsAppTrafficWidget } from "@/components/widgets/WhatsAppTrafficWidget";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
-import { BarChart3, Sparkles, CalendarIcon, Headphones, TrendingUp } from "lucide-react";
+import { BarChart3, Sparkles, CalendarIcon, Headphones, TrendingUp, Brain, Rocket, MessageCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -37,6 +43,7 @@ type PeriodFilter = {
 export default function Analytics() {
   const { role, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<string>('support');
   
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>({
     type: 'preset',
@@ -162,16 +169,28 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Main Tabs: Support vs Sales Performance */}
-        <Tabs defaultValue="support" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+        {/* Main Tabs: Support, AI, Onboarding, WhatsApp, Sales */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="support" className="flex items-center gap-2">
               <Headphones className="h-4 w-4" />
-              Performance de Atendimento
+              Suporte
+            </TabsTrigger>
+            <TabsTrigger value="ai" className="flex items-center gap-2">
+              <Brain className="h-4 w-4" />
+              Inteligência Artificial
+            </TabsTrigger>
+            <TabsTrigger value="onboarding" className="flex items-center gap-2">
+              <Rocket className="h-4 w-4" />
+              Onboarding
+            </TabsTrigger>
+            <TabsTrigger value="whatsapp" className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp
             </TabsTrigger>
             <TabsTrigger value="sales" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
-              Performance Comercial
+              Vendas
             </TabsTrigger>
           </TabsList>
 
@@ -180,8 +199,11 @@ export default function Analytics() {
             {/* The 3 Clocks: FRT, MTTR, CSAT */}
             <SupportKPIsWidget startDate={startDate} endDate={endDate} />
 
-            {/* Churn Analytics - Global View */}
-            <ChurnAnalyticsWidget />
+            {/* SLA Compliance + Team Efficiency */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <SLAComplianceWidget startDate={startDate} endDate={endDate} />
+              <TeamEfficiencyWidget startDate={startDate} endDate={endDate} />
+            </div>
 
             {/* Volume vs Resolution + Busy Hours Heatmap */}
             <div className="grid gap-6 md:grid-cols-2">
@@ -195,13 +217,33 @@ export default function Analytics() {
               <SentimentDistributionWidget startDate={startDate} endDate={endDate} />
             </div>
 
-            {/* AI Usage */}
-            <div className="w-full">
+            {/* Churn Analytics */}
+            <ChurnAnalyticsWidget />
+          </TabsContent>
+
+          {/* TAB 2: AI Analytics */}
+          <TabsContent value="ai" className="space-y-6">
+            {/* AI Economy Chart */}
+            <AIEconomyWidget startDate={startDate} endDate={endDate} />
+
+            {/* AI Usage + Top Topics */}
+            <div className="grid gap-6 md:grid-cols-2">
               <AIUsageWidget startDate={startDate} endDate={endDate} />
+              <TopTopicsWidget startDate={startDate} endDate={endDate} />
             </div>
           </TabsContent>
 
-          {/* TAB 2: Sales Performance */}
+          {/* TAB 3: Onboarding Funnel */}
+          <TabsContent value="onboarding" className="space-y-6">
+            <OnboardingFunnelWidget startDate={startDate} endDate={endDate} />
+          </TabsContent>
+
+          {/* TAB 4: WhatsApp Traffic */}
+          <TabsContent value="whatsapp" className="space-y-6">
+            <WhatsAppTrafficWidget startDate={startDate} endDate={endDate} />
+          </TabsContent>
+
+          {/* TAB 5: Sales Performance */}
           <TabsContent value="sales" className="space-y-6">
             {/* Cadence Performance - Full Width */}
             <CadencePerformanceWidget />
