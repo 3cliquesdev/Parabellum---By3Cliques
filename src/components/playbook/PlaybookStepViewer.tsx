@@ -138,13 +138,13 @@ export function PlaybookStepViewer({
         <div className="relative rounded-xl overflow-hidden shadow-2xl border border-border/50 bg-gradient-to-b from-background/80 to-muted">
           {/* Player SEMPRE renderizado com o link real do usuário */}
           <div className="aspect-video relative bg-black">
-            {React.createElement(ReactPlayer as any, {
-              url: trimmedUrl,
-              width: '100%',
-              height: '100%',
-              controls: true,
-              playing: false,
-              light: false,
+          {React.createElement(ReactPlayer as any, {
+            url: trimmedUrl,
+            width: '100%',
+            height: '100%',
+            controls: true,
+            playing: false,
+            light: true,
               onReady: () => {
                 console.log('✅ ReactPlayer pronto para:', trimmedUrl);
               },
