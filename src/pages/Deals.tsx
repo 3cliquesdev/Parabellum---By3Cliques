@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Plus, TrendingUp, Flame, Skull, DollarSign } from "lucide-react";
 import { useDeals, useUpdateDeal, useUpdateDealStage } from "@/hooks/useDeals";
 import { useStages } from "@/hooks/useStages";
@@ -372,12 +373,15 @@ export default function Deals() {
       </div>
 
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-6 overflow-x-auto pb-4">
-          {stages.map((stage) => {
-            const stageDeals = filteredDeals?.filter((deal) => deal.stage_id === stage.id) || [];
-            return <KanbanColumn key={stage.id} stage={stage} deals={stageDeals as Deal[]} />;
-          })}
-        </div>
+        <ScrollArea className="w-full whitespace-nowrap rounded-lg">
+          <div className="flex gap-6 pb-4">
+            {stages.map((stage) => {
+              const stageDeals = filteredDeals?.filter((deal) => deal.stage_id === stage.id) || [];
+              return <KanbanColumn key={stage.id} stage={stage} deals={stageDeals as Deal[]} />;
+            })}
+          </div>
+          <ScrollBar orientation="horizontal" className="h-3" />
+        </ScrollArea>
 
         <DragOverlay>
           {activeDeal ? <KanbanCard deal={activeDeal} /> : null}
