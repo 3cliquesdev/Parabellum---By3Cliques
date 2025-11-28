@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, Mail, CheckSquare, Phone, GitBranch, UserCheck, FastForward, Eye } from "lucide-react";
+import { Clock, Mail, CheckSquare, Phone, GitBranch, UserCheck, FastForward, Eye, Lock, CheckCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Node } from "reactflow";
 import { PlaybookStepViewer } from "./PlaybookStepViewer";
 import { EmailPreviewModal } from "./EmailPreviewModal";
@@ -135,16 +136,8 @@ export function SimulatorStepRenderer({
 
   // TASK NODE (Video + Quiz + Rich Content)
   if (node.type === "task") {
+    const [isVideoLocked, setIsVideoLocked] = useState(false);
     const hasVideo = node.data.video_url?.trim();
-    
-    // DEBUG: Log para verificar se o vídeo está chegando
-    console.log("🎬 SimulatorStepRenderer - Task Node:", {
-      nodeId: node.id,
-      label: node.data.label,
-      video_url: node.data.video_url,
-      hasVideo,
-      fullNodeData: node.data
-    });
     
     return (
       <div className="space-y-4">
@@ -157,7 +150,8 @@ export function SimulatorStepRenderer({
           quiz_question={node.data.quiz_question}
           quiz_options={node.data.quiz_options}
           quiz_correct_option={node.data.quiz_correct_option}
-          onVideoEnded={() => console.log("Video completed in simulation")}
+          onVideoEnded={() => setIsVideoLocked(false)}
+          onLockStateChange={setIsVideoLocked}
           onQuizPassed={() => {
             toast({
               title: "✅ Quiz Passou!",
@@ -166,9 +160,28 @@ export function SimulatorStepRenderer({
           }}
         />
 
-        <Button onClick={() => onComplete()} className="w-full gap-2">
-          <CheckSquare className="h-4 w-4" />
-          ⏭️ Próximo Passo
+        {/* BOTÃO COM TRAVA VISUAL */}
+        <Button 
+          onClick={() => onComplete()} 
+          disabled={isVideoLocked}
+          className={cn(
+            "w-full gap-2 transition-all",
+            isVideoLocked 
+              ? "bg-gray-400 cursor-not-allowed opacity-50" 
+              : "bg-green-600 hover:bg-green-700 animate-pulse"
+          )}
+        >
+          {isVideoLocked ? (
+            <>
+              <Lock className="h-4 w-4" />
+              🔒 Assista até o final para liberar
+            </>
+          ) : (
+            <>
+              <CheckCircle className="h-4 w-4" />
+              ✅ Concluir e Avançar
+            </>
+          )}
         </Button>
       </div>
     );
