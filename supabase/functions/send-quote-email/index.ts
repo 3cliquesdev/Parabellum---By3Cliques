@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface SendQuoteEmailRequest {
   quote_id: string;
+  frontend_url: string;
 }
 
 serve(async (req) => {
@@ -16,7 +17,7 @@ serve(async (req) => {
   }
 
   try {
-    const { quote_id }: SendQuoteEmailRequest = await req.json();
+    const { quote_id, frontend_url }: SendQuoteEmailRequest = await req.json();
 
     console.log('[send-quote-email] Processing quote:', quote_id);
 
@@ -53,7 +54,7 @@ serve(async (req) => {
     }
 
     // Generate public link
-    const publicLink = `${Deno.env.get('SUPABASE_URL')?.replace('/rest/v1', '')}/public-quote/${quote.signature_token}`;
+    const publicLink = `${frontend_url}/public-quote/${quote.signature_token}`;
 
     // Calculate totals
     const items = quote.items as any[] || [];
@@ -145,9 +146,9 @@ serve(async (req) => {
             </a>
           </div>
 
-          ${quote.expires_at ? `
+          ${quote.expiration_date ? `
             <p style="text-align: center; color: #dc2626; font-weight: bold; margin: 20px 0; padding: 15px; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
-              ⚠️ Proposta válida até: ${new Date(quote.expires_at).toLocaleDateString('pt-BR')}
+              ⚠️ Proposta válida até: ${new Date(quote.expiration_date).toLocaleDateString('pt-BR')}
             </p>
           ` : ''}
 

@@ -9,7 +9,10 @@ export function useSendQuote() {
   return useMutation({
     mutationFn: async (quoteId: string) => {
       const { data, error } = await supabase.functions.invoke('send-quote-email', {
-        body: { quote_id: quoteId },
+        body: { 
+          quote_id: quoteId,
+          frontend_url: window.location.origin
+        },
       });
 
       if (error) throw error;
