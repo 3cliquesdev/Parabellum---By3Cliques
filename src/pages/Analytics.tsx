@@ -11,6 +11,7 @@ import { BusyHoursHeatmap } from "@/components/widgets/BusyHoursHeatmap";
 import { ChatConversionFunnel } from "@/components/widgets/ChatConversionFunnel";
 import { RevenueByChannelWidget } from "@/components/widgets/RevenueByChannelWidget";
 import { TeamPerformanceTable } from "@/components/widgets/TeamPerformanceTable";
+import { ChurnAnalyticsWidget } from "@/components/widgets/ChurnAnalyticsWidget";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
@@ -175,6 +176,9 @@ export default function Analytics() {
           <TabsContent value="support" className="space-y-6">
             {/* The 3 Clocks: FRT, MTTR, CSAT */}
             <SupportKPIsWidget startDate={startDate} endDate={endDate} />
+
+            {/* Churn Analytics - Global View */}
+            <ChurnAnalyticsWidget />
 
             {/* Volume vs Resolution + Busy Hours Heatmap */}
             <div className="grid gap-6 md:grid-cols-2">
