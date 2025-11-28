@@ -33,6 +33,7 @@ export function SimulatorStepRenderer({
   const [emailPreviewOpen, setEmailPreviewOpen] = useState(false);
   const [emailHtml, setEmailHtml] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
+  const [isVideoLocked, setIsVideoLocked] = useState(false);
 
   // EMAIL NODE
   if (node.type === "email") {
@@ -136,7 +137,6 @@ export function SimulatorStepRenderer({
 
   // TASK NODE (Video + Quiz + Rich Content)
   if (node.type === "task") {
-    const [isVideoLocked, setIsVideoLocked] = useState(false);
     const hasVideo = node.data.video_url?.trim();
     
     // DEBUG: Log estado do botão
