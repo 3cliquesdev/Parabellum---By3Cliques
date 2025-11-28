@@ -14,13 +14,21 @@ import { Textarea } from '@/components/ui/textarea';
 const extractVideoUrl = (input: string): string | null => {
   if (!input?.trim()) return null;
   
-  const trimmed = input.trim();
+  let trimmed = input.trim();
   
   // Se for iframe, extrair src
   const iframeMatch = trimmed.match(/<iframe[^>]+src=["']([^"']+)["']/i);
   if (iframeMatch) {
-    console.log('🎬 Iframe detectado! URL extraída:', iframeMatch[1]);
-    return iframeMatch[1];
+    trimmed = iframeMatch[1];
+  }
+  
+  // Normalizar URLs do YouTube /embed/ para formato watch?v=
+  if (trimmed.includes('youtube.com/embed/')) {
+    const parts = trimmed.split('youtube.com/embed/')[1];
+    const id = parts?.split(/[?"']/)[0];
+    if (id) {
+      trimmed = `https://www.youtube.com/watch?v=${id}`;
+    }
   }
   
   // Se for URL direta, retornar
