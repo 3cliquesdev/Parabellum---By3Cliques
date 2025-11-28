@@ -40,6 +40,7 @@ export function useCreateProduct() {
       delivery_group_id?: string | null;
       requires_account_manager: boolean;
       is_active: boolean;
+      price?: number;
     }) => {
       const { data, error } = await supabase
         .from("products")
@@ -83,6 +84,7 @@ export function useUpdateProduct() {
         delivery_group_id: string | null;
         requires_account_manager: boolean;
         is_active: boolean;
+        price: number;
       }>;
     }) => {
       const { data, error } = await supabase

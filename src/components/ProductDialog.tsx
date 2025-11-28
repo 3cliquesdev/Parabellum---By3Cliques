@@ -38,6 +38,7 @@ const productSchema = z.object({
   delivery_group_id: z.string().optional(),
   requires_account_manager: z.boolean(),
   is_active: z.boolean(),
+  price: z.number().min(0, "Preço não pode ser negativo").optional(),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -53,6 +54,7 @@ interface ProductDialogProps {
     delivery_group_id: string | null;
     requires_account_manager: boolean;
     is_active: boolean;
+    price: number | null;
     delivery_groups?: {
       id: string;
       name: string;
@@ -74,6 +76,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       delivery_group_id: product?.delivery_group_id || "none",
       requires_account_manager: product?.requires_account_manager || false,
       is_active: product?.is_active ?? true,
+      price: product?.price || 0,
     },
   });
 
@@ -86,6 +89,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       delivery_group_id: product?.delivery_group_id || "none",
       requires_account_manager: product?.requires_account_manager || false,
       is_active: product?.is_active ?? true,
+      price: product?.price || 0,
     });
   }, [product, form]);
 
@@ -102,6 +106,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
           delivery_group_id: delivery_group_id || undefined,
           requires_account_manager: data.requires_account_manager,
           is_active: data.is_active,
+          price: data.price || 0,
         },
       });
     } else {
@@ -112,6 +117,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
         delivery_group_id: delivery_group_id || undefined,
         requires_account_manager: data.requires_account_manager,
         is_active: data.is_active,
+        price: data.price || 0,
       });
     }
 
@@ -139,6 +145,30 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
                   <FormControl>
                     <Input placeholder="Ex: Mentoria High Ticket" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Preço (R$)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0,00"
+                      {...field}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Valor base do produto para propostas comerciais
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
