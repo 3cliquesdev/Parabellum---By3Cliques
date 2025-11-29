@@ -32,8 +32,21 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
 
   // Check role permissions (if allowedRoles is specified)
   if (allowedRoles && role && !allowedRoles.includes(role as "admin" | "manager" | "sales_rep" | "consultant" | "support_agent" | "support_manager" | "financial_manager")) {
-    console.log("ProtectedRoute: User lacks required role, redirecting to /");
-    return <Navigate to="/" replace />;
+    console.log("ProtectedRoute: User lacks required role, smart redirecting based on role");
+    
+    // Smart redirect based on user role
+    const roleHomePage: Record<string, string> = {
+      support_manager: "/support",
+      support_agent: "/support",
+      financial_manager: "/support",
+      consultant: "/my-portfolio",
+      sales_rep: "/",
+      admin: "/",
+      manager: "/",
+    };
+    
+    const targetPage = roleHomePage[role] || "/";
+    return <Navigate to={targetPage} replace />;
   }
 
   console.log("ProtectedRoute: Rendering protected content");

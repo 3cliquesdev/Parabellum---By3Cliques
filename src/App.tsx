@@ -114,7 +114,7 @@ const App = () => {
           <Route path="/public-chat/:conversationId" element={<PublicChatWindow />} />
             <Route path="/open-ticket" element={<PublicTicketForm />} />
             <Route path="/tv" element={<TVMode />} />
-            <Route path="/" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><Dashboard /></Layout></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager", "support_manager", "financial_manager"]}><Layout><Dashboard /></Layout></ProtectedRoute>} />
             <Route path="/inbox" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "sales_rep", "admin", "manager"]}><Layout><Inbox /></Layout></ProtectedRoute>} />
             <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["consultant", "sales_rep", "manager", "admin"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "admin", "manager"]}><Layout><Contacts /></Layout></ProtectedRoute>} />
@@ -130,7 +130,7 @@ const App = () => {
             <Route path="/email-templates" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><EmailTemplates /></Layout></ProtectedRoute>} />
             <Route path="/onboarding-builder" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><OnboardingBuilder /></Layout></ProtectedRoute>} />
             <Route path="/playbook-executions" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
-            <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "manager", "support_manager"]}><Layout><Analytics /></Layout></ProtectedRoute>} />
+            <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "manager", "support_manager", "financial_manager"]}><Layout><Analytics /></Layout></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Layout><Reports /></Layout></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><Goals /></Layout></ProtectedRoute>} />
             <Route path="/cadences" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager"]}><Layout><Cadences /></Layout></ProtectedRoute>} />
