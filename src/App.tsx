@@ -133,7 +133,7 @@ const App = () => {
             <Route path="/contacts/:id" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "cs_manager", "admin", "general_manager", "manager"]}><Layout><ContactDetails /></Layout></ProtectedRoute>} />
             <Route path="/organizations" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "general_manager", "manager"]}><Layout><Organizations /></Layout></ProtectedRoute>} />
             <Route path="/deals" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager"]}><Layout><Deals /></Layout></ProtectedRoute>} />
-            <Route path="/quotes" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "sales_rep"]}><Layout><Quotes /></Layout></ProtectedRoute>} />
+            <Route path="/quotes" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "sales_rep", "financial_manager"]}><Layout><Quotes /></Layout></ProtectedRoute>} />
             <Route path="/quotes/new" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "sales_rep"]}><Layout><QuoteBuilder /></Layout></ProtectedRoute>} />
             <Route path="/public-quote/:token" element={<PublicQuote />} />
             <Route path="/forms" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><Forms /></Layout></ProtectedRoute>} />
@@ -142,8 +142,8 @@ const App = () => {
             <Route path="/email-templates" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><EmailTemplates /></Layout></ProtectedRoute>} />
             <Route path="/onboarding-builder" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager"]}><Layout><OnboardingBuilder /></Layout></ProtectedRoute>} />
             <Route path="/playbook-executions" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager"]}><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
-            <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "support_manager", "financial_manager", "cs_manager"]}><Layout><Analytics /></Layout></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager", "support_manager"]}><Layout><Reports /></Layout></ProtectedRoute>} />
+            <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager", "support_manager", "financial_manager"]}><Layout><Analytics /></Layout></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager", "support_manager", "financial_manager"]}><Layout><Reports /></Layout></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "general_manager", "manager"]}><Layout><Goals /></Layout></ProtectedRoute>} />
             <Route path="/goals-management" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager", "support_manager"]}><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
             <Route path="/cadences" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager"]}><Layout><Cadences /></Layout></ProtectedRoute>} />

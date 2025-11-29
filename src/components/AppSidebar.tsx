@@ -85,8 +85,18 @@ const supportManagerManagementItems = [
 ];
 
 // ============= FINANCIAL MANAGER MENU (💰) =============
-const financialManagerMainItems = [
+const financialManagerOverviewItems = [
+  { title: "Analytics", href: "/analytics", icon: BarChart3 },
+  { title: "Relatórios", href: "/reports", icon: FileText },
+];
+
+const financialManagerOperationsItems = [
   { title: "Tickets Financeiros", href: "/support", icon: Ticket },
+  { title: "Cotações", href: "/quotes", icon: Receipt },
+  { title: "Inbox", href: "/inbox", icon: MessageCircle },
+];
+
+const financialManagerCadastrosItems = [
   { title: "Contatos", href: "/contacts", icon: Users },
 ];
 
@@ -434,10 +444,28 @@ export function AppSidebar() {
             {isFinancialManager && !isAdmin && !isManager ? (
               <>
                 <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Financeiro</SidebarGroupLabel>}
+                  {!collapsed && <SidebarGroupLabel>Visão Geral</SidebarGroupLabel>}
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {financialManagerMainItems.map(renderMenuItem)}
+                      {financialManagerOverviewItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Operações Financeiras</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {financialManagerOperationsItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Cadastros</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {financialManagerCadastrosItems.map(renderMenuItem)}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
