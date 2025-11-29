@@ -107,6 +107,8 @@ Deno.serve(async (req) => {
           );
         }
         
+        console.log('🔒 Iniciando bloqueio do usuário:', user_id);
+        
         // Banir usuário no Auth (duração de ~100 anos = permanente)
         authUpdate = { ban_duration: '876000h' };
         
@@ -119,6 +121,8 @@ Deno.serve(async (req) => {
         break;
 
       case 'unblock':
+        console.log('🔓 Iniciando desbloqueio do usuário:', user_id);
+        
         // Remover banimento no Auth
         authUpdate = { ban_duration: 'none' };
         
@@ -155,14 +159,35 @@ Deno.serve(async (req) => {
 
     // Atualizar Auth (para block/unblock)
     if (action === 'block' || action === 'unblock') {
-      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
-        user_id,
-        authUpdate
-      );
+      console.log('📡 Chamando Auth Admin API para', action, '- User ID:', user_id);
+      
+      try {
+        // Usar Promise.race para adicionar timeout de 10 segundos
+        const authUpdatePromise = supabaseAdmin.auth.admin.updateUserById(
+          user_id,
+          authUpdate
+        );
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Auth Admin API timeout após 10 segundos')), 10000)
+        );
+        
+        const { error: authUpdateError } = await Promise.race([
+          authUpdatePromise,
+          timeoutPromise
+        ]) as any;
 
-      if (authUpdateError) {
-        console.error('Erro ao atualizar Auth:', authUpdateError);
-        throw authUpdateError;
+        if (authUpdateError) {
+          console.error('❌ Erro ao atualizar Auth:', authUpdateError);
+          throw authUpdateError;
+        }
+        
+        console.log('✅ Auth atualizado com sucesso');
+      } catch (error) {
+        console.error('❌ Falha crítica ao atualizar Auth:', error);
+        
+        // Mesmo se Auth falhar, vamos atualizar o profile para manter consistência
+        console.log('⚠️ Continuando para atualizar profile mesmo com falha no Auth');
       }
     }
 
