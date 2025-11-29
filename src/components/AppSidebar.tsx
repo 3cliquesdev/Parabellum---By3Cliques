@@ -85,6 +85,23 @@ const financialManagerMainItems = [
   { title: "Contatos", href: "/contacts", icon: Users },
 ];
 
+// ============= CS MANAGER MENU (👔) =============
+const csManagerMainItems = [
+  { title: "Dashboard CS", href: "/cs-management", icon: BarChart3 },
+  { title: "Carteiras", href: "/my-portfolio", icon: Briefcase },
+];
+
+const csManagerOperationItems = [
+  { title: "Inbox", href: "/inbox", icon: MessageCircle },
+  { title: "Tickets", href: "/support", icon: Ticket },
+  { title: "Clientes", href: "/contacts", icon: Users },
+];
+
+const csManagerAnalysisItems = [
+  { title: "Analytics", href: "/analytics", icon: BarChart3 },
+  { title: "Relatórios", href: "/reports", icon: FileText },
+];
+
 // ============= CONSULTANT MENU (🤝) =============
 const consultantMainItems = [
   { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase },
@@ -160,7 +177,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, isSupportManager, isFinancialManager, loading } = useUserRole();
+  const { isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, isSupportManager, isFinancialManager, isCSManager, loading } = useUserRole();
   const { signOut, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -172,6 +189,7 @@ export function AppSidebar() {
     if (isSupportManager && !isAdmin && !isManager) return { label: "👨‍💼 Gerente de Suporte", color: "bg-indigo-500" };
     if (isSupportAgent && !isSupportManager && !isAdmin && !isManager) return { label: "🛡️ Modo Suporte", color: "bg-blue-500" };
     if (isFinancialManager && !isAdmin && !isManager) return { label: "💰 Gerente Financeiro", color: "bg-emerald-500" };
+    if (isCSManager && !isAdmin && !isManager) return { label: "👔 Gerente de CS", color: "bg-purple-600" };
     if (isConsultant && !isAdmin && !isManager) return { label: "🤝 Modo Consultor", color: "bg-green-500" };
     if (isSalesRep && !isAdmin && !isManager) return { label: "🎯 Modo Vendas", color: "bg-orange-500" };
     if (isAdmin || isManager) return { label: "👑 Modo Admin", color: "bg-purple-500" };
@@ -322,6 +340,38 @@ export function AppSidebar() {
               </>
             ) : null}
 
+            {/* ============= CS MANAGER VIEW (👔) ============= */}
+            {isCSManager && !isAdmin && !isManager ? (
+              <>
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Gestão de CS</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {csManagerMainItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Operações</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {csManagerOperationItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Análise</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {csManagerAnalysisItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            ) : null}
+
             {/* ============= FINANCIAL MANAGER VIEW (💰) ============= */}
             {isFinancialManager && !isAdmin && !isManager ? (
               <>
@@ -459,63 +509,95 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-border p-4">
         {!collapsed ? (
           <div className="space-y-3">
-            {/* Availability Toggle for Consultants, Support Agents, and Support Managers */}
-            {(isConsultant || isSupportAgent || isSupportManager) && (
+            {/* Status Toggle - apenas para agentes/consultores */}
+            {(isSupportAgent || isConsultant || isSalesRep) && !isAdmin && !isManager && (
               <AvailabilityToggle />
             )}
-            
-            <div className="flex items-center gap-3 px-2">
+
+            {/* Profile info */}
+            <div className="flex items-center gap-3">
               <div className="relative">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                    {user?.email?.substring(0, 2).toUpperCase() || "US"}
+                <Avatar className="h-10 w-10">
+                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
+                    {user?.email?.[0].toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
-                {(isConsultant || isSupportAgent || isSupportManager) && (
-                  <span 
-                    className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-sidebar ${getStatusColor(availabilityStatus)}`}
-                  />
+                {/* Status indicator dot */}
+                {(isSupportAgent || isConsultant || isSalesRep) && !isAdmin && !isManager && (
+                  <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full border-2 border-sidebar ${getStatusColor(availabilityStatus)}`} />
                 )}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">Usuário</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              <div className="flex-1 overflow-hidden">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {user?.email?.split("@")[0] || "Usuário"}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {user?.email || ""}
+                </p>
               </div>
             </div>
+
+            {/* Action buttons */}
             <div className="flex gap-2">
+              <ProfileEditDialog trigger={
+                <Button variant="ghost" size="icon" className="h-9 w-9" title="Editar Perfil">
+                  <UserCog className="h-4 w-4" />
+                </Button>
+              } />
               <ModeToggle />
-              <ProfileEditDialog
-                trigger={
-                  <Button variant="ghost" size="sm" className="flex-1 gap-2">
-                    <Settings className="h-4 w-4" />
-                    Perfil
-                  </Button>
-                }
-              />
-              <Button variant="ghost" size="sm" onClick={handleSignOut} className="flex-1 gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSignOut}
+                title="Sair"
+                className="h-9 w-9"
+              >
                 <LogOut className="h-4 w-4" />
-                Sair
               </Button>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {/* Availability Toggle for Consultants, Support Agents, and Support Managers (collapsed) */}
-            {(isConsultant || isSupportAgent || isSupportManager) && (
-              <AvailabilityToggle />
+          <div className="space-y-2">
+            {/* Status Toggle - apenas para agentes/consultores */}
+            {(isSupportAgent || isConsultant || isSalesRep) && !isAdmin && !isManager && (
+              <div className="flex justify-center">
+                <AvailabilityToggle />
+              </div>
             )}
-            
-            <ModeToggle />
-            <ProfileEditDialog
-              trigger={
-                <Button variant="ghost" size="sm" className="w-full">
-                  <Settings className="h-4 w-4" />
+
+            {/* Avatar with status */}
+            <div className="flex justify-center">
+              <div className="relative">
+                <Avatar className="h-10 w-10">
+                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
+                    {user?.email?.[0].toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+                {/* Status indicator dot */}
+                {(isSupportAgent || isConsultant || isSalesRep) && !isAdmin && !isManager && (
+                  <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full border-2 border-sidebar ${getStatusColor(availabilityStatus)}`} />
+                )}
+              </div>
+            </div>
+
+            {/* Compact action buttons */}
+            <div className="flex flex-col gap-1">
+              <ProfileEditDialog trigger={
+                <Button variant="ghost" size="icon" className="h-9 w-9 mx-auto" title="Editar Perfil">
+                  <UserCog className="h-4 w-4" />
                 </Button>
-              }
-            />
-            <Button variant="ghost" size="sm" onClick={handleSignOut} className="w-full">
-              <LogOut className="h-4 w-4" />
-            </Button>
+              } />
+              <ModeToggle />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSignOut}
+                className="h-9 w-9 mx-auto"
+                title="Sair"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </SidebarFooter>

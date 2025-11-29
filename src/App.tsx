@@ -39,6 +39,7 @@ import Knowledge from "./pages/Knowledge";
 import PublicTicketForm from "./pages/PublicTicketForm";
 import AIStudio from "./pages/AIStudio";
 import MyPortfolio from "./pages/MyPortfolio";
+import CSManagement from "./pages/CSManagement";
 import OnboardingBuilder from "./pages/OnboardingBuilder";
 import PlaybookExecutions from "./pages/PlaybookExecutions";
 import KnowledgeImport from "./pages/KnowledgeImport";
@@ -118,7 +119,8 @@ const App = () => {
             <Route path="/tv" element={<TVMode />} />
             <Route path="/" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager", "support_manager", "financial_manager"]}><Layout><Dashboard /></Layout></ProtectedRoute>} />
             <Route path="/inbox" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "sales_rep", "admin", "manager"]}><Layout><Inbox /></Layout></ProtectedRoute>} />
-            <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["consultant", "sales_rep", "manager", "admin"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
+            <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["consultant", "sales_rep", "manager", "admin", "cs_manager"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
+            <Route path="/cs-management" element={<ProtectedRoute allowedRoles={["cs_manager", "admin"]}><CSManagement /></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "admin", "manager"]}><Layout><Contacts /></Layout></ProtectedRoute>} />
             <Route path="/contacts/:id" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "admin", "manager"]}><Layout><ContactDetails /></Layout></ProtectedRoute>} />
             <Route path="/organizations" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "manager"]}><Layout><Organizations /></Layout></ProtectedRoute>} />
