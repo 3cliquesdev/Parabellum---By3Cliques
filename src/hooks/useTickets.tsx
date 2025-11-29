@@ -5,12 +5,12 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 type TicketStatus = 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed';
 
-export function useTickets(statusFilter?: TicketStatus, assignedFilter?: 'mine' | 'unassigned' | 'all') {
+export function useTickets(statusFilter?: TicketStatus, assignedFilter?: 'mine' | 'unassigned' | 'all', agentFilter?: string) {
   const { user } = useAuth();
   const { role } = useUserRole();
 
   return useQuery({
-    queryKey: ["tickets", statusFilter, assignedFilter, user?.id],
+    queryKey: ["tickets", statusFilter, assignedFilter, agentFilter, user?.id],
     queryFn: async () => {
       if (!user) return [];
 
@@ -56,7 +56,14 @@ export function useTickets(statusFilter?: TicketStatus, assignedFilter?: 'mine' 
         query = query.is("assigned_to", null);
       }
 
+      // Filtro por agente específico (para support_manager auditar)
+      if (agentFilter) {
+        query = query.eq("assigned_to", agentFilter);
+      }
+
       // Sales rep só vê tickets atribuídos a ele (já filtrado por RLS)
+      // Support Agent só vê tickets atribuídos ou não atribuídos (RLS)
+      // Support Manager vê todos (RLS)
       // Admin/Manager veem todos (permitido por RLS)
 
       const { data, error } = await query;

@@ -11,15 +11,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useNavigate } from "react-router-dom";
 import { useUsers } from "@/hooks/useUsers";
 
-interface UserWithRole {
-  id: string;
-  email: string;
-  created_at: string;
-  role: "admin" | "manager" | "sales_rep" | "consultant";
-  full_name?: string;
-  job_title?: string;
-  avatar_url?: string;
-}
+// Import type from useUsers hook
+type UserWithRole = NonNullable<ReturnType<typeof useUsers>['data']>[number];
 
 export default function Users() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -73,6 +66,9 @@ export default function Users() {
     manager: "Gerente de Vendas",
     sales_rep: "Vendedor",
     consultant: "Consultor",
+    support_agent: "Agente de Suporte",
+    support_manager: "Gerente de Suporte",
+    financial_manager: "Gerente Financeiro",
   };
 
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "outline" => {
