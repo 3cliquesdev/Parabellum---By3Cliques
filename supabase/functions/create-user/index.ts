@@ -174,9 +174,15 @@ serve(async (req) => {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <!-- HEADER COM LOGO -->
         <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-          <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png" 
+          <p style="color: #94a3b8; font-size: 10px; text-transform: uppercase; letter-spacing: 3px; margin: 0 0 15px 0;">
+            ECOSSISTEMA PARABELLUM
+          </p>
+          <img src="https://parabellum.work/images/logo-parabellum-email.png" 
                alt="PARABELLUM" 
-               style="max-width: 200px; height: auto;" />
+               style="max-width: 180px; height: auto;" />
+          <p style="color: #64748b; font-size: 11px; margin: 15px 0 0 0;">
+            operado por <strong style="color: #94a3b8;">3 Cliques</strong>
+          </p>
         </div>
         
         <!-- CONTEÚDO -->
@@ -238,8 +244,11 @@ serve(async (req) => {
         
         <!-- FOOTER -->
         <div style="background: #1e3a5f; padding: 20px; text-align: center;">
-          <p style="color: #94a3b8; margin: 0; font-size: 12px;">
+          <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
             Departamento de Segurança - PARABELLUM
+          </p>
+          <p style="color: #64748b; margin: 0; font-size: 11px;">
+            Ambiente Seguro. Operado por 3 Cliques.
           </p>
         </div>
       </div>
