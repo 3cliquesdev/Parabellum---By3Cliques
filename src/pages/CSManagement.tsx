@@ -55,28 +55,28 @@ export default function CSManagement() {
 
   return (
     <Layout>
-      <div className="container mx-auto p-6 space-y-6">
+      <div className="container mx-auto p-4 md:p-6 space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Dashboard do Gerente de CS</h1>
-            <p className="text-muted-foreground mt-1">Visão estratégica da operação de Customer Success</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard do Gerente de CS</h1>
+            <p className="text-sm text-muted-foreground mt-1">Visão estratégica da operação de Customer Success</p>
           </div>
         </div>
 
         {/* KPIs Compactos - Grid 4 colunas */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* ARR Total */}
           <Card className="p-4 h-28 flex flex-col justify-between">
             {kpisLoading ? (
               <Skeleton className="h-full" />
             ) : (
               <>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">ARR Total</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">ARR Total</span>
                   <DollarSign className="w-4 h-4 text-emerald-600" />
                 </div>
-                <div className="text-3xl font-bold text-foreground">{formatCurrency(kpis?.arrTotal || 0)}</div>
+                <div className="text-2xl font-bold text-foreground truncate">{formatCurrency(kpis?.arrTotal || 0)}</div>
                 <p className="text-xs text-muted-foreground">Receita Recorrente Anual</p>
               </>
             )}
@@ -88,11 +88,11 @@ export default function CSManagement() {
               <Skeleton className="h-full" />
             ) : (
               <>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Churn Rate</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">Churn Rate</span>
                   <TrendingDown className="w-4 h-4 text-rose-600" />
                 </div>
-                <div className="text-3xl font-bold text-foreground">{kpis?.churnRateMonthly.toFixed(1)}%</div>
+                <div className="text-2xl font-bold text-foreground">{kpis?.churnRateMonthly.toFixed(1)}%</div>
                 <p className="text-xs text-muted-foreground">Perdas este mês</p>
               </>
             )}
@@ -104,11 +104,11 @@ export default function CSManagement() {
               <Skeleton className="h-full" />
             ) : (
               <>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Expansão</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">Expansão</span>
                   <TrendingUp className="w-4 h-4 text-blue-600" />
                 </div>
-                <div className="text-3xl font-bold text-foreground">{formatCurrency(kpis?.upsellRevenue || 0)}</div>
+                <div className="text-2xl font-bold text-foreground truncate">{formatCurrency(kpis?.upsellRevenue || 0)}</div>
                 <p className="text-xs text-muted-foreground">Upsell este mês</p>
               </>
             )}
@@ -120,12 +120,12 @@ export default function CSManagement() {
               <Skeleton className="h-full" />
             ) : (
               <>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Saúde da Base</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">Saúde da Base</span>
                   <Users className="w-4 h-4 text-slate-600" />
                 </div>
-                <div className="text-3xl font-bold text-foreground">{totalClients}</div>
-                <div className="flex items-center gap-2">
+                <div className="text-2xl font-bold text-foreground">{totalClients}</div>
+                <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
                     <span className="text-xs font-medium">{kpis?.healthDistribution.green || 0}</span>
@@ -145,23 +145,23 @@ export default function CSManagement() {
         </div>
 
         {/* Seção Visual - 2 colunas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Gráfico de Rosca - Saúde da Base */}
-          <Card className="p-4">
-            <h3 className="text-lg font-semibold text-foreground mb-2">Distribuição de Saúde</h3>
+          <Card className="p-5">
+            <h3 className="text-base font-semibold text-foreground mb-3">Distribuição de Saúde</h3>
             {kpisLoading ? (
-              <Skeleton className="h-64" />
+              <Skeleton className="h-56" />
             ) : (
-              <div className="relative h-64">
+              <div className="relative h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={healthData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={90}
-                      paddingAngle={2}
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={3}
                       dataKey="value"
                     >
                       {healthData.map((entry, index) => (
@@ -172,33 +172,33 @@ export default function CSManagement() {
                 </ResponsiveContainer>
                 {/* Número no centro - Apple Style */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <div className="text-4xl font-bold text-foreground">{totalClients}</div>
-                  <div className="text-sm text-muted-foreground">Clientes</div>
+                  <div className="text-3xl font-bold text-foreground">{totalClients}</div>
+                  <div className="text-xs text-muted-foreground">Clientes</div>
                 </div>
               </div>
             )}
-            <div className="flex items-center justify-center gap-6 mt-2">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center gap-4 mt-3">
+              <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                <span className="text-sm text-muted-foreground">Saudável</span>
+                <span className="text-xs text-muted-foreground">Saudável</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                <span className="text-sm text-muted-foreground">Atenção</span>
+                <span className="text-xs text-muted-foreground">Atenção</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-rose-500"></div>
-                <span className="text-sm text-muted-foreground">Crítico</span>
+                <span className="text-xs text-muted-foreground">Crítico</span>
               </div>
             </div>
           </Card>
 
           {/* Clientes em UTI - Compacto */}
-          <Card className="p-4">
+          <Card className="p-5">
             <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-5 h-5 text-rose-600" />
-              <h3 className="text-lg font-semibold text-foreground">🚨 Clientes em UTI</h3>
-              <Badge variant="error">{criticalClients?.length || 0}</Badge>
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
+              <h3 className="text-base font-semibold text-foreground">🚨 Clientes em UTI</h3>
+              <Badge variant="error" className="text-xs">{criticalClients?.length || 0}</Badge>
             </div>
             <p className="text-xs text-muted-foreground mb-3">
               Top clientes de maior valor com saúde crítica. Ação imediata necessária.
@@ -207,38 +207,38 @@ export default function CSManagement() {
             {criticalLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-12" />
+                  <Skeleton key={i} className="h-16" />
                 ))}
               </div>
             ) : criticalClients && criticalClients.length > 0 ? (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-2">
                 {criticalClients.slice(0, 5).map((client) => (
-                  <div key={client.id} className="flex items-center justify-between p-2 border rounded hover:bg-accent/50 transition-colors">
+                  <div key={client.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Avatar className="w-8 h-8">
+                      <Avatar className="w-9 h-9">
                         <AvatarImage src={client.avatar_url || undefined} />
                         <AvatarFallback className="text-xs">{client.first_name[0]}{client.last_name[0]}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm text-foreground truncate">{client.first_name} {client.last_name}</div>
-                        <div className="text-xs text-muted-foreground">{formatCurrency(client.total_ltv)}</div>
+                        <div className="text-xs text-muted-foreground truncate">{formatCurrency(client.total_ltv)}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       {client.phone && (
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => window.open(`https://wa.me/${client.phone}`, "_blank")}>
-                          <Phone className="w-3 h-3" />
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => window.open(`https://wa.me/${client.phone}`, "_blank")}>
+                          <Phone className="w-3.5 h-3.5" />
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => navigate(`/contacts/${client.id}`)}>
-                        <Eye className="w-3 h-3" />
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => navigate(`/contacts/${client.id}`)}>
+                        <Eye className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-6 text-muted-foreground">
+              <div className="text-center py-8 text-muted-foreground">
                 <AlertTriangle className="w-10 h-10 mx-auto mb-2 opacity-20" />
                 <p className="text-sm">Nenhum cliente crítico 🎉</p>
               </div>
@@ -247,8 +247,8 @@ export default function CSManagement() {
         </div>
 
         {/* Performance do Time - Full Width + Paginação */}
-        <Card className="p-4">
-          <h2 className="text-xl font-semibold text-foreground mb-4">📊 Performance do Time de CS</h2>
+        <Card className="p-5">
+          <h2 className="text-base font-semibold text-foreground mb-4">📊 Performance do Time de CS</h2>
           
           {consultantsLoading ? (
             <div className="space-y-3">
