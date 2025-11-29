@@ -91,6 +91,11 @@ const csManagerMainItems = [
   { title: "Carteiras", href: "/my-portfolio", icon: Briefcase },
 ];
 
+const csManagerOnboardingItems = [
+  { title: "Playbooks", href: "/onboarding-builder", icon: Workflow },
+  { title: "Execuções", href: "/playbook-executions", icon: CheckSquare },
+];
+
 const csManagerOperationItems = [
   { title: "Inbox", href: "/inbox", icon: MessageCircle },
   { title: "Tickets", href: "/support", icon: Ticket },
@@ -376,6 +381,15 @@ export function AppSidebar() {
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {csManagerMainItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Onboarding</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {csManagerOnboardingItems.map(renderMenuItem)}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
