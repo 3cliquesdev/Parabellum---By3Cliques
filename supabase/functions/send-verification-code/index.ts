@@ -76,15 +76,9 @@ serve(async (req) => {
           
         <!-- HEADER COM LOGO -->
         <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-          <p style="color: #94a3b8; font-size: 10px; text-transform: uppercase; letter-spacing: 3px; margin: 0 0 15px 0;">
-            ECOSSISTEMA PARABELLUM
-          </p>
           <img src="https://parabellum.work/images/logo-parabellum-email.png" 
                alt="PARABELLUM" 
-               style="max-width: 180px; height: auto;" />
-          <p style="color: #64748b; font-size: 11px; margin: 15px 0 0 0;">
-            operado por <strong style="color: #94a3b8;">3 Cliques</strong>
-          </p>
+               style="max-width: 200px; height: auto;" />
         </div>
           
           <!-- CONTAINER PRINCIPAL -->
@@ -96,7 +90,7 @@ serve(async (req) => {
             </p>
             
             <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
-              Recebemos uma solicitação de acesso à sua conta no <strong>Ecossistema Parabellum</strong>.
+              Recebemos uma solicitação de acesso à sua conta no <strong>Parabellum / 3 Cliques</strong>.
             </p>
             
             <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
@@ -122,7 +116,7 @@ serve(async (req) => {
                 ⚠️ ALERTA DE SEGURANÇA
               </h3>
               <p style="color: #78350f; font-size: 13px; line-height: 1.6; margin: 0 0 10px 0;">
-                <strong>Nunca compartilhe:</strong> A equipe Parabellum <u>jamais</u> solicitará este código por telefone, WhatsApp ou SMS.
+                <strong>Nunca compartilhe:</strong> A equipe Parabellum / 3 Cliques <u>jamais</u> solicitará este código por telefone, WhatsApp ou SMS.
               </p>
               <p style="color: #78350f; font-size: 13px; line-height: 1.6; margin: 0;">
                 <strong>Não foi você?</strong> Se você não solicitou este código, sua credencial pode estar comprometida. 
@@ -138,7 +132,7 @@ serve(async (req) => {
               <table style="width: 100%; font-size: 13px; color: #4b5563;">
                 <tr>
                   <td style="padding: 5px 0; color: #6b7280;">Sistema:</td>
-                  <td style="padding: 5px 0; font-weight: 500;">Parabellum CRM</td>
+                  <td style="padding: 5px 0; font-weight: 500;">Parabellum / 3 Cliques</td>
                 </tr>
                 <tr>
                   <td style="padding: 5px 0; color: #6b7280;">Data/Hora:</td>
@@ -159,12 +153,23 @@ serve(async (req) => {
           </div>
           
           <!-- FOOTER -->
-          <div style="background: #1e3a5f; padding: 20px; text-align: center;">
+          <div style="background: #1e3a5f; padding: 25px; text-align: center;">
+            <!-- Logos lado a lado -->
+            <div style="margin-bottom: 15px;">
+              <img src="https://parabellum.work/images/logo-parabellum-email.png" 
+                   alt="PARABELLUM" 
+                   style="max-width: 120px; height: auto; vertical-align: middle; margin-right: 15px;" />
+              <span style="color: #64748b; font-size: 18px; vertical-align: middle;">/</span>
+              <img src="https://parabellum.work/images/logo-3cliques-email.png" 
+                   alt="3 CLIQUES" 
+                   style="max-width: 100px; height: auto; vertical-align: middle; margin-left: 15px;" />
+            </div>
+            
             <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
-              Departamento de Segurança - PARABELLUM
+              Departamento de Segurança da Informação
             </p>
             <p style="color: #64748b; margin: 0; font-size: 11px;">
-              Ambiente Seguro. Operado por 3 Cliques.
+              Ambiente Seguro. Parabellum / 3 Cliques.
             </p>
           </div>
           
