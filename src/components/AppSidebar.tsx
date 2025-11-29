@@ -137,6 +137,7 @@ const salesRepProductivityItems = [
 // ============= SALES MANAGER MENU (📊) =============
 const salesManagerOverviewItems = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard },
+  { title: "Gestão de Vendas", href: "/sales-management", icon: TrendingUp },
   { title: "Analytics", href: "/analytics", icon: BarChart3 },
 ];
 

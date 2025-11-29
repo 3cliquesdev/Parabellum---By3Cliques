@@ -41,6 +41,8 @@ import PublicTicketForm from "./pages/PublicTicketForm";
 import AIStudio from "./pages/AIStudio";
 import MyPortfolio from "./pages/MyPortfolio";
 import CSManagement from "./pages/CSManagement";
+import SalesManagement from "./pages/SalesManagement";
+import SalesRepDetail from "./pages/SalesRepDetail";
 import OnboardingBuilder from "./pages/OnboardingBuilder";
 import PlaybookExecutions from "./pages/PlaybookExecutions";
 import KnowledgeImport from "./pages/KnowledgeImport";
@@ -125,6 +127,8 @@ const App = () => {
             <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["consultant", "sales_rep", "general_manager", "manager", "admin", "cs_manager"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
             <Route path="/cs-management" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><CSManagement /></Layout></ProtectedRoute>} />
             <Route path="/cs-management/consultant/:id" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><ConsultantDetail /></Layout></ProtectedRoute>} />
+            <Route path="/sales-management" element={<ProtectedRoute allowedRoles={["manager", "admin", "general_manager"]}><Layout><SalesManagement /></Layout></ProtectedRoute>} />
+            <Route path="/sales-management/rep/:id" element={<ProtectedRoute allowedRoles={["manager", "admin", "general_manager"]}><Layout><SalesRepDetail /></Layout></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "cs_manager", "admin", "general_manager", "manager"]}><Layout><Contacts /></Layout></ProtectedRoute>} />
             <Route path="/contacts/:id" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "cs_manager", "admin", "general_manager", "manager"]}><Layout><ContactDetails /></Layout></ProtectedRoute>} />
             <Route path="/organizations" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "general_manager", "manager"]}><Layout><Organizations /></Layout></ProtectedRoute>} />
