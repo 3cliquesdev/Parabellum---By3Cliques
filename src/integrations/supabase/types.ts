@@ -2942,6 +2942,7 @@ export type Database = {
         | "financial_manager"
         | "support_manager"
         | "cs_manager"
+        | "general_manager"
       automation_action:
         | "assign_to_user"
         | "create_activity"
@@ -3149,6 +3150,7 @@ export const Constants = {
         "financial_manager",
         "support_manager",
         "cs_manager",
+        "general_manager",
       ],
       automation_action: [
         "assign_to_user",
