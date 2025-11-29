@@ -79,6 +79,11 @@ const supportManagerToolsItems = [
   { title: "Contatos", href: "/contacts", icon: Users },
 ];
 
+const supportManagerManagementItems = [
+  { title: "Relatórios", href: "/reports", icon: FileText },
+  { title: "🎯 Definir Metas", href: "/goals-management", icon: Target },
+];
+
 // ============= FINANCIAL MANAGER MENU (💰) =============
 const financialManagerMainItems = [
   { title: "Tickets Financeiros", href: "/support", icon: Ticket },
@@ -164,13 +169,14 @@ const salesManagerProductivityItems = [
 // ============= ADMIN/GENERAL MANAGER MENU (👑) =============
 const adminOverviewItems = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard },
+  { title: "Gestão de Vendas", href: "/sales-management", icon: TrendingUp },
+  { title: "Dashboard CS", href: "/cs-management", icon: BarChart3 },
   { title: "Analytics", href: "/analytics", icon: BarChart3 },
 ];
 
 const adminOperationItems = [
   { title: "Inbox", href: "/inbox", icon: MessageCircle },
   { title: "Tickets", href: "/support", icon: Headphones },
-  { title: "Dashboard CS", href: "/cs-management", icon: BarChart3 },
   { title: "Negócios", href: "/deals", icon: TrendingUp },
   { title: "Propostas", href: "/quotes", icon: Receipt },
   { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase },
@@ -179,6 +185,7 @@ const adminOperationItems = [
 const adminCrmItems = [
   { title: "Contatos", href: "/contacts", icon: Users },
   { title: "Organizações", href: "/organizations", icon: Building2 },
+  { title: "Base de Conhecimento", href: "/knowledge", icon: Book },
 ];
 
   const adminStrategyItems = [
@@ -344,6 +351,15 @@ export function AppSidebar() {
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {supportManagerToolsItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Gestão</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {supportManagerManagementItems.map(renderMenuItem)}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
