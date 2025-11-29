@@ -69,15 +69,24 @@ export function useAuth() {
 
   const signOut = async () => {
     try {
-      // Clear local state first so UI updates immediately
+      // Clear local state first so UI updates imediatamente
       setUser(null);
       setProfile(null);
       setSession(null);
 
-      // Use local scope to avoid /logout 403 when server session is already gone
+      // Tenta encerrar a sessão local (sem depender do /logout do servidor)
       await supabase.auth.signOut({ scope: "local" });
     } catch (error: any) {
       console.error("useAuth: Logout error (ignored)", error);
+    } finally {
+      // Garantir remoção do token de autenticação do navegador
+      try {
+        const storageKey = "sb-zaeozfdjhrmblfaxsyuu-auth-token";
+        window.localStorage.removeItem(storageKey);
+        window.sessionStorage.removeItem(storageKey);
+      } catch (storageError) {
+        console.error("useAuth: Erro ao limpar storage de sessão", storageError);
+      }
     }
   };
 
