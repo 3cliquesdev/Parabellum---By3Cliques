@@ -85,7 +85,7 @@ export default function MyPortfolio() {
         <div className="flex items-center gap-3">
           <Briefcase className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold">Minha Carteira</h1>
+            <h1 className="text-3xl font-bold text-foreground">Minha Carteira</h1>
             <p className="text-muted-foreground">
               {clients?.length || 0} clientes ativos
             </p>
