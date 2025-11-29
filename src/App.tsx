@@ -148,7 +148,7 @@ const App = () => {
             <Route path="/knowledge" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "admin", "general_manager", "manager"]}><Layout><Knowledge /></Layout></ProtectedRoute>} />
             <Route path="/ai-studio/personas" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><AIStudio /></Layout></ProtectedRoute>} />
             <Route path="/import-clients" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><ImportClients /></Layout></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><Settings /></Layout></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><Settings /></Layout></ProtectedRoute>} />
             <Route path="/settings/email-templates" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><EmailTemplates /></ProtectedRoute>} />
             <Route path="/settings/products" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><Products /></Layout></ProtectedRoute>} />
             <Route path="/settings/delivery-groups" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><DeliveryGroups /></Layout></ProtectedRoute>} />

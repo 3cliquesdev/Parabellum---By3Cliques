@@ -39,9 +39,9 @@ export function useTeamGoalProgress(month: number, year: number) {
       // Determine team members based on manager role/department
       let teamMemberIds: string[] = operationalUsers.map(u => u.id);
 
-      // For managers and CS managers, restrict to same department
-      if (role === "manager" || role === "cs_manager") {
-        // Get manager department
+      // For managers and CS managers, restrict to same department AND role
+      if (role === "manager") {
+        // Sales Manager → only see sales_rep
         const { data: managerProfile, error: managerProfileError } = await supabase
           .from("profiles")
           .select("id, department")
@@ -63,9 +63,44 @@ export function useTeamGoalProgress(month: number, year: number) {
 
           if (teamProfilesError) throw teamProfilesError;
 
-          teamMemberIds = teamProfiles
-            .filter((profile) => profile.department === managerDepartment)
-            .map((profile) => profile.id);
+          // Filter by department AND sales_rep role
+          teamMemberIds = operationalUsers
+            .filter((u) => {
+              const profile = teamProfiles.find(p => p.id === u.id);
+              return profile?.department === managerDepartment && u.role === "sales_rep";
+            })
+            .map((u) => u.id);
+        }
+      } else if (role === "cs_manager") {
+        // CS Manager → only see consultant
+        const { data: managerProfile, error: managerProfileError } = await supabase
+          .from("profiles")
+          .select("id, department")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (managerProfileError) throw managerProfileError;
+
+        const managerDepartment = managerProfile?.department;
+
+        if (managerDepartment) {
+          const { data: teamProfiles, error: teamProfilesError } = await supabase
+            .from("profiles")
+            .select("id, department")
+            .in(
+              "id",
+              operationalUsers.map(u => u.id)
+            );
+
+          if (teamProfilesError) throw teamProfilesError;
+
+          // Filter by department AND consultant role
+          teamMemberIds = operationalUsers
+            .filter((u) => {
+              const profile = teamProfiles.find(p => p.id === u.id);
+              return profile?.department === managerDepartment && u.role === "consultant";
+            })
+            .map((u) => u.id);
         }
       }
 
