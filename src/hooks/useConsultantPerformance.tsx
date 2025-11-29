@@ -1,0 +1,102 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+export interface ConsultantPerformance {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+  portfolio_count: number;
+  portfolio_value: number;
+  avg_health_score: number;
+  last_activity: string | null;
+}
+
+export function useConsultantPerformance() {
+  return useQuery({
+    queryKey: ["consultant-performance"],
+    queryFn: async () => {
+      // Fetch all consultants
+      const { data: consultants, error: consultantsError } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url")
+        .in("id", 
+          (await supabase
+            .from("user_roles")
+            .select("user_id")
+            .eq("role", "consultant")
+          ).data?.map(r => r.user_id) || []
+        );
+
+      if (consultantsError) throw consultantsError;
+
+      // For each consultant, calculate their metrics
+      const performanceData: ConsultantPerformance[] = await Promise.all(
+        (consultants || []).map(async (consultant) => {
+          // Get their portfolio
+          const { data: portfolio, error: portfolioError } = await supabase
+            .from("contacts")
+            .select("subscription_plan, last_contact_date")
+            .eq("consultant_id", consultant.id)
+            .eq("status", "customer");
+
+          if (portfolioError) throw portfolioError;
+
+          const portfolio_count = portfolio?.length || 0;
+
+          // Calculate portfolio value
+          const portfolio_value = portfolio?.reduce((sum, contact) => {
+            const planValue = contact.subscription_plan?.match(/\d+/)?.[0];
+            return sum + (planValue ? parseFloat(planValue) * 12 : 0);
+          }, 0) || 0;
+
+          // Calculate average health score
+          const fourteenDaysAgo = new Date();
+          fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+          let healthScoreSum = 0;
+          portfolio?.forEach((contact) => {
+            if (!contact.last_contact_date) {
+              healthScoreSum += 0; // Red = 0
+            } else {
+              const lastContact = new Date(contact.last_contact_date);
+              if (lastContact < fourteenDaysAgo) {
+                healthScoreSum += 0; // Red
+              } else if (lastContact < sevenDaysAgo) {
+                healthScoreSum += 1; // Yellow
+              } else {
+                healthScoreSum += 2; // Green
+              }
+            }
+          });
+
+          const avg_health_score = portfolio_count > 0 ? healthScoreSum / portfolio_count : 0;
+
+          // Get last activity (last interaction created by this consultant)
+          const { data: lastActivity } = await supabase
+            .from("interactions")
+            .select("created_at")
+            .eq("created_by", consultant.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          return {
+            id: consultant.id,
+            full_name: consultant.full_name || "Sem nome",
+            avatar_url: consultant.avatar_url,
+            portfolio_count,
+            portfolio_value,
+            avg_health_score,
+            last_activity: lastActivity?.created_at || null,
+          };
+        })
+      );
+
+      // Sort by portfolio value descending
+      return performanceData.sort((a, b) => b.portfolio_value - a.portfolio_value);
+    },
+    staleTime: 2 * 60 * 1000,
+  });
+}
