@@ -60,38 +60,38 @@
   }
 
   .dark {
-    /* STEALTH MODE - Cinza Profundo Azulado */
-    --background: 222 47% 5%;          /* #0B0E14 - Quase preto azulado */
-    --foreground: 210 20% 85%;         /* #D1D5DB - Não branco puro (gray-300) */
+    /* TRUE BLACK - Preto Sólido Neutro */
+    --background: 0 0% 1%;             /* #020202 - Preto quase absoluto */
+    --foreground: 0 0% 93%;            /* #EDEDED - zinc-100 */
     
     /* SIDEBAR - Variáveis Completas */
-    --sidebar-background: 222 47% 6%;
-    --sidebar-foreground: 210 20% 85%;
+    --sidebar-background: 0 0% 3%;     /* #080808 */
+    --sidebar-foreground: 0 0% 93%;
     --sidebar-primary: 221.2 83.2% 53.3%;
     --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 222 47% 10%;
-    --sidebar-accent-foreground: 210 20% 85%;
-    --sidebar-border: 220 13% 15%;
+    --sidebar-accent: 0 0% 10%;        /* #1A1A1A */
+    --sidebar-accent-foreground: 0 0% 93%;
+    --sidebar-border: 0 0% 12%;        /* Bordas sutis */
     --sidebar-ring: 221.2 83.2% 53.3%;
     
-    --card: 222 47% 8%;                /* #151921 - Elevação sutil */
-    --card-foreground: 210 20% 85%;
+    --card: 0 0% 5%;                   /* #0D0D0D - Elevação zinco */
+    --card-foreground: 0 0% 93%;
     
     --primary: 221.2 83.2% 53.3%;
     --primary-foreground: 210 40% 98%;
     
-    --secondary: 222 47% 10%;
-    --secondary-foreground: 210 20% 85%;
+    --secondary: 0 0% 8%;              /* #141414 */
+    --secondary-foreground: 0 0% 93%;
     
-    --border: 220 13% 15%;             /* Bordas muito sutis */
-    --input: 220 13% 15%;
+    --border: 0 0% 15%;                /* #262626 - zinc-800 */
+    --input: 0 0% 15%;
     --ring: 221.2 83.2% 53.3%;
     
-    --muted: 222 47% 10%;
-    --muted-foreground: 215 20% 55%;   /* gray-500 para texto secundário */
+    --muted: 0 0% 8%;                  /* #141414 */
+    --muted-foreground: 0 0% 55%;      /* #8C8C8C - zinc-400 */
     
-    --accent: 222 47% 10%;
-    --accent-foreground: 210 20% 85%;
+    --accent: 0 0% 10%;                /* #1A1A1A */
+    --accent-foreground: 0 0% 93%;
     
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 20% 98%;
@@ -103,8 +103,8 @@
     --info: 221.2 83.2% 53.3%;
     --info-foreground: 0 0% 100%;
     
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 20% 85%;
+    --popover: 0 0% 5%;                /* Mesmo que card */
+    --popover-foreground: 0 0% 93%;
   }
 
   * {
@@ -121,15 +121,15 @@
 /* Enterprise Typography & Density Utilities */
 @layer components {
   .text-enterprise-title {
-    @apply text-base font-semibold text-slate-900 dark:text-gray-200;
+    @apply text-base font-semibold text-slate-900 dark:text-zinc-100;
   }
   
   .text-enterprise-body {
-    @apply text-sm text-slate-600 dark:text-gray-400;
+    @apply text-sm text-slate-600 dark:text-zinc-400;
   }
   
   .text-enterprise-label {
-    @apply text-xs font-medium text-slate-500 dark:text-gray-500 uppercase tracking-wide;
+    @apply text-xs font-medium text-slate-500 dark:text-zinc-500 uppercase tracking-wide;
   }
   
   .card-compact {
