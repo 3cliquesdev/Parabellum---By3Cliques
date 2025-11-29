@@ -118,77 +118,104 @@ serve(async (req) => {
 
     // Send welcome email with responsibility term
     const emailHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
-          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-          .credentials { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2563EB; }
-          .button { display: inline-block; background: #2563EB; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-          .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
-          .term { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; }
-          ul { margin: 10px 0; padding-left: 20px; }
-          strong { color: #2563EB; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1 style="margin: 0;">📧 Acesso Concedido</h1>
-            <p style="margin: 10px 0 0 0; opacity: 0.9;">Bem-vindo à operação</p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <!-- HEADER COM LOGO -->
+        <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
+          <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
+               alt="PARABELLUM" 
+               style="max-width: 200px; height: auto;" />
+        </div>
+        
+        <!-- CONTEÚDO -->
+        <div style="padding: 30px; background: #f8fafc;">
+          <p style="color: #475569; line-height: 1.6; margin-bottom: 15px;">
+            Prezado(a) <strong>${fullName}</strong>,
+          </p>
+          
+          <p style="color: #475569; line-height: 1.6; margin-bottom: 25px;">
+            Bem-vindo à operação. Seu acesso à plataforma PARABELLUM | 3Cliques foi concedido.
+          </p>
+          
+          <p style="color: #1e3a5f; font-weight: 600; margin-bottom: 10px;">
+            Seguem suas credenciais de acesso:
+          </p>
+          
+          <div style="background: white; border: 2px solid #1e3a5f; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <p style="margin: 8px 0; color: #1e3a5f;"><strong>Sistema:</strong> https://parabellum.work</p>
+            <p style="margin: 8px 0; color: #1e3a5f;"><strong>Login:</strong> ${email}</p>
+            <p style="margin: 8px 0; color: #1e3a5f;"><strong>Senha Temporária:</strong> ${newPassword}</p>
+            <p style="margin: 8px 0; color: #dc2626; font-size: 13px;">(Troca obrigatória no primeiro login)</p>
           </div>
           
-          <div class="content">
-            <p>Olá <strong>${fullName}</strong>,</p>
-            
-            <p>Bem-vindo à operação. Seu acesso à plataforma PARABELLUM | 3Cliques foi concedido. Nova senha temporária gerada.</p>
-            
-            <div class="credentials">
-              <h3 style="margin-top: 0; color: #2563EB;">🔑 Credenciais de Acesso</h3>
-              <p><strong>Email:</strong> ${email}</p>
-              <p><strong>Senha Temporária:</strong> <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">${newPassword}</code></p>
-              <p><strong>Perfil:</strong> ${roleLabels[role]}</p>
-            </div>
-
-            <a href="${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || 'https://seu-app.lovable.app'}" class="button">
-              🚀 Acessar Sistema
-            </a>
-
-            <div class="term">
-              <h3 style="margin-top: 0; color: #f59e0b;">⚠️ Termo de Responsabilidade</h3>
-              <p>Ao utilizar suas credenciais, você declara ciência das seguintes normas de segurança da informação da PARABELLUM | 3Cliques:</p>
-              <ul>
-                <li>Este acesso é <strong>pessoal e intransferível</strong></li>
-                <li>Você é responsável por todas as ações realizadas com suas credenciais</li>
-                <li>Deve <strong>manter sigilo absoluto</strong> sobre informações confidenciais</li>
-                <li>O compartilhamento de senhas é <strong>expressamente proibido</strong></li>
-                <li>O uso indevido pode resultar em <strong>bloqueio imediato</strong></li>
-              </ul>
-            </div>
-
-            <p style="margin-top: 30px;">
-              <strong>Próximos passos:</strong><br>
-              1. Acesse o sistema usando as credenciais acima<br>
-              2. Você será solicitado a validar seu email via código OTP<br>
-              3. Crie uma senha forte e pessoal<br>
-              4. Explore sua área de trabalho
+          <h3 style="color: #1e3a5f; margin-top: 30px; margin-bottom: 15px; font-size: 16px; text-transform: uppercase;">
+            TERMO DE RESPONSABILIDADE E SIGILO
+          </h3>
+          
+          <p style="color: #475569; line-height: 1.6; margin-bottom: 15px;">
+            Ao utilizar suas credenciais, você declara ciência das seguintes normas de segurança da informação da PARABELLUM | 3Cliques:
+          </p>
+          
+          <div style="margin: 20px 0;">
+            <p style="color: #475569; line-height: 1.6; margin-bottom: 12px;">
+              <strong style="color: #1e3a5f;">Intransferibilidade:</strong> Seu usuário e senha são de uso estritamente pessoal. É proibido compartilhar o acesso com terceiros, sob pena de desligamento e sanções legais.
             </p>
-
-            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
-              💡 <em>Caso tenha dúvidas, entre em contato com o administrador do sistema.</em>
+            
+            <p style="color: #475569; line-height: 1.6; margin-bottom: 12px;">
+              <strong style="color: #1e3a5f;">Propriedade de Dados:</strong> Todas as informações contidas no sistema (clientes, estratégias, valores) são propriedade exclusiva da empresa. A exportação, print ou divulgação não autorizada constitui violação de sigilo.
+            </p>
+            
+            <p style="color: #475569; line-height: 1.6; margin-bottom: 12px;">
+              <strong style="color: #1e3a5f;">Auditoria:</strong> Todas as ações realizadas na plataforma são monitoradas e registradas (Logs de Acesso) para fins de segurança.
+            </p>
+            
+            <p style="color: #475569; line-height: 1.6; margin-bottom: 12px;">
+              <strong style="color: #1e3a5f;">Dever de Guarda:</strong> Você é responsável por qualquer ação realizada através do seu login. Realize o logoff ao terminar suas atividades.
             </p>
           </div>
-
-          <div class="footer">
-            <p>© ${new Date().getFullYear()} PARABELLUM | 3Cliques - Sistema de Gestão</p>
-            <p>Este é um email automático, por favor não responda.</p>
-          </div>
+          
+          <p style="color: #1e3a5f; font-style: italic; margin-top: 25px; margin-bottom: 20px;">
+            Mantenha a vigilância.
+          </p>
+          
+          <p style="color: #475569; line-height: 1.6; margin-top: 25px;">
+            Atenciosamente,<br>
+            <strong style="color: #1e3a5f;">Departamento de Segurança PARABELLUM</strong>
+          </p>
         </div>
-      </body>
-      </html>
+        
+        <!-- FOOTER -->
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #1e3a5f;">
+          <tr>
+            <td align="center" style="padding: 25px;">
+              <table cellpadding="0" cellspacing="0" border="0" align="center">
+                <tr>
+                  <td style="padding: 0 8px;">
+                    <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
+                         alt="PARABELLUM" 
+                         width="100"
+                         style="display: block; max-width: 100px; height: auto;" />
+                  </td>
+                  <td style="padding: 0 8px;">
+                    <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-3cliques-email.png?v=2" 
+                         alt="3 CLIQUES" 
+                         width="80"
+                         style="display: block; max-width: 80px; height: auto;" />
+                  </td>
+                </tr>
+              </table>
+              <p style="color: #ffffff; margin: 15px 0 10px 0; font-size: 14px; font-weight: 600;">
+                PARABELLUM by 3Cliques
+              </p>
+              <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
+                Departamento de Segurança da Informação
+              </p>
+              <p style="color: #64748b; margin: 0; font-size: 11px;">
+                Ambiente Seguro
+              </p>
+            </td>
+          </tr>
+        </table>
+      </div>
     `;
 
     const { data: emailData, error: emailError } = await resend.emails.send({
