@@ -141,6 +141,7 @@ const adminOverviewItems = [
 const adminOperationItems = [
   { title: "Inbox", href: "/inbox", icon: MessageCircle },
   { title: "Tickets", href: "/support", icon: Headphones },
+  { title: "Dashboard CS", href: "/cs-management", icon: BarChart3 },
   { title: "Negócios", href: "/deals", icon: TrendingUp },
   { title: "Propostas", href: "/quotes", icon: Receipt },
   { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase },

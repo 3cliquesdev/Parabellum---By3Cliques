@@ -1,7 +1,7 @@
 import { useUserRole } from "@/hooks/useUserRole";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Target, Calendar } from "lucide-react";
+import { Target, Calendar, Users } from "lucide-react";
 import { GoalDialog } from "@/components/GoalDialog";
 import { GoalCard } from "@/components/GoalCard";
 import { PerformanceRanking } from "@/components/PerformanceRanking";
@@ -9,6 +9,12 @@ import { MonthlyTrendChart } from "@/components/MonthlyTrendChart";
 import { useGoals } from "@/hooks/useGoals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useConsultants } from "@/hooks/useConsultants";
+import { useCSGoals } from "@/hooks/useCSGoals";
+import { CSGoalDialog } from "@/components/CSGoalDialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 export default function Goals() {
   const { role, loading: roleLoading } = useUserRole();
@@ -17,6 +23,10 @@ export default function Goals() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   const { data: goals, isLoading } = useGoals(selectedMonth, selectedYear);
+  const { data: consultants } = useConsultants();
+  
+  // Format month as YYYY-MM-01 for CS goals
+  const formattedMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
 
   if (roleLoading) {
     return (
@@ -93,10 +103,11 @@ export default function Goals() {
           </div>
         </div>
 
-        {/* Tabs: Minhas Metas / Dashboard */}
+        {/* Tabs: Minhas Metas / Metas de CS / Dashboard */}
         <Tabs defaultValue="goals" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className={`grid w-full ${role === 'admin' ? 'max-w-2xl grid-cols-3' : 'max-w-md grid-cols-2'}`}>
             <TabsTrigger value="goals">Minhas Metas</TabsTrigger>
+            {role === "admin" && <TabsTrigger value="cs-goals">Metas de CS</TabsTrigger>}
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           </TabsList>
 
@@ -126,6 +137,65 @@ export default function Goals() {
               </div>
             )}
           </TabsContent>
+
+          {/* Tab: Metas de CS (Admin Only) */}
+          {role === "admin" && (
+            <TabsContent value="cs-goals" className="mt-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                  <Users className="h-4 w-4" />
+                  <span>Defina metas mensais para cada consultor da equipe</span>
+                </div>
+
+                <div className="rounded-lg border bg-card">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Consultor</TableHead>
+                        <TableHead>Cargo</TableHead>
+                        <TableHead className="text-center">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {consultants?.map((consultant) => (
+                        <TableRow key={consultant.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                  {consultant.full_name?.[0]?.toUpperCase() || "C"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium">{consultant.full_name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="font-normal">
+                              {consultant.job_title || "Consultor"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <CSGoalDialog
+                              consultantId={consultant.id}
+                              consultantName={consultant.full_name || "Consultor"}
+                              currentMonth={formattedMonth}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {!consultants?.length && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                            Nenhum consultor encontrado
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </TabsContent>
+          )}
 
           {/* Tab: Dashboard */}
           <TabsContent value="dashboard" className="mt-6">
