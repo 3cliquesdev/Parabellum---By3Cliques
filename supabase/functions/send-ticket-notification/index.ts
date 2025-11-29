@@ -232,7 +232,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Suporte <onboarding@resend.dev>",
+        from: "PARABELLUM Suporte <suporte@parabellum.work>",
         to: [customer_email],
         subject: `🎫 Ticket #${ticket_number} criado com sucesso`,
         html,

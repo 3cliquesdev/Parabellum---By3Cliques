@@ -46,7 +46,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'CRM <onboarding@resend.dev>',
+        from: 'PARABELLUM <contato@parabellum.work>',
         to: [`${to_name} <${to}>`],
         subject,
         html,
