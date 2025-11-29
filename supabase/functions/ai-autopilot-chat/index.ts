@@ -240,10 +240,10 @@ serve(async (req) => {
       return await fallbackResponse.json();
     }
 
-    // FASE 2: Classificar intenção ANTES da busca pesada (com categoria "confirmation")
+    // FASE 1 & 2: Classificar intenção com lógica invertida (skip vs search)
     console.log('[ai-autopilot-chat] Classificando intenção da mensagem...');
     
-    let intentType = 'technical'; // Default
+    let intentType = 'search'; // Default: sempre buscar
     let knowledgeArticles: any[] = [];
     
     try {
@@ -251,7 +251,12 @@ serve(async (req) => {
         messages: [
           { 
             role: 'system', 
-            content: 'Classifique a mensagem em uma categoria:\n- "greeting" (saudações: oi, olá, bom dia, obrigado, valeu, elogios)\n- "confirmation" (confirmações casuais: ok, certo, entendi, perfeito, blz, beleza, sim)\n- "technical" (dúvidas reais, problemas, pedidos de ajuda, perguntas sobre produtos/serviços)\n- "other" (resto)\n\nResponda APENAS com uma palavra: greeting, confirmation, technical ou other.'
+            content: `Classifique a mensagem:
+- "skip" APENAS se for: saudação pura (oi, olá, bom dia), confirmação pura (ok, entendi, beleza), ou elogio/agradecimento puro (obrigado, valeu)
+- "search" para QUALQUER outra coisa (perguntas, dúvidas, problemas, informações, etc.)
+
+Se tiver QUALQUER indício de pergunta ou dúvida, responda "search".
+Responda APENAS: skip ou search`
           },
           { role: 'user', content: customerMessage }
         ],
@@ -259,20 +264,21 @@ serve(async (req) => {
         max_tokens: 10
       });
 
-      intentType = intentData.choices?.[0]?.message?.content?.trim().toLowerCase() || 'technical';
+      intentType = intentData.choices?.[0]?.message?.content?.trim().toLowerCase() || 'search';
       console.log(`[ai-autopilot-chat] Intenção detectada: ${intentType}`);
     } catch (error) {
       console.error('[ai-autopilot-chat] Erro na classificação de intenção:', error);
-      // Fallback para busca técnica em caso de erro
+      // Fallback: buscar na base em caso de erro
+      intentType = 'search';
     }
     
-    // FASE 1 & 2: Lógica refinada de busca e handoff
-    if (intentType === 'greeting' || intentType === 'confirmation') {
-      // Saudações e confirmações: pular busca na base, responder naturalmente
-      console.log('[ai-autopilot-chat] ⚡ Greeting/Confirmation detectado - pulando busca na base');
-    } else if (intentType === 'technical') {
-      // APENAS para dúvidas técnicas: buscar na base de conhecimento
-      console.log('[ai-autopilot-chat] 🔍 Busca técnica - consultando base de conhecimento...');
+    // FASE 1 & 3: Lógica invertida - buscar para tudo, exceto "skip"
+    if (intentType === 'skip') {
+      // Saudações/confirmações puras: pular busca na base, responder naturalmente
+      console.log('[ai-autopilot-chat] ⚡ Skip detectado - pulando busca na base');
+    } else {
+      // QUALQUER outra coisa: buscar na base de conhecimento
+      console.log('[ai-autopilot-chat] 🔍 Search - consultando base de conhecimento...');
       
       const removeAccents = (str: string) => 
         str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -312,39 +318,14 @@ serve(async (req) => {
             knowledgeArticles = relevantArticles;
             console.log(`[ai-autopilot-chat] ✅ ${relevantArticles.length} artigos encontrados`);
           } else {
-            // FASE 1: Só fazer handoff automático quando intent=technical E não encontrar artigos
-            console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo encontrado para dúvida técnica - transbordo automático');
-            
-            const fallbackMessage = "Não encontrei essa informação na nossa base de conhecimento. Vou chamar um atendente humano para te ajudar! 🤝";
-            
-            await supabaseClient.from('messages').insert({
-              conversation_id: conversationId,
-              content: fallbackMessage,
-              sender_type: 'user',
-              message_type: 'text',
-              is_ai_generated: true,
-              sender_id: null
-            });
-            
-            await supabaseClient.from('conversations').update({ ai_mode: 'copilot' }).eq('id', conversationId);
-            await supabaseClient.functions.invoke('route-conversation', { body: { conversationId } });
-            
-            return new Response(JSON.stringify({ 
-              status: 'handoff',
-              message: fallbackMessage,
-              reason: 'no_knowledge_found'
-            }), {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
+            // FASE 3: Se não encontrar artigos, deixar IA tentar responder com conhecimento geral
+            // Só fazer handoff se a IA explicitamente não souber
+            console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo encontrado - IA tentará responder com conhecimento geral');
           }
         }
       } catch (error) {
         console.error('[ai-autopilot-chat] Erro na busca de conhecimento:', error);
       }
-    } else {
-      // intentType === 'other': NÃO fazer handoff automático
-      // Deixar o AI responder naturalmente usando conhecimento geral
-      console.log('[ai-autopilot-chat] 💬 Intent "other" - resposta natural sem handoff forçado');
     }
 
     // 5. FASE 1: Identity Wall - Verificar se contato tem email
