@@ -218,7 +218,11 @@ export default function CSManagement() {
                     const existingGoal = allGoals?.find(g => g.consultant_id === consultant.id);
                     
                     return (
-                      <tr key={consultant.id} className="border-b hover:bg-accent/50 transition-colors">
+                      <tr 
+                        key={consultant.id} 
+                        className="border-b hover:bg-accent/50 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/cs-management/consultant/${consultant.id}`)}
+                      >
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
                             <Avatar>
@@ -245,17 +249,18 @@ export default function CSManagement() {
                             }
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2">
-                            <CSGoalDialog 
-                              consultantId={consultant.id}
-                              consultantName={consultant.full_name}
-                              existingGoal={existingGoal}
-                              currentMonth={currentMonth}
-                            />
-                            <Button size="sm" variant="outline" onClick={() => navigate(`/my-portfolio?consultant=${consultant.id}`)}>
+                            <Button 
+                              size="sm" 
+                              variant="default"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/cs-management/consultant/${consultant.id}`);
+                              }}
+                            >
                               <Eye className="w-4 h-4 mr-1" />
-                              Ver Carteira
+                              Ver Detalhes
                             </Button>
                           </div>
                         </td>

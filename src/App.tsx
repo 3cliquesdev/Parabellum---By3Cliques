@@ -53,6 +53,8 @@ import WhatsAppSettings from "./pages/WhatsAppSettings";
 import WebhooksSettings from "./pages/WebhooksSettings";
 import Reports from "./pages/Reports";
 
+import ConsultantDetail from "./pages/ConsultantDetail";
+
 const queryClient = new QueryClient();
 
 class ErrorBoundary extends React.Component<
@@ -121,7 +123,8 @@ const App = () => {
             <Route path="/" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager", "support_manager", "financial_manager"]}><Layout><Dashboard /></Layout></ProtectedRoute>} />
             <Route path="/inbox" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "sales_rep", "admin", "general_manager", "manager"]}><Layout><Inbox /></Layout></ProtectedRoute>} />
             <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["consultant", "sales_rep", "general_manager", "manager", "admin", "cs_manager"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
-            <Route path="/cs-management" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><CSManagement /></ProtectedRoute>} />
+            <Route path="/cs-management" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><CSManagement /></Layout></ProtectedRoute>} />
+            <Route path="/cs-management/consultant/:id" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><ConsultantDetail /></Layout></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "admin", "general_manager", "manager"]}><Layout><Contacts /></Layout></ProtectedRoute>} />
             <Route path="/contacts/:id" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "admin", "general_manager", "manager"]}><Layout><ContactDetails /></Layout></ProtectedRoute>} />
             <Route path="/organizations" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "general_manager", "manager"]}><Layout><Organizations /></Layout></ProtectedRoute>} />
