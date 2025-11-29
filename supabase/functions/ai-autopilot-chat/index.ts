@@ -642,6 +642,9 @@ Use essas informações de forma natural e personalizada.`;
             const args = JSON.parse(toolCall.function.arguments);
             console.log('[ai-autopilot-chat] 🎫 Criando ticket automaticamente:', args);
 
+            // 🔐 SECURITY NOTE: Rate limiting is handled at conversation level (AI autopilot only runs for authenticated conversations)
+            // Public ticket creation via forms should implement rate limiting separately
+
             // Create ticket in database
             const { data: ticket, error: ticketError } = await supabaseClient
               .from('tickets')

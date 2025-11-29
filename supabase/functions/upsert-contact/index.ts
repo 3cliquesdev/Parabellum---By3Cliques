@@ -38,6 +38,33 @@ serve(async (req) => {
     // Parse request body
     const body: UpsertContactRequest = await req.json();
 
+    // 🔐 SECURITY: Rate limiting
+    const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    console.log(`[UPSERT-CONTACT] Request from IP: ${clientIP}`);
+
+    const { data: rateLimitAllowed, error: rateLimitError } = await supabase.rpc('check_rate_limit', {
+      p_identifier: `ip_${clientIP}`,
+      p_action_type: 'upsert_contact',
+      p_max_requests: 5,
+      p_window_minutes: 1
+    });
+
+    if (rateLimitError) {
+      console.error('[UPSERT-CONTACT] Rate limit check error:', rateLimitError);
+      // Continue anyway - não bloquear por erro de rate limit
+    } else if (!rateLimitAllowed) {
+      console.warn('[UPSERT-CONTACT] Rate limit exceeded for IP:', clientIP);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Limite de requisições excedido. Por favor, aguarde 1 minuto.' 
+        }),
+        { 
+          status: 429, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
     // Validação básica
     if (!body.email || !body.first_name || !body.last_name) {
       console.error('[UPSERT-CONTACT] Missing required fields:', body);

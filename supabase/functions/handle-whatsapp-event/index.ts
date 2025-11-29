@@ -43,12 +43,88 @@ interface EvolutionWebhook {
   apikey?: string;
 }
 
+/**
+ * Verifies Evolution API webhook signature
+ * @param body - Raw request body string
+ * @param signature - Signature from x-evolution-signature header (if Evolution API supports it)
+ * @param secret - Webhook secret from environment
+ * @returns true if signature is valid, false otherwise
+ */
+async function verifyEvolutionSignature(
+  body: string,
+  signature: string | null,
+  secret: string | null
+): Promise<boolean> {
+  // Se não houver secret configurado, pular verificação (para compatibilidade)
+  if (!secret) {
+    console.warn('[handle-whatsapp-event] ⚠️ EVOLUTION_API_SECRET not configured - skipping signature verification');
+    return true;
+  }
+
+  if (!signature) {
+    console.error('[handle-whatsapp-event] ❌ Missing signature header');
+    return false;
+  }
+
+  try {
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    const messageData = encoder.encode(body);
+
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    const signatureBuffer = await crypto.subtle.sign(
+      'HMAC',
+      cryptoKey,
+      messageData
+    );
+
+    const expectedSignature = Array.from(new Uint8Array(signatureBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    const isValid = expectedSignature === signature.toLowerCase();
+    
+    if (!isValid) {
+      console.error('[handle-whatsapp-event] ❌ Invalid signature');
+      console.error('Expected:', expectedSignature);
+      console.error('Received:', signature);
+    }
+
+    return isValid;
+  } catch (error) {
+    console.error('[handle-whatsapp-event] ❌ Signature verification error:', error);
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // 🔐 SECURITY: Verify webhook signature
+    const rawBody = await req.text();
+    const signature = req.headers.get('x-evolution-signature');
+    const evolutionSecret = Deno.env.get('EVOLUTION_API_SECRET') || null;
+
+    const isValidSignature = await verifyEvolutionSignature(rawBody, signature, evolutionSecret);
+    
+    if (!isValidSignature) {
+      console.error('[handle-whatsapp-event] 🚨 Invalid webhook signature - rejecting request');
+      return new Response(
+        JSON.stringify({ error: 'Invalid signature' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -57,7 +133,7 @@ serve(async (req) => {
       }
     );
 
-    const body = await req.json();
+    const body = JSON.parse(rawBody);
     console.log('[handle-whatsapp-event] 🔥 Raw payload:', JSON.stringify(body, null, 2));
     
     const payload: EvolutionWebhook = body as EvolutionWebhook;
