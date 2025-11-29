@@ -190,7 +190,9 @@ export function AppSidebar() {
   const modeInfo = getModeInfo();
 
   const handleSignOut = async () => {
+    console.log("AppSidebar: handleSignOut clicked");
     await signOut();
+    console.log("AppSidebar: signOut finished, navigating to /auth");
     toast({
       title: "Logout realizado",
       description: "Até logo!",
