@@ -235,7 +235,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                 <div className="flex items-center gap-2 mt-1">
                   {/* FASE 5: Badge WhatsApp */}
                   {conversation.channel === 'whatsapp' && (
-                    <Badge variant="default" className="text-xs bg-green-600">
+                    <Badge variant="success" className="text-xs">
                       📱 WhatsApp
                     </Badge>
                   )}
@@ -247,12 +247,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   {!aiModeLoading && (
                     <>
                       <Badge 
-                        variant={isAutopilot ? "default" : isCopilot ? "outline" : "secondary"}
-                        className={cn(
-                          "text-xs",
-                          isCopilot && "border-blue-500 text-blue-700 dark:text-blue-300",
-                          isDisabled && "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                        )}
+                        variant={isAutopilot ? "default" : isCopilot ? "info" : "secondary"}
+                        className="text-xs"
                       >
                         {isAutopilot && "🤖 Autopilot"}
                         {isCopilot && "🧠 Copilot"}
@@ -267,7 +263,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
               )}
               {/* Badge de Sessão Não Verificada */}
               {!((conversation.customer_metadata as any)?.session_verified ?? true) && (
-                <Badge variant="outline" className="text-yellow-600 border-yellow-600 text-xs">
+                <Badge variant="warning" className="text-xs">
                   <AlertCircle className="h-3 w-3 mr-1" />
                   Não verificado
                 </Badge>
@@ -358,7 +354,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             </Alert>
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50/50 dark:bg-slate-950">
+          <div className="flex-1 min-h-0 overflow-y-auto bg-slate-100/50 dark:bg-slate-900">
             <div className="p-4 md:p-6">
               <div className="max-w-3xl mx-auto w-full">
                 {conversation.status === "closed" && (
@@ -434,14 +430,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                           )}
                           
                           <div className={cn("flex flex-col", isCustomer ? "items-start" : "items-end")}>
-                            {isCustomer && (
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 px-1 font-medium">
-                                {contact?.first_name} {contact?.last_name}
-                              </p>
-                            )}
-                            
                             {!isCustomer && (
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 px-1 font-medium">
+                              <p className="text-xs text-muted-foreground mb-1 px-1 font-medium">
                                 {isAI ? "Assistente Virtual" : message.sender?.full_name}
                                 {message.sender?.job_title && (
                                   <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
@@ -453,12 +443,12 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                             
                             <div
                               className={cn(
-                                "max-w-[80%] px-4 py-3 shadow-sm",
+                                "max-w-[75%] px-4 py-3 shadow-sm",
                                 isCustomer
-                                  ? "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
+                                  ? "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
                                   : isAI
-                                  ? "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tr-none text-slate-800 dark:text-slate-100"
-                                  : "bg-primary text-primary-foreground rounded-2xl rounded-tr-none"
+                                  ? "bg-violet-50 dark:bg-violet-950 border border-violet-200 dark:border-violet-800 rounded-2xl rounded-tr-none text-violet-900 dark:text-violet-100"
+                                  : "bg-blue-600 dark:bg-blue-700 text-white rounded-2xl rounded-tr-none"
                               )}
                             >
                               <SafeHTML 
@@ -466,17 +456,19 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                                 className="text-sm whitespace-pre-wrap break-words"
                               />
                               <div className={cn(
-                                "flex items-center gap-1.5 mt-1",
-                                isCustomer || isAI ? "text-slate-400 dark:text-slate-500" : "text-white/70"
+                                "text-[10px] mt-1 flex items-center gap-1.5",
+                                isCustomer ? "text-slate-400 dark:text-slate-500" : 
+                                isAI ? "text-violet-600 dark:text-violet-400 opacity-70" : 
+                                "text-white opacity-70"
                               )}>
-                                <span className="text-[10px]">
+                                <span>
                                   {format(new Date(message.created_at), "HH:mm")}
                                 </span>
                                 {/* Status indicator for user/agent messages */}
                                 {!isCustomer && (message as any).status && (
                                   <MessageStatusIndicator 
                                     status={(message as any).status}
-                                    className={isCustomer || isAI ? "" : "text-white/70"}
+                                    className={isAI ? "text-violet-600 dark:text-violet-400" : "text-white"}
                                   />
                                 )}
                               </div>
@@ -537,7 +529,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                 </div>
               ) : (
                 <div className="flex-none bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4">
-                  <div className="max-w-3xl mx-auto flex gap-2">
+                  <div className="max-w-3xl mx-auto flex gap-3 items-center">
                     <Input
                       placeholder={
                         conversation.status === "closed"
@@ -553,10 +545,15 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                         }
                       }}
                       disabled={isSending || conversation.status === "closed"}
-                      className="flex-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                      className="flex-1 rounded-full bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 px-5 py-3 h-12"
                     />
-                    <Button onClick={handleSendMessage} disabled={isSending || !message.trim() || conversation.status === "closed"}>
-                      <Send className="h-4 w-4" />
+                    <Button 
+                      onClick={handleSendMessage} 
+                      disabled={isSending || !message.trim() || conversation.status === "closed"}
+                      size="icon"
+                      className="rounded-full h-12 w-12 shrink-0 shadow-md"
+                    >
+                      <Send className="h-5 w-5" />
                     </Button>
                   </div>
                 </div>

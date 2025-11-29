@@ -128,7 +128,7 @@ export function HotDealsWidget() {
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       {isUrgent && (
-                        <Badge variant="destructive" className="w-fit">
+                        <Badge variant="hot" className="w-fit">
                           <Flame className="h-3 w-3 mr-1" />
                           Urgente
                         </Badge>

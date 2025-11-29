@@ -46,7 +46,7 @@ export default function RottenDealsWidget() {
             {topRottenDeals.map((deal) => (
               <div
                 key={deal.id}
-                className="p-3 rounded-lg border border-destructive/30 bg-destructive/5 cursor-pointer hover:bg-destructive/10 transition-colors"
+                className="p-3 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 onClick={() => navigate("/deals")}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -58,7 +58,7 @@ export default function RottenDealsWidget() {
                       </p>
                     )}
                   </div>
-                  <Badge variant="destructive" className="text-xs whitespace-nowrap">
+                  <Badge variant="cold" className="text-xs whitespace-nowrap">
                     {deal.daysSinceUpdate}d
                   </Badge>
                 </div>

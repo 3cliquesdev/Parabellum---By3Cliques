@@ -122,15 +122,10 @@ function ConversationItem({
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Badge
-            variant={conversation.channel === "whatsapp" ? "default" : "secondary"}
-            className={cn(
-              "text-xs",
-              conversation.channel === "whatsapp" 
-                ? "bg-green-600 text-white" 
-                : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
-            )}
+            variant={conversation.channel === "whatsapp" ? "success" : "secondary"}
+            className="text-xs"
           >
-            {conversation.channel}
+            {conversation.channel === "whatsapp" ? "📱 WhatsApp" : conversation.channel}
           </Badge>
           {conversation.department_data && (
             <Badge 
@@ -156,18 +151,14 @@ function ConversationItem({
             <Badge 
               variant={
                 conversation.ai_mode === 'autopilot' ? "default" : 
-                conversation.ai_mode === 'copilot' ? "outline" : 
+                conversation.ai_mode === 'copilot' ? "info" : 
                 "secondary"
               }
-              className={cn(
-                "text-xs",
-                conversation.ai_mode === 'copilot' && "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900 dark:text-blue-200",
-                conversation.ai_mode === 'disabled' && "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-              )}
+              className="text-xs"
             >
-              {conversation.ai_mode === 'autopilot' && "🤖"}
-              {conversation.ai_mode === 'copilot' && "🧠"}
-              {conversation.ai_mode === 'disabled' && "👤"}
+              {conversation.ai_mode === 'autopilot' && "🤖 AI"}
+              {conversation.ai_mode === 'copilot' && "🧠 Copilot"}
+              {conversation.ai_mode === 'disabled' && "👤 Manual"}
             </Badge>
           )}
           {sentiment && <SentimentBadge sentiment={sentiment} className="text-xs" />}
@@ -178,7 +169,7 @@ function ConversationItem({
           )}
           {/* FASE 4: Badge de Sessão Não Verificada para WhatsApp sem email */}
           {conversation.channel === 'whatsapp' && !conversation.contacts?.email && (
-            <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-600 dark:text-yellow-400">
+            <Badge variant="warning" className="text-xs">
               ⚠️ Sem email
             </Badge>
           )}

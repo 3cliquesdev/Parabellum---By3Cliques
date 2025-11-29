@@ -224,48 +224,48 @@ export default function PublicChatWindow() {
                         </div>
                       )}
                       
-                      <div className={cn("flex flex-col", isCustomer ? "items-end" : "items-start")}>
-                        {!isCustomer && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 px-1 font-medium">
-                            {isAI ? "Assistente Virtual" : message.sender?.full_name}
-                            {message.sender?.job_title && (
-                              <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
-                                {message.sender.job_title}
-                              </span>
+                          <div className={cn("flex flex-col", isCustomer ? "items-start" : "items-end")}>
+                            {!isCustomer && (
+                              <p className="text-xs text-muted-foreground mb-1 px-1 font-medium">
+                                {isAI ? "Assistente Virtual" : message.sender?.full_name}
+                                {message.sender?.job_title && (
+                                  <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+                                    {message.sender.job_title}
+                                  </span>
+                                )}
+                              </p>
                             )}
-                          </p>
-                        )}
-                        
-                        <div
-                          className={cn(
-                            "max-w-[80%] px-4 py-3 shadow-sm",
-                            isCustomer
-                              ? "bg-blue-700 dark:bg-blue-800 text-white rounded-2xl rounded-tr-none"
-                              : isAI
-                              ? "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
-                              : "bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
-                          )}
-                        >
-                          <SafeHTML 
-                            html={message.content}
-                            className="text-sm whitespace-pre-wrap break-words"
-                          />
-                          <div className={cn(
-                            "text-[10px] mt-1 flex items-center gap-1",
-                            isCustomer ? "text-white/70" : "text-slate-400 dark:text-slate-500"
-                          )}>
-                            <span>
-                              {formatDistanceToNow(new Date(message.created_at), { addSuffix: true, locale: ptBR })}
-                            </span>
-                            {isCustomer && message.id.startsWith('temp-') && (
-                              <Clock className="h-3 w-3 animate-pulse" />
-                            )}
-                            {isCustomer && !message.id.startsWith('temp-') && (
-                              <Check className="h-3 w-3" />
-                            )}
+                            
+                            <div
+                              className={cn(
+                                "max-w-[75%] px-4 py-3 shadow-sm",
+                                isCustomer
+                                  ? "bg-blue-600 dark:bg-blue-700 text-white rounded-2xl rounded-tr-none"
+                                  : isAI
+                                  ? "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
+                                  : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
+                              )}
+                            >
+                              <SafeHTML 
+                                html={message.content}
+                                className="text-sm whitespace-pre-wrap break-words"
+                              />
+                              <div className={cn(
+                                "text-[10px] mt-1 flex items-center gap-1",
+                                isCustomer ? "text-white/70" : "text-slate-400 dark:text-slate-500"
+                              )}>
+                                <span>
+                                  {formatDistanceToNow(new Date(message.created_at), { addSuffix: true, locale: ptBR })}
+                                </span>
+                                {isCustomer && message.id.startsWith('temp-') && (
+                                  <Clock className="h-3 w-3 animate-pulse" />
+                                )}
+                                {isCustomer && !message.id.startsWith('temp-') && (
+                                  <Check className="h-3 w-3" />
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
                     </div>
                   );
                 })}
@@ -286,16 +286,21 @@ export default function PublicChatWindow() {
       )}
 
       <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4">
-        <div className="max-w-3xl mx-auto flex gap-2">
+        <div className="max-w-3xl mx-auto flex gap-3 items-center">
           <Input
             placeholder="Digite sua mensagem..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            className="flex-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+            className="flex-1 rounded-full bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 px-5 py-3 h-12"
           />
-          <Button onClick={handleSendMessage} disabled={sendMessageMutation.isPending || !message.trim()}>
-            <Send className="h-4 w-4" />
+          <Button 
+            onClick={handleSendMessage} 
+            disabled={sendMessageMutation.isPending || !message.trim()}
+            size="icon"
+            className="rounded-full h-12 w-12 shrink-0 shadow-md"
+          >
+            <Send className="h-5 w-5" />
           </Button>
         </div>
       </div>
