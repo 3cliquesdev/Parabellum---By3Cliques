@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePortfolioClients } from "@/hooks/usePortfolioClients";
 import { usePortfolioKPIs } from "@/hooks/usePortfolioKPIs";
+import { useManagerPortfolioClients } from "@/hooks/useManagerPortfolioClients";
+import { useManagerPortfolioKPIs } from "@/hooks/useManagerPortfolioKPIs";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -22,9 +25,22 @@ import { CSGoalsWidget } from "@/components/widgets/CSGoalsWidget";
 
 export default function MyPortfolio() {
   const navigate = useNavigate();
-  const { data: clients, isLoading } = usePortfolioClients();
-  const { data: kpis, isLoading: isLoadingKPIs } = usePortfolioKPIs();
+  const { isAdmin, isManager, isCSManager } = useUserRole();
+  const isTeamView = isAdmin || isManager || isCSManager;
+
+  // Use different hooks based on role
+  const { data: individualClients, isLoading: isLoadingIndividual } = usePortfolioClients();
+  const { data: teamClients, isLoading: isLoadingTeam } = useManagerPortfolioClients();
+  const { data: individualKPIs, isLoading: isLoadingIndividualKPIs } = usePortfolioKPIs();
+  const { data: teamKPIs, isLoading: isLoadingTeamKPIs } = useManagerPortfolioKPIs();
   const { data: churnRisks } = useChurnPrediction();
+
+  // Select appropriate data based on role
+  const clients = isTeamView ? teamClients : individualClients;
+  const kpis = isTeamView ? teamKPIs : individualKPIs;
+  const isLoading = isTeamView ? isLoadingTeam : isLoadingIndividual;
+  const isLoadingKPIs = isTeamView ? isLoadingTeamKPIs : isLoadingIndividualKPIs;
+
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [qbrDialogOpen, setQbrDialogOpen] = useState(false);
@@ -86,9 +102,11 @@ export default function MyPortfolio() {
         <div className="flex items-center gap-3">
           <Briefcase className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Minha Carteira</h1>
+            <h1 className="text-3xl font-bold text-foreground">
+              {isTeamView ? "Carteira da Equipe" : "Minha Carteira"}
+            </h1>
             <p className="text-muted-foreground">
-              {clients?.length || 0} clientes ativos
+              {clients?.length || 0} clientes ativos {isTeamView ? "sob gestão da equipe" : ""}
             </p>
           </div>
         </div>
@@ -161,8 +179,8 @@ export default function MyPortfolio() {
         </Card>
       </div>
 
-      {/* CS Goals Widget - Full Width */}
-      <CSGoalsWidget />
+      {/* CS Goals Widget - Full Width (Individual consultants only) */}
+      {!isTeamView && <CSGoalsWidget />}
 
       {/* Widgets Row - Bento Box Layout: Attack | Meta | Defense */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -242,6 +260,24 @@ export default function MyPortfolio() {
                           {client.subscription_plan || "N/A"}
                         </Badge>
                       </div>
+
+                      {/* Consultant (Team View Only) */}
+                      {isTeamView && 'consultant_name' in client && (
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Consultor</p>
+                            <p className="text-sm font-medium">
+                              {client.consultant_name || "Não atribuído"}
+                            </p>
+                          </div>
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={client.consultant_avatar || undefined} />
+                            <AvatarFallback>
+                              {client.consultant_name?.[0] || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                        </div>
+                      )}
 
                       {/* Original Seller */}
                       <div className="flex items-center gap-2">
