@@ -277,13 +277,23 @@ export default function EmailTemplates() {
               Assunto: {previewTemplate?.subject}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="border rounded-lg p-4 bg-white text-black max-h-96 overflow-y-auto">
-            <style>{`.email-preview * { color: black !important; }`}</style>
-            <div 
-              className="email-preview"
-              dangerouslySetInnerHTML={{ __html: previewTemplate?.html_body || "" }} 
-            />
-          </div>
+              <div className="border rounded-lg p-4 max-h-96 overflow-y-auto bg-white">
+                <style>{`
+                  .email-preview,
+                  .email-preview * { 
+                    color: #1a1a1a !important; 
+                    background-color: transparent !important;
+                  }
+                  .email-preview { 
+                    background-color: white !important;
+                  }
+                `}</style>
+                <div 
+                  className="email-preview prose prose-sm max-w-none"
+                  style={{ backgroundColor: 'white', color: '#1a1a1a' }}
+                  dangerouslySetInnerHTML={{ __html: previewTemplate?.html_body || "" }} 
+                />
+              </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Fechar</AlertDialogCancel>
           </AlertDialogFooter>
