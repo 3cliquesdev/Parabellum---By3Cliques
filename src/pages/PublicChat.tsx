@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUpsertContact } from "@/hooks/useUpsertContact";
 import { PreChatForm } from "@/components/PreChatForm";
 import { MessageSquare, Loader2 } from "lucide-react";
+import { storeSessionToken } from "@/lib/publicSupabaseClient";
 
 const IDENTITY_STORAGE_KEY = "public_chat_identity";
 const IDENTITY_EXPIRES_DAYS = 30;
@@ -272,10 +273,16 @@ export default function PublicChat() {
         throw new Error(data?.error || "Falha ao criar conversa");
       }
 
+      // SECURITY: Store session token for scoped RLS access
+      if (data?.session_token) {
+        storeSessionToken(data.session_token);
+      }
+
       console.log(
         `[PublicChat] Conversa criada/reaberta:`,
         data.conversation_id,
-        data.is_existing_conversation ? "(existente)" : "(nova)"
+        data.is_existing_conversation ? "(existente)" : "(nova)",
+        `[Token: ${data?.session_token ? 'stored' : 'missing'}]`
       );
 
       // Salvar conversationId no localStorage
