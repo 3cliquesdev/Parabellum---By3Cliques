@@ -1,3 +1,4 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
@@ -76,7 +77,7 @@ serve(async (req) => {
       recentConversionTrend,
     });
 
-    // Preparar prompt para Lovable AI
+    // Preparar prompt para IA
     const prompt = `Você é um analista de vendas especializado em CRM. Analise os dados abaixo e gere insights concisos e acionáveis sobre a performance de vendas.
 
 DADOS:
@@ -86,7 +87,7 @@ DADOS:
 - Negócios perdidos: ${lostDeals}
 - Taxa de conversão: ${conversionRate}%
 - Valor total ganho: R$ ${totalValue.toLocaleString('pt-BR')}
-- Ticket médio: R$ ${avgDealValue}
+- Ticket médio: R$ ${avgDealValue.toLocaleString('pt-BR')}
 - Tendência de conversão (últimos 30 dias): ${recentConversionTrend}%
 
 INSTRUÇÕES:
@@ -98,71 +99,89 @@ INSTRUÇÕES:
 
 Responda APENAS com os insights, sem introdução ou conclusão.`;
 
-    // Chamar Lovable AI
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-    if (!lovableApiKey) {
-      console.error('[generate-sales-insights] LOVABLE_API_KEY não configurado');
-      throw new Error('LOVABLE_API_KEY não configurado');
-    }
+    let insights = '';
+    let aiProvider = 'fallback';
 
-    console.log('[generate-sales-insights] Chamando Lovable AI...');
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: 'Você é um analista de vendas especializado em CRM.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 300,
-      }),
-    });
-
-    // Fallback para rate limit ou erro da API
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.warn('[generate-sales-insights] API Lovable AI falhou:', aiResponse.status, errorText);
-      
-      // Se for rate limit (429), retornar insights simples baseados em métricas
-      if (aiResponse.status === 429) {
-        const fallbackInsights = `Performance de vendas no período: ${totalDeals} negócios totais, com ${wonDeals} ganhos (${conversionRate}% de conversão) gerando R$ ${totalValue.toLocaleString('pt-BR')} em receita. Ticket médio de R$ ${avgDealValue.toLocaleString('pt-BR')}. ${recentConversionTrend > 0 ? `Tendência positiva de +${recentConversionTrend}%` : recentConversionTrend < 0 ? `Tendência negativa de ${recentConversionTrend}%` : 'Conversão estável'} nos últimos 30 dias.`;
-        
-        return new Response(
-          JSON.stringify({
-            insights: fallbackInsights,
-            metrics: {
-              totalDeals,
-              openDeals,
-              wonDeals,
-              lostDeals,
-              conversionRate,
-              totalValue,
-              avgDealValue,
-              recentConversionTrend,
-            },
-            generatedAt: new Date().toISOString(),
-            isAIGenerated: false,
+    // TENTATIVA 1: OpenAI (prioridade por ter quota dedicada)
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (openaiApiKey) {
+      try {
+        console.log('[generate-sales-insights] Tentando OpenAI...');
+        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: 'Você é um analista de vendas especializado em CRM.' },
+              { role: 'user', content: prompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 300,
           }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          }
-        );
+        });
+
+        if (openaiResponse.ok) {
+          const openaiData = await openaiResponse.json();
+          insights = openaiData.choices[0].message.content;
+          aiProvider = 'openai';
+          console.log('[generate-sales-insights] ✅ Insights gerados via OpenAI');
+        } else {
+          const errorText = await openaiResponse.text();
+          console.warn('[generate-sales-insights] OpenAI falhou:', openaiResponse.status, errorText);
+        }
+      } catch (openaiError) {
+        console.warn('[generate-sales-insights] Erro ao chamar OpenAI:', openaiError);
       }
-      
-      // Para outros erros, continuar retornando erro
-      throw new Error(`Erro na API Lovable AI: ${aiResponse.status} ${errorText}`);
     }
 
-    const aiData = await aiResponse.json();
-    const insights = aiData.choices[0].message.content;
+    // TENTATIVA 2: Lovable AI (se OpenAI falhou)
+    if (!insights) {
+      const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+      if (lovableApiKey) {
+        try {
+          console.log('[generate-sales-insights] Tentando Lovable AI...');
+          const lovableResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${lovableApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'google/gemini-2.5-flash',
+              messages: [
+                { role: 'system', content: 'Você é um analista de vendas especializado em CRM.' },
+                { role: 'user', content: prompt }
+              ],
+              temperature: 0.7,
+              max_tokens: 300,
+            }),
+          });
 
-    console.log('[generate-sales-insights] Insights gerados com sucesso via IA');
+          if (lovableResponse.ok) {
+            const lovableData = await lovableResponse.json();
+            insights = lovableData.choices[0].message.content;
+            aiProvider = 'lovable';
+            console.log('[generate-sales-insights] ✅ Insights gerados via Lovable AI');
+          } else {
+            const errorText = await lovableResponse.text();
+            console.warn('[generate-sales-insights] Lovable AI falhou:', lovableResponse.status, errorText);
+          }
+        } catch (lovableError) {
+          console.warn('[generate-sales-insights] Erro ao chamar Lovable AI:', lovableError);
+        }
+      }
+    }
+
+    // TENTATIVA 3: Fallback baseado em métricas (se ambas as IAs falharam)
+    if (!insights) {
+      console.log('[generate-sales-insights] 📊 Usando fallback baseado em métricas');
+      insights = `Performance de vendas no período: ${totalDeals} negócios totais, com ${wonDeals} ganhos (${conversionRate}% de conversão) gerando R$ ${totalValue.toLocaleString('pt-BR')} em receita. Ticket médio de R$ ${avgDealValue.toLocaleString('pt-BR')}. ${recentConversionTrend > 0 ? `Tendência positiva de +${recentConversionTrend}% nos últimos 30 dias` : recentConversionTrend < 0 ? `Atenção: tendência negativa de ${recentConversionTrend}% nos últimos 30 dias` : 'Conversão estável nos últimos 30 dias'}.`;
+      aiProvider = 'fallback';
+    }
 
     return new Response(
       JSON.stringify({
@@ -178,7 +197,7 @@ Responda APENAS com os insights, sem introdução ou conclusão.`;
           recentConversionTrend,
         },
         generatedAt: new Date().toISOString(),
-        isAIGenerated: true,
+        aiProvider, // 'openai', 'lovable', ou 'fallback'
       }),
       {
         status: 200,
@@ -186,7 +205,7 @@ Responda APENAS com os insights, sem introdução ou conclusão.`;
       }
     );
   } catch (error: any) {
-    console.error('[generate-sales-insights] Erro:', error);
+    console.error('[generate-sales-insights] Erro fatal:', error);
     return new Response(
       JSON.stringify({
         error: error.message,
