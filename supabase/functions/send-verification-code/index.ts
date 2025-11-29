@@ -68,20 +68,36 @@ serve(async (req) => {
     const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
     
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: 'Seu Armazém Drop <noreply@parabellum.work>',
+      from: 'Parabellum Security <sistema@parabellum.work>',
       to: [email],
-      subject: 'Seu Código de Verificação',
+      subject: '🔐 Código de Verificação - Primeiro Acesso Parabellum',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2563EB;">🔐 Verificação de Identidade</h2>
-          <p>Recebemos uma solicitação para acessar seu histórico de conversas.</p>
-          <div style="background: #F3F4F6; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-            <h1 style="font-size: 48px; letter-spacing: 8px; margin: 0; color: #2563EB;">${code}</h1>
+          <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
+            <h1 style="color: white; margin: 0;">🔐 Sistema Parabellum</h1>
           </div>
-          <p><strong>Este código expira em 10 minutos.</strong></p>
-          <p style="color: #6B7280; font-size: 14px;">
-            Se você não solicitou este código, pode ignorar este email.
-          </p>
+          
+          <div style="padding: 30px; background: #f8fafc;">
+            <h2 style="color: #1e3a5f;">Código de Verificação</h2>
+            <p>Olá! Você está ativando sua conta no Sistema Parabellum.</p>
+            <p>Use o código abaixo para confirmar sua identidade:</p>
+            
+            <div style="background: white; border-radius: 8px; padding: 30px; text-align: center; margin: 20px 0; border: 2px solid #2563EB;">
+              <h1 style="font-size: 48px; letter-spacing: 12px; margin: 0; color: #2563EB; font-weight: bold;">${code}</h1>
+            </div>
+            
+            <p style="color: #dc2626; font-weight: bold;">⏱️ Este código expira em 10 minutos.</p>
+            
+            <p style="color: #64748b; font-size: 14px;">
+              Se você não solicitou este código, entre em contato com o suporte imediatamente.
+            </p>
+          </div>
+          
+          <div style="background: #1e3a5f; padding: 20px; text-align: center;">
+            <p style="color: #94a3b8; margin: 0; font-size: 12px;">
+              Equipe de Segurança - Parabellum
+            </p>
+          </div>
         </div>
       `,
     });
