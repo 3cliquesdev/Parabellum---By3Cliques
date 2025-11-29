@@ -55,7 +55,7 @@ export default function CSManagement() {
 
   return (
     <Layout>
-      <div className="container mx-auto p-4 md:p-6 space-y-4">
+      <div className="container mx-auto p-3 md:p-4 space-y-3">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -73,10 +73,10 @@ export default function CSManagement() {
             ) : (
               <>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">ARR Total</span>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">ARR Total</span>
                   <DollarSign className="w-4 h-4 text-emerald-600" />
                 </div>
-                <div className="text-2xl font-bold text-foreground truncate">{formatCurrency(kpis?.arrTotal || 0)}</div>
+                <div className="text-3xl font-bold text-foreground truncate">{formatCurrency(kpis?.arrTotal || 0)}</div>
                 <p className="text-xs text-muted-foreground">Receita Recorrente Anual</p>
               </>
             )}
@@ -89,10 +89,10 @@ export default function CSManagement() {
             ) : (
               <>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Churn Rate</span>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Churn Rate</span>
                   <TrendingDown className="w-4 h-4 text-rose-600" />
                 </div>
-                <div className="text-2xl font-bold text-foreground">{kpis?.churnRateMonthly.toFixed(1)}%</div>
+                <div className="text-3xl font-bold text-foreground">{kpis?.churnRateMonthly.toFixed(1)}%</div>
                 <p className="text-xs text-muted-foreground">Perdas este mês</p>
               </>
             )}
@@ -105,10 +105,10 @@ export default function CSManagement() {
             ) : (
               <>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Expansão</span>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Expansão</span>
                   <TrendingUp className="w-4 h-4 text-blue-600" />
                 </div>
-                <div className="text-2xl font-bold text-foreground truncate">{formatCurrency(kpis?.upsellRevenue || 0)}</div>
+                <div className="text-3xl font-bold text-foreground truncate">{formatCurrency(kpis?.upsellRevenue || 0)}</div>
                 <p className="text-xs text-muted-foreground">Upsell este mês</p>
               </>
             )}
@@ -121,10 +121,10 @@ export default function CSManagement() {
             ) : (
               <>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Saúde da Base</span>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Saúde da Base</span>
                   <Users className="w-4 h-4 text-slate-600" />
                 </div>
-                <div className="text-2xl font-bold text-foreground">{totalClients}</div>
+                <div className="text-3xl font-bold text-foreground">{totalClients}</div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
@@ -145,14 +145,14 @@ export default function CSManagement() {
         </div>
 
         {/* Seção Visual - 2 colunas */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* Gráfico de Rosca - Saúde da Base */}
           <Card className="p-5">
             <h3 className="text-base font-semibold text-foreground mb-3">Distribuição de Saúde</h3>
             {kpisLoading ? (
-              <Skeleton className="h-56" />
+              <Skeleton className="h-48" />
             ) : (
-              <div className="relative h-56">
+              <div className="relative h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -211,11 +211,11 @@ export default function CSManagement() {
                 ))}
               </div>
             ) : criticalClients && criticalClients.length > 0 ? (
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-2">
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                 {criticalClients.slice(0, 5).map((client) => (
-                  <div key={client.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors">
+                  <div key={client.id} className="flex items-center justify-between p-2 border rounded-lg hover:bg-accent/50 transition-colors">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Avatar className="w-9 h-9">
+                      <Avatar className="w-8 h-8">
                         <AvatarImage src={client.avatar_url || undefined} />
                         <AvatarFallback className="text-xs">{client.first_name[0]}{client.last_name[0]}</AvatarFallback>
                       </Avatar>
@@ -277,10 +277,10 @@ export default function CSManagement() {
                       return (
                         <tr 
                           key={consultant.id} 
-                          className="border-b hover:bg-accent/50 transition-colors cursor-pointer"
+                          className="border-b hover:bg-accent/50 transition-colors cursor-pointer text-sm"
                           onClick={() => navigate(`/cs-management/consultant/${consultant.id}`)}
                         >
-                          <td className="py-3 px-4">
+                          <td className="py-2 px-4">
                             <div className="flex items-center gap-3">
                               <Avatar>
                                 <AvatarImage src={consultant.avatar_url || undefined} />
@@ -289,16 +289,16 @@ export default function CSManagement() {
                               <span className="font-medium text-foreground">{consultant.full_name}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-4">
+                          <td className="py-2 px-4">
                             <span className="text-foreground">{consultant.portfolio_count} clientes</span>
                           </td>
-                          <td className="py-3 px-4">
+                          <td className="py-2 px-4">
                             <span className="font-medium text-foreground">{formatCurrency(consultant.portfolio_value)}</span>
                           </td>
-                          <td className="py-3 px-4">
+                          <td className="py-2 px-4">
                             <Badge variant={healthBadge.variant}>{healthBadge.label}</Badge>
                           </td>
-                          <td className="py-3 px-4">
+                          <td className="py-2 px-4">
                             <span className="text-sm text-muted-foreground">
                               {consultant.last_activity 
                                 ? formatDistanceToNow(new Date(consultant.last_activity), { addSuffix: true, locale: ptBR })
@@ -306,17 +306,16 @@ export default function CSManagement() {
                               }
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <td className="py-2 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                             <Button 
                               size="sm" 
-                              variant="default"
+                              variant="ghost"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigate(`/cs-management/consultant/${consultant.id}`);
                               }}
                             >
-                              <Eye className="w-4 h-4 mr-1" />
-                              Ver Detalhes
+                              <Eye className="w-4 h-4" />
                             </Button>
                           </td>
                         </tr>

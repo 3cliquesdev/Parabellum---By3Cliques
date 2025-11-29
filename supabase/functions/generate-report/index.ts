@@ -96,6 +96,11 @@ serve(async (req) => {
         fileName = `unanswered_${Date.now()}`;
         break;
       
+      case 'team_goals_performance':
+        data = await generateTeamGoalsPerformanceReport(supabaseClient, filters);
+        fileName = `team_goals_${Date.now()}`;
+        break;
+      
       default:
         throw new Error(`Unknown report type: ${report_type}`);
     }
@@ -489,6 +494,110 @@ async function generateUnansweredQuestionsReport(supabase: any, filters: any) {
     escalated_at: log.created_at,
     reason: log.result_data?.reason || 'Sem resposta na base de conhecimento',
   }));
+}
+
+async function generateTeamGoalsPerformanceReport(supabase: any, filters: any) {
+  const { startDate, endDate } = filters;
+  
+  // Parse month/year from startDate (format: YYYY-MM-DD)
+  const date = startDate ? new Date(startDate) : new Date();
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+  
+  console.log('[team_goals_performance] Generating for:', { month, year });
+  
+  // Fetch all sales goals for the period
+  const { data: salesGoals, error: salesGoalsError } = await supabase
+    .from('sales_goals')
+    .select(`
+      *, 
+      assigned_user:profiles!sales_goals_assigned_to_fkey(full_name)
+    `)
+    .eq('period_month', month)
+    .eq('period_year', year)
+    .eq('status', 'active');
+
+  if (salesGoalsError) throw salesGoalsError;
+
+  const performanceData: any[] = [];
+
+  // Process sales goals
+  for (const goal of salesGoals || []) {
+    // Calculate realized value (deals won in period)
+    const periodStart = new Date(year, month - 1, 1).toISOString();
+    const periodEnd = new Date(year, month, 0, 23, 59, 59).toISOString();
+
+    const { data: deals, error: dealsError } = await supabase
+      .from('deals')
+      .select('value')
+      .eq('assigned_to', goal.assigned_to)
+      .eq('status', 'won')
+      .gte('closed_at', periodStart)
+      .lte('closed_at', periodEnd);
+
+    if (dealsError) throw dealsError;
+
+    const realizedValue = deals?.reduce((sum: number, deal: any) => sum + (deal.value || 0), 0) || 0;
+    const percentage = goal.target_value > 0 ? (realizedValue / goal.target_value) * 100 : 0;
+    const commission = realizedValue * (goal.commission_rate / 100);
+    
+    let status = 'Abaixo';
+    if (percentage >= 100) status = 'Bateu Meta 🏆';
+    else if (percentage >= 75) status = 'No Ritmo';
+
+    performanceData.push({
+      mes_referencia: `${String(month).padStart(2, '0')}/${year}`,
+      nome: goal.assigned_user?.full_name || 'Usuário',
+      cargo: 'Vendedor',
+      meta_definida: goal.target_value,
+      valor_realizado: realizedValue,
+      percentual_atingimento: percentage.toFixed(1) + '%',
+      comissao_bonus: commission,
+      status,
+    });
+  }
+
+  // Fetch all CS goals for the period
+  const formattedMonth = `${year}-${String(month).padStart(2, '0')}-01`;
+  const { data: csGoals, error: csGoalsError } = await supabase
+    .from('cs_goals')
+    .select('*')
+    .eq('month', formattedMonth);
+
+  if (csGoalsError) throw csGoalsError;
+
+  // Process CS goals
+  for (const goal of csGoals || []) {
+    // Calculate current GMV
+    const { data: contacts, error: contactsError } = await supabase
+      .from('contacts')
+      .select('total_ltv, profiles:consultant_id(full_name)')
+      .eq('consultant_id', goal.consultant_id)
+      .eq('status', 'customer');
+
+    if (contactsError) throw contactsError;
+
+    const realizedValue = contacts?.reduce((sum: number, contact: any) => sum + (contact.total_ltv || 0), 0) || 0;
+    const percentage = goal.target_gmv > 0 ? (realizedValue / goal.target_gmv) * 100 : 0;
+    
+    let status = 'Abaixo';
+    if (percentage >= 100) status = 'Bateu Meta 🏆';
+    else if (percentage >= 75) status = 'No Ritmo';
+
+    performanceData.push({
+      mes_referencia: `${String(month).padStart(2, '0')}/${year}`,
+      nome: contacts?.[0]?.profiles?.full_name || 'Consultor',
+      cargo: 'Consultor CS',
+      meta_definida: goal.target_gmv,
+      valor_realizado: realizedValue,
+      percentual_atingimento: percentage.toFixed(1) + '%',
+      comissao_bonus: goal.bonus_amount || 0,
+      status,
+    });
+  }
+
+  console.log(`[team_goals_performance] Generated ${performanceData.length} rows`);
+  return performanceData;
 }
 
 function convertToCSV(data: any[]): string {

@@ -17,6 +17,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { CSGoalsWidget } from "@/components/widgets/CSGoalsWidget";
+import { useTeamGoalProgress } from "@/hooks/useTeamGoalProgress";
+import { TeamGoalGauge } from "@/components/TeamGoalGauge";
+import { TeamMemberProgressTable } from "@/components/TeamMemberProgressTable";
 
 export default function Goals() {
   const { role, isConsultant, loading: roleLoading } = useUserRole();
@@ -27,9 +30,13 @@ export default function Goals() {
 
   const { data: goals, isLoading } = useGoals(selectedMonth, selectedYear);
   const { data: consultants } = useConsultants();
+  const { data: teamProgress, isLoading: teamProgressLoading } = useTeamGoalProgress(selectedMonth, selectedYear);
   
   // Format month as YYYY-MM-01 for CS goals
   const formattedMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+
+  // Check if user is a manager (should see team view)
+  const isManager = role === "admin" || role === "manager" || role === "cs_manager";
 
   if (roleLoading) {
     return (
@@ -116,11 +123,22 @@ export default function Goals() {
 
           {/* Tab: Minhas Metas */}
           <TabsContent value="goals" className="mt-6">
-            {isConsultant && !role?.includes('admin') && !role?.includes('manager') ? (
+            {isManager ? (
+              // Manager view: Team Goal Dashboard
+              <div className="space-y-6">
+                <TeamGoalGauge
+                  targetValue={teamProgress?.teamTargetValue || 0}
+                  currentValue={teamProgress?.teamCurrentValue || 0}
+                  percentage={teamProgress?.teamPercentage || 0}
+                  isLoading={teamProgressLoading}
+                />
+                <TeamMemberProgressTable members={teamProgress?.members || []} />
+              </div>
+            ) : isConsultant ? (
               // Consultant view: CS Goals Widget
               <CSGoalsWidget />
             ) : (
-              // Sales Rep/Admin view: Sales Goals Cards
+              // Sales Rep view: Individual Sales Goals Cards
               <>
                 {isLoading ? (
                   <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -139,9 +157,7 @@ export default function Goals() {
                     <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-semibold mb-2">Nenhuma meta encontrada</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      {role === "admin" 
-                        ? "Crie uma nova meta para começar a acompanhar o progresso da equipe." 
-                        : "Aguardando definição de metas pelo administrador."}
+                      Aguardando definição de metas pelo administrador.
                     </p>
                   </div>
                 )}

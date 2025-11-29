@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileSpreadsheet, TrendingUp, Users, MessageSquare, DollarSign } from "lucide-react";
+import { FileSpreadsheet, TrendingUp, Users, MessageSquare, DollarSign, Target } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import ReportCard from "@/components/ReportCard";
@@ -56,6 +56,12 @@ export default function Reports() {
           name: 'Motivos de Perda',
           description: 'Análise agregada de por que deals foram perdidos',
           icon: FileSpreadsheet,
+        },
+        {
+          id: 'team_goals_performance',
+          name: 'Performance de Metas da Equipe',
+          description: 'Comparativo de metas vs realizados com comissões',
+          icon: Target,
         },
       ],
     },
