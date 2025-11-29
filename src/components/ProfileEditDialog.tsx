@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -40,9 +41,10 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const { profile, user } = useAuth();
+  const { profile, user, refetchProfile } = useAuth();
   const { toast } = useToast();
   const { uploadAvatar, uploading: uploadingAvatar } = useAvatarUpload();
+  const queryClient = useQueryClient();
 
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -86,15 +88,16 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
 
       if (error) throw error;
 
+      // Refetch profile data without page reload
+      await refetchProfile();
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+
       toast({
         title: "Perfil atualizado",
         description: "Suas informações foram atualizadas com sucesso.",
       });
 
       setOpen(false);
-      
-      // Refresh page to update profile in useAuth
-      window.location.reload();
     } catch (error) {
       console.error("Error updating profile:", error);
       toast({

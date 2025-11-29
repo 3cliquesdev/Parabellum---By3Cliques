@@ -71,12 +71,25 @@ export function useAuth() {
     await supabase.auth.signOut();
   };
 
+  const refetchProfile = async () => {
+    if (!user) return;
+    
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+    
+    setProfile(data);
+  };
+
   return {
     user,
     profile,
     session,
     loading,
     signOut,
+    refetchProfile,
     isAuthenticated: !!user,
     department: profile?.department || null,
   };

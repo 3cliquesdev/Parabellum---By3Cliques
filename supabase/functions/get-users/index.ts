@@ -89,6 +89,7 @@ Deno.serve(async (req) => {
           full_name: profile?.full_name,
           job_title: profile?.job_title,
           avatar_url: profile?.avatar_url,
+          department: profile?.department,
         };
       })
     );
