@@ -29,8 +29,8 @@ export default function DragDropActionBar({ isVisible }: DragDropActionBarProps)
             className={cn(
               "relative h-32 rounded-xl border-4 border-dashed transition-all duration-200",
               "flex items-center justify-center gap-3",
-              "bg-green-500/10 border-green-500",
-              isOverWon && "bg-green-500/30 border-green-600 scale-105 shadow-xl"
+              "bg-green-500/10 border-green-500/30 dark:bg-green-500/5 dark:border-green-500/20",
+              isOverWon && "bg-green-500/20 dark:bg-green-500/10 border-green-600 scale-105 shadow-xl"
             )}
           >
             <Trophy className={cn(
@@ -49,8 +49,8 @@ export default function DragDropActionBar({ isVisible }: DragDropActionBarProps)
             className={cn(
               "relative h-32 rounded-xl border-4 border-dashed transition-all duration-200",
               "flex items-center justify-center gap-3",
-              "bg-red-500/10 border-red-500",
-              isOverLost && "bg-red-500/30 border-red-600 scale-105 shadow-xl"
+              "bg-rose-500/10 border-rose-500/30 dark:bg-rose-500/5 dark:border-rose-500/20",
+              isOverLost && "bg-rose-500/20 dark:bg-rose-500/10 border-rose-600 scale-105 shadow-xl"
             )}
           >
             <X className={cn(

@@ -13,13 +13,13 @@ const badgeVariants = cva(
         destructive: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600",
         // Enterprise Subtle Variants
-        success: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-        warning: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
-        info: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300",
-        error: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300",
+        success: "border-emerald-200/20 bg-emerald-500/10 text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400",
+        warning: "border-amber-200/20 bg-amber-500/10 text-amber-600 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400",
+        info: "border-blue-200/20 bg-blue-500/10 text-blue-600 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400",
+        error: "border-rose-200/20 bg-rose-500/10 text-rose-600 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400",
         // Gamification Subtle
-        hot: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300",
-        cold: "border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400",
+        hot: "border-orange-200/20 bg-orange-500/10 text-orange-500 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400",
+        cold: "border-slate-200/20 bg-slate-500/10 text-slate-500 dark:border-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400",
       },
     },
     defaultVariants: {

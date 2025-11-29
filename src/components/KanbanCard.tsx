@@ -126,8 +126,10 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
         ref={setNodeRef}
         style={style}
         className={cn(
-          "cursor-grab active:cursor-grabbing mb-3 hover:border-primary transition-all relative group",
-          isRotten && "border-destructive border-2"
+          "cursor-grab active:cursor-grabbing mb-3 transition-all relative group",
+          "hover:border-primary/50 dark:hover:border-primary/30",
+          "dark:bg-white/[0.02] dark:border-white/5",
+          isRotten && "border-destructive/50 dark:border-destructive/30 border-2"
         )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}

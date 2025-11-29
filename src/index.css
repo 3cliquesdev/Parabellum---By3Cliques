@@ -53,44 +53,44 @@
   }
 
   .dark {
-    /* DARK MODE - PALETA TECH BLUE ENTERPRISE */
-    --background: 0 0% 0%;             /* Preto Puro */
-    --foreground: 0 0% 100%;           /* Texto Branco */
+    /* STEALTH MODE - Cinza Profundo Azulado */
+    --background: 222 47% 5%;          /* #0B0E14 - Quase preto azulado */
+    --foreground: 210 20% 85%;         /* #D1D5DB - Não branco puro (gray-300) */
     
     /* SIDEBAR - Variáveis Completas */
-    --sidebar-background: 0 0% 5%;            /* Cinza Quase Preto */
-    --sidebar-foreground: 0 0% 100%;          /* Texto Branco */
-    --sidebar-primary: 221.2 83.2% 53.3%;     /* Azul Royal */
-    --sidebar-primary-foreground: 210 40% 98%;/* Branco */
-    --sidebar-accent: 0 0% 12%;               /* Hover Cinza Escuro */
-    --sidebar-accent-foreground: 0 0% 100%;   /* Texto Branco no Hover */
-    --sidebar-border: 0 0% 15%;               /* Bordas Sutis */
-    --sidebar-ring: 221.2 83.2% 53.3%;        /* Foco Azul */
+    --sidebar-background: 222 47% 6%;
+    --sidebar-foreground: 210 20% 85%;
+    --sidebar-primary: 221.2 83.2% 53.3%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 222 47% 10%;
+    --sidebar-accent-foreground: 210 20% 85%;
+    --sidebar-border: 220 13% 15%;
+    --sidebar-ring: 221.2 83.2% 53.3%;
     
-    --card: 0 0% 5%;                   /* Cinza Quase Preto */
-    --card-foreground: 0 0% 100%;
+    --card: 222 47% 8%;                /* #151921 - Elevação sutil */
+    --card-foreground: 210 20% 85%;
     
-    --primary: 221.2 83.2% 53.3%;      /* Tech Blue */
+    --primary: 221.2 83.2% 53.3%;
     --primary-foreground: 210 40% 98%;
     
-    --secondary: 0 0% 12%;             /* Cinza Chumbo */
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 222 47% 10%;
+    --secondary-foreground: 210 20% 85%;
     
-    --border: 0 0% 15%;                /* Borda sutil */
-    --input: 0 0% 15%;
+    --border: 220 13% 15%;             /* Bordas muito sutis */
+    --input: 220 13% 15%;
     --ring: 221.2 83.2% 53.3%;
     
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 222 47% 10%;
+    --muted-foreground: 215 20% 55%;   /* gray-500 para texto secundário */
     
-    --accent: 0 0% 12%;                  /* Hover cinza escuro */
-    --accent-foreground: 0 0% 100%;      /* Texto BRANCO no hover */
+    --accent: 222 47% 10%;
+    --accent-foreground: 210 20% 85%;
     
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive-foreground: 210 20% 98%;
     
-    --popover: 0 0% 5%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 20% 85%;
   }
 
   * {
@@ -107,15 +107,15 @@
 /* Enterprise Typography & Density Utilities */
 @layer components {
   .text-enterprise-title {
-    @apply text-base font-semibold text-slate-900 dark:text-slate-100;
+    @apply text-base font-semibold text-slate-900 dark:text-gray-200;
   }
   
   .text-enterprise-body {
-    @apply text-sm text-slate-600 dark:text-slate-400;
+    @apply text-sm text-slate-600 dark:text-gray-400;
   }
   
   .text-enterprise-label {
-    @apply text-xs font-medium text-slate-500 dark:text-slate-500 uppercase tracking-wide;
+    @apply text-xs font-medium text-slate-500 dark:text-gray-500 uppercase tracking-wide;
   }
   
   .card-compact {

@@ -11,17 +11,17 @@ const sentimentConfig = {
   critico: {
     label: "Crítico",
     icon: Angry,
-    color: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300",
+    color: "border-rose-200/20 bg-rose-500/10 text-rose-600 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400",
   },
   neutro: {
     label: "Neutro",
     icon: Meh,
-    color: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400",
+    color: "border-slate-200/20 bg-slate-500/10 text-slate-600 dark:border-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400",
   },
   promotor: {
     label: "Promotor",
     icon: Smile,
-    color: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+    color: "border-emerald-200/20 bg-emerald-500/10 text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400",
   },
 };
 

@@ -44,9 +44,13 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
 
   return (
     <div className="flex-shrink-0 w-64">
-      <div className="bg-muted/50 rounded-lg p-3">
+      <div className="bg-card/50 dark:bg-white/[0.02] rounded-xl p-3 border border-border/50 dark:border-white/5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
+            {/* Bolinha de cor da etapa */}
+            <span 
+              className="w-2 h-2 rounded-full flex-shrink-0 bg-primary" 
+            />
             {isAdmin ? (
               <StageDialog
                 trigger={
