@@ -112,11 +112,11 @@ export function CSGoalDialog({ consultantId, consultantName, existingGoal, curre
                 {...register("target_gmv", { required: true })} 
                 placeholder="50000.00" 
               />
-              <p className="text-xs text-muted-foreground mt-1">Volume total transacionado pela carteira</p>
+              <p className="text-xs text-muted-foreground mt-1">Vendas totais da carteira no mês</p>
             </div>
 
             <div>
-              <Label htmlFor="target_upsell">📈 Meta de Upsell (R$) *</Label>
+              <Label htmlFor="target_upsell">📈 Meta de Expansão (R$) *</Label>
               <Input 
                 id="target_upsell" 
                 type="number" 
@@ -124,13 +124,13 @@ export function CSGoalDialog({ consultantId, consultantName, existingGoal, curre
                 {...register("target_upsell", { required: true })} 
                 placeholder="10000.00" 
               />
-              <p className="text-xs text-muted-foreground mt-1">Vendas adicionais (expansão)</p>
+              <p className="text-xs text-muted-foreground mt-1">Vendas adicionais para base existente</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="max_churn_rate">🛡️ Teto de Churn (%) *</Label>
+              <Label htmlFor="max_churn_rate">🛡️ Meta de Retenção (%) *</Label>
               <Input 
                 id="max_churn_rate" 
                 type="number" 
@@ -138,7 +138,7 @@ export function CSGoalDialog({ consultantId, consultantName, existingGoal, curre
                 {...register("max_churn_rate", { required: true })} 
                 placeholder="2.0" 
               />
-              <p className="text-xs text-muted-foreground mt-1">Taxa máxima de cancelamento aceitável</p>
+              <p className="text-xs text-muted-foreground mt-1">Máximo de churn permitido (ex: 2% = 98% retenção)</p>
             </div>
 
             <div>
@@ -149,7 +149,7 @@ export function CSGoalDialog({ consultantId, consultantName, existingGoal, curre
                 {...register("activation_count", { required: true })} 
                 placeholder="5" 
               />
-              <p className="text-xs text-muted-foreground mt-1">Clientes novos ativados</p>
+              <p className="text-xs text-muted-foreground mt-1">Clientes novos que devem ativar no mês</p>
             </div>
           </div>
 
