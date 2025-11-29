@@ -445,7 +445,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                               className={cn(
                                 "max-w-[75%] px-4 py-3 shadow-sm",
                                 isCustomer
-                                  ? "bg-white dark:bg-zinc-700 border border-gray-200 dark:border-zinc-600 rounded-2xl rounded-tl-none text-slate-800 dark:text-gray-200"
+                                  ? "bg-white dark:bg-neutral-600 border border-gray-200 dark:border-neutral-500 rounded-2xl rounded-tl-none text-slate-800 dark:text-white"
                                   : isAI
                                   ? "bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 rounded-2xl rounded-tr-none text-violet-900 dark:text-violet-300"
                                   : "bg-blue-600 dark:bg-blue-600/90 text-white rounded-2xl rounded-tr-none"
