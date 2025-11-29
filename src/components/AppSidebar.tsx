@@ -164,6 +164,7 @@ const adminCrmItems = [
 
 const adminReportsItems = [
   { title: "Metas", href: "/goals", icon: Target },
+  { title: "🎯 Definir Metas", href: "/goals-management", icon: Target },
   { title: "Relatórios", href: "/reports", icon: FileText },
 ];
 
