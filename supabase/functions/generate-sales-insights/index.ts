@@ -123,16 +123,46 @@ Responda APENAS com os insights, sem introdução ou conclusão.`;
       }),
     });
 
+    // Fallback para rate limit ou erro da API
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error('[generate-sales-insights] Erro na API Lovable AI:', errorText);
+      console.warn('[generate-sales-insights] API Lovable AI falhou:', aiResponse.status, errorText);
+      
+      // Se for rate limit (429), retornar insights simples baseados em métricas
+      if (aiResponse.status === 429) {
+        const fallbackInsights = `Performance de vendas no período: ${totalDeals} negócios totais, com ${wonDeals} ganhos (${conversionRate}% de conversão) gerando R$ ${totalValue.toLocaleString('pt-BR')} em receita. Ticket médio de R$ ${avgDealValue.toLocaleString('pt-BR')}. ${recentConversionTrend > 0 ? `Tendência positiva de +${recentConversionTrend}%` : recentConversionTrend < 0 ? `Tendência negativa de ${recentConversionTrend}%` : 'Conversão estável'} nos últimos 30 dias.`;
+        
+        return new Response(
+          JSON.stringify({
+            insights: fallbackInsights,
+            metrics: {
+              totalDeals,
+              openDeals,
+              wonDeals,
+              lostDeals,
+              conversionRate,
+              totalValue,
+              avgDealValue,
+              recentConversionTrend,
+            },
+            generatedAt: new Date().toISOString(),
+            isAIGenerated: false,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+      
+      // Para outros erros, continuar retornando erro
       throw new Error(`Erro na API Lovable AI: ${aiResponse.status} ${errorText}`);
     }
 
     const aiData = await aiResponse.json();
     const insights = aiData.choices[0].message.content;
 
-    console.log('[generate-sales-insights] Insights gerados com sucesso');
+    console.log('[generate-sales-insights] Insights gerados com sucesso via IA');
 
     return new Response(
       JSON.stringify({
@@ -148,6 +178,7 @@ Responda APENAS com os insights, sem introdução ou conclusão.`;
           recentConversionTrend,
         },
         generatedAt: new Date().toISOString(),
+        isAIGenerated: true,
       }),
       {
         status: 200,
