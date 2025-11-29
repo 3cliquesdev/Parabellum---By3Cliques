@@ -291,8 +291,14 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
                 <SelectContent>
                   <SelectItem value="admin">
                     <div className="flex flex-col">
-                      <span className="font-medium">Administrador</span>
-                      <span className="text-xs text-muted-foreground">Acesso total</span>
+                      <span className="font-medium">👑 Administrador (Super Admin)</span>
+                      <span className="text-xs text-muted-foreground">Acesso total + Infraestrutura</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="general_manager">
+                    <div className="flex flex-col">
+                      <span className="font-medium">🎖️ Gerente Geral</span>
+                      <span className="text-xs text-muted-foreground">Operação completa (sem infra)</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="manager">

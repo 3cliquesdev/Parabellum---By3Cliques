@@ -177,7 +177,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, isSupportManager, isFinancialManager, isCSManager, loading } = useUserRole();
+  const { isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, isSupportManager, isFinancialManager, isCSManager, isGeneralManager, loading } = useUserRole();
   const { signOut, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -186,12 +186,13 @@ export function AppSidebar() {
 
   // Determine mode label and color
   const getModeInfo = () => {
-    if (isSupportManager && !isAdmin && !isManager) return { label: "👨‍💼 Gerente de Suporte", color: "bg-indigo-500" };
-    if (isSupportAgent && !isSupportManager && !isAdmin && !isManager) return { label: "🛡️ Modo Suporte", color: "bg-blue-500" };
-    if (isFinancialManager && !isAdmin && !isManager) return { label: "💰 Gerente Financeiro", color: "bg-emerald-500" };
-    if (isCSManager && !isAdmin && !isManager) return { label: "👔 Gerente de CS", color: "bg-purple-600" };
-    if (isConsultant && !isAdmin && !isManager) return { label: "🤝 Modo Consultor", color: "bg-green-500" };
-    if (isSalesRep && !isAdmin && !isManager) return { label: "🎯 Modo Vendas", color: "bg-orange-500" };
+    if (isSupportManager && !isAdmin && !isManager && !isGeneralManager) return { label: "👨‍💼 Gerente de Suporte", color: "bg-indigo-500" };
+    if (isSupportAgent && !isSupportManager && !isAdmin && !isManager && !isGeneralManager) return { label: "🛡️ Modo Suporte", color: "bg-blue-500" };
+    if (isFinancialManager && !isAdmin && !isManager && !isGeneralManager) return { label: "💰 Gerente Financeiro", color: "bg-emerald-500" };
+    if (isCSManager && !isAdmin && !isManager && !isGeneralManager) return { label: "👔 Gerente de CS", color: "bg-purple-600" };
+    if (isConsultant && !isAdmin && !isManager && !isGeneralManager) return { label: "🤝 Modo Consultor", color: "bg-green-500" };
+    if (isSalesRep && !isAdmin && !isManager && !isGeneralManager) return { label: "🎯 Modo Vendas", color: "bg-orange-500" };
+    if (isGeneralManager && !isAdmin) return { label: "🎖️ Gerente Geral", color: "bg-blue-600" };
     if (isAdmin || isManager) return { label: "👑 Modo Admin", color: "bg-purple-500" };
     return { label: "Sistema", color: "bg-gray-500" };
   };
@@ -220,8 +221,8 @@ export function AppSidebar() {
   };
 
   const renderMenuItem = (item: { title: string; href: string; icon: any }) => {
-    // Show SLA alert badge on Inbox for admins/managers
-    const showSLABadge = (isAdmin || isManager) && item.href === "/inbox" && slaAlerts.length > 0;
+    // Show SLA alert badge on Inbox for admins/managers/general_managers
+    const showSLABadge = (isAdmin || isManager || isGeneralManager) && item.href === "/inbox" && slaAlerts.length > 0;
 
     return (
       <SidebarMenuItem key={item.title}>
@@ -441,8 +442,8 @@ export function AppSidebar() {
               </>
             ) : null}
 
-            {/* ============= ADMIN/MANAGER VIEW (👑) ============= */}
-            {isAdmin || isManager ? (
+            {/* ============= ADMIN/MANAGER/GENERAL_MANAGER VIEW (👑/🎖️) ============= */}
+            {isAdmin || isManager || isGeneralManager ? (
               <>
                 <SidebarGroup>
                   {!collapsed && <SidebarGroupLabel>Visão Geral</SidebarGroupLabel>}

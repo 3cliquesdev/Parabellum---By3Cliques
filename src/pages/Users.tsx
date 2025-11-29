@@ -36,21 +36,21 @@ export default function Users() {
   
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { role, isAdmin, loading: roleLoading } = useUserRole();
+  const { role, isAdmin, isGeneralManager, loading: roleLoading } = useUserRole();
   const { data: users, isLoading } = useUsers();
   const manageUserStatus = useManageUserStatus();
   const resendWelcomeEmail = useResendWelcomeEmail();
 
-  // Redirect if not admin - only after role is loaded and confirmed not admin
+  // Redirect if not admin or general_manager - only after role is loaded and confirmed
   useEffect(() => {
-    console.log("[Users] Checking access", { roleLoading, role, isAdmin });
+    console.log("[Users] Checking access", { roleLoading, role, isAdmin, isGeneralManager });
     
-    // Only redirect if role is loaded AND user is confirmed not admin
-    if (!roleLoading && role !== null && !isAdmin) {
-      console.log("[Users] User is not admin, redirecting to dashboard");
+    // Only redirect if role is loaded AND user is confirmed not admin/general_manager
+    if (!roleLoading && role !== null && !isAdmin && !isGeneralManager) {
+      console.log("[Users] User is not admin/general_manager, redirecting to dashboard");
       navigate("/");
     }
-  }, [role, isAdmin, roleLoading, navigate]);
+  }, [role, isAdmin, isGeneralManager, roleLoading, navigate]);
 
   const handleSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -122,17 +122,20 @@ export default function Users() {
   }
 
   const roleLabels: Record<string, string> = {
-    admin: "Administrador",
+    admin: "Administrador (Super Admin)",
+    general_manager: "Gerente Geral",
     manager: "Gerente de Vendas",
     sales_rep: "Vendedor",
     consultant: "Consultor",
     support_agent: "Agente de Suporte",
     support_manager: "Gerente de Suporte",
     financial_manager: "Gerente Financeiro",
+    cs_manager: "Gerente de CS",
   };
 
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "outline" => {
     if (role === "admin") return "default";
+    if (role === "general_manager") return "secondary";
     if (role === "manager") return "secondary";
     return "outline";
   };
@@ -230,12 +233,19 @@ export default function Users() {
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                        >
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEditClick(user)}>
+                        <DropdownMenuItem 
+                          onClick={() => handleEditClick(user)}
+                          disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                        >
                           <Edit className="mr-2 h-4 w-4" /> Editar
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleResendEmail(user)}>
@@ -243,21 +253,34 @@ export default function Users() {
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {user.is_blocked ? (
-                          <DropdownMenuItem onClick={() => handleUnblock(user)}>
+                          <DropdownMenuItem 
+                            onClick={() => handleUnblock(user)}
+                            disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                          >
                             <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> Desbloquear
                           </DropdownMenuItem>
                         ) : (
-                          <DropdownMenuItem onClick={() => handleBlock(user)} className="text-destructive">
+                          <DropdownMenuItem 
+                            onClick={() => handleBlock(user)} 
+                            className="text-destructive"
+                            disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                          >
                             <Ban className="mr-2 h-4 w-4" /> Bloquear
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
                         {user.is_archived ? (
-                          <DropdownMenuItem onClick={() => handleUnarchive(user)}>
+                          <DropdownMenuItem 
+                            onClick={() => handleUnarchive(user)}
+                            disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                          >
                             <ArchiveRestore className="mr-2 h-4 w-4" /> Desarquivar
                           </DropdownMenuItem>
                         ) : (
-                          <DropdownMenuItem onClick={() => handleArchive(user)}>
+                          <DropdownMenuItem 
+                            onClick={() => handleArchive(user)}
+                            disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                          >
                             <Archive className="mr-2 h-4 w-4" /> Arquivar
                           </DropdownMenuItem>
                         )}
