@@ -41,7 +41,6 @@ const productSchema = z.object({
   delivery_group_id: z.string().optional(),
   requires_account_manager: z.boolean(),
   is_active: z.boolean(),
-  price: z.number().min(0, "Preço não pode ser negativo").optional(),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -88,7 +87,6 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       delivery_group_id: product?.delivery_group_id || "none",
       requires_account_manager: product?.requires_account_manager || false,
       is_active: product?.is_active ?? true,
-      price: product?.price || 0,
     },
   });
 
@@ -101,7 +99,6 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       delivery_group_id: product?.delivery_group_id || "none",
       requires_account_manager: product?.requires_account_manager || false,
       is_active: product?.is_active ?? true,
-      price: product?.price || 0,
     });
   }, [product, form]);
 
@@ -131,7 +128,6 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
           delivery_group_id: delivery_group_id || undefined,
           requires_account_manager: data.requires_account_manager,
           is_active: data.is_active,
-          price: data.price || 0,
         },
       });
     } else {
@@ -142,7 +138,6 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
         delivery_group_id: delivery_group_id || undefined,
         requires_account_manager: data.requires_account_manager,
         is_active: data.is_active,
-        price: data.price || 0,
       });
     }
 
@@ -161,44 +156,56 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">
-                      Nome do Produto <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: Mentoria High Ticket" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">
+                    Nome do Produto <span className="text-destructive">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ex: Mentoria High Ticket" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              <FormField
-                control={form.control}
-                name="price"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Preço (R$)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0,00"
-                        {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            {/* Price Display - Read Only */}
+            {product && offers && offers.length > 0 && (
+              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Preço (via Kiwify)</p>
+                    <p className="text-lg font-bold text-green-600">
+                      {(() => {
+                        const activeOffers = offers.filter(o => o.is_active);
+                        if (activeOffers.length === 0) return "R$ 0,00";
+                        const prices = activeOffers.map(o => o.price);
+                        const minPrice = Math.min(...prices);
+                        const maxPrice = Math.max(...prices);
+                        if (minPrice === maxPrice) {
+                          return `R$ ${minPrice.toFixed(2).replace('.', ',')}`;
+                        }
+                        return `R$ ${minPrice.toFixed(2).replace('.', ',')} - R$ ${maxPrice.toFixed(2).replace('.', ',')}`;
+                      })()}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {offers.length} oferta(s) vinculada(s)
+                  </Badge>
+                </div>
+              </div>
+            )}
+
+            {product && (!offers || offers.length === 0) && (
+              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ Nenhuma oferta Kiwify vinculada. Vincule ofertas abaixo para definir o preço.
+                </p>
+              </div>
+            )}
 
             <FormField
               control={form.control}

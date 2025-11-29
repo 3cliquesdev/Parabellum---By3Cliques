@@ -18,6 +18,13 @@ export function useProducts() {
             id,
             name,
             is_active
+          ),
+          product_offers(
+            id,
+            offer_id,
+            offer_name,
+            price,
+            is_active
           )
         `)
         .order("name", { ascending: true });
