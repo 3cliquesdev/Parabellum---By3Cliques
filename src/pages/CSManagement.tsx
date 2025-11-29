@@ -12,12 +12,18 @@ import { TrendingUp, TrendingDown, DollarSign, Users, AlertTriangle, Eye, Phone,
 import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { CSGoalDialog } from "@/components/CSGoalDialog";
+import { useCSGoals } from "@/hooks/useCSGoals";
 
 export default function CSManagement() {
   const navigate = useNavigate();
   const { data: kpis, isLoading: kpisLoading } = useCSManagerKPIs();
   const { data: consultants, isLoading: consultantsLoading } = useConsultantPerformance();
   const { data: criticalClients, isLoading: criticalLoading } = useCriticalClients();
+  
+  // Fetch CS goals for current month
+  const currentMonth = new Date().toISOString().slice(0, 7) + "-01";
+  const { data: allGoals } = useCSGoals(undefined, currentMonth);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -203,12 +209,14 @@ export default function CSManagement() {
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Valor da Carteira</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Saúde Média</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Última Atividade</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Ação</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {consultants.map((consultant) => {
                     const healthBadge = getHealthBadge(consultant.avg_health_score);
+                    const existingGoal = allGoals?.find(g => g.consultant_id === consultant.id);
+                    
                     return (
                       <tr key={consultant.id} className="border-b hover:bg-accent/50 transition-colors">
                         <td className="py-3 px-4">
@@ -238,10 +246,18 @@ export default function CSManagement() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <Button size="sm" variant="outline" onClick={() => navigate(`/my-portfolio?consultant=${consultant.id}`)}>
-                            <Eye className="w-4 h-4 mr-1" />
-                            Ver Carteira
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <CSGoalDialog 
+                              consultantId={consultant.id}
+                              consultantName={consultant.full_name}
+                              existingGoal={existingGoal}
+                              currentMonth={currentMonth}
+                            />
+                            <Button size="sm" variant="outline" onClick={() => navigate(`/my-portfolio?consultant=${consultant.id}`)}>
+                              <Eye className="w-4 h-4 mr-1" />
+                              Ver Carteira
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );

@@ -18,6 +18,7 @@ import CommissionTrackerWidget from "@/components/widgets/CommissionTrackerWidge
 import EarlyWarningWidget from "@/components/widgets/EarlyWarningWidget";
 import QBRGeneratorDialog from "@/components/QBRGeneratorDialog";
 import { useChurnPrediction } from "@/hooks/useChurnPrediction";
+import { CSGoalsWidget } from "@/components/widgets/CSGoalsWidget";
 
 export default function MyPortfolio() {
   const navigate = useNavigate();
@@ -159,6 +160,9 @@ export default function MyPortfolio() {
           </CardContent>
         </Card>
       </div>
+
+      {/* CS Goals Widget - Full Width */}
+      <CSGoalsWidget />
 
       {/* Widgets Row - Bento Box Layout: Attack | Meta | Defense */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

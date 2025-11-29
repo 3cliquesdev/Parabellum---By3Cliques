@@ -1011,6 +1011,48 @@ export type Database = {
           },
         ]
       }
+      cs_goals: {
+        Row: {
+          activation_count: number
+          bonus_amount: number
+          consultant_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          max_churn_rate: number
+          month: string
+          target_gmv: number
+          target_upsell: number
+          updated_at: string
+        }
+        Insert: {
+          activation_count?: number
+          bonus_amount?: number
+          consultant_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          max_churn_rate?: number
+          month: string
+          target_gmv?: number
+          target_upsell?: number
+          updated_at?: string
+        }
+        Update: {
+          activation_count?: number
+          bonus_amount?: number
+          consultant_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          max_churn_rate?: number
+          month?: string
+          target_gmv?: number
+          target_upsell?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customer_journey_steps: {
         Row: {
           attachments: Json | null
