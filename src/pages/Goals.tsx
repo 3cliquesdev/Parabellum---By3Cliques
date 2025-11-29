@@ -108,9 +108,9 @@ export default function Goals() {
 
         {/* Tabs: Minhas Metas / Metas de CS / Dashboard */}
         <Tabs defaultValue="goals" className="w-full">
-          <TabsList className={`grid w-full ${role === 'admin' ? 'max-w-2xl grid-cols-3' : 'max-w-md grid-cols-2'}`}>
+          <TabsList className={`grid w-full ${(role === 'admin' || role === 'cs_manager') ? 'max-w-2xl grid-cols-3' : 'max-w-md grid-cols-2'}`}>
             <TabsTrigger value="goals">Minhas Metas</TabsTrigger>
-            {role === "admin" && <TabsTrigger value="cs-goals">Metas de CS</TabsTrigger>}
+            {(role === "admin" || role === "cs_manager") && <TabsTrigger value="cs-goals">Metas de CS</TabsTrigger>}
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           </TabsList>
 
@@ -149,8 +149,8 @@ export default function Goals() {
             )}
           </TabsContent>
 
-          {/* Tab: Metas de CS (Admin Only) */}
-          {role === "admin" && (
+          {/* Tab: Metas de CS (Admin/CS Manager) */}
+          {(role === "admin" || role === "cs_manager") && (
             <TabsContent value="cs-goals" className="mt-6">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">

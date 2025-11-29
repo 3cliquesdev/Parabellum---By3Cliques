@@ -138,7 +138,7 @@ const App = () => {
             <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "support_manager", "financial_manager"]}><Layout><Analytics /></Layout></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><Reports /></Layout></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "general_manager", "manager"]}><Layout><Goals /></Layout></ProtectedRoute>} />
-            <Route path="/goals-management" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
+            <Route path="/goals-management" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager"]}><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
             <Route path="/cadences" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager"]}><Layout><Cadences /></Layout></ProtectedRoute>} />
             <Route path="/sales-tasks" element={<ProtectedRoute allowedRoles={["sales_rep"]}><Layout><SalesTasks /></Layout></ProtectedRoute>} />
             <Route path="/support" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "admin", "general_manager", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />

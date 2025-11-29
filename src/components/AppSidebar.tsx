@@ -100,6 +100,7 @@ const csManagerOperationItems = [
 const csManagerAnalysisItems = [
   { title: "Analytics", href: "/analytics", icon: BarChart3 },
   { title: "Relatórios", href: "/reports", icon: FileText },
+  { title: "🎯 Definir Metas", href: "/goals-management", icon: Target },
 ];
 
 // ============= CONSULTANT MENU (🤝) =============
