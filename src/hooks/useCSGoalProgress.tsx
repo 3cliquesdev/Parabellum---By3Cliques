@@ -80,18 +80,28 @@ export function useCSGoalProgress(consultantId: string, month: string) {
       const startOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
       const endOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
 
-      // 1. Calculate GMV (sum of all orders from consultant's clients in the month)
-      const { data: clients } = await supabase
-        .from("contacts")
-        .select("id, total_ltv")
-        .eq("consultant_id", consultantId)
-        .eq("status", "customer");
+      // 1. Calculate GMV (sum of won deals from consultant's clients in the month)
+      const { data: gmvDeals } = await supabase
+        .from("deals")
+        .select("value")
+        .eq("assigned_to", consultantId)
+        .eq("status", "won")
+        .gte("closed_at", startOfMonth.toISOString())
+        .lte("closed_at", endOfMonth.toISOString());
 
-      const currentGMV = clients?.reduce((sum, c) => sum + (c.total_ltv || 0), 0) || 0;
+      const currentGMV = gmvDeals?.reduce((sum, d) => sum + (d.value || 0), 0) || 0;
       const gmvPercentage = goal.target_gmv > 0 ? Math.min((currentGMV / goal.target_gmv) * 100, 100) : 0;
 
-      // 2. Calculate Retention (churn rate)
-      const totalClients = clients?.length || 0;
+      // 2. Calculate Retention (churn rate) - Get total clients at start of month
+      const { data: clientsAtStart } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("consultant_id", consultantId)
+        .eq("status", "customer")
+        .lte("created_at", startOfMonth.toISOString());
+
+      const totalClients = clientsAtStart?.length || 0;
+      
       const { data: churnedInMonth } = await supabase
         .from("contacts")
         .select("id")
@@ -104,11 +114,22 @@ export function useCSGoalProgress(consultantId: string, month: string) {
       const churnRate = totalClients > 0 ? (churnedClients / totalClients) * 100 : 0;
       const retentionRate = 100 - churnRate;
 
-      // 3. Calculate Upsell (won deals where customer already existed)
+      // 3. Calculate Upsell (won deals from existing customers - customer_type expansion)
+      // Get all customers who were already customers before this month
+      const { data: existingCustomerIds } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("consultant_id", consultantId)
+        .eq("status", "customer")
+        .lt("created_at", startOfMonth.toISOString());
+
+      const existingIds = existingCustomerIds?.map(c => c.id) || [];
+
+      // Get deals won in this month from those existing customers
       const { data: upsellDeals } = await supabase
         .from("deals")
         .select("value")
-        .eq("assigned_to", consultantId)
+        .in("contact_id", existingIds)
         .eq("status", "won")
         .gte("closed_at", startOfMonth.toISOString())
         .lte("closed_at", endOfMonth.toISOString());

@@ -125,7 +125,7 @@ export function CSGoalsWidget() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              💡 Seus clientes precisam vender mais! Ligue para quem está parado.
+              💡 Ligue para clientes que não venderam esta semana!
             </p>
           </CardContent>
         </Card>
@@ -174,7 +174,7 @@ export function CSGoalsWidget() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-purple-600" />
-                <CardTitle className="text-base text-foreground">📈 Expansão (Upsell)</CardTitle>
+                <CardTitle className="text-base text-foreground">📈 Expansão</CardTitle>
               </div>
               <Badge variant={progress.upsellPercentage >= 100 ? "success" : "secondary"}>
                 {progress.upsellPercentage.toFixed(0)}%
@@ -184,7 +184,7 @@ export function CSGoalsWidget() {
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Vendas Adicionais</span>
+                <span className="text-muted-foreground">Vendas Adicionais (Base)</span>
                 <span className="font-bold text-foreground">{formatCurrency(progress.currentUpsell)}</span>
               </div>
               <Progress 
@@ -201,7 +201,7 @@ export function CSGoalsWidget() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              💡 Ofereça produtos complementares para sua base!
+              💡 Clientes existentes são ouro! Ofereça upgrades.
             </p>
           </CardContent>
         </Card>
