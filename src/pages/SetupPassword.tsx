@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ShieldCheck, Mail, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import logoLight from "@/assets/logo-parabellum-light.png";
 
 type Step = "send_code" | "verify_otp" | "set_password";
 
@@ -137,9 +138,11 @@ export default function SetupPassword() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/20 to-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-            <ShieldCheck className="w-6 h-6 text-primary" />
-          </div>
+          <img 
+            src={logoLight} 
+            alt="Seu Armazém Drop" 
+            className="h-16 w-auto mx-auto mb-4 object-contain" 
+          />
           <CardTitle className="text-2xl">Configuração de Segurança</CardTitle>
           <CardDescription>
             {step === "send_code" && "Valide seu email para definir uma senha segura"}
