@@ -40,7 +40,13 @@ export default function Auth() {
   // Redirect based on role after authentication
   useEffect(() => {
     if (!authLoading && !roleLoading && user && role) {
-      // Role-based intelligent routing
+      // PRIORITY 1: Force password change if required
+      if (user.user_metadata?.must_change_password === true) {
+        navigate("/setup-password");
+        return;
+      }
+
+      // PRIORITY 2: Role-based intelligent routing
       switch (role) {
         case "support_agent":
           navigate("/support");

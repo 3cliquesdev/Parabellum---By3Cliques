@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 
@@ -8,8 +8,9 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
+  const location = useLocation();
 
   console.log("ProtectedRoute: Render", { isAuthenticated, authLoading, roleLoading, role, allowedRoles });
 
@@ -28,6 +29,13 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
   if (!isAuthenticated) {
     console.log("ProtectedRoute: Redirecting to /auth");
     return <Navigate to="/auth" replace />;
+  }
+
+  // CRITICAL: Forçar setup de senha se necessário (exceto se já estiver na página)
+  const mustChangePassword = user?.user_metadata?.must_change_password === true;
+  if (mustChangePassword && location.pathname !== "/setup-password") {
+    console.log("ProtectedRoute: User must change password, redirecting to /setup-password");
+    return <Navigate to="/setup-password" replace />;
   }
 
   // Check role permissions (if allowedRoles is specified)

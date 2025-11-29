@@ -31,6 +31,7 @@ import Setup from "./pages/Setup";
 import Automations from "./pages/Automations";
 import Analytics from "./pages/Analytics";
 import TVMode from "./pages/TVMode";
+import SetupPassword from "./pages/SetupPassword";
 import Goals from "./pages/Goals";
 import ImportClients from "./pages/ImportClients";
 import Support from "./pages/Support";
@@ -108,6 +109,7 @@ const App = () => {
           <RealtimeNotifications />
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/setup-password" element={<SetupPassword />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/public/form/:formId" element={<PublicForm />} />
           <Route path="/public-chat" element={<PublicChat />} />
