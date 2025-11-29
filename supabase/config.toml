@@ -101,3 +101,27 @@ verify_jwt = false
 [functions.check-sla-violations.cron]
 schedule = "* * * * *"
 region = "us-east-1"
+
+[functions.analyze-dashboard]
+verify_jwt = true
+
+[functions.whatsapp-proxy]
+verify_jwt = true
+
+[functions.reset-whatsapp-instance]
+verify_jwt = true
+
+[functions.create-public-conversation]
+verify_jwt = false
+
+[functions.send-verification-code]
+verify_jwt = false
+
+[functions.verify-code]
+verify_jwt = false
+
+[functions.check-user-status]
+verify_jwt = false
+
+[functions.generate-sales-insights]
+verify_jwt = true

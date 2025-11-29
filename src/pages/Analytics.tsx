@@ -21,54 +21,47 @@ import { AIEconomyWidget } from "@/components/widgets/AIEconomyWidget";
 import { TopTopicsWidget } from "@/components/widgets/TopTopicsWidget";
 import { OnboardingFunnelWidget } from "@/components/widgets/OnboardingFunnelWidget";
 import { WhatsAppTrafficWidget } from "@/components/widgets/WhatsAppTrafficWidget";
+import { AIExecutiveSummary } from "@/components/widgets/AIExecutiveSummary";
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
-import { BarChart3, Sparkles, CalendarIcon, Headphones, TrendingUp, Brain, Rocket, MessageCircle } from "lucide-react";
+import { BarChart3, Sparkles, Headphones, TrendingUp, Brain, Rocket, MessageCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
-
-type PeriodFilter = {
-  type: 'preset' | 'custom';
-  daysBack?: number;
-  dateRange?: DateRange;
-};
 
 export default function Analytics() {
   const { role, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>('support');
   
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>({
-    type: 'preset',
-    daysBack: 90
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setMonth(start.getMonth() - 1); // Default: último mês
+    return { from: start, to: end };
   });
 
-  // Calculate period BEFORE any conditional return (React Hooks Rule)
+  // Calculate period from dateRange
   const { startDate, endDate, daysBack } = useMemo(() => {
-    if (periodFilter.type === 'custom' && periodFilter.dateRange?.from && periodFilter.dateRange?.to) {
+    if (dateRange?.from && dateRange?.to) {
       return {
-        startDate: periodFilter.dateRange.from,
-        endDate: periodFilter.dateRange.to,
-        daysBack: Math.ceil((periodFilter.dateRange.to.getTime() - periodFilter.dateRange.from.getTime()) / (1000 * 60 * 60 * 24))
+        startDate: dateRange.from,
+        endDate: dateRange.to,
+        daysBack: Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))
       };
     } else {
       const end = new Date();
       const start = new Date();
-      start.setDate(start.getDate() - (periodFilter.daysBack || 90));
+      start.setMonth(start.getMonth() - 1);
       return { 
         startDate: start, 
         endDate: end,
-        daysBack: periodFilter.daysBack || 90
+        daysBack: 30
       };
     }
-  }, [periodFilter]);
+  }, [dateRange]);
 
   // Permission validation - only admin and manager can access Analytics
   useEffect(() => {
@@ -119,52 +112,12 @@ export default function Analytics() {
               </div>
             </div>
 
-            {/* Period Filter */}
-            <div className="flex items-center gap-4">
-              <Tabs 
-                value={periodFilter.type === 'preset' ? String(periodFilter.daysBack) : 'custom'}
-                onValueChange={(value) => {
-                  if (value === 'custom') {
-                    setPeriodFilter({ type: 'custom' });
-                  } else {
-                    setPeriodFilter({ type: 'preset', daysBack: parseInt(value) });
-                  }
-                }}
-              >
-                <TabsList>
-                  <TabsTrigger value="1">Hoje</TabsTrigger>
-                  <TabsTrigger value="7">7 dias</TabsTrigger>
-                  <TabsTrigger value="30">30 dias</TabsTrigger>
-                  <TabsTrigger value="90">90 dias</TabsTrigger>
-                  <TabsTrigger value="custom">Customizado</TabsTrigger>
-                </TabsList>
-              </Tabs>
-
-              {periodFilter.type === 'custom' && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-[280px] justify-start text-left">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {periodFilter.dateRange?.from && periodFilter.dateRange?.to
-                        ? `${format(periodFilter.dateRange.from, "dd/MM/yyyy", { locale: ptBR })} - ${format(periodFilter.dateRange.to, "dd/MM/yyyy", { locale: ptBR })}`
-                        : "Selecione o período"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="end">
-                    <Calendar
-                      mode="range"
-                      selected={periodFilter.dateRange}
-                      onSelect={(range) => setPeriodFilter({
-                        type: 'custom',
-                        dateRange: range
-                      })}
-                      numberOfMonths={2}
-                      locale={ptBR}
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              )}
+            {/* The Time Machine - Controle de Tempo Global */}
+            <div className="w-full max-w-2xl">
+              <DateRangePicker 
+                value={dateRange}
+                onChange={setDateRange}
+              />
             </div>
           </div>
         </div>
@@ -196,6 +149,17 @@ export default function Analytics() {
 
           {/* TAB 1: Support Performance */}
           <TabsContent value="support" className="space-y-6">
+            {/* AI Executive Summary */}
+            <AIExecutiveSummary 
+              data={{ 
+                context: 'support',
+                message: 'Aguardando coleta de KPIs para análise. Clique em "Gerar Análise" para processar.',
+              }}
+              context="support"
+              startDate={startDate}
+              endDate={endDate}
+            />
+
             {/* The 3 Clocks: FRT, MTTR, CSAT */}
             <SupportKPIsWidget startDate={startDate} endDate={endDate} />
 
@@ -223,6 +187,17 @@ export default function Analytics() {
 
           {/* TAB 2: AI Analytics */}
           <TabsContent value="ai" className="space-y-6">
+            {/* AI Executive Summary */}
+            <AIExecutiveSummary 
+              data={{ 
+                context: 'ai',
+                message: 'Aguardando coleta de métricas de IA para análise. Clique em "Gerar Análise" para processar.',
+              }}
+              context="ai"
+              startDate={startDate}
+              endDate={endDate}
+            />
+
             {/* AI Economy Chart */}
             <AIEconomyWidget startDate={startDate} endDate={endDate} />
 
@@ -235,16 +210,49 @@ export default function Analytics() {
 
           {/* TAB 3: Onboarding Funnel */}
           <TabsContent value="onboarding" className="space-y-6">
+            {/* AI Executive Summary */}
+            <AIExecutiveSummary 
+              data={{ 
+                context: 'onboarding',
+                message: 'Aguardando coleta de dados de onboarding para análise. Clique em "Gerar Análise" para processar.',
+              }}
+              context="onboarding"
+              startDate={startDate}
+              endDate={endDate}
+            />
+
             <OnboardingFunnelWidget startDate={startDate} endDate={endDate} />
           </TabsContent>
 
           {/* TAB 4: WhatsApp Traffic */}
           <TabsContent value="whatsapp" className="space-y-6">
+            {/* AI Executive Summary */}
+            <AIExecutiveSummary 
+              data={{ 
+                context: 'whatsapp',
+                message: 'Aguardando coleta de dados de WhatsApp para análise. Clique em "Gerar Análise" para processar.',
+              }}
+              context="whatsapp"
+              startDate={startDate}
+              endDate={endDate}
+            />
+
             <WhatsAppTrafficWidget startDate={startDate} endDate={endDate} />
           </TabsContent>
 
           {/* TAB 5: Sales Performance */}
           <TabsContent value="sales" className="space-y-6">
+            {/* AI Executive Summary */}
+            <AIExecutiveSummary 
+              data={{ 
+                context: 'sales',
+                message: 'Aguardando coleta de métricas de vendas para análise. Clique em "Gerar Análise" para processar.',
+              }}
+              context="sales"
+              startDate={startDate}
+              endDate={endDate}
+            />
+
             {/* Cadence Performance - Full Width */}
             <CadencePerformanceWidget />
             
