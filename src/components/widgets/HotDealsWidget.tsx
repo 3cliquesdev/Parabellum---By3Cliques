@@ -71,16 +71,16 @@ export function HotDealsWidget() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Flame className="h-5 w-5 text-orange-500" />
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <Flame className="h-4 w-4 text-orange-500" />
           Negócios Quentes
         </CardTitle>
-        <CardDescription>
-          Top {hotDeals.length} com fechamento previsto nos próximos 7 dias
+        <CardDescription className="text-xs">
+          Fechamento previsto nos próximos 7 dias
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         <Table>
           <TableHeader>
             <TableRow>

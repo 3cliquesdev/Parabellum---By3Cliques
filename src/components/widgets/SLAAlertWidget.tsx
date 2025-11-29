@@ -50,29 +50,28 @@ export function SLAAlertWidget() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 justify-between">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2 justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-destructive" />
-            🚨 Alertas SLA Ativos
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            Alertas SLA Ativos
           </div>
           {alerts.length > 0 && (
-            <Badge variant="destructive" className="text-lg px-3">
+            <Badge variant="destructive" className="text-sm px-2">
               {alerts.length}
             </Badge>
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="pt-0 space-y-3">
         {alerts.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Clock className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>Nenhum alerta ativo no momento</p>
-            <p className="text-xs mt-1">Todos os clientes estão sendo atendidos dentro do SLA</p>
+          <div className="text-center py-4 text-muted-foreground">
+            <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p className="text-xs">Nenhum alerta ativo</p>
           </div>
         ) : (
           <>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {alerts.map((alert) => {
                 const contact = alert.conversations.contacts;
                 const contactName = `${contact.first_name} ${contact.last_name}`;
@@ -80,24 +79,25 @@ export function SLAAlertWidget() {
                 return (
                   <div 
                     key={alert.id} 
-                    className="flex items-center justify-between p-3 rounded-lg border border-destructive/20 bg-destructive/5"
+                    className="flex items-center justify-between p-2 rounded border border-destructive/20 bg-destructive/5"
                   >
-                    <div className="flex items-center gap-3 flex-1">
+                    <div className="flex items-center gap-2 flex-1">
                       <Clock className="h-4 w-4 text-destructive" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{contactName}</p>
+                        <p className="font-medium text-xs truncate">{contactName}</p>
                         <p className="text-xs text-muted-foreground">
-                          Aguardando há <span className="font-bold text-destructive">{alert.actual_minutes} min</span>
+                          <span className="font-bold text-destructive">{alert.actual_minutes} min</span>
                         </p>
                       </div>
                     </div>
                     <Button 
                       size="sm" 
                       variant="destructive"
+                      className="h-7 text-xs"
                       onClick={() => handleAcknowledge(alert.id, alert.conversation_id)}
                       disabled={acknowledgeAlert.isPending}
                     >
-                      <UserPlus className="h-4 w-4 mr-1" />
+                      <UserPlus className="h-3 w-3 mr-1" />
                       Assumir
                     </Button>
                   </div>
@@ -106,13 +106,13 @@ export function SLAAlertWidget() {
             </div>
 
             {stats && (
-              <div className="pt-3 border-t">
-                <div className="text-sm text-muted-foreground">
-                  <span className="font-medium">📊 Taxa de Violação Hoje:</span>{" "}
+              <div className="pt-2 border-t">
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-medium">Taxa de Violação:</span>{" "}
                   <span className={stats.violation_rate > 10 ? "text-destructive font-bold" : "text-foreground"}>
                     {stats.violation_rate}%
                   </span>{" "}
-                  ({stats.violations_count} de {stats.total_conversations} conversas)
+                  ({stats.violations_count}/{stats.total_conversations})
                 </div>
               </div>
             )}

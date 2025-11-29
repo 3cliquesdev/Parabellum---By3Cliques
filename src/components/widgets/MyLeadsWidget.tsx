@@ -70,40 +70,29 @@ export function MyLeadsWidget({ userId }: MyLeadsWidgetProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <Users className="h-4 w-4 text-slate-400" />
           Meus Leads
         </CardTitle>
-        <CardDescription>Status dos seus leads</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="pt-0 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Novos (24h)</p>
-            <p className="text-2xl font-bold text-foreground">{leadsData?.newLeads || 0}</p>
+            <p className="text-xs text-muted-foreground">Novos (24h)</p>
+            <p className="text-2xl font-semibold text-slate-900 dark:text-white">{leadsData?.newLeads || 0}</p>
           </div>
-          <UserPlus className="h-8 w-8 text-primary" />
+          <UserPlus className="h-6 w-6 text-primary" />
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-border">
+        <div className="flex items-center justify-between pt-3 border-t">
           <div>
-            <p className="text-sm text-muted-foreground">Em Negociação</p>
-            <p className="text-xl font-semibold text-foreground">{leadsData?.inNegotiation || 0}</p>
+            <p className="text-xs text-muted-foreground">Em Negociação</p>
+            <p className="text-lg font-semibold">{leadsData?.inNegotiation || 0}</p>
           </div>
-          <TrendingUp className="h-6 w-6 text-muted-foreground" />
-        </div>
-
-        <div className="pt-4 border-t border-border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Taxa de Conversão</p>
-              <p className="text-xl font-semibold text-foreground">{leadsData?.conversionRate}%</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">Total de Leads</p>
-              <p className="text-lg font-semibold text-foreground">{leadsData?.totalLeads || 0}</p>
-            </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Conversão</p>
+            <p className="text-lg font-semibold">{leadsData?.conversionRate}%</p>
           </div>
         </div>
       </CardContent>
