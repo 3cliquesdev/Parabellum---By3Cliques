@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMessagesOffline, usePendingMessages } from "@/hooks/useMessagesOffline";
 import { useSendMessageOffline } from "@/hooks/useSendMessageOffline";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Send, ArrowLeft, MessageSquare, Bot, Clock, Check, WifiOff } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -14,6 +13,7 @@ import { useAutopilotTrigger } from "@/hooks/useAutopilotTrigger";
 import { cn } from "@/lib/utils";
 import { SafeHTML } from "@/components/SafeHTML";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
+import { createPublicChatClient, clearSessionToken } from "@/lib/publicSupabaseClient";
 
 export default function PublicChatWindow() {
   const { conversationId } = useParams();
@@ -22,8 +22,11 @@ export default function PublicChatWindow() {
   const [message, setMessage] = useState("");
   const [conversation, setConversation] = useState<any>(null);
   const [isAITyping, setIsAITyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // SECURITY: Use custom Supabase client with session token
+  const supabase = createPublicChatClient();
 
   const { messages = [], isOffline } = useMessagesOffline(conversationId || null);
   const pendingMessages = usePendingMessages(conversationId || null);
@@ -109,6 +112,14 @@ export default function PublicChatWindow() {
       .single();
 
     if (error) {
+      console.error('[PublicChatWindow] Error loading conversation:', error);
+      
+      // SECURITY: Clear session if token is invalid (403/401 errors)
+      if (error.code === 'PGRST301' || error.message?.includes('permission')) {
+        console.warn('[PublicChatWindow] Invalid session token - clearing');
+        clearSessionToken();
+      }
+      
       // ✅ FIX: Limpar localStorage para evitar loop infinito
       localStorage.removeItem('active_conversation_id');
       

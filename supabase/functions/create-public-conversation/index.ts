@@ -168,6 +168,47 @@ serve(async (req) => {
       was_reopened 
     });
 
+    // SECURITY: Generate session token for new conversations
+    let sessionToken: string | null = null;
+    
+    if (!is_existing) {
+      // Generate secure session token for new conversations
+      const { data: tokenData, error: tokenError } = await supabase
+        .rpc('generate_session_token')
+        .single();
+      
+      if (tokenError) {
+        console.error('[create-public-conversation] Error generating token:', tokenError);
+      } else {
+        sessionToken = tokenData as string;
+        
+        // Update conversation with session_token
+        await supabase
+          .from('conversations')
+          .update({ session_token: sessionToken })
+          .eq('id', conversation_id);
+        
+        console.log('[create-public-conversation] ✅ Session token generated and assigned');
+      }
+    } else {
+      // For existing conversations, retrieve the existing token
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('session_token')
+        .eq('id', conversation_id)
+        .single();
+      
+      sessionToken = conv?.session_token || null;
+      console.log('[create-public-conversation] Retrieved existing session token');
+    }
+
+    console.log('[create-public-conversation] RPC result:', { 
+      conversation_id, 
+      is_existing, 
+      was_reopened,
+      has_session_token: !!sessionToken
+    });
+
     // Se foi reaberta, registrar nota no timeline
     if (was_reopened) {
       await supabase.from('interactions').insert({
@@ -194,6 +235,7 @@ serve(async (req) => {
           is_returning_customer: customerMetadata.is_returning_customer || false,
           is_existing_conversation: true,
           was_reopened,
+          session_token: sessionToken, // SECURITY: Return token for session scoping
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -229,6 +271,7 @@ serve(async (req) => {
         contact_id: finalContactId,
         department_name: department.name,
         is_returning_customer: customerMetadata.is_returning_customer || false,
+        session_token: sessionToken, // SECURITY: Return token for session scoping
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
