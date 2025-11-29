@@ -153,33 +153,43 @@ serve(async (req) => {
           </div>
           
           <!-- FOOTER -->
-          <div style="background: #1e3a5f; padding: 25px; text-align: center;">
-            <!-- Logos lado a lado usando tabela para melhor compatibilidade -->
-            <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 0 auto 15px auto;">
-              <tr>
-                <td style="padding: 0; text-align: right;">
-                  <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png" 
-                       alt="PARABELLUM" 
-                       style="display: block; max-width: 110px; height: auto;" />
-                </td>
-                <td style="padding: 0 12px; vertical-align: middle;">
-                  <span style="color: #64748b; font-size: 20px; line-height: 1;">/</span>
-                </td>
-                <td style="padding: 0; text-align: left;">
-                  <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-3cliques-email.png" 
-                       alt="3 CLIQUES" 
-                       style="display: block; max-width: 90px; height: auto;" />
-                </td>
-              </tr>
-            </table>
-            
-            <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
-              Departamento de Segurança da Informação
-            </p>
-            <p style="color: #64748b; margin: 0; font-size: 11px;">
-              Ambiente Seguro. Parabellum / 3 Cliques.
-            </p>
-          </div>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #1e3a5f;">
+            <tr>
+              <td align="center" style="padding: 25px;">
+                
+                <!-- Logos lado a lado -->
+                <table cellpadding="0" cellspacing="0" border="0" align="center">
+                  <tr>
+                    <td style="padding: 0 8px;">
+                      <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png" 
+                           alt="PARABELLUM" 
+                           width="100"
+                           style="display: block; max-width: 100px; height: auto;" />
+                    </td>
+                    <td style="padding: 0 8px;">
+                      <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-3cliques-email.png" 
+                           alt="3 CLIQUES" 
+                           width="80"
+                           style="display: block; max-width: 80px; height: auto;" />
+                    </td>
+                  </tr>
+                </table>
+                
+                <!-- Texto "PARABELLUM by 3Cliques" -->
+                <p style="color: #ffffff; margin: 15px 0 10px 0; font-size: 14px; font-weight: 600;">
+                  PARABELLUM by 3Cliques
+                </p>
+                
+                <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
+                  Departamento de Segurança da Informação
+                </p>
+                <p style="color: #64748b; margin: 0; font-size: 11px;">
+                  Ambiente Seguro
+                </p>
+                
+              </td>
+            </tr>
+          </table>
           
         </div>
       `,
