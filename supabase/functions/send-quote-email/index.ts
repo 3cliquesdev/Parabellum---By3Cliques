@@ -185,7 +185,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Propostas Comerciais <onboarding@resend.dev>',
+        from: 'PARABELLUM Comercial <comercial@parabellum.work>',
         to: [contact.email],
         subject: `📄 Proposta Comercial #${quote.quote_number} - ${contact.company || contact.first_name}`,
         html: emailHtml,
