@@ -6,9 +6,11 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 import { z } from "zod";
+import logoLight from "@/assets/logo-parabellum-light.png";
 
 const authSchema = z.object({
   email: z.string().email({ message: "E-mail inválido" }),
@@ -19,6 +21,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
@@ -52,33 +55,28 @@ export default function Auth() {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     
     const validation = authSchema.safeParse({ email, password });
     if (!validation.success) {
-      toast({
-        title: "Erro de validação",
-        description: validation.error.errors[0].message,
-        variant: "destructive",
-      });
+      setError(validation.error.errors[0].message);
       return;
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     setLoading(false);
 
-    if (error) {
-      toast({
-        title: "Erro ao fazer login",
-        description: error.message === "Invalid login credentials" 
+    if (signInError) {
+      setError(
+        signInError.message === "Invalid login credentials" 
           ? "E-mail ou senha incorretos" 
-          : error.message,
-        variant: "destructive",
-      });
+          : signInError.message
+      );
     } else {
       toast({
         title: "Login realizado!",
@@ -89,18 +87,81 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl text-center">CRM Liberty</CardTitle>
-          <CardDescription className="text-center">
-            Faça login para acessar o sistema
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSignIn} className="space-y-4">
+    <div className="min-h-screen flex">
+      {/* Left Column - Brand (Hidden on Mobile) */}
+      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-slate-900 via-slate-800 to-primary/20 p-12 flex-col justify-between overflow-hidden">
+        {/* Decorative grid pattern */}
+        <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:50px_50px]" />
+        
+        {/* Content */}
+        <div className="relative z-10 flex flex-col justify-center flex-1">
+          {/* Logo */}
+          <div className="mb-12">
+            <img 
+              src={logoLight} 
+              alt="PARABELLUM" 
+              className="h-20 w-auto mb-8"
+            />
+            <div className="h-1 w-24 bg-primary/60 rounded-full" />
+          </div>
+
+          {/* Epic Quote */}
+          <div className="space-y-6">
+            <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight">
+              Acelere suas vendas
+              <br />
+              <span className="text-primary/90">com inteligência.</span>
+            </h1>
+            
+            <p className="text-xl italic text-slate-300 font-light">
+              "Se queres paz, prepara-te para a guerra"
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="relative z-10">
+          <p className="text-sm text-slate-400">
+            © 2025 PARABELLUM CRM. Sistema Enterprise.
+          </p>
+        </div>
+      </div>
+
+      {/* Right Column - Form */}
+      <div className="w-full lg:w-1/2 bg-background flex items-center justify-center p-8">
+        <div className="w-full max-w-md space-y-8">
+          {/* Mobile Logo */}
+          <div className="lg:hidden mb-8 text-center">
+            <img 
+              src={logoLight} 
+              alt="PARABELLUM" 
+              className="h-16 w-auto mx-auto mb-4"
+            />
+          </div>
+
+          {/* Header */}
+          <div className="text-center lg:text-left">
+            <h2 className="text-3xl font-bold text-foreground mb-2">
+              Bem-vindo de volta
+            </h2>
+            <p className="text-muted-foreground">
+              Insira suas credenciais para acessar o painel de comando.
+            </p>
+          </div>
+
+          {/* Error Alert */}
+          {error && (
+            <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSignIn} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-foreground font-medium">
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -108,27 +169,51 @@ export default function Auth() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={loading}
+                className="h-12 rounded-xl text-base transition-all"
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <Label htmlFor="password" className="text-foreground font-medium">
+                Senha
+              </Label>
               <Input
                 id="password"
                 type="password"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
+                className="h-12 rounded-xl text-base transition-all"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Entrando..." : "Entrar"}
+
+            <Button 
+              type="submit" 
+              className="w-full h-11 text-base font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all" 
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Entrando...
+                </>
+              ) : (
+                "Entrar no Sistema"
+              )}
             </Button>
-            <p className="text-sm text-muted-foreground text-center mt-4">
-              Entre em contato com o administrador para criar uma conta
-            </p>
           </form>
-        </CardContent>
-      </Card>
+
+          {/* Footer */}
+          <div className="text-center text-sm text-muted-foreground pt-4 border-t border-border">
+            <p>
+              Acesso restrito. Entre em contato com o administrador.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
