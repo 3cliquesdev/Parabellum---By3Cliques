@@ -12,12 +12,14 @@ const AUDIT_EMAIL = Deno.env.get("AUDIT_EMAIL");
 
 const roleLabels: Record<string, string> = {
   'admin': 'Administrador',
-  'manager': 'Gerente',
+  'general_manager': 'Gerente Geral',
+  'manager': 'Gerente de Vendas',
   'sales_rep': 'Vendedor',
   'consultant': 'Consultor',
   'support_agent': 'Agente de Suporte',
   'support_manager': 'Gerente de Suporte',
-  'financial_manager': 'Gerente Financeiro'
+  'financial_manager': 'Gerente Financeiro',
+  'cs_manager': 'Gerente de CS'
 };
 
 serve(async (req) => {
@@ -86,11 +88,20 @@ serve(async (req) => {
       );
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return new Response(
+        JSON.stringify({ error: 'Email inválido. Por favor, insira um email válido.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Validate role
-    const allowedRoles = ['admin', 'manager', 'sales_rep', 'consultant', 'support_agent', 'support_manager', 'financial_manager'];
+    const allowedRoles = ['admin', 'general_manager', 'manager', 'sales_rep', 'consultant', 'support_agent', 'support_manager', 'financial_manager', 'cs_manager'];
     if (!allowedRoles.includes(role)) {
       return new Response(
-        JSON.stringify({ error: 'Invalid role' }),
+        JSON.stringify({ error: `Invalid role. Must be one of: ${allowedRoles.join(', ')}` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
