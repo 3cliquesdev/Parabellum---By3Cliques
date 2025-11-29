@@ -19,11 +19,11 @@ interface Ticket {
     last_name: string;
     email: string;
     avatar_url?: string;
-  };
+  } | null;
   assigned_user?: {
     full_name: string;
     avatar_url?: string;
-  };
+  } | null;
 }
 
 interface TicketsListProps {
@@ -86,16 +86,16 @@ export function TicketsList({ tickets, selectedTicketId, onSelectTicket }: Ticke
           >
             <div className="flex items-start gap-3">
               <Avatar className="w-10 h-10">
-                <AvatarImage src={ticket.customer.avatar_url} />
+                <AvatarImage src={ticket.customer?.avatar_url} />
                 <AvatarFallback>
-                  {ticket.customer.first_name?.[0]}{ticket.customer.last_name?.[0]}
+                  {ticket.customer?.first_name?.[0]}{ticket.customer?.last_name?.[0]}
                 </AvatarFallback>
               </Avatar>
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <p className="font-medium text-sm truncate text-slate-900 dark:text-white">
-                    {ticket.customer.first_name} {ticket.customer.last_name}
+                    {ticket.customer?.first_name || 'Cliente'} {ticket.customer?.last_name || ''}
                   </p>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
                     {formatDistanceToNow(new Date(ticket.created_at), { 
