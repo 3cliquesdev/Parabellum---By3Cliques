@@ -76,7 +76,7 @@ export default function Support() {
       {/* Split View */}
       <div className="flex-1 flex overflow-hidden">
         {/* Lista de Tickets (30%) */}
-        <div className="w-[30%] border-r-2 border-slate-200 dark:border-border overflow-hidden bg-card">
+        <div className="w-[30%] border-r-2 border-slate-200 dark:border-border bg-card flex flex-col h-full overflow-hidden">
           <TicketsList
             tickets={tickets}
             selectedTicketId={selectedTicketId}

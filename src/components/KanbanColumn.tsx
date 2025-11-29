@@ -43,11 +43,11 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
   };
 
   return (
-    <div className="flex-shrink-0 w-80">
-      <div className="bg-muted/50 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-4">
+    <div className="flex-shrink-0 w-64">
+      <div className="bg-muted/50 rounded-lg p-3">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-foreground">{stage.name}</h3>
+            <h3 className="text-sm font-semibold text-foreground">{stage.name}</h3>
             {isAdmin && (
               <StageDialog
                 trigger={
@@ -66,7 +66,7 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
 
         {/* Financial Intelligence */}
         {totalValue > 0 && (
-          <div className="mb-3 p-3 bg-background/50 rounded-lg border border-border">
+          <div className="mb-2 p-2 bg-background/50 rounded-lg border border-border">
             <div className="space-y-1">
               <div className="flex items-baseline justify-between">
                 <span className="text-xs text-muted-foreground">Total:</span>
@@ -83,7 +83,7 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
         <div
           ref={setNodeRef}
           className={cn(
-            "min-h-[500px] transition-colors rounded-lg",
+            "min-h-[400px] transition-colors rounded-lg",
             isOver && "bg-primary/5 ring-2 ring-primary"
           )}
         >
