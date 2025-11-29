@@ -214,8 +214,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
       )}
       
       {conversation ? (
-        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-slate-50/50 dark:bg-slate-950">
-          <div className="flex-none border-b border-slate-200 dark:border-slate-800 px-4 py-3 !bg-white dark:!bg-slate-900/95 backdrop-blur flex items-center gap-3 justify-between">
+        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-slate-50/50 dark:bg-background">
+          <div className="flex-none border-b border-slate-200 dark:border-zinc-800 px-4 py-3 !bg-white dark:!bg-zinc-900/95 backdrop-blur flex items-center gap-3 justify-between">
             <div className="flex items-center gap-3">
               <Avatar className="w-10 h-10 shrink-0">
                 {contact?.avatar_url ? (
@@ -226,10 +226,10 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-medium text-slate-900 dark:text-slate-100">
+                <p className="font-medium text-slate-900 dark:text-zinc-100">
                   {contact?.first_name} {contact?.last_name}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
                   {contact?.email || contact?.phone}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
@@ -240,7 +240,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                     </Badge>
                   )}
                   {conversation.assigned_user && (
-                    <Badge variant="secondary" className="text-xs bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                    <Badge variant="secondary" className="text-xs bg-slate-200 text-slate-700 dark:bg-zinc-700 dark:text-zinc-200">
                       {conversation.assigned_user.full_name}
                     </Badge>
                   )}
@@ -255,7 +255,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                         {isDisabled && "👤 Manual"}
                       </Badge>
                       {activePersona && isAutopilot && (
-                        <Badge variant="secondary" className="text-xs bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                        <Badge variant="secondary" className="text-xs bg-slate-200 text-slate-700 dark:bg-zinc-700 dark:text-zinc-200">
                           {activePersona.name}
                         </Badge>
                   )}
@@ -354,7 +354,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             </Alert>
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto bg-slate-100/50 dark:bg-slate-900">
+          <div className="flex-1 min-h-0 overflow-y-auto bg-slate-100/50 dark:bg-background">
             <div className="p-4 md:p-6">
               <div className="max-w-3xl mx-auto w-full">
                 {conversation.status === "closed" && (
@@ -367,11 +367,11 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                 
                 {isMessagesLoading ? (
                   <div className="flex items-center justify-center h-32">
-                    <div className="text-slate-500 dark:text-slate-400">Carregando mensagens...</div>
+                    <div className="text-slate-500 dark:text-zinc-400">Carregando mensagens...</div>
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="flex items-center justify-center h-32">
-                    <div className="text-slate-500 dark:text-slate-400">Nenhuma mensagem ainda</div>
+                    <div className="text-slate-500 dark:text-zinc-400">Nenhuma mensagem ainda</div>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -383,8 +383,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                       if (isSystem) {
                         return (
                           <div key={message.id} className="flex justify-center py-3">
-                            <div className="bg-slate-200/50 dark:bg-slate-800/50 px-4 py-2 rounded-full">
-                              <p className="text-xs text-slate-600 dark:text-slate-400 text-center">
+                            <div className="bg-slate-200/50 dark:bg-zinc-800/50 px-4 py-2 rounded-full">
+                              <p className="text-xs text-slate-600 dark:text-zinc-400 text-center">
                                 📢 {message.content}
                               </p>
                             </div>
@@ -445,7 +445,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                               className={cn(
                                 "max-w-[75%] px-4 py-3 shadow-sm",
                                 isCustomer
-                                  ? "bg-white dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 rounded-2xl rounded-tl-none text-slate-800 dark:text-gray-200"
+                                  ? "bg-white dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-gray-200"
                                   : isAI
                                   ? "bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 rounded-2xl rounded-tr-none text-violet-900 dark:text-violet-300"
                                   : "bg-blue-600 dark:bg-blue-600/90 text-white rounded-2xl rounded-tr-none"
@@ -457,7 +457,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                               />
                               <div className={cn(
                                 "text-[10px] mt-1 flex items-center gap-1.5",
-                                isCustomer ? "text-slate-400 dark:text-slate-500" : 
+                                isCustomer ? "text-slate-400 dark:text-zinc-500" : 
                                 isAI ? "text-violet-600 dark:text-violet-400 opacity-70" : 
                                 "text-white opacity-70"
                               )}>
@@ -494,8 +494,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           )}
 
           {isAutopilot ? (
-            <div className="flex-none p-4 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur">
-              <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            <div className="flex-none p-4 border-t border-slate-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 backdrop-blur">
+              <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-zinc-400">
                 <Bot className="h-4 w-4" />
                 <span>Modo Piloto Automático - Digite mensagens desabilitado</span>
               </div>
@@ -503,20 +503,20 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           ) : (
             <>
               {isEmailMode ? (
-                <div className="flex-none bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4 space-y-2">
+                <div className="flex-none bg-white/95 dark:bg-zinc-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-zinc-900/60 border-t border-slate-200 dark:border-zinc-800 p-4 space-y-2">
                   <div className="max-w-3xl mx-auto space-y-2">
                     <Input
                       placeholder="Assunto do e-mail"
                       value={emailSubject}
                       onChange={(e) => setEmailSubject(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                      className="w-full bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
                     />
                     <div className="flex gap-2">
                       <Textarea
                         placeholder="Digite sua mensagem de e-mail..."
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        className="flex-1 min-h-[80px] bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                        className="flex-1 min-h-[80px] bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
                       />
                     </div>
                     <div className="flex justify-end items-center gap-2">
@@ -528,7 +528,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   </div>
                 </div>
               ) : (
-                <div className="flex-none bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 p-4">
+                <div className="flex-none bg-white/95 dark:bg-zinc-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-zinc-900/60 border-t border-slate-200 dark:border-zinc-800 p-4">
                   <div className="max-w-3xl mx-auto flex gap-3 items-center">
                     <Input
                       placeholder={
@@ -545,7 +545,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                         }
                       }}
                       disabled={isSending || conversation.status === "closed"}
-                      className="flex-1 rounded-full bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 px-5 py-3 h-12"
+                      className="flex-1 rounded-full bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 px-5 py-3 h-12"
                     />
                     <Button 
                       onClick={handleSendMessage} 
@@ -562,8 +562,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           )}
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-          <div className="text-center text-slate-500 dark:text-slate-400">
+        <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-background">
+          <div className="text-center text-slate-500 dark:text-zinc-400">
             <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>Selecione uma conversa para começar</p>
           </div>
