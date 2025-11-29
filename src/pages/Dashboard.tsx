@@ -22,6 +22,7 @@ import { ConversionRateWidget } from "@/components/widgets/ConversionRateWidget"
 import { RecentActionsWidget } from "@/components/widgets/RecentActionsWidget";
 import RottenDealsWidget from "@/components/widgets/RottenDealsWidget";
 import LostReasonsWidget from "@/components/widgets/LostReasonsWidget";
+import { SLAAlertWidget } from "@/components/widgets/SLAAlertWidget";
 
 // Widgets Sales Rep
 import { MySalesWidget } from "@/components/widgets/MySalesWidget";
@@ -121,6 +122,13 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold text-foreground">Dashboard de Vendas</h1>
         <p className="text-muted-foreground">Inteligência de negócios em tempo real</p>
       </div>
+
+      {/* LINHA 0: SLA Alerts (Admin/Manager only) */}
+      {(role === "admin" || role === "manager") && (
+        <div className="w-full">
+          <SLAAlertWidget />
+        </div>
+      )}
 
       {/* LINHA 1: KPIs Cards (3 colunas) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
