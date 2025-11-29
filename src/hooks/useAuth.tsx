@@ -68,7 +68,22 @@ export function useAuth() {
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      // Clear local state first
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+      
+      // Try to sign out from Supabase, but don't fail if session doesn't exist
+      await supabase.auth.signOut();
+    } catch (error: any) {
+      // Ignore "session not found" errors (403) - user is already logged out
+      if (error?.status === 403 || error?.message?.includes("Session not found")) {
+        console.log("useAuth: Session already cleared, continuing logout");
+      } else {
+        console.error("useAuth: Logout error", error);
+      }
+    }
   };
 
   const refetchProfile = async () => {
