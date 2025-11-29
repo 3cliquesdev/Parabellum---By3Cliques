@@ -61,7 +61,7 @@ export default function LostReasonsWidget() {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {top3.map((reason, idx) => (
               <div key={idx} className="p-3 rounded-lg border border-border bg-muted/50">
                 <p className="text-xs text-muted-foreground mb-1">Top {idx + 1}</p>
@@ -86,7 +86,7 @@ export default function LostReasonsWidget() {
                 color: "hsl(var(--destructive))",
               },
             }}
-            className="h-[200px]"
+            className="h-[160px]"
           >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>

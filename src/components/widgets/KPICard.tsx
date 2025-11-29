@@ -22,17 +22,17 @@ export function KPICard({
 }: KPICardProps) {
   return (
     <Card className="relative overflow-hidden">
-      <CardContent className="p-4">
+      <CardContent className="p-4 min-w-0">
         {/* Header: Label + Icon */}
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+        <div className="flex items-center justify-between mb-2 gap-2">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wide truncate">
             {title}
           </span>
-          <Icon className="h-4 w-4 text-slate-400" />
+          <Icon className="h-4 w-4 text-slate-400 flex-shrink-0" />
         </div>
         
         {/* Value */}
-        <div className="text-2xl font-semibold text-slate-900 dark:text-white">
+        <div className="text-2xl font-semibold text-slate-900 dark:text-white truncate">
           {value}
         </div>
         

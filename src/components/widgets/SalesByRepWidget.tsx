@@ -65,8 +65,9 @@ export function SalesByRepWidget() {
             <YAxis
               type="category"
               dataKey="repName"
-              width={100}
+              width={80}
               className="text-xs"
+              tickFormatter={(value) => value.length > 12 ? value.slice(0, 12) + '...' : value}
             />
             <Tooltip
               formatter={(value: number) => [formatCurrency(value), "Vendas"]}

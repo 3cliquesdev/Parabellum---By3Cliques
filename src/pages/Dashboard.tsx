@@ -71,7 +71,7 @@ export default function Dashboard() {
         </div>
 
         {/* Bento Grid Container */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-min">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-min">
           {/* ROW 1: 4 KPI Cards (full width on mobile, 1 col each on desktop) */}
           <MySalesWidget userId={user?.id} />
           <MyLeadsWidget userId={user?.id} />
@@ -86,10 +86,10 @@ export default function Dashboard() {
           <MyPerformanceWidget userId={user?.id} />
           
           {/* ROW 2: Activities + Hot Deals (2x2) */}
-          <div className="col-span-full md:col-span-2">
+          <div className="col-span-full lg:col-span-2">
             <MyActivitiesWidget />
           </div>
-          <div className="col-span-full md:col-span-2">
+          <div className="col-span-full lg:col-span-2">
             <HotDealsWidget />
           </div>
           
@@ -135,7 +135,7 @@ export default function Dashboard() {
       </div>
 
       {/* Bento Grid Container */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-min">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-min">
         {/* ROW 1: 4 KPI Cards */}
         <KPICard 
           title="Pipeline" 
@@ -172,29 +172,29 @@ export default function Dashboard() {
         )}
         
         {/* ROW 3: Charts 2x2 */}
-        <div className="col-span-full md:col-span-2">
+        <div className="col-span-full lg:col-span-2">
           <SalesByRepWidget />
         </div>
-        <div className="col-span-full md:col-span-2">
+        <div className="col-span-full lg:col-span-2">
           <RevenueEvolutionWidget />
         </div>
         
         {/* ROW 4: Funil + Hot Deals */}
-        <div className="col-span-full md:col-span-2">
+        <div className="col-span-full lg:col-span-2">
           <SalesFunnelWidget />
         </div>
-        <div className="col-span-full md:col-span-2">
+        <div className="col-span-full lg:col-span-2">
           <HotDealsWidget />
         </div>
         
         {/* ROW 5: Análises + Ações */}
-        <div className="col-span-full md:col-span-2">
+        <div className="col-span-full lg:col-span-2">
           <RottenDealsWidget />
         </div>
-        <div className="col-span-full md:col-span-1">
+        <div className="col-span-full sm:col-span-1">
           <LostReasonsWidget />
         </div>
-        <div className="col-span-full md:col-span-1">
+        <div className="col-span-full sm:col-span-1">
           <RecentActionsWidget />
         </div>
       </div>

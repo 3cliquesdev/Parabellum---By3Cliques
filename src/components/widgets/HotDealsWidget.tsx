@@ -121,7 +121,7 @@ export function HotDealsWidget() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium">{deal.title}</TableCell>
+                  <TableCell className="font-medium truncate max-w-[200px]">{deal.title}</TableCell>
                   <TableCell className="font-semibold text-primary">
                     {formatCurrency(deal.value || 0)}
                   </TableCell>
