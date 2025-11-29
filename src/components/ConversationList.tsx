@@ -85,17 +85,17 @@ function ConversationItem({
     <button
       onClick={onClick}
       className={cn(
-        "w-full p-4 flex items-start gap-3 hover:bg-accent transition-colors text-left",
-        isActive && "bg-primary text-primary-foreground"
+        "w-full p-4 flex items-start gap-3 hover:bg-accent transition-colors text-left relative",
+        isActive && "bg-accent dark:bg-white/[0.05] border-l-2 border-primary"
       )}
     >
       <Avatar className={cn(
         "h-12 w-12 flex items-center justify-center",
-        isActive ? "bg-primary-foreground/20" : "bg-primary/10"
+        isActive ? "bg-primary/20 dark:bg-primary/10" : "bg-primary/10"
       )}>
         <span className={cn(
           "text-sm font-semibold",
-          isActive ? "text-primary-foreground" : "text-primary"
+          "text-primary"
         )}>
           {conversation.contacts?.first_name?.[0] || ''}
           {conversation.contacts?.last_name?.[0] || ''}
@@ -104,15 +104,13 @@ function ConversationItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <p className={cn(
-            "font-medium truncate",
-            isActive ? "text-primary-foreground" : "text-foreground"
+            "font-medium truncate text-foreground"
           )}>
             {conversation.contacts?.first_name || 'Cliente'}{" "}
             {conversation.contacts?.last_name || ''}
           </p>
           <span className={cn(
-            "text-xs",
-            isActive ? "text-primary-foreground/70" : "text-muted-foreground"
+            "text-xs text-muted-foreground"
           )}>
             {formatDistanceToNow(new Date(conversation.last_message_at), {
               addSuffix: true,

@@ -445,10 +445,10 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                               className={cn(
                                 "max-w-[75%] px-4 py-3 shadow-sm",
                                 isCustomer
-                                  ? "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-100"
+                                  ? "bg-white dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 rounded-2xl rounded-tl-none text-slate-800 dark:text-gray-200"
                                   : isAI
-                                  ? "bg-violet-50 dark:bg-violet-950 border border-violet-200 dark:border-violet-800 rounded-2xl rounded-tr-none text-violet-900 dark:text-violet-100"
-                                  : "bg-blue-600 dark:bg-blue-700 text-white rounded-2xl rounded-tr-none"
+                                  ? "bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 rounded-2xl rounded-tr-none text-violet-900 dark:text-violet-300"
+                                  : "bg-blue-600 dark:bg-blue-600/90 text-white rounded-2xl rounded-tr-none"
                               )}
                             >
                               <SafeHTML 
