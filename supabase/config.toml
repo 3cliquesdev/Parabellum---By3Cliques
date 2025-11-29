@@ -94,3 +94,10 @@ verify_jwt = false
 [functions.send-scheduled-reports.cron]
 schedule = "1 0 * * *"
 region = "us-east-1"
+
+[functions.check-sla-violations]
+verify_jwt = false
+
+[functions.check-sla-violations.cron]
+schedule = "* * * * *"
+region = "us-east-1"

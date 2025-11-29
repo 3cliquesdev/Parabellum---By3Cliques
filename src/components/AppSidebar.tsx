@@ -35,6 +35,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useAvailabilityStatus } from "@/hooks/useAvailabilityStatus";
 import { useNavigate } from "react-router-dom";
+import { useSLAAlerts } from "@/hooks/useSLAAlerts";
 import {
   Sidebar,
   SidebarContent,
@@ -146,6 +147,7 @@ export function AppSidebar() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { status: availabilityStatus } = useAvailabilityStatus();
+  const { data: slaAlerts = [] } = useSLAAlerts();
 
   // Determine mode label and color
   const getModeInfo = () => {
@@ -176,21 +178,40 @@ export function AppSidebar() {
     navigate("/auth");
   };
 
-  const renderMenuItem = (item: { title: string; href: string; icon: any }) => (
-    <SidebarMenuItem key={item.title}>
-      <SidebarMenuButton asChild>
-        <NavLink
-          to={item.href}
-          end={item.href === "/"}
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
-        >
-          <item.icon className="h-5 w-5 flex-shrink-0" />
-          {!collapsed && <span>{item.title}</span>}
-        </NavLink>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  );
+  const renderMenuItem = (item: { title: string; href: string; icon: any }) => {
+    // Show SLA alert badge on Inbox for admins/managers
+    const showSLABadge = (isAdmin || isManager) && item.href === "/inbox" && slaAlerts.length > 0;
+
+    return (
+      <SidebarMenuItem key={item.title}>
+        <SidebarMenuButton asChild>
+          <NavLink
+            to={item.href}
+            end={item.href === "/"}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+          >
+            <item.icon className="h-5 w-5 flex-shrink-0" />
+            {!collapsed && (
+              <span className="flex items-center gap-2 flex-1">
+                {item.title}
+                {showSLABadge && (
+                  <Badge variant="destructive" className="text-xs px-1.5 py-0">
+                    {slaAlerts.length}
+                  </Badge>
+                )}
+              </span>
+            )}
+            {collapsed && showSLABadge && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] flex items-center justify-center text-white font-bold">
+                {slaAlerts.length}
+              </span>
+            )}
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
 
   return (
     <Sidebar className={cn(

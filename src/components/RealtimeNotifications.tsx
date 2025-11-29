@@ -187,5 +187,95 @@ export default function RealtimeNotifications() {
     }
   }, [user, navigate, play, showBrowserNotification, queryClient]);
 
+  // Listen for new SLA alerts (FASE 3: SLA Alert Notifications)
+  useEffect(() => {
+    if (!user) return;
+
+    console.log("[RealtimeNotifications] Setting up SLA alert listener");
+
+    try {
+      const channel = supabase
+        .channel("sla-alerts")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "sla_alerts",
+          },
+          async (payload) => {
+            console.log("[RealtimeNotifications] New SLA alert:", payload);
+
+            // Fetch alert with conversation details
+            const { data: alert, error } = await supabase
+              .from("sla_alerts")
+              .select(`
+                *,
+                conversations (
+                  contacts (
+                    first_name,
+                    last_name
+                  )
+                )
+              `)
+              .eq("id", payload.new.id)
+              .single();
+
+            if (error || !alert) {
+              console.error("Error fetching alert details:", error);
+              return;
+            }
+
+            const contact = Array.isArray(alert.conversations?.contacts)
+              ? alert.conversations.contacts[0]
+              : alert.conversations?.contacts;
+
+            if (contact) {
+              const contactName = `${contact.first_name} ${contact.last_name}`;
+
+              // Play alert sound
+              play();
+
+              // Show critical toast
+              toast(
+                "🚨 ALERTA SLA: Conversa sem resposta",
+                {
+                  description: `${contactName} aguardando há ${alert.actual_minutes} min`,
+                  icon: <MessageSquare className="h-4 w-4" />,
+                  action: {
+                    label: "Assumir Conversa",
+                    onClick: () => navigate("/inbox"),
+                  },
+                  duration: 0, // Persistent until dismissed
+                  className: "border-destructive bg-destructive/10",
+                }
+              );
+
+              // Show browser notification
+              if (document.hidden) {
+                showBrowserNotification(
+                  "🚨 SLA Violado",
+                  `${contactName} aguardando há ${alert.actual_minutes} min`
+                );
+              }
+            }
+
+            // Invalidate queries
+            queryClient.invalidateQueries({ queryKey: ["sla-alerts"] });
+          }
+        )
+        .subscribe((status) => {
+          console.log("RealtimeNotifications SLA subscription status:", status);
+        });
+
+      return () => {
+        console.log("[RealtimeNotifications] Cleaning up SLA listener");
+        supabase.removeChannel(channel);
+      };
+    } catch (error) {
+      console.error("[RealtimeNotifications] Error setting up SLA listener", error);
+    }
+  }, [user, navigate, play, showBrowserNotification, queryClient]);
+
   return null;
 }

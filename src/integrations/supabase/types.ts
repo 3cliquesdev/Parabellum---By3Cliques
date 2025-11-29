@@ -2389,6 +2389,56 @@ export type Database = {
         }
         Relationships: []
       }
+      sla_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          actual_minutes: number
+          alert_type: string
+          conversation_id: string
+          created_at: string | null
+          id: string
+          notified_managers: Json | null
+          resolved_at: string | null
+          status: string | null
+          threshold_minutes: number
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          actual_minutes: number
+          alert_type?: string
+          conversation_id: string
+          created_at?: string | null
+          id?: string
+          notified_managers?: Json | null
+          resolved_at?: string | null
+          status?: string | null
+          threshold_minutes?: number
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          actual_minutes?: number
+          alert_type?: string
+          conversation_id?: string
+          created_at?: string | null
+          id?: string
+          notified_managers?: Json | null
+          resolved_at?: string | null
+          status?: string | null
+          threshold_minutes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sla_alerts_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stages: {
         Row: {
           created_at: string
