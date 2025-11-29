@@ -154,16 +154,24 @@ serve(async (req) => {
           
           <!-- FOOTER -->
           <div style="background: #1e3a5f; padding: 25px; text-align: center;">
-            <!-- Logos lado a lado -->
-            <div style="margin-bottom: 15px;">
-              <img src="https://parabellum.work/images/logo-parabellum-email.png" 
-                   alt="PARABELLUM" 
-                   style="max-width: 120px; height: auto; vertical-align: middle; margin-right: 15px;" />
-              <span style="color: #64748b; font-size: 18px; vertical-align: middle;">/</span>
-              <img src="https://parabellum.work/images/logo-3cliques-email.png" 
-                   alt="3 CLIQUES" 
-                   style="max-width: 100px; height: auto; vertical-align: middle; margin-left: 15px;" />
-            </div>
+            <!-- Logos lado a lado usando tabela para melhor compatibilidade -->
+            <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 0 auto 15px auto;">
+              <tr>
+                <td style="padding: 0; text-align: right;">
+                  <img src="https://parabellum.work/images/logo-parabellum-email.png" 
+                       alt="PARABELLUM" 
+                       style="display: block; max-width: 110px; height: auto;" />
+                </td>
+                <td style="padding: 0 12px; vertical-align: middle;">
+                  <span style="color: #64748b; font-size: 20px; line-height: 1;">/</span>
+                </td>
+                <td style="padding: 0; text-align: left;">
+                  <img src="https://parabellum.work/images/logo-3cliques-email.png" 
+                       alt="3 CLIQUES" 
+                       style="display: block; max-width: 90px; height: auto;" />
+                </td>
+              </tr>
+            </table>
             
             <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
               Departamento de Segurança da Informação
