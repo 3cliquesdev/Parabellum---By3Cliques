@@ -67,6 +67,24 @@ const supportAgentToolsItems = [
   { title: "Contatos", href: "/contacts", icon: Users },
 ];
 
+// ============= SUPPORT MANAGER MENU (👨‍💼) =============
+const supportManagerMainItems = [
+  { title: "Inbox", href: "/inbox", icon: MessageCircle },
+  { title: "Fila de Tickets", href: "/support", icon: Ticket },
+  { title: "Analytics", href: "/analytics", icon: BarChart3 },
+];
+
+const supportManagerToolsItems = [
+  { title: "Base de Conhecimento", href: "/knowledge", icon: Book },
+  { title: "Contatos", href: "/contacts", icon: Users },
+];
+
+// ============= FINANCIAL MANAGER MENU (💰) =============
+const financialManagerMainItems = [
+  { title: "Tickets Financeiros", href: "/support", icon: Ticket },
+  { title: "Contatos", href: "/contacts", icon: Users },
+];
+
 // ============= CONSULTANT MENU (🤝) =============
 const consultantMainItems = [
   { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase },
@@ -142,7 +160,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, loading } = useUserRole();
+  const { isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, isSupportManager, isFinancialManager, loading } = useUserRole();
   const { signOut, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -151,7 +169,9 @@ export function AppSidebar() {
 
   // Determine mode label and color
   const getModeInfo = () => {
-    if (isSupportAgent) return { label: "🛡️ Modo Suporte", color: "bg-blue-500" };
+    if (isSupportManager && !isAdmin && !isManager) return { label: "👨‍💼 Gerente de Suporte", color: "bg-indigo-500" };
+    if (isSupportAgent && !isSupportManager && !isAdmin && !isManager) return { label: "🛡️ Modo Suporte", color: "bg-blue-500" };
+    if (isFinancialManager && !isAdmin && !isManager) return { label: "💰 Gerente Financeiro", color: "bg-emerald-500" };
     if (isConsultant && !isAdmin && !isManager) return { label: "🤝 Modo Consultor", color: "bg-green-500" };
     if (isSalesRep && !isAdmin && !isManager) return { label: "🎯 Modo Vendas", color: "bg-orange-500" };
     if (isAdmin || isManager) return { label: "👑 Modo Admin", color: "bg-purple-500" };
@@ -253,8 +273,31 @@ export function AppSidebar() {
           </div>
         ) : (
           <>
+            {/* ============= SUPPORT MANAGER VIEW (👨‍💼) ============= */}
+            {isSupportManager && !isAdmin && !isManager ? (
+              <>
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {supportManagerMainItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Equipe</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {supportManagerToolsItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            ) : null}
+
             {/* ============= SUPPORT AGENT VIEW (🛡️) ============= */}
-            {isSupportAgent && !isAdmin && !isManager ? (
+            {isSupportAgent && !isSupportManager && !isAdmin && !isManager ? (
               <>
                 <SidebarGroup>
                   {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
@@ -270,6 +313,20 @@ export function AppSidebar() {
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {supportAgentToolsItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            ) : null}
+
+            {/* ============= FINANCIAL MANAGER VIEW (💰) ============= */}
+            {isFinancialManager && !isAdmin && !isManager ? (
+              <>
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Financeiro</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {financialManagerMainItems.map(renderMenuItem)}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
@@ -399,8 +456,8 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-border p-4">
         {!collapsed ? (
           <div className="space-y-3">
-            {/* Availability Toggle for Consultants and Support Agents */}
-            {(isConsultant || isSupportAgent) && (
+            {/* Availability Toggle for Consultants, Support Agents, and Support Managers */}
+            {(isConsultant || isSupportAgent || isSupportManager) && (
               <AvailabilityToggle />
             )}
             
@@ -411,7 +468,7 @@ export function AppSidebar() {
                     {user?.email?.substring(0, 2).toUpperCase() || "US"}
                   </AvatarFallback>
                 </Avatar>
-                {(isConsultant || isSupportAgent) && (
+                {(isConsultant || isSupportAgent || isSupportManager) && (
                   <span 
                     className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-sidebar ${getStatusColor(availabilityStatus)}`}
                   />
@@ -440,8 +497,8 @@ export function AppSidebar() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {/* Availability Toggle for Consultants and Support Agents (collapsed) */}
-            {(isConsultant || isSupportAgent) && (
+            {/* Availability Toggle for Consultants, Support Agents, and Support Managers (collapsed) */}
+            {(isConsultant || isSupportAgent || isSupportManager) && (
               <AvailabilityToggle />
             )}
             

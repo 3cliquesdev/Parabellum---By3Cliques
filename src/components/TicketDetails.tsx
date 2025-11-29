@@ -207,9 +207,9 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
         )}
 
         {/* Conversation Link */}
-        {ticket.conversation_id && (
+        {ticket.source_conversation_id && (
           <TicketConversationLink 
-            conversationId={ticket.conversation_id}
+            conversationId={ticket.source_conversation_id}
             conversationChannel={ticket.channel}
             conversationCreatedAt={ticket.created_at}
           />
