@@ -81,11 +81,8 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
     });
   };
 
-  const handleDelete = async (id: string, isDefault: boolean) => {
-    if (isDefault) {
-      return;
-    }
-    if (confirm("Tem certeza que deseja deletar este pipeline? Todas as etapas serão removidas.")) {
+  const handleDelete = async (id: string) => {
+    if (confirm("Tem certeza que deseja deletar este pipeline? Todas as etapas e negócios vinculados serão afetados.")) {
       await deletePipeline.mutateAsync(id);
     }
   };
@@ -147,10 +144,9 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
                         type="button"
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(pipeline.id, pipeline.is_default || false)}
-                        disabled={pipeline.is_default}
+                        onClick={() => handleDelete(pipeline.id)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
                   </div>
