@@ -19,6 +19,7 @@ interface GoalFormData {
   period_year: string;
   assigned_to?: string;
   department?: string;
+  commission_rate?: string;
 }
 
 export function GoalDialog() {
@@ -47,6 +48,7 @@ export function GoalDialog() {
       period_year: parseInt(data.period_year),
       assigned_to: data.assigned_to,
       department: data.department,
+      commission_rate: data.commission_rate ? parseFloat(data.commission_rate) : 0,
     });
 
     reset();
@@ -103,7 +105,7 @@ export function GoalDialog() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="period_month">Mês *</Label>
               <Select onValueChange={(value) => setValue("period_month", value)} defaultValue={String(new Date().getMonth() + 1)}>
@@ -134,6 +136,17 @@ export function GoalDialog() {
                 type="number" 
                 {...register("period_year", { required: true })} 
                 placeholder="2025" 
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="commission_rate">Taxa Comissão (%)</Label>
+              <Input 
+                id="commission_rate" 
+                type="number" 
+                step="0.01" 
+                {...register("commission_rate")} 
+                placeholder="5.00" 
               />
             </div>
           </div>

@@ -2319,6 +2319,7 @@ export type Database = {
       sales_goals: {
         Row: {
           assigned_to: string | null
+          commission_rate: number | null
           created_at: string
           created_by: string | null
           department: Database["public"]["Enums"]["department_type"] | null
@@ -2327,6 +2328,7 @@ export type Database = {
           id: string
           period_month: number
           period_year: number
+          product_targets: Json | null
           status: string
           target_value: number
           title: string
@@ -2334,6 +2336,7 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          commission_rate?: number | null
           created_at?: string
           created_by?: string | null
           department?: Database["public"]["Enums"]["department_type"] | null
@@ -2342,6 +2345,7 @@ export type Database = {
           id?: string
           period_month: number
           period_year: number
+          product_targets?: Json | null
           status?: string
           target_value: number
           title: string
@@ -2349,6 +2353,7 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          commission_rate?: number | null
           created_at?: string
           created_by?: string | null
           department?: Database["public"]["Enums"]["department_type"] | null
@@ -2357,6 +2362,7 @@ export type Database = {
           id?: string
           period_month?: number
           period_year?: number
+          product_targets?: Json | null
           status?: string
           target_value?: number
           title?: string

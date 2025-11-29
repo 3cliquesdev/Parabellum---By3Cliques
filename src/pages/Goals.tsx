@@ -122,7 +122,7 @@ export default function Goals() {
                 ))}
               </div>
             ) : goals && goals.length > 0 ? (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-8">
                 {goals.map((goal) => (
                   <GoalCard key={goal.id} goal={goal} />
                 ))}

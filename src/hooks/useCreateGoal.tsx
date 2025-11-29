@@ -11,6 +11,7 @@ interface CreateGoalData {
   period_year: number;
   assigned_to?: string;
   department?: string;
+  commission_rate?: number;
 }
 
 export function useCreateGoal() {
@@ -36,6 +37,8 @@ export function useCreateGoal() {
           department: (data.department as any) || null,
           created_by: user.id,
           status: "active",
+          commission_rate: data.commission_rate || 0,
+          product_targets: [],
         }])
         .select()
         .single();

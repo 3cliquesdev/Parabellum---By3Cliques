@@ -2,6 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "./useUserRole";
 
+export interface ProductTarget {
+  product_id: string;
+  product_name: string;
+  target_quantity: number;
+  current_quantity: number;
+}
+
 export interface Goal {
   id: string;
   title: string;
@@ -16,6 +23,8 @@ export interface Goal {
   created_at: string;
   updated_at: string;
   status: "active" | "completed" | "cancelled";
+  commission_rate: number;
+  product_targets: ProductTarget[];
   assigned_user?: {
     full_name: string;
     avatar_url: string | null;
@@ -56,7 +65,16 @@ export function useGoals(month?: number, year?: number) {
       }
 
       console.log(`✅ Fetched ${data?.length || 0} goals`);
-      return data as Goal[];
+      
+      // Parse product_targets from JSONB to ProductTarget[]
+      const parsedGoals = (data || []).map(goal => ({
+        ...goal,
+        product_targets: Array.isArray(goal.product_targets) 
+          ? (goal.product_targets as unknown as ProductTarget[]) 
+          : [],
+      }));
+      
+      return parsedGoals as Goal[];
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
