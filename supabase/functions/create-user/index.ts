@@ -174,9 +174,8 @@ serve(async (req) => {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <!-- HEADER COM LOGO -->
         <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-          <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-               alt="PARABELLUM" 
-               style="max-width: 200px; height: auto;" />
+          <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold; letter-spacing: 2px;">PARABELLUM</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px; font-weight: 500;">by 3Cliques</p>
         </div>
         
         <!-- CONTEÚDO -->
@@ -240,24 +239,8 @@ serve(async (req) => {
         <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #1e3a5f;">
           <tr>
             <td align="center" style="padding: 25px;">
-              <table cellpadding="0" cellspacing="0" border="0" align="center">
-                <tr>
-                  <td style="padding: 0 8px;">
-                    <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-                         alt="PARABELLUM" 
-                         width="100"
-                         style="display: block; max-width: 100px; height: auto;" />
-                  </td>
-                  <td style="padding: 0 8px;">
-                    <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-3cliques-email.png?v=2" 
-                         alt="3 CLIQUES" 
-                         width="80"
-                         style="display: block; max-width: 80px; height: auto;" />
-                  </td>
-                </tr>
-              </table>
-              <p style="color: #ffffff; margin: 15px 0 10px 0; font-size: 14px; font-weight: 600;">
-                PARABELLUM by 3Cliques
+              <p style="color: #ffffff; margin: 0 0 10px 0; font-size: 20px; font-weight: bold; letter-spacing: 1px;">
+                PARABELLUM | 3Cliques
               </p>
               <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
                 Departamento de Segurança da Informação
