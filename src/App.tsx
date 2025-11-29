@@ -121,12 +121,12 @@ const App = () => {
             <Route path="/open-ticket" element={<PublicTicketForm />} />
             <Route path="/tv" element={<TVMode />} />
             <Route path="/" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager", "support_manager", "financial_manager"]}><Layout><Dashboard /></Layout></ProtectedRoute>} />
-            <Route path="/inbox" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "sales_rep", "admin", "general_manager", "manager"]}><Layout><Inbox /></Layout></ProtectedRoute>} />
+            <Route path="/inbox" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "sales_rep", "cs_manager", "admin", "general_manager", "manager"]}><Layout><Inbox /></Layout></ProtectedRoute>} />
             <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["consultant", "sales_rep", "general_manager", "manager", "admin", "cs_manager"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
             <Route path="/cs-management" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><CSManagement /></Layout></ProtectedRoute>} />
             <Route path="/cs-management/consultant/:id" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><ConsultantDetail /></Layout></ProtectedRoute>} />
-            <Route path="/contacts" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "admin", "general_manager", "manager"]}><Layout><Contacts /></Layout></ProtectedRoute>} />
-            <Route path="/contacts/:id" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "admin", "general_manager", "manager"]}><Layout><ContactDetails /></Layout></ProtectedRoute>} />
+            <Route path="/contacts" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "cs_manager", "admin", "general_manager", "manager"]}><Layout><Contacts /></Layout></ProtectedRoute>} />
+            <Route path="/contacts/:id" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "cs_manager", "admin", "general_manager", "manager"]}><Layout><ContactDetails /></Layout></ProtectedRoute>} />
             <Route path="/organizations" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "general_manager", "manager"]}><Layout><Organizations /></Layout></ProtectedRoute>} />
             <Route path="/deals" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager"]}><Layout><Deals /></Layout></ProtectedRoute>} />
             <Route path="/quotes" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "sales_rep"]}><Layout><Quotes /></Layout></ProtectedRoute>} />
@@ -144,7 +144,7 @@ const App = () => {
             <Route path="/goals-management" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager"]}><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
             <Route path="/cadences" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager"]}><Layout><Cadences /></Layout></ProtectedRoute>} />
             <Route path="/sales-tasks" element={<ProtectedRoute allowedRoles={["sales_rep"]}><Layout><SalesTasks /></Layout></ProtectedRoute>} />
-            <Route path="/support" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "admin", "general_manager", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />
+            <Route path="/support" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "cs_manager", "admin", "general_manager", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />
             <Route path="/knowledge" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "admin", "general_manager", "manager"]}><Layout><Knowledge /></Layout></ProtectedRoute>} />
             <Route path="/ai-studio/personas" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><AIStudio /></Layout></ProtectedRoute>} />
             <Route path="/import-clients" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><ImportClients /></Layout></ProtectedRoute>} />

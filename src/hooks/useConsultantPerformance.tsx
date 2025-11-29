@@ -15,19 +15,39 @@ export function useConsultantPerformance() {
   return useQuery({
     queryKey: ["consultant-performance"],
     queryFn: async () => {
-      // Fetch all consultants
+      console.log("🔍 useConsultantPerformance: Fetching consultants...");
+      
+      // Fetch consultant user IDs first
+      const { data: userRoles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "consultant");
+
+      if (rolesError) {
+        console.error("❌ Error fetching consultant roles:", rolesError);
+        throw rolesError;
+      }
+
+      const consultantIds = userRoles?.map(r => r.user_id) || [];
+      console.log("✅ Found consultant IDs:", consultantIds);
+
+      if (consultantIds.length === 0) {
+        console.log("⚠️ No consultants found");
+        return [];
+      }
+
+      // Fetch consultant profiles
       const { data: consultants, error: consultantsError } = await supabase
         .from("profiles")
         .select("id, full_name, avatar_url")
-        .in("id", 
-          (await supabase
-            .from("user_roles")
-            .select("user_id")
-            .eq("role", "consultant")
-          ).data?.map(r => r.user_id) || []
-        );
+        .in("id", consultantIds);
 
-      if (consultantsError) throw consultantsError;
+      if (consultantsError) {
+        console.error("❌ Error fetching consultant profiles:", consultantsError);
+        throw consultantsError;
+      }
+
+      console.log("✅ Found consultant profiles:", consultants?.length);
 
       // For each consultant, calculate their metrics
       const performanceData: ConsultantPerformance[] = await Promise.all(
@@ -94,9 +114,12 @@ export function useConsultantPerformance() {
         })
       );
 
+      console.log("✅ Performance data calculated for", performanceData.length, "consultants");
+
       // Sort by portfolio value descending
       return performanceData.sort((a, b) => b.portfolio_value - a.portfolio_value);
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 1 * 60 * 1000, // Reduzido para 1 minuto para facilitar debug
+    refetchOnMount: true, // Força refetch ao montar componente
   });
 }
