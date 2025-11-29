@@ -42,14 +42,12 @@ export default function SetupPassword() {
     setError("");
 
     try {
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: userEmail,
-        options: {
-          shouldCreateUser: false,
-        },
+      const { data, error } = await supabase.functions.invoke('send-verification-code', {
+        body: { email: userEmail }
       });
 
-      if (otpError) throw otpError;
+      if (error) throw error;
+      if (!data.success && data.error) throw new Error(data.error);
 
       toast.success("Código enviado para seu email!");
       setStep("verify_otp");
@@ -72,19 +70,18 @@ export default function SetupPassword() {
     setError("");
 
     try {
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: userEmail,
-        token: otp,
-        type: "email",
+      const { data, error } = await supabase.functions.invoke('verify-code', {
+        body: { email: userEmail, code: otp }
       });
 
-      if (verifyError) throw verifyError;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || "Código inválido");
 
       toast.success("Email validado com sucesso!");
       setStep("set_password");
     } catch (err: any) {
       console.error("Erro ao validar código:", err);
-      setError("Código inválido ou expirado");
+      setError(err.message || "Código inválido ou expirado");
       toast.error("Código inválido");
     } finally {
       setLoading(false);
