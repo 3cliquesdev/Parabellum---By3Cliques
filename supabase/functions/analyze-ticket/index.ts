@@ -89,8 +89,18 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
 
     console.log(`[analyze-ticket] Mode: ${mode}, Processing request`);
 
-    // Call AI Gateway directly - no retry logic, let client handle rate limits
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // Helper: Fetch with timeout
+    const fetchWithTimeout = (url: string, options: RequestInit, timeout = 60000) => {
+      return Promise.race([
+        fetch(url, options),
+        new Promise<Response>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timeout after 60s')), timeout)
+        )
+      ]);
+    };
+
+    // Call AI Gateway with timeout protection
+    const response = await fetchWithTimeout('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,
@@ -111,37 +121,49 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
       }
       
       const errorText = await response.text();
-      console.error(`[analyze-ticket] AI Gateway error:`, response.status, errorText);
+      console.error(`[analyze-ticket] AI Gateway error: ${response.status}`, errorText);
       
-      // GRACEFUL DEGRADATION: Return fallback values on 429 instead of failing
-      if (response.status === 429) {
-        console.warn(`[analyze-ticket] ⚠️ Rate limit hit, returning fallback for mode: ${mode}`);
+      // GRACEFUL DEGRADATION: Return fallback values for known errors
+      if (response.status === 429 || response.status === 503 || response.status === 502) {
+        const errorReason = response.status === 429 ? 'rate_limit' : 
+                           response.status === 503 ? 'service_unavailable' :
+                           response.status === 502 ? 'bad_gateway' : 'unknown';
+        
+        console.warn(`[analyze-ticket] ⚠️ AI Gateway error ${response.status}, returning fallback for mode: ${mode}`);
         
         let fallbackResult = '';
+        let fallbackMessage = '';
+        
         switch (mode) {
           case 'sentiment':
             fallbackResult = 'neutro'; // Safe default sentiment
+            fallbackMessage = 'Análise de sentimento indisponível';
             break;
           case 'summary':
-            fallbackResult = 'Resumo indisponível devido a limite de requisições. Por favor, revise a conversa manualmente.';
+            fallbackResult = 'Resumo indisponível temporariamente. Por favor, revise a conversa manualmente.';
+            fallbackMessage = 'Sistema de resumo temporariamente indisponível';
             break;
           case 'reply':
             fallbackResult = 'Obrigado pela sua mensagem. Nossa equipe irá analisar seu caso e retornar em breve.';
+            fallbackMessage = 'Sugestão de resposta temporariamente indisponível';
             break;
           case 'tags':
             fallbackResult = ''; // Empty tags
+            fallbackMessage = 'Sistema de tags temporariamente indisponível';
             break;
           default:
             fallbackResult = 'Resultado não disponível';
+            fallbackMessage = 'Serviço temporariamente indisponível';
         }
         
         return new Response(JSON.stringify({ 
           result: fallbackResult,
           mode,
           fallback: true,
-          reason: 'rate_limit'
+          reason: errorReason,
+          message: fallbackMessage
         }), {
-          status: 200, // ✅ Return 200 with fallback instead of 429 error
+          status: 200, // ✅ Return 200 with fallback instead of error
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -171,9 +193,16 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
     });
 
   } catch (error) {
-    console.error('[analyze-ticket] Error:', error);
+    console.error('[analyze-ticket] Critical Error:', error);
+    
+    // Graceful degradation even for critical errors (timeout, network failure, etc.)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
     return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+      error: errorMessage,
+      fallback: true,
+      reason: 'critical_error',
+      message: 'Serviço de IA temporariamente indisponível. Tente novamente em alguns instantes.'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
