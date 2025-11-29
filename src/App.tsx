@@ -27,7 +27,6 @@ import PublicChat from "./pages/PublicChat";
 import PublicChatWindow from "./pages/PublicChatWindow";
 import ChatLinksSettings from "./pages/ChatLinksSettings";
 import Auth from "./pages/Auth";
-import Setup from "./pages/Setup";
 import Automations from "./pages/Automations";
 import Analytics from "./pages/Analytics";
 import TVMode from "./pages/TVMode";
@@ -116,7 +115,6 @@ const App = () => {
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/setup-password" element={<SetupPassword />} />
-            <Route path="/setup" element={<Setup />} />
             <Route path="/public/form/:formId" element={<PublicForm />} />
           <Route path="/public-chat" element={<PublicChat />} />
           <Route path="/public-chat/:conversationId" element={<PublicChatWindow />} />
