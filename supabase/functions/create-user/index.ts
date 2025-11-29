@@ -172,69 +172,74 @@ serve(async (req) => {
     // Enviar email de boas-vindas com Termo de Responsabilidade
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <!-- HEADER COM LOGO -->
         <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
           <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png" 
                alt="PARABELLUM" 
                style="max-width: 200px; height: auto;" />
         </div>
         
+        <!-- CONTEÚDO -->
         <div style="padding: 30px; background: #f8fafc;">
-          <h2 style="color: #1e3a5f;">Bem-vindo ao Sistema Parabellum</h2>
-          
-          <p>Olá <strong>${full_name}</strong>,</p>
-          <p>Seu acesso ao sistema Parabellum foi criado com sucesso.</p>
-          
-          <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #2563eb;">
-            <p style="margin: 5px 0;"><strong>📧 Email:</strong> ${email}</p>
-            <p style="margin: 5px 0;"><strong>🔑 Senha Provisória:</strong> ${password}</p>
-            <p style="margin: 5px 0;"><strong>👔 Cargo:</strong> ${roleLabels[role] || role}</p>
-            <p style="margin: 5px 0;"><strong>🏢 Departamento:</strong> ${deptData?.name || 'N/A'}</p>
-            <p style="margin: 5px 0;"><strong>🔗 Link de Acesso:</strong> <a href="https://parabellum.work">https://parabellum.work</a></p>
-          </div>
-          
-          <div style="background: #fef3c7; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #f59e0b;">
-            <h3 style="color: #92400e; margin-top: 0;">⚠️ TERMO DE RESPONSABILIDADE</h3>
-            <p style="color: #78350f; font-size: 14px;">
-              Ao utilizar este sistema, você declara estar ciente e concorda com as seguintes cláusulas:
-            </p>
-            
-            <p style="color: #78350f; font-size: 14px;"><strong>1. INTRANSFERIBILIDADE</strong><br>
-            As credenciais de acesso são pessoais e intransferíveis. É estritamente proibido compartilhar, emprestar ou ceder suas credenciais a terceiros, sob qualquer circunstância.</p>
-            
-            <p style="color: #78350f; font-size: 14px;"><strong>2. SIGILO DE DADOS</strong><br>
-            Você se compromete a manter sigilo absoluto sobre todas as informações acessadas através deste sistema, incluindo dados de clientes, estratégias comerciais e informações internas.</p>
-            
-            <p style="color: #78350f; font-size: 14px;"><strong>3. RESPONSABILIDADE CIVIL E CRIMINAL</strong><br>
-            O uso indevido das credenciais ou vazamento de informações poderá resultar em:<br>
-            • Demissão por justa causa<br>
-            • Responsabilização civil por danos causados<br>
-            • Responsabilização criminal conforme legislação vigente (LGPD)</p>
-            
-            <p style="color: #78350f; font-size: 14px;"><strong>4. MONITORAMENTO</strong><br>
-            Todas as ações realizadas neste sistema são registradas e monitoradas para fins de auditoria e segurança.</p>
-          </div>
-          
-          <div style="background: #dbeafe; border-radius: 8px; padding: 15px; margin: 20px 0;">
-            <p style="color: #1e40af; margin: 0; font-size: 14px;">
-              <strong>⚠️ IMPORTANTE:</strong> No primeiro acesso você será solicitado a validar seu email via código OTP e definir uma nova senha.
-            </p>
-          </div>
-          
-          <p style="color: #64748b; font-size: 12px; margin-top: 30px; text-align: center;">
-            Ao fazer login, você confirma a leitura e aceite deste termo.
+          <p style="color: #475569; line-height: 1.6; margin-bottom: 15px;">
+            Prezado(a) <strong>${full_name}</strong>,
           </p>
           
-          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+          <p style="color: #475569; line-height: 1.6; margin-bottom: 25px;">
+            Bem-vindo à operação. Seu acesso à plataforma PARABELLUM foi concedido.
+          </p>
           
-          <p style="color: #94a3b8; font-size: 11px; text-align: center;">
-            Data de Emissão: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}<br>
-            Criado por: ${user.email}
+          <p style="color: #1e3a5f; font-weight: 600; margin-bottom: 10px;">
+            Seguem suas credenciais de acesso:
+          </p>
+          
+          <div style="background: white; border: 2px solid #1e3a5f; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <p style="margin: 8px 0; color: #1e3a5f;"><strong>Sistema:</strong> https://parabellum.work</p>
+            <p style="margin: 8px 0; color: #1e3a5f;"><strong>Login:</strong> ${email}</p>
+            <p style="margin: 8px 0; color: #1e3a5f;"><strong>Senha Temporária:</strong> ${password}</p>
+            <p style="margin: 8px 0; color: #dc2626; font-size: 13px;">(Troca obrigatória no primeiro login)</p>
+          </div>
+          
+          <h3 style="color: #1e3a5f; margin-top: 30px; margin-bottom: 15px; font-size: 16px; text-transform: uppercase;">
+            TERMO DE RESPONSABILIDADE E SIGILO
+          </h3>
+          
+          <p style="color: #475569; line-height: 1.6; margin-bottom: 15px;">
+            Ao utilizar suas credenciais, você declara ciência das seguintes normas de segurança da informação da PARABELLUM:
+          </p>
+          
+          <div style="margin: 20px 0;">
+            <p style="color: #475569; line-height: 1.6; margin-bottom: 12px;">
+              <strong style="color: #1e3a5f;">Intransferibilidade:</strong> Seu usuário e senha são de uso estritamente pessoal. É proibido compartilhar o acesso com terceiros, sob pena de desligamento e sanções legais.
+            </p>
+            
+            <p style="color: #475569; line-height: 1.6; margin-bottom: 12px;">
+              <strong style="color: #1e3a5f;">Propriedade de Dados:</strong> Todas as informações contidas no sistema (clientes, estratégias, valores) são propriedade exclusiva da empresa. A exportação, print ou divulgação não autorizada constitui violação de sigilo.
+            </p>
+            
+            <p style="color: #475569; line-height: 1.6; margin-bottom: 12px;">
+              <strong style="color: #1e3a5f;">Auditoria:</strong> Todas as ações realizadas na plataforma são monitoradas e registradas (Logs de Acesso) para fins de segurança.
+            </p>
+            
+            <p style="color: #475569; line-height: 1.6; margin-bottom: 12px;">
+              <strong style="color: #1e3a5f;">Dever de Guarda:</strong> Você é responsável por qualquer ação realizada através do seu login. Realize o logoff ao terminar suas atividades.
+            </p>
+          </div>
+          
+          <p style="color: #1e3a5f; font-style: italic; margin-top: 25px; margin-bottom: 20px;">
+            Mantenha a vigilância.
+          </p>
+          
+          <p style="color: #475569; line-height: 1.6; margin-top: 25px;">
+            Atenciosamente,<br>
+            <strong style="color: #1e3a5f;">Departamento de Segurança PARABELLUM</strong>
           </p>
         </div>
         
+        <!-- FOOTER -->
         <div style="background: #1e3a5f; padding: 20px; text-align: center;">
           <p style="color: #94a3b8; margin: 0; font-size: 12px;">
-            Equipe de Segurança - Parabellum
+            Departamento de Segurança - PARABELLUM
           </p>
         </div>
       </div>
@@ -242,9 +247,9 @@ serve(async (req) => {
 
     try {
       const emailPayload: any = {
-        from: 'Parabellum Security <sistema@parabellum.work>',
+        from: 'PARABELLUM Security <sistema@parabellum.work>',
         to: [email],
-        subject: '🔐 Seu Acesso ao Sistema Parabellum - Termo de Responsabilidade',
+        subject: '🔐 Acesso Concedido - Termo de Responsabilidade',
         html: emailHtml,
       };
       
