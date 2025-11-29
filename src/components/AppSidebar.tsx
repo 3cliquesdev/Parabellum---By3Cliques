@@ -134,7 +134,28 @@ const salesRepProductivityItems = [
   { title: "Minhas Metas", href: "/goals", icon: Target },
 ];
 
-// ============= ADMIN/MANAGER MENU (👑) =============
+// ============= SALES MANAGER MENU (📊) =============
+const salesManagerOverviewItems = [
+  { title: "Dashboard", href: "/", icon: LayoutDashboard },
+  { title: "Analytics", href: "/analytics", icon: BarChart3 },
+];
+
+const salesManagerSalesItems = [
+  { title: "Inbox", href: "/inbox", icon: MessageCircle },
+  { title: "Negócios", href: "/deals", icon: TrendingUp },
+  { title: "Propostas", href: "/quotes", icon: Receipt },
+  { title: "Contatos", href: "/contacts", icon: Users },
+  { title: "Organizações", href: "/organizations", icon: Building2 },
+];
+
+const salesManagerProductivityItems = [
+  { title: "Cadências", href: "/cadences", icon: RefreshCw },
+  { title: "Metas da Equipe", href: "/goals", icon: Target },
+  { title: "🎯 Definir Metas", href: "/goals-management", icon: Target },
+  { title: "Relatórios", href: "/reports", icon: FileText },
+];
+
+// ============= ADMIN/GENERAL MANAGER MENU (👑) =============
 const adminOverviewItems = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard },
   { title: "Analytics", href: "/analytics", icon: BarChart3 },
@@ -196,8 +217,9 @@ export function AppSidebar() {
     if (isCSManager && !isAdmin && !isManager && !isGeneralManager) return { label: "👔 Gerente de CS", color: "bg-purple-600" };
     if (isConsultant && !isAdmin && !isManager && !isGeneralManager) return { label: "🤝 Modo Consultor", color: "bg-green-500" };
     if (isSalesRep && !isAdmin && !isManager && !isGeneralManager) return { label: "🎯 Modo Vendas", color: "bg-orange-500" };
+    if (isManager && !isAdmin && !isGeneralManager) return { label: "📊 Gerente de Vendas", color: "bg-blue-600" };
     if (isGeneralManager && !isAdmin) return { label: "🎖️ Gerente Geral", color: "bg-blue-600" };
-    if (isAdmin || isManager) return { label: "👑 Modo Admin", color: "bg-purple-500" };
+    if (isAdmin) return { label: "👑 Modo Admin", color: "bg-purple-500" };
     return { label: "Sistema", color: "bg-gray-500" };
   };
 
@@ -446,8 +468,40 @@ export function AppSidebar() {
               </>
             ) : null}
 
-            {/* ============= ADMIN/MANAGER/GENERAL_MANAGER VIEW (👑/🎖️) ============= */}
-            {isAdmin || isManager || isGeneralManager ? (
+            {/* ============= SALES MANAGER VIEW (📊) ============= */}
+            {isManager && !isAdmin && !isGeneralManager ? (
+              <>
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Visão Geral</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {salesManagerOverviewItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Vendas</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {salesManagerSalesItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  {!collapsed && <SidebarGroupLabel>Gestão</SidebarGroupLabel>}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {salesManagerProductivityItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            ) : null}
+
+            {/* ============= ADMIN/GENERAL_MANAGER VIEW (👑/🎖️) ============= */}
+            {isAdmin || isGeneralManager ? (
               <>
                 <SidebarGroup>
                   {!collapsed && <SidebarGroupLabel>Visão Geral</SidebarGroupLabel>}
