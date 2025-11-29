@@ -63,6 +63,18 @@ export default function Auth() {
         case "manager":
           navigate("/analytics");
           break;
+        case "cs_manager":
+          navigate("/analytics");
+          break;
+        case "support_manager":
+          navigate("/analytics");
+          break;
+        case "financial_manager":
+          navigate("/analytics");
+          break;
+        case "general_manager":
+          navigate("/analytics");
+          break;
         default:
           navigate("/dashboard");
       }
