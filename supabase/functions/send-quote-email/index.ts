@@ -90,7 +90,7 @@ serve(async (req) => {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 650px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-          <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png" 
+          <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
                alt="PARABELLUM" 
                style="max-width: 200px; height: auto;" />
         </div>
@@ -167,11 +167,37 @@ serve(async (req) => {
           </div>
         </div>
 
-        <div style="background: #1e3a5f; padding: 20px; text-align: center;">
-          <p style="color: #94a3b8; margin: 0; font-size: 12px;">
-            Equipe Comercial - Parabellum
-          </p>
-        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #1e3a5f;">
+          <tr>
+            <td align="center" style="padding: 25px;">
+              <table cellpadding="0" cellspacing="0" border="0" align="center">
+                <tr>
+                  <td style="padding: 0 8px;">
+                    <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
+                         alt="PARABELLUM" 
+                         width="100"
+                         style="display: block; max-width: 100px; height: auto;" />
+                  </td>
+                  <td style="padding: 0 8px;">
+                    <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-3cliques-email.png?v=2" 
+                         alt="3 CLIQUES" 
+                         width="80"
+                         style="display: block; max-width: 80px; height: auto;" />
+                  </td>
+                </tr>
+              </table>
+              <p style="color: #ffffff; margin: 15px 0 10px 0; font-size: 14px; font-weight: 600;">
+                PARABELLUM by 3Cliques
+              </p>
+              <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
+                Equipe Comercial
+              </p>
+              <p style="color: #64748b; margin: 0; font-size: 11px;">
+                Ambiente Seguro
+              </p>
+            </td>
+          </tr>
+        </table>
       </body>
       </html>
     `;
