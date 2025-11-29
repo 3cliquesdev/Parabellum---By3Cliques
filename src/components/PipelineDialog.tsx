@@ -124,7 +124,7 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
                 {pipelines?.map((pipeline) => (
                   <div
                     key={pipeline.id}
-                    className="flex items-center justify-between p-3 border rounded-lg"
+                    className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
                   >
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{pipeline.name}</span>
