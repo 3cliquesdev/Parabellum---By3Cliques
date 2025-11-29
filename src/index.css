@@ -44,7 +44,12 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
     
-    --radius: 0.5rem;  /* Enterprise radius */
+    --radius: 1rem;  /* Soft radius for clean aesthetic */
+    
+    /* Soft shadows for floating effect */
+    --shadow-soft: 0 2px 20px rgba(0, 0, 0, 0.04);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.02), 0 8px 24px rgba(0, 0, 0, 0.04);
+    --shadow-elevated: 0 4px 32px rgba(0, 0, 0, 0.08);
   }
 
   .dark {

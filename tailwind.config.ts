@@ -74,7 +74,13 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
-        "3xl": "24px",
+        "2xl": "1rem",
+        "3xl": "1.5rem",
+      },
+      boxShadow: {
+        'soft': '0 2px 20px rgba(0, 0, 0, 0.04)',
+        'card': '0 1px 3px rgba(0, 0, 0, 0.02), 0 8px 24px rgba(0, 0, 0, 0.04)',
+        'elevated': '0 4px 32px rgba(0, 0, 0, 0.08)',
       },
       keyframes: {
         "accordion-down": {
