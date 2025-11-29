@@ -66,7 +66,7 @@ export default function DeliveryGroups() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
+          <h1 className="text-3xl font-bold flex items-center gap-2 text-foreground">
             <Package className="h-8 w-8" />
             Grupos de Entrega
           </h1>

@@ -81,7 +81,7 @@ export default function Users() {
     <div className="p-8 space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Gerenciamento de Usuários</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Gerenciamento de Usuários</h1>
           <p className="text-muted-foreground">
             Gerencie os usuários do sistema e suas permissões
           </p>

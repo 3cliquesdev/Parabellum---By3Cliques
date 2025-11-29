@@ -141,7 +141,7 @@ exemplo@email.com,João,Silva,(11) 99999-9999,Empresa Exemplo,123.456.789-00,987
     <div className="container mx-auto py-8 px-4 max-w-6xl">
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-3xl font-bold">Importação de Clientes</h1>
+          <h1 className="text-3xl font-bold text-foreground">Importação de Clientes</h1>
           <Button variant="outline" onClick={downloadTemplate}>
             <Download className="w-4 h-4 mr-2" />
             Baixar Template
