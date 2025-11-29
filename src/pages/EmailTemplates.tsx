@@ -22,6 +22,7 @@ import { useEmailTemplates } from "@/hooks/useEmailTemplates";
 import { useDeleteEmailTemplate } from "@/hooks/useDeleteEmailTemplate";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { Tables } from "@/integrations/supabase/types";
+import { SafeHTML } from "@/components/SafeHTML";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -288,10 +289,9 @@ export default function EmailTemplates() {
                     background-color: white !important;
                   }
                 `}</style>
-                <div 
+                <SafeHTML 
+                  html={previewTemplate?.html_body || ""} 
                   className="email-preview prose prose-sm max-w-none"
-                  style={{ backgroundColor: 'white', color: '#1a1a1a' }}
-                  dangerouslySetInnerHTML={{ __html: previewTemplate?.html_body || "" }} 
                 />
               </div>
           <AlertDialogFooter>

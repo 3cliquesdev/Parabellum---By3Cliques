@@ -3,9 +3,6 @@ project_id = "zaeozfdjhrmblfaxsyuu"
 [functions.kiwify-webhook]
 verify_jwt = false
 
-[functions.create-first-admin]
-verify_jwt = false
-
 [functions.handle-whatsapp-event]
 verify_jwt = false
 

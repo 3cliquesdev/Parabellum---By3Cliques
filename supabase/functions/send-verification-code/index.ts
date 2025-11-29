@@ -227,8 +227,9 @@ serve(async (req) => {
     console.log('[send-verification-code] 🔑 Código OTP gerado:', code);
 
     return new Response(JSON.stringify({ 
-      success: true,
-      code: code // FASE 1: Sempre retornar o código para uso interno
+      success: true
+      // SECURITY FIX: Code is only sent via email, never in API response
+      // Code can only be returned in dev_mode (line 214) for testing purposes
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 import ReactPlayer from 'react-player';
 import { Textarea } from '@/components/ui/textarea';
+import DOMPurify from 'dompurify';
 
 /**
  * Extrai URL de vídeo de diferentes formatos
@@ -46,12 +47,18 @@ interface VideoEmbedFieldProps {
 export function VideoEmbedField({ url, onChange }: VideoEmbedFieldProps) {
   const videoUrl = extractVideoUrl(url);
 
-  // Normalize iframe HTML to force 100% dimensions
+  // Normalize iframe HTML to force 100% dimensions and sanitize for XSS protection
   const normalizeIframe = (iframeHtml: string): string => {
-    return iframeHtml
+    const normalized = iframeHtml
       .replace(/width=["']\d+["']/gi, 'width="100%"')
       .replace(/height=["']\d+["']/gi, 'height="100%"')
       .replace(/<iframe/gi, '<iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"');
+    
+    // SECURITY: Sanitize HTML to prevent XSS attacks
+    return DOMPurify.sanitize(normalized, {
+      ALLOWED_TAGS: ['iframe'],
+      ALLOWED_ATTR: ['src', 'width', 'height', 'style', 'allowfullscreen', 'frameborder', 'allow']
+    });
   };
 
   return (
