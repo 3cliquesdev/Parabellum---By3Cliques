@@ -58,35 +58,32 @@ export function MySalesWidget({ userId }: MySalesWidgetProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <DollarSign className="h-5 w-5" />
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <DollarSign className="h-4 w-4 text-slate-400" />
           Minhas Vendas
         </CardTitle>
-        <CardDescription>Suas vendas e performance</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="pt-0 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Total de Vendas</p>
-            <p className="text-2xl font-bold text-foreground">
+            <p className="text-xs text-muted-foreground">Total de Vendas</p>
+            <p className="text-2xl font-semibold text-slate-900 dark:text-white">
               ${salesData?.totalSales.toLocaleString() || 0}
             </p>
           </div>
-          <TrendingUp className="h-8 w-8 text-primary" />
+          <TrendingUp className="h-6 w-6 text-primary" />
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-border">
+        <div className="flex items-center justify-between pt-3 border-t">
           <div>
-            <p className="text-sm text-muted-foreground">Fechados este mês</p>
-            <p className="text-xl font-semibold text-foreground">{salesData?.dealsThisMonth || 0}</p>
+            <p className="text-xs text-muted-foreground">Fechados este mês</p>
+            <p className="text-lg font-semibold">{salesData?.dealsThisMonth || 0}</p>
           </div>
-          <Target className="h-6 w-6 text-muted-foreground" />
-        </div>
-
-        <div className="pt-4 border-t border-border">
-          <p className="text-sm text-muted-foreground">Total de Deals Ganhos</p>
-          <p className="text-xl font-semibold text-foreground">{salesData?.totalDeals || 0}</p>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Total Ganhos</p>
+            <p className="text-lg font-semibold">{salesData?.totalDeals || 0}</p>
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDeals } from "@/hooks/useDeals";
 import { useContacts } from "@/hooks/useContacts";
 import { CheckCircle2, Clock, DollarSign } from "lucide-react";
@@ -34,41 +34,44 @@ export function RecentActionsWidget() {
     .slice(0, 5);
 
   return (
-    <Card className="bg-card border-border rounded-3xl p-6 animate-fade-in">
-      <div className="flex items-center gap-2 mb-6">
-        <Clock className="h-5 w-5 text-primary" />
-        <h3 className="text-lg font-bold text-foreground">Últimas Ações</h3>
-      </div>
-
-      <div className="space-y-4">
-        {recentActions.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">
-            Nenhuma ação recente
-          </p>
-        ) : (
-          recentActions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <div key={action.id} className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div
-                    className={`flex items-center justify-center w-10 h-10 rounded-2xl bg-secondary ${action.iconColor}`}
-                  >
-                    <Icon className="h-5 w-5" />
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <Clock className="h-4 w-4 text-slate-400" />
+          Últimas Ações
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="space-y-2">
+          {recentActions.length === 0 ? (
+            <p className="text-center text-muted-foreground py-4 text-xs">
+              Nenhuma ação recente
+            </p>
+          ) : (
+            recentActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <div key={action.id} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div
+                      className={`flex items-center justify-center w-8 h-8 rounded bg-secondary ${action.iconColor}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{action.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{action.description}</p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-foreground font-medium truncate">{action.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{action.description}</p>
-                  </div>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {formatDistanceToNow(action.timestamp, { addSuffix: true, locale: ptBR })}
+                  </span>
                 </div>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {formatDistanceToNow(action.timestamp, { addSuffix: true, locale: ptBR })}
-                </span>
-              </div>
-            );
-          })
-        )}
-      </div>
+              );
+            })
+          )}
+        </div>
+      </CardContent>
     </Card>
   );
 }

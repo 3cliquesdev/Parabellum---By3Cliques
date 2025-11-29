@@ -38,18 +38,18 @@ export function PipelineValueWidget() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-slate-400" />
           Valor no Pipeline
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="text-4xl font-bold text-primary">
+      <CardContent className="pt-0">
+        <div className="text-2xl font-semibold text-slate-900 dark:text-white">
           {formatCurrency(totalPipelineValue)}
         </div>
 
-        <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
           <span>Ponderado: {formatCurrency(weightedValue)}</span>
           <TooltipProvider>
             <Tooltip>
