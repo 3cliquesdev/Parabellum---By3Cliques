@@ -42,19 +42,104 @@ interface KiwifyWebhookPayload {
   };
 }
 
+/**
+ * Verifies HMAC SHA-256 signature from Kiwify webhook
+ * @param body - Raw request body string
+ * @param signature - Signature from x-kiwify-signature header
+ * @param secret - Webhook secret from environment
+ * @returns true if signature is valid, false otherwise
+ */
+async function verifyKiwifySignature(
+  body: string,
+  signature: string | null,
+  secret: string
+): Promise<boolean> {
+  if (!signature) {
+    console.error('[kiwify-webhook] ❌ Missing signature header');
+    return false;
+  }
+
+  try {
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    const messageData = encoder.encode(body);
+
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    const signatureBuffer = await crypto.subtle.sign(
+      'HMAC',
+      cryptoKey,
+      messageData
+    );
+
+    const expectedSignature = Array.from(new Uint8Array(signatureBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    const isValid = expectedSignature === signature.toLowerCase();
+    
+    if (!isValid) {
+      console.error('[kiwify-webhook] ❌ Invalid signature');
+      console.error('Expected:', expectedSignature);
+      console.error('Received:', signature);
+    }
+
+    return isValid;
+  } catch (error) {
+    console.error('[kiwify-webhook] ❌ Signature verification error:', error);
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // ============================================
+    // SECURITY: Verify webhook signature (HMAC)
+    // ============================================
+    const webhookSecret = Deno.env.get('KIWIFY_WEBHOOK_SECRET');
+    
+    if (!webhookSecret) {
+      console.error('[kiwify-webhook] ❌ KIWIFY_WEBHOOK_SECRET not configured');
+      return new Response(
+        JSON.stringify({ error: 'Webhook secret not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Read body as text for signature verification
+    const bodyText = await req.text();
+    const signature = req.headers.get('x-kiwify-signature');
+
+    // Verify signature before processing
+    const isValid = await verifyKiwifySignature(bodyText, signature, webhookSecret);
+    
+    if (!isValid) {
+      console.error('[kiwify-webhook] ❌ SECURITY: Invalid webhook signature - possible attack');
+      return new Response(
+        JSON.stringify({ error: 'Invalid signature' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[kiwify-webhook] ✅ Signature verified');
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { persistSession: false } }
     );
 
-    const payload: KiwifyWebhookPayload = await req.json();
+    const payload: KiwifyWebhookPayload = JSON.parse(bodyText);
     console.log('[kiwify-webhook] Received:', payload.order_status, payload.order_id);
 
     const { order_status, Customer, Product, Commissions, order_id } = payload;
