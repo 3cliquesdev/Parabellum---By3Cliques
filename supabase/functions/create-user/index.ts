@@ -90,7 +90,8 @@ serve(async (req) => {
       email_confirm: true,
       user_metadata: {
         full_name,
-        department
+        department,
+        must_change_password: true
       }
     });
 

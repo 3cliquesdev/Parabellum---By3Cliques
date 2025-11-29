@@ -119,7 +119,7 @@ export default function SetupPassword() {
 
       if (metadataError) throw metadataError;
 
-      toast.success("Senha definida com sucesso!");
+      toast.success("Conta ativada com segurança!");
       
       // Pequeno delay para garantir que a atualização foi processada
       setTimeout(() => {
@@ -143,9 +143,9 @@ export default function SetupPassword() {
             alt="Seu Armazém Drop" 
             className="h-16 w-auto mx-auto mb-4 object-contain" 
           />
-          <CardTitle className="text-2xl">Configuração de Segurança</CardTitle>
+          <CardTitle className="text-2xl">Primeiro Acesso - Validação de Segurança</CardTitle>
           <CardDescription>
-            {step === "send_code" && "Valide seu email para definir uma senha segura"}
+            {step === "send_code" && "Este é seu primeiro acesso. Para ativar sua conta, precisamos validar seu e-mail."}
             {step === "verify_otp" && "Digite o código enviado para seu email"}
             {step === "set_password" && "Defina sua senha definitiva"}
           </CardDescription>
@@ -158,7 +158,7 @@ export default function SetupPassword() {
               <Alert>
                 <Mail className="h-4 w-4" />
                 <AlertDescription>
-                  Olá <strong>{userName}</strong>. Por segurança, precisamos validar seu email antes de definir sua senha definitiva.
+                  Olá <strong>{userName}</strong>. Este é seu primeiro acesso. Por segurança, precisamos validar seu email antes de ativar sua conta.
                 </AlertDescription>
               </Alert>
 
