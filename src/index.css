@@ -4,21 +4,21 @@
 
 @layer base {
   :root {
-    /* LIGHT MODE - Alto Contraste Enterprise */
-    --background: 0 0% 100%;           /* Branco Puro */
+    /* LIGHT MODE - Enterprise Gray Shell */
+    --background: 210 40% 98%;         /* Slate-50 - Gray Shell */
     --foreground: 222.2 84% 4.9%;      /* Azul Quase Preto */
     
     /* SIDEBAR - Variáveis Completas */
-    --sidebar-background: 210 40% 98%;        /* Cinza Gelo */
-    --sidebar-foreground: 222.2 84% 4.9%;     /* Texto Escuro */
+    --sidebar-background: 0 0% 100%;          /* Sidebar Branca */
+    --sidebar-foreground: 215.4 16.3% 25%;    /* Texto Escuro */
     --sidebar-primary: 221.2 83.2% 53.3%;     /* Azul Royal */
-    --sidebar-primary-foreground: 210 40% 98%;/* Branco */
-    --sidebar-accent: 210 40% 96.1%;          /* Hover Cinza Suave */
-    --sidebar-accent-foreground: 222.2 84% 4.9%;/* Texto Escuro no Hover */
-    --sidebar-border: 214.3 31.8% 91.4%;      /* Bordas Sutis */
+    --sidebar-primary-foreground: 0 0% 100%;  /* Branco */
+    --sidebar-accent: 221.2 83.2% 95%;        /* Hover Azul Suave */
+    --sidebar-accent-foreground: 221.2 83.2% 53.3%; /* Texto Azul no Hover */
+    --sidebar-border: 214.3 31.8% 85%;        /* Bordas Visíveis */
     --sidebar-ring: 221.2 83.2% 53.3%;        /* Foco Azul */
     
-    --card: 0 0% 100%;                 /* Branco */
+    --card: 0 0% 100%;                 /* Cards Brancos */
     --card-foreground: 222.2 84% 4.9%;
     
     --primary: 221.2 83.2% 53.3%;      /* Tech Blue */
@@ -27,12 +27,12 @@
     --secondary: 210 40% 96.1%;        /* Cinza muito suave */
     --secondary-foreground: 222.2 47.4% 11.2%;
     
-    --border: 214.3 31.8% 85%;       /* Bordas mais visíveis */
-    --input: 214.3 31.8% 85%;
+    --border: 214.3 31.8% 83%;         /* Bordas Enterprise */
+    --input: 214.3 31.8% 83%;
     --ring: 221.2 83.2% 53.3%;
     
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 40%; /* Contraste aumentado */
+    --muted-foreground: 215.4 16.3% 35%; /* Contraste aumentado */
     
     --accent: 210 40% 96.1%;            /* Hover cinza claro */
     --accent-foreground: 222.2 84% 4.9%; /* Texto ESCURO no hover */
@@ -43,7 +43,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
     
-    --radius: 1rem;
+    --radius: 0.5rem;  /* Enterprise radius */
   }
 
   .dark {
@@ -93,6 +93,29 @@
 
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+/* Enterprise Typography & Density Utilities */
+@layer components {
+  .text-enterprise-title {
+    @apply text-base font-semibold text-slate-900 dark:text-slate-100;
+  }
+  
+  .text-enterprise-body {
+    @apply text-sm text-slate-600 dark:text-slate-400;
+  }
+  
+  .text-enterprise-label {
+    @apply text-xs font-medium text-slate-500 dark:text-slate-500 uppercase tracking-wide;
+  }
+  
+  .card-compact {
+    @apply p-3;
+  }
+  
+  .table-row-compact {
+    @apply py-2 px-3 text-sm;
   }
 }
 

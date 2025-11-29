@@ -40,12 +40,12 @@ export default function Support() {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <div className="border-b p-4 space-y-4">
+      <div className="border-b-2 border-slate-200 dark:border-border p-4 space-y-3 bg-card">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Suporte</h1>
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-white">Suporte</h1>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterType)} className="flex-1">
             <TabsList>
               <TabsTrigger value="all">Todos os Tickets</TabsTrigger>
@@ -76,7 +76,7 @@ export default function Support() {
       {/* Split View */}
       <div className="flex-1 flex overflow-hidden">
         {/* Lista de Tickets (30%) */}
-        <div className="w-[30%] border-r overflow-hidden">
+        <div className="w-[30%] border-r-2 border-slate-200 dark:border-border overflow-hidden bg-card">
           <TicketsList
             tickets={tickets}
             selectedTicketId={selectedTicketId}

@@ -121,10 +121,10 @@ export default function Inbox() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex-none border-b border-border px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-foreground">Caixa de Entrada</h2>
-          <div className="text-sm text-muted-foreground">
+      <div className="flex-none border-b-2 border-slate-200 dark:border-border px-4 py-3 bg-card">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Caixa de Entrada</h2>
+          <div className="text-sm text-slate-500">
             {totalActiveCount} {totalActiveCount === 1 ? 'conversa ativa' : 'conversas ativas'}
           </div>
         </div>

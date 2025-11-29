@@ -4,12 +4,12 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
-      <div className="flex h-screen w-full bg-background overflow-hidden">
+      <div className="flex h-screen w-full overflow-hidden">
         <AppSidebar />
         
-        <div className="flex-1 flex flex-col">
-          {/* Header com trigger */}
-          <header className="h-14 border-b border-border flex items-center px-4 bg-card">
+        <div className="flex-1 flex flex-col bg-background">
+          {/* Header Enterprise */}
+          <header className="h-14 border-b-2 border-slate-200 dark:border-border flex items-center px-4 bg-card shadow-sm">
             <SidebarTrigger />
           </header>
 

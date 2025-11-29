@@ -59,26 +59,26 @@ export default function Dashboard() {
   // VENDEDOR: Dashboard Pessoal
   if (role && (role as string) === "sales_rep") {
     return (
-      <div className="min-h-screen p-6 flex flex-col gap-6">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold text-foreground">Meu Dashboard</h1>
-          <p className="text-muted-foreground">Suas métricas e atividades pessoais</p>
+      <div className="min-h-screen p-4 flex flex-col gap-4">
+        <div className="mb-2">
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-white">Meu Dashboard</h1>
+          <p className="text-sm text-slate-500">Suas métricas e atividades pessoais</p>
         </div>
 
         {/* Linha 1: Vendas + Pipeline Ponderado */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <MySalesWidget userId={user?.id} />
           <PipelineValueWidget />
         </div>
 
         {/* Linha 2: Leads + Atividades */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <MyLeadsWidget userId={user?.id} />
           <MyActivitiesWidget />
         </div>
 
         {/* Linha 3: Hot Deals + Performance */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <HotDealsWidget />
           <MyPerformanceWidget userId={user?.id} />
         </div>
@@ -99,11 +99,11 @@ export default function Dashboard() {
   // Visualização Financeira - apenas widgets financeiros
   if (view === "financial") {
     return (
-      <div className="min-h-screen p-6 flex flex-col gap-6">
+      <div className="min-h-screen p-4 flex flex-col gap-4">
         <div className="w-full">
           <FinancialStatusWidget />
         </div>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 flex-1">
           <div className="min-h-[400px]">
             <LTVWidget />
           </div>
@@ -117,10 +117,10 @@ export default function Dashboard() {
 
   // ADMIN/MANAGER: Dashboard Geral com Business Intelligence
   return (
-    <div className="min-h-screen p-6 flex flex-col gap-6">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-foreground">Dashboard de Vendas</h1>
-        <p className="text-muted-foreground">Inteligência de negócios em tempo real</p>
+    <div className="min-h-screen p-4 flex flex-col gap-4">
+      <div className="mb-2">
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-white">Dashboard de Vendas</h1>
+        <p className="text-sm text-slate-500">Inteligência de negócios em tempo real</p>
       </div>
 
       {/* LINHA 0: SLA Alerts (Admin/Manager only) */}
@@ -131,7 +131,7 @@ export default function Dashboard() {
       )}
 
       {/* LINHA 1: KPIs Cards (3 colunas) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <PipelineValueWidget />
         
         {/* Taxa de Conversão simplificada */}
@@ -172,19 +172,19 @@ export default function Dashboard() {
       </div>
 
       {/* LINHA 2: Gráficos Principais (2 colunas) */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <SalesByRepWidget />
         <RevenueEvolutionWidget />
       </div>
 
       {/* LINHA 3: Funil + Hot Deals (2 colunas) */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <SalesFunnelWidget />
         <HotDealsWidget />
       </div>
 
       {/* LINHA 4: Análises Complementares (2 colunas) */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <RottenDealsWidget />
         <LostReasonsWidget />
       </div>

@@ -208,8 +208,8 @@ export function AppSidebar() {
           <NavLink
             to={item.href}
             end={item.href === "/"}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            activeClassName="bg-primary text-primary-foreground font-medium hover:bg-primary hover:text-primary-foreground"
+            className="flex items-center gap-3 px-3 py-2 rounded-md text-slate-700 dark:text-slate-300 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            activeClassName="bg-primary/10 text-primary font-medium border-l-2 border-primary hover:bg-primary/10 hover:text-primary"
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
             {!collapsed && (
@@ -236,10 +236,10 @@ export function AppSidebar() {
   return (
     <Sidebar className={cn(
       collapsed ? "w-[60px]" : "w-[280px]",
-      "bg-sidebar border-r border-sidebar-border"
+      "bg-card border-r-2 border-slate-200 dark:border-border"
     )} collapsible="icon">
       {/* Header com Logo e Badge de Modo */}
-      <SidebarHeader className="border-b border-slate-200 dark:border-border p-4">
+      <SidebarHeader className="border-b-2 border-slate-200 dark:border-border p-4">
         {!collapsed ? (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
