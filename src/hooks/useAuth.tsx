@@ -69,20 +69,15 @@ export function useAuth() {
 
   const signOut = async () => {
     try {
-      // Clear local state first
+      // Clear local state first so UI updates immediately
       setUser(null);
       setProfile(null);
       setSession(null);
-      
-      // Try to sign out from Supabase, but don't fail if session doesn't exist
-      await supabase.auth.signOut();
+
+      // Use local scope to avoid /logout 403 when server session is already gone
+      await supabase.auth.signOut({ scope: "local" });
     } catch (error: any) {
-      // Ignore "session not found" errors (403) - user is already logged out
-      if (error?.status === 403 || error?.message?.includes("Session not found")) {
-        console.log("useAuth: Session already cleared, continuing logout");
-      } else {
-        console.error("useAuth: Logout error", error);
-      }
+      console.error("useAuth: Logout error (ignored)", error);
     }
   };
 
