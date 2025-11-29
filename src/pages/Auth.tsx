@@ -101,14 +101,14 @@ export default function Auth() {
         <div className="relative z-10 flex flex-col justify-center flex-1">
           {/* Logo */}
           <div className="mb-12">
-            <img src={logoLight} alt="PARABELLUM" className="h-20 w-auto mb-8 object-contain" />
+            <img src={logoLight} alt="PARABELLUM" className="h-32 w-auto mb-8 object-contain" />
             <div className="h-1 w-24 bg-primary/60 rounded-full" />
           </div>
 
           {/* Epic Quote */}
           <div className="space-y-6">
-            <h1 className="text-4xl font-bold text-white leading-tight md:text-4xl font-sans">Para os concorrentes, uma equipe grande é um custo, e eles cortam. Para nós, o TIME é uma força, e temos um mercado para dominar.<br />
-              <span className="text-primary/90 text-justify">Para nós, a minha equipe é a minha força, e nós temos um mercado para dominar.".</span>
+            <h1 className="text-4xl font-bold text-white leading-tight md:text-4xl font-sans">
+              Para os concorrentes, uma equipe grande é um custo, e eles cortam. Para nós, o TIME é uma força, e temos um mercado para dominar.
             </h1>
             
             <p className="text-xl italic text-slate-300 font-light">
@@ -130,13 +130,13 @@ export default function Auth() {
         <div className="w-full max-w-md space-y-8">
           {/* Mobile Logo */}
           <div className="lg:hidden mb-8 text-center">
-            <img src={logoLight} alt="PARABELLUM" className="h-16 w-auto mx-auto mb-4" />
+            <img src={logoLight} alt="PARABELLUM" className="h-24 w-auto mx-auto mb-4" />
           </div>
 
           {/* Header */}
           <div className="text-center lg:text-left">
             <h2 className="text-3xl font-bold text-foreground mb-2">Bem-vindo de ao Q.G</h2>
-            <p className="text-muted-foreground">Insira suas credenciais </p>
+            <p className="text-muted-foreground">Insira suas credenciais </p>
           </div>
 
           {/* Error Alert */}
