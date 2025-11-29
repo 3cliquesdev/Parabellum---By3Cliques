@@ -73,7 +73,7 @@ serve(async (req) => {
     }
 
     // Validate role
-    const allowedRoles = ['admin', 'manager', 'sales_rep', 'consultant', 'support_agent'];
+    const allowedRoles = ['admin', 'manager', 'sales_rep', 'consultant', 'support_agent', 'financial_manager'];
     if (!allowedRoles.includes(role)) {
       return new Response(
         JSON.stringify({ error: 'Invalid role' }),

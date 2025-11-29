@@ -35,6 +35,11 @@ export function useTickets(statusFilter?: TicketStatus, assignedFilter?: 'mine' 
             id,
             full_name,
             avatar_url
+          ),
+          department:departments(
+            id,
+            name,
+            color
           )
         `)
         .order("created_at", { ascending: false });

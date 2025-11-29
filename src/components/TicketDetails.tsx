@@ -7,11 +7,16 @@ import { CustomerInfoCard } from "@/components/CustomerInfoCard";
 import { TicketChat } from "@/components/TicketChat";
 import { useSmartReply } from "@/hooks/useSmartReply";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Clock, CheckCircle, User, Sparkles, Copy } from "lucide-react";
+import { TicketAttachments } from "@/components/TicketAttachments";
+import { TicketConversationLink } from "@/components/TicketConversationLink";
+import { FinancialApprovalBar } from "@/components/FinancialApprovalBar";
+import { TransferToFinancialDialog } from "@/components/TransferToFinancialDialog";
+import { AlertCircle, Clock, CheckCircle, Sparkles, Copy, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useUsers } from "@/hooks/useUsers";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface TicketDetailsProps {
   ticket: any;
@@ -51,7 +56,10 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
   const updateTicket = useUpdateTicket();
   const { data: users = [] } = useUsers();
   const smartReply = useSmartReply();
+  const { isFinancialManager, isSupportAgent } = useUserRole();
   const [suggestedReply, setSuggestedReply] = useState<string>("");
+  const [attachments, setAttachments] = useState(ticket.attachments || []);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 
   const handleStatusChange = (status: string) => {
     updateTicket.mutate({
@@ -74,6 +82,14 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
     });
   };
 
+  const handleAttachmentsChange = (newAttachments: any[]) => {
+    setAttachments(newAttachments);
+    updateTicket.mutate({
+      id: ticket.id,
+      updates: { attachments: newAttachments },
+    });
+  };
+
   const handleSmartReply = () => {
     smartReply.mutate(
       { description: ticket.description, subject: ticket.subject },
@@ -89,6 +105,11 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
     navigator.clipboard.writeText(suggestedReply);
   };
 
+  // Verificar se é ticket de reembolso/financeiro
+  const isFinancialTicket = ticket.category === 'financeiro' || ticket.description?.toLowerCase().includes('reembolso');
+  const hasEvidence = attachments.length > 0;
+  const canTransferToFinancial = isSupportAgent && isFinancialTicket && ticket.status !== 'resolved' && ticket.status !== 'closed';
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -103,6 +124,18 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
               })}
             </p>
           </div>
+          
+          {/* Botão Transferir para Financeiro */}
+          {canTransferToFinancial && (
+            <Button
+              variant="outline"
+              onClick={() => setTransferDialogOpen(true)}
+              className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950"
+            >
+              <ArrowRight className="w-4 h-4 mr-2" />
+              Enviar para Financeiro
+            </Button>
+          )}
         </div>
 
         <p className="text-muted-foreground">{ticket.description}</p>
@@ -164,7 +197,34 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Financial Approval Bar (só para financial_manager) */}
+        {isFinancialManager && isFinancialTicket && (
+          <FinancialApprovalBar 
+            ticketId={ticket.id}
+            ticketStatus={ticket.status}
+            hasEvidence={hasEvidence}
+          />
+        )}
+
+        {/* Conversation Link */}
+        {ticket.conversation_id && (
+          <TicketConversationLink 
+            conversationId={ticket.conversation_id}
+            conversationChannel={ticket.channel}
+            conversationCreatedAt={ticket.created_at}
+          />
+        )}
+
+        {/* Customer Info */}
         {ticket.customer && <CustomerInfoCard customer={ticket.customer} />}
+
+        {/* Attachments/Evidence Section */}
+        <TicketAttachments
+          attachments={attachments}
+          onAttachmentsChange={handleAttachmentsChange}
+          readonly={ticket.status === 'resolved' || ticket.status === 'closed'}
+          requireEvidence={isFinancialTicket}
+        />
         
         {/* Smart Reply Section */}
         <Card>
@@ -209,8 +269,17 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
           )}
         </Card>
 
+        {/* Ticket Chat */}
         <TicketChat ticketId={ticket.id} />
       </div>
+
+      {/* Transfer Dialog */}
+      <TransferToFinancialDialog
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+        ticketId={ticket.id}
+        hasEvidence={hasEvidence}
+      />
     </div>
   );
 }

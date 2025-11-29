@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 
 interface UpdateUserData {
   user_id: string;
-  role?: "admin" | "manager" | "sales_rep" | "consultant" | "support_agent";
+  role?: "admin" | "manager" | "sales_rep" | "consultant" | "support_agent" | "financial_manager";
   department?: string;
   full_name?: string;
   job_title?: string;

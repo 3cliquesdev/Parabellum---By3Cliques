@@ -2545,17 +2545,23 @@ export type Database = {
       }
       tickets: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           assigned_to: string | null
           attachment_url: string | null
+          attachments: Json | null
           category: Database["public"]["Enums"]["ticket_category"] | null
+          conversation_id: string | null
           created_at: string
           customer_id: string
+          department_id: string | null
           description: string
           due_date: string | null
           first_response_at: string | null
           id: string
           internal_note: string | null
           priority: Database["public"]["Enums"]["ticket_priority"]
+          rejection_reason: string | null
           resolved_at: string | null
           source_conversation_id: string | null
           status: Database["public"]["Enums"]["ticket_status"]
@@ -2563,17 +2569,23 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           assigned_to?: string | null
           attachment_url?: string | null
+          attachments?: Json | null
           category?: Database["public"]["Enums"]["ticket_category"] | null
+          conversation_id?: string | null
           created_at?: string
           customer_id: string
+          department_id?: string | null
           description: string
           due_date?: string | null
           first_response_at?: string | null
           id?: string
           internal_note?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
+          rejection_reason?: string | null
           resolved_at?: string | null
           source_conversation_id?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
@@ -2581,17 +2593,23 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           assigned_to?: string | null
           attachment_url?: string | null
+          attachments?: Json | null
           category?: Database["public"]["Enums"]["ticket_category"] | null
+          conversation_id?: string | null
           created_at?: string
           customer_id?: string
+          department_id?: string | null
           description?: string
           due_date?: string | null
           first_response_at?: string | null
           id?: string
           internal_note?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
+          rejection_reason?: string | null
           resolved_at?: string | null
           source_conversation_id?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
@@ -2607,10 +2625,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tickets_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tickets_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
           {
@@ -2832,6 +2864,7 @@ export type Database = {
         | "sales_rep"
         | "consultant"
         | "support_agent"
+        | "financial_manager"
       automation_action:
         | "assign_to_user"
         | "create_activity"
@@ -3036,6 +3069,7 @@ export const Constants = {
         "sales_rep",
         "consultant",
         "support_agent",
+        "financial_manager",
       ],
       automation_action: [
         "assign_to_user",

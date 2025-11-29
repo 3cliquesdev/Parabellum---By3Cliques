@@ -8,6 +8,8 @@ interface UpdateTicketData {
   assigned_to?: string | null;
   subject?: string;
   description?: string;
+  department_id?: string;
+  attachments?: any[];
 }
 
 export function useUpdateTicket() {

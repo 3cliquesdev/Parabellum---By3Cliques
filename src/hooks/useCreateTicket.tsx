@@ -9,6 +9,9 @@ interface CreateTicketData {
   category?: 'financeiro' | 'tecnico' | 'bug' | 'outro';
   customer_id: string;
   assigned_to?: string;
+  conversation_id?: string;
+  attachments?: any[];
+  department_id?: string;
 }
 
 export function useCreateTicket() {

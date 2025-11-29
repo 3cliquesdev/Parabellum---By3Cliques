@@ -14,6 +14,11 @@ export default function Support() {
   const { data: tickets = [], isLoading } = useTickets(undefined, filter);
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId);
+  
+  // Auto-select primeiro ticket se nenhum selecionado
+  if (!selectedTicketId && tickets.length > 0) {
+    setSelectedTicketId(tickets[0].id);
+  }
 
   if (isLoading) {
     return (
