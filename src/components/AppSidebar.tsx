@@ -192,12 +192,13 @@ export function AppSidebar() {
   const handleSignOut = async () => {
     console.log("AppSidebar: handleSignOut clicked");
     await signOut();
-    console.log("AppSidebar: signOut finished, navigating to /auth");
+    console.log("AppSidebar: signOut finished, reloading to /auth");
     toast({
       title: "Logout realizado",
       description: "Até logo!",
     });
-    navigate("/auth");
+    // Forçar recarregamento completo na tela de login para garantir limpeza de sessão
+    window.location.href = "/auth";
   };
 
   const renderMenuItem = (item: { title: string; href: string; icon: any }) => {
