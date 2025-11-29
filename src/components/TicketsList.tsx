@@ -107,7 +107,7 @@ export function TicketsList({ tickets, selectedTicketId, onSelectTicket }: Ticke
 
                 <h4 className="font-semibold text-sm mb-1 truncate">{ticket.subject}</h4>
                 
-                <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-2">
                   {ticket.description}
                 </p>
 

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Upload, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import AvatarCropper from "./AvatarCropper";
 
 interface AvatarUploaderProps {
   currentAvatarUrl?: string | null;
@@ -20,6 +21,8 @@ export default function AvatarUploader({
 }: AvatarUploaderProps) {
   const [preview, setPreview] = useState<string | null>(currentAvatarUrl || null);
   const [isDragging, setIsDragging] = useState(false);
+  const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -60,6 +63,7 @@ export default function AvatarUploader({
   const handleFileChange = (file: File | null) => {
     if (!file) {
       setPreview(null);
+      setRawImageSrc(null);
       onFileSelect(null);
       return;
     }
@@ -68,14 +72,34 @@ export default function AvatarUploader({
       return;
     }
 
-    // Criar preview local
+    // Ler arquivo e abrir cropper
     const reader = new FileReader();
     reader.onloadend = () => {
-      setPreview(reader.result as string);
+      setRawImageSrc(reader.result as string);
+      setShowCropper(true);
     };
     reader.readAsDataURL(file);
+  };
 
-    onFileSelect(file);
+  const handleCropComplete = (croppedBlob: Blob) => {
+    // Criar preview do blob recortado
+    const croppedUrl = URL.createObjectURL(croppedBlob);
+    setPreview(croppedUrl);
+    
+    // Converter blob para File
+    const croppedFile = new File([croppedBlob], "avatar.jpg", { type: "image/jpeg" });
+    onFileSelect(croppedFile);
+    
+    setShowCropper(false);
+    setRawImageSrc(null);
+  };
+
+  const handleCropCancel = () => {
+    setShowCropper(false);
+    setRawImageSrc(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -99,6 +123,7 @@ export default function AvatarUploader({
 
   const handleRemove = () => {
     setPreview(null);
+    setRawImageSrc(null);
     onFileSelect(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -106,7 +131,8 @@ export default function AvatarUploader({
   };
 
   return (
-    <div className="space-y-4">
+    <>
+      <div className="space-y-4">
       {/* Avatar Preview */}
       <div className="flex justify-center">
         <Avatar className="h-32 w-32 border-4 border-border">
@@ -187,6 +213,17 @@ export default function AvatarUploader({
           </Button>
         )}
       </div>
-    </div>
+      </div>
+
+      {/* Cropper Modal */}
+      {rawImageSrc && (
+        <AvatarCropper
+          imageSrc={rawImageSrc}
+          onCropComplete={handleCropComplete}
+          onCancel={handleCropCancel}
+          open={showCropper}
+        />
+      )}
+    </>
   );
 }

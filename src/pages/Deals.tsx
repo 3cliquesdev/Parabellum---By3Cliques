@@ -374,7 +374,7 @@ export default function Deals() {
 
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <ScrollArea className="w-full whitespace-nowrap rounded-lg">
-          <div className="flex gap-6 pb-4">
+          <div className="flex gap-4 pb-4">
             {stages.map((stage) => {
               const stageDeals = filteredDeals?.filter((deal) => deal.stage_id === stage.id) || [];
               return <KanbanColumn key={stage.id} stage={stage} deals={stageDeals as Deal[]} />;

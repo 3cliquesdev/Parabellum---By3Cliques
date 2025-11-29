@@ -123,17 +123,25 @@ function ConversationItem({
         <div className="flex items-center gap-2 flex-wrap">
           <Badge
             variant={conversation.channel === "whatsapp" ? "default" : "secondary"}
-            className="text-xs"
+            className={cn(
+              "text-xs",
+              conversation.channel === "whatsapp" 
+                ? "bg-green-600 text-white" 
+                : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+            )}
           >
             {conversation.channel}
           </Badge>
           {conversation.department_data && (
             <Badge 
               variant="outline" 
-              className="text-xs"
+              className="text-xs border-2"
               style={{
                 borderColor: conversation.department_data.color || undefined,
                 color: conversation.department_data.color || undefined,
+                backgroundColor: conversation.department_data.color 
+                  ? `${conversation.department_data.color}15` 
+                  : undefined,
               }}
             >
               🏢 {conversation.department_data.name}
