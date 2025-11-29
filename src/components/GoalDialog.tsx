@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { useCreateGoal } from "@/hooks/useCreateGoal";
 import { useCreateCSGoal } from "@/hooks/useCreateCSGoal";
 import { useUsers } from "@/hooks/useUsers";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 
@@ -48,11 +49,18 @@ export function GoalDialog() {
   });
 
   const { data: users } = useUsers();
+  const { role: currentUserRole } = useUserRole();
   const createGoal = useCreateGoal();
   const createCSGoal = useCreateCSGoal();
 
-  // Filter users to show only sales_rep and consultant
-  const eligibleUsers = users?.filter(u => u.role === "sales_rep" || u.role === "consultant");
+  // Filter users based on current user's role
+  // CS Manager sees only consultants, other managers see both sales_rep and consultant
+  const eligibleUsers = users?.filter(u => {
+    if (currentUserRole === "cs_manager") {
+      return u.role === "consultant";
+    }
+    return u.role === "sales_rep" || u.role === "consultant";
+  });
 
   const handleUserSelect = (userId: string) => {
     const user = eligibleUsers?.find(u => u.id === userId);
