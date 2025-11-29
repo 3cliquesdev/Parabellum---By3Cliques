@@ -137,14 +137,14 @@ serve(async (req) => {
       <body>
         <div class="container">
           <div class="header">
-            <h1 style="margin: 0;">📧 Email Reenviado</h1>
-            <p style="margin: 10px 0 0 0; opacity: 0.9;">Seja bem-vindo(a) ao Seu Armazém Drop</p>
+            <h1 style="margin: 0;">📧 Acesso Concedido</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">Bem-vindo à operação</p>
           </div>
           
           <div class="content">
             <p>Olá <strong>${fullName}</strong>,</p>
             
-            <p>Seu email de boas-vindas foi reenviado com uma nova senha temporária.</p>
+            <p>Bem-vindo à operação. Seu acesso à plataforma PARABELLUM | 3Cliques foi concedido. Nova senha temporária gerada.</p>
             
             <div class="credentials">
               <h3 style="margin-top: 0; color: #2563EB;">🔑 Credenciais de Acesso</h3>
@@ -159,7 +159,7 @@ serve(async (req) => {
 
             <div class="term">
               <h3 style="margin-top: 0; color: #f59e0b;">⚠️ Termo de Responsabilidade</h3>
-              <p>Ao utilizar este sistema, você declara estar ciente de que:</p>
+              <p>Ao utilizar suas credenciais, você declara ciência das seguintes normas de segurança da informação da PARABELLUM | 3Cliques:</p>
               <ul>
                 <li>Este acesso é <strong>pessoal e intransferível</strong></li>
                 <li>Você é responsável por todas as ações realizadas com suas credenciais</li>
@@ -183,7 +183,7 @@ serve(async (req) => {
           </div>
 
           <div class="footer">
-            <p>© ${new Date().getFullYear()} Seu Armazém Drop - Sistema de Gestão</p>
+            <p>© ${new Date().getFullYear()} PARABELLUM | 3Cliques - Sistema de Gestão</p>
             <p>Este é um email automático, por favor não responda.</p>
           </div>
         </div>
@@ -192,9 +192,9 @@ serve(async (req) => {
     `;
 
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: 'Seu Armazém Drop <sistema@parabellum.work>',
+      from: 'PARABELLUM Security <sistema@parabellum.work>',
       to: [email!],
-      subject: `📧 Email Reenviado - Bem-vindo(a) ao Sistema`,
+      subject: 'Acesso Concedido - Termo de Responsabilidade',
       html: emailHtml,
     });
 

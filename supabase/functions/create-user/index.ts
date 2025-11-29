@@ -186,7 +186,7 @@ serve(async (req) => {
           </p>
           
           <p style="color: #475569; line-height: 1.6; margin-bottom: 25px;">
-            Bem-vindo à operação. Seu acesso à plataforma PARABELLUM foi concedido.
+            Bem-vindo à operação. Seu acesso à plataforma PARABELLUM | 3Cliques foi concedido.
           </p>
           
           <p style="color: #1e3a5f; font-weight: 600; margin-bottom: 10px;">
@@ -205,7 +205,7 @@ serve(async (req) => {
           </h3>
           
           <p style="color: #475569; line-height: 1.6; margin-bottom: 15px;">
-            Ao utilizar suas credenciais, você declara ciência das seguintes normas de segurança da informação da PARABELLUM:
+            Ao utilizar suas credenciais, você declara ciência das seguintes normas de segurança da informação da PARABELLUM | 3Cliques:
           </p>
           
           <div style="margin: 20px 0;">
@@ -275,7 +275,7 @@ serve(async (req) => {
       const emailPayload: any = {
         from: 'PARABELLUM Security <sistema@parabellum.work>',
         to: [email],
-        subject: '🔐 Acesso Concedido - Termo de Responsabilidade',
+        subject: 'Acesso Concedido - Termo de Responsabilidade',
         html: emailHtml,
       };
       
