@@ -47,7 +47,19 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
       <div className="bg-muted/50 rounded-lg p-3">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">{stage.name}</h3>
+            {isAdmin ? (
+              <StageDialog
+                trigger={
+                  <button className="text-sm font-semibold text-foreground hover:text-primary hover:underline cursor-pointer transition-colors">
+                    {stage.name}
+                  </button>
+                }
+                pipelineId={stage.pipeline_id}
+                stage={stage}
+              />
+            ) : (
+              <h3 className="text-sm font-semibold text-foreground">{stage.name}</h3>
+            )}
             {isAdmin && (
               <StageDialog
                 trigger={
