@@ -906,37 +906,55 @@ Responda APENAS: skip ou search`
     // Detectar se é a primeira mensagem pós-verificação (FASE 3)
     const isRecentlyVerified = customer_context?.isVerified === true;
     
+    // Detectar se é contexto financeiro na mensagem atual
+    const isFinancialContext = FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
+    
     if (contactHasEmail && responseChannel === 'whatsapp') {
-      // FASE 1: Cliente conhecido - DISPARAR OTP AUTOMATICAMENTE
       const maskedEmail = contactEmail.replace(/(.{1})(.*)(@.*)/, '$1***$3');
       
-      // Verificar se precisa OTP (não tem verificação recente)
-      if (!hasRecentOTPVerification) {
-        console.log('[ai-autopilot-chat] 🔐 FASE 1: Disparando OTP automático para cliente conhecido');
+      // CASO 1: Contexto FINANCEIRO - Precisa verificação OTP
+      if (isFinancialContext && !hasRecentOTPVerification) {
+        console.log('[ai-autopilot-chat] 🔐 Contexto financeiro detectado - Disparando OTP para segurança');
         
-        // DISPARAR OTP AUTOMATICAMENTE
         try {
           await supabaseClient.functions.invoke('send-verification-code', {
             body: { email: contactEmail }
           });
           
-          identityWallNote = `\n\n**🔐 VERIFICAÇÃO AUTOMÁTICA INICIADA:**
-Cliente conhecido com email: ${maskedEmail}
+          identityWallNote = `\n\n**🔐 VERIFICAÇÃO DE SEGURANÇA (CONTEXTO FINANCEIRO):**
+Cliente: ${contactName}
+Status: ${contactStatus}
 
-**RESPOSTA OBRIGATÓRIA (não responda mais nada além disso):**
-"Para garantir sua segurança, enviamos um código de verificação para ${maskedEmail}. 
-Por favor, digite o código de 6 dígitos que você recebeu no email."
+**RESPOSTA OBRIGATÓRIA:**
+"Olá ${contactName}! Você é nosso cliente, mas questões financeiras são delicadas. 
+Para sua segurança, vou confirmar que é você mesmo.
 
-**⚠️ CRÍTICO:**
-- AGUARDE o cliente digitar o código
-- NÃO responda perguntas até verificação concluída
-- NÃO ofereça ajuda ainda
-- NÃO cumprimente além da mensagem do código`;
+Enviei um código de 6 dígitos para ${maskedEmail}.
+Por favor, digite o código que você recebeu no email."
+
+**⚠️ AGUARDE o código antes de processar a solicitação financeira.**`;
         } catch (error) {
-          console.error('[ai-autopilot-chat] ❌ Erro ao disparar OTP:', error);
+          console.error('[ai-autopilot-chat] ❌ Erro ao disparar OTP financeiro:', error);
         }
-      } else {
-        // Já tem OTP verificado
+      }
+      // CASO 2: Contexto NORMAL - Apenas boas-vindas
+      else if (!isFinancialContext && !hasRecentOTPVerification) {
+        console.log('[ai-autopilot-chat] ✅ Cliente conhecido - Boas-vindas sem OTP');
+        
+        identityWallNote = `\n\n**✅ CLIENTE CONHECIDO:**
+Cliente: ${contactName}${contactCompany}
+Email: ${contactEmail}
+Status: ${contactStatus}
+
+**RESPOSTA OBRIGATÓRIA:**
+"Olá ${contactName}! Bem-vindo(a) de volta! 😊
+Como posso te ajudar hoje?"
+
+→ Seja caloroso e amigável
+→ Mostre que reconhecemos o cliente`;
+      }
+      // CASO 3: Já tem OTP verificado (financeiro ou normal)
+      else {
         identityWallNote = `\n\n**✅ CLIENTE VERIFICADO:**
 Cliente: ${contactName}${contactCompany}
 Email: ${contactEmail}
