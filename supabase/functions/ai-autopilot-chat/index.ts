@@ -210,120 +210,198 @@ serve(async (req) => {
     
     console.log(`[ai-autopilot-chat] Canal da última mensagem: ${responseChannel}, Departamento: ${department}`);
 
-    // FASE 2: Verificar cache antes de processar (zero latência para perguntas repetidas)
-    const questionHash = await generateQuestionHash(customerMessage);
-    const { data: cachedResponse } = await supabaseClient
-      .from('ai_response_cache')
-      .select('answer, context_ids, created_at')
-      .eq('question_hash', questionHash)
-      .gte('created_at', new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString()) // ✅ FASE 3: TTL reduzido para 1h
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // FASE 1: Verificar se deve pular cache para experiência personalizada
+    const contactHasEmailForCache = contact.email && contact.email.trim() !== '';
+    const isFinancialForCache = FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
+    const isFirstContactGreeting = /^(oi|olá|ola|bom dia|boa tarde|boa noite|ei|eae|e aí|hey|hi|hello)[\s!.,?]*$/i.test(customerMessage.trim());
 
-    if (cachedResponse) {
-      console.log('✅ [CACHE HIT] Resposta instantânea recuperada do cache');
-      
-      // 🆕 FASE 1: Verificar se resposta cacheada é fallback e executar handoff real
-      const isCachedFallback = FALLBACK_PHRASES.some(phrase => 
-        cachedResponse.answer.toLowerCase().includes(phrase)
-      );
-      
-      if (isCachedFallback) {
-        console.log('🚨 [CACHE] Resposta cacheada é FALLBACK - IGNORANDO cache e gerando nova resposta');
+    const shouldSkipCacheForPersonalization = 
+      (contactHasEmailForCache && isFirstContactGreeting) || // Cliente conhecido + saudação
+      isFinancialForCache || // Contexto financeiro (precisa OTP)
+      (!contactHasEmailForCache && responseChannel === 'whatsapp'); // Lead novo WhatsApp
+
+    // Gerar hash da pergunta (usado tanto para busca quanto para salvar cache depois)
+    const questionHash = await generateQuestionHash(customerMessage);
+
+    if (shouldSkipCacheForPersonalization) {
+      console.log('[ai-autopilot-chat] ⚡ SKIP CACHE para experiência personalizada');
+    } else {
+      // FASE 2: Verificar cache antes de processar (zero latência para perguntas repetidas)
+      const { data: cachedResponse } = await supabaseClient
+        .from('ai_response_cache')
+        .select('answer, context_ids, created_at')
+        .eq('question_hash', questionHash)
+        .gte('created_at', new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString()) // ✅ FASE 3: TTL reduzido para 1h
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cachedResponse) {
+        console.log('✅ [CACHE HIT] Resposta instantânea recuperada do cache');
         
-        // 1. Mudar modo para copilot
-        await supabaseClient
-          .from('conversations')
-          .update({ ai_mode: 'copilot' })
-          .eq('id', conversationId);
+        // 🆕 FASE 1: Verificar se resposta cacheada é fallback e executar handoff real
+        const isCachedFallback = FALLBACK_PHRASES.some(phrase => 
+          cachedResponse.answer.toLowerCase().includes(phrase)
+        );
         
-        // 2. Rotear para agente humano
-        await supabaseClient.functions.invoke('route-conversation', {
-          body: { conversationId }
-        });
-        
-        // 3. Criar ticket se for financeiro (com verificação de INTENÇÃO, não keyword solta)
-        const isInformational = INFORMATIONAL_PATTERNS.some(p => p.test(customerMessage));
-        const isFinancial = !isInformational && FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
-        
-        let ticketProtocol = '';
-        if (isFinancial) {
-          // 🔒 ANTI-DUPLICAÇÃO: Verificar se conversa já tem ticket vinculado
-          if (conversation.related_ticket_id) {
-            console.log('[CACHE] ⚠️ Conversa já possui ticket vinculado - pulando criação:', conversation.related_ticket_id);
-            ticketProtocol = conversation.related_ticket_id.slice(0, 8).toUpperCase();
-          } else {
-            // Criar ticket apenas se não houver
-            const { data: ticket } = await supabaseClient
-              .from('tickets')
-              .insert({
-                customer_id: contact.id,
-                subject: `💰 Solicitação Financeira - ${customerMessage.substring(0, 50)}`,
-                description: customerMessage,
-                priority: 'high',
-                status: 'open',
-                category: 'financeiro',
-                source_conversation_id: conversationId
-              })
-              .select()
-              .single();
-            
-            if (ticket) {
-              ticketProtocol = ticket.id.slice(0, 8).toUpperCase();
-              console.log('🎫 [CACHE] Ticket financeiro criado:', ticket.id);
+        if (isCachedFallback) {
+          console.log('🚨 [CACHE] Resposta cacheada é FALLBACK - IGNORANDO cache e gerando nova resposta');
+          
+          // 1. Mudar modo para copilot
+          await supabaseClient
+            .from('conversations')
+            .update({ ai_mode: 'copilot' })
+            .eq('id', conversationId);
+          
+          // 2. Rotear para agente humano
+          await supabaseClient.functions.invoke('route-conversation', {
+            body: { conversationId }
+          });
+          
+          // 3. Criar ticket se for financeiro (com verificação de INTENÇÃO, não keyword solta)
+          const isInformational = INFORMATIONAL_PATTERNS.some(p => p.test(customerMessage));
+          const isFinancial = !isInformational && FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
+          
+          let ticketProtocol = '';
+          if (isFinancial) {
+            // 🔒 ANTI-DUPLICAÇÃO: Verificar se conversa já tem ticket vinculado
+            if (conversation.related_ticket_id) {
+              console.log('[CACHE] ⚠️ Conversa já possui ticket vinculado - pulando criação:', conversation.related_ticket_id);
+              ticketProtocol = conversation.related_ticket_id.slice(0, 8).toUpperCase();
+            } else {
+              // Criar ticket apenas se não houver
+              const { data: ticket } = await supabaseClient
+                .from('tickets')
+                .insert({
+                  customer_id: contact.id,
+                  subject: `💰 Solicitação Financeira - ${customerMessage.substring(0, 50)}`,
+                  description: customerMessage,
+                  priority: 'high',
+                  status: 'open',
+                  category: 'financeiro',
+                  source_conversation_id: conversationId
+                })
+                .select()
+                .single();
               
-              // Vincular à conversa
-              await supabaseClient
-                .from('conversations')
-                .update({ related_ticket_id: ticket.id })
-                .eq('id', conversationId);
+              if (ticket) {
+                ticketProtocol = ticket.id.slice(0, 8).toUpperCase();
+                console.log('🎫 [CACHE] Ticket financeiro criado:', ticket.id);
+                
+                // Vincular à conversa
+                await supabaseClient
+                  .from('conversations')
+                  .update({ related_ticket_id: ticket.id })
+                  .eq('id', conversationId);
+              }
             }
           }
+          
+          // 4. Registrar nota interna
+          await supabaseClient.from('interactions').insert({
+            customer_id: contact.id,
+            type: 'internal_note',
+            content: `🤖→👤 Handoff automático (cache poisoning detectado): "${customerMessage}"`,
+            channel: responseChannel
+          });
+          
+          // 5. Invalidar esse cache
+          await supabaseClient
+            .from('ai_response_cache')
+            .delete()
+            .eq('question_hash', questionHash);
+          
+          console.log('✅ [CACHE] Handoff executado, cache invalidado');
+          
+          // 🆕 6. RETORNAR RESPOSTA IMEDIATA DE HANDOFF (não usar cache ruim!)
+          const handoffMessage = isFinancial && ticketProtocol
+            ? `Entendi sua solicitação financeira. Estou transferindo você para um especialista humano que vai te ajudar com isso.\n\n📋 Protocolo criado: #${ticketProtocol}`
+            : `Entendi sua dúvida. Estou transferindo você para um especialista humano que poderá te ajudar melhor.`;
+          
+          // Salvar mensagem de handoff no banco
+          const { data: handoffMessageData } = await supabaseClient
+            .from("messages")
+            .insert({
+              conversation_id: conversationId,
+              content: handoffMessage,
+              sender_type: "user",
+              is_ai_generated: true,
+              channel: responseChannel,
+            })
+            .select('id')
+            .single();
+          
+          // Atualizar last_message_at
+          await supabaseClient
+            .from("conversations")
+            .update({ last_message_at: new Date().toISOString() })
+            .eq("id", conversationId);
+          
+          // Se for WhatsApp, enviar via Evolution API
+          if (responseChannel === 'whatsapp' && handoffMessageData) {
+            const { data: whatsappInstance } = await supabaseClient
+              .from('whatsapp_instances')
+              .select('*')
+              .eq('status', 'connected')
+              .limit(1)
+              .maybeSingle();
+
+            if (whatsappInstance) {
+              const { error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
+                body: {
+                  instance_id: whatsappInstance.id,
+                  phone_number: contact.phone,
+                  whatsapp_id: contact.whatsapp_id,
+                  message: handoffMessage,
+                },
+              });
+
+              if (!whatsappError) {
+                await supabaseClient
+                  .from('messages')
+                  .update({ status: 'sent' })
+                  .eq('id', handoffMessageData.id);
+              }
+            }
+          }
+          
+          // 🆕 RETORNAR AQUI - Não deixar o código continuar para retornar cache ruim
+          return new Response(
+            JSON.stringify({
+              status: 'handoff_executed',
+              message: handoffMessage,
+              from_cache: false,
+              handoff_reason: 'cached_fallback_detected',
+              ticket_created: isFinancial,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
         
-        // 4. Registrar nota interna
-        await supabaseClient.from('interactions').insert({
-          customer_id: contact.id,
-          type: 'internal_note',
-          content: `🤖→👤 Handoff automático (cache poisoning detectado): "${customerMessage}"`,
-          channel: responseChannel
-        });
-        
-        // 5. Invalidar esse cache
-        await supabaseClient
-          .from('ai_response_cache')
-          .delete()
-          .eq('question_hash', questionHash);
-        
-        console.log('✅ [CACHE] Handoff executado, cache invalidado');
-        
-        // 🆕 6. RETORNAR RESPOSTA IMEDIATA DE HANDOFF (não usar cache ruim!)
-        const handoffMessage = isFinancial && ticketProtocol
-          ? `Entendi sua solicitação financeira. Estou transferindo você para um especialista humano que vai te ajudar com isso.\n\n📋 Protocolo criado: #${ticketProtocol}`
-          : `Entendi sua dúvida. Estou transferindo você para um especialista humano que poderá te ajudar melhor.`;
-        
-        // Salvar mensagem de handoff no banco
-        const { data: handoffMessageData } = await supabaseClient
+        // ❌ REMOVIDO: Não inserir mensagem do cliente aqui - já foi inserida por useSendMessageOffline/handle-whatsapp-event/inbound-email
+
+        // Salvar resposta da IA (do cache)
+        const { data: aiMessageData } = await supabaseClient
           .from("messages")
           .insert({
             conversation_id: conversationId,
-            content: handoffMessage,
+            content: cachedResponse.answer,
             sender_type: "user",
             is_ai_generated: true,
-            channel: responseChannel,
+            attachment_url: JSON.stringify(cachedResponse.context_ids || []),
+            channel: responseChannel, // ✅ FASE 4: Adicionar canal
           })
           .select('id')
           .single();
-        
+
         // Atualizar last_message_at
         await supabaseClient
           .from("conversations")
           .update({ last_message_at: new Date().toISOString() })
           .eq("id", conversationId);
-        
-        // Se for WhatsApp, enviar via Evolution API
-        if (responseChannel === 'whatsapp' && handoffMessageData) {
+
+        // Se for WhatsApp, enviar mensagem via Evolution API
+        if (responseChannel === 'whatsapp') {
           const { data: whatsappInstance } = await supabaseClient
             .from('whatsapp_instances')
             .select('*')
@@ -331,13 +409,15 @@ serve(async (req) => {
             .limit(1)
             .maybeSingle();
 
-          if (whatsappInstance) {
+          if (whatsappInstance && aiMessageData) {
+            console.log('[ai-autopilot-chat] 📤 Enviando resposta cached via WhatsApp');
+
             const { error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
               body: {
                 instance_id: whatsappInstance.id,
                 phone_number: contact.phone,
                 whatsapp_id: contact.whatsapp_id,
-                message: handoffMessage,
+                message: cachedResponse.answer,
               },
             });
 
@@ -345,84 +425,20 @@ serve(async (req) => {
               await supabaseClient
                 .from('messages')
                 .update({ status: 'sent' })
-                .eq('id', handoffMessageData.id);
+                .eq('id', aiMessageData.id);
             }
           }
         }
-        
-        // 🆕 RETORNAR AQUI - Não deixar o código continuar para retornar cache ruim
+
         return new Response(
           JSON.stringify({
-            status: 'handoff_executed',
-            message: handoffMessage,
-            from_cache: false,
-            handoff_reason: 'cached_fallback_detected',
-            ticket_created: isFinancial,
+            message: cachedResponse.answer,
+            from_cache: true,
+            used_articles: cachedResponse.context_ids || [],
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      
-      // ❌ REMOVIDO: Não inserir mensagem do cliente aqui - já foi inserida por useSendMessageOffline/handle-whatsapp-event/inbound-email
-
-      // Salvar resposta da IA (do cache)
-      const { data: aiMessageData } = await supabaseClient
-        .from("messages")
-        .insert({
-          conversation_id: conversationId,
-          content: cachedResponse.answer,
-          sender_type: "user",
-          is_ai_generated: true,
-          attachment_url: JSON.stringify(cachedResponse.context_ids || []),
-          channel: responseChannel, // ✅ FASE 4: Adicionar canal
-        })
-        .select('id')
-        .single();
-
-      // Atualizar last_message_at
-      await supabaseClient
-        .from("conversations")
-        .update({ last_message_at: new Date().toISOString() })
-        .eq("id", conversationId);
-
-      // Se for WhatsApp, enviar mensagem via Evolution API
-      if (responseChannel === 'whatsapp') {
-        const { data: whatsappInstance } = await supabaseClient
-          .from('whatsapp_instances')
-          .select('*')
-          .eq('status', 'connected')
-          .limit(1)
-          .maybeSingle();
-
-        if (whatsappInstance && aiMessageData) {
-          console.log('[ai-autopilot-chat] 📤 Enviando resposta cached via WhatsApp');
-
-          const { error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
-            body: {
-              instance_id: whatsappInstance.id,
-              phone_number: contact.phone,
-              whatsapp_id: contact.whatsapp_id,
-              message: cachedResponse.answer,
-            },
-          });
-
-          if (!whatsappError) {
-            await supabaseClient
-              .from('messages')
-              .update({ status: 'sent' })
-              .eq('id', aiMessageData.id);
-          }
-        }
-      }
-
-      return new Response(
-        JSON.stringify({
-          message: cachedResponse.answer,
-          from_cache: true,
-          used_articles: cachedResponse.context_ids || [],
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
 
     console.log('⚠️ [CACHE MISS] Processando nova resposta...');
