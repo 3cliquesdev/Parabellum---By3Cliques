@@ -7,29 +7,62 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTicketComments } from "@/hooks/useTicketComments";
 import { useCreateComment } from "@/hooks/useCreateComment";
-import { Send } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Mail, Send } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { SafeHTML } from "@/components/SafeHTML";
+import { ChannelBadge } from "@/components/ChannelBadge";
+import { useToast } from "@/hooks/use-toast";
 
 interface TicketChatProps {
   ticketId: string;
+  channel?: string;
 }
 
-export function TicketChat({ ticketId }: TicketChatProps) {
+export function TicketChat({ ticketId, channel = 'platform' }: TicketChatProps) {
   const [message, setMessage] = useState("");
   const { data: comments = [] } = useTicketComments(ticketId);
   const createComment = useCreateComment();
+  const { toast } = useToast();
+  const isEmailChannel = channel === 'email';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
 
+    // Criar comentário no ticket
     await createComment.mutateAsync({
       ticket_id: ticketId,
       content: message.trim(),
       is_internal: false,
     });
+
+    // Se for canal de email, enviar email para o cliente
+    if (isEmailChannel) {
+      try {
+        const { error } = await supabase.functions.invoke('send-ticket-email-reply', {
+          body: {
+            ticket_id: ticketId,
+            message_content: message.trim(),
+          },
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "📧 Email enviado",
+          description: "Sua resposta foi enviada por email ao cliente",
+        });
+      } catch (error: any) {
+        console.error('[TicketChat] Email send error:', error);
+        toast({
+          title: "Erro ao enviar email",
+          description: "O comentário foi salvo mas o email não foi enviado",
+          variant: "destructive",
+        });
+      }
+    }
 
     setMessage("");
   };
@@ -37,7 +70,10 @@ export function TicketChat({ ticketId }: TicketChatProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Comentários</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg">Comentários</CardTitle>
+          <ChannelBadge channel={channel} />
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <ScrollArea className="h-[300px] pr-4">
@@ -84,7 +120,11 @@ export function TicketChat({ ticketId }: TicketChatProps) {
             <Textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Digite sua resposta ou / para macros..."
+              placeholder={
+                isEmailChannel 
+                  ? "Responder por email..." 
+                  : "Digite sua resposta ou / para macros..."
+              }
               rows={3}
             />
           </SlashCommandMenu>
@@ -93,8 +133,12 @@ export function TicketChat({ ticketId }: TicketChatProps) {
               type="submit" 
               disabled={!message.trim() || createComment.isPending}
             >
-              <Send className="w-4 h-4 mr-2" />
-              Enviar
+              {isEmailChannel ? (
+                <Mail className="w-4 h-4 mr-2" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              {isEmailChannel ? "Enviar Email" : "Enviar"}
             </Button>
           </div>
         </form>
