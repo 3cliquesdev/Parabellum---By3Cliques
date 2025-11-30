@@ -77,7 +77,7 @@ serve(async (req) => {
       await supabaseClient.from("messages").insert({
         conversation_id: conversationId,
         content: customerMessage,
-        sender_type: "customer",
+        sender_type: "contact",
       });
 
       // Salvar resposta da IA (do cache)
