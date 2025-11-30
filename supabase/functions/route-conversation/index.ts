@@ -49,9 +49,10 @@ serve(async (req) => {
 
     const { conversationId, priority = 0, aiAnalysis } = await req.json() as RouteConversationRequest;
 
-    console.log(`[route-conversation] Processing conversation: ${conversationId}, priority: ${priority}, AI category: ${aiAnalysis?.category}`);
+    console.log(`[route-conversation] 🔄 Processing conversation: ${conversationId}, priority: ${priority}, AI category: ${aiAnalysis?.category}`);
 
     // 1. Buscar dados da conversa e contato
+    console.log('[route-conversation] 📊 Fetching conversation data...');
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
       .select(`
@@ -67,6 +68,12 @@ serve(async (req) => {
       `)
       .eq('id', conversationId)
       .single();
+    
+    console.log('[route-conversation] 📥 Conversation data:', { 
+      found: !!conversation, 
+      department: conversation?.department,
+      error: convError?.message 
+    });
 
     if (convError || !conversation) {
       throw new Error(`Conversa não encontrada: ${convError?.message}`);
@@ -83,7 +90,7 @@ serve(async (req) => {
 
     // 2. PRIORIDADE 1: STICKY AGENT (Consultor da Carteira)
     if (contact?.consultant_id) {
-      console.log('[route-conversation] Checking consultant availability:', contact.consultant_id);
+      console.log('[route-conversation] 🎯 STICKY AGENT detected - Checking consultant availability:', contact.consultant_id);
       
       const { data: consultant, error: consultantError } = await supabase
         .from('profiles')
@@ -91,6 +98,13 @@ serve(async (req) => {
         .eq('id', contact.consultant_id)
         .eq('availability_status', 'online')
         .single();
+      
+      console.log('[route-conversation] 👤 Consultant query result:', { 
+        found: !!consultant, 
+        name: consultant?.full_name,
+        status: consultant?.availability_status,
+        error: consultantError?.message 
+      });
 
       if (consultant && !consultantError) {
         console.log('[route-conversation] ✅ STICKY AGENT - Assigning to consultant:', consultant.full_name);
@@ -185,7 +199,8 @@ serve(async (req) => {
     
     // 3.2 FALLBACK: Se não encontrou agentes com skill, busca agentes genéricos
     if (onlineAgents.length === 0) {
-      console.log('[route-conversation] Searching for generic support agents (load balancing)');
+      console.log('[route-conversation] 🔍 Searching for generic support agents (load balancing)');
+      console.log('[route-conversation] 📌 Department filter:', conversation.department || 'none');
       
       let agentsQuery = supabase
         .from('profiles')
@@ -205,6 +220,11 @@ serve(async (req) => {
       }
 
       const { data: genericAgents, error: agentsError } = await agentsQuery;
+      
+      console.log('[route-conversation] 📊 Generic agents query result:', { 
+        found_count: genericAgents?.length || 0,
+        error: agentsError?.message 
+      });
       
       if (agentsError) {
         throw new Error(`Erro ao buscar agentes: ${agentsError.message}`);

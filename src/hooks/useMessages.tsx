@@ -50,13 +50,53 @@ export function useMessages(conversationId: string | null) {
           table: "messages",
           filter: `conversation_id=eq.${conversationId}`,
         },
-        (payload) => {
+        async (payload) => {
           console.log("New message received:", payload);
+          const newMessage = payload.new as Message;
+          
+          // 🚨 FASE 2: INTERCEPTADOR DE FALLBACK NO FRONTEND
+          if (newMessage.is_ai_generated) {
+            const content = newMessage.content?.toLowerCase() || '';
+            const fallbackPhrases = [
+              'vou chamar um especialista',
+              'transferir para um atendente',
+              'não consegui registrar',
+              'não tenho essa informação',
+              'transferindo você',
+              'chamar um atendente humano'
+            ];
+            
+            const isFallbackMessage = fallbackPhrases.some(phrase => content.includes(phrase));
+            
+            if (isFallbackMessage) {
+              console.log('🚨 [Frontend] Fallback detectado na mensagem da IA - Forçando handoff');
+              
+              try {
+                // 1. Forçar route-conversation
+                const { error: routeError } = await supabase.functions.invoke('route-conversation', {
+                  body: { conversationId }
+                });
+                
+                if (!routeError) {
+                  console.log('✅ [Frontend] Handoff forçado via interceptador');
+                  
+                  // 2. Invalidar queries para atualizar UI
+                  queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
+                  queryClient.invalidateQueries({ queryKey: ["conversations"] });
+                } else {
+                  console.error('❌ [Frontend] Erro ao forçar handoff:', routeError);
+                }
+              } catch (error) {
+                console.error('❌ [Frontend] Exceção ao forçar handoff:', error);
+              }
+            }
+          }
+          
           queryClient.setQueryData(
             ["messages", conversationId],
             (old: Message[] | undefined) => {
-              if (!old) return [payload.new as Message];
-              return [...old, payload.new as Message];
+              if (!old) return [newMessage];
+              return [...old, newMessage];
             }
           );
 

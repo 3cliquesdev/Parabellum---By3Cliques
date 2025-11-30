@@ -562,7 +562,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     console.log('[handle-whatsapp-event] Triggering AI autopilot...');
     
     try {
-      await supabase.functions.invoke('ai-autopilot-chat', {
+      // 🚨 FASE 3: INVOCAR AI E INTERCEPTAR FALLBACK
+      const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-autopilot-chat', {
         body: {
           conversationId: conversationId,
           customerMessage: messageText,
@@ -573,6 +574,44 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           } : null
         },
       });
+      
+      if (!aiError && aiResponse) {
+        console.log('[handle-whatsapp-event] ✅ AI response received');
+        
+        // 🚨 INTERCEPTADOR DE FALLBACK NO WEBHOOK WHATSAPP
+        const responseMessage = aiResponse.message || '';
+        const fallbackPhrases = [
+          'vou chamar um especialista',
+          'transferir para um atendente',
+          'não consegui registrar',
+          'não tenho essa informação',
+          'transferindo você',
+          'chamar um atendente humano'
+        ];
+        
+        const isFallbackResponse = fallbackPhrases.some(phrase => 
+          responseMessage.toLowerCase().includes(phrase)
+        );
+        
+        if (isFallbackResponse) {
+          console.log('🚨 [handle-whatsapp-event] Fallback detectado na resposta da IA - Forçando handoff');
+          
+          try {
+            const { error: routeError } = await supabase.functions.invoke('route-conversation', {
+              body: { conversationId }
+            });
+            
+            if (!routeError) {
+              console.log('✅ [handle-whatsapp-event] Handoff forçado via interceptador');
+            } else {
+              console.error('❌ [handle-whatsapp-event] Erro ao forçar handoff:', routeError);
+            }
+          } catch (error) {
+            console.error('❌ [handle-whatsapp-event] Exceção ao forçar handoff:', error);
+          }
+        }
+      }
+      
       console.log('[handle-whatsapp-event] AI triggered successfully');
     } catch (aiError) {
       console.error('[handle-whatsapp-event] Error triggering AI:', aiError);
