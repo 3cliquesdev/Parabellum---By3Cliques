@@ -156,44 +156,57 @@ serve(async (req) => {
     if (requiredSkillName) {
       console.log(`[route-conversation] 🎯 Skill-based routing: Looking for agents with skill "${requiredSkillName}"`);
       
-      // Buscar agentes online COM a skill específica
-      const { data: skilledAgents } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          full_name,
-          availability_status,
-          department,
-          user_roles!inner(role),
-          profiles_skills!inner(
-            skill_id,
-            skills!inner(name)
-          )
-        `)
-        .eq('availability_status', 'online')
-        .eq('user_roles.role', 'support_agent');
+      // FASE 1: Query em 2 etapas - Sem JOIN FK
+      // 1. Buscar user_ids de support_agents
+      const { data: supportAgentIds } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'support_agent');
       
-      // Filtrar agentes que possuem a skill necessária
-      const agentsWithSkill = (skilledAgents || []).filter(agent => {
-        const skills = Array.isArray(agent.profiles_skills) ? agent.profiles_skills : [agent.profiles_skills];
-        return skills.some((ps: any) => {
-          const skill = Array.isArray(ps.skills) ? ps.skills[0] : ps.skills;
-          return skill?.name === requiredSkillName;
+      if (!supportAgentIds || supportAgentIds.length === 0) {
+        console.log('[route-conversation] ❌ Nenhum support_agent encontrado nos roles');
+        onlineAgents = [];
+      } else {
+        // 2. Buscar agentes online COM a skill específica
+        const agentUserIds = supportAgentIds.map(r => r.user_id);
+        
+        const { data: skilledAgents } = await supabase
+          .from('profiles')
+          .select(`
+            id,
+            full_name,
+            availability_status,
+            department,
+            profiles_skills!inner(
+              skill_id,
+              skills!inner(name)
+            )
+          `)
+          .eq('availability_status', 'online')
+          .in('id', agentUserIds);
+      
+        // Filtrar agentes que possuem a skill necessária
+        const agentsWithSkill = (skilledAgents || []).filter(agent => {
+          const skills = Array.isArray(agent.profiles_skills) ? agent.profiles_skills : [agent.profiles_skills];
+          return skills.some((ps: any) => {
+            const skill = Array.isArray(ps.skills) ? ps.skills[0] : ps.skills;
+            return skill?.name === requiredSkillName;
+          });
         });
-      });
-      
-      // Filtrar por departamento se houver
-      if (conversation.department && agentsWithSkill.length > 0) {
-        onlineAgents = agentsWithSkill.filter(a => a.department === conversation.department);
-      } else {
-        onlineAgents = agentsWithSkill;
-      }
-      
-      if (onlineAgents.length > 0) {
-        routingStrategy = 'skill_based';
-        console.log(`[route-conversation] ✅ Found ${onlineAgents.length} agents with skill "${requiredSkillName}"`);
-      } else {
-        console.log(`[route-conversation] ⚠️ No agents found with skill "${requiredSkillName}", falling back to generic`);
+        
+        // Filtrar por departamento se houver
+        if (conversation.department && agentsWithSkill.length > 0) {
+          onlineAgents = agentsWithSkill.filter(a => a.department === conversation.department);
+        } else {
+          onlineAgents = agentsWithSkill;
+        }
+        
+        if (onlineAgents.length > 0) {
+          routingStrategy = 'skill_based';
+          console.log(`[route-conversation] ✅ Found ${onlineAgents.length} agents with skill "${requiredSkillName}"`);
+        } else {
+          console.log(`[route-conversation] ⚠️ No agents found with skill "${requiredSkillName}", falling back to generic`);
+        }
       }
     }
     
@@ -202,24 +215,35 @@ serve(async (req) => {
       console.log('[route-conversation] 🔍 Searching for generic support agents (load balancing)');
       console.log('[route-conversation] 📌 Department filter:', conversation.department || 'none');
       
-      let agentsQuery = supabase
-        .from('profiles')
-        .select(`
-          id,
-          full_name,
-          availability_status,
-          department,
-          user_roles!inner(role)
-        `)
-        .eq('availability_status', 'online')
-        .eq('user_roles.role', 'support_agent');
+      // FASE 1: Query em 2 etapas - Sem JOIN FK
+      // 1. Buscar user_ids de support_agents
+      const { data: genericSupportIds } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'support_agent');
+      
+      let genericAgents: any[] = [];
+      let agentsError = null;
+      
+      if (genericSupportIds && genericSupportIds.length > 0) {
+        // 2. Buscar profiles desses users
+        const genericAgentUserIds = genericSupportIds.map(r => r.user_id);
+        
+        let agentsQuery = supabase
+          .from('profiles')
+          .select('id, full_name, availability_status, department')
+          .eq('availability_status', 'online')
+          .in('id', genericAgentUserIds);
 
-      // Filtrar por departamento se houver
-      if (conversation.department) {
-        agentsQuery = agentsQuery.eq('department', conversation.department);
+        // Filtrar por departamento se houver
+        if (conversation.department) {
+          agentsQuery = agentsQuery.eq('department', conversation.department);
+        }
+
+        const result = await agentsQuery;
+        genericAgents = result.data || [];
+        agentsError = result.error;
       }
-
-      const { data: genericAgents, error: agentsError } = await agentsQuery;
       
       console.log('[route-conversation] 📊 Generic agents query result:', { 
         found_count: genericAgents?.length || 0,
