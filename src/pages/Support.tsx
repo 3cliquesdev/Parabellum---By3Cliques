@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2 } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUsers } from "@/hooks/useUsers";
+import { useDepartments } from "@/hooks/useDepartments";
 
 type FilterType = 'all' | 'mine' | 'unassigned';
 
@@ -14,10 +15,17 @@ export default function Support() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
   const { isSupportManager } = useUserRole();
   const { data: allUsers } = useUsers();
+  const { data: departments } = useDepartments();
 
-  const { data: tickets = [], isLoading } = useTickets(undefined, filter, selectedAgentId || undefined);
+  const { data: allTickets = [], isLoading } = useTickets(undefined, filter, selectedAgentId || undefined);
+  
+  // Filter tickets by department
+  const tickets = selectedDepartmentId
+    ? allTickets.filter(t => t.department_id === selectedDepartmentId)
+    : allTickets;
   
   // Filter support agents from all users
   const supportAgents = allUsers?.filter(u => u.role === 'support_agent' || u.role === 'support_manager') || [];
@@ -53,6 +61,21 @@ export default function Support() {
               <TabsTrigger value="unassigned">Não Atribuídos</TabsTrigger>
             </TabsList>
           </Tabs>
+
+          {/* Department Filter */}
+          <Select value={selectedDepartmentId || "all"} onValueChange={(v) => setSelectedDepartmentId(v === "all" ? null : v)}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Departamento" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">🏢 Todos os Departamentos</SelectItem>
+              {departments?.filter(d => d.is_active).map(dept => (
+                <SelectItem key={dept.id} value={dept.id}>
+                  {dept.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {/* Support Manager: Agent Filter */}
           {isSupportManager && (

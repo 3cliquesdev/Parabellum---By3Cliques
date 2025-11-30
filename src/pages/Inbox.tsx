@@ -75,7 +75,12 @@ export default function Inbox() {
         return result.filter(c => c.ai_mode === 'autopilot');
       
       case "human_queue":
-        // Fila Humana: conversas em copilot ou disabled E atribuídas ao usuário atual
+        // Fila Humana: conversas em copilot ou disabled
+        // Admin/Manager: vê TODAS as conversas em modo humano
+        // Outros: vê apenas as atribuídas a eles
+        if (role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager') {
+          return result.filter(c => c.ai_mode === 'copilot' || c.ai_mode === 'disabled');
+        }
         return result.filter(c => 
           (c.ai_mode === 'copilot' || c.ai_mode === 'disabled') &&
           c.assigned_to === user?.id
@@ -95,11 +100,18 @@ export default function Inbox() {
     (!departmentFilter || c.department === departmentFilter)
   ).length || 0;
   
-  const humanQueueCount = conversations?.filter(c => 
-    (c.ai_mode === 'copilot' || c.ai_mode === 'disabled') && 
-    c.assigned_to === user?.id &&
-    (!departmentFilter || c.department === departmentFilter)
-  ).length || 0;
+  const humanQueueCount = conversations?.filter(c => {
+    const isHumanMode = c.ai_mode === 'copilot' || c.ai_mode === 'disabled';
+    const matchesDept = !departmentFilter || c.department === departmentFilter;
+    
+    // Admin/Manager vê todas as conversas em modo humano
+    if (role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager') {
+      return isHumanMode && matchesDept;
+    }
+    
+    // Outros vê apenas as atribuídas a eles
+    return isHumanMode && c.assigned_to === user?.id && matchesDept;
+  }).length || 0;
 
   const totalActiveCount = conversations?.filter(c => 
     c.status !== 'closed' &&

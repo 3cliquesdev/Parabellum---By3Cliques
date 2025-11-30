@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { SafeHTML } from "@/components/SafeHTML";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { createPublicChatClient, clearSessionToken } from "@/lib/publicSupabaseClient";
+import { RatingWidget } from "@/components/public/RatingWidget";
 
 export default function PublicChatWindow() {
   const { conversationId } = useParams();
@@ -192,6 +193,14 @@ export default function PublicChatWindow() {
               </div>
             ) : (
               <div className="space-y-4">
+                {/* CSAT Widget - Mostrar quando conversa for fechada */}
+                {conversation.status === 'closed' && (
+                  <RatingWidget 
+                    conversationId={conversation.id} 
+                    channel={conversation.channel} 
+                  />
+                )}
+                
                 {messages.map((message) => {
                   const isCustomer = message.sender_type === 'contact';
                   const isSystem = message.sender_type === 'system';
