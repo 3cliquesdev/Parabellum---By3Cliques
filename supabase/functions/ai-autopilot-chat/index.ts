@@ -731,10 +731,19 @@ Use essas informações de forma natural e personalizada.`;
         conversation_id: conversationId,
         content: assistantMessage,
         sender_type: 'user', // 'user' = sistema/agente interno
-        message_type: 'text',
+        message_type: 'ai_response',
         is_ai_generated: true,
         sender_id: null,
-        status: 'sending' // CRITICAL: Start with 'sending' status
+        status: 'sending', // CRITICAL: Start with 'sending' status
+        attachment_url: JSON.stringify({
+          persona_id: persona.id,
+          persona_name: persona.name,
+          used_articles: knowledgeArticles.map(a => ({
+            id: a.id,
+            title: a.title,
+            category: a.category
+          }))
+        })
       })
       .select()
       .single();
@@ -891,6 +900,11 @@ Use essas informações de forma natural e personalizada.`;
         id: persona.id,
         name: persona.name
       },
+      used_articles: knowledgeArticles.map(a => ({
+        id: a.id,
+        title: a.title,
+        category: a.category
+      })),
       tool_calls: toolCalls,
       debug: {
         intent: intentType,

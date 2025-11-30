@@ -23,7 +23,9 @@ import CopilotSuggestionCard from "@/components/CopilotSuggestionCard";
 import CloseConversationDialog from "@/components/CloseConversationDialog";
 import { SafeHTML } from "@/components/SafeHTML";
 import { MessageStatusIndicator } from "@/components/MessageStatusIndicator";
+import { AIDebugTooltip } from "@/components/AIDebugTooltip";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserRole } from "@/hooks/useUserRole";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -53,6 +55,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
+  const { isAdmin, isManager } = useUserRole();
   const { data: messages = [], isLoading: isMessagesLoading } = useMessages(conversation?.id || null);
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
   const { data: activePersona } = useActivePersona(conversation?.id || null);
@@ -379,6 +382,17 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                       const isCustomer = message.sender_type === 'contact';
                       const isSystem = message.sender_type === 'system';
                       const isAI = message.is_ai_generated;
+                      
+                      // Parse AI debug metadata
+                      let usedArticles: any[] = [];
+                      try {
+                        if (isAI && message.attachment_url) {
+                          const metadata = JSON.parse(message.attachment_url);
+                          usedArticles = metadata.used_articles || [];
+                        }
+                      } catch (e) {
+                        // Ignore parse errors
+                      }
 
                       if (isSystem) {
                         return (
@@ -450,7 +464,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                                   ? "bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 rounded-2xl rounded-tr-none text-violet-900 dark:text-violet-300"
                                   : "bg-blue-600 dark:bg-blue-600/90 text-white rounded-2xl rounded-tr-none"
                               )}
-                            >
+                             >
                               <SafeHTML 
                                 html={message.content}
                                 className="text-sm whitespace-pre-wrap break-words"
@@ -464,6 +478,10 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                                 <span>
                                   {format(new Date(message.created_at), "HH:mm")}
                                 </span>
+                                {/* AI Debug Icon for Admins/Managers */}
+                                {isAI && (isAdmin || isManager) && (
+                                  <AIDebugTooltip usedArticles={usedArticles} />
+                                )}
                                 {/* Status indicator for user/agent messages */}
                                 {!isCustomer && (message as any).status && (
                                   <MessageStatusIndicator 
