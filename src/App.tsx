@@ -52,6 +52,7 @@ import SalesTasks from "./pages/SalesTasks";
 import Macros from "./pages/Macros";
 import NotFound from "./pages/NotFound";
 import AuditLogs from "./pages/AuditLogs";
+import SkillsSettings from "./pages/SkillsSettings";
 import WhatsAppSettings from "./pages/WhatsAppSettings";
 import WebhooksSettings from "./pages/WebhooksSettings";
 import Reports from "./pages/Reports";
@@ -161,6 +162,7 @@ const App = () => {
             <Route path="/settings/widget-builder" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><WidgetBuilder /></Layout></ProtectedRoute>} />
             <Route path="/settings/knowledge-import" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><KnowledgeImport /></Layout></ProtectedRoute>} />
             <Route path="/settings/audit-logs" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><AuditLogs /></Layout></ProtectedRoute>} />
+            <Route path="/settings/skills" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><SkillsSettings /></Layout></ProtectedRoute>} />
             <Route path="/settings/whatsapp" element={<ProtectedRoute allowedRoles={["admin", "consultant"]}><WhatsAppSettings /></ProtectedRoute>} />
             <Route path="/settings/webhooks" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><WebhooksSettings /></Layout></ProtectedRoute>} />
             <Route path="/settings/macros" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "support_agent", "support_manager", "consultant", "sales_rep"]}><Layout><Macros /></Layout></ProtectedRoute>} />

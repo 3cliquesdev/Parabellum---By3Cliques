@@ -9,7 +9,32 @@ const corsHeaders = {
 interface RouteConversationRequest {
   conversationId: string;
   priority?: number;
+  aiAnalysis?: {
+    category?: string;
+    intent?: string;
+  };
 }
+
+// Mapeamento de Categoria da IA -> Skill Necessária
+const SKILL_MAPPING: Record<string, string> = {
+  'financeiro': 'Financeiro',
+  'reembolso': 'Financeiro',
+  'cobranca': 'Cobrança',
+  'pagamento': 'Financeiro',
+  'suporte_tecnico': 'Suporte Técnico',
+  'bug': 'Suporte Técnico',
+  'tecnico': 'Suporte Técnico',
+  'vendas': 'Vendas',
+  'upgrade': 'Vendas',
+  'upsell': 'Vendas',
+  'cancelamento': 'Retenção',
+  'churn': 'Retenção',
+  'insatisfacao': 'Retenção',
+  'onboarding': 'Onboarding',
+  'implementacao': 'Onboarding',
+  'ingles': 'Inglês',
+  'english': 'Inglês',
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -22,9 +47,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, priority = 0 } = await req.json() as RouteConversationRequest;
+    const { conversationId, priority = 0, aiAnalysis } = await req.json() as RouteConversationRequest;
 
-    console.log(`[route-conversation] Processing conversation: ${conversationId}, priority: ${priority}`);
+    console.log(`[route-conversation] Processing conversation: ${conversationId}, priority: ${priority}, AI category: ${aiAnalysis?.category}`);
 
     // 1. Buscar dados da conversa e contato
     const { data: conversation, error: convError } = await supabase
@@ -105,31 +130,87 @@ serve(async (req) => {
       console.log('[route-conversation] Consultant offline or unavailable');
     }
 
-    // 3. PRIORIDADE 2: BALANCEAMENTO DE CARGA (Support Agents ONLY)
-    console.log('[route-conversation] Searching for available support agents');
-
-    // Buscar agentes de suporte online (role='support_agent'), filtrados por departamento se houver
-    let agentsQuery = supabase
-      .from('profiles')
-      .select(`
-        id,
-        full_name,
-        availability_status,
-        department,
-        user_roles!inner(role)
-      `)
-      .eq('availability_status', 'online')
-      .eq('user_roles.role', 'support_agent');
-
-    // Filtrar por departamento se a conversa tiver um
-    if (conversation.department) {
-      agentsQuery = agentsQuery.eq('department', conversation.department);
+    // 3. PRIORIDADE 2: SKILL-BASED ROUTING (Agentes com Skill Específica)
+    let onlineAgents: any[] = [];
+    let routingStrategy = 'load_balancing';
+    let requiredSkillName: string | null = null;
+    
+    // 3.1 Identificar skill necessária baseada na análise da IA
+    const aiCategory = aiAnalysis?.category?.toLowerCase();
+    requiredSkillName = aiCategory ? SKILL_MAPPING[aiCategory] : null;
+    
+    if (requiredSkillName) {
+      console.log(`[route-conversation] 🎯 Skill-based routing: Looking for agents with skill "${requiredSkillName}"`);
+      
+      // Buscar agentes online COM a skill específica
+      const { data: skilledAgents } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          availability_status,
+          department,
+          user_roles!inner(role),
+          profiles_skills!inner(
+            skill_id,
+            skills!inner(name)
+          )
+        `)
+        .eq('availability_status', 'online')
+        .eq('user_roles.role', 'support_agent');
+      
+      // Filtrar agentes que possuem a skill necessária
+      const agentsWithSkill = (skilledAgents || []).filter(agent => {
+        const skills = Array.isArray(agent.profiles_skills) ? agent.profiles_skills : [agent.profiles_skills];
+        return skills.some((ps: any) => {
+          const skill = Array.isArray(ps.skills) ? ps.skills[0] : ps.skills;
+          return skill?.name === requiredSkillName;
+        });
+      });
+      
+      // Filtrar por departamento se houver
+      if (conversation.department && agentsWithSkill.length > 0) {
+        onlineAgents = agentsWithSkill.filter(a => a.department === conversation.department);
+      } else {
+        onlineAgents = agentsWithSkill;
+      }
+      
+      if (onlineAgents.length > 0) {
+        routingStrategy = 'skill_based';
+        console.log(`[route-conversation] ✅ Found ${onlineAgents.length} agents with skill "${requiredSkillName}"`);
+      } else {
+        console.log(`[route-conversation] ⚠️ No agents found with skill "${requiredSkillName}", falling back to generic`);
+      }
     }
+    
+    // 3.2 FALLBACK: Se não encontrou agentes com skill, busca agentes genéricos
+    if (onlineAgents.length === 0) {
+      console.log('[route-conversation] Searching for generic support agents (load balancing)');
+      
+      let agentsQuery = supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          availability_status,
+          department,
+          user_roles!inner(role)
+        `)
+        .eq('availability_status', 'online')
+        .eq('user_roles.role', 'support_agent');
 
-    const { data: onlineAgents, error: agentsError } = await agentsQuery;
+      // Filtrar por departamento se houver
+      if (conversation.department) {
+        agentsQuery = agentsQuery.eq('department', conversation.department);
+      }
 
-    if (agentsError) {
-      throw new Error(`Erro ao buscar agentes: ${agentsError.message}`);
+      const { data: genericAgents, error: agentsError } = await agentsQuery;
+      
+      if (agentsError) {
+        throw new Error(`Erro ao buscar agentes: ${agentsError.message}`);
+      }
+      
+      onlineAgents = genericAgents || [];
     }
 
     if (onlineAgents && onlineAgents.length > 0) {
@@ -155,9 +236,11 @@ serve(async (req) => {
       agentLoads.sort((a, b) => a.open_conversations - b.open_conversations);
       const selectedAgent = agentLoads[0];
 
-      console.log('[route-conversation] ✅ LOAD BALANCING - Assigning to:', {
+      console.log(`[route-conversation] ✅ ${routingStrategy === 'skill_based' ? 'SKILL-BASED ROUTING' : 'LOAD BALANCING'} - Assigning to:`, {
         agent: selectedAgent.full_name,
-        current_load: selectedAgent.open_conversations
+        current_load: selectedAgent.open_conversations,
+        routing_strategy: routingStrategy,
+        required_skill: requiredSkillName || 'none'
       });
 
       // Atribuir ao agente com menos carga
@@ -185,9 +268,10 @@ serve(async (req) => {
           success: true,
           assigned_to: selectedAgent.id,
           agent_name: selectedAgent.full_name,
-          assignment_type: 'load_balancing',
+          assignment_type: routingStrategy,
           current_load: selectedAgent.open_conversations,
-          message: `Conversa atribuída a ${selectedAgent.full_name}`
+          required_skill: requiredSkillName || null,
+          message: `Conversa atribuída a ${selectedAgent.full_name}${requiredSkillName ? ` (Skill: ${requiredSkillName})` : ''}`
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

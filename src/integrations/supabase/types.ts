@@ -2201,6 +2201,42 @@ export type Database = {
           },
         ]
       }
+      profiles_skills: {
+        Row: {
+          created_at: string | null
+          proficiency_level: string | null
+          profile_id: string
+          skill_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          proficiency_level?: string | null
+          profile_id: string
+          skill_id: string
+        }
+        Update: {
+          created_at?: string | null
+          proficiency_level?: string | null
+          profile_id?: string
+          skill_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_skills_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_skills_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_ticket_portal_config: {
         Row: {
           created_at: string | null
@@ -2579,6 +2615,30 @@ export type Database = {
           report_type?: string
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      skills: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
         }
         Relationships: []
       }

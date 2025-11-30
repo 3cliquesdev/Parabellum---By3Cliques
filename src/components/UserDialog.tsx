@@ -9,7 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUpdateUser } from "@/hooks/useUpdateUser";
 import { useAvatarUpload } from "@/hooks/useAvatarUpload";
+import { useProfileSkills } from "@/hooks/useProfileSkills";
+import { useUpdateProfileSkills } from "@/hooks/useUpdateProfileSkills";
 import AvatarUploader from "@/components/AvatarUploader";
+import SkillsMultiSelect from "@/components/SkillsMultiSelect";
 import { z } from "zod";
 
 const userSchema = z.object({
@@ -52,11 +55,14 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
   const [jobTitle, setJobTitle] = useState("");
   const [department, setDepartment] = useState<string>("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { data: departments } = useDepartments();
   const updateUserMutation = useUpdateUser();
   const { uploadAvatar, uploading: uploadingAvatar } = useAvatarUpload();
+  const { data: profileSkills } = useProfileSkills(editUser?.id);
+  const updateProfileSkills = useUpdateProfileSkills();
 
   const isEditMode = !!editUser;
 
@@ -68,6 +74,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
       setFullName(editUser.full_name || "");
       setJobTitle(editUser.job_title || "");
       setDepartment(editUser.department || "");
+      setSelectedSkills(profileSkills?.map(ps => ps.skill_id) || []);
     } else {
       // Reset form for creation mode
       setEmail("");
@@ -76,8 +83,9 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
       setFullName("");
       setJobTitle("");
       setDepartment("");
+      setSelectedSkills([]);
     }
-  }, [editUser, open]);
+  }, [editUser, open, profileSkills]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +119,12 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
           full_name: fullName,
           job_title: jobTitle || undefined,
           department,
+        });
+        
+        // Atualizar skills
+        await updateProfileSkills.mutateAsync({
+          profileId: editUser.id,
+          skillIds: selectedSkills,
         });
 
         onOpenChange(false);
@@ -373,6 +387,20 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
                 </SelectContent>
               </Select>
             </div>
+            
+            {/* Habilidades - Apenas no modo edição */}
+            {isEditMode && editUser && (
+              <div className="col-span-2 space-y-2">
+                <Label>Habilidades do Agente</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Selecione as habilidades para roteamento inteligente de conversas
+                </p>
+                <SkillsMultiSelect
+                  selectedSkillIds={selectedSkills}
+                  onSelectionChange={setSelectedSkills}
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading || uploadingAvatar}>

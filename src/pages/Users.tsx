@@ -22,9 +22,37 @@ import { useNavigate } from "react-router-dom";
 import { useUsers } from "@/hooks/useUsers";
 import { useManageUserStatus } from "@/hooks/useManageUserStatus";
 import { useResendWelcomeEmail } from "@/hooks/useResendWelcomeEmail";
+import { useProfileSkills } from "@/hooks/useProfileSkills";
 
 // Import type from useUsers hook
 type UserWithRole = NonNullable<ReturnType<typeof useUsers>['data']>[number];
+
+// Component to display user skills
+function UserSkillsBadges({ userId }: { userId: string }) {
+  const { data: profileSkills } = useProfileSkills(userId);
+  
+  if (!profileSkills || profileSkills.length === 0) {
+    return <span className="text-xs text-muted-foreground">Sem habilidades</span>;
+  }
+  
+  return (
+    <div className="flex flex-wrap gap-1">
+      {profileSkills.map((ps) => (
+        <Badge
+          key={ps.skill_id}
+          variant="outline"
+          className="text-xs"
+          style={{
+            borderColor: ps.skill.color,
+            color: ps.skill.color
+          }}
+        >
+          {ps.skill.name}
+        </Badge>
+      ))}
+    </div>
+  );
+}
 
 export default function Users() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -181,6 +209,7 @@ export default function Users() {
                 <TableHead>Usuário</TableHead>
                 <TableHead>Cargo</TableHead>
                 <TableHead>Perfil de Acesso</TableHead>
+                <TableHead>Habilidades</TableHead>
                 <TableHead>Data de Criação</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -226,6 +255,9 @@ export default function Users() {
                     <Badge variant={getRoleBadgeVariant(user.role)}>
                       {roleLabels[user.role] || user.role}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <UserSkillsBadges userId={user.id} />
                   </TableCell>
                   <TableCell>
                     {new Date(user.created_at).toLocaleDateString("pt-BR")}
@@ -291,7 +323,7 @@ export default function Users() {
               ))}
               {(!filteredUsers || filteredUsers.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
                     Nenhum usuário encontrado
                   </TableCell>
                 </TableRow>
