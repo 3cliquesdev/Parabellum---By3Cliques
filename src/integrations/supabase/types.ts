@@ -163,6 +163,30 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_response_cache: {
+        Row: {
+          answer: string
+          context_ids: Json | null
+          created_at: string
+          id: string
+          question_hash: string
+        }
+        Insert: {
+          answer: string
+          context_ids?: Json | null
+          created_at?: string
+          id?: string
+          question_hash: string
+        }
+        Update: {
+          answer?: string
+          context_ids?: Json | null
+          created_at?: string
+          id?: string
+          question_hash?: string
+        }
+        Relationships: []
+      }
       ai_routing_rules: {
         Row: {
           channel: string

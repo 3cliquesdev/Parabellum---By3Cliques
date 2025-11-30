@@ -6,6 +6,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// FASE 2: Função para gerar hash SHA-256 da pergunta normalizada
+async function generateQuestionHash(message: string): Promise<string> {
+  const normalized = message
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+    .replace(/[^\w\s]/g, "") // Remove pontuação
+    .trim();
+  
+  const encoder = new TextEncoder();
+  const data = encoder.encode(normalized);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 interface AutopilotChatRequest {
   conversationId: string;
   customerMessage: string;
@@ -42,6 +58,54 @@ serve(async (req) => {
     }
     
     console.log('[ai-autopilot-chat] Request received:', { conversationId, messagePreview: customerMessage?.substring(0, 50) });
+
+    // FASE 2: Verificar cache antes de processar (zero latência para perguntas repetidas)
+    const questionHash = await generateQuestionHash(customerMessage);
+    const { data: cachedResponse } = await supabaseClient
+      .from('ai_response_cache')
+      .select('answer, context_ids, created_at')
+      .eq('question_hash', questionHash)
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // TTL 24h
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (cachedResponse) {
+      console.log('✅ [CACHE HIT] Resposta instantânea recuperada do cache');
+      
+      // Salvar mensagem do customer
+      await supabaseClient.from("messages").insert({
+        conversation_id: conversationId,
+        content: customerMessage,
+        sender_type: "customer",
+      });
+
+      // Salvar resposta da IA (do cache)
+      await supabaseClient.from("messages").insert({
+        conversation_id: conversationId,
+        content: cachedResponse.answer,
+        sender_type: "ai_agent",
+        is_ai_generated: true,
+        attachment_url: JSON.stringify(cachedResponse.context_ids || []),
+      });
+
+      // Atualizar last_message_at
+      await supabaseClient
+        .from("conversations")
+        .update({ last_message_at: new Date().toISOString() })
+        .eq("id", conversationId);
+
+      return new Response(
+        JSON.stringify({
+          message: cachedResponse.answer,
+          from_cache: true,
+          used_articles: cachedResponse.context_ids || [],
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('⚠️ [CACHE MISS] Processando nova resposta...');
     
     // FASE 4: Rate Limiting (10 mensagens por minuto por conversa)
     const { data: rateLimitAllowed, error: rateLimitError } = await supabaseClient
@@ -893,9 +957,27 @@ Use essas informações de forma natural e personalizada.`;
 
     console.log('[ai-autopilot-chat] ✅ Resposta processada com sucesso!');
 
+    // FASE 2: Salvar resposta no cache para futuras consultas (TTL 24h)
+    try {
+      await supabaseClient.from('ai_response_cache').insert({
+        question_hash: questionHash,
+        answer: assistantMessage,
+        context_ids: knowledgeArticles.map(a => ({
+          id: a.id,
+          title: a.title,
+          category: a.category
+        })),
+      });
+      console.log('💾 [CACHE SAVED] Resposta salva no cache para reutilização');
+    } catch (cacheError) {
+      console.error('⚠️ [CACHE ERROR] Erro ao salvar no cache (não bloqueante):', cacheError);
+      // Não bloqueia a resposta se falhar o cache
+    }
+
     return new Response(JSON.stringify({ 
       status: 'success',
       message: assistantMessage,
+      from_cache: false,
       persona_used: {
         id: persona.id,
         name: persona.name
