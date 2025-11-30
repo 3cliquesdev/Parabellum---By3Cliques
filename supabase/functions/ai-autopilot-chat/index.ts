@@ -1155,11 +1155,10 @@ Use essas informações de forma natural e personalizada.`;
             .update({ related_ticket_id: ticket?.id })
             .eq('id', conversationId);
           
-          // 🔒 Só enriquecer se ticket NÃO foi criado por tool call (previne duplicação)
-          if (!ticketCreatedSuccessfully) {
-            // Enriquecer mensagem ao cliente
-            assistantMessage = `${assistantMessage}\n\n📋 Criei o protocolo #${ticket?.id?.slice(0, 8).toUpperCase()} para sua solicitação financeira. Um especialista vai analisar seu caso com prioridade.`;
-          }
+          // Enriquecer mensagem ao cliente (fallback detector sempre enriquece, pois é o único que criou)
+          assistantMessage = `${assistantMessage}\n\n📋 Criei o protocolo #${ticket?.id?.slice(0, 8).toUpperCase()} para sua solicitação financeira. Um especialista vai analisar seu caso com prioridade.`;
+          
+          ticketCreatedSuccessfully = true; // 🔒 Atualizar flag DEPOIS de enriquecer
         }
       }
       
