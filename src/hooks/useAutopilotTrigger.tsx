@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -6,6 +6,10 @@ import { supabase } from '@/integrations/supabase/client';
  * em conversas no modo Autopilot (fallback caso webhook não funcione)
  */
 export function useAutopilotTrigger(conversationId: string | null) {
+  // 🛡️ PROTEÇÃO ANTI-LOOP: Rastrear mensagens já processadas
+  const processedMessageIds = useRef(new Set<string>());
+  const lastTriggerRef = useRef<number>(0);
+
   useEffect(() => {
     if (!conversationId) return;
 
@@ -29,6 +33,19 @@ export function useAutopilotTrigger(conversationId: string | null) {
             sender_type: newMessage.sender_type
           });
           
+          // 🛡️ PROTEÇÃO 1: Não processar mensagens já processadas
+          if (processedMessageIds.current.has(newMessage.id)) {
+            console.log('[useAutopilotTrigger] ⏭️ Mensagem já processada, ignorando');
+            return;
+          }
+
+          // 🛡️ PROTEÇÃO 2: Debounce de 2 segundos entre chamadas
+          const now = Date.now();
+          if (now - lastTriggerRef.current < 2000) {
+            console.log('[useAutopilotTrigger] ⏸️ Debounce ativo - ignorando');
+            return;
+          }
+
           // Só processar mensagens de clientes
           if (newMessage.sender_type !== 'contact') {
             console.log('[useAutopilotTrigger] Ignoring non-contact message');
@@ -40,6 +57,15 @@ export function useAutopilotTrigger(conversationId: string | null) {
             console.log('[useAutopilotTrigger] Ignorando mensagem WhatsApp - processada pelo backend');
             return;
           }
+
+          // Marcar como processada
+          processedMessageIds.current.add(newMessage.id);
+          lastTriggerRef.current = now;
+
+          // Limpar ID após 1 minuto para não acumular memória
+          setTimeout(() => {
+            processedMessageIds.current.delete(newMessage.id);
+          }, 60000);
 
           // Buscar ai_mode
           const { data: conv, error } = await supabase

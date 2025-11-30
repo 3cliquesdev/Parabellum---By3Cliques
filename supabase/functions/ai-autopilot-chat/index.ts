@@ -110,12 +110,7 @@ serve(async (req) => {
     if (cachedResponse) {
       console.log('✅ [CACHE HIT] Resposta instantânea recuperada do cache');
       
-      // Salvar mensagem do customer
-      await supabaseClient.from("messages").insert({
-        conversation_id: conversationId,
-        content: customerMessage,
-        sender_type: "contact",
-      });
+      // ❌ REMOVIDO: Não inserir mensagem do cliente aqui - já foi inserida por useSendMessageOffline/handle-whatsapp-event/inbound-email
 
       // Salvar resposta da IA (do cache)
       const { data: aiMessageData } = await supabaseClient
