@@ -80,10 +80,21 @@ serve(async (req) => {
     }
 
     const contact = conversation.contacts as any;
-    const channel = conversation.channel;
     const department = conversation.department || null;
 
-    console.log(`[ai-autopilot-chat] Canal: ${channel}, Departamento: ${department}`);
+    // FASE 4: Buscar canal da ÚLTIMA mensagem do cliente (não da conversa)
+    const { data: lastCustomerMessage } = await supabaseClient
+      .from('messages')
+      .select('channel')
+      .eq('conversation_id', conversationId)
+      .eq('sender_type', 'contact')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const responseChannel = lastCustomerMessage?.channel || 'web_chat';
+    
+    console.log(`[ai-autopilot-chat] Canal da última mensagem: ${responseChannel}, Departamento: ${department}`);
 
     // FASE 2: Verificar cache antes de processar (zero latência para perguntas repetidas)
     const questionHash = await generateQuestionHash(customerMessage);
@@ -126,7 +137,7 @@ serve(async (req) => {
         .eq("id", conversationId);
 
       // Se for WhatsApp, enviar mensagem via Evolution API
-      if (channel === 'whatsapp') {
+      if (responseChannel === 'whatsapp') {
         const { data: whatsappInstance } = await supabaseClient
           .from('whatsapp_instances')
           .select('*')
@@ -200,7 +211,7 @@ serve(async (req) => {
         *,
         ai_personas!inner(*)
       `)
-      .eq('channel', channel)
+      .eq('channel', responseChannel)
       .eq('is_active', true)
       .order('priority', { ascending: false });
 
@@ -559,7 +570,7 @@ Responda APENAS: skip ou search`
     console.log('[ai-autopilot-chat] 🔐 Identity Wall Check:', {
       hasEmail: contactHasEmail,
       email: contactEmail,
-      channel,
+      channel: responseChannel,
       isKnownCustomer: contactHasEmail
     });
     
@@ -576,7 +587,7 @@ Responda APENAS: skip ou search`
     // Detectar se é a primeira mensagem pós-verificação (FASE 3)
     const isRecentlyVerified = customer_context?.isVerified === true;
     
-    if (contactHasEmail && channel === 'whatsapp') {
+    if (contactHasEmail && responseChannel === 'whatsapp') {
       // FASE 4: Cliente conhecido (tem email) - dar boas-vindas
       identityWallNote = `\n\n**✅ CLIENTE CONHECIDO:**
 Este cliente JÁ está verificado no sistema.
@@ -589,7 +600,7 @@ Exemplo: "Olá ${contactName}! Que bom ter você de volta! Como posso ajudar hoj
 
 ${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Ofereça ajuda e pergunte "Como posso te ajudar?".' : ''}`;
       
-    } else if (!contactHasEmail && channel === 'whatsapp') {
+    } else if (!contactHasEmail && responseChannel === 'whatsapp') {
       // FASE 4: Lead (não tem email) - seguir Identity Wall e direcionar para comercial após verificação
       identityWallNote = `\n\n**🚨 LEAD NOVO - Identity Wall OBRIGATÓRIO:**
 Este cliente NÃO tem email cadastrado no sistema (é um LEAD, não um cliente existente).
@@ -633,7 +644,7 @@ ${knowledgeContext}${identityWallNote}
 **Contexto do Cliente:**
 - Nome: ${contactName}${contactCompany}
 - Status: ${contactStatus}
-- Canal: ${channel}
+- Canal: ${responseChannel}
 ${customer_context?.email || contact.email ? `- Email: ${customer_context?.email || contact.email}` : '- Email: NÃO CADASTRADO - SOLICITAR'}
 ${contact.phone ? `- Telefone: ${contact.phone}` : ''}
 
@@ -951,7 +962,7 @@ Use essas informações de forma natural e personalizada.`;
     const messageId = savedMessage?.id;
 
     // 8. Se WhatsApp, enviar via Evolution API e atualizar status
-    if (channel === 'whatsapp' && contact.phone && messageId) {
+    if (responseChannel === 'whatsapp' && contact.phone && messageId) {
       console.log('[ai-autopilot-chat] 📱 Tentando enviar WhatsApp:', {
         contactPhone: contact.phone,
         contactWhatsappId: contact.whatsapp_id,

@@ -1673,6 +1673,7 @@ export type Database = {
         Row: {
           attachment_type: string | null
           attachment_url: string | null
+          channel: Database["public"]["Enums"]["conversation_channel"] | null
           content: string
           conversation_id: string
           created_at: string
@@ -1688,6 +1689,7 @@ export type Database = {
         Insert: {
           attachment_type?: string | null
           attachment_url?: string | null
+          channel?: Database["public"]["Enums"]["conversation_channel"] | null
           content: string
           conversation_id: string
           created_at?: string
@@ -1703,6 +1705,7 @@ export type Database = {
         Update: {
           attachment_type?: string | null
           attachment_url?: string | null
+          channel?: Database["public"]["Enums"]["conversation_channel"] | null
           content?: string
           conversation_id?: string
           created_at?: string
