@@ -135,15 +135,15 @@ export default function AvatarUploader({
       <div className="space-y-4">
       {/* Avatar Preview */}
       <div className="flex justify-center">
-        <Avatar className="h-32 w-32 border-4 border-border">
+        <Avatar className="h-24 w-24 border-2 border-border">
           {uploading ? (
             <div className="flex items-center justify-center w-full h-full bg-muted">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <>
               <AvatarImage src={preview || undefined} />
-              <AvatarFallback className="text-2xl font-semibold bg-primary/10 text-primary">
+              <AvatarFallback className="text-xl font-semibold bg-primary/10 text-primary">
                 {getInitials(userName)}
               </AvatarFallback>
             </>
@@ -157,13 +157,13 @@ export default function AvatarUploader({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer hover:border-primary/50",
+          "border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer hover:border-primary/50",
           isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25",
           uploading && "opacity-50 cursor-not-allowed"
         )}
         onClick={() => !uploading && fileInputRef.current?.click()}
       >
-        <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+        <Upload className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
         <p className="text-sm text-muted-foreground mb-1">
           <span className="font-medium text-foreground">Arraste uma foto aqui</span>
           <br />

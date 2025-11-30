@@ -220,7 +220,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
             {isEditMode ? "Editar Usuário" : "Criar Novo Usuário"}
@@ -233,36 +233,37 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4 py-4">
-            {/* Nome Completo */}
-            <div className="space-y-2">
-              <Label htmlFor="full_name">Nome Completo</Label>
-              <Input
-                id="full_name"
-                type="text"
-                placeholder="João Silva"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-            </div>
+          <div className="space-y-4 py-4">
+            {/* Nome e Email */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="full_name">Nome Completo</Label>
+                <Input
+                  id="full_name"
+                  type="text"
+                  placeholder="João Silva"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                />
+              </div>
 
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="usuario@exemplo.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isEditMode}
-                required={!isEditMode}
-              />
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="usuario@exemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isEditMode}
+                  required={!isEditMode}
+                />
+              </div>
             </div>
             
-            {/* Avatar Upload - Span 2 columns */}
-            <div className="col-span-2 space-y-2">
+            {/* Avatar Upload */}
+            <div className="space-y-2">
               <Label>Foto do Perfil</Label>
               <AvatarUploader
                 currentAvatarUrl={editUser?.avatar_url}
@@ -272,32 +273,33 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
               />
             </div>
 
-            {/* Cargo */}
-            <div className="space-y-2">
-              <Label htmlFor="job_title">Cargo (opcional)</Label>
-              <Input
-                id="job_title"
-                type="text"
-                placeholder="Vendedor Senior"
-                value={jobTitle}
-                onChange={(e) => setJobTitle(e.target.value)}
-              />
-            </div>
-
-            {/* Senha (apenas para criação) */}
-            {!isEditMode && (
+            {/* Cargo e Senha/Perfil */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="password">Senha Temporária</Label>
+                <Label htmlFor="job_title">Cargo (opcional)</Label>
                 <Input
-                  id="password"
-                  type="password"
-                  placeholder="Mínimo 8 caracteres"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
+                  id="job_title"
+                  type="text"
+                  placeholder="Vendedor"
+                  value={jobTitle}
+                  onChange={(e) => setJobTitle(e.target.value)}
                 />
               </div>
-            )}
+
+              {!isEditMode && (
+                <div className="space-y-2">
+                  <Label htmlFor="password">Senha Temporária</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Mínimo 8 caracteres"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+            </div>
 
             {/* Perfil de Acesso */}
             <div className="space-y-2">
@@ -390,7 +392,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
             
             {/* Habilidades - Apenas no modo edição */}
             {isEditMode && editUser && (
-              <div className="col-span-2 space-y-2">
+              <div className="space-y-2">
                 <Label>Habilidades do Agente</Label>
                 <p className="text-xs text-muted-foreground mb-2">
                   Selecione as habilidades para roteamento inteligente de conversas
