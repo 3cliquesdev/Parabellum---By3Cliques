@@ -84,7 +84,7 @@ serve(async (req) => {
       await supabaseClient.from("messages").insert({
         conversation_id: conversationId,
         content: cachedResponse.answer,
-        sender_type: "ai_agent",
+        sender_type: "user",
         is_ai_generated: true,
         attachment_url: JSON.stringify(cachedResponse.context_ids || []),
       });
