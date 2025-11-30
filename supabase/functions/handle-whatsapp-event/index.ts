@@ -540,6 +540,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     sender_type: 'contact',
     sender_id: null,
     is_ai_generated: false,
+    channel: 'whatsapp', // ✅ FASE 3: Rastrear origem da mensagem
   };
 
   console.log('[handle-whatsapp-event] 📨 Trying to insert message:', newMessage);
