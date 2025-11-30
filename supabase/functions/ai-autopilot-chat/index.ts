@@ -1054,8 +1054,10 @@ ${canRequestWithdrawal
    - Responda: "✅ Ticket #[ID] criado! O financeiro vai processar o PIX para o CPF informado em até 7 dias úteis."
 
 3. **SE CLIENTE DISSER NÃO (dados incorretos):**
-   - Responda: "Entendi. Por segurança, vou transferir você para um atendente humano para atualizar seus dados cadastrais."
-   - Execute handoff para copilot (não use create_ticket, apenas informe que vai transferir)
+   - Execute a tool request_human_agent com:
+     - reason: "dados_financeiros_incorretos"
+     - internal_note: "Cliente informou que dados cadastrais (Nome/CPF) estão incorretos durante solicitação de saque. Requer correção manual."
+   - A ferramenta vai responder automaticamente e transferir para um atendente.
 
 ---
 
@@ -1073,6 +1075,7 @@ ${canRequestWithdrawal
 - create_ticket: Use APENAS quando cliente pedir explicitamente ajuda humana OU problema financeiro concreto OU você não conseguir responder após tentar. Para SAQUE, use SOMENTE após coletar e confirmar todos os dados (veja FLUXO ESPECIAL acima).
 - update_customer_email: Atualize o email quando fornecido
 - verify_otp_code: Valide códigos OTP de 6 dígitos
+- request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver. Use com reason: "dados_financeiros_incorretos", "solicitacao_cliente", ou "caso_complexo".
 
 ${knowledgeContext}${identityWallNote}
 
@@ -1173,6 +1176,28 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
               code: { type: 'string', description: 'O código de 6 dígitos fornecido pelo cliente.' }
             },
             required: ['code']
+          }
+        }
+      },
+      // TOOL: Handoff manual para atendente humano
+      {
+        type: 'function',
+        function: {
+          name: 'request_human_agent',
+          description: 'Transfere a conversa para um atendente humano. Use quando: 1) Cliente pedir explicitamente atendimento humano, 2) Dados do cliente estiverem incorretos e precisarem de correção, 3) Situação complexa que requer intervenção humana.',
+          parameters: {
+            type: 'object',
+            properties: {
+              reason: { 
+                type: 'string', 
+                description: 'Motivo da transferência (ex: "dados_incorretos", "solicitacao_cliente", "caso_complexo", "dados_financeiros_incorretos")' 
+              },
+              internal_note: { 
+                type: 'string', 
+                description: 'Nota interna explicando o contexto da transferência para o atendente' 
+              }
+            },
+            required: ['reason']
           }
         }
       },
@@ -1417,6 +1442,78 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
             console.error('[ai-autopilot-chat] ❌ Erro ao processar tool call (ignorando):', error);
             // ⚠️ NÃO sobrescrever assistantMessage aqui
             // Deixar que o detector de fallback lide com o handoff se necessário
+          }
+        }
+        // TOOL: request_human_agent - Handoff manual
+        else if (toolCall.function.name === 'request_human_agent') {
+          try {
+            const args = JSON.parse(toolCall.function.arguments);
+            console.log('[ai-autopilot-chat] 👤 Executando handoff manual:', args);
+
+            const handoffReason = args.reason || 'solicitacao_cliente';
+            const handoffNote = args.internal_note || 'Transferência solicitada pela IA';
+
+            // 1. MUDAR O MODO (Desligar IA)
+            await supabaseClient
+              .from('conversations')
+              .update({ ai_mode: 'copilot' })
+              .eq('id', conversationId);
+            
+            console.log('[ai-autopilot-chat] ✅ ai_mode mudado para copilot');
+
+            // 2. CHAMAR O ROTEADOR (Buscar agente disponível)
+            const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
+              body: { conversationId }
+            });
+            
+            if (routeError) {
+              console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
+            } else {
+              console.log('[ai-autopilot-chat] ✅ Conversa roteada:', routeResult);
+            }
+
+            // 3. REGISTRAR NOTA INTERNA
+            const reasonLabels: Record<string, string> = {
+              dados_incorretos: '📋 Dados Cadastrais Incorretos',
+              solicitacao_cliente: '🙋 Solicitação do Cliente',
+              caso_complexo: '🔍 Caso Complexo',
+              dados_financeiros_incorretos: '💰 Dados Financeiros Incorretos'
+            };
+
+            await supabaseClient.from('interactions').insert({
+              customer_id: contact.id,
+              type: 'internal_note',
+              content: `🤖→👤 **Handoff Manual Executado**
+
+**Motivo:** ${reasonLabels[handoffReason] || handoffReason}
+**Contexto:** ${handoffNote}
+**Última Mensagem do Cliente:** "${customerMessage}"
+
+**Ação:** Conversa transferida para atendimento humano.`,
+              channel: responseChannel,
+              metadata: {
+                source: 'ai_autopilot_manual_handoff',
+                reason: handoffReason,
+                original_message: customerMessage
+              }
+            });
+
+            console.log('[ai-autopilot-chat] ✅ Nota interna de handoff registrada');
+
+            // 4. DEFINIR MENSAGEM APROPRIADA PARA O CLIENTE
+            const reasonMessages: Record<string, string> = {
+              dados_incorretos: 'Entendi! Vou transferir você para um atendente que vai ajudar a atualizar seus dados cadastrais. Aguarde um momento, por favor. 🙏',
+              dados_financeiros_incorretos: 'Por segurança, vou transferir você para um atendente humano que vai ajudar a corrigir seus dados. Aguarde um momento! 🔒',
+              solicitacao_cliente: 'Sem problemas! Estou transferindo você para um atendente humano. Aguarde um momento, por favor. 🙏',
+              caso_complexo: 'Vou transferir você para um especialista que pode te ajudar melhor com essa situação. Aguarde um momento! 🎯'
+            };
+
+            assistantMessage = reasonMessages[handoffReason] || 
+              'Estou transferindo você para um atendente humano. Aguarde um momento, por favor. 🙏';
+
+          } catch (error) {
+            console.error('[ai-autopilot-chat] ❌ Erro ao executar handoff manual:', error);
+            assistantMessage = 'Vou transferir você para um atendente humano. Por favor, aguarde um momento.';
           }
         }
       }
