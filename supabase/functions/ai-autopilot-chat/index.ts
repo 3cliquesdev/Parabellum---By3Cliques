@@ -88,9 +88,24 @@ const INFORMATIONAL_PATTERNS = [
 function createTicketSuccessMessage(
   ticketId: string, 
   issueType: string = 'financeiro', 
-  orderId?: string
+  orderId?: string,
+  withdrawalData?: { amount?: number; cpf_last4?: string }
 ): string {
   const formattedId = ticketId.slice(0, 8).toUpperCase();
+  
+  // FASE 5: Mensagem específica para SAQUE com dados coletados
+  if (issueType === 'saque' && withdrawalData?.amount) {
+    return `✅ **Solicitação de saque registrada!**
+
+📋 **Protocolo:** #${formattedId}
+💵 **Valor:** R$ ${withdrawalData.amount.toFixed(2)}
+${withdrawalData.cpf_last4 ? `🔐 **CPF (final):** ...${withdrawalData.cpf_last4}` : ''}
+⏱️ **Prazo:** Até 48h úteis
+
+📌 **IMPORTANTE:** O saque será creditado via PIX na chave cadastrada com seu CPF. Não é possível transferir para conta de terceiros.
+
+Nossa equipe financeira já iniciou a análise. Você será notificado assim que o pagamento for processado!`;
+  }
   
   const ticketMessages: Record<string, string> = {
     'financeiro': `Entendi sua solicitação financeira. Abri o ticket #${formattedId} para nossa equipe resolver.`,
@@ -883,6 +898,13 @@ Se o cliente insistir em pular a verificação, explique que é uma política de
 ${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
     }
     
+    // FASE 2: Preparar contexto financeiro (CPF mascarado e saldo)
+    const contactCPF = contact.document || ''; // CPF completo
+    const maskedCPF = contactCPF.length >= 4 ? `***.***.***-${contactCPF.slice(-2)}` : 'Não cadastrado';
+    const cpfLast4 = contactCPF.length >= 4 ? contactCPF.slice(-4) : '';
+    const availableBalance = contact.account_balance || 0;
+    const formattedBalance = `R$ ${availableBalance.toFixed(2)}`;
+    
     const contextualizedSystemPrompt = `Você é a Lais, assistente virtual inteligente da Parabellum / 3Cliques.
 Sua missão é AJUDAR o cliente, não se livrar dele.
 
@@ -909,8 +931,55 @@ Sua missão é AJUDAR o cliente, não se livrar dele.
    - Dizer "Não consegui processar" de cara - TENTE ajudar primeiro
    - Transferir para humano sem motivo real
 
+---
+
+**🚨 FLUXO ESPECIAL - SOLICITAÇÃO DE SAQUE:**
+
+Quando cliente solicitar SAQUE/RETIRADA de valores, siga RIGOROSAMENTE este roteiro ANTES de criar o ticket:
+
+**PASSO 1 - INFORMAR REGRAS (OBRIGATÓRIO):**
+"Entendi que você quer realizar um saque! 😊
+
+📌 **Informações importantes:**
+- ✅ O saque será enviado via **PIX** para a conta vinculada ao seu CPF (${maskedCPF})
+- ⏱️ Processamento em até **48 horas úteis**
+- 🔒 Por segurança, **não é possível** sacar para conta de terceiros ou outro CPF
+- 💰 Seu saldo disponível atual: **${formattedBalance}**
+
+Vamos confirmar os dados para processar sua solicitação?"
+
+**PASSO 2 - CONFIRMAR DADOS (OBRIGATÓRIO):**
+Faça as seguintes perguntas (uma de cada vez, aguardando resposta):
+
+1. "Confirma que o saque deve ser enviado para a chave PIX do seu CPF ${maskedCPF}?" 
+   → Aguarde resposta afirmativa (sim/confirmo/correto)
+
+2. "Qual valor você deseja sacar? (Saldo disponível: ${formattedBalance})"
+   → Aguarde valor numérico
+
+3. "Perfeito! Confirma o saque de R$ [VALOR] para o CPF ${maskedCPF}?"
+   → Aguarde confirmação final (sim/confirmo/pode processar)
+
+**PASSO 3 - CRIAR TICKET (SOMENTE APÓS CONFIRMAÇÃO):**
+Após confirmar TODOS os dados acima, use create_ticket com:
+- issue_type: "saque" (novo tipo!)
+- subject: "Solicitação de Saque - R$ [VALOR]"
+- description: "[VALOR] solicitado pelo cliente ${contactName} - CPF ${maskedCPF}"
+- withdrawal_amount: [VALOR_NUMERICO]
+- confirmed_cpf_last4: "${cpfLast4}"
+- available_balance: ${availableBalance}
+- customer_confirmation: true
+
+**IMPORTANTE:**
+- ❌ NÃO crie ticket imediatamente quando cliente pedir saque
+- ✅ SEMPRE siga os 3 passos acima
+- ✅ Confirme CADA informação antes de prosseguir
+- ✅ Seja educado e paciente - saque é sensível!
+
+---
+
 **Você tem acesso às seguintes ferramentas:**
-- create_ticket: Use APENAS quando cliente pedir explicitamente ajuda humana OU problema financeiro concreto OU você não conseguir responder após tentar
+- create_ticket: Use APENAS quando cliente pedir explicitamente ajuda humana OU problema financeiro concreto OU você não conseguir responder após tentar. Para SAQUE, use SOMENTE após coletar e confirmar todos os dados (veja FLUXO ESPECIAL acima).
 - update_customer_email: Atualize o email quando fornecido
 - verify_otp_code: Valide códigos OTP de 6 dígitos
 
@@ -922,6 +991,8 @@ ${knowledgeContext}${identityWallNote}
 - Canal: ${responseChannel}
 ${customer_context?.email || contact.email ? `- Email: ${customer_context?.email || contact.email}` : '- Email: NÃO CADASTRADO - SOLICITAR'}
 ${contact.phone ? `- Telefone: ${contact.phone}` : ''}
+- CPF: ${maskedCPF}
+- Saldo Disponível: ${formattedBalance}
 
 Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 
@@ -942,14 +1013,14 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         type: 'function',
         function: {
           name: 'create_ticket',
-          description: 'Cria um ticket de suporte. USE APENAS quando: (1) Cliente PEDIR explicitamente ajuda humana, (2) Problema financeiro CONCRETO com intenção de ação (reembolso, saque real), (3) Você NÃO conseguir responder APÓS tentar. NÃO use para dúvidas informativas.',
+          description: 'Cria um ticket de suporte. USE APENAS quando: (1) Cliente PEDIR explicitamente ajuda humana, (2) Problema financeiro CONCRETO com intenção de ação (reembolso, saque real), (3) Você NÃO conseguir responder APÓS tentar. Para SAQUE: use SOMENTE após seguir o FLUXO ESPECIAL no system prompt (informar regras, confirmar dados, obter confirmação). NÃO use para dúvidas informativas.',
           parameters: {
             type: 'object',
             properties: {
               issue_type: { 
                 type: 'string', 
-                enum: ['financeiro', 'devolucao', 'reembolso', 'troca', 'defeito', 'outro'],
-                description: 'O tipo de solicitação. Use "financeiro" para saque, saldo, pagamentos, pix, comissão.' 
+                enum: ['financeiro', 'devolucao', 'reembolso', 'troca', 'defeito', 'saque', 'outro'],
+                description: 'O tipo de solicitação. Use "saque" APENAS após coletar todos os dados no FLUXO ESPECIAL. Use "financeiro" para outras questões de pagamento/pix/comissão.' 
               },
               subject: { 
                 type: 'string', 
@@ -962,6 +1033,22 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
               order_id: { 
                 type: 'string', 
                 description: 'O número do pedido, se aplicável. Deixe vazio se não houver pedido.' 
+              },
+              withdrawal_amount: {
+                type: 'number',
+                description: '[APENAS PARA SAQUE] Valor numérico solicitado pelo cliente após confirmação.'
+              },
+              confirmed_cpf_last4: {
+                type: 'string',
+                description: '[APENAS PARA SAQUE] Últimos 4 dígitos do CPF confirmados pelo cliente.'
+              },
+              available_balance: {
+                type: 'number',
+                description: '[APENAS PARA SAQUE] Saldo disponível do cliente no momento da solicitação.'
+              },
+              customer_confirmation: {
+                type: 'boolean',
+                description: '[APENAS PARA SAQUE] true se cliente confirmou explicitamente os dados (CPF, valor, destino).'
               }
             },
             required: ['issue_type', 'subject', 'description']
@@ -1154,12 +1241,41 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 
             // Create ticket in database
             const ticketCategory = args.issue_type === 'defeito' ? 'tecnico' : 
-                                   args.issue_type === 'financeiro' ? 'financeiro' : 
+                                   (args.issue_type === 'financeiro' || args.issue_type === 'saque') ? 'financeiro' : 
                                    'financeiro';
             
             const ticketSubject = args.subject || 
                                   (args.order_id ? `${args.issue_type.toUpperCase()} - Pedido ${args.order_id}` : 
                                    `${args.issue_type.toUpperCase()} - ${args.description.substring(0, 50)}`);
+
+            // FASE 4: Enriquecer internal_note para SAQUE com checklist estruturado
+            let internalNote = `Ticket criado automaticamente pela IA${args.order_id ? `. Pedido: ${args.order_id}` : ''}`;
+            
+            if (args.issue_type === 'saque' && args.withdrawal_amount) {
+              internalNote = `🤖 **TICKET DE SAQUE CRIADO VIA IA**
+
+**✅ DADOS COLETADOS E CONFIRMADOS:**
+
+💵 **Valor Solicitado:** R$ ${args.withdrawal_amount.toFixed(2)}
+${args.confirmed_cpf_last4 ? `🔐 **CPF Confirmado (final):** ...${args.confirmed_cpf_last4}` : ''}
+💰 **Saldo Disponível:** R$ ${args.available_balance ? args.available_balance.toFixed(2) : '0.00'}
+${args.customer_confirmation ? '✅ **Cliente Confirmou:** SIM - Dados verificados' : '⚠️ **Cliente Confirmou:** Não confirmado'}
+
+---
+
+**📋 CHECKLIST FINANCEIRO:**
+- [ ] Validar CPF do cliente no sistema
+- [ ] Verificar saldo disponível atual
+- [ ] Confirmar chave PIX cadastrada (CPF)
+- [ ] Processar transferência via PIX
+- [ ] Atualizar saldo do cliente
+- [ ] Notificar cliente sobre conclusão
+
+---
+
+**⏱️ PRAZO:** Até 48h úteis
+**🔒 REGRA:** Saque APENAS para conta do próprio CPF (não transferir para terceiros)`;
+            }
 
             const { data: ticket, error: ticketError } = await supabaseClient
               .from('tickets')
@@ -1167,11 +1283,11 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
                 customer_id: contact.id,
                 subject: ticketSubject,
                 description: args.description,
-                priority: args.issue_type === 'financeiro' ? 'high' : 'medium',
+                priority: (args.issue_type === 'financeiro' || args.issue_type === 'saque') ? 'high' : 'medium',
                 status: 'open',
                 source_conversation_id: conversationId,
                 category: ticketCategory,
-                internal_note: `Ticket criado automaticamente pela IA${args.order_id ? `. Pedido: ${args.order_id}` : ''}`
+                internal_note: internalNote
               })
               .select()
               .single();
@@ -1192,11 +1308,18 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
                 .update({ related_ticket_id: ticket.id })
                 .eq('id', conversationId);
 
+              // FASE 5: Mensagem específica para SAQUE com dados coletados
+              const withdrawalData = args.issue_type === 'saque' && args.withdrawal_amount ? {
+                amount: args.withdrawal_amount,
+                cpf_last4: args.confirmed_cpf_last4
+              } : undefined;
+
               // 🎯 SUBSTITUIR COMPLETAMENTE - Ticket criado = Problema resolvido = Não precisa desculpa
               assistantMessage = createTicketSuccessMessage(
                 ticket.id,
                 args.issue_type,
-                args.order_id
+                args.order_id,
+                withdrawalData
               );
             }
           } catch (error) {
