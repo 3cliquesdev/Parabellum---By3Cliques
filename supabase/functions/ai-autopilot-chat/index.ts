@@ -882,103 +882,9 @@ Use essas informações de forma natural e personalizada.`;
     let assistantMessage = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui processar sua mensagem.';
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
 
-    // ========== DETECTOR DE FALLBACK + HANDOFF REAL ==========
-    const fallbackPhrases = [
-      'vou chamar um especialista',
-      'vou transferir para um atendente',
-      'transferir para um atendente',
-      'encaminhar para um humano',
-      'não tenho essa informação',
-      'não encontrei essa informação',
-      'não consegui encontrar',
-      'momento por favor',
-      'chamar um atendente'
-    ];
-
-    const isFallbackResponse = fallbackPhrases.some(phrase => 
-      assistantMessage.toLowerCase().includes(phrase)
-    );
-
-    if (isFallbackResponse) {
-      console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO - Executando handoff REAL');
-      
-      // 1. MUDAR O MODO (Desligar IA)
-      await supabaseClient
-        .from('conversations')
-        .update({ ai_mode: 'copilot' })
-        .eq('id', conversationId);
-      
-      console.log('[ai-autopilot-chat] ✅ ai_mode mudado para copilot');
-      
-      // 2. CHAMAR O ROTEADOR (Buscar agente disponível)
-      const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
-        body: { conversationId }
-      });
-      
-      if (routeError) {
-        console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
-      } else {
-        console.log('[ai-autopilot-chat] ✅ Conversa roteada:', routeResult);
-      }
-      
-      // 3. CRIAR TICKET AUTOMÁTICO PARA CASOS FINANCEIROS
-      const financialKeywords = ['saque', 'saldo', 'pix', 'dinheiro', 'pagamento', 'comissão', 'carteira', 'transferir', 'transferência'];
-      const isFinancialRequest = financialKeywords.some(keyword => 
-        customerMessage.toLowerCase().includes(keyword)
-      );
-      
-      if (isFinancialRequest) {
-        console.log('[ai-autopilot-chat] 💰 Solicitação financeira detectada - Criando ticket de segurança');
-        
-        const { data: ticket, error: ticketError } = await supabaseClient
-          .from('tickets')
-          .insert({
-            customer_id: contact.id,
-            subject: `💰 Solicitação Financeira - ${customerMessage.substring(0, 50)}...`,
-            description: `**Mensagem Original:**\n${customerMessage}\n\n**Motivo do Ticket:**\nCriado automaticamente por handoff de IA - solicitação financeira detectada.`,
-            priority: 'high',
-            status: 'open',
-            category: 'financeiro',
-            source_conversation_id: conversationId,
-            internal_note: '🤖 Ticket criado automaticamente pela IA - Assunto financeiro requer atenção humana'
-          })
-          .select()
-          .single();
-        
-        if (ticketError) {
-          console.error('[ai-autopilot-chat] ❌ Erro ao criar ticket financeiro:', ticketError);
-        } else {
-          console.log('[ai-autopilot-chat] ✅ Ticket financeiro criado:', ticket?.id);
-          
-          // Vincular ticket à conversa
-          await supabaseClient
-            .from('conversations')
-            .update({ related_ticket_id: ticket?.id })
-            .eq('id', conversationId);
-          
-          // Enriquecer mensagem ao cliente
-          assistantMessage = `${assistantMessage}\n\n📋 Criei o protocolo #${ticket?.id?.slice(0, 8).toUpperCase()} para sua solicitação financeira. Um especialista vai analisar seu caso com prioridade.`;
-        }
-      }
-      
-      // 4. REGISTRAR NOTA INTERNA (Auditoria)
-      await supabaseClient.from('interactions').insert({
-        customer_id: contact.id,
-        type: 'internal_note',
-        content: `🤖→👤 **Handoff Automático Executado**\n\n**Pergunta do Cliente:** "${customerMessage}"\n**Motivo:** IA não encontrou resposta adequada na base de conhecimento.\n**Ação:** Conversa transferida para atendimento humano.${isFinancialRequest ? '\n**Ticket Financeiro:** Criado automaticamente' : ''}`,
-        channel: responseChannel,
-        metadata: {
-          source: 'ai_autopilot_handoff',
-          fallback_phrase_detected: true,
-          is_financial: isFinancialRequest,
-          original_message: customerMessage
-        }
-      });
-      
-      console.log('[ai-autopilot-chat] ✅ Nota interna de handoff registrada');
-    }
-    // ========== FIM DETECTOR DE FALLBACK ==========
-
+    // ============================================================
+    // FASE 3: TOOL CALLING - Execute first to prevent duplicates
+    // ============================================================
     // Handle tool calls (Function Calling)
     if (toolCalls.length > 0) {
       console.log('[ai-autopilot-chat] 🛠️ AI solicitou execução de ferramenta:', toolCalls);
@@ -1165,7 +1071,113 @@ Use essas informações de forma natural e personalizada.`;
       }
     }
 
-    // FASE 3: Deduplicação - Verificar se mensagem similar foi enviada recentemente
+    // ============================================================
+    // FASE 4: FALLBACK DETECTOR - After tool calls to prevent duplicates
+    // ============================================================
+    const fallbackPhrases = [
+      'vou chamar um especialista',
+      'vou transferir para um atendente',
+      'transferir para um atendente',
+      'encaminhar para um humano',
+      'não tenho essa informação',
+      'não encontrei essa informação',
+      'não consegui encontrar',
+      'momento por favor',
+      'chamar um atendente'
+    ];
+
+    const isFallbackResponse = fallbackPhrases.some(phrase => 
+      assistantMessage.toLowerCase().includes(phrase)
+    );
+
+    if (isFallbackResponse) {
+      console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO - Executando handoff REAL');
+      
+      // 1. MUDAR O MODO (Desligar IA)
+      await supabaseClient
+        .from('conversations')
+        .update({ ai_mode: 'copilot' })
+        .eq('id', conversationId);
+      
+      console.log('[ai-autopilot-chat] ✅ ai_mode mudado para copilot');
+      
+      // 2. CHAMAR O ROTEADOR (Buscar agente disponível)
+      const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
+        body: { conversationId }
+      });
+      
+      if (routeError) {
+        console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
+      } else {
+        console.log('[ai-autopilot-chat] ✅ Conversa roteada:', routeResult);
+      }
+      
+      // 3. CRIAR TICKET AUTOMÁTICO PARA CASOS FINANCEIROS (apenas se não criado por tool call)
+      const financialKeywords = ['saque', 'saldo', 'pix', 'dinheiro', 'pagamento', 'comissão', 'carteira', 'transferir', 'transferência'];
+      const isFinancialRequest = financialKeywords.some(keyword => 
+        customerMessage.toLowerCase().includes(keyword)
+      );
+      
+      // Check if ticket was already created by tool call
+      const { data: existingTicket } = await supabaseClient
+        .from('conversations')
+        .select('related_ticket_id')
+        .eq('id', conversationId)
+        .single();
+      
+      if (isFinancialRequest && !existingTicket?.related_ticket_id) {
+        console.log('[ai-autopilot-chat] 💰 Solicitação financeira detectada - Criando ticket de segurança');
+        
+        const { data: ticket, error: ticketError } = await supabaseClient
+          .from('tickets')
+          .insert({
+            customer_id: contact.id,
+            subject: `💰 Solicitação Financeira - ${customerMessage.substring(0, 50)}...`,
+            description: `**Mensagem Original:**\n${customerMessage}\n\n**Motivo do Ticket:**\nCriado automaticamente por handoff de IA - solicitação financeira detectada.`,
+            priority: 'high',
+            status: 'open',
+            category: 'financeiro',
+            source_conversation_id: conversationId,
+            internal_note: '🤖 Ticket criado automaticamente pela IA - Assunto financeiro requer atenção humana'
+          })
+          .select()
+          .single();
+        
+        if (ticketError) {
+          console.error('[ai-autopilot-chat] ❌ Erro ao criar ticket financeiro:', ticketError);
+        } else {
+          console.log('[ai-autopilot-chat] ✅ Ticket financeiro criado:', ticket?.id);
+          
+          // Vincular ticket à conversa
+          await supabaseClient
+            .from('conversations')
+            .update({ related_ticket_id: ticket?.id })
+            .eq('id', conversationId);
+          
+          // Enriquecer mensagem ao cliente
+          assistantMessage = `${assistantMessage}\n\n📋 Criei o protocolo #${ticket?.id?.slice(0, 8).toUpperCase()} para sua solicitação financeira. Um especialista vai analisar seu caso com prioridade.`;
+        }
+      }
+      
+      // 4. REGISTRAR NOTA INTERNA (Auditoria)
+      await supabaseClient.from('interactions').insert({
+        customer_id: contact.id,
+        type: 'internal_note',
+        content: `🤖→👤 **Handoff Automático Executado**\n\n**Pergunta do Cliente:** "${customerMessage}"\n**Motivo:** IA não encontrou resposta adequada na base de conhecimento.\n**Ação:** Conversa transferida para atendimento humano.${isFinancialRequest ? '\n**Ticket Financeiro:** Criado automaticamente' : ''}`,
+        channel: responseChannel,
+        metadata: {
+          source: 'ai_autopilot_handoff',
+          fallback_phrase_detected: true,
+          is_financial: isFinancialRequest,
+          original_message: customerMessage
+        }
+      });
+      
+      console.log('[ai-autopilot-chat] ✅ Nota interna de handoff registrada');
+    }
+    // ========== FIM DETECTOR DE FALLBACK ==========
+
+    // FASE 5: Deduplicação - Verificar se mensagem similar foi enviada recentemente
     const { data: recentMessages } = await supabaseClient
       .from('messages')
       .select('content, created_at')
