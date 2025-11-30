@@ -59,6 +59,32 @@ serve(async (req) => {
     
     console.log('[ai-autopilot-chat] Request received:', { conversationId, messagePreview: customerMessage?.substring(0, 50) });
 
+    // 1. Buscar conversa e informações do contato (ANTES do cache)
+    const { data: conversation, error: convError } = await supabaseClient
+      .from('conversations')
+      .select(`
+        *,
+        contacts!inner(
+          id, first_name, last_name, email, phone, whatsapp_id, company, status
+        )
+      `)
+      .eq('id', conversationId)
+      .single();
+
+    if (convError || !conversation) {
+      console.error('[ai-autopilot-chat] Conversa não encontrada:', convError);
+      return new Response(JSON.stringify({ error: 'Conversa não encontrada' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const contact = conversation.contacts as any;
+    const channel = conversation.channel;
+    const department = conversation.department || null;
+
+    console.log(`[ai-autopilot-chat] Canal: ${channel}, Departamento: ${department}`);
+
     // FASE 2: Verificar cache antes de processar (zero latência para perguntas repetidas)
     const questionHash = await generateQuestionHash(customerMessage);
     const { data: cachedResponse } = await supabaseClient
@@ -81,19 +107,53 @@ serve(async (req) => {
       });
 
       // Salvar resposta da IA (do cache)
-      await supabaseClient.from("messages").insert({
-        conversation_id: conversationId,
-        content: cachedResponse.answer,
-        sender_type: "user",
-        is_ai_generated: true,
-        attachment_url: JSON.stringify(cachedResponse.context_ids || []),
-      });
+      const { data: aiMessageData } = await supabaseClient
+        .from("messages")
+        .insert({
+          conversation_id: conversationId,
+          content: cachedResponse.answer,
+          sender_type: "user",
+          is_ai_generated: true,
+          attachment_url: JSON.stringify(cachedResponse.context_ids || []),
+        })
+        .select('id')
+        .single();
 
       // Atualizar last_message_at
       await supabaseClient
         .from("conversations")
         .update({ last_message_at: new Date().toISOString() })
         .eq("id", conversationId);
+
+      // Se for WhatsApp, enviar mensagem via Evolution API
+      if (channel === 'whatsapp') {
+        const { data: whatsappInstance } = await supabaseClient
+          .from('whatsapp_instances')
+          .select('*')
+          .eq('status', 'connected')
+          .limit(1)
+          .maybeSingle();
+
+        if (whatsappInstance && aiMessageData) {
+          console.log('[ai-autopilot-chat] 📤 Enviando resposta cached via WhatsApp');
+
+          const { error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
+            body: {
+              instance_id: whatsappInstance.id,
+              phone_number: contact.phone,
+              whatsapp_id: contact.whatsapp_id,
+              message: cachedResponse.answer,
+            },
+          });
+
+          if (!whatsappError) {
+            await supabaseClient
+              .from('messages')
+              .update({ status: 'sent' })
+              .eq('id', aiMessageData.id);
+          }
+        }
+      }
 
       return new Response(
         JSON.stringify({
@@ -132,32 +192,6 @@ serve(async (req) => {
     }
     
     console.log(`[ai-autopilot-chat] Processando mensagem para conversa ${conversationId}...`);
-
-    // 1. Buscar conversa e informações do contato
-    const { data: conversation, error: convError } = await supabaseClient
-      .from('conversations')
-      .select(`
-        *,
-        contacts!inner(
-          id, first_name, last_name, email, phone, whatsapp_id, company, status
-        )
-      `)
-      .eq('id', conversationId)
-      .single();
-
-    if (convError || !conversation) {
-      console.error('[ai-autopilot-chat] Conversa não encontrada:', convError);
-      return new Response(JSON.stringify({ error: 'Conversa não encontrada' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const contact = conversation.contacts as any;
-    const channel = conversation.channel;
-    const department = conversation.department || null;
-
-    console.log(`[ai-autopilot-chat] Canal: ${channel}, Departamento: ${department}`);
 
     // 2. Buscar persona baseado em routing rules (canal + departamento)
     const { data: routingRules, error: rulesError } = await supabaseClient
