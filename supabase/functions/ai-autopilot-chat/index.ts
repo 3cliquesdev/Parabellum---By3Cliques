@@ -35,7 +35,17 @@ const FALLBACK_PHRASES = [
   'não consegui encontrar',
   'não consegui registrar',
   'momento por favor',
-  'chamar um atendente'
+  'chamar um atendente',
+  // 🆕 Frases faltantes que causavam cache poisoning
+  'desculpe',
+  'não consegui processar',
+  'não consigo',
+  'infelizmente não',
+  'não posso ajudar',
+  'não sei como',
+  'sorry',
+  'i cannot',
+  'unable to'
 ];
 
 const FINANCIAL_KEYWORDS = [
@@ -49,6 +59,29 @@ const FINANCIAL_KEYWORDS = [
   'carteira',
   'transferência',
   'estorno'
+];
+
+// 🆕 Padrões de INTENÇÃO financeira (não keyword solta) - Usado globalmente
+const FINANCIAL_ACTION_PATTERNS = [
+  /quero\s+(sacar|reembolso|meu\s+dinheiro)/i,
+  /preciso\s+(sacar|de\s+reembolso|do\s+meu\s+dinheiro)/i,
+  /cadê\s+(meu\s+saldo|meu\s+dinheiro|meu\s+pix)/i,
+  /não\s+(recebi|caiu|chegou)\s+(o\s+)?(pix|pagamento|saldo|dinheiro)/i,
+  /devolver\s+(meu\s+)?dinheiro/i,
+  /estornar|estorno/i,
+  /erro\s+(no|de)\s+pagamento/i,
+  /quero\s+meu\s+dinheiro/i,
+  /cobrar|cobraram\s+errado/i,
+];
+
+// 🆕 Perguntas INFORMATIVAS - NÃO criar ticket - Usado globalmente
+const INFORMATIONAL_PATTERNS = [
+  /como\s+(funciona|faz|é|posso)/i,
+  /o\s+que\s+(é|significa)/i,
+  /qual\s+(é|o)/i,
+  /pode\s+me\s+explicar/i,
+  /quero\s+saber/i,
+  /me\s+explica/i,
 ];
 
 // Template de mensagem de sucesso do ticket (CONTEXTUAL)
@@ -182,8 +215,9 @@ serve(async (req) => {
           body: { conversationId }
         });
         
-        // 3. Criar ticket se for financeiro (com verificação de duplicação)
-        const isFinancial = FINANCIAL_KEYWORDS.some(k => customerMessage.toLowerCase().includes(k));
+        // 3. Criar ticket se for financeiro (com verificação de INTENÇÃO, não keyword solta)
+        const isInformational = INFORMATIONAL_PATTERNS.some(p => p.test(customerMessage));
+        const isFinancial = !isInformational && FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
         
         let ticketProtocol = '';
         if (isFinancial) {
@@ -1205,33 +1239,13 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       
       // 3. CRIAR TICKET AUTOMÁTICO PARA CASOS FINANCEIROS (apenas se não criado por tool call)
       
-      // 🚨 Detectar se é pedido financeiro COM INTENÇÃO DE AÇÃO (não apenas keyword solta)
-      const financialActionPatterns = [
-        /quero\s+(sacar|reembolso|meu\s+dinheiro)/i,
-        /preciso\s+(sacar|de\s+reembolso|do\s+meu\s+dinheiro)/i,
-        /cadê\s+(meu\s+saldo|meu\s+dinheiro|meu\s+pix)/i,
-        /não\s+(recebi|caiu|chegou)\s+(o\s+)?(pix|pagamento|saldo|dinheiro)/i,
-        /devolver\s+(meu\s+)?dinheiro/i,
-        /estornar|estorno/i,
-        /erro\s+(no|de)\s+pagamento/i,
-      ];
-
-      // Frases que são DÚVIDAS, não problemas - NÃO criar ticket
-      const informationalPatterns = [
-        /como\s+(funciona|faz|é|posso)/i,
-        /o\s+que\s+(é|significa)/i,
-        /qual\s+(é|o)/i,
-        /pode\s+me\s+explicar/i,
-        /quero\s+saber/i,
-        /me\s+explica/i,
-      ];
-
-      const isInformationalQuestion = informationalPatterns.some(pattern => 
+      // 🚨 Detectar se é pedido financeiro COM INTENÇÃO DE AÇÃO (usa constante global)
+      const isInformationalQuestion = INFORMATIONAL_PATTERNS.some(pattern => 
         pattern.test(customerMessage)
       );
 
       // Só é request financeiro se tiver padrão de ação E não for dúvida informativa
-      let isFinancialRequest = financialActionPatterns.some(pattern => 
+      let isFinancialRequest = FINANCIAL_ACTION_PATTERNS.some(pattern => 
         pattern.test(customerMessage)
       );
 
