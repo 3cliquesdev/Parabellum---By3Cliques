@@ -1085,20 +1085,26 @@ Use essas informações de forma natural e personalizada.`;
         .eq('id', messageId);
     }
 
-    // 9. Registrar uso de IA nos logs
-    await supabaseClient
-      .from('ai_usage_logs')
-      .insert({
-        feature_type: 'autopilot_chat',
-        conversation_id: conversationId,
-        result_data: {
-          persona_id: persona.id,
-          persona_name: persona.name,
-          message_length: assistantMessage.length,
-          tools_used: toolCalls.length,
-          tool_calls: toolCalls
-        }
-      });
+    // 9. Registrar uso de IA nos logs (não-bloqueante)
+    try {
+      await supabaseClient
+        .from('ai_usage_logs')
+        .insert({
+          feature_type: 'autopilot_chat',
+          conversation_id: conversationId,
+          result_data: {
+            persona_id: persona.id,
+            persona_name: persona.name,
+            message_length: assistantMessage.length,
+            tools_used: toolCalls.length,
+            tool_calls: toolCalls
+          }
+        });
+      console.log('📊 [USAGE LOG] Uso da IA registrado com sucesso');
+    } catch (logError) {
+      console.error('⚠️ [USAGE LOG ERROR] Erro ao registrar uso (não bloqueante):', logError);
+      // Não bloqueia a resposta ao cliente se o log falhar
+    }
 
     console.log('[ai-autopilot-chat] ✅ Resposta processada com sucesso!');
 
