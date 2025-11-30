@@ -48,7 +48,6 @@ const formSchema = z.object({
       }
     }, "Domínio inválido. Use formato: https://dominio.com (com extensão como .com, .net, etc)"),
   api_token: z.string().min(10, "Token inválido"),
-  ai_mode: z.enum(["autopilot", "copilot", "disabled"]),
   department_id: z.string().optional(),
   user_id: z.string().optional(),
 });
@@ -93,7 +92,6 @@ export function WhatsAppInstanceDialog({
       instance_name: "",
       api_url: "",
       api_token: "",
-      ai_mode: "autopilot",
       department_id: "__none__",
       user_id: "__none__",
     },
@@ -108,7 +106,6 @@ export function WhatsAppInstanceDialog({
         instance_name: instance.instance_name,
         api_url: instance.api_url,
         api_token: instance.api_token,
-        ai_mode: instance.ai_mode,
         department_id: instance.department_id || "__none__",
         user_id: instance.user_id || "__none__",
       });
@@ -119,7 +116,6 @@ export function WhatsAppInstanceDialog({
         instance_name: "",
         api_url: "",
         api_token: "",
-        ai_mode: "autopilot",
         department_id: "__none__",
         user_id: "__none__",
       });
@@ -261,34 +257,6 @@ export function WhatsAppInstanceDialog({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="ai_mode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Modo de IA</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o modo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="autopilot">
-                        🤖 Autopilot - IA responde automaticamente
-                      </SelectItem>
-                      <SelectItem value="copilot">
-                        🤝 Copilot - IA sugere, humano aprova
-                      </SelectItem>
-                      <SelectItem value="disabled">
-                        ⛔ Desabilitado - Somente humano
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}
