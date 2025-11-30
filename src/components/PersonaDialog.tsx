@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCreatePersona } from "@/hooks/useCreatePersona";
 import { useUpdatePersona } from "@/hooks/useUpdatePersona";
+import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
 
 interface PersonaDialogProps {
   trigger: React.ReactNode;
@@ -30,11 +32,12 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
   const [systemPrompt, setSystemPrompt] = useState("");
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(500);
-  const [knowledgeBase, setKnowledgeBase] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
 
   const createPersona = useCreatePersona();
   const updatePersona = useUpdatePersona();
+  const { data: availableCategories = [], isLoading: loadingCategories } = useKnowledgeCategories();
 
   useEffect(() => {
     if (persona) {
@@ -43,7 +46,7 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       setSystemPrompt(persona.system_prompt);
       setTemperature(persona.temperature ?? 0.7);
       setMaxTokens(persona.max_tokens ?? 500);
-      setKnowledgeBase(persona.knowledge_base_paths?.join("\n") ?? "");
+      setSelectedCategories(persona.knowledge_base_paths ?? []);
       setIsActive(persona.is_active ?? true);
     } else {
       setName("");
@@ -51,7 +54,7 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       setSystemPrompt("");
       setTemperature(0.7);
       setMaxTokens(500);
-      setKnowledgeBase("");
+      setSelectedCategories([]);
       setIsActive(true);
     }
   }, [persona, open]);
@@ -59,18 +62,13 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const knowledgePaths = knowledgeBase
-      .split("\n")
-      .map((path) => path.trim())
-      .filter((path) => path.length > 0);
-
     const data = {
       name,
       role,
       system_prompt: systemPrompt,
       temperature,
       max_tokens: maxTokens,
-      knowledge_base_paths: knowledgePaths.length > 0 ? knowledgePaths : null,
+      knowledge_base_paths: selectedCategories.length > 0 ? selectedCategories : null,
       is_active: isActive,
     };
 
@@ -82,6 +80,14 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
 
     setOpen(false);
     onOpenChange?.(false);
+  };
+
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
   };
 
   return (
@@ -159,15 +165,43 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="knowledgeBase">Base de Conhecimento (opcional)</Label>
-            <Textarea
-              id="knowledgeBase"
-              value={knowledgeBase}
-              onChange={(e) => setKnowledgeBase(e.target.value)}
-              placeholder="Caminhos para documentos (um por linha)&#10;/docs/vendas/processo.md&#10;/docs/produtos/catalogo.md"
-              className="min-h-[80px] font-mono text-xs"
-            />
+          <div className="space-y-3">
+            <div>
+              <Label>Categorias da Base de Conhecimento</Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Selecione quais categorias esta persona pode acessar. Deixe vazio para acessar todas.
+              </p>
+            </div>
+            
+            {loadingCategories ? (
+              <p className="text-sm text-muted-foreground">Carregando categorias...</p>
+            ) : availableCategories.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma categoria encontrada. Crie artigos primeiro.</p>
+            ) : (
+              <div className="border rounded-lg p-4 space-y-2 max-h-[180px] overflow-y-auto">
+                {availableCategories.map((category) => (
+                  <div key={category} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`category-${category}`}
+                      checked={selectedCategories.includes(category)}
+                      onCheckedChange={() => toggleCategory(category)}
+                    />
+                    <label
+                      htmlFor={`category-${category}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      {category}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {selectedCategories.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                ✅ {selectedCategories.length} categoria(s) selecionada(s): {selectedCategories.join(", ")}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between p-4 border rounded-lg">

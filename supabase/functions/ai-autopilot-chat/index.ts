@@ -283,6 +283,17 @@ Responda APENAS: skip ou search`
       const removeAccents = (str: string) => 
         str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       
+      // FASE 1: Verificar se persona tem categorias específicas configuradas
+      const personaCategories = persona.knowledge_base_paths || [];
+      const hasPersonaCategories = personaCategories.length > 0;
+      
+      console.log('[ai-autopilot-chat] 📂 Persona categories:', {
+        persona_id: persona.id,
+        persona_name: persona.name,
+        allowed_categories: hasPersonaCategories ? personaCategories : 'ALL (sem filtro)',
+        category_filter_applied: hasPersonaCategories
+      });
+      
       try {
         const keywordData = await callAIWithFallback({
           messages: [
@@ -307,20 +318,34 @@ Responda APENAS: skip ou search`
             `title.ilike.%${term}%,content.ilike.%${term}%`
           ).join(',');
           
-          const { data: relevantArticles } = await supabaseClient
+          // FASE 1: Construir query com filtro de categoria se persona tiver configurado
+          let query = supabaseClient
             .from('knowledge_articles')
-            .select('title, content')
+            .select('title, content, category')
             .eq('is_published', true)
-            .or(orConditions)
-            .limit(5);
+            .or(orConditions);
+          
+          // Aplicar filtro de categoria se persona tiver categorias específicas
+          if (hasPersonaCategories) {
+            query = query.in('category', personaCategories);
+            console.log(`[ai-autopilot-chat] 🔒 Filtro de categoria APLICADO: ${personaCategories.join(', ')}`);
+          } else {
+            console.log('[ai-autopilot-chat] 🌐 Sem filtro de categoria - buscando em TODAS as categorias');
+          }
+          
+          const { data: relevantArticles } = await query.limit(5);
 
           if (relevantArticles && relevantArticles.length > 0) {
             knowledgeArticles = relevantArticles;
-            console.log(`[ai-autopilot-chat] ✅ ${relevantArticles.length} artigos encontrados`);
+            console.log(`[ai-autopilot-chat] ✅ ${relevantArticles.length} artigos encontrados`, 
+              relevantArticles.map(a => `${a.title} [${a.category}]`));
           } else {
             // FASE 3: Se não encontrar artigos, deixar IA tentar responder com conhecimento geral
             // Só fazer handoff se a IA explicitamente não souber
-            console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo encontrado - IA tentará responder com conhecimento geral');
+            const reasonMsg = hasPersonaCategories 
+              ? `nas categorias permitidas (${personaCategories.join(', ')})`
+              : 'na base completa';
+            console.log(`[ai-autopilot-chat] ⚠️ Nenhum artigo encontrado ${reasonMsg} - IA tentará responder com conhecimento geral`);
           }
         }
       } catch (error) {
@@ -869,7 +894,9 @@ Use essas informações de forma natural e personalizada.`;
       tool_calls: toolCalls,
       debug: {
         intent: intentType,
-        articles_found: knowledgeArticles.map((a: any) => a.title),
+        persona_categories: persona.knowledge_base_paths || 'ALL',
+        filtered_by_category: (persona.knowledge_base_paths || []).length > 0,
+        articles_found: knowledgeArticles.map((a: any) => `${a.title} [${a.category || 'sem categoria'}]`),
         search_performed: knowledgeArticles.length > 0
       }
     }), {
