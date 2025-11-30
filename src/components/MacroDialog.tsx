@@ -139,12 +139,12 @@ export function MacroDialog({ open, onOpenChange, macro }: MacroDialogProps) {
           {isPublic && (
             <div className="space-y-2">
               <Label htmlFor="department">Departamento (opcional)</Label>
-              <Select value={departmentId} onValueChange={setDepartmentId}>
+              <Select value={departmentId || "global"} onValueChange={(value) => setDepartmentId(value === "global" ? "" : value)}>
                 <SelectTrigger id="department">
                   <SelectValue placeholder="Global (todos os departamentos)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Global (todos)</SelectItem>
+                  <SelectItem value="global">Global (todos)</SelectItem>
                   {departments.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
                       {dept.name}
