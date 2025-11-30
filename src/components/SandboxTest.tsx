@@ -8,16 +8,21 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { usePersonas } from "@/hooks/usePersonas";
-import { useSandboxChat, SandboxMessage } from "@/hooks/useSandboxChat";
+import { useSandboxChat, SandboxMessage, CustomerContext } from "@/hooks/useSandboxChat";
 import { useCreateRLHFFeedback } from "@/hooks/useCreateRLHFFeedback";
-import { Bot, Send, Trash2, Activity, Zap, ThumbsUp, ThumbsDown, Database, Brain } from "lucide-react";
+import { PreChatForm } from "@/components/PreChatForm";
+import { Bot, Send, Trash2, Activity, Zap, ThumbsUp, ThumbsDown, Database, Brain, UserCheck, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export function SandboxTest() {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [feedbackGiven, setFeedbackGiven] = useState<Set<number>>(new Set());
+  const [simulateRealFlow, setSimulateRealFlow] = useState(false);
+  const [showPreChatForm, setShowPreChatForm] = useState(false);
+  const [identifiedCustomer, setIdentifiedCustomer] = useState<CustomerContext | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: personas } = usePersonas();
@@ -30,7 +35,9 @@ export function SandboxTest() {
     useKnowledgeBase,
     setUseKnowledgeBase,
     aiProvider,
-    setAiProvider 
+    setAiProvider,
+    customerContext,
+    setCustomerContext
   } = useSandboxChat();
   const createFeedback = useCreateRLHFFeedback();
 
@@ -71,8 +78,50 @@ export function SandboxTest() {
 
   const handleSend = async () => {
     if (!input.trim() || !selectedPersonaId) return;
-    await sendMessage(input, selectedPersonaId);
+    await sendMessage(input, selectedPersonaId, identifiedCustomer || undefined);
     setInput("");
+  };
+
+  const handleStartSimulation = () => {
+    if (simulateRealFlow) {
+      setShowPreChatForm(true);
+    } else {
+      // Limpar identificação e começar direto
+      setIdentifiedCustomer(null);
+      setCustomerContext(null);
+    }
+  };
+
+  const handleCustomerIdentified = async (contact: any, _departmentId: string) => {
+    const context: CustomerContext = {
+      contact_id: contact.id,
+      email: contact.email,
+      first_name: contact.first_name,
+      last_name: contact.last_name,
+      status: contact.status,
+    };
+    
+    setIdentifiedCustomer(context);
+    setCustomerContext(context);
+    setShowPreChatForm(false);
+    
+    toast.success(`✅ Cliente identificado: ${contact.first_name} ${contact.last_name}`);
+  };
+
+  const handleNewLeadIdentified = async (data: any, _departmentId: string) => {
+    const context: CustomerContext = {
+      contact_id: 'new_lead',
+      email: data.email,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      status: 'lead',
+    };
+    
+    setIdentifiedCustomer(context);
+    setCustomerContext(context);
+    setShowPreChatForm(false);
+    
+    toast.success(`✅ Novo lead identificado: ${data.first_name} ${data.last_name}`);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -81,6 +130,17 @@ export function SandboxTest() {
       handleSend();
     }
   };
+
+  // Show PreChatForm if simulation mode is active
+  if (showPreChatForm) {
+    return (
+      <PreChatForm
+        onExistingCustomerVerified={handleCustomerIdentified}
+        onNewLeadCreated={handleNewLeadIdentified}
+        isLoading={isLoading}
+      />
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-12rem)]">
@@ -115,6 +175,54 @@ export function SandboxTest() {
             
             {/* Configuration Options */}
             <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="sim-toggle" className="cursor-pointer">
+                    Simular Fluxo Real (OTP + Identificação)
+                  </Label>
+                </div>
+                <Switch
+                  id="sim-toggle"
+                  checked={simulateRealFlow}
+                  onCheckedChange={(checked) => {
+                    setSimulateRealFlow(checked);
+                    if (!checked) {
+                      setIdentifiedCustomer(null);
+                      setCustomerContext(null);
+                    }
+                  }}
+                />
+              </div>
+
+              {simulateRealFlow && !identifiedCustomer && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleStartSimulation}
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Iniciar Identificação
+                </Button>
+              )}
+
+              {identifiedCustomer && (
+                <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <UserCheck className="h-4 w-4 text-green-600" />
+                    <div>
+                      <p className="font-medium text-green-900 dark:text-green-100">
+                        {identifiedCustomer.first_name} {identifiedCustomer.last_name}
+                      </p>
+                      <p className="text-xs text-green-700 dark:text-green-300">
+                        {identifiedCustomer.email}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Database className="h-4 w-4 text-muted-foreground" />
@@ -340,6 +448,72 @@ export function SandboxTest() {
                   {selectedPersona.system_prompt}
                 </p>
               </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Customer Context Debug */}
+        {debugInfo?.customer_context && (
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-green-600" />
+              <h3 className="font-semibold">🔐 Identificação</h3>
+            </div>
+            <Separator />
+            <div className="space-y-2 text-sm">
+              <div>
+                <p className="text-muted-foreground">Nome:</p>
+                <p className="font-medium">
+                  {debugInfo.customer_context.first_name} {debugInfo.customer_context.last_name}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Email:</p>
+                <p className="font-medium text-xs">{debugInfo.customer_context.email}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Status:</p>
+                <Badge variant={debugInfo.customer_context.status === 'customer' ? 'default' : 'secondary'}>
+                  {debugInfo.customer_context.status}
+                </Badge>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Tool Execution Results */}
+        {debugInfo?.tools_executed && debugInfo.tools_executed.length > 0 && (
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-orange-600" />
+              <h3 className="font-semibold">⚡ Tools Executadas</h3>
+            </div>
+            <Separator />
+            <div className="space-y-3">
+              {debugInfo.tools_executed.map((tool: any, idx: number) => (
+                <div key={idx} className="bg-muted p-3 rounded text-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium">{tool.tool_name}</p>
+                    <Badge variant={tool.success ? 'default' : 'destructive'}>
+                      {tool.success ? '✓ Sucesso' : '✗ Falhou'}
+                    </Badge>
+                  </div>
+                  <div className="text-xs space-y-1">
+                    <p className="text-muted-foreground">Argumentos:</p>
+                    <pre className="bg-background p-2 rounded overflow-x-auto">
+                      {JSON.stringify(tool.arguments, null, 2)}
+                    </pre>
+                    {tool.result && (
+                      <>
+                        <p className="text-muted-foreground mt-2">Resultado:</p>
+                        <pre className="bg-background p-2 rounded overflow-x-auto">
+                          {JSON.stringify(tool.result, null, 2)}
+                        </pre>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </Card>
         )}

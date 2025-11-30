@@ -15,10 +15,11 @@ serve(async (req) => {
   const startTime = Date.now();
 
   try {
-    const { messages, personaId, useKnowledgeBase = false, aiProvider = 'lovable' } = await req.json();
+    const { messages, personaId, useKnowledgeBase = false, aiProvider = 'lovable', customerContext } = await req.json();
     
     console.log('[sandbox-chat] Processing request for persona:', personaId);
     console.log('[sandbox-chat] Knowledge Base:', useKnowledgeBase, '| Provider:', aiProvider);
+    console.log('[sandbox-chat] Customer Context:', customerContext ? `${customerContext.first_name} (${customerContext.status})` : 'None');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -288,6 +289,21 @@ Responda APENAS: skip ou search`
       }
     }
 
+    // FASE 3: Inject Customer Context
+    if (customerContext) {
+      const contextInfo = `
+
+## CLIENTE IDENTIFICADO:
+- Nome: ${customerContext.first_name} ${customerContext.last_name}
+- Email: ${customerContext.email}
+- Status: ${customerContext.status === 'customer' ? 'Cliente Existente' : 'Lead/Novo Contato'}
+
+Você está conversando com um cliente identificado. Use essas informações para personalizar suas respostas.`;
+      
+      systemPrompt = `${systemPrompt}${contextInfo}`;
+      console.log('[sandbox-chat] Customer context injected into prompt');
+    }
+
     const aiMessages = [
       { role: "system", content: systemPrompt },
       ...messages
@@ -426,6 +442,8 @@ Responda APENAS: skip ou search`
           prompt_tokens: aiData.usage?.prompt_tokens || 0,
           completion_tokens: aiData.usage?.completion_tokens || 0,
           total_tokens: aiData.usage?.total_tokens || 0,
+          customer_context: customerContext || undefined,
+          tools_executed: [], // FASE 2: Tool execution results will be added here
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
