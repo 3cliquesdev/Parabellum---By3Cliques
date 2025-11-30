@@ -51,22 +51,28 @@ const FINANCIAL_KEYWORDS = [
   'estorno'
 ];
 
-// Template de mensagem de sucesso do ticket
+// Template de mensagem de sucesso do ticket (CONTEXTUAL)
 function createTicketSuccessMessage(
   ticketId: string, 
   issueType: string = 'financeiro', 
   orderId?: string
 ): string {
-  const ticketIcon = issueType === 'financeiro' ? '💰' : '📦';
-  const formattedType = issueType.charAt(0).toUpperCase() + issueType.slice(1);
   const formattedId = ticketId.slice(0, 8).toUpperCase();
   
-  return `✅ **Protocolo registrado com sucesso!**
-
-📋 **Número do Ticket:** #${formattedId}
-${orderId ? `🔢 **Pedido:** ${orderId}\n` : ''}${ticketIcon} **Tipo:** ${formattedType}
-
-Nossa equipe vai analisar seu caso e retornar em breve.`;
+  const ticketMessages: Record<string, string> = {
+    'financeiro': `Entendi sua solicitação financeira. Abri o ticket #${formattedId} para nossa equipe resolver.`,
+    'reembolso': `Registrei seu pedido de reembolso no ticket #${formattedId}. Vamos analisar e retornar.`,
+    'devolucao': `Registrei seu pedido de devolução no ticket #${formattedId}. Vamos processar e retornar.`,
+    'troca': `Registrei sua solicitação de troca no ticket #${formattedId}. Nossa equipe vai cuidar disso.`,
+    'defeito': `Criei o ticket #${formattedId} para nossa equipe técnica analisar seu caso.`,
+    'tecnico': `Criei o ticket #${formattedId} para nossa equipe técnica analisar seu caso.`,
+    'default': `Abri o ticket #${formattedId}. Nossa equipe vai cuidar disso para você.`
+  };
+  
+  const baseMessage = ticketMessages[issueType] || ticketMessages['default'];
+  const orderInfo = orderId ? `\n\n🔢 **Pedido:** ${orderId}` : '';
+  
+  return `${baseMessage}${orderInfo}`;
 }
 
 interface AutopilotChatRequest {
@@ -843,28 +849,37 @@ Se o cliente insistir em pular a verificação, explique que é uma política de
 ${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
     }
     
-    const contextualizedSystemPrompt = `Você é o assistente virtual da empresa.
+    const contextualizedSystemPrompt = `Você é a Lais, assistente virtual inteligente da Parabellum / 3Cliques.
+Sua missão é AJUDAR o cliente, não se livrar dele.
 
-**REGRAS CRÍTICAS DE RESPOSTA:**
+**COMO RESPONDER:**
 
-1. **Solicitações Financeiras (PRIORIDADE MÁXIMA):**
-   - Se o cliente perguntar sobre: saque, saldo, pix, pagamento, comissão, carteira, transferência
-   - USE IMEDIATAMENTE a ferramenta \`create_ticket\` com issue_type='financeiro'
-   - Colete informações necessárias e crie o ticket
-   - NÃO diga apenas "vou chamar um especialista" - CRIE O TICKET
+1. **Saudações e Small Talk (Oi, Bom dia, Obrigado):**
+   - Responda de forma calorosa e natural
+   - NÃO busque na base de conhecimento
+   - NÃO crie ticket
+   - Exemplo: "Olá! Bom dia! Como posso te ajudar hoje?"
 
-2. **Devolução/Reembolso/Troca/Defeito:**
-   - Colete o número do pedido (se houver)
-   - Use \`create_ticket\` com o tipo apropriado
+2. **Dúvidas e Perguntas (Como funciona...? O que é...?):**
+   - Use seu conhecimento geral e a base de conhecimento fornecida
+   - Se não tiver certeza, faça perguntas para esclarecer
+   - NÃO crie ticket para dúvidas - tente responder primeiro
 
-3. **Dúvidas Técnicas:**
-   - Use o contexto da base de conhecimento para responder
+3. **Criação de Ticket - USE SOMENTE QUANDO:**
+   - O cliente PEDIR EXPLICITAMENTE: "Quero falar com humano", "Abre um chamado"
+   - For problema financeiro CONCRETO com intenção de ação: "Quero sacar", "Cadê meu dinheiro?", "Preciso de reembolso"
+   - Você REALMENTE não souber responder APÓS tentar ajudar
 
-4. **Small Talk (Saudações/Elogios):**
-   - Se o usuário disser "Oi", "Bom dia", "Obrigado" ou fizer elogios, responda de forma educada e breve usando seu conhecimento geral
+4. **PROIBIDO:**
+   - Criar ticket para perguntas informativas ("Como funciona o pagamento?")
+   - Dizer "Não consegui processar" de cara - TENTE ajudar primeiro
+   - Transferir para humano sem motivo real
 
-5. **Se não souber responder:**
-   - Diga "Vou transferir para um especialista" (o sistema executará handoff automaticamente)
+**Você tem acesso às seguintes ferramentas:**
+- create_ticket: Use APENAS quando cliente pedir explicitamente ajuda humana OU problema financeiro concreto OU você não conseguir responder após tentar
+- update_customer_email: Atualize o email quando fornecido
+- verify_otp_code: Valide códigos OTP de 6 dígitos
+
 ${knowledgeContext}${identityWallNote}
 
 **Contexto do Cliente:**
@@ -874,7 +889,7 @@ ${knowledgeContext}${identityWallNote}
 ${customer_context?.email || contact.email ? `- Email: ${customer_context?.email || contact.email}` : '- Email: NÃO CADASTRADO - SOLICITAR'}
 ${contact.phone ? `- Telefone: ${contact.phone}` : ''}
 
-Use essas informações de forma natural e personalizada.`;
+Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 
     // 6. Gerar resposta final
     const aiPayload: any = {
@@ -893,7 +908,7 @@ Use essas informações de forma natural e personalizada.`;
         type: 'function',
         function: {
           name: 'create_ticket',
-          description: 'Cria um ticket de suporte para qualquer solicitação que precisa de acompanhamento humano: financeiro (saque, saldo, pagamento, pix, comissão), devolução, troca, reembolso, defeito ou outro.',
+          description: 'Cria um ticket de suporte. USE APENAS quando: (1) Cliente PEDIR explicitamente ajuda humana, (2) Problema financeiro CONCRETO com intenção de ação (reembolso, saque real), (3) Você NÃO conseguir responder APÓS tentar. NÃO use para dúvidas informativas.',
           parameters: {
             type: 'object',
             properties: {
@@ -1189,9 +1204,41 @@ Use essas informações de forma natural e personalizada.`;
       }
       
       // 3. CRIAR TICKET AUTOMÁTICO PARA CASOS FINANCEIROS (apenas se não criado por tool call)
-      const isFinancialRequest = FINANCIAL_KEYWORDS.some(keyword => 
-        customerMessage.toLowerCase().includes(keyword)
+      
+      // 🚨 Detectar se é pedido financeiro COM INTENÇÃO DE AÇÃO (não apenas keyword solta)
+      const financialActionPatterns = [
+        /quero\s+(sacar|reembolso|meu\s+dinheiro)/i,
+        /preciso\s+(sacar|de\s+reembolso|do\s+meu\s+dinheiro)/i,
+        /cadê\s+(meu\s+saldo|meu\s+dinheiro|meu\s+pix)/i,
+        /não\s+(recebi|caiu|chegou)\s+(o\s+)?(pix|pagamento|saldo|dinheiro)/i,
+        /devolver\s+(meu\s+)?dinheiro/i,
+        /estornar|estorno/i,
+        /erro\s+(no|de)\s+pagamento/i,
+      ];
+
+      // Frases que são DÚVIDAS, não problemas - NÃO criar ticket
+      const informationalPatterns = [
+        /como\s+(funciona|faz|é|posso)/i,
+        /o\s+que\s+(é|significa)/i,
+        /qual\s+(é|o)/i,
+        /pode\s+me\s+explicar/i,
+        /quero\s+saber/i,
+        /me\s+explica/i,
+      ];
+
+      const isInformationalQuestion = informationalPatterns.some(pattern => 
+        pattern.test(customerMessage)
       );
+
+      // Só é request financeiro se tiver padrão de ação E não for dúvida informativa
+      let isFinancialRequest = financialActionPatterns.some(pattern => 
+        pattern.test(customerMessage)
+      );
+
+      if (isInformationalQuestion) {
+        isFinancialRequest = false; // Anular se for dúvida
+        console.log('[ai-autopilot-chat] ℹ️ Pergunta informativa detectada - NÃO criar ticket');
+      }
       
       // 🔒 Só criar ticket automático se não foi criado COM SUCESSO pelo tool call
       // Se o tool call falhou, permitir que o fallback detector crie como backup
