@@ -61,6 +61,19 @@ const FINANCIAL_KEYWORDS = [
   'estorno'
 ];
 
+// 🆕 BARREIRA FINANCEIRA - Palavras que EXIGEM cliente identificado antes de prosseguir
+const FINANCIAL_BARRIER_KEYWORDS = [
+  'reembolso',
+  'cancelar',
+  'cancelamento',
+  'saque',
+  'sacar',
+  'devolução',
+  'devolver',
+  'meu dinheiro',
+  'estorno'
+];
+
 // 🆕 Padrões de INTENÇÃO financeira (não keyword solta) - Usado globalmente
 const FINANCIAL_ACTION_PATTERNS = [
   /quero\s+(sacar|reembolso|meu\s+dinheiro)/i,
@@ -847,6 +860,29 @@ Responda APENAS: skip ou search`
       ).join('\n\n---\n\n')}`;
     }
     
+    // FASE 2: Preparar contexto financeiro (CPF mascarado e saldo)
+    const contactCPF = contact.document || ''; // CPF completo
+    const maskedCPF = contactCPF.length >= 4 ? `***.***.***-${contactCPF.slice(-2)}` : 'Não cadastrado';
+    const cpfLast4 = contactCPF.length >= 4 ? contactCPF.slice(-4) : '';
+    const availableBalance = contact.account_balance || 0;
+    const formattedBalance = `R$ ${availableBalance.toFixed(2)}`;
+    
+    // FASE 1: Validação de Cliente Real para Saque
+    const isRealCustomer = !!contactCPF && contact.status === 'customer';
+    const canRequestWithdrawal = isRealCustomer;
+    const withdrawalBlockReason = !contactCPF 
+      ? 'CPF não cadastrado - não é cliente verificado'
+      : contact.status !== 'customer'
+        ? `Status atual: ${contact.status} - ainda não é cliente`
+        : null;
+    
+    // 🚨 BARREIRA DE ENTRADA FINANCEIRA
+    const isFinancialRequest = FINANCIAL_BARRIER_KEYWORDS.some(keyword =>
+      customerMessage.toLowerCase().includes(keyword)
+    );
+    const isClientIdentified = !!contactEmail || !!contactCPF;
+    const financialBarrierActive = isFinancialRequest && !isClientIdentified;
+    
     // FASE 3 & 4: Identity Wall + Diferenciação Cliente vs Lead
     let identityWallNote = '';
     
@@ -892,27 +928,28 @@ Este cliente NÃO tem email cadastrado no sistema (é um LEAD, não um cliente e
 
 **IMPORTANTE:** NÃO atenda dúvidas técnicas, NÃO crie tickets, NÃO responda perguntas até o email estar verificado.
 Se o cliente insistir em pular a verificação, explique que é uma política de segurança obrigatória.`;
-    } else if (customer_context?.isVerified || contactHasEmail) {
+    }
+    
+    // 🚨 BARREIRA FINANCEIRA ATIVADA
+    if (financialBarrierActive) {
+      identityWallNote += `\n\n**🚨🚨🚨 BARREIRA FINANCEIRA ATIVADA 🚨🚨🚨**
+O cliente fez uma solicitação financeira MAS NÃO ESTÁ IDENTIFICADO.
+
+**RESPOSTA OBRIGATÓRIA:**
+"Para tratar de assuntos financeiros, preciso localizar seu cadastro. 
+Qual o seu **email de compra**?"
+
+→ Use a tool update_customer_email quando ele fornecer
+→ NÃO fale de valores, prazos ou processos
+→ NÃO crie ticket
+→ PARE AQUI até identificação completa (email + OTP)`;
+    }
+    
+    if (!identityWallNote) {
       identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.
 
 ${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
     }
-    
-    // FASE 2: Preparar contexto financeiro (CPF mascarado e saldo)
-    const contactCPF = contact.document || ''; // CPF completo
-    const maskedCPF = contactCPF.length >= 4 ? `***.***.***-${contactCPF.slice(-2)}` : 'Não cadastrado';
-    const cpfLast4 = contactCPF.length >= 4 ? contactCPF.slice(-4) : '';
-    const availableBalance = contact.account_balance || 0;
-    const formattedBalance = `R$ ${availableBalance.toFixed(2)}`;
-    
-    // FASE 1: Validação de Cliente Real para Saque
-    const isRealCustomer = !!contactCPF && contact.status === 'customer';
-    const canRequestWithdrawal = isRealCustomer;
-    const withdrawalBlockReason = !contactCPF 
-      ? 'CPF não cadastrado - não é cliente verificado'
-      : contact.status !== 'customer'
-        ? `Status atual: ${contact.status} - ainda não é cliente`
-        : null;
     
     const contextualizedSystemPrompt = `Você é a Lais, assistente virtual inteligente da Parabellum / 3Cliques.
 Sua missão é AJUDAR o cliente, não se livrar dele.
@@ -942,75 +979,93 @@ Sua missão é AJUDAR o cliente, não se livrar dele.
 
 ---
 
-**🚨 FLUXO ESPECIAL - SOLICITAÇÃO DE SAQUE/CANCELAMENTO:**
+**🧠 CÉREBRO FINANCEIRO - FLUXOGRAMA OBRIGATÓRIO:**
 
-⚠️ **IMPORTANTE:** Saque = Cliente querendo SAIR! Você deve tentar RETER antes de processar.
+QUANDO cliente mencionar "reembolso", "cancelamento", "saque", "devolver dinheiro":
 
-**VERIFICAÇÃO OBRIGATÓRIA (ANTES DE TUDO):**
-${canRequestWithdrawal 
-  ? '✅ Cliente VERIFICADO - CPF cadastrado, pode solicitar saque após tentativa de retenção.'
-  : `❌ BLOQUEIO: ${withdrawalBlockReason}
-     → Informe: "Para solicitar saque, você precisa ser cliente cadastrado conosco com CPF verificado."
-     → Se for lead, transfira para o time Comercial.
-     → NÃO crie ticket de saque para não-clientes!`}
+**PASSO 1: IDENTIFICAR O TIPO DE PEDIDO**
+Pergunte ao cliente de forma clara e direta:
+"Entendi que você quer resolver uma questão financeira. Para te ajudar corretamente, preciso saber:
 
-**PASSO 1 - RETENÇÃO (OBRIGATÓRIO):**
-Quando cliente pedir saque/cancelamento, PRIMEIRO tente entender e reter:
+Você quer:
+**A)** Cancelar sua assinatura/curso (comprado na Kiwify)?
+**B)** Sacar o saldo da sua carteira (Seu Armazém Drop)?"
 
-"Entendi que você quer encerrar sua conta. 😔
-Posso saber o que aconteceu? Gostaria de entender melhor para ver se consigo te ajudar antes de prosseguir."
+→ AGUARDE a resposta do cliente antes de prosseguir
 
-→ Ouça o motivo do cliente
-→ Tente oferecer soluções/alternativas
-→ Seja empático, não robótico
-→ Só prossiga para o saque se o cliente INSISTIR
+---
 
-**PASSO 2 - INFORMAR REGRAS (se cliente insistir):**
-"Entendi. Vou dar início ao processo de criação da sua solicitação de saque.
+**CENÁRIO A: CANCELAMENTO KIWIFY (Assinatura/Curso)**
 
-📌 **Informações importantes:**
-- ⏱️ O saque levará de **3 a 7 dias úteis** para ser processado
-- 📋 Nossa equipe vai analisar todo o cenário antes de concluir
-- 🔒 O saque será enviado **única e exclusivamente** para a conta cadastrada no sistema
-- ❌ **NÃO** é possível enviar para PIX de terceiros - somente para os dados da sua conta
+1. **RETENÇÃO BREVE** (opcional):
+   "Posso saber o motivo? Talvez eu consiga te ajudar antes de você cancelar."
 
-Entendido? Posso prosseguir com algumas perguntas?"
-
-**PASSO 3 - COLETAR DADOS (após confirmação):**
-Pergunte uma de cada vez:
-
-1. "Para criar sua solicitação, preciso da sua **chave PIX** para receber o valor.
-   ⚠️ Importante: O valor só pode ser enviado ao dono da carteira. Se for PIX de terceiros, sua solicitação será cancelada."
-   → Aguarde a chave PIX
-
-2. "Qual o **valor** que você deseja sacar?"
-   → Aguarde valor numérico
-
-3. "Para confirmar:
-   - Chave PIX informada: [CHAVE]
-   - Valor solicitado: R$ [VALOR]
-   - Destino: Conta vinculada ao seu CPF (${maskedCPF})
+2. **SE CLIENTE INSISTIR EM CANCELAR:**
+   - ❌ NÃO CRIE TICKET
+   - Informe que o cancelamento é feito direto na plataforma:
    
-   Confirma esses dados?"
-   → Aguarde confirmação (sim/confirmo)
+   "Entendi! O cancelamento de cursos/assinaturas é feito diretamente pela plataforma Kiwify.
+   
+   📌 Você tem **7 dias de garantia** a partir da compra para solicitar reembolso.
+   
+   🔗 **Acesse aqui para cancelar:** https://reembolso.kiwify.com.br/login
+   
+   Use o mesmo email da compra para fazer login e solicitar o reembolso.
+   
+   Posso ajudar em mais alguma coisa?"
 
-**PASSO 4 - CRIAR TICKET (SOMENTE após TUDO confirmado):**
-Use create_ticket com:
-- issue_type: "saque"
-- subject: "Solicitação de Saque - R$ [VALOR]"
-- description: "Cliente ${contactName} solicita saque de R$ [VALOR]. Chave PIX: [CHAVE]. Destino: CPF ${maskedCPF}"
-- withdrawal_amount: [VALOR_NUMERICO]
-- confirmed_cpf_last4: "${cpfLast4}"
-- pix_key: [CHAVE_PIX_INFORMADA]
-- customer_confirmation: true
+3. **ENCERRE O ASSUNTO** - Não crie ticket, não transfira para humano
+
+---
+
+**CENÁRIO B: SAQUE DE SALDO (Carteira Interna - Seu Armazém Drop)**
+
+${canRequestWithdrawal 
+  ? `✅ Cliente VERIFICADO para saque (CPF: ${maskedCPF})`
+  : `❌ BLOQUEIO: ${withdrawalBlockReason}
+     → Informe: "Para solicitar saque, você precisa ser cliente verificado com CPF cadastrado."
+     → NÃO crie ticket de saque`}
+
+**SE CLIENTE VERIFICADO, seguir passos:**
+
+1. **CONFIRMAÇÃO OBRIGATÓRIA DE DADOS:**
+   Apresente os dados do cliente e peça confirmação:
+   
+   "Vou confirmar seus dados para o saque:
+   
+   👤 **Nome:** ${contactName}
+   📄 **CPF:** ${maskedCPF}
+   
+   ⚠️ **Regra de Segurança:** O saque só pode ser feito via PIX para uma chave vinculada a este CPF cadastrado. Não é possível enviar para conta de terceiros.
+   
+   Os dados estão corretos?"
+
+2. **SE CLIENTE CONFIRMAR (SIM):**
+   - Pergunte: "Qual o **valor** que você deseja sacar?"
+   - Pergunte: "Qual a sua **chave PIX** para receber? (deve ser do mesmo CPF)"
+   - ENTÃO execute create_ticket com:
+     - issue_type: "saque"
+     - subject: "Solicitação de Saque - R$ [VALOR]"
+     - description: "Cliente ${contactName} solicita saque de R$ [VALOR]. Chave PIX: [CHAVE]. CPF: ${maskedCPF}"
+     - pix_key: [CHAVE_INFORMADA]
+     - withdrawal_amount: [VALOR]
+     - customer_confirmation: true
+     - ticket_type: "saque_carteira"
+   - Responda: "✅ Ticket #[ID] criado! O financeiro vai processar o PIX para o CPF informado em até 7 dias úteis."
+
+3. **SE CLIENTE DISSER NÃO (dados incorretos):**
+   - Responda: "Entendi. Por segurança, vou transferir você para um atendente humano para atualizar seus dados cadastrais."
+   - Execute handoff para copilot (não use create_ticket, apenas informe que vai transferir)
+
+---
 
 **REGRAS CRÍTICAS:**
-- ❌ NÃO crie ticket para leads ou não-clientes
-- ❌ NÃO pule a etapa de retenção
-- ❌ NÃO mostre saldo (financeiro vai verificar)
-- ✅ SEMPRE valide se tem CPF cadastrado antes
-- ✅ SEMPRE tente reter primeiro
-- ✅ SEMPRE colete chave PIX
+- ❌ NUNCA crie ticket para cancelamento Kiwify (é self-service)
+- ❌ NUNCA fale de valores com cliente não identificado
+- ❌ NUNCA pule a confirmação de dados
+- ✅ SEMPRE pergunte qual tipo (A ou B) antes de prosseguir
+- ✅ SEMPRE mostre os dados e peça confirmação para saque
+- ✅ SEMPRE envie o link da Kiwify para cancelamentos
 
 ---
 
@@ -1285,6 +1340,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
                                    `${args.issue_type.toUpperCase()} - ${args.description.substring(0, 50)}`);
 
             // FASE 4: Enriquecer internal_note para SAQUE com checklist estruturado
+            const ticketType = args.ticket_type || 'outro';
             let internalNote = `Ticket criado automaticamente pela IA${args.order_id ? `. Pedido: ${args.order_id}` : ''}`;
             
             if (args.issue_type === 'saque' && args.withdrawal_amount) {
@@ -1293,6 +1349,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 **🔐 DADOS DO CLIENTE:**
 - Nome: ${contactName}
 - CPF: ${maskedCPF}
+- Tipo de Solicitação: ${ticketType === 'saque_carteira' ? 'Saque de Carteira Interna' : 'Outro'}
 
 **💰 DADOS DO SAQUE:**
 - Valor Solicitado: R$ ${args.withdrawal_amount.toFixed(2)}
