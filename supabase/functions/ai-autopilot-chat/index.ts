@@ -863,7 +863,7 @@ Use essas informações de forma natural e personalizada.`;
             const { data: ticket, error: ticketError } = await supabaseClient
               .from('tickets')
               .insert({
-                contact_id: contact.id,
+                customer_id: contact.id,
                 subject: `${args.issue_type.toUpperCase()} - Pedido ${args.order_id}`,
                 description: args.description,
                 priority: 'medium',
