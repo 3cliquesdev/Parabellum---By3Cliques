@@ -2153,6 +2153,7 @@ export type Database = {
           is_blocked: boolean | null
           job_title: string | null
           last_status_change: string | null
+          manager_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2171,6 +2172,7 @@ export type Database = {
           is_blocked?: boolean | null
           job_title?: string | null
           last_status_change?: string | null
+          manager_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2189,6 +2191,7 @@ export type Database = {
           is_blocked?: boolean | null
           job_title?: string | null
           last_status_change?: string | null
+          manager_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -2197,6 +2200,13 @@ export type Database = {
             columns: ["department"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
