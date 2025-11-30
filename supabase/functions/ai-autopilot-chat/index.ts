@@ -909,6 +909,9 @@ Responda APENAS: skip ou search`
     // Detectar se é contexto financeiro na mensagem atual
     const isFinancialContext = FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
     
+    // FASE 1: Criar instrução prioritária que vai NO INÍCIO do prompt
+    let priorityInstruction = '';
+    
     if (contactHasEmail && responseChannel === 'whatsapp') {
       const maskedEmail = contactEmail.replace(/(.{1})(.*)(@.*)/, '$1***$3');
       
@@ -921,52 +924,62 @@ Responda APENAS: skip ou search`
             body: { email: contactEmail }
           });
           
+          priorityInstruction = `🚨🚨🚨 INSTRUÇÃO PRIORITÁRIA - IGNORE TUDO ABAIXO ATÉ SEGUIR ISSO 🚨🚨🚨
+
+A PRIMEIRA coisa que você DEVE falar é EXATAMENTE:
+"Olá ${contactName}! Você é nosso cliente, mas questões financeiras são delicadas. Para sua segurança, vou confirmar que é você mesmo. Enviei um código de 6 dígitos para ${maskedEmail}. Por favor, digite o código que você recebeu."
+
+→ PARE AQUI. NÃO responda mais nada até o cliente digitar o código.
+🚨🚨🚨 FIM DA INSTRUÇÃO PRIORITÁRIA 🚨🚨🚨
+
+`;
+          
           identityWallNote = `\n\n**🔐 VERIFICAÇÃO DE SEGURANÇA (CONTEXTO FINANCEIRO):**
 Cliente: ${contactName}
 Status: ${contactStatus}
-
-**RESPOSTA OBRIGATÓRIA:**
-"Olá ${contactName}! Você é nosso cliente, mas questões financeiras são delicadas. 
-Para sua segurança, vou confirmar que é você mesmo.
-
-Enviei um código de 6 dígitos para ${maskedEmail}.
-Por favor, digite o código que você recebeu no email."
 
 **⚠️ AGUARDE o código antes de processar a solicitação financeira.**`;
         } catch (error) {
           console.error('[ai-autopilot-chat] ❌ Erro ao disparar OTP financeiro:', error);
         }
       }
-      // CASO 2: Contexto NORMAL - Apenas boas-vindas
-      else if (!isFinancialContext && !hasRecentOTPVerification) {
+      // CASO 2: Contexto NORMAL - Apenas boas-vindas (CORRIGIDO: removido !hasRecentOTPVerification)
+      else if (!isFinancialContext) {
         console.log('[ai-autopilot-chat] ✅ Cliente conhecido - Boas-vindas sem OTP');
+        
+        priorityInstruction = `🚨🚨🚨 INSTRUÇÃO PRIORITÁRIA - IGNORE TUDO ABAIXO ATÉ SEGUIR ISSO 🚨🚨🚨
+
+A PRIMEIRA coisa que você DEVE falar é uma saudação calorosa com o nome do cliente:
+"Olá ${contactName}! Bem-vindo(a) de volta! 😊 Como posso te ajudar hoje?"
+
+→ Você DEVE reconhecer que este é um cliente conhecido
+→ NÃO peça email ou verificação
+🚨🚨🚨 FIM DA INSTRUÇÃO PRIORITÁRIA 🚨🚨🚨
+
+`;
         
         identityWallNote = `\n\n**✅ CLIENTE CONHECIDO:**
 Cliente: ${contactName}${contactCompany}
 Email: ${contactEmail}
 Status: ${contactStatus}
 
-**RESPOSTA OBRIGATÓRIA:**
-"Olá ${contactName}! Bem-vindo(a) de volta! 😊
-Como posso te ajudar hoje?"
-
 → Seja caloroso e amigável
 → Mostre que reconhecemos o cliente`;
-      }
-      // CASO 3: Já tem OTP verificado (financeiro ou normal)
-      else {
-        identityWallNote = `\n\n**✅ CLIENTE VERIFICADO:**
-Cliente: ${contactName}${contactCompany}
-Email: ${contactEmail}
-Status: ${contactStatus}
-
-Dê boas vindas calorosas e pergunte "Como posso te ajudar hoje?"
-
-${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação.' : ''}`;
       }
       
     } else if (!contactHasEmail && responseChannel === 'whatsapp') {
       // FASE 4: Lead (não tem email) - seguir Identity Wall e direcionar para comercial após verificação
+      priorityInstruction = `🚨🚨🚨 INSTRUÇÃO PRIORITÁRIA - IGNORE TUDO ABAIXO ATÉ SEGUIR ISSO 🚨🚨🚨
+
+Este contato NÃO tem email cadastrado. A PRIMEIRA coisa que você DEVE falar é:
+"Olá! Para garantir um atendimento personalizado e seguro, preciso que você me informe seu email."
+
+→ PARE AQUI. AGUARDE o cliente fornecer o email.
+→ NÃO responda dúvidas técnicas até ter o email
+🚨🚨🚨 FIM DA INSTRUÇÃO PRIORITÁRIA 🚨🚨🚨
+
+`;
+      
       identityWallNote = `\n\n**🚨 LEAD NOVO - Identity Wall OBRIGATÓRIO:**
 Este cliente NÃO tem email cadastrado no sistema (é um LEAD, não um cliente existente).
 
@@ -1160,7 +1173,7 @@ ${canShowFinancialData
 - verify_otp_code: Valide códigos OTP de 6 dígitos
 - request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver. Use com reason: "dados_financeiros_incorretos", "solicitacao_cliente", ou "caso_complexo".
 
-${knowledgeContext}${identityWallNote}
+${priorityInstruction}${knowledgeContext}${identityWallNote}
 
 **Contexto do Cliente:**
 - Nome: ${contactName}${contactCompany}
