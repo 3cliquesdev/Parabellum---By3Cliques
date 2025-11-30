@@ -35,7 +35,7 @@ export default function WidgetBuilder() {
       `data-color="${config.color}"`,
       `data-position="${config.position}"`,
       `data-greeting="${config.greeting}"`,
-      config.department ? `data-dept="${config.department}"` : "",
+      config.department && config.department !== "none" ? `data-dept="${config.department}"` : "",
       config.logo ? `data-logo="${config.logo}"` : "",
       `data-show-whatsapp="${config.showWhatsApp}"`,
       `data-show-ticket="${config.showTicket}"`,
@@ -149,14 +149,14 @@ export default function WidgetBuilder() {
               <div className="space-y-2">
                 <Label htmlFor="department">Departamento Padrão</Label>
                 <Select
-                  value={config.department}
-                  onValueChange={(value) => setConfig({ ...config, department: value })}
+                  value={config.department || "none"}
+                  onValueChange={(value) => setConfig({ ...config, department: value === "none" ? "" : value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Nenhum (usuário escolhe)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="none">Nenhum (usuário escolhe)</SelectItem>
                     {activeDepartments.map((dept) => (
                       <SelectItem key={dept.id} value={dept.id}>
                         {dept.name}
