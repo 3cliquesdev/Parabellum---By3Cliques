@@ -124,7 +124,7 @@ serve(async (req) => {
       );
       
       if (isCachedFallback) {
-        console.log('🚨 [CACHE] Resposta cacheada é FALLBACK - Executando handoff real');
+        console.log('🚨 [CACHE] Resposta cacheada é FALLBACK - IGNORANDO cache e gerando nova resposta');
         
         // 1. Mudar modo para copilot
         await supabaseClient
@@ -141,6 +141,7 @@ serve(async (req) => {
         const financialKeywords = ['saque', 'saldo', 'pix', 'dinheiro', 'pagamento', 'reembolso', 'estorno'];
         const isFinancial = financialKeywords.some(k => customerMessage.toLowerCase().includes(k));
         
+        let ticketProtocol = '';
         if (isFinancial) {
           const { data: ticket } = await supabaseClient
             .from('tickets')
@@ -157,7 +158,7 @@ serve(async (req) => {
             .single();
           
           if (ticket) {
-            cachedResponse.answer += `\n\n📋 Protocolo criado: #${ticket.id.slice(0, 8).toUpperCase()}`;
+            ticketProtocol = ticket.id.slice(0, 8).toUpperCase();
             console.log('🎫 [CACHE] Ticket financeiro criado:', ticket.id);
           }
         }
@@ -166,17 +167,81 @@ serve(async (req) => {
         await supabaseClient.from('interactions').insert({
           customer_id: contact.id,
           type: 'internal_note',
-          content: `🤖→👤 Handoff automático (resposta cached detectada como fallback): "${customerMessage}"`,
+          content: `🤖→👤 Handoff automático (cache poisoning detectado): "${customerMessage}"`,
           channel: responseChannel
         });
         
-        // 5. Invalidar esse cache (não usar mais)
+        // 5. Invalidar esse cache
         await supabaseClient
           .from('ai_response_cache')
           .delete()
           .eq('question_hash', questionHash);
         
-        console.log('✅ [CACHE] Handoff executado e cache invalidado');
+        console.log('✅ [CACHE] Handoff executado, cache invalidado');
+        
+        // 🆕 6. RETORNAR RESPOSTA IMEDIATA DE HANDOFF (não usar cache ruim!)
+        const handoffMessage = isFinancial && ticketProtocol
+          ? `Entendi sua solicitação financeira. Estou transferindo você para um especialista humano que vai te ajudar com isso.\n\n📋 Protocolo criado: #${ticketProtocol}`
+          : `Entendi sua dúvida. Estou transferindo você para um especialista humano que poderá te ajudar melhor.`;
+        
+        // Salvar mensagem de handoff no banco
+        const { data: handoffMessageData } = await supabaseClient
+          .from("messages")
+          .insert({
+            conversation_id: conversationId,
+            content: handoffMessage,
+            sender_type: "user",
+            is_ai_generated: true,
+            channel: responseChannel,
+          })
+          .select('id')
+          .single();
+        
+        // Atualizar last_message_at
+        await supabaseClient
+          .from("conversations")
+          .update({ last_message_at: new Date().toISOString() })
+          .eq("id", conversationId);
+        
+        // Se for WhatsApp, enviar via Evolution API
+        if (responseChannel === 'whatsapp' && handoffMessageData) {
+          const { data: whatsappInstance } = await supabaseClient
+            .from('whatsapp_instances')
+            .select('*')
+            .eq('status', 'connected')
+            .limit(1)
+            .maybeSingle();
+
+          if (whatsappInstance) {
+            const { error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
+              body: {
+                instance_id: whatsappInstance.id,
+                phone_number: contact.phone,
+                whatsapp_id: contact.whatsapp_id,
+                message: handoffMessage,
+              },
+            });
+
+            if (!whatsappError) {
+              await supabaseClient
+                .from('messages')
+                .update({ status: 'sent' })
+                .eq('id', handoffMessageData.id);
+            }
+          }
+        }
+        
+        // 🆕 RETORNAR AQUI - Não deixar o código continuar para retornar cache ruim
+        return new Response(
+          JSON.stringify({
+            status: 'handoff_executed',
+            message: handoffMessage,
+            from_cache: false,
+            handoff_reason: 'cached_fallback_detected',
+            ticket_created: isFinancial,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
       
       // ❌ REMOVIDO: Não inserir mensagem do cliente aqui - já foi inserida por useSendMessageOffline/handle-whatsapp-event/inbound-email
