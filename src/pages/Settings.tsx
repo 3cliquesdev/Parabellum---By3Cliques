@@ -143,7 +143,9 @@ export default function Settings() {
             <CardDescription>Gerencie conexões e migrações</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline">Abrir Backend</Button>
+            <Button variant="outline" disabled title="Em breve">
+              Abrir Backend
+            </Button>
           </CardContent>
         </Card>
 
@@ -156,7 +158,9 @@ export default function Settings() {
             <CardDescription>Configure provedores de email</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline">Configurar</Button>
+            <Button variant="outline" disabled title="Em breve">
+              Configurar
+            </Button>
           </CardContent>
         </Card>
 
@@ -289,7 +293,9 @@ export default function Settings() {
             <CardDescription>Políticas de acesso e RLS</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline">Configurar</Button>
+            <Button variant="outline" disabled title="Em breve">
+              Configurar
+            </Button>
           </CardContent>
         </Card>
 

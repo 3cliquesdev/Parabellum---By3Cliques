@@ -350,30 +350,42 @@ export default function AIStudio() {
 
         {/* AI TOOLS TAB */}
         <TabsContent value="tools" className="space-y-6 mt-6 animate-fade-in">
-          {/* Persona Selector */}
-          <Card className="p-6">
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold mb-1">Selecione uma Persona</h3>
-                <p className="text-sm text-muted-foreground">
-                  Escolha uma persona para gerenciar quais tools ela pode utilizar
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {personas?.map((persona) => (
+          <div className="mb-4">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Wrench className="h-6 w-6 text-primary" />
+              AI Tools Disponíveis
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Gerencie ferramentas e vincule-as às personas
+            </p>
+          </div>
+
+          {/* Optional: Persona Selector for filtered view */}
+          {personas && personas.length > 0 && (
+            <Card className="p-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-sm font-medium">Filtrar por Persona:</span>
+                <Button
+                  size="sm"
+                  variant={!selectedPersonaForTools ? "default" : "outline"}
+                  onClick={() => setSelectedPersonaForTools(null)}
+                >
+                  Todas
+                </Button>
+                {personas.map((persona) => (
                   <Button
                     key={persona.id}
+                    size="sm"
                     variant={selectedPersonaForTools === persona.id ? "default" : "outline"}
                     onClick={() => setSelectedPersonaForTools(persona.id)}
-                    className="justify-start h-auto py-3"
                   >
-                    <Brain className="mr-2 h-4 w-4 flex-shrink-0" />
-                    <span className="truncate">{persona.name}</span>
+                    <Brain className="mr-1 h-3 w-3" />
+                    {persona.name}
                   </Button>
                 ))}
               </div>
-            </div>
-          </Card>
+            </Card>
+          )}
 
           {/* AI Tools Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -401,7 +413,8 @@ export default function AIStudio() {
               ))
             ) : tools && tools.length > 0 ? (
               tools.map((tool) => {
-                const isLinked = isToolLinkedToPersona(tool.id);
+                const isLinked = selectedPersonaForTools ? isToolLinkedToPersona(tool.id) : false;
+                
                 return (
                   <Card key={tool.id} className="p-6 space-y-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
                     <div className="space-y-2">
@@ -441,12 +454,12 @@ export default function AIStudio() {
                         />
                       </div>
 
-                      {/* Persona-specific Toggle */}
-                      {selectedPersonaForTools && tool.is_enabled && (
+                      {/* Persona Linking Section */}
+                      {tool.is_enabled && selectedPersonaForTools && (
                         <div className="flex items-center justify-between pt-3 border-t">
                           <div className="space-y-1">
                             <p className="text-sm font-medium">
-                              Vinculada à Persona
+                              Vinculada à {personas?.find(p => p.id === selectedPersonaForTools)?.name}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               Permite que a persona use esta tool
@@ -465,9 +478,32 @@ export default function AIStudio() {
                         </div>
                       )}
 
-                      {selectedPersonaForTools && !tool.is_enabled && (
+                      {tool.is_enabled && !selectedPersonaForTools && (
+                        <div className="pt-3 border-t">
+                          <p className="text-sm font-medium mb-2">Vincular a Personas</p>
+                          <p className="text-xs text-muted-foreground mb-3">
+                            Selecione uma persona acima para gerenciar vinculações
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {personas?.map(persona => (
+                              <Button
+                                key={persona.id}
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSelectedPersonaForTools(persona.id)}
+                                className="text-xs h-7"
+                              >
+                                <Brain className="h-3 w-3 mr-1" />
+                                {persona.name}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {!tool.is_enabled && (
                         <p className="text-xs text-muted-foreground text-center py-2 border-t">
-                          Ative a tool globalmente primeiro
+                          Ative a tool globalmente para vincular personas
                         </p>
                       )}
                     </div>
