@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { 
   Search, 
   Briefcase, 
@@ -576,7 +577,7 @@ export default function ConsultantDetail() {
           
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Consultor de Destino</label>
+              <Label>Consultor de Destino</Label>
               <Select value={targetConsultantId} onValueChange={setTargetConsultantId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o consultor" />

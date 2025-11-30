@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Copy, Webhook, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -83,7 +84,7 @@ const WebhooksSettings = () => {
             <CardContent className="space-y-4">
               {/* URL Section */}
               <div>
-                <label className="text-sm font-medium mb-2 block">URL do Webhook</label>
+                <Label className="mb-2 block">URL do Webhook</Label>
                 <div className="flex gap-2">
                   <code className="flex-1 bg-muted px-3 py-2 rounded-md text-sm font-mono break-all">
                     {webhook.url}
@@ -100,7 +101,7 @@ const WebhooksSettings = () => {
 
               {/* Events Section */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Eventos Suportados</label>
+                <Label className="mb-2 block">Eventos Suportados</Label>
                 <div className="flex flex-wrap gap-2">
                   {webhook.events.map((event) => (
                     <Badge key={event} variant="secondary">
@@ -112,7 +113,7 @@ const WebhooksSettings = () => {
 
               {/* Instructions Section */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Como Configurar</label>
+                <Label className="mb-2 block">Como Configurar</Label>
                 <ol className="space-y-2">
                   {webhook.instructions.map((instruction, index) => (
                     <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">

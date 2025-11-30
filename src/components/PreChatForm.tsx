@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { MessageSquare, Loader2, ShieldCheck, UserPlus, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -330,7 +331,7 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
                 </Alert>
                 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Código de Verificação</label>
+                  <Label>Código de Verificação</Label>
                   <div className="flex justify-center">
                     <InputOTP maxLength={6} value={otp} onChange={setOtp}>
                       <InputOTPGroup>

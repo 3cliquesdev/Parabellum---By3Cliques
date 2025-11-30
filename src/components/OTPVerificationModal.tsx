@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ShieldCheck, Mail, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -92,7 +93,7 @@ export function OTPVerificationModal({ open, email, onVerified, onCancel }: OTPV
           </Alert>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Código de Verificação</label>
+            <Label>Código de Verificação</Label>
             <Input
               type="text"
               placeholder="000000"

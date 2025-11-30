@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, ExternalLink } from "lucide-react";
@@ -151,9 +152,9 @@ export default function ChatLinksSettings() {
 
             <div className="space-y-3">
               <div>
-                <label className="text-sm font-medium mb-2 block">
+                <Label className="mb-2 block">
                   1. Copie o código abaixo e cole antes do {"</body>"} do seu site:
-                </label>
+                </Label>
                 <div className="relative">
                   <code className="block p-4 bg-muted rounded text-xs overflow-x-auto">
 {`<script>

@@ -186,12 +186,12 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
                       checked={selectedCategories.includes(category)}
                       onCheckedChange={() => toggleCategory(category)}
                     />
-                    <label
-                      htmlFor={`category-${category}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    >
-                      {category}
-                    </label>
+                <Label
+                  htmlFor={`category-${category}`}
+                  className="cursor-pointer"
+                >
+                  {category}
+                </Label>
                   </div>
                 ))}
               </div>
