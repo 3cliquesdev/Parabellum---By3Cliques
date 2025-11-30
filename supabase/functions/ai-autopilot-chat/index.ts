@@ -356,71 +356,110 @@ Responda APENAS: skip ou search`
       });
       
       try {
-        // FASE 3: Busca Semântica via Embeddings (se OpenAI disponível)
-        if (OPENAI_API_KEY) {
-          console.log('[ai-autopilot-chat] 🧠 Usando busca semântica (embeddings)...');
+        // FASE 5: Query Expansion + Semantic Search Múltiplo
+        if (OPENAI_API_KEY || LOVABLE_API_KEY) {
+          console.log('[ai-autopilot-chat] 🚀 Iniciando Query Expansion...');
           
-          // Gerar embedding da pergunta do usuário
-          const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${OPENAI_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'text-embedding-3-small',
-              input: customerMessage,
-            }),
-          });
+          // Step 1: Expandir query para múltiplas variações
+          let expandedQueries: string[] = [customerMessage];
+          
+          try {
+            const { data: expansionData, error: expansionError } = await supabaseClient.functions.invoke(
+              'expand-query',
+              { body: { query: customerMessage } }
+            );
 
-          if (embeddingResponse.ok) {
-            const embeddingData = await embeddingResponse.json();
-            const queryEmbedding = embeddingData.data[0].embedding;
+            if (!expansionError && expansionData?.expanded_queries) {
+              expandedQueries = [customerMessage, ...expansionData.expanded_queries];
+              console.log(`[ai-autopilot-chat] ✅ Query expandida em ${expandedQueries.length} variações`);
+            } else {
+              console.log('[ai-autopilot-chat] ⚠️ Usando apenas query original (expansion falhou)');
+            }
+          } catch (expansionError) {
+            console.error('[ai-autopilot-chat] Erro no query expansion:', expansionError);
+          }
+
+          // Step 2: Buscar embeddings para todas as queries expandidas
+          const articleMap: Map<string, any> = new Map();
+          
+          for (const query of expandedQueries) {
+            if (!OPENAI_API_KEY) continue;
             
-            console.log('[ai-autopilot-chat] 📊 Query embedding gerado. Buscando artigos similares...');
-
-            // Buscar artigos por similaridade semântica
-            const { data: semanticResults, error: semanticError } = await supabaseClient
-              .rpc('match_knowledge_articles', {
-                query_embedding: queryEmbedding,
-                match_threshold: 0.75,
-                match_count: 5,
+            try {
+              console.log(`[ai-autopilot-chat] 🔍 Gerando embedding para: "${query.substring(0, 50)}..."`);
+              
+              const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: 'text-embedding-3-small',
+                  input: query,
+                }),
               });
 
-            if (semanticError) {
-              console.error('[ai-autopilot-chat] Erro na busca semântica:', semanticError);
-            } else if (semanticResults && semanticResults.length > 0) {
-              // Filtrar por categoria se persona tiver configurado
-              let filteredResults = semanticResults;
-              if (hasPersonaCategories) {
-                filteredResults = semanticResults.filter((a: any) => 
-                  personaCategories.includes(a.category)
-                );
-                console.log(`[ai-autopilot-chat] 🔒 Filtro de categoria aplicado: ${semanticResults.length} → ${filteredResults.length} artigos`);
-              }
-
-              if (filteredResults.length > 0) {
-                knowledgeArticles = filteredResults.map((a: any) => ({
-                  id: a.id,
-                  title: a.title,
-                  content: a.content,
-                  category: a.category,
-                }));
+              if (embeddingResponse.ok) {
+                const embeddingData = await embeddingResponse.json();
+                const queryEmbedding = embeddingData.data[0].embedding;
                 
-                console.log(`[ai-autopilot-chat] ✅ Busca Semântica: ${filteredResults.length} artigos encontrados:`, 
-                  filteredResults.map((a: any) => `${a.title} [${a.category}] (${(a.similarity * 100).toFixed(1)}%)`));
-              } else {
-                console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo relevante após filtro de categoria');
+                // Buscar artigos similares
+                const { data: semanticResults, error: semanticError } = await supabaseClient.rpc(
+                  'match_knowledge_articles',
+                  {
+                    query_embedding: queryEmbedding,
+                    match_threshold: 0.75,
+                    match_count: 5,
+                  }
+                );
+
+                if (!semanticError && semanticResults) {
+                  // Adicionar ao mapa para deduplicar (mantém melhor similaridade)
+                  semanticResults.forEach((article: any) => {
+                    const existing = articleMap.get(article.id);
+                    if (!existing || article.similarity > existing.similarity) {
+                      articleMap.set(article.id, article);
+                    }
+                  });
+                }
               }
-            } else {
-              console.log('[ai-autopilot-chat] ⚠️ Busca semântica não retornou resultados');
+            } catch (error) {
+              console.error(`[ai-autopilot-chat] ❌ Erro no embedding para query: "${query}"`, error);
             }
+          }
+
+          // Step 3: Converter mapa para array e aplicar filtros
+          let allArticles = Array.from(articleMap.values());
+          console.log(`[ai-autopilot-chat] 📊 Total de artigos únicos encontrados: ${allArticles.length}`);
+
+          // Filtrar por categoria se persona tiver configurado
+          if (hasPersonaCategories) {
+            allArticles = allArticles.filter((a: any) => 
+              personaCategories.includes(a.category)
+            );
+            console.log(`[ai-autopilot-chat] 🔒 Filtro de categoria: ${articleMap.size} → ${allArticles.length} artigos`);
+          }
+
+          if (allArticles.length > 0) {
+            // Ordenar por similaridade e pegar top 5
+            knowledgeArticles = allArticles
+              .sort((a: any, b: any) => b.similarity - a.similarity)
+              .slice(0, 5)
+              .map((a: any) => ({
+                id: a.id,
+                title: a.title,
+                content: a.content,
+                category: a.category,
+              }));
+            
+            console.log(`[ai-autopilot-chat] ✅ Query Expansion + Semantic: ${knowledgeArticles.length} artigos finais:`, 
+              allArticles.slice(0, 5).map((a: any) => `${a.title} [${a.category}] (${(a.similarity * 100).toFixed(1)}%)`));
           } else {
-            console.warn('[ai-autopilot-chat] Falha ao gerar embedding, usando busca por palavras-chave');
-            throw new Error('Embedding failed');
+            console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo relevante após filtros');
           }
         } else {
-          throw new Error('OpenAI não disponível');
+          throw new Error('Nenhuma API key disponível para embeddings');
         }
       } catch (embeddingError) {
         // FALLBACK: Busca por palavras-chave (método antigo)
