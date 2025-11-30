@@ -907,17 +907,45 @@ Responda APENAS: skip ou search`
     const isRecentlyVerified = customer_context?.isVerified === true;
     
     if (contactHasEmail && responseChannel === 'whatsapp') {
-      // FASE 4: Cliente conhecido (tem email) - dar boas-vindas
-      identityWallNote = `\n\n**✅ CLIENTE CONHECIDO:**
-Este cliente JÁ está verificado no sistema.
-Nome: ${contactName}${contactCompany}
+      // FASE 1: Cliente conhecido - DISPARAR OTP AUTOMATICAMENTE
+      const maskedEmail = contactEmail.replace(/(.{1})(.*)(@.*)/, '$1***$3');
+      
+      // Verificar se precisa OTP (não tem verificação recente)
+      if (!hasRecentOTPVerification) {
+        console.log('[ai-autopilot-chat] 🔐 FASE 1: Disparando OTP automático para cliente conhecido');
+        
+        // DISPARAR OTP AUTOMATICAMENTE
+        try {
+          await supabaseClient.functions.invoke('send-verification-code', {
+            body: { email: contactEmail }
+          });
+          
+          identityWallNote = `\n\n**🔐 VERIFICAÇÃO AUTOMÁTICA INICIADA:**
+Cliente conhecido com email: ${maskedEmail}
+
+**RESPOSTA OBRIGATÓRIA (não responda mais nada além disso):**
+"Para garantir sua segurança, enviamos um código de verificação para ${maskedEmail}. 
+Por favor, digite o código de 6 dígitos que você recebeu no email."
+
+**⚠️ CRÍTICO:**
+- AGUARDE o cliente digitar o código
+- NÃO responda perguntas até verificação concluída
+- NÃO ofereça ajuda ainda
+- NÃO cumprimente além da mensagem do código`;
+        } catch (error) {
+          console.error('[ai-autopilot-chat] ❌ Erro ao disparar OTP:', error);
+        }
+      } else {
+        // Já tem OTP verificado
+        identityWallNote = `\n\n**✅ CLIENTE VERIFICADO:**
+Cliente: ${contactName}${contactCompany}
 Email: ${contactEmail}
 Status: ${contactStatus}
 
-**IMPORTANTE:** NÃO peça email novamente! Dê boas vindas de forma calorosa reconhecendo que ele já é cliente.
-Exemplo: "Olá ${contactName}! Que bom ter você de volta! Como posso ajudar hoje?"
+Dê boas vindas calorosas e pergunte "Como posso te ajudar hoje?"
 
-${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Ofereça ajuda e pergunte "Como posso te ajudar?".' : ''}`;
+${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação.' : ''}`;
+      }
       
     } else if (!contactHasEmail && responseChannel === 'whatsapp') {
       // FASE 4: Lead (não tem email) - seguir Identity Wall e direcionar para comercial após verificação
@@ -1283,42 +1311,60 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
               .eq('email', emailInformado)
               .single();
 
-            // CENÁRIO A: EMAIL NÃO ENCONTRADO (Não é cliente)
+            // CENÁRIO A: EMAIL NÃO ENCONTRADO (Não é cliente - rotear para COMERCIAL)
             if (searchError || !existingCustomer) {
-              console.log('[ai-autopilot-chat] ❌ Email não encontrado na base:', emailInformado);
+              console.log('[ai-autopilot-chat] ❌ FASE 2: Email não encontrado - routing para Comercial');
               
               // Registrar tentativa
               await supabaseClient.from('interactions').insert({
                 customer_id: contact.id,
                 type: 'internal_note',
-                content: `⚠️ Tentativa de acesso financeiro com email não cadastrado: ${emailInformado}`,
+                content: `⚠️ Email não cadastrado (Lead): ${emailInformado} - Routing para Comercial`,
                 channel: responseChannel,
-                metadata: { source: 'financial_barrier', email_not_found: true }
+                metadata: { source: 'lead_routing', email_not_found: true }
               });
 
-              // TENTAR HANDOFF PARA HUMANO
+              // Buscar departamento COMERCIAL
+              const { data: comercialDept } = await supabaseClient
+                .from('departments')
+                .select('id, name')
+                .eq('name', 'Comercial')
+                .eq('is_active', true)
+                .single();
+
+              if (!comercialDept) {
+                console.error('[ai-autopilot-chat] ❌ Departamento Comercial não encontrado');
+              }
+
+              // Mudar para copilot ANTES de rotear
+              await supabaseClient
+                .from('conversations')
+                .update({ 
+                  ai_mode: 'copilot',
+                  department: comercialDept?.id // Forçar departamento Comercial
+                })
+                .eq('id', conversationId);
+
+              // ROTEAR PARA COMERCIAL
               const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
-                body: { conversationId }
+                body: { 
+                  conversationId,
+                  department_id: comercialDept?.id
+                }
               });
 
               if (routeError || !routeResult?.assigned_to) {
-                // Nenhum agente disponível
-                assistantMessage = `Verifiquei aqui e este email (${emailInformado}) não consta na nossa base de clientes ativos.
+                // Nenhum agente do Comercial disponível
+                assistantMessage = `Este email não consta na nossa base de clientes.
 
-Nossos atendentes estão offline no momento.
-⏰ **Horário de atendimento:** Segunda a Sexta, 09h às 18h.
+Nosso **time de vendas** está offline no momento.
+⏰ **Horário de atendimento Comercial:** Segunda a Sexta, 09h às 18h.
 
-Sua conversa está na **fila prioritária** e será respondida assim que retornarmos. 🙏`;
-                
-                // Mudar para copilot (fila humana)
-                await supabaseClient
-                  .from('conversations')
-                  .update({ ai_mode: 'copilot' })
-                  .eq('id', conversationId);
+Quando retornarmos, um consultor vai te ajudar! 🙏`;
               } else {
-                assistantMessage = `Verifiquei aqui e este email não consta na nossa base de clientes ativos.
+                assistantMessage = `Este email não consta na nossa base de clientes.
 
-Vou transferir você para um atendente que pode te ajudar a verificar seu cadastro. Aguarde um momento! 🙏`;
+Vou te transferir para nosso **time de vendas** que pode te ajudar. Aguarde um momento! 🙏`;
               }
               continue;
             }

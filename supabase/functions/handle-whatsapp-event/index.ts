@@ -645,7 +645,7 @@ async function handleOTPValidation(
   const claimedContactId = metadata.claimed_contact_id;
   const attempts = metadata.otp_attempts || 0;
 
-  console.log(`[handle-whatsapp-event] 🔐 Validating OTP attempt ${attempts + 1}/3`);
+  console.log(`[handle-whatsapp-event] 🔐 Validating OTP attempt ${attempts + 1}/2`);
 
   // Verificar código no banco
   const { data: verification } = await supabase
@@ -738,8 +738,8 @@ async function handleOTPValidation(
     // ❌ CÓDIGO INCORRETO
     const newAttempts = attempts + 1;
 
-    if (newAttempts >= 3) {
-      // 🚨 BLOQUEIO POR EXCESSO DE TENTATIVAS
+    if (newAttempts >= 2) {
+      // 🚨 BLOQUEIO POR EXCESSO DE TENTATIVAS (MÁXIMO 2)
       console.log('[handle-whatsapp-event] 🚨 Max OTP attempts reached - triggering fraud alert');
 
       await supabase
