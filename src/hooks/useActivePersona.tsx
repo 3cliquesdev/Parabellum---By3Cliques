@@ -11,11 +11,12 @@ export const useActivePersona = (conversationId: string | null) => {
     queryFn: async () => {
       if (!conversationId) return null;
 
-      // Buscar conversa e departamento do contato atribuído
+      // Buscar conversa - priorizar conversation.department sobre assigned_user
       const { data: conversation, error: convError } = await supabase
         .from("conversations")
         .select(`
           channel,
+          department,
           contacts!inner(
             assigned_user:profiles!contacts_assigned_to_fkey(department)
           )
@@ -27,7 +28,9 @@ export const useActivePersona = (conversationId: string | null) => {
 
       const contact = conversation.contacts as any;
       const channel = conversation.channel;
-      const department = contact?.assigned_user?.department || null;
+      
+      // FASE 4: Priorizar conversation.department sobre assigned_user.department
+      const department = conversation.department || contact?.assigned_user?.department || null;
 
       // Buscar routing rules que combinam
       const { data: routingRules, error: rulesError } = await supabase
