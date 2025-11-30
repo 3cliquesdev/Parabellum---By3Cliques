@@ -630,11 +630,26 @@ ${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira
     
     const contextualizedSystemPrompt = `Você é o assistente virtual da empresa.
 
-**REGRAS DE RESPOSTA:**
-1. **Small Talk (Saudações/Elogios):** Se o usuário disser "Oi", "Bom dia", "Obrigado" ou fizer elogios, responda de forma educada e breve usando seu conhecimento geral. Não busque na base de dados para isso.
-2. **Dúvidas Técnicas:** Se o usuário fizer uma pergunta sobre produtos, entregas ou suporte, USE O CONTEXTO ABAIXO se disponível.
-3. **Casos de Devolução/Reembolso/Troca:** Se o cliente relatar problema com pedido (defeito, arrependimento, produto errado), colete: número do pedido, tipo do problema, e descrição. Depois use a ferramenta create_ticket para registrar automaticamente. NÃO transfira para humano nesses casos básicos.
-4. **Falha:** Se a resposta não estiver no contexto e não for conversa fiada nem caso de ticket, diga: "Vou chamar um especialista para te ajudar" e pare.
+**REGRAS CRÍTICAS DE RESPOSTA:**
+
+1. **Solicitações Financeiras (PRIORIDADE MÁXIMA):**
+   - Se o cliente perguntar sobre: saque, saldo, pix, pagamento, comissão, carteira, transferência
+   - USE IMEDIATAMENTE a ferramenta \`create_ticket\` com issue_type='financeiro'
+   - Colete informações necessárias e crie o ticket
+   - NÃO diga apenas "vou chamar um especialista" - CRIE O TICKET
+
+2. **Devolução/Reembolso/Troca/Defeito:**
+   - Colete o número do pedido (se houver)
+   - Use \`create_ticket\` com o tipo apropriado
+
+3. **Dúvidas Técnicas:**
+   - Use o contexto da base de conhecimento para responder
+
+4. **Small Talk (Saudações/Elogios):**
+   - Se o usuário disser "Oi", "Bom dia", "Obrigado" ou fizer elogios, responda de forma educada e breve usando seu conhecimento geral
+
+5. **Se não souber responder:**
+   - Diga "Vou transferir para um especialista" (o sistema executará handoff automaticamente)
 ${knowledgeContext}${identityWallNote}
 
 **Contexto do Cliente:**
@@ -663,15 +678,29 @@ Use essas informações de forma natural e personalizada.`;
         type: 'function',
         function: {
           name: 'create_ticket',
-          description: 'Cria um ticket de suporte para devolução, troca, reembolso ou defeito.',
+          description: 'Cria um ticket de suporte para qualquer solicitação que precisa de acompanhamento humano: financeiro (saque, saldo, pagamento, pix, comissão), devolução, troca, reembolso, defeito ou outro.',
           parameters: {
             type: 'object',
             properties: {
-              order_id: { type: 'string', description: 'O número do pedido informado pelo cliente.' },
-              issue_type: { type: 'string', enum: ['devolucao', 'reembolso', 'troca', 'defeito'], description: 'O tipo de problema.' },
-              description: { type: 'string', description: 'O motivo detalhado do problema relatado pelo cliente.' }
+              issue_type: { 
+                type: 'string', 
+                enum: ['financeiro', 'devolucao', 'reembolso', 'troca', 'defeito', 'outro'],
+                description: 'O tipo de solicitação. Use "financeiro" para saque, saldo, pagamentos, pix, comissão.' 
+              },
+              subject: { 
+                type: 'string', 
+                description: 'Resumo breve da solicitação (máximo 100 caracteres).' 
+              },
+              description: { 
+                type: 'string', 
+                description: 'Descrição detalhada do problema ou solicitação.' 
+              },
+              order_id: { 
+                type: 'string', 
+                description: 'O número do pedido, se aplicável. Deixe vazio se não houver pedido.' 
+              }
             },
-            required: ['order_id', 'issue_type', 'description']
+            required: ['issue_type', 'subject', 'description']
           }
         }
       },
@@ -718,6 +747,103 @@ Use essas informações de forma natural e personalizada.`;
     const aiData = await callAIWithFallback(aiPayload);
     let assistantMessage = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui processar sua mensagem.';
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
+
+    // ========== DETECTOR DE FALLBACK + HANDOFF REAL ==========
+    const fallbackPhrases = [
+      'vou chamar um especialista',
+      'vou transferir para um atendente',
+      'transferir para um atendente',
+      'encaminhar para um humano',
+      'não tenho essa informação',
+      'não encontrei essa informação',
+      'não consegui encontrar',
+      'momento por favor',
+      'chamar um atendente'
+    ];
+
+    const isFallbackResponse = fallbackPhrases.some(phrase => 
+      assistantMessage.toLowerCase().includes(phrase)
+    );
+
+    if (isFallbackResponse) {
+      console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO - Executando handoff REAL');
+      
+      // 1. MUDAR O MODO (Desligar IA)
+      await supabaseClient
+        .from('conversations')
+        .update({ ai_mode: 'copilot' })
+        .eq('id', conversationId);
+      
+      console.log('[ai-autopilot-chat] ✅ ai_mode mudado para copilot');
+      
+      // 2. CHAMAR O ROTEADOR (Buscar agente disponível)
+      const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
+        body: { conversationId }
+      });
+      
+      if (routeError) {
+        console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
+      } else {
+        console.log('[ai-autopilot-chat] ✅ Conversa roteada:', routeResult);
+      }
+      
+      // 3. CRIAR TICKET AUTOMÁTICO PARA CASOS FINANCEIROS
+      const financialKeywords = ['saque', 'saldo', 'pix', 'dinheiro', 'pagamento', 'comissão', 'carteira', 'transferir', 'transferência'];
+      const isFinancialRequest = financialKeywords.some(keyword => 
+        customerMessage.toLowerCase().includes(keyword)
+      );
+      
+      if (isFinancialRequest) {
+        console.log('[ai-autopilot-chat] 💰 Solicitação financeira detectada - Criando ticket de segurança');
+        
+        const { data: ticket, error: ticketError } = await supabaseClient
+          .from('tickets')
+          .insert({
+            customer_id: contact.id,
+            subject: `💰 Solicitação Financeira - ${customerMessage.substring(0, 50)}...`,
+            description: `**Mensagem Original:**\n${customerMessage}\n\n**Motivo do Ticket:**\nCriado automaticamente por handoff de IA - solicitação financeira detectada.`,
+            priority: 'high',
+            status: 'open',
+            category: 'financeiro',
+            source_conversation_id: conversationId,
+            internal_note: '🤖 Ticket criado automaticamente pela IA - Assunto financeiro requer atenção humana'
+          })
+          .select()
+          .single();
+        
+        if (ticketError) {
+          console.error('[ai-autopilot-chat] ❌ Erro ao criar ticket financeiro:', ticketError);
+        } else {
+          console.log('[ai-autopilot-chat] ✅ Ticket financeiro criado:', ticket?.id);
+          
+          // Vincular ticket à conversa
+          await supabaseClient
+            .from('conversations')
+            .update({ related_ticket_id: ticket?.id })
+            .eq('id', conversationId);
+          
+          // Enriquecer mensagem ao cliente
+          assistantMessage = `${assistantMessage}\n\n📋 Criei o protocolo #${ticket?.id?.slice(0, 8).toUpperCase()} para sua solicitação financeira. Um especialista vai analisar seu caso com prioridade.`;
+        }
+      }
+      
+      // 4. REGISTRAR NOTA INTERNA (Auditoria)
+      await supabaseClient.from('interactions').insert({
+        customer_id: contact.id,
+        type: 'internal_note',
+        content: `🤖→👤 **Handoff Automático Executado**\n\n**Pergunta do Cliente:** "${customerMessage}"\n**Motivo:** IA não encontrou resposta adequada na base de conhecimento.\n**Ação:** Conversa transferida para atendimento humano.${isFinancialRequest ? '\n**Ticket Financeiro:** Criado automaticamente' : ''}`,
+        channel: responseChannel,
+        metadata: {
+          source: 'ai_autopilot_handoff',
+          fallback_phrase_detected: true,
+          is_financial: isFinancialRequest,
+          original_message: customerMessage
+        }
+      });
+      
+      console.log('[ai-autopilot-chat] ✅ Nota interna de handoff registrada');
+    }
+    // ========== FIM DETECTOR DE FALLBACK ==========
 
     // Handle tool calls (Function Calling)
     if (toolCalls.length > 0) {
@@ -855,17 +981,25 @@ Use essas informações de forma natural e personalizada.`;
             // Public ticket creation via forms should implement rate limiting separately
 
             // Create ticket in database
+            const ticketCategory = args.issue_type === 'defeito' ? 'tecnico' : 
+                                   args.issue_type === 'financeiro' ? 'financeiro' : 
+                                   'financeiro';
+            
+            const ticketSubject = args.subject || 
+                                  (args.order_id ? `${args.issue_type.toUpperCase()} - Pedido ${args.order_id}` : 
+                                   `${args.issue_type.toUpperCase()} - ${args.description.substring(0, 50)}`);
+
             const { data: ticket, error: ticketError } = await supabaseClient
               .from('tickets')
               .insert({
                 customer_id: contact.id,
-                subject: `${args.issue_type.toUpperCase()} - Pedido ${args.order_id}`,
+                subject: ticketSubject,
                 description: args.description,
-                priority: 'medium',
+                priority: args.issue_type === 'financeiro' ? 'high' : 'medium',
                 status: 'open',
                 source_conversation_id: conversationId,
-                category: args.issue_type === 'defeito' ? 'tecnico' : 'financeiro',
-                internal_note: `Ticket criado automaticamente pela IA. Pedido: ${args.order_id}`
+                category: ticketCategory,
+                internal_note: `Ticket criado automaticamente pela IA${args.order_id ? `. Pedido: ${args.order_id}` : ''}`
               })
               .select()
               .single();
@@ -887,7 +1021,8 @@ Use essas informações de forma natural e personalizada.`;
                 .eq('id', conversationId);
 
               // Generate confirmation message
-              assistantMessage = `✅ Protocolo registrado com sucesso!\n\n📋 **Número do Ticket:** #${ticket.id.slice(0, 8).toUpperCase()}\n🔢 **Pedido:** ${args.order_id}\n📦 **Tipo:** ${args.issue_type.charAt(0).toUpperCase() + args.issue_type.slice(1)}\n\nNossa equipe vai analisar seu caso e retornar em breve. Você pode acompanhar o status através deste chat.`;
+              const ticketIcon = args.issue_type === 'financeiro' ? '💰' : '📦';
+              assistantMessage = `✅ Protocolo registrado com sucesso!\n\n📋 **Número do Ticket:** #${ticket.id.slice(0, 8).toUpperCase()}\n${args.order_id ? `🔢 **Pedido:** ${args.order_id}\n` : ''}${ticketIcon} **Tipo:** ${args.issue_type.charAt(0).toUpperCase() + args.issue_type.slice(1)}\n\nNossa equipe vai analisar seu caso e retornar em breve. Você pode acompanhar o status através deste chat.`;
             }
           } catch (error) {
             console.error('[ai-autopilot-chat] ❌ Erro ao processar tool call:', error);
