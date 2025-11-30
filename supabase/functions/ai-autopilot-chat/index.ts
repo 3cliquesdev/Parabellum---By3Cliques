@@ -22,6 +22,35 @@ async function generateQuestionHash(message: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ============================================================
+// 🔒 CONSTANTES GLOBAIS - Unificadas para prevenir inconsistências
+// ============================================================
+const FALLBACK_PHRASES = [
+  'vou chamar um especialista',
+  'vou transferir para um atendente',
+  'transferir para um atendente',
+  'encaminhar para um humano',
+  'não tenho essa informação',
+  'não encontrei essa informação',
+  'não consegui encontrar',
+  'não consegui registrar',
+  'momento por favor',
+  'chamar um atendente'
+];
+
+const FINANCIAL_KEYWORDS = [
+  'saque',
+  'saldo',
+  'pix',
+  'dinheiro',
+  'pagamento',
+  'reembolso',
+  'comissão',
+  'carteira',
+  'transferência',
+  'estorno'
+];
+
 interface AutopilotChatRequest {
   conversationId: string;
   customerMessage: string;
@@ -111,15 +140,7 @@ serve(async (req) => {
       console.log('✅ [CACHE HIT] Resposta instantânea recuperada do cache');
       
       // 🆕 FASE 1: Verificar se resposta cacheada é fallback e executar handoff real
-      const cachedFallbackPhrases = [
-        'vou chamar um especialista',
-        'transferir para um atendente',
-        'encaminhar para um humano',
-        'não tenho essa informação',
-        'não consegui registrar'
-      ];
-      
-      const isCachedFallback = cachedFallbackPhrases.some(phrase => 
+      const isCachedFallback = FALLBACK_PHRASES.some(phrase => 
         cachedResponse.answer.toLowerCase().includes(phrase)
       );
       
@@ -137,29 +158,41 @@ serve(async (req) => {
           body: { conversationId }
         });
         
-        // 3. Criar ticket se for financeiro
-        const financialKeywords = ['saque', 'saldo', 'pix', 'dinheiro', 'pagamento', 'reembolso', 'estorno'];
-        const isFinancial = financialKeywords.some(k => customerMessage.toLowerCase().includes(k));
+        // 3. Criar ticket se for financeiro (com verificação de duplicação)
+        const isFinancial = FINANCIAL_KEYWORDS.some(k => customerMessage.toLowerCase().includes(k));
         
         let ticketProtocol = '';
         if (isFinancial) {
-          const { data: ticket } = await supabaseClient
-            .from('tickets')
-            .insert({
-              customer_id: contact.id,
-              subject: `💰 Solicitação Financeira - ${customerMessage.substring(0, 50)}`,
-              description: customerMessage,
-              priority: 'high',
-              status: 'open',
-              category: 'financeiro',
-              source_conversation_id: conversationId
-            })
-            .select()
-            .single();
-          
-          if (ticket) {
-            ticketProtocol = ticket.id.slice(0, 8).toUpperCase();
-            console.log('🎫 [CACHE] Ticket financeiro criado:', ticket.id);
+          // 🔒 ANTI-DUPLICAÇÃO: Verificar se conversa já tem ticket vinculado
+          if (conversation.related_ticket_id) {
+            console.log('[CACHE] ⚠️ Conversa já possui ticket vinculado - pulando criação:', conversation.related_ticket_id);
+            ticketProtocol = conversation.related_ticket_id.slice(0, 8).toUpperCase();
+          } else {
+            // Criar ticket apenas se não houver
+            const { data: ticket } = await supabaseClient
+              .from('tickets')
+              .insert({
+                customer_id: contact.id,
+                subject: `💰 Solicitação Financeira - ${customerMessage.substring(0, 50)}`,
+                description: customerMessage,
+                priority: 'high',
+                status: 'open',
+                category: 'financeiro',
+                source_conversation_id: conversationId
+              })
+              .select()
+              .single();
+            
+            if (ticket) {
+              ticketProtocol = ticket.id.slice(0, 8).toUpperCase();
+              console.log('🎫 [CACHE] Ticket financeiro criado:', ticket.id);
+              
+              // Vincular à conversa
+              await supabaseClient
+                .from('conversations')
+                .update({ related_ticket_id: ticket.id })
+                .eq('id', conversationId);
+            }
           }
         }
         
@@ -328,6 +361,36 @@ serve(async (req) => {
         error: 'Rate limit exceeded. Please try again in a moment.' 
       }), {
         status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    // ============================================================
+    // FASE 5: VERIFICAÇÃO DE DUPLICATA - ANTES do processamento da IA
+    // ============================================================
+    console.log('[ai-autopilot-chat] 🔍 Verificando duplicatas...');
+    
+    const { data: recentMessages } = await supabaseClient
+      .from('messages')
+      .select('content, created_at')
+      .eq('conversation_id', conversationId)
+      .eq('sender_type', 'user')
+      .eq('is_ai_generated', true)
+      .gte('created_at', new Date(Date.now() - 10000).toISOString()) // Últimos 10 segundos
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    const isDuplicate = recentMessages?.some(msg => 
+      msg.content.length > 50 && // Só verificar mensagens longas (evitar falsos positivos com "ok", "sim")
+      (Date.now() - new Date(msg.created_at).getTime()) < 5000 // Menos de 5 segundos
+    );
+
+    if (isDuplicate) {
+      console.warn('[ai-autopilot-chat] ⚠️ Mensagem duplicada detectada - ignorando processamento');
+      return new Response(JSON.stringify({ 
+        status: 'duplicate',
+        message: 'Mensagem duplicada ignorada'
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -1080,19 +1143,7 @@ Use essas informações de forma natural e personalizada.`;
     // ============================================================
     // FASE 4: FALLBACK DETECTOR - After tool calls to prevent duplicates
     // ============================================================
-    const fallbackPhrases = [
-      'vou chamar um especialista',
-      'vou transferir para um atendente',
-      'transferir para um atendente',
-      'encaminhar para um humano',
-      'não tenho essa informação',
-      'não encontrei essa informação',
-      'não consegui encontrar',
-      'momento por favor',
-      'chamar um atendente'
-    ];
-
-    const isFallbackResponse = fallbackPhrases.some(phrase => 
+    const isFallbackResponse = FALLBACK_PHRASES.some(phrase => 
       assistantMessage.toLowerCase().includes(phrase)
     );
 
@@ -1119,8 +1170,7 @@ Use essas informações de forma natural e personalizada.`;
       }
       
       // 3. CRIAR TICKET AUTOMÁTICO PARA CASOS FINANCEIROS (apenas se não criado por tool call)
-      const financialKeywords = ['saque', 'saldo', 'pix', 'dinheiro', 'pagamento', 'comissão', 'carteira', 'transferir', 'transferência'];
-      const isFinancialRequest = financialKeywords.some(keyword => 
+      const isFinancialRequest = FINANCIAL_KEYWORDS.some(keyword => 
         customerMessage.toLowerCase().includes(keyword)
       );
       
@@ -1182,31 +1232,9 @@ Use essas informações de forma natural e personalizada.`;
     }
     // ========== FIM DETECTOR DE FALLBACK ==========
 
-    // FASE 5: Deduplicação - Verificar se mensagem similar foi enviada recentemente
-    const { data: recentMessages } = await supabaseClient
-      .from('messages')
-      .select('content, created_at')
-      .eq('conversation_id', conversationId)
-      .eq('sender_type', 'user')
-      .eq('is_ai_generated', true)
-      .gte('created_at', new Date(Date.now() - 10000).toISOString()) // Últimos 10 segundos
-      .order('created_at', { ascending: false })
-      .limit(3);
-
-    const isDuplicate = recentMessages?.some(msg => 
-      msg.content === assistantMessage && 
-      (Date.now() - new Date(msg.created_at).getTime()) < 5000 // Menos de 5 segundos
-    );
-
-    if (isDuplicate) {
-      console.warn('[ai-autopilot-chat] ⚠️ Mensagem duplicada detectada - ignorando envio');
-      return new Response(JSON.stringify({ 
-        status: 'duplicate',
-        message: 'Mensagem duplicada ignorada'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    // ============================================================
+    // FASE 5: Verificação de duplicata JÁ REALIZADA no início (linha ~325)
+    // ============================================================
 
     // 7. Salvar resposta da IA como mensagem (PRIMEIRO salvar para visibilidade interna)
     const { data: savedMessage, error: saveError } = await supabaseClient
@@ -1444,17 +1472,9 @@ Use essas informações de forma natural e personalizada.`;
 
     console.log('[ai-autopilot-chat] ✅ Resposta processada com sucesso!');
 
-    // FASE 2: Salvar resposta no cache para futuras consultas (TTL 24h)
-    // 🆕 Verificar se NÃO é fallback antes de cachear
-    const cacheSkipFallbackPhrases = [
-      'vou chamar um especialista',
-      'transferir para um atendente',
-      'encaminhar para um humano',
-      'não tenho essa informação',
-      'não consegui registrar'
-    ];
-    
-    const shouldSkipCache = cacheSkipFallbackPhrases.some(phrase => 
+    // FASE 2: Salvar resposta no cache para futuras consultas (TTL 1h)
+    // 🆕 Verificar se NÃO é fallback antes de cachear (usa constante global)
+    const shouldSkipCache = FALLBACK_PHRASES.some(phrase => 
       assistantMessage.toLowerCase().includes(phrase)
     );
     
