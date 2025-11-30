@@ -110,6 +110,75 @@ serve(async (req) => {
     if (cachedResponse) {
       console.log('✅ [CACHE HIT] Resposta instantânea recuperada do cache');
       
+      // 🆕 FASE 1: Verificar se resposta cacheada é fallback e executar handoff real
+      const cachedFallbackPhrases = [
+        'vou chamar um especialista',
+        'transferir para um atendente',
+        'encaminhar para um humano',
+        'não tenho essa informação',
+        'não consegui registrar'
+      ];
+      
+      const isCachedFallback = cachedFallbackPhrases.some(phrase => 
+        cachedResponse.answer.toLowerCase().includes(phrase)
+      );
+      
+      if (isCachedFallback) {
+        console.log('🚨 [CACHE] Resposta cacheada é FALLBACK - Executando handoff real');
+        
+        // 1. Mudar modo para copilot
+        await supabaseClient
+          .from('conversations')
+          .update({ ai_mode: 'copilot' })
+          .eq('id', conversationId);
+        
+        // 2. Rotear para agente humano
+        await supabaseClient.functions.invoke('route-conversation', {
+          body: { conversationId }
+        });
+        
+        // 3. Criar ticket se for financeiro
+        const financialKeywords = ['saque', 'saldo', 'pix', 'dinheiro', 'pagamento', 'reembolso', 'estorno'];
+        const isFinancial = financialKeywords.some(k => customerMessage.toLowerCase().includes(k));
+        
+        if (isFinancial) {
+          const { data: ticket } = await supabaseClient
+            .from('tickets')
+            .insert({
+              customer_id: contact.id,
+              subject: `💰 Solicitação Financeira - ${customerMessage.substring(0, 50)}`,
+              description: customerMessage,
+              priority: 'high',
+              status: 'open',
+              category: 'financeiro',
+              source_conversation_id: conversationId
+            })
+            .select()
+            .single();
+          
+          if (ticket) {
+            cachedResponse.answer += `\n\n📋 Protocolo criado: #${ticket.id.slice(0, 8).toUpperCase()}`;
+            console.log('🎫 [CACHE] Ticket financeiro criado:', ticket.id);
+          }
+        }
+        
+        // 4. Registrar nota interna
+        await supabaseClient.from('interactions').insert({
+          customer_id: contact.id,
+          type: 'internal_note',
+          content: `🤖→👤 Handoff automático (resposta cached detectada como fallback): "${customerMessage}"`,
+          channel: responseChannel
+        });
+        
+        // 5. Invalidar esse cache (não usar mais)
+        await supabaseClient
+          .from('ai_response_cache')
+          .delete()
+          .eq('question_hash', questionHash);
+        
+        console.log('✅ [CACHE] Handoff executado e cache invalidado');
+      }
+      
       // ❌ REMOVIDO: Não inserir mensagem do cliente aqui - já foi inserida por useSendMessageOffline/handle-whatsapp-event/inbound-email
 
       // Salvar resposta da IA (do cache)
@@ -1299,20 +1368,37 @@ Use essas informações de forma natural e personalizada.`;
     console.log('[ai-autopilot-chat] ✅ Resposta processada com sucesso!');
 
     // FASE 2: Salvar resposta no cache para futuras consultas (TTL 24h)
-    try {
-      await supabaseClient.from('ai_response_cache').insert({
-        question_hash: questionHash,
-        answer: assistantMessage,
-        context_ids: knowledgeArticles.map(a => ({
-          id: a.id,
-          title: a.title,
-          category: a.category
-        })),
-      });
-      console.log('💾 [CACHE SAVED] Resposta salva no cache para reutilização');
-    } catch (cacheError) {
-      console.error('⚠️ [CACHE ERROR] Erro ao salvar no cache (não bloqueante):', cacheError);
-      // Não bloqueia a resposta se falhar o cache
+    // 🆕 Verificar se NÃO é fallback antes de cachear
+    const cacheSkipFallbackPhrases = [
+      'vou chamar um especialista',
+      'transferir para um atendente',
+      'encaminhar para um humano',
+      'não tenho essa informação',
+      'não consegui registrar'
+    ];
+    
+    const shouldSkipCache = cacheSkipFallbackPhrases.some(phrase => 
+      assistantMessage.toLowerCase().includes(phrase)
+    );
+    
+    if (shouldSkipCache) {
+      console.log('⚠️ [CACHE SKIP] Resposta de fallback detectada - NÃO cacheando');
+    } else {
+      try {
+        await supabaseClient.from('ai_response_cache').insert({
+          question_hash: questionHash,
+          answer: assistantMessage,
+          context_ids: knowledgeArticles.map(a => ({
+            id: a.id,
+            title: a.title,
+            category: a.category
+          })),
+        });
+        console.log('💾 [CACHE SAVED] Resposta salva no cache para reutilização');
+      } catch (cacheError) {
+        console.error('⚠️ [CACHE ERROR] Erro ao salvar no cache (não bloqueante):', cacheError);
+        // Não bloqueia a resposta se falhar o cache
+      }
     }
 
     return new Response(JSON.stringify({ 
