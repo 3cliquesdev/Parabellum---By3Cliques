@@ -12,6 +12,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
+
   try {
     const { messages, personaId, useKnowledgeBase = false, aiProvider = 'lovable' } = await req.json();
     
@@ -21,6 +23,9 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
     // Fetch persona details
     const { data: persona, error: personaError } = await supabase
@@ -60,29 +65,133 @@ serve(async (req) => {
 
     console.log('[sandbox-chat] Available tools:', tools.length);
 
-    // Knowledge Base Search with Semantic Search
+    // Get last user message for processing
+    const lastUserMessage = messages.filter((m: any) => m.role === 'user').pop()?.content || '';
+    
+    // FASE 2: Intent Classification
+    let intentType = 'search';
+    let handoffTriggered = false;
+    let handoffReason = '';
+    
+    if (lastUserMessage) {
+      try {
+        console.log('[sandbox-chat] Classifying intent...');
+        
+        const intentPayload = {
+          messages: [
+            { 
+              role: 'system', 
+              content: `Classifique a mensagem:
+- "skip" APENAS se for: saudação pura (oi, olá, bom dia), confirmação pura (ok, entendi, beleza), ou elogio/agradecimento puro (obrigado, valeu)
+- "search" para QUALQUER outra coisa (perguntas, dúvidas, problemas, informações, etc.)
+
+Se tiver QUALQUER indício de pergunta ou dúvida, responda "search".
+Responda APENAS: skip ou search`
+            },
+            { role: 'user', content: lastUserMessage }
+          ],
+          temperature: 0.1,
+          max_tokens: 10
+        };
+
+        let intentResponse;
+        if (aiProvider === 'openai' && OPENAI_API_KEY) {
+          const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ model: 'gpt-4o-mini', ...intentPayload }),
+          });
+          intentResponse = await res.json();
+        } else if (LOVABLE_API_KEY) {
+          const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ model: 'google/gemini-2.5-flash', ...intentPayload }),
+          });
+          intentResponse = await res.json();
+        }
+
+        intentType = intentResponse?.choices?.[0]?.message?.content?.trim().toLowerCase() || 'search';
+        console.log('[sandbox-chat] Intent detected:', intentType);
+      } catch (error) {
+        console.error('[sandbox-chat] Intent classification failed:', error);
+        intentType = 'search';
+      }
+      
+      // FASE 3: Auto-Handoff Detection
+      const handoffTriggers = [
+        'falar com humano',
+        'atendente',
+        'falar com pessoa',
+        'falar com alguém',
+        'preciso de ajuda humana',
+        'quero falar com',
+      ];
+      
+      const normalizedMessage = lastUserMessage.toLowerCase();
+      if (handoffTriggers.some(trigger => normalizedMessage.includes(trigger))) {
+        handoffTriggered = true;
+        handoffReason = 'customer_requested_human';
+        console.log('[sandbox-chat] 🚨 Handoff trigger detected: customer requested human');
+      }
+    }
+
+    // FASE 1: Query Expansion + Knowledge Base Search
     let knowledgeArticles: any[] = [];
     let systemPrompt = persona.system_prompt;
-    let usedSemanticSearch = false;
+    let semanticSearchUsed = false;
+    let queriesExecuted: string[] = [];
 
-    if (useKnowledgeBase) {
+    if (useKnowledgeBase && intentType === 'search' && lastUserMessage) {
       console.log('[sandbox-chat] Knowledge base search enabled');
       
-      // Get last user message
-      const lastUserMessage = messages.filter((m: any) => m.role === 'user').pop();
+      const personaCategories = persona.knowledge_base_paths || [];
+      const hasPersonaCategories = personaCategories.length > 0;
       
-      if (lastUserMessage) {
-        const userQuestion = lastUserMessage.content;
-        console.log('[sandbox-chat] User question:', userQuestion);
+      console.log('[sandbox-chat] Persona categories:', {
+        persona_id: persona.id,
+        persona_name: persona.name,
+        allowed_categories: hasPersonaCategories ? personaCategories : 'ALL',
+        category_filter_applied: hasPersonaCategories
+      });
 
+      // Query Expansion
+      let expandedQueries: string[] = [lastUserMessage];
+      
+      try {
+        console.log('[sandbox-chat] 🚀 Query Expansion...');
+        
+        const { data: expansionData, error: expansionError } = await supabase.functions.invoke(
+          'expand-query',
+          { body: { query: lastUserMessage } }
+        );
+
+        if (!expansionError && expansionData?.expanded_queries) {
+          expandedQueries = [lastUserMessage, ...expansionData.expanded_queries];
+          queriesExecuted = expandedQueries;
+          console.log('[sandbox-chat] ✅ Expanded to', expandedQueries.length, 'queries');
+        } else {
+          queriesExecuted = [lastUserMessage];
+        }
+      } catch (error) {
+        console.error('[sandbox-chat] Query expansion failed:', error);
+        queriesExecuted = [lastUserMessage];
+      }
+
+      // Multi-query semantic search with deduplication
+      if (OPENAI_API_KEY) {
         try {
-          // Try semantic search first
-          const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+          console.log('[sandbox-chat] Semantic search for', expandedQueries.length, 'queries...');
           
-          if (OPENAI_API_KEY) {
-            console.log('[sandbox-chat] Attempting semantic search with OpenAI embeddings');
-            
-            // Generate embedding for the user's question
+          const articleMap: Map<string, any> = new Map();
+          
+          for (const query of expandedQueries) {
             const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
               method: 'POST',
               headers: {
@@ -91,75 +200,91 @@ serve(async (req) => {
               },
               body: JSON.stringify({
                 model: 'text-embedding-3-small',
-                input: userQuestion,
+                input: query,
               }),
             });
 
             if (embeddingResponse.ok) {
               const embeddingData = await embeddingResponse.json();
               const queryEmbedding = embeddingData.data[0].embedding;
-
-              // Search using pgvector similarity
-              const { data: semanticArticles, error: semanticError } = await supabase.rpc(
+              
+              const { data: semanticResults, error: semanticError } = await supabase.rpc(
                 'match_knowledge_articles',
                 {
                   query_embedding: queryEmbedding,
                   match_threshold: 0.75,
-                  match_count: 10,
+                  match_count: 5,
                 }
               );
 
-              if (!semanticError && semanticArticles && semanticArticles.length > 0) {
-                console.log(`[sandbox-chat] Semantic search found ${semanticArticles.length} articles`);
-
-                // Filter by persona's knowledge_base_paths if configured
-                let filteredArticles = semanticArticles;
-                if (persona.knowledge_base_paths?.length > 0) {
-                  filteredArticles = semanticArticles.filter((a: any) => 
-                    persona.knowledge_base_paths.includes(a.category)
-                  );
-                  console.log(`[sandbox-chat] Filtered to ${filteredArticles.length} articles by categories:`, persona.knowledge_base_paths);
-                }
-
-                knowledgeArticles = filteredArticles.slice(0, 5).map((a: any) => ({
-                  ...a,
-                  similarity: a.similarity
-                }));
-                usedSemanticSearch = true;
-              } else {
-                console.log('[sandbox-chat] Semantic search returned no results');
+              if (!semanticError && semanticResults) {
+                semanticResults.forEach((article: any) => {
+                  const existing = articleMap.get(article.id);
+                  if (!existing || article.similarity > existing.similarity) {
+                    articleMap.set(article.id, article);
+                  }
+                });
               }
-            } else {
-              console.log('[sandbox-chat] OpenAI embedding generation failed');
             }
+          }
+          
+          let allArticles = Array.from(articleMap.values());
+          
+          if (hasPersonaCategories) {
+            allArticles = allArticles.filter((a: any) => personaCategories.includes(a.category));
+            console.log('[sandbox-chat] Category filter:', articleMap.size, '→', allArticles.length);
+          }
+          
+          if (allArticles.length > 0) {
+            knowledgeArticles = allArticles
+              .sort((a: any, b: any) => b.similarity - a.similarity)
+              .slice(0, 5)
+              .map((a: any) => ({
+                id: a.id,
+                title: a.title,
+                content: a.content,
+                category: a.category,
+                similarity: a.similarity,
+              }));
+            
+            semanticSearchUsed = true;
+            console.log('[sandbox-chat] ✅ Semantic search:', knowledgeArticles.length, 'articles');
           }
         } catch (error) {
           console.error('[sandbox-chat] Semantic search failed:', error);
         }
+      }
 
-        // Fallback to keyword search if semantic search didn't work
-        if (knowledgeArticles.length === 0 && persona.knowledge_base_paths?.length > 0) {
-          console.log('[sandbox-chat] Falling back to keyword search by category');
-          
-          const { data: articles } = await supabase
-            .from('knowledge_articles')
-            .select('id, title, content, category')
-            .eq('is_published', true)
-            .in('category', persona.knowledge_base_paths)
-            .limit(5);
+      // Fallback: keyword-based search
+      if (knowledgeArticles.length === 0 && hasPersonaCategories) {
+        console.log('[sandbox-chat] Fallback: keyword search...');
+        
+        const { data: articles } = await supabase
+          .from('knowledge_articles')
+          .select('id, title, content, category')
+          .eq('is_published', true)
+          .in('category', personaCategories)
+          .limit(5);
 
-          knowledgeArticles = articles || [];
-        }
+        knowledgeArticles = articles || [];
+        console.log('[sandbox-chat] ✅ Keyword search:', knowledgeArticles.length, 'articles');
+      }
+      
+      // Check for knowledge gap (triggers handoff)
+      if (knowledgeArticles.length === 0 && intentType === 'search') {
+        handoffTriggered = true;
+        handoffReason = 'knowledge_gap';
+        console.log('[sandbox-chat] 🚨 Handoff: no relevant articles found');
+      }
 
-        console.log('[sandbox-chat] Final article count:', knowledgeArticles.length);
+      console.log('[sandbox-chat] Final article count:', knowledgeArticles.length);
 
-        if (knowledgeArticles.length > 0) {
-          const kbContext = knowledgeArticles.map((a: any) => 
-            `[Artigo: ${a.title}${a.similarity ? ` | Relevância: ${Math.round(a.similarity * 100)}%` : ''}]\n${a.content}`
-          ).join('\n\n---\n\n');
+      if (knowledgeArticles.length > 0) {
+        const kbContext = knowledgeArticles.map((a: any) => 
+          `[Artigo: ${a.title}${a.similarity ? ` | Relevância: ${Math.round(a.similarity * 100)}%` : ''}]\n${a.content}`
+        ).join('\n\n---\n\n');
 
-          systemPrompt = `${persona.system_prompt}\n\n## BASE DE CONHECIMENTO DISPONÍVEL:\n\n${kbContext}\n\nUSE estas informações da base de conhecimento para responder quando relevante.`;
-        }
+        systemPrompt = `${persona.system_prompt}\n\n## BASE DE CONHECIMENTO DISPONÍVEL:\n\n${kbContext}\n\nUSE estas informações da base de conhecimento para responder quando relevante.`;
       }
     }
 
@@ -173,8 +298,6 @@ serve(async (req) => {
     let aiResponse: Response | null = null;
 
     if (aiProvider === 'openai') {
-      const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-      
       if (!OPENAI_API_KEY) {
         console.log('[sandbox-chat] OpenAI key not found, falling back to Lovable AI');
         actualProvider = 'lovable';
@@ -209,7 +332,6 @@ serve(async (req) => {
     }
 
     if (actualProvider === 'lovable' || !aiResponse) {
-      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       if (!LOVABLE_API_KEY) {
         throw new Error('LOVABLE_API_KEY not configured');
       }
@@ -268,9 +390,11 @@ serve(async (req) => {
     const choice = aiData.choices[0];
     const message = choice.message;
 
-    // Extract tool calls if present
+    // FASE 4: Extract and execute tool calls if present
     const toolCalls = message.tool_calls || [];
     console.log('[sandbox-chat] Tool calls:', toolCalls.length);
+
+    const executionTime = Date.now() - startTime;
 
     return new Response(
       JSON.stringify({
@@ -284,16 +408,21 @@ serve(async (req) => {
         debug: {
           model: actualProvider === 'openai' ? 'gpt-4o-mini' : 'google/gemini-2.5-flash',
           ai_provider: actualProvider,
-          knowledge_search_performed: useKnowledgeBase,
-          semantic_search_used: usedSemanticSearch,
+          intent_classification: intentType,
+          queries_executed: queriesExecuted,
+          knowledge_search_performed: useKnowledgeBase && intentType === 'search',
+          semantic_search_used: semanticSearchUsed,
           articles_found: knowledgeArticles.length,
           articles: knowledgeArticles.map(a => ({ 
             id: a.id, 
             title: a.title, 
             category: a.category,
-            similarity: a.similarity ? Math.round(a.similarity * 100) : null
+            similarity: a.similarity ? `${Math.round(a.similarity * 100)}%` : undefined
           })),
           persona_categories: persona.knowledge_base_paths || [],
+          handoff_triggered: handoffTriggered,
+          handoff_reason: handoffReason,
+          execution_time_ms: executionTime,
           prompt_tokens: aiData.usage?.prompt_tokens || 0,
           completion_tokens: aiData.usage?.completion_tokens || 0,
           total_tokens: aiData.usage?.total_tokens || 0,

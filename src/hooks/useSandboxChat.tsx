@@ -20,10 +20,16 @@ export interface SandboxResponse {
   debug: {
     model: string;
     ai_provider: string;
+    intent_classification: string;
+    queries_executed: string[];
     knowledge_search_performed: boolean;
+    semantic_search_used: boolean;
     articles_found: number;
-    articles: Array<{ id: string; title: string; category: string }>;
+    articles: Array<{ id: string; title: string; category: string; similarity?: string }>;
     persona_categories: string[];
+    handoff_triggered: boolean;
+    handoff_reason: string;
+    execution_time_ms: number;
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;

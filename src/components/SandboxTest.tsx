@@ -365,12 +365,36 @@ export function SandboxTest() {
                 </Badge>
               </div>
               
+              <div>
+                <p className="text-muted-foreground">Intent:</p>
+                <Badge variant={debugInfo.intent_classification === 'skip' ? 'secondary' : 'default'}>
+                  {debugInfo.intent_classification === 'skip' ? '⚡ Skip KB' : '🔍 Search KB'}
+                </Badge>
+              </div>
+              
+              {debugInfo.queries_executed && debugInfo.queries_executed.length > 1 && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Query Expansion:</p>
+                  <div className="bg-muted p-2 rounded mt-1">
+                    <ul className="text-xs space-y-1">
+                      {debugInfo.queries_executed.map((q: string, i: number) => (
+                        <li key={i} className="truncate">
+                          {i === 0 ? '🎯' : '🔄'} {q}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+              
               {debugInfo.knowledge_search_performed && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Database className="h-4 w-4 text-green-500" />
                     <p className="text-muted-foreground">
-                      Base de Conhecimento: <span className="font-medium text-green-500">Ativa</span>
+                      Base: <span className="font-medium text-green-500">
+                        {debugInfo.semantic_search_used ? 'Semantic' : 'Keyword'}
+                      </span>
                     </p>
                   </div>
                   <div>
@@ -383,7 +407,11 @@ export function SandboxTest() {
                       <ul className="text-xs space-y-1">
                         {debugInfo.articles.map((article: any) => (
                           <li key={article.id} className="truncate">
-                            • {article.title} <span className="text-muted-foreground">({article.category})</span>
+                            • {article.title} 
+                            {article.similarity && (
+                              <span className="text-primary ml-1">({article.similarity})</span>
+                            )}
+                            <span className="text-muted-foreground"> [{article.category}]</span>
                           </li>
                         ))}
                       </ul>
@@ -403,6 +431,25 @@ export function SandboxTest() {
                   )}
                 </div>
               )}
+              
+              {debugInfo.handoff_triggered && (
+                <div className="bg-destructive/10 border border-destructive/20 p-3 rounded">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-lg">🚨</span>
+                    <p className="font-semibold text-destructive">Handoff Triggered</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Reason: {debugInfo.handoff_reason === 'customer_requested_human' 
+                      ? 'Customer requested human agent' 
+                      : 'Knowledge gap detected'}
+                  </p>
+                </div>
+              )}
+              
+              <div>
+                <p className="text-muted-foreground">Execution Time:</p>
+                <p className="font-medium">{debugInfo.execution_time_ms}ms</p>
+              </div>
               
               <div>
                 <p className="text-muted-foreground">Tokens:</p>
