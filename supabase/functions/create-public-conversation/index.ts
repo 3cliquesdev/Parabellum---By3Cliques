@@ -17,7 +17,43 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { department_id, contact_id, customer_data, session_verified } = await req.json();
+    const { department_id: requestedDepartmentId, contact_id, customer_data, session_verified } = await req.json();
+
+    // FASE 5: Departamento Automático - determinar baseado no contexto do cliente
+    let finalDepartmentId = requestedDepartmentId;
+    
+    // Se contact_id fornecido, buscar status do cliente para routing inteligente
+    if (contact_id && !requestedDepartmentId) {
+      const { data: contact } = await supabase
+        .from('contacts')
+        .select('status')
+        .eq('id', contact_id)
+        .single();
+      
+      if (contact?.status === 'customer') {
+        // Cliente existente → Suporte
+        const { data: supportDept } = await supabase
+          .from('departments')
+          .select('id')
+          .eq('name', 'Suporte')
+          .eq('is_active', true)
+          .single();
+        
+        finalDepartmentId = supportDept?.id || requestedDepartmentId;
+        console.log('[create-public-conversation] Auto-routing customer to Suporte:', finalDepartmentId);
+      } else {
+        // Lead/prospect → Comercial
+        const { data: salesDept } = await supabase
+          .from('departments')
+          .select('id')
+          .eq('name', 'Comercial')
+          .eq('is_active', true)
+          .single();
+        
+        finalDepartmentId = salesDept?.id || requestedDepartmentId;
+        console.log('[create-public-conversation] Auto-routing lead to Comercial:', finalDepartmentId);
+      }
+    }
 
     // FASE 4: Rate Limiting por IP (10 conversas por minuto por IP anônimo)
     const ip = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'unknown';
@@ -43,7 +79,7 @@ serve(async (req) => {
       );
     }
 
-    if (!department_id) {
+    if (!finalDepartmentId) {
       return new Response(
         JSON.stringify({ success: false, error: 'department_id é obrigatório' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -54,7 +90,7 @@ serve(async (req) => {
     const { data: department, error: deptError } = await supabase
       .from('departments')
       .select('id, name, is_active')
-      .eq('id', department_id)
+      .eq('id', finalDepartmentId)
       .eq('is_active', true)
       .single();
 
@@ -146,7 +182,7 @@ serve(async (req) => {
     const { data: rpcResult, error: rpcError } = await supabase
       .rpc('get_or_create_conversation', {
         p_contact_id: finalContactId,
-        p_department_id: department_id,
+        p_department_id: finalDepartmentId,
         p_channel: 'web_chat'
       })
       .single();
@@ -251,7 +287,7 @@ serve(async (req) => {
         channel: 'other',
         metadata: {
           conversation_id,
-          department_id: department_id,
+          department_id: finalDepartmentId,
           department_name: department.name,
           source: 'public_chat_widget',
           customer_metadata: customerMetadata,
