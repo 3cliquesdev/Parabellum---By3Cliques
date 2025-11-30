@@ -51,6 +51,24 @@ const FINANCIAL_KEYWORDS = [
   'estorno'
 ];
 
+// Template de mensagem de sucesso do ticket
+function createTicketSuccessMessage(
+  ticketId: string, 
+  issueType: string = 'financeiro', 
+  orderId?: string
+): string {
+  const ticketIcon = issueType === 'financeiro' ? '💰' : '📦';
+  const formattedType = issueType.charAt(0).toUpperCase() + issueType.slice(1);
+  const formattedId = ticketId.slice(0, 8).toUpperCase();
+  
+  return `✅ **Protocolo registrado com sucesso!**
+
+📋 **Número do Ticket:** #${formattedId}
+${orderId ? `🔢 **Pedido:** ${orderId}\n` : ''}${ticketIcon} **Tipo:** ${formattedType}
+
+Nossa equipe vai analisar seu caso e retornar em breve.`;
+}
+
 interface AutopilotChatRequest {
   conversationId: string;
   customerMessage: string;
@@ -1125,11 +1143,12 @@ Use essas informações de forma natural e personalizada.`;
                 .update({ related_ticket_id: ticket.id })
                 .eq('id', conversationId);
 
-              // 🎯 SEMPRE complementar (nunca sobrescrever) para preservar fallback detection
-              const ticketIcon = args.issue_type === 'financeiro' ? '💰' : '📦';
-              const ticketConfirmation = `\n\n✅ **Protocolo registrado com sucesso!**\n\n📋 **Número do Ticket:** #${ticket.id.slice(0, 8).toUpperCase()}\n${args.order_id ? `🔢 **Pedido:** ${args.order_id}\n` : ''}${ticketIcon} **Tipo:** ${args.issue_type.charAt(0).toUpperCase() + args.issue_type.slice(1)}\n\nNossa equipe vai analisar seu caso e retornar em breve.`;
-              
-              assistantMessage = assistantMessage + ticketConfirmation;
+              // 🎯 SUBSTITUIR COMPLETAMENTE - Ticket criado = Problema resolvido = Não precisa desculpa
+              assistantMessage = createTicketSuccessMessage(
+                ticket.id,
+                args.issue_type,
+                args.order_id
+              );
             }
           } catch (error) {
             console.error('[ai-autopilot-chat] ❌ Erro ao processar tool call (ignorando):', error);
@@ -1205,10 +1224,11 @@ Use essas informações de forma natural e personalizada.`;
             .update({ related_ticket_id: ticket?.id })
             .eq('id', conversationId);
           
-          // 🔒 Só enriquecer se mensagem NÃO contém protocolo já (previne duplicação quando tool call criou antes)
-          if (!assistantMessage.toLowerCase().includes('protocolo')) {
-            assistantMessage = `${assistantMessage}\n\n📋 Criei o protocolo #${ticket?.id?.slice(0, 8).toUpperCase()} para sua solicitação financeira. Um especialista vai analisar seu caso com prioridade.`;
-          }
+          // 🎯 SUBSTITUIR COMPLETAMENTE - Ticket criado = Mensagem limpa e profissional
+          assistantMessage = createTicketSuccessMessage(
+            ticket?.id || '',
+            'financeiro'
+          );
           
           ticketCreatedSuccessfully = true; // 🔒 Atualizar flag DEPOIS de enriquecer
         }
