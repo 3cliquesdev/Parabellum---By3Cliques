@@ -1139,12 +1139,10 @@ Use essas informações de forma natural e personalizada.`;
               .single();
 
             if (ticketError) {
-              console.error('[ai-autopilot-chat] ❌ Erro ao criar ticket:', ticketError);
-              assistantMessage = 'Desculpe, não consegui registrar seu atendimento. Vou chamar um especialista.';
-              
-              // Fallback to human
-              await supabaseClient.from('conversations').update({ ai_mode: 'copilot' }).eq('id', conversationId);
-              await supabaseClient.functions.invoke('route-conversation', { body: { conversationId } });
+              console.error('[ai-autopilot-chat] ❌ Erro ao criar ticket (ignorando):', ticketError);
+              // ⚠️ NÃO sobrescrever assistantMessage aqui
+              // Deixar que o detector de fallback (linhas 886-979) lide com o handoff
+              // se a resposta da IA for uma frase de fallback
             } else {
               console.log('[ai-autopilot-chat] ✅ Ticket criado com sucesso:', ticket.id);
               
@@ -1159,12 +1157,9 @@ Use essas informações de forma natural e personalizada.`;
               assistantMessage = `✅ Protocolo registrado com sucesso!\n\n📋 **Número do Ticket:** #${ticket.id.slice(0, 8).toUpperCase()}\n${args.order_id ? `🔢 **Pedido:** ${args.order_id}\n` : ''}${ticketIcon} **Tipo:** ${args.issue_type.charAt(0).toUpperCase() + args.issue_type.slice(1)}\n\nNossa equipe vai analisar seu caso e retornar em breve. Você pode acompanhar o status através deste chat.`;
             }
           } catch (error) {
-            console.error('[ai-autopilot-chat] ❌ Erro ao processar tool call:', error);
-            assistantMessage = 'Ocorreu um erro ao processar sua solicitação. Vou chamar um especialista.';
-            
-            // Fallback to human
-            await supabaseClient.from('conversations').update({ ai_mode: 'copilot' }).eq('id', conversationId);
-            await supabaseClient.functions.invoke('route-conversation', { body: { conversationId } });
+            console.error('[ai-autopilot-chat] ❌ Erro ao processar tool call (ignorando):', error);
+            // ⚠️ NÃO sobrescrever assistantMessage aqui
+            // Deixar que o detector de fallback lide com o handoff se necessário
           }
         }
       }
