@@ -534,15 +534,20 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     .eq('id', conversationId);
 
   // 5. Inserir mensagem do cliente
+  const newMessage = {
+    conversation_id: conversationId,
+    content: messageText,
+    sender_type: 'contact',
+    sender_id: null,
+    is_ai_generated: false,
+  };
+
+  console.log('[handle-whatsapp-event] 📨 Trying to insert message:', newMessage);
+
   const { error: messageError } = await supabase
     .from('messages')
-    .insert({
-      conversation_id: conversationId,
-      content: messageText,
-      sender_type: 'contact',
-      sender_id: null,
-      is_ai_generated: false,
-    });
+    .insert(newMessage);
+
 
   if (messageError) {
     console.error('[handle-whatsapp-event] Error inserting message:', messageError);
