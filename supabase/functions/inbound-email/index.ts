@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, svix-id, svix-timestamp, svix-signature",
 };
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -18,7 +18,71 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const payload = await req.json();
+    // Verificar secret configurado
+    const webhookSecret = Deno.env.get('RESEND_WEBHOOK_SECRET');
+    if (!webhookSecret) {
+      console.error('[inbound-email] RESEND_WEBHOOK_SECRET not configured');
+      return new Response(
+        JSON.stringify({ error: 'Webhook secret not configured' }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Extrair headers Svix
+    const svixId = req.headers.get('svix-id');
+    const svixTimestamp = req.headers.get('svix-timestamp');
+    const svixSignature = req.headers.get('svix-signature');
+
+    if (!svixId || !svixTimestamp || !svixSignature) {
+      console.error('[inbound-email] Missing Svix headers');
+      return new Response(
+        JSON.stringify({ error: 'Missing webhook signature headers' }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Ler body como texto para validação
+    const body = await req.text();
+    const signedContent = `${svixId}.${svixTimestamp}.${body}`;
+
+    // Calcular assinatura esperada
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(webhookSecret);
+    const key = await crypto.subtle.importKey(
+      'raw', keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false, ['sign']
+    );
+
+    const signatureData = await crypto.subtle.sign('HMAC', key, encoder.encode(signedContent));
+    const expectedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureData)));
+
+    // Verificar assinatura
+    const signatures = svixSignature.split(' ');
+    const versionedSignatures = signatures.filter(sig => sig.startsWith('v1,'));
+
+    if (versionedSignatures.length === 0) {
+      console.error('[inbound-email] No v1 signature found');
+      return new Response(
+        JSON.stringify({ error: 'Invalid signature version' }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const providedSignature = versionedSignatures[0].replace('v1,', '');
+
+    if (providedSignature !== expectedSignature) {
+      console.error('[inbound-email] Signature verification failed');
+      return new Response(
+        JSON.stringify({ error: 'Invalid webhook signature' }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log('[inbound-email] ✅ Signature verified successfully');
+
+    // Agora parsear o JSON
+    const payload = JSON.parse(body);
     console.log("[inbound-email] Payload received:", JSON.stringify(payload, null, 2));
 
     // Resend webhook payload structure
