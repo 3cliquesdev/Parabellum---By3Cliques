@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useCreateKnowledgeArticle } from "@/hooks/useCreateKnowledgeArticle";
 import { useUpdateKnowledgeArticle } from "@/hooks/useUpdateKnowledgeArticle";
+import { useGenerateEmbedding } from "@/hooks/useGenerateEmbedding";
 
 interface KnowledgeArticle {
   id: string;
@@ -32,6 +33,7 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
 
   const createArticle = useCreateKnowledgeArticle();
   const updateArticle = useUpdateKnowledgeArticle();
+  const generateEmbedding = useGenerateEmbedding();
 
   useEffect(() => {
     if (article) {
@@ -53,6 +55,7 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
     e.preventDefault();
 
     const tags = tagsInput.split(",").map(tag => tag.trim()).filter(Boolean);
+    let articleId: string;
 
     if (article) {
       await updateArticle.mutateAsync({
@@ -63,14 +66,21 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
         tags,
         is_published: isPublished,
       });
+      articleId = article.id;
     } else {
-      await createArticle.mutateAsync({
+      const newArticle = await createArticle.mutateAsync({
         title,
         content,
         category: category || undefined,
         tags,
         is_published: isPublished,
       });
+      articleId = newArticle.id;
+    }
+
+    // FASE 3: Gerar embedding automaticamente para busca semântica
+    if (articleId && content) {
+      generateEmbedding.mutate({ articleId, content });
     }
 
     onOpenChange(false);

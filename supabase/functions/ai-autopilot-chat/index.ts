@@ -344,9 +344,6 @@ Responda APENAS: skip ou search`
       // QUALQUER outra coisa: buscar na base de conhecimento
       console.log('[ai-autopilot-chat] 🔍 Search - consultando base de conhecimento...');
       
-      const removeAccents = (str: string) => 
-        str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      
       // FASE 1: Verificar se persona tem categorias específicas configuradas
       const personaCategories = persona.knowledge_base_paths || [];
       const hasPersonaCategories = personaCategories.length > 0;
@@ -359,61 +356,123 @@ Responda APENAS: skip ou search`
       });
       
       try {
-        const keywordData = await callAIWithFallback({
-          messages: [
-            { 
-              role: 'system', 
-              content: 'Extraia palavras-chave (substantivos e verbos) da mensagem. Responda apenas as palavras separadas por espaço.'
+        // FASE 3: Busca Semântica via Embeddings (se OpenAI disponível)
+        if (OPENAI_API_KEY) {
+          console.log('[ai-autopilot-chat] 🧠 Usando busca semântica (embeddings)...');
+          
+          // Gerar embedding da pergunta do usuário
+          const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'Content-Type': 'application/json',
             },
-            { role: 'user', content: customerMessage }
-          ],
-          temperature: 0.3,
-          max_tokens: 50
-        });
+            body: JSON.stringify({
+              model: 'text-embedding-3-small',
+              input: customerMessage,
+            }),
+          });
 
-        const extractedKeywords = keywordData.choices?.[0]?.message?.content?.trim() || '';
-        const words = extractedKeywords.toLowerCase().split(/\s+/).filter((w: string) => w.length > 1);
-        
-        if (words.length > 0) {
-          const searchTerms = words.flatMap((word: string) => [word, removeAccents(word)])
-            .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
-          
-          const orConditions = searchTerms.map((term: string) =>
-            `title.ilike.%${term}%,content.ilike.%${term}%`
-          ).join(',');
-          
-          // FASE 1: Construir query com filtro de categoria se persona tiver configurado
-          let query = supabaseClient
-            .from('knowledge_articles')
-            .select('title, content, category')
-            .eq('is_published', true)
-            .or(orConditions);
-          
-          // Aplicar filtro de categoria se persona tiver categorias específicas
-          if (hasPersonaCategories) {
-            query = query.in('category', personaCategories);
-            console.log(`[ai-autopilot-chat] 🔒 Filtro de categoria APLICADO: ${personaCategories.join(', ')}`);
-          } else {
-            console.log('[ai-autopilot-chat] 🌐 Sem filtro de categoria - buscando em TODAS as categorias');
-          }
-          
-          const { data: relevantArticles } = await query.limit(5);
+          if (embeddingResponse.ok) {
+            const embeddingData = await embeddingResponse.json();
+            const queryEmbedding = embeddingData.data[0].embedding;
+            
+            console.log('[ai-autopilot-chat] 📊 Query embedding gerado. Buscando artigos similares...');
 
-          if (relevantArticles && relevantArticles.length > 0) {
-            knowledgeArticles = relevantArticles;
-            console.log(`[ai-autopilot-chat] ✅ ${relevantArticles.length} artigos encontrados`, 
-              relevantArticles.map(a => `${a.title} [${a.category}]`));
+            // Buscar artigos por similaridade semântica
+            const { data: semanticResults, error: semanticError } = await supabaseClient
+              .rpc('match_knowledge_articles', {
+                query_embedding: queryEmbedding,
+                match_threshold: 0.75,
+                match_count: 5,
+              });
+
+            if (semanticError) {
+              console.error('[ai-autopilot-chat] Erro na busca semântica:', semanticError);
+            } else if (semanticResults && semanticResults.length > 0) {
+              // Filtrar por categoria se persona tiver configurado
+              let filteredResults = semanticResults;
+              if (hasPersonaCategories) {
+                filteredResults = semanticResults.filter((a: any) => 
+                  personaCategories.includes(a.category)
+                );
+                console.log(`[ai-autopilot-chat] 🔒 Filtro de categoria aplicado: ${semanticResults.length} → ${filteredResults.length} artigos`);
+              }
+
+              if (filteredResults.length > 0) {
+                knowledgeArticles = filteredResults.map((a: any) => ({
+                  id: a.id,
+                  title: a.title,
+                  content: a.content,
+                  category: a.category,
+                }));
+                
+                console.log(`[ai-autopilot-chat] ✅ Busca Semântica: ${filteredResults.length} artigos encontrados:`, 
+                  filteredResults.map((a: any) => `${a.title} [${a.category}] (${(a.similarity * 100).toFixed(1)}%)`));
+              } else {
+                console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo relevante após filtro de categoria');
+              }
+            } else {
+              console.log('[ai-autopilot-chat] ⚠️ Busca semântica não retornou resultados');
+            }
           } else {
-            // FASE 3: Se não encontrar artigos, deixar IA tentar responder com conhecimento geral
-            // Só fazer handoff se a IA explicitamente não souber
-            const reasonMsg = hasPersonaCategories 
-              ? `nas categorias permitidas (${personaCategories.join(', ')})`
-              : 'na base completa';
-            console.log(`[ai-autopilot-chat] ⚠️ Nenhum artigo encontrado ${reasonMsg} - IA tentará responder com conhecimento geral`);
+            console.warn('[ai-autopilot-chat] Falha ao gerar embedding, usando busca por palavras-chave');
+            throw new Error('Embedding failed');
           }
+        } else {
+          throw new Error('OpenAI não disponível');
         }
-      } catch (error) {
-        console.error('[ai-autopilot-chat] Erro na busca de conhecimento:', error);
+      } catch (embeddingError) {
+        // FALLBACK: Busca por palavras-chave (método antigo)
+        console.log('[ai-autopilot-chat] ⚠️ Fallback para busca por palavras-chave');
+        
+        const removeAccents = (str: string) => 
+          str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        
+        try {
+          const keywordData = await callAIWithFallback({
+            messages: [
+              { 
+                role: 'system', 
+                content: 'Extraia palavras-chave (substantivos e verbos) da mensagem. Responda apenas as palavras separadas por espaço.'
+              },
+              { role: 'user', content: customerMessage }
+            ],
+            temperature: 0.3,
+            max_tokens: 50
+          });
+
+          const extractedKeywords = keywordData.choices?.[0]?.message?.content?.trim() || '';
+          const words = extractedKeywords.toLowerCase().split(/\s+/).filter((w: string) => w.length > 1);
+          
+          if (words.length > 0) {
+            const searchTerms = words.flatMap((word: string) => [word, removeAccents(word)])
+              .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
+            
+            const orConditions = searchTerms.map((term: string) =>
+              `title.ilike.%${term}%,content.ilike.%${term}%`
+            ).join(',');
+            
+            let query = supabaseClient
+              .from('knowledge_articles')
+              .select('id, title, content, category')
+              .eq('is_published', true)
+              .or(orConditions);
+            
+            if (hasPersonaCategories) {
+              query = query.in('category', personaCategories);
+            }
+            
+            const { data: relevantArticles } = await query.limit(5);
+
+            if (relevantArticles && relevantArticles.length > 0) {
+              knowledgeArticles = relevantArticles;
+              console.log(`[ai-autopilot-chat] ✅ Busca por Palavras-Chave: ${relevantArticles.length} artigos encontrados`);
+            }
+          }
+        } catch (keywordError) {
+          console.error('[ai-autopilot-chat] Erro na busca por palavras-chave:', keywordError);
+        }
       }
     }
 

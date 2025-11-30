@@ -125,3 +125,6 @@ verify_jwt = true
 
 [functions.resend-welcome-email]
 verify_jwt = true
+
+[functions.generate-article-embedding]
+verify_jwt = true

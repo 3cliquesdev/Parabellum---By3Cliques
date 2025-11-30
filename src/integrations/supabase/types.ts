@@ -1636,6 +1636,7 @@ export type Database = {
           content: string
           created_at: string
           created_by: string | null
+          embedding: string | null
           id: string
           is_published: boolean
           tags: string[] | null
@@ -1647,6 +1648,7 @@ export type Database = {
           content: string
           created_at?: string
           created_by?: string | null
+          embedding?: string | null
           id?: string
           is_published?: boolean
           tags?: string[] | null
@@ -1658,6 +1660,7 @@ export type Database = {
           content?: string
           created_at?: string
           created_by?: string | null
+          embedding?: string | null
           id?: string
           is_published?: boolean
           tags?: string[] | null
@@ -2957,6 +2960,24 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      match_knowledge_articles: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          category: string
+          content: string
+          id: string
+          similarity: number
+          title: string
+        }[]
+      }
+      update_article_embedding: {
+        Args: { article_id: string; new_embedding: string }
+        Returns: undefined
       }
       upsert_contact_with_interaction:
         | {
