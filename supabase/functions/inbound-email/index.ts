@@ -97,7 +97,7 @@ serve(async (req) => {
     // 2. Find or create contact
     let { data: contact, error: contactFetchError } = await supabase
       .from("contacts")
-      .select("id, first_name, last_name")
+      .select("id, first_name, last_name, email")
       .eq("email", fromEmail)
       .single();
 
@@ -129,117 +129,106 @@ serve(async (req) => {
       throw new Error("Failed to find or create contact");
     }
 
-    // 3. Check if this is a reply to an existing ticket
-    // Look for "Re:" in subject or ticket ID pattern
-    const isReply = subject.toLowerCase().startsWith("re:");
-    let existingTicket = null;
+    // FASE 2: NOVO FLUXO - Criar Conversa + Disparar IA (não criar ticket direto)
+    console.log("[inbound-email] 🔄 NOVO FLUXO: Criando conversa com canal=email...");
 
-    if (isReply && contact.id) {
-      // Try to extract ticket ID from subject (format: "Re: [Subject] [Ticket #ID]")
-      const ticketIdMatch = subject.match(/ticket #([a-f0-9-]+)/i);
-      
-      if (ticketIdMatch) {
-        const { data: ticket } = await supabase
-          .from("tickets")
-          .select("id")
-          .eq("id", ticketIdMatch[1])
-          .eq("customer_id", contact.id)
-          .in("status", ["open", "in_progress", "waiting_customer"])
-          .single();
+    // Buscar departamento Suporte
+    const { data: supportDept } = await supabase
+      .from("departments")
+      .select("id, name")
+      .eq("name", "Suporte")
+      .eq("is_active", true)
+      .single();
 
-        existingTicket = ticket;
-      }
-
-      // Fallback: Find most recent open ticket from this customer
-      if (!existingTicket) {
-        const { data: ticket } = await supabase
-          .from("tickets")
-          .select("id")
-          .eq("customer_id", contact.id)
-          .in("status", ["open", "in_progress", "waiting_customer"])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
-
-        existingTicket = ticket;
-      }
+    if (!supportDept) {
+      throw new Error("Departamento Suporte não encontrado");
     }
 
-    // 4. Add comment to existing ticket OR create new ticket
-    if (existingTicket) {
-      console.log("[inbound-email] Adding comment to existing ticket:", existingTicket.id);
+    // Usar RPC get_or_create_conversation com channel='email'
+    const { data: conversationData, error: convError } = await supabase
+      .rpc('get_or_create_conversation', {
+        p_contact_id: contact.id,
+        p_department_id: supportDept.id,
+        p_channel: 'email'
+      })
+      .single();
 
-      const { error: commentError } = await supabase
-        .from("ticket_comments")
-        .insert({
-          ticket_id: existingTicket.id,
-          content: text || html || "Email sem conteúdo",
-          is_internal: false,
-        });
+    if (convError) {
+      console.error('[inbound-email] Erro ao criar conversa:', convError);
+      throw new Error(`Failed to create conversation: ${convError.message}`);
+    }
 
-      if (commentError) throw commentError;
+    const conversationId = (conversationData as any).conversation_id;
+    console.log(`[inbound-email] ✅ Conversa criada/recuperada: ${conversationId}`);
 
-      // Update ticket status to indicate customer replied
-      await supabase
-        .from("tickets")
-        .update({ 
-          status: "in_progress",
-          last_email_message_id: headers["Message-ID"] || null,
-        })
-        .eq("id", existingTicket.id);
+    // Inserir mensagem do cliente na conversa
+    const emailContent = text || html || "Email sem conteúdo";
+    
+    await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      content: emailContent,
+      sender_type: 'contact',
+      channel: 'email',
+      status: 'delivered'
+    });
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          action: "comment_added",
-          ticket_id: existingTicket.id,
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+    console.log('[inbound-email] ✅ Mensagem do cliente inserida');
+
+    // DISPARAR IA para responder automaticamente
+    console.log('[inbound-email] 🤖 Disparando IA para responder...');
+    
+    try {
+      await supabase.functions.invoke('ai-autopilot-chat', {
+        body: {
+          conversationId,
+          customerMessage: emailContent,
+          customer_context: {
+            name: `${contact.first_name} ${contact.last_name}`.trim(),
+            email: contact.email,
+            isVerified: true
+          }
         }
-      );
-    } else {
-      console.log("[inbound-email] Creating new ticket...");
-
-      // Get Suporte department
-      const { data: department } = await supabase
-        .from("departments")
-        .select("id")
-        .eq("name", "Suporte")
-        .single();
-
+      });
+      
+      console.log('[inbound-email] ✅ IA disparada com sucesso');
+    } catch (aiError) {
+      console.error('[inbound-email] ⚠️ Erro ao disparar IA:', aiError);
+      // Se IA falhar, fazer fallback para criar ticket (como antes)
+      console.log('[inbound-email] Fallback: criando ticket...');
+      
       const { data: ticket, error: ticketError } = await supabase
         .from("tickets")
         .insert({
           customer_id: contact.id,
           subject: subject.replace(/^re:\s*/i, "").trim(),
-          description: text || "Conteúdo em HTML",
+          description: emailContent,
           channel: "email",
           status: "open",
           priority: "medium",
-          department_id: department?.id,
+          department_id: supportDept.id,
+          source_conversation_id: conversationId,
           last_email_message_id: headers["Message-ID"] || null,
         })
         .select()
         .single();
 
       if (ticketError) throw ticketError;
-
-      console.log("[inbound-email] Ticket created:", ticket.id);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          action: "ticket_created",
-          ticket_id: ticket.id,
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      
+      console.log("[inbound-email] Ticket fallback criado:", ticket.id);
     }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        action: "conversation_created_with_ai",
+        conversation_id: conversationId,
+        contact_id: contact.id,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   } catch (error: any) {
     console.error("[inbound-email] Error:", error);
     return new Response(

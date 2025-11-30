@@ -963,8 +963,68 @@ Use essas informações de forma natural e personalizada.`;
 
     const messageId = savedMessage?.id;
 
+    // FASE 3: Se Email, enviar resposta via send-email
+    if (responseChannel === 'email' && contact.email && messageId) {
+      console.log('[ai-autopilot-chat] 📧 Enviando resposta por email:', {
+        contactEmail: contact.email,
+        messageId
+      });
+
+      try {
+        const { data: emailResult, error: emailError } = await supabaseClient.functions.invoke('send-email', {
+          body: {
+            to: contact.email,
+            to_name: `${contact.first_name} ${contact.last_name}`.trim(),
+            subject: `Re: ${conversation.subject || 'Seu Armazém Drop - Resposta do Suporte'}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #2563EB;">Olá, ${contact.first_name}!</h2>
+                <div style="margin: 20px 0; line-height: 1.6;">
+                  ${assistantMessage.replace(/\n/g, '<br>')}
+                </div>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;" />
+                <p style="color: #6b7280; font-size: 12px;">
+                  Esta é uma resposta automática do nosso assistente inteligente.<br>
+                  Se precisar de mais ajuda, basta responder este email.
+                </p>
+              </div>
+            `,
+            customer_id: contact.id
+          }
+        });
+
+        if (emailError) {
+          console.error('[ai-autopilot-chat] ❌ Erro ao enviar email:', emailError);
+          // Atualizar status para failed
+          await supabaseClient
+            .from('messages')
+            .update({ 
+              status: 'failed',
+              delivery_error: emailError.message || 'Failed to send email'
+            })
+            .eq('id', messageId);
+        } else {
+          console.log('[ai-autopilot-chat] ✅ Email enviado com sucesso');
+          // Atualizar status para delivered
+          await supabaseClient
+            .from('messages')
+            .update({ status: 'delivered' })
+            .eq('id', messageId);
+        }
+      } catch (emailError) {
+        console.error('[ai-autopilot-chat] ❌ Exception ao enviar email:', emailError);
+        await supabaseClient
+          .from('messages')
+          .update({ 
+            status: 'failed',
+            delivery_error: emailError instanceof Error ? emailError.message : 'Unknown error'
+          })
+          .eq('id', messageId);
+      }
+    }
+    
     // 8. Se WhatsApp, enviar via Evolution API e atualizar status
-    if (responseChannel === 'whatsapp' && contact.phone && messageId) {
+    else if (responseChannel === 'whatsapp' && contact.phone && messageId) {
       console.log('[ai-autopilot-chat] 📱 Tentando enviar WhatsApp:', {
         contactPhone: contact.phone,
         contactWhatsappId: contact.whatsapp_id,

@@ -176,6 +176,37 @@ ${summary}
         }
       });
 
+    // FASE 4: Se canal é email, criar ticket automaticamente para agente trabalhar
+    const { data: conversationDetails } = await supabaseClient
+      .from('conversations')
+      .select('channel')
+      .eq('id', conversationId)
+      .single();
+
+    if (conversationDetails?.channel === 'email') {
+      console.log('[auto-handoff] 📧 Canal é email - criando ticket para agente...');
+      
+      const { data: ticket, error: ticketError } = await supabaseClient
+        .from('tickets')
+        .insert({
+          customer_id: conversation.contact_id,
+          subject: `[Escalado da IA] ${summary.substring(0, 100)}`,
+          description: summary,
+          channel: 'email',
+          source_conversation_id: conversationId,
+          priority: handoffReason === 'critical_sentiment' ? 'high' : 'medium',
+          status: 'open'
+        })
+        .select()
+        .single();
+
+      if (ticketError) {
+        console.error('[auto-handoff] ⚠️ Erro ao criar ticket:', ticketError);
+      } else {
+        console.log('[auto-handoff] ✅ Ticket criado:', ticket.id);
+      }
+    }
+
     console.log('[auto-handoff] ✅ Handoff executado com sucesso!');
 
     return new Response(

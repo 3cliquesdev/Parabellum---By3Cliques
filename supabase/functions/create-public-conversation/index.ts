@@ -300,6 +300,27 @@ serve(async (req) => {
       is_returning_customer: customerMetadata.is_returning_customer || false,
     });
 
+    // FASE 1: Disparar IA automaticamente para nova conversa (boas-vindas)
+    console.log('[create-public-conversation] 🤖 Disparando IA para boas-vindas...');
+    try {
+      await supabase.functions.invoke('ai-autopilot-chat', {
+        body: {
+          conversationId: conversation_id,
+          customerMessage: '[NOVA_CONVERSA]', // Trigger especial para IA enviar boas-vindas
+          customer_context: customerMetadata.is_returning_customer ? {
+            name: customer_data?.first_name,
+            email: customer_data?.email,
+            isVerified: true,
+            isReturning: true
+          } : null
+        },
+      });
+      console.log('[create-public-conversation] ✅ IA disparada com sucesso');
+    } catch (aiError) {
+      console.error('[create-public-conversation] ⚠️ Erro ao disparar IA (não-crítico):', aiError);
+      // Não falhar a criação da conversa se IA falhar
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
