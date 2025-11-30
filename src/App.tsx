@@ -49,6 +49,7 @@ import KnowledgeImport from "./pages/KnowledgeImport";
 import DeliveryGroups from "./pages/DeliveryGroups";
 import Cadences from "./pages/Cadences";
 import SalesTasks from "./pages/SalesTasks";
+import Macros from "./pages/Macros";
 import NotFound from "./pages/NotFound";
 import AuditLogs from "./pages/AuditLogs";
 import WhatsAppSettings from "./pages/WhatsAppSettings";
@@ -162,6 +163,7 @@ const App = () => {
             <Route path="/settings/audit-logs" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><AuditLogs /></Layout></ProtectedRoute>} />
             <Route path="/settings/whatsapp" element={<ProtectedRoute allowedRoles={["admin", "consultant"]}><WhatsAppSettings /></ProtectedRoute>} />
             <Route path="/settings/webhooks" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><WebhooksSettings /></Layout></ProtectedRoute>} />
+            <Route path="/settings/macros" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "support_agent", "support_manager", "consultant", "sales_rep"]}><Layout><Macros /></Layout></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -711,6 +711,53 @@ export type Database = {
           },
         ]
       }
+      canned_responses: {
+        Row: {
+          content: string
+          created_at: string | null
+          created_by: string
+          department_id: string | null
+          id: string
+          is_public: boolean | null
+          shortcut: string
+          title: string
+          updated_at: string | null
+          usage_count: number | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          created_by?: string
+          department_id?: string | null
+          id?: string
+          is_public?: boolean | null
+          shortcut: string
+          title: string
+          updated_at?: string | null
+          usage_count?: number | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          created_by?: string
+          department_id?: string | null
+          id?: string
+          is_public?: boolean | null
+          shortcut?: string
+          title?: string
+          updated_at?: string | null
+          usage_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canned_responses_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           account_balance: number | null

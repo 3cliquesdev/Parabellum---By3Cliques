@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { SlashCommandMenu } from "@/components/SlashCommandMenu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTicketComments } from "@/hooks/useTicketComments";
@@ -79,12 +80,14 @@ export function TicketChat({ ticketId }: TicketChatProps) {
         </ScrollArea>
 
         <form onSubmit={handleSubmit} className="space-y-2">
-          <Textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Digite sua resposta..."
-            rows={3}
-          />
+          <SlashCommandMenu value={message} onChange={setMessage}>
+            <Textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Digite sua resposta ou / para macros..."
+              rows={3}
+            />
+          </SlashCommandMenu>
           <div className="flex justify-end">
             <Button 
               type="submit" 

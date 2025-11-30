@@ -11,7 +11,10 @@ import { TicketAttachments } from "@/components/TicketAttachments";
 import { TicketConversationLink } from "@/components/TicketConversationLink";
 import { FinancialApprovalBar } from "@/components/FinancialApprovalBar";
 import { TransferToFinancialDialog } from "@/components/TransferToFinancialDialog";
-import { AlertCircle, Clock, CheckCircle, Sparkles, Copy, ArrowRight } from "lucide-react";
+import { useTicketPresence } from "@/hooks/useTicketPresence";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertCircle, Clock, CheckCircle, Sparkles, Copy, ArrowRight, Users } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -60,6 +63,9 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
   const [suggestedReply, setSuggestedReply] = useState<string>("");
   const [attachments, setAttachments] = useState(ticket.attachments || []);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  
+  // FASE 5: Agent Presence
+  const { otherUsers, setTyping } = useTicketPresence(ticket.id);
 
   const handleStatusChange = (status: string) => {
     updateTicket.mutate({
@@ -116,7 +122,52 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
       <div className="border-b p-6 space-y-4">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold mb-2 text-slate-900 dark:text-white">{ticket.subject}</h2>
+            <div className="flex items-center gap-3 mb-2">
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{ticket.subject}</h2>
+              
+              {/* FASE 5: Agent Presence - Avatares */}
+              {otherUsers.length > 0 && (
+                <TooltipProvider>
+                  <div className="flex items-center gap-2">
+                    <div className="flex -space-x-2">
+                      {otherUsers.slice(0, 3).map((user) => (
+                        <Tooltip key={user.user_id}>
+                          <TooltipTrigger>
+                            <Avatar className="w-8 h-8 border-2 border-white dark:border-zinc-800">
+                              {user.avatar_url ? (
+                                <AvatarImage src={user.avatar_url} alt={user.full_name} />
+                              ) : null}
+                              <AvatarFallback className="bg-blue-500 text-white text-xs">
+                                {user.full_name.split(' ').map(n => n[0]).join('')}
+                              </AvatarFallback>
+                            </Avatar>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">{user.full_name} - Visualizando agora</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                    {otherUsers.length > 3 && (
+                      <span className="text-xs text-muted-foreground">
+                        +{otherUsers.length - 3} mais
+                      </span>
+                    )}
+                  </div>
+                </TooltipProvider>
+              )}
+            </div>
+            
+            {/* FASE 5: Alerta de "Fulano está digitando..." */}
+            {otherUsers.some(u => u.is_typing) && (
+              <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 mb-2">
+                <Users className="w-4 h-4 animate-pulse" />
+                <span>
+                  {otherUsers.filter(u => u.is_typing).map(u => u.full_name).join(', ')} está digitando...
+                </span>
+              </div>
+            )}
+            
             <p className="text-sm text-slate-500 dark:text-slate-400">
               Criado {formatDistanceToNow(new Date(ticket.created_at), { 
                 addSuffix: true, 

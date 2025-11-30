@@ -17,6 +17,7 @@ import { useActivePersona } from "@/hooks/useActivePersona";
 import { useTakeControl } from "@/hooks/useTakeControl";
 import { useReturnToAutopilot } from "@/hooks/useReturnToAutopilot";
 import { useAutopilotTrigger } from "@/hooks/useAutopilotTrigger";
+import { SlashCommandMenu } from "@/components/SlashCommandMenu";
 import TransferConversationDialog from "@/components/TransferConversationDialog";
 import { CreateTicketFromInboxDialog } from "@/components/CreateTicketFromInboxDialog";
 import CopilotSuggestionCard from "@/components/CopilotSuggestionCard";
@@ -548,23 +549,25 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
               ) : (
                 <div className="flex-none bg-white/95 dark:bg-zinc-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-zinc-900/60 border-t border-slate-200 dark:border-zinc-800 p-4">
                   <div className="max-w-3xl mx-auto flex gap-3 items-center">
-                    <Input
-                      placeholder={
-                        conversation.status === "closed"
-                          ? "Conversa encerrada - não é possível enviar mensagens"
-                          : "Digite sua mensagem..."
-                      }
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage();
+                    <SlashCommandMenu value={message} onChange={setMessage}>
+                      <Input
+                        placeholder={
+                          conversation.status === "closed"
+                            ? "Conversa encerrada - não é possível enviar mensagens"
+                            : "Digite sua mensagem ou / para macros..."
                         }
-                      }}
-                      disabled={isSending || conversation.status === "closed"}
-                      className="flex-1 rounded-full bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 px-5 py-3 h-12"
-                    />
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage();
+                          }
+                        }}
+                        disabled={isSending || conversation.status === "closed"}
+                        className="flex-1 rounded-full bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 px-5 py-3 h-12"
+                      />
+                    </SlashCommandMenu>
                     <Button 
                       onClick={handleSendMessage} 
                       disabled={isSending || !message.trim() || conversation.status === "closed"}
