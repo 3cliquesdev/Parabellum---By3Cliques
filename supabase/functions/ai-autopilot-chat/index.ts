@@ -102,7 +102,7 @@ serve(async (req) => {
       .from('ai_response_cache')
       .select('answer, context_ids, created_at')
       .eq('question_hash', questionHash)
-      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // TTL 24h
+      .gte('created_at', new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString()) // ✅ FASE 3: TTL reduzido para 1h
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -126,6 +126,7 @@ serve(async (req) => {
           sender_type: "user",
           is_ai_generated: true,
           attachment_url: JSON.stringify(cachedResponse.context_ids || []),
+          channel: responseChannel, // ✅ FASE 4: Adicionar canal
         })
         .select('id')
         .single();
@@ -942,6 +943,7 @@ Use essas informações de forma natural e personalizada.`;
         is_ai_generated: true,
         sender_id: null,
         status: 'sending', // CRITICAL: Start with 'sending' status
+        channel: responseChannel, // ✅ FASE 4: Adicionar canal
         attachment_url: JSON.stringify({
           persona_id: persona.id,
           persona_name: persona.name,

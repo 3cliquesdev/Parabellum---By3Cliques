@@ -80,9 +80,15 @@ export function useSendMessage() {
 
   return useMutation({
     mutationFn: async (message: MessageInsert & { status?: 'sending' | 'sent' | 'failed'; delivery_error?: string | null }) => {
+      // ✅ FASE 2: Garantir canal para mensagens Web Chat
+      const messageWithChannel = {
+        ...message,
+        channel: message.channel || 'web_chat',
+      };
+
       const { data, error } = await supabase
         .from("messages")
-        .insert(message)
+        .insert(messageWithChannel)
         .select()
         .single();
 

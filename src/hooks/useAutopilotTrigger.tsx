@@ -35,6 +35,12 @@ export function useAutopilotTrigger(conversationId: string | null) {
             return;
           }
 
+          // ✅ FASE 1: Ignorar mensagens WhatsApp (já processadas pelo handle-whatsapp-event)
+          if (newMessage.channel === 'whatsapp') {
+            console.log('[useAutopilotTrigger] Ignorando mensagem WhatsApp - processada pelo backend');
+            return;
+          }
+
           // Buscar ai_mode
           const { data: conv, error } = await supabase
             .from('conversations')
