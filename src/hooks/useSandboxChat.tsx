@@ -9,6 +9,21 @@ export interface SandboxMessage {
   timestamp: Date;
 }
 
+export interface CustomerContext {
+  contact_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  status: string;
+}
+
+export interface ToolExecutionResult {
+  tool_name: string;
+  arguments: any;
+  result: any;
+  success: boolean;
+}
+
 export interface SandboxResponse {
   content: string;
   tool_calls: any[];
@@ -33,6 +48,8 @@ export interface SandboxResponse {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
+    customer_context?: CustomerContext;
+    tools_executed?: ToolExecutionResult[];
   };
 }
 
@@ -42,8 +59,9 @@ export const useSandboxChat = () => {
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [useKnowledgeBase, setUseKnowledgeBase] = useState(false);
   const [aiProvider, setAiProvider] = useState<'lovable' | 'openai'>('lovable');
+  const [customerContext, setCustomerContext] = useState<CustomerContext | null>(null);
 
-  const sendMessage = async (content: string, personaId: string) => {
+  const sendMessage = async (content: string, personaId: string, context?: CustomerContext) => {
     if (!content.trim() || !personaId) return;
 
     // Add user message
@@ -66,6 +84,7 @@ export const useSandboxChat = () => {
           personaId,
           useKnowledgeBase,
           aiProvider,
+          customerContext: context || customerContext,
         },
       });
 
@@ -95,6 +114,7 @@ export const useSandboxChat = () => {
   const clearChat = () => {
     setMessages([]);
     setDebugInfo(null);
+    setCustomerContext(null);
   };
 
   return {
@@ -107,5 +127,7 @@ export const useSandboxChat = () => {
     setUseKnowledgeBase,
     aiProvider,
     setAiProvider,
+    customerContext,
+    setCustomerContext,
   };
 };
