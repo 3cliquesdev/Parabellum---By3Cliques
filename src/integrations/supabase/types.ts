@@ -2744,6 +2744,7 @@ export type Database = {
           attachment_url: string | null
           attachments: Json | null
           category: Database["public"]["Enums"]["ticket_category"] | null
+          channel: string | null
           conversation_id: string | null
           created_at: string
           customer_id: string
@@ -2753,6 +2754,8 @@ export type Database = {
           first_response_at: string | null
           id: string
           internal_note: string | null
+          last_email_message_id: string | null
+          merged_to_ticket_id: string | null
           priority: Database["public"]["Enums"]["ticket_priority"]
           rejection_reason: string | null
           resolved_at: string | null
@@ -2768,6 +2771,7 @@ export type Database = {
           attachment_url?: string | null
           attachments?: Json | null
           category?: Database["public"]["Enums"]["ticket_category"] | null
+          channel?: string | null
           conversation_id?: string | null
           created_at?: string
           customer_id: string
@@ -2777,6 +2781,8 @@ export type Database = {
           first_response_at?: string | null
           id?: string
           internal_note?: string | null
+          last_email_message_id?: string | null
+          merged_to_ticket_id?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           rejection_reason?: string | null
           resolved_at?: string | null
@@ -2792,6 +2798,7 @@ export type Database = {
           attachment_url?: string | null
           attachments?: Json | null
           category?: Database["public"]["Enums"]["ticket_category"] | null
+          channel?: string | null
           conversation_id?: string | null
           created_at?: string
           customer_id?: string
@@ -2801,6 +2808,8 @@ export type Database = {
           first_response_at?: string | null
           id?: string
           internal_note?: string | null
+          last_email_message_id?: string | null
+          merged_to_ticket_id?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           rejection_reason?: string | null
           resolved_at?: string | null
@@ -2836,6 +2845,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_merged_to_ticket_id_fkey"
+            columns: ["merged_to_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
           {
