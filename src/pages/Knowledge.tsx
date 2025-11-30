@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Plus, Edit, Trash2, BookOpen, Eye, EyeOff, Upload } from "lucide-react";
+import { Search, Plus, Edit, Trash2, BookOpen, Eye, EyeOff, Upload, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { useKnowledgeArticles } from "@/hooks/useKnowledgeArticles";
 import { useDeleteKnowledgeArticle } from "@/hooks/useDeleteKnowledgeArticle";
+import { useGenerateBatchEmbeddings } from "@/hooks/useGenerateBatchEmbeddings";
 import { useUserRole } from "@/hooks/useUserRole";
 import KnowledgeArticleDialog from "@/components/KnowledgeArticleDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +33,7 @@ export default function Knowledge() {
 
   const { data: articles = [], isLoading } = useKnowledgeArticles({ searchQuery, category });
   const deleteArticle = useDeleteKnowledgeArticle();
+  const generateEmbeddings = useGenerateBatchEmbeddings();
   const { isAdmin, isManager } = useUserRole();
 
   const canManageArticles = isAdmin || isManager;
@@ -77,6 +79,15 @@ export default function Knowledge() {
         </div>
         {canManageArticles && (
           <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => generateEmbeddings.mutate()}
+              disabled={generateEmbeddings.isPending}
+              className="gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              {generateEmbeddings.isPending ? 'Gerando...' : 'Gerar Embeddings'}
+            </Button>
             <Button variant="outline" onClick={() => navigate('/settings/knowledge-import')} className="gap-2">
               <Upload className="h-4 w-4" />
               Importar

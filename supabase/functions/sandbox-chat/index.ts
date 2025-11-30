@@ -60,30 +60,102 @@ serve(async (req) => {
 
     console.log('[sandbox-chat] Available tools:', tools.length);
 
-    // Knowledge Base Search
+    // Knowledge Base Search with Semantic Search
     let knowledgeArticles: any[] = [];
     let systemPrompt = persona.system_prompt;
+    let usedSemanticSearch = false;
 
-    if (useKnowledgeBase && persona.knowledge_base_paths?.length > 0) {
-      console.log('[sandbox-chat] Searching knowledge base with categories:', persona.knowledge_base_paths);
+    if (useKnowledgeBase) {
+      console.log('[sandbox-chat] Knowledge base search enabled');
       
-      // Get last user message for keyword extraction
+      // Get last user message
       const lastUserMessage = messages.filter((m: any) => m.role === 'user').pop();
       
       if (lastUserMessage) {
-        const { data: articles } = await supabase
-          .from('knowledge_articles')
-          .select('id, title, content, category')
-          .eq('is_published', true)
-          .in('category', persona.knowledge_base_paths)
-          .limit(5);
+        const userQuestion = lastUserMessage.content;
+        console.log('[sandbox-chat] User question:', userQuestion);
 
-        knowledgeArticles = articles || [];
-        console.log('[sandbox-chat] Found', knowledgeArticles.length, 'knowledge articles');
+        try {
+          // Try semantic search first
+          const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+          
+          if (OPENAI_API_KEY) {
+            console.log('[sandbox-chat] Attempting semantic search with OpenAI embeddings');
+            
+            // Generate embedding for the user's question
+            const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'text-embedding-3-small',
+                input: userQuestion,
+              }),
+            });
+
+            if (embeddingResponse.ok) {
+              const embeddingData = await embeddingResponse.json();
+              const queryEmbedding = embeddingData.data[0].embedding;
+
+              // Search using pgvector similarity
+              const { data: semanticArticles, error: semanticError } = await supabase.rpc(
+                'match_knowledge_articles',
+                {
+                  query_embedding: queryEmbedding,
+                  match_threshold: 0.75,
+                  match_count: 10,
+                }
+              );
+
+              if (!semanticError && semanticArticles && semanticArticles.length > 0) {
+                console.log(`[sandbox-chat] Semantic search found ${semanticArticles.length} articles`);
+
+                // Filter by persona's knowledge_base_paths if configured
+                let filteredArticles = semanticArticles;
+                if (persona.knowledge_base_paths?.length > 0) {
+                  filteredArticles = semanticArticles.filter((a: any) => 
+                    persona.knowledge_base_paths.includes(a.category)
+                  );
+                  console.log(`[sandbox-chat] Filtered to ${filteredArticles.length} articles by categories:`, persona.knowledge_base_paths);
+                }
+
+                knowledgeArticles = filteredArticles.slice(0, 5).map((a: any) => ({
+                  ...a,
+                  similarity: a.similarity
+                }));
+                usedSemanticSearch = true;
+              } else {
+                console.log('[sandbox-chat] Semantic search returned no results');
+              }
+            } else {
+              console.log('[sandbox-chat] OpenAI embedding generation failed');
+            }
+          }
+        } catch (error) {
+          console.error('[sandbox-chat] Semantic search failed:', error);
+        }
+
+        // Fallback to keyword search if semantic search didn't work
+        if (knowledgeArticles.length === 0 && persona.knowledge_base_paths?.length > 0) {
+          console.log('[sandbox-chat] Falling back to keyword search by category');
+          
+          const { data: articles } = await supabase
+            .from('knowledge_articles')
+            .select('id, title, content, category')
+            .eq('is_published', true)
+            .in('category', persona.knowledge_base_paths)
+            .limit(5);
+
+          knowledgeArticles = articles || [];
+        }
+
+        console.log('[sandbox-chat] Final article count:', knowledgeArticles.length);
 
         if (knowledgeArticles.length > 0) {
-          const kbContext = knowledgeArticles.map(a => 
-            `[Artigo: ${a.title}]\n${a.content}`
+          const kbContext = knowledgeArticles.map((a: any) => 
+            `[Artigo: ${a.title}${a.similarity ? ` | Relevância: ${Math.round(a.similarity * 100)}%` : ''}]\n${a.content}`
           ).join('\n\n---\n\n');
 
           systemPrompt = `${persona.system_prompt}\n\n## BASE DE CONHECIMENTO DISPONÍVEL:\n\n${kbContext}\n\nUSE estas informações da base de conhecimento para responder quando relevante.`;
@@ -213,8 +285,14 @@ serve(async (req) => {
           model: actualProvider === 'openai' ? 'gpt-4o-mini' : 'google/gemini-2.5-flash',
           ai_provider: actualProvider,
           knowledge_search_performed: useKnowledgeBase,
+          semantic_search_used: usedSemanticSearch,
           articles_found: knowledgeArticles.length,
-          articles: knowledgeArticles.map(a => ({ id: a.id, title: a.title, category: a.category })),
+          articles: knowledgeArticles.map(a => ({ 
+            id: a.id, 
+            title: a.title, 
+            category: a.category,
+            similarity: a.similarity ? Math.round(a.similarity * 100) : null
+          })),
           persona_categories: persona.knowledge_base_paths || [],
           prompt_tokens: aiData.usage?.prompt_tokens || 0,
           completion_tokens: aiData.usage?.completion_tokens || 0,
