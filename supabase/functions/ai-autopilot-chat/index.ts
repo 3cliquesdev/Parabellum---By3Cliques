@@ -1114,7 +1114,12 @@ Qual é o seu **email de compra**?"
 ${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
     }
     
-    const contextualizedSystemPrompt = `🚨 **DIRETRIZ DE SEGURANÇA E PRIVACIDADE (LGPD - IMPORTANTE):**
+    // 🐛 DEBUG: Confirmar que priorityInstruction está sendo gerada
+    console.log('[ai-autopilot-chat] 📣 Priority Instruction:', priorityInstruction ? 'SET ✅' : 'EMPTY ❌');
+    
+    const contextualizedSystemPrompt = `${priorityInstruction}
+
+🚨 **DIRETRIZ DE SEGURANÇA E PRIVACIDADE (LGPD - IMPORTANTE):**
 - NUNCA escreva o e-mail completo, telefone ou CPF do cliente na resposta
 - Se precisar confirmar a conta, use APENAS o formato mascarado fornecido (ex: ro***@gmail.com)
 - Proteja os dados do cliente como se fossem seus
@@ -1251,7 +1256,7 @@ ${canShowFinancialData
 - verify_otp_code: Valide códigos OTP de 6 dígitos
 - request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver. Use com reason: "dados_financeiros_incorretos", "solicitacao_cliente", ou "caso_complexo".
 
-${priorityInstruction}${knowledgeContext}${identityWallNote}
+${knowledgeContext}${identityWallNote}
 
 **Contexto do Cliente:**
 - Nome: ${contactName}${contactCompany}
