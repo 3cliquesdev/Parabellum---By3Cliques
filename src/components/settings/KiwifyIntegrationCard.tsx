@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ShoppingCart, Copy, ExternalLink, CheckCircle2, AlertTriangle, Loader2, Plus, Trash2, Key, RefreshCw, Settings } from "lucide-react";
+import { ShoppingCart, Copy, ExternalLink, CheckCircle2, AlertTriangle, Loader2, Plus, Trash2, Key, RefreshCw, Settings, History, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +11,7 @@ import AddKiwifyTokenDialog from "./AddKiwifyTokenDialog";
 import SyncOptionsDialog, { SyncOptions } from "./SyncOptionsDialog";
 import SyncProgressWidget from "./SyncProgressWidget";
 import SyncReportDialog from "./SyncReportDialog";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -19,6 +19,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function KiwifyIntegrationCard() {
   const { toast } = useToast();
@@ -31,6 +38,7 @@ export default function KiwifyIntegrationCard() {
   const [syncReportOpen, setSyncReportOpen] = useState(false);
   const [syncStats, setSyncStats] = useState<any>(null);
   const [apiConfigOpen, setApiConfigOpen] = useState(false);
+  const [syncHistoryOpen, setSyncHistoryOpen] = useState(false);
   
   const [apiCredentials, setApiCredentials] = useState({
     client_id: "",
@@ -100,6 +108,39 @@ export default function KiwifyIntegrationCard() {
       return data || [];
     },
     refetchInterval: 10000, // Atualizar a cada 10 segundos
+  });
+
+  // Buscar última sincronização
+  const { data: lastSync } = useQuery({
+    queryKey: ["kiwify-last-sync"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sync_jobs")
+        .select("*")
+        .eq("job_type", "kiwify_sales")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Buscar histórico completo de sincronizações
+  const { data: syncHistory } = useQuery({
+    queryKey: ["kiwify-sync-history"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sync_jobs")
+        .select("*")
+        .eq("job_type", "kiwify_sales")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      
+      if (error) throw error;
+      return data || [];
+    },
   });
 
   const deleteTokenMutation = useMutation({
@@ -219,6 +260,10 @@ export default function KiwifyIntegrationCard() {
         if (job && (job.status === "completed" || job.status === "failed")) {
           clearInterval(checkJobCompletion);
           setCurrentJobId(null);
+          
+          // Invalidar cache de sincronização
+          queryClient.invalidateQueries({ queryKey: ["kiwify-last-sync"] });
+          queryClient.invalidateQueries({ queryKey: ["kiwify-sync-history"] });
           
           if (job.status === "completed") {
             setSyncStats({
@@ -691,6 +736,77 @@ export default function KiwifyIntegrationCard() {
 
           <Separator />
 
+          {/* Histórico de Sincronização */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                <History className="h-4 w-4" />
+                Histórico de Sincronização
+              </label>
+              {syncHistory && syncHistory.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSyncHistoryOpen(true)}
+                  className="gap-2"
+                >
+                  <Clock className="h-4 w-4" />
+                  Ver Histórico Completo
+                </Button>
+              )}
+            </div>
+
+            {!lastSync ? (
+              <div className="p-4 bg-muted/50 rounded-lg border border-border">
+                <p className="text-sm text-muted-foreground text-center">
+                  📭 Nenhuma sincronização realizada ainda
+                </p>
+              </div>
+            ) : lastSync.status === "running" ? (
+              <SyncProgressWidget jobId={lastSync.id} />
+            ) : lastSync.status === "completed" ? (
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg border border-emerald-200 dark:border-emerald-900">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
+                      ✅ Última sincronização bem-sucedida
+                    </p>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
+                      {format(new Date(lastSync.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })} - {lastSync.processed_items || 0} vendas importadas
+                    </p>
+                    {lastSync.contacts_created > 0 && (
+                      <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                        {lastSync.contacts_created} contatos criados, {lastSync.deals_created || 0} negócios criados
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-rose-50 dark:bg-rose-950/20 rounded-lg border border-rose-200 dark:border-rose-900">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-rose-900 dark:text-rose-100">
+                      ❌ Última tentativa falhou
+                    </p>
+                    <p className="text-xs text-rose-700 dark:text-rose-300 mt-1">
+                      {format(new Date(lastSync.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </p>
+                    {lastSync.errors && Array.isArray(lastSync.errors) && lastSync.errors.length > 0 && (
+                      <p className="text-xs text-rose-700 dark:text-rose-300 mt-1">
+                        {(lastSync.errors[0] as any)?.message || "Erro desconhecido"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
           {/* Botão de Sincronização */}
           <div className="space-y-3">
             {currentJobId ? (
@@ -754,6 +870,97 @@ export default function KiwifyIntegrationCard() {
           errors: 0,
         }}
       />
+
+      {/* Dialog de Histórico Completo */}
+      <Dialog open={syncHistoryOpen} onOpenChange={setSyncHistoryOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Histórico Completo de Sincronizações
+            </DialogTitle>
+            <DialogDescription>
+              Últimas 20 tentativas de sincronização com a Kiwify
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 mt-4">
+            {syncHistory && syncHistory.length > 0 ? (
+              syncHistory.map((job) => (
+                <div
+                  key={job.id}
+                  className={`p-4 rounded-lg border ${
+                    job.status === "completed"
+                      ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900"
+                      : job.status === "failed"
+                      ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900"
+                      : "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3 flex-1">
+                      {job.status === "completed" ? (
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5" />
+                      ) : job.status === "failed" ? (
+                        <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5" />
+                      ) : (
+                        <Loader2 className="h-5 w-5 text-blue-600 animate-spin mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">
+                            {job.status === "completed"
+                              ? "✅ Sincronização bem-sucedida"
+                              : job.status === "failed"
+                              ? "❌ Sincronização falhou"
+                              : "🔄 Sincronização em andamento"}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {format(new Date(job.created_at), "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR })}
+                        </p>
+                        {job.status === "completed" && (
+                          <div className="mt-2 space-y-1">
+                            <p className="text-xs">
+                              📊 <strong>{job.processed_items || 0}</strong> vendas processadas
+                            </p>
+                            {job.contacts_created > 0 && (
+                              <p className="text-xs">
+                                👤 <strong>{job.contacts_created}</strong> contatos criados
+                              </p>
+                            )}
+                            {job.deals_created > 0 && (
+                              <p className="text-xs">
+                                💼 <strong>{job.deals_created}</strong> negócios criados
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {job.status === "failed" && job.errors && Array.isArray(job.errors) && job.errors.length > 0 && (
+                          <p className="text-xs text-rose-700 dark:text-rose-300 mt-2">
+                            {(job.errors[0] as any)?.message || "Erro desconhecido"}
+                          </p>
+                        )}
+                        {job.status === "running" && (
+                          <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                            {job.processed_items || 0} itens processados...
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  📭 Nenhuma sincronização encontrada
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
