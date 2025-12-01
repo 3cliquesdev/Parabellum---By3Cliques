@@ -145,10 +145,11 @@ serve(async (req) => {
 
     while (hasMore) {
       const salesResponse = await fetch(
-        `https://public-api.kiwify.com/v1/sales?account_id=${accountId}&page=${page}&per_page=100`,
+        `https://public-api.kiwify.com/v1/sales?page=${page}&per_page=100`,
         {
           headers: {
             'Authorization': `Bearer ${access_token}`,
+            'x-kiwify-account-id': accountId,
             'Content-Type': 'application/json',
           },
         }
