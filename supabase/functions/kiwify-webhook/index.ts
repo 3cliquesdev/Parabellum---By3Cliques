@@ -447,6 +447,30 @@ async function handlePaidOrder(
     console.warn('[kiwify-webhook] Auth error:', authErr);
   }
 
+  // 2.5 🆕 CRIAR DEAL COM STATUS "GANHO" E VALOR DA VENDA
+  const { data: wonDeal, error: dealError } = await supabase
+    .from('deals')
+    .insert({
+      title: `Venda Kiwify: ${Product.product_name}`,
+      contact_id: contact.id,
+      value: Commissions.product_base_price,
+      currency: 'BRL',
+      status: 'won',
+      closed_at: new Date().toISOString(),
+      pipeline_id: '00000000-0000-0000-0000-000000000001', // Pipeline de Vendas
+      stage_id: '55555555-5555-5555-5555-555555555555', // Fechado
+      product_id: product?.id || null,
+      lead_source: 'kiwify',
+    })
+    .select()
+    .single();
+
+  if (dealError) {
+    console.error('[kiwify-webhook] ❌ Erro ao criar deal ganho:', dealError);
+  } else {
+    console.log('[kiwify-webhook] ✅ Deal ganho criado:', wonDeal.id, 'Valor: R$', Commissions.product_base_price);
+  }
+
   // 3. Buscar produto por offer_id PRIMEIRO (se disponível), fallback para external_id
   let playbook_ids: string[] = [];
   
@@ -551,9 +575,11 @@ async function handlePaidOrder(
     success: true,
     action: 'new_customer_onboarding',
     contact_id: contact.id,
+    deal_id: wonDeal?.id,
+    deal_value: Commissions.product_base_price,
     playbook_ids,
     playbooks_count: playbook_ids.length,
-    message: `Novo cliente criado, Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)`
+    message: `Novo cliente criado, Deal ganho criado (R$ ${Commissions.product_base_price}), Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)`
   };
 }
 
@@ -584,6 +610,29 @@ async function handleUpsellOrder(
       last_kiwify_event_at: new Date().toISOString(),
     })
     .eq('id', existingContact.id);
+
+  // 2.5 🆕 CRIAR DEAL COM STATUS "GANHO" PARA UPSELL
+  const { data: upsellDeal, error: dealError } = await supabase
+    .from('deals')
+    .insert({
+      title: `Upsell Kiwify: ${Product.product_name}`,
+      contact_id: existingContact.id,
+      value: Commissions.product_base_price,
+      currency: 'BRL',
+      status: 'won',
+      closed_at: new Date().toISOString(),
+      pipeline_id: '00000000-0000-0000-0000-000000000001', // Pipeline de Vendas
+      stage_id: '55555555-5555-5555-5555-555555555555', // Fechado
+      lead_source: 'kiwify_upsell',
+    })
+    .select()
+    .single();
+
+  if (dealError) {
+    console.error('[kiwify-webhook] ❌ Erro ao criar deal upsell:', dealError);
+  } else {
+    console.log('[kiwify-webhook] ✅ Deal upsell criado:', upsellDeal.id, 'Valor: R$', Commissions.product_base_price);
+  }
 
   // 3. Buscar produto e playbooks (NOVA LÓGICA: offer_id primeiro)
   let product = null;
@@ -717,11 +766,13 @@ async function handleUpsellOrder(
     success: true,
     action: 'upsell_processed',
     contact_id: existingContact.id,
+    deal_id: upsellDeal?.id,
+    deal_value: Commissions.product_base_price,
     new_ltv: newLtv,
     playbook_ids,
     playbooks_count: playbook_ids.length,
     consultant_notified: !!existingContact.consultant_id,
-    message: `Upsell processado, LTV atualizado, ${playbook_ids.length} playbook(s) iniciado(s)`
+    message: `Upsell processado, Deal ganho criado (R$ ${Commissions.product_base_price}), LTV atualizado, ${playbook_ids.length} playbook(s) iniciado(s)`
   };
 }
 
