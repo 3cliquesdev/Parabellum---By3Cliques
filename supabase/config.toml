@@ -147,3 +147,6 @@ verify_jwt = true
 
 [functions.test-email-send]
 verify_jwt = true
+
+[functions.reprocess-unmapped-sales]
+verify_jwt = true
