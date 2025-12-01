@@ -22,6 +22,12 @@ export interface KiwifyFinancialData {
     kiwifyFee: number;
     affiliateCommission: number;
   }>;
+  topAffiliates: Array<{
+    affiliateName: string;
+    affiliateEmail: string;
+    salesCount: number;
+    totalCommission: number;
+  }>;
 }
 
 export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
@@ -33,7 +39,7 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
 
       console.log("📊 useKiwifyFinancials: Buscando dados financeiros", { start, end });
 
-      // Buscar todos os deals Kiwify no período
+      // Buscar todos os deals Kiwify no período (incluindo recuperação e deals abertos)
       const { data: deals, error } = await supabase
         .from("deals")
         .select(`
@@ -44,15 +50,17 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
           net_value,
           kiwify_fee,
           affiliate_commission,
+          affiliate_name,
+          affiliate_email,
           status,
           created_at,
           closed_at,
           products:product_id (name)
         `)
-        .in("status", ["won"])
+        .in("status", ["won", "open"])
         .gte("created_at", start)
         .lte("created_at", end)
-        .or("title.ilike.%Kiwify%,title.ilike.%Upsell%");
+        .or("title.ilike.%Kiwify%,title.ilike.%Upsell%,title.ilike.%Recuperação%");
 
       if (error) {
         console.error("❌ useKiwifyFinancials: Erro ao buscar deals:", error);
@@ -116,10 +124,33 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
 
       const monthlyEvolution = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
 
+      // Top Afiliados
+      const affiliateMap = new Map<string, any>();
+      deals.forEach(deal => {
+        if (!deal.affiliate_name && !deal.affiliate_email) return;
+        
+        const key = deal.affiliate_email || deal.affiliate_name || "Sem identificação";
+        if (!affiliateMap.has(key)) {
+          affiliateMap.set(key, {
+            affiliateName: deal.affiliate_name || "Nome não disponível",
+            affiliateEmail: deal.affiliate_email || "Email não disponível",
+            salesCount: 0,
+            totalCommission: 0,
+          });
+        }
+        const affiliate = affiliateMap.get(key);
+        affiliate.salesCount++;
+        affiliate.totalCommission += deal.affiliate_commission || 0;
+      });
+
+      const topAffiliates = Array.from(affiliateMap.values())
+        .sort((a, b) => b.totalCommission - a.totalCommission);
+
       console.log("✅ useKiwifyFinancials: Dados calculados", {
         totalGrossRevenue,
         totalNetRevenue,
         productsCount: productBreakdown.length,
+        affiliatesCount: topAffiliates.length,
       });
 
       return {
@@ -129,6 +160,7 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
         totalAffiliateCommissions,
         productBreakdown,
         monthlyEvolution,
+        topAffiliates,
       } as KiwifyFinancialData;
     },
     staleTime: 1000 * 60 * 5, // 5 minutos

@@ -1492,6 +1492,8 @@ export type Database = {
       deals: {
         Row: {
           affiliate_commission: number | null
+          affiliate_email: string | null
+          affiliate_name: string | null
           assigned_to: string | null
           churn_risk: string | null
           closed_at: string | null
@@ -1523,6 +1525,8 @@ export type Database = {
         }
         Insert: {
           affiliate_commission?: number | null
+          affiliate_email?: string | null
+          affiliate_name?: string | null
           assigned_to?: string | null
           churn_risk?: string | null
           closed_at?: string | null
@@ -1554,6 +1558,8 @@ export type Database = {
         }
         Update: {
           affiliate_commission?: number | null
+          affiliate_email?: string | null
+          affiliate_name?: string | null
           assigned_to?: string | null
           churn_risk?: string | null
           closed_at?: string | null

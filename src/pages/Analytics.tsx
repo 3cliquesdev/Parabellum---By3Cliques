@@ -33,6 +33,7 @@ import { DateRange } from "react-day-picker";
 import { FinancialKPIsWidget } from "@/components/widgets/FinancialKPIsWidget";
 import { RevenueBreakdownWidget } from "@/components/widgets/RevenueBreakdownWidget";
 import { ProductMarginTable } from "@/components/widgets/ProductMarginTable";
+import { TopAffiliatesWidget } from "@/components/widgets/TopAffiliatesWidget";
 
 export default function Analytics() {
   const { role, loading: roleLoading } = useUserRole();
@@ -301,8 +302,11 @@ export default function Analytics() {
               endDate={endDate}
             />
 
-            {/* KPIs Financeiros */}
-            <FinancialKPIsWidget startDate={startDate} endDate={endDate} />
+            {/* KPIs Financeiros + Top Afiliados */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <FinancialKPIsWidget startDate={startDate} endDate={endDate} />
+              <TopAffiliatesWidget startDate={startDate} endDate={endDate} />
+            </div>
 
             {/* Evolução de Receita */}
             <RevenueBreakdownWidget startDate={startDate} endDate={endDate} />

@@ -339,10 +339,19 @@ async function handlePaidOrder(
     document: Customer.CPF || Customer.cnpj || 'NONE',
     phone: Customer.mobile || Customer.mobile_phone || Customer.phone || 'NONE'
   });
+  // Extrair dados do afiliado
+  const affiliateData = Commissions.commissioned_stores?.find(s => s.type === 'affiliate');
+  const affiliateCommission = (affiliateData?.value || 0) / 100;
+  const affiliateName = affiliateData?.custom_name || null;
+  const affiliateEmail = affiliateData?.email || null;
+
   console.log('[kiwify-webhook] 💰 Financial values:', {
     gross: Commissions.product_base_price / 100,
     net: (Commissions.my_commission || Commissions.product_base_price) / 100,
-    fee: (Commissions.kiwify_fee || 0) / 100
+    fee: (Commissions.kiwify_fee || 0) / 100,
+    affiliateCommission,
+    affiliateName,
+    affiliateEmail
   });
 
   // 🔍 DIVISOR DE ÁGUAS: Verificar se cliente já existe
@@ -473,7 +482,6 @@ async function handlePaidOrder(
   const grossValue = Commissions.product_base_price / 100;
   const netValue = (Commissions.my_commission || Commissions.product_base_price) / 100;
   const kiwifyFee = (Commissions.kiwify_fee || 0) / 100;
-  const affiliateCommission = (Commissions.commissioned_stores?.find(s => s.type === 'affiliate')?.value || 0) / 100;
 
   const { data: wonDeal, error: dealError } = await supabase
     .from('deals')
@@ -485,6 +493,8 @@ async function handlePaidOrder(
       net_value: netValue,          // Valor líquido
       kiwify_fee: kiwifyFee,        // Taxa Kiwify
       affiliate_commission: affiliateCommission,  // Comissão afiliado
+      affiliate_name: affiliateName,              // Nome do afiliado
+      affiliate_email: affiliateEmail,            // Email do afiliado
       currency: 'BRL',
       status: 'won',
       closed_at: new Date().toISOString(),
@@ -633,7 +643,13 @@ async function handleUpsellOrder(
   const grossValue = Commissions.product_base_price / 100;
   const netValue = (Commissions.my_commission || Commissions.product_base_price) / 100;
   const kiwifyFee = (Commissions.kiwify_fee || 0) / 100;
-  const affiliateCommission = (Commissions.commissioned_stores?.find(s => s.type === 'affiliate')?.value || 0) / 100;
+  
+  // Extrair dados do afiliado para upsell
+  const upsellAffiliateData = Commissions.commissioned_stores?.find(s => s.type === 'affiliate');
+  const upsellAffiliateCommission = (upsellAffiliateData?.value || 0) / 100;
+  const upsellAffiliateName = upsellAffiliateData?.custom_name || null;
+  const upsellAffiliateEmail = upsellAffiliateData?.email || null;
+  
   const newLtv = (existingContact.total_ltv || 0) + netValue;
   
   await supabase
@@ -657,7 +673,9 @@ async function handleUpsellOrder(
       gross_value: grossValue,      // Valor bruto
       net_value: netValue,          // Valor líquido
       kiwify_fee: kiwifyFee,        // Taxa Kiwify
-      affiliate_commission: affiliateCommission,  // Comissão afiliado
+      affiliate_commission: upsellAffiliateCommission,  // Comissão afiliado
+      affiliate_name: upsellAffiliateName,              // Nome do afiliado
+      affiliate_email: upsellAffiliateEmail,            // Email do afiliado
       currency: 'BRL',
       status: 'won',
       closed_at: new Date().toISOString(),
