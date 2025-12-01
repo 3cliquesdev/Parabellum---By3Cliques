@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Package } from "lucide-react";
 import { ReprocessSalesButton } from "./ReprocessSalesButton";
@@ -108,15 +109,32 @@ export function UnmappedProductsSection({ alerts, products }: UnmappedProductsSe
 
                     <div className="flex gap-2">
                       {!group.is_mapped && (
-                        <ReprocessSalesButton
-                          kiwifyProductId={group.kiwify_product_id}
-                          productName={group.product_name}
-                          variant="outline"
-                          onSuccess={setReportData}
-                          disabled
-                        >
-                          ✏️ Mapear Primeiro
-                        </ReprocessSalesButton>
+                        <>
+                          <ReprocessSalesButton
+                            kiwifyProductId={group.kiwify_product_id}
+                            productName={group.product_name}
+                            variant="secondary"
+                            onSuccess={setReportData}
+                            disabled
+                          >
+                            🔄 Reprocessar Vendas
+                          </ReprocessSalesButton>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const event = new CustomEvent('map-unmapped-product', {
+                                detail: {
+                                  kiwify_product_id: group.kiwify_product_id,
+                                  product_name: group.product_name
+                                }
+                              });
+                              window.dispatchEvent(event);
+                            }}
+                          >
+                            ✏️ Mapear Primeiro
+                          </Button>
+                        </>
                       )}
 
                       {group.is_mapped && (

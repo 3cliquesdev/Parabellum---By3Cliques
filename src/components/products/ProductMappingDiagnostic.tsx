@@ -33,7 +33,8 @@ export function ProductMappingDiagnostic() {
             name
           ),
           product_offers (
-            id
+            id,
+            offer_id
           )
         `)
         .order('name');

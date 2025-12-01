@@ -27,11 +27,22 @@ export default function Products() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [initialProductData, setInitialProductData] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
 
   const handleEdit = (product: any) => {
     setSelectedProduct(product);
+    setInitialProductData(null);
+    setDialogOpen(true);
+  };
+
+  const handleMapUnmapped = (kiwifyProductId: string, productName: string) => {
+    setSelectedProduct(null);
+    setInitialProductData({
+      name: productName,
+      external_id: kiwifyProductId,
+    });
     setDialogOpen(true);
   };
 
@@ -45,9 +56,16 @@ export default function Products() {
       }
     };
 
+    const handleMapUnmappedEvent = (event: CustomEvent) => {
+      const { kiwify_product_id, product_name } = event.detail;
+      handleMapUnmapped(kiwify_product_id, product_name);
+    };
+
     window.addEventListener('edit-product', handleEditProductEvent as EventListener);
+    window.addEventListener('map-unmapped-product', handleMapUnmappedEvent as EventListener);
     return () => {
       window.removeEventListener('edit-product', handleEditProductEvent as EventListener);
+      window.removeEventListener('map-unmapped-product', handleMapUnmappedEvent as EventListener);
     };
   }, [products]);
 
@@ -86,6 +104,7 @@ export default function Products() {
 
   const handleNewProduct = () => {
     setSelectedProduct(null);
+    setInitialProductData(null);
     setDialogOpen(true);
   };
 
@@ -223,6 +242,7 @@ export default function Products() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         product={selectedProduct}
+        initialData={initialProductData}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

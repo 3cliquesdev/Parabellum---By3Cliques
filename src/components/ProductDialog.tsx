@@ -65,9 +65,13 @@ interface ProductDialogProps {
       name: string;
     };
   };
+  initialData?: {
+    name?: string;
+    external_id?: string;
+  };
 }
 
-export function ProductDialog({ open, onOpenChange, product }: ProductDialogProps) {
+export function ProductDialog({ open, onOpenChange, product, initialData }: ProductDialogProps) {
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const { data: deliveryGroups } = useDeliveryGroups();
@@ -85,9 +89,9 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: {
-      name: product?.name || "",
+      name: product?.name || initialData?.name || "",
       description: product?.description || "",
-      external_id: product?.external_id || "",
+      external_id: product?.external_id || initialData?.external_id || "",
       delivery_group_id: product?.delivery_group_id || "none",
       support_channel_id: product?.support_channel_id || "none",
       requires_account_manager: product?.requires_account_manager || false,
@@ -95,18 +99,18 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
     },
   });
 
-  // Reset form when product changes
+  // Reset form when product or initialData changes
   useEffect(() => {
     form.reset({
-      name: product?.name || "",
+      name: product?.name || initialData?.name || "",
       description: product?.description || "",
-      external_id: product?.external_id || "",
+      external_id: product?.external_id || initialData?.external_id || "",
       delivery_group_id: product?.delivery_group_id || "none",
       support_channel_id: product?.support_channel_id || "none",
       requires_account_manager: product?.requires_account_manager || false,
       is_active: product?.is_active ?? true,
     });
-  }, [product, form]);
+  }, [product, initialData, form]);
 
   const handleAddOffer = async () => {
     if (!product || !newOfferData.offer_id || !newOfferData.offer_name) return;
