@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ export default function KiwifyIntegrationCard() {
     client_secret: "",
     account_id: "",
   });
+  const [initialized, setInitialized] = useState(false);
 
   // Buscar tokens cadastrados
   const { data: tokens, isLoading: tokensLoading } = useQuery({
@@ -69,10 +70,21 @@ export default function KiwifyIntegrationCard() {
         configs[key] = c.value;
       });
       
-      setApiCredentials(configs);
       return configs;
     },
   });
+
+  // Sincronizar estado apenas na primeira carga
+  useEffect(() => {
+    if (apiConfigs && !initialized) {
+      setApiCredentials({
+        client_id: apiConfigs.client_id || "",
+        client_secret: apiConfigs.client_secret || "",
+        account_id: apiConfigs.account_id || "",
+      });
+      setInitialized(true);
+    }
+  }, [apiConfigs, initialized]);
 
   // Buscar últimos eventos recebidos
   const { data: recentEvents, isLoading } = useQuery({
