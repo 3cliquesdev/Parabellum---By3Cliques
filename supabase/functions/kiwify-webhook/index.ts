@@ -23,6 +23,8 @@ interface KiwifyCustomer {
   full_name: string;
   email: string;
   mobile_phone?: string;
+  mobile?: string;        // Campo correto do telefone
+  phone?: string;
   CPF?: string;
   cnpj?: string;
   birth_date?: string;
@@ -36,7 +38,17 @@ interface KiwifyProduct {
 }
 
 interface KiwifyCommissions {
-  product_base_price: number;
+  product_base_price: number;      // Valor bruto (centavos)
+  charge_amount?: number;          // Valor cobrado
+  my_commission?: number;          // Valor líquido que você recebe
+  kiwify_fee?: number;             // Taxa da Kiwify
+  currency?: string;
+  commissioned_stores?: Array<{
+    type: string;                  // 'producer' | 'affiliate'
+    value: number;
+    custom_name?: string;
+    email?: string;
+  }>;
 }
 
 interface KiwifyWebhookPayload {
@@ -323,15 +335,14 @@ async function handlePaidOrder(
   order_id: string
 ) {
   console.log('[kiwify-webhook] 💚 PAID - Verificando existência:', Customer.email);
-  console.log('[kiwify-webhook] 📊 Customer document:', {
-    CPF: Customer.CPF,
-    cnpj: Customer.cnpj,
-    selected: Customer.CPF || Customer.cnpj || 'NONE'
+  console.log('[kiwify-webhook] 📊 Customer data:', {
+    document: Customer.CPF || Customer.cnpj || 'NONE',
+    phone: Customer.mobile || Customer.mobile_phone || Customer.phone || 'NONE'
   });
-  console.log('[kiwify-webhook] 💰 Price conversion:', {
-    raw: Commissions.product_base_price,
-    converted: Commissions.product_base_price / 100,
-    unit: 'BRL'
+  console.log('[kiwify-webhook] 💰 Financial values:', {
+    gross: Commissions.product_base_price / 100,
+    net: (Commissions.my_commission || Commissions.product_base_price) / 100,
+    fee: (Commissions.kiwify_fee || 0) / 100
   });
 
   // 🔍 DIVISOR DE ÁGUAS: Verificar se cliente já existe
@@ -408,7 +419,7 @@ async function handlePaidOrder(
       email: Customer.email,
       first_name: nameParts[0],
       last_name: nameParts.slice(1).join(' ') || nameParts[0],
-      phone: Customer.mobile_phone,
+      phone: Customer.mobile || Customer.mobile_phone || Customer.phone || null,
       document: Customer.CPF || Customer.cnpj || null,
       birth_date: Customer.birth_date || null,
       address: Customer.Address?.street || null,
@@ -459,13 +470,21 @@ async function handlePaidOrder(
   }
 
   // 2.5 🆕 CRIAR DEAL COM STATUS "GANHO" E VALOR DA VENDA
-  const dealValue = Commissions.product_base_price / 100; // ✅ Converter centavos para reais
+  const grossValue = Commissions.product_base_price / 100;
+  const netValue = (Commissions.my_commission || Commissions.product_base_price) / 100;
+  const kiwifyFee = (Commissions.kiwify_fee || 0) / 100;
+  const affiliateCommission = (Commissions.commissioned_stores?.find(s => s.type === 'affiliate')?.value || 0) / 100;
+
   const { data: wonDeal, error: dealError } = await supabase
     .from('deals')
     .insert({
       title: `Venda Kiwify: ${Product.product_name}`,
       contact_id: contact.id,
-      value: dealValue,
+      value: netValue,              // Valor líquido como principal
+      gross_value: grossValue,      // Valor bruto
+      net_value: netValue,          // Valor líquido
+      kiwify_fee: kiwifyFee,        // Taxa Kiwify
+      affiliate_commission: affiliateCommission,  // Comissão afiliado
       currency: 'BRL',
       status: 'won',
       closed_at: new Date().toISOString(),
@@ -480,7 +499,7 @@ async function handlePaidOrder(
   if (dealError) {
     console.error('[kiwify-webhook] ❌ Erro ao criar deal ganho:', dealError);
   } else {
-    console.log('[kiwify-webhook] ✅ Deal ganho criado:', wonDeal.id, 'Valor: R$', dealValue.toFixed(2));
+    console.log('[kiwify-webhook] ✅ Deal ganho criado:', wonDeal.id, 'Bruto: R$', grossValue.toFixed(2), 'Líquido: R$', netValue.toFixed(2));
   }
 
   // 3. Buscar produto por offer_id PRIMEIRO (se disponível), fallback para external_id
@@ -588,10 +607,11 @@ async function handlePaidOrder(
     action: 'new_customer_onboarding',
     contact_id: contact.id,
     deal_id: wonDeal?.id,
-    deal_value: dealValue,
+    deal_gross_value: grossValue,
+    deal_net_value: netValue,
     playbook_ids,
     playbooks_count: playbook_ids.length,
-    message: `Novo cliente criado, Deal ganho criado (R$ ${dealValue.toFixed(2)}), Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)`
+    message: `Novo cliente criado, Deal ganho criado (Bruto: R$ ${grossValue.toFixed(2)}, Líquido: R$ ${netValue.toFixed(2)}), Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)`
   };
 }
 
@@ -610,8 +630,11 @@ async function handleUpsellOrder(
 
   // 1. ❌ NÃO criar usuário no Auth (já existe)
   // 2. ✅ Atualizar LTV somando valor da nova compra
-  const upsellValue = Commissions.product_base_price / 100; // ✅ Converter centavos para reais
-  const newLtv = (existingContact.total_ltv || 0) + upsellValue;
+  const grossValue = Commissions.product_base_price / 100;
+  const netValue = (Commissions.my_commission || Commissions.product_base_price) / 100;
+  const kiwifyFee = (Commissions.kiwify_fee || 0) / 100;
+  const affiliateCommission = (Commissions.commissioned_stores?.find(s => s.type === 'affiliate')?.value || 0) / 100;
+  const newLtv = (existingContact.total_ltv || 0) + netValue;
   
   await supabase
     .from('contacts')
@@ -630,7 +653,11 @@ async function handleUpsellOrder(
     .insert({
       title: `Upsell Kiwify: ${Product.product_name}`,
       contact_id: existingContact.id,
-      value: upsellValue,
+      value: netValue,              // Valor líquido
+      gross_value: grossValue,      // Valor bruto
+      net_value: netValue,          // Valor líquido
+      kiwify_fee: kiwifyFee,        // Taxa Kiwify
+      affiliate_commission: affiliateCommission,  // Comissão afiliado
       currency: 'BRL',
       status: 'won',
       closed_at: new Date().toISOString(),
@@ -644,7 +671,7 @@ async function handleUpsellOrder(
   if (dealError) {
     console.error('[kiwify-webhook] ❌ Erro ao criar deal upsell:', dealError);
   } else {
-    console.log('[kiwify-webhook] ✅ Deal upsell criado:', upsellDeal.id, 'Valor: R$', upsellValue.toFixed(2));
+    console.log('[kiwify-webhook] ✅ Deal upsell criado:', upsellDeal.id, 'Bruto: R$', grossValue.toFixed(2), 'Líquido: R$', netValue.toFixed(2));
   }
 
   // 3. Buscar produto e playbooks (NOVA LÓGICA: offer_id primeiro)
@@ -780,12 +807,13 @@ async function handleUpsellOrder(
     action: 'upsell_processed',
     contact_id: existingContact.id,
     deal_id: upsellDeal?.id,
-    deal_value: upsellValue,
+    deal_gross_value: grossValue,
+    deal_net_value: netValue,
     new_ltv: newLtv,
     playbook_ids,
     playbooks_count: playbook_ids.length,
     consultant_notified: !!existingContact.consultant_id,
-    message: `Upsell processado, Deal ganho criado (R$ ${upsellValue.toFixed(2)}), LTV atualizado, ${playbook_ids.length} playbook(s) iniciado(s)`
+    message: `Upsell processado, Deal ganho criado (Bruto: R$ ${grossValue.toFixed(2)}, Líquido: R$ ${netValue.toFixed(2)}), LTV atualizado, ${playbook_ids.length} playbook(s) iniciado(s)`
   };
 }
 
@@ -928,7 +956,7 @@ async function handleRecoveryOrder(
       email: Customer.email,
       first_name: nameParts[0],
       last_name: nameParts.slice(1).join(' ') || nameParts[0],
-      phone: Customer.mobile_phone,
+      phone: Customer.mobile || Customer.mobile_phone || Customer.phone || null,
       document: Customer.CPF || Customer.cnpj || null,
       birth_date: Customer.birth_date || null,
       address: Customer.Address?.street || null,
@@ -1029,12 +1057,20 @@ async function handleRecoveryOrder(
   const { data: salesRepId } = await supabase.rpc('get_least_loaded_sales_rep');
 
   // 6. Criar Deal de Recuperação
-  const recoveryValue = Commissions.product_base_price / 100; // ✅ Converter centavos para reais
+  const grossValue = Commissions.product_base_price / 100;
+  const netValue = (Commissions.my_commission || Commissions.product_base_price) / 100;
+  const kiwifyFee = (Commissions.kiwify_fee || 0) / 100;
+  const affiliateCommission = (Commissions.commissioned_stores?.find(s => s.type === 'affiliate')?.value || 0) / 100;
+
   const { data: deal } = await supabase
     .from('deals')
     .insert({
       title: `Recuperação - ${Product.product_name} - ${Customer.full_name}`,
-      value: recoveryValue,
+      value: netValue,              // Valor líquido
+      gross_value: grossValue,      // Valor bruto
+      net_value: netValue,          // Valor líquido
+      kiwify_fee: kiwifyFee,        // Taxa Kiwify
+      affiliate_commission: affiliateCommission,  // Comissão afiliado
       currency: 'BRL',
       status: 'open',
       stage_id: recoveryStage.id,
@@ -1056,7 +1092,8 @@ async function handleRecoveryOrder(
       content: `🚨 RECUPERAÇÃO URGENTE: ${order_status === 'refused' ? 'Pagamento recusado' : 'Carrinho abandonado'} - Ligar AGORA`,
       metadata: {
         product: Product.product_name,
-        value: recoveryValue,
+        gross_value: grossValue,
+        net_value: netValue,
         order_id,
         deal_id: deal?.id,
         assigned_to: salesRepId

@@ -1491,6 +1491,7 @@ export type Database = {
       }
       deals: {
         Row: {
+          affiliate_commission: number | null
           assigned_to: string | null
           churn_risk: string | null
           closed_at: string | null
@@ -1499,12 +1500,15 @@ export type Database = {
           currency: string | null
           expected_close_date: string | null
           expected_revenue: number | null
+          gross_value: number | null
           id: string
+          kiwify_fee: number | null
           lead_email: string | null
           lead_phone: string | null
           lead_source: string | null
           lead_whatsapp_id: string | null
           lost_reason: string | null
+          net_value: number | null
           organization_id: string | null
           pain_points: string | null
           pipeline_id: string
@@ -1518,6 +1522,7 @@ export type Database = {
           value: number | null
         }
         Insert: {
+          affiliate_commission?: number | null
           assigned_to?: string | null
           churn_risk?: string | null
           closed_at?: string | null
@@ -1526,12 +1531,15 @@ export type Database = {
           currency?: string | null
           expected_close_date?: string | null
           expected_revenue?: number | null
+          gross_value?: number | null
           id?: string
+          kiwify_fee?: number | null
           lead_email?: string | null
           lead_phone?: string | null
           lead_source?: string | null
           lead_whatsapp_id?: string | null
           lost_reason?: string | null
+          net_value?: number | null
           organization_id?: string | null
           pain_points?: string | null
           pipeline_id: string
@@ -1545,6 +1553,7 @@ export type Database = {
           value?: number | null
         }
         Update: {
+          affiliate_commission?: number | null
           assigned_to?: string | null
           churn_risk?: string | null
           closed_at?: string | null
@@ -1553,12 +1562,15 @@ export type Database = {
           currency?: string | null
           expected_close_date?: string | null
           expected_revenue?: number | null
+          gross_value?: number | null
           id?: string
+          kiwify_fee?: number | null
           lead_email?: string | null
           lead_phone?: string | null
           lead_source?: string | null
           lead_whatsapp_id?: string | null
           lost_reason?: string | null
+          net_value?: number | null
           organization_id?: string | null
           pain_points?: string | null
           pipeline_id?: string
