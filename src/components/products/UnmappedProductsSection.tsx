@@ -56,7 +56,9 @@ export function UnmappedProductsSection({ alerts, products }: UnmappedProductsSe
       p.product_offers?.some((o: any) => o.offer_id === group.kiwify_product_id)
     );
 
-    group.is_mapped = internalProduct?.is_mapped || false;
+    // Considerar mapeado se o produto foi encontrado E tem delivery_group_id
+    // (necessário para iniciar playbooks no reprocessamento)
+    group.is_mapped = !!(internalProduct && internalProduct.delivery_group_id);
   });
 
   const productGroups = Object.values(groupedByProduct);
