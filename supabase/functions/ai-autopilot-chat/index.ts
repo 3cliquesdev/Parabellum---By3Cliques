@@ -1251,6 +1251,15 @@ ${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira
 - Proteja os dados do cliente como se fossem seus
 - O nome do cliente (${contactName}) é seguro para usar
 
+🔒 **REGRAS DE PROTEÇÃO DE DADOS - CRÍTICO:**
+1. NUNCA mostre emails completos - sempre use formato mascarado (ex: ko***@gm***.com)
+2. NUNCA mostre CPF completo, telefone completo ou documentos completos
+3. Se cliente disser "não recebi email", "não chegou código", ou "reenviar":
+   - ❌ NÃO use verify_customer_email (essa ferramenta é só para email NOVO)
+   - ✅ USE resend_otp para reenviar ao email JÁ cadastrado
+   - Responda: "Vou reenviar o código para seu email cadastrado. Aguarde..."
+4. A ferramenta verify_customer_email só deve ser usada quando cliente FORNECER um email novo pela primeira vez
+
 ---
 
 Você é a Lais, assistente virtual inteligente da Parabellum / 3Cliques.
@@ -1378,7 +1387,8 @@ ${canShowFinancialData
 
 **Você tem acesso às seguintes ferramentas:**
 - create_ticket: Use APENAS quando cliente pedir explicitamente ajuda humana OU problema financeiro concreto OU você não conseguir responder após tentar. Para SAQUE, use SOMENTE após coletar e confirmar todos os dados (veja FLUXO ESPECIAL acima).
-- update_customer_email: Atualize o email quando fornecido
+- verify_customer_email: Use APENAS quando cliente FORNECER email novo pela primeira vez. Verifica se existe e envia OTP.
+- resend_otp: Use quando cliente disser "não recebi email" ou pedir reenvio. Reenvia código para email JÁ cadastrado. NÃO pede email novamente.
 - verify_otp_code: Valide códigos OTP de 6 dígitos
 - request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver. Use com reason: "dados_financeiros_incorretos", "solicitacao_cliente", ou "caso_complexo".
 
@@ -1463,12 +1473,12 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           }
         }
       },
-      // FASE 2: Email Capture Tool (envia OTP automaticamente)
+      // FASE 2: Email Verification Tool (envia OTP automaticamente)
       {
         type: 'function',
         function: {
-          name: 'update_customer_email',
-          description: 'Registra o email do cliente e envia código de verificação OTP automaticamente.',
+          name: 'verify_customer_email',
+          description: 'APENAS use quando cliente FORNECER email novo pela PRIMEIRA VEZ. Verifica se email existe na base e envia OTP. ⚠️ NÃO use se cliente reclamar "não recebi email" - nesse caso use resend_otp.',
           parameters: {
             type: 'object',
             properties: {
@@ -1490,6 +1500,19 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
               code: { type: 'string', description: 'O código de 6 dígitos fornecido pelo cliente.' }
             },
             required: ['code']
+          }
+        }
+      },
+      // FASE 2: Resend OTP Tool - Reenvia código para email JÁ CADASTRADO
+      {
+        type: 'function',
+        function: {
+          name: 'resend_otp',
+          description: 'Reenvia código OTP para o email JÁ CADASTRADO do cliente. Use quando cliente disser "não recebi email", "não chegou código", "reenviar código". NÃO pede email novamente.',
+          parameters: {
+            type: 'object',
+            properties: {},
+            required: []
           }
         }
       },
@@ -1539,8 +1562,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       console.log('[ai-autopilot-chat] 🛠️ AI solicitou execução de ferramenta:', toolCalls);
       
       for (const toolCall of toolCalls) {
-        // FASE 2: Handle email update and send OTP
-        if (toolCall.function.name === 'update_customer_email') {
+        // FASE 2: Handle email verification and send OTP
+        if (toolCall.function.name === 'verify_customer_email' || toolCall.function.name === 'update_customer_email') {
           try {
             const args = JSON.parse(toolCall.function.arguments);
             const emailInformado = args.email.toLowerCase().trim();
@@ -1730,10 +1753,11 @@ Assim que retornarmos, um consultor vai te ajudar! 🙏`;
             console.log('[ai-autopilot-chat] ✅ OTP enviado para cliente verificado');
             
             // Dev mode
+            const safeEmail = maskEmail(emailInformado);
             if (otpData.dev_mode && otpData.code) {
               assistantMessage = `✅ Encontrei seu cadastro, ${existingCustomer.first_name}!
 
-📧 Enviei um código de 6 dígitos para **${emailInformado}**.
+📧 Enviei um código de 6 dígitos para **${safeEmail}**.
 
 🔧 **Modo Dev:** Seu código é ${otpData.code}
 
@@ -1741,7 +1765,7 @@ Por favor, digite o código para confirmar sua identidade e prosseguir.`;
             } else {
               assistantMessage = `✅ Encontrei seu cadastro, ${existingCustomer.first_name}!
 
-📧 Enviei um código de 6 dígitos para **${emailInformado}**.
+📧 Enviei um código de 6 dígitos para **${safeEmail}**.
 
 Por favor, digite o código que você recebeu para confirmar sua identidade.`;
             }
@@ -1756,6 +1780,61 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
           } catch (error) {
             console.error('[ai-autopilot-chat] ❌ Erro ao processar email:', error);
             assistantMessage = 'Ocorreu um erro. Poderia me enviar o email novamente?';
+          }
+        }
+        // FASE 2.5: Handle Resend OTP (reenvio seguro para email cadastrado)
+        else if (toolCall.function.name === 'resend_otp') {
+          try {
+            console.log('[ai-autopilot-chat] 🔄 Reenviando OTP para email cadastrado');
+            
+            const contactEmail = contact.email;
+            if (!contactEmail) {
+              assistantMessage = '⚠️ Não encontrei seu email cadastrado. Por favor, informe seu email para que eu possa enviar o código.';
+              continue;
+            }
+
+            // Reenviar OTP para o email JÁ CADASTRADO
+            const { data: otpData, error: otpError } = await supabaseClient.functions.invoke('send-verification-code', {
+              body: { email: contactEmail, type: 'customer' }
+            });
+
+            if (otpError || !otpData?.success) {
+              console.error('[ai-autopilot-chat] ❌ Erro ao reenviar OTP:', otpError);
+              assistantMessage = '❌ Não consegui reenviar o código. Por favor, tente novamente em alguns instantes.';
+              continue;
+            }
+
+            const safeEmail = maskEmail(contactEmail);
+            
+            // Dev mode
+            if (otpData.dev_mode && otpData.code) {
+              assistantMessage = `✅ Código reenviado com sucesso!
+
+📧 Enviei um novo código de 6 dígitos para **${safeEmail}**.
+
+🔧 **Modo Dev:** Seu código é ${otpData.code}
+
+Por favor, digite o código para prosseguir.`;
+            } else {
+              assistantMessage = `✅ Código reenviado com sucesso!
+
+📧 Enviei um novo código de 6 dígitos para **${safeEmail}**.
+
+Por favor, verifique sua caixa de entrada (e spam) e digite o código que você recebeu.`;
+            }
+
+            console.log('[ai-autopilot-chat] ✅ OTP reenviado para email cadastrado:', safeEmail);
+            
+            await supabaseClient.from('interactions').insert({
+              customer_id: contact.id,
+              type: 'note',
+              content: `OTP reenviado para email cadastrado (${safeEmail})`,
+              channel: responseChannel,
+              metadata: { source: 'resend_otp', email_masked: safeEmail }
+            });
+          } catch (error) {
+            console.error('[ai-autopilot-chat] ❌ Erro ao reenviar OTP:', error);
+            assistantMessage = '❌ Ocorreu um erro ao reenviar o código. Por favor, tente novamente.';
           }
         }
         // FASE 2: Handle OTP verification
