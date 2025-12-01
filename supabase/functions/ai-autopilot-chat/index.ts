@@ -563,6 +563,22 @@ serve(async (req) => {
     const persona = selectedRule.ai_personas as any;
     console.log(`[ai-autopilot-chat] Persona selecionada: ${persona.name} (${persona.id})`);
 
+    // 🎓 Buscar exemplos de treinamento (Few-Shot Learning)
+    const { data: trainingExamples } = await supabaseClient
+      .from('ai_training_examples')
+      .select('*')
+      .eq('persona_id', persona.id)
+      .eq('is_active', true)
+      .limit(10);
+
+    console.log('[ai-autopilot-chat] Training examples found:', trainingExamples?.length || 0);
+
+    // Formatar como few-shot messages
+    const fewShotMessages = trainingExamples?.flatMap((example: any) => [
+      { role: 'user', content: example.input_text },
+      { role: 'assistant', content: example.ideal_output }
+    ]) || [];
+
     // 3. Buscar tools vinculadas à persona
     const { data: personaTools, error: toolsError } = await supabaseClient
       .from('ai_persona_tools')
@@ -1251,12 +1267,21 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     const aiPayload: any = {
       messages: [
         { role: 'system', content: contextualizedSystemPrompt },
+        ...fewShotMessages,  // ✨ Injetar exemplos de treinamento (Few-Shot Learning)
         ...messageHistory,
         { role: 'user', content: customerMessage }
       ],
       temperature: persona.temperature || 0.7,
       max_tokens: persona.max_tokens || 500
     };
+
+    console.log('[ai-autopilot-chat] Messages structure:', {
+      system: 1,
+      fewShot: fewShotMessages.length,
+      history: messageHistory.length,
+      current: 1,
+      total: aiPayload.messages.length
+    });
 
     // Add built-in tools + persona tools
     const allTools = [

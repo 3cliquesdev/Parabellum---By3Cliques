@@ -7,11 +7,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePersonas } from "@/hooks/usePersonas";
 import { useSandboxChat, SandboxMessage, CustomerContext } from "@/hooks/useSandboxChat";
 import { useCreateRLHFFeedback } from "@/hooks/useCreateRLHFFeedback";
+import { useScenarioConfigs } from "@/hooks/useTrainingExamples";
+import { SaveTrainingDialog } from "./SaveTrainingDialog";
 import { PreChatForm } from "@/components/PreChatForm";
-import { Bot, Send, Trash2, Activity, Zap, ThumbsUp, ThumbsDown, Database, Brain, UserCheck, Play } from "lucide-react";
+import { Bot, Send, Trash2, Activity, Zap, ThumbsUp, ThumbsDown, Database, Brain, UserCheck, Play, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,9 +26,13 @@ export function SandboxTest() {
   const [simulateRealFlow, setSimulateRealFlow] = useState(false);
   const [showPreChatForm, setShowPreChatForm] = useState(false);
   const [identifiedCustomer, setIdentifiedCustomer] = useState<CustomerContext | null>(null);
+  const [selectedScenario, setSelectedScenario] = useState("normal");
+  const [saveTrainingOpen, setSaveTrainingOpen] = useState(false);
+  const [trainingData, setTrainingData] = useState<{ userMessage: string; assistantMessage: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: personas } = usePersonas();
+  const { data: scenarios } = useScenarioConfigs();
   const { 
     messages, 
     isLoading, 
@@ -42,6 +49,19 @@ export function SandboxTest() {
   const createFeedback = useCreateRLHFFeedback();
 
   const selectedPersona = personas?.find(p => p.id === selectedPersonaId);
+
+  const handleSaveAsTraining = (messageIndex: number) => {
+    const userMessage = messages[messageIndex - 1];
+    const assistantMessage = messages[messageIndex];
+    
+    if (userMessage && assistantMessage && assistantMessage.role === "assistant" && selectedPersonaId) {
+      setTrainingData({
+        userMessage: userMessage.content,
+        assistantMessage: assistantMessage.content
+      });
+      setSaveTrainingOpen(true);
+    }
+  };
 
   const handleFeedback = async (
     messageIndex: number,
@@ -78,7 +98,13 @@ export function SandboxTest() {
 
   const handleSend = async () => {
     if (!input.trim() || !selectedPersonaId) return;
-    await sendMessage(input, selectedPersonaId, identifiedCustomer || undefined);
+    
+    const scenarioConfig = scenarios?.find(s => s.name.toLowerCase() === selectedScenario.toLowerCase());
+    const messageWithScenario = scenarioConfig?.system_instruction 
+      ? `${input}\n\n[SCENARIO_INSTRUCTION: ${scenarioConfig.system_instruction}]`
+      : input;
+
+    await sendMessage(messageWithScenario, selectedPersonaId, identifiedCustomer || undefined);
     setInput("");
   };
 
@@ -236,6 +262,25 @@ export function SandboxTest() {
                   onCheckedChange={setUseKnowledgeBase}
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label>🎭 Cenário do Cliente</Label>
+                <Select value={selectedScenario} onValueChange={setSelectedScenario}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o cenário" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {scenarios?.map((scenario) => (
+                      <SelectItem key={scenario.id} value={scenario.name.toLowerCase()}>
+                        {scenario.icon} {scenario.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {scenarios?.find(s => s.name.toLowerCase() === selectedScenario)?.description}
+                </p>
+              </div>
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -366,6 +411,15 @@ export function SandboxTest() {
                             disabled={feedbackGiven.has(index)}
                           >
                             <ThumbsDown className="h-4 w-4 text-red-500" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => handleSaveAsTraining(index)}
+                            title="Salvar como exemplo de treinamento"
+                          >
+                            <Star className="h-4 w-4 text-yellow-500" />
                           </Button>
                         </div>
                       )}
@@ -657,6 +711,16 @@ export function SandboxTest() {
           </ul>
         </Card>
       </div>
+
+      {trainingData && selectedPersonaId && (
+        <SaveTrainingDialog
+          open={saveTrainingOpen}
+          onOpenChange={setSaveTrainingOpen}
+          personaId={selectedPersonaId}
+          userMessage={trainingData.userMessage}
+          assistantMessage={trainingData.assistantMessage}
+        />
+      )}
     </div>
   );
 }
