@@ -45,8 +45,8 @@ export default function TransferConversationDialog({
   conversation,
   currentUserId,
 }: TransferConversationDialogProps) {
-  // Early return se não há conversa selecionada
-  if (!conversation) {
+  // Early return se não há conversa selecionada ou contato
+  if (!conversation || !conversation.contacts) {
     return null;
   }
 
@@ -110,7 +110,7 @@ export default function TransferConversationDialog({
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             Selecione o departamento e o agente que ficará responsável por esta conversa com{" "}
-            <strong className="text-foreground">{conversation.contacts.first_name} {conversation.contacts.last_name}</strong>
+            <strong className="text-foreground">{conversation.contacts?.first_name} {conversation.contacts?.last_name}</strong>
           </DialogDescription>
         </DialogHeader>
 
