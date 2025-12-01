@@ -30,6 +30,27 @@ export default function Products() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
 
+  const handleEdit = (product: any) => {
+    setSelectedProduct(product);
+    setDialogOpen(true);
+  };
+
+  // Listen for edit-product event from diagnostic
+  useEffect(() => {
+    const handleEditProductEvent = (event: CustomEvent) => {
+      const productId = event.detail;
+      const product = products?.find(p => p.id === productId);
+      if (product) {
+        handleEdit(product);
+      }
+    };
+
+    window.addEventListener('edit-product', handleEditProductEvent as EventListener);
+    return () => {
+      window.removeEventListener('edit-product', handleEditProductEvent as EventListener);
+    };
+  }, [products]);
+
   if (roleLoading || isLoading) {
     return (
       <div className="min-h-screen p-6 flex items-center justify-center">
@@ -50,11 +71,6 @@ export default function Products() {
     );
   }
 
-  const handleEdit = (product: any) => {
-    setSelectedProduct(product);
-    setDialogOpen(true);
-  };
-
   const handleDelete = (id: string) => {
     setProductToDelete(id);
     setDeleteDialogOpen(true);
@@ -72,22 +88,6 @@ export default function Products() {
     setSelectedProduct(null);
     setDialogOpen(true);
   };
-
-  // Listen for edit-product event from diagnostic
-  useEffect(() => {
-    const handleEditProductEvent = (event: CustomEvent) => {
-      const productId = event.detail;
-      const product = products?.find(p => p.id === productId);
-      if (product) {
-        handleEdit(product);
-      }
-    };
-
-    window.addEventListener('edit-product', handleEditProductEvent as EventListener);
-    return () => {
-      window.removeEventListener('edit-product', handleEditProductEvent as EventListener);
-    };
-  }, [products]);
 
   return (
     <div className="min-h-screen p-6">
