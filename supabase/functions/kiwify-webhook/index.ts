@@ -938,48 +938,68 @@ async function handleRecoveryOrder(
     .select()
     .single();
 
-  // 3. VERIFICAR DUPLICIDADE: Deal aberto já existe? (FUNCIONA MESMO SEM PRODUCT)
-  let dealQuery = supabase
+  // 3. VERIFICAR DUPLICIDADE: UM CLIENTE = UM DEAL (independente do produto)
+  const { data: existingDeal } = await supabase
     .from('deals')
-    .select('id, title')
+    .select('id, title, value, product_id')
     .eq('contact_id', contact.id)
-    .eq('status', 'open');
-
-  // Se tiver product, filtrar por product_id também
-  if (product) {
-    dealQuery = dealQuery.eq('product_id', product.id);
-  } else {
-    // Sem product, verificar por título similar
-    dealQuery = dealQuery.ilike('title', `%${Product.product_name}%`);
-  }
-
-  const { data: existingDeal } = await dealQuery.maybeSingle();
+    .eq('status', 'open')
+    .ilike('title', '%Recuperação%')
+    .maybeSingle();
 
   if (existingDeal) {
-    // Apenas adicionar nota ao deal existente
+    // AGREGAR produto ao deal existente
+    const additionalValue = Commissions.product_base_price / 100;
+    const newValue = (existingDeal.value || 0) + additionalValue;
+    
+    // Atualizar título se produto ainda não está incluso
+    let newTitle = existingDeal.title;
+    if (!existingDeal.title.includes(Product.product_name)) {
+      newTitle = `${existingDeal.title} + ${Product.product_name}`;
+    }
+    
+    // Update deal com valor agregado e produto (se existir)
+    const updatePayload: any = {
+      value: newValue,
+      title: newTitle,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Se há produto mapeado e o deal não tinha produto, adicionar
+    if (product && !existingDeal.product_id) {
+      updatePayload.product_id = product.id;
+    }
+    
+    await supabase
+      .from('deals')
+      .update(updatePayload)
+      .eq('id', existingDeal.id);
+    
+    // Registrar nota sobre produto adicional
     await supabase
       .from('interactions')
       .insert({
         customer_id: contact.id,
         type: 'note',
         channel: 'other',
-        content: `⚠️ Nova tentativa de compra falhou: ${order_status}`,
+        content: `➕ Produto adicional ao carrinho: ${Product.product_name} (R$ ${additionalValue.toFixed(2)}) - Cliente tentou comprar mais um produto`,
         metadata: {
           product: Product.product_name,
+          value_added: additionalValue,
+          new_total: newValue,
           order_id,
-          reason: order_status,
           deal_id: existingDeal.id
         }
       });
-
-    console.log('[kiwify-webhook] ℹ️ Nota adicionada ao deal existente:', existingDeal.id);
+    
+    console.log('[kiwify-webhook] ➕ Produto agregado ao deal existente:', existingDeal.id, 'Novo valor:', newValue);
     
     return {
       success: true,
-      action: 'note_added',
+      action: 'product_aggregated_to_deal',
       contact_id: contact.id,
       deal_id: existingDeal.id,
-      message: 'Deal já existe, nota de nova tentativa adicionada'
+      message: `Produto ${Product.product_name} agregado ao deal existente. Novo valor: R$ ${newValue.toFixed(2)}`
     };
   }
 
