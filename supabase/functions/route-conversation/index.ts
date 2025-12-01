@@ -59,11 +59,15 @@ serve(async (req) => {
         id,
         contact_id,
         department,
+        channel,
+        whatsapp_instance_id,
         contacts (
           id,
           first_name,
           last_name,
-          consultant_id
+          consultant_id,
+          phone,
+          whatsapp_id
         )
       `)
       .eq('id', conversationId)
@@ -336,15 +340,55 @@ serve(async (req) => {
       });
 
     // Enviar mensagem de espera ao cliente
+    const queueMessage = '📢 Nossos atendentes estão ocupados ou ausentes no momento. Deixe sua mensagem que responderemos em breve. ⏰';
+    
     await supabase
       .from('messages')
       .insert({
         conversation_id: conversationId,
-        content: 'Nossos atendentes estão ocupados ou ausentes no momento. Deixe sua mensagem que responderemos em breve. ⏰',
+        content: queueMessage,
         sender_type: 'system',
         message_type: 'system',
         is_ai_generated: true
       });
+
+    // Enviar via WhatsApp se o canal for WhatsApp
+    if (conversation.channel === 'whatsapp' && contact) {
+      console.log('[route-conversation] 📱 Enviando mensagem de fila via WhatsApp...');
+      
+      // Buscar instância WhatsApp conectada
+      let instanceId = conversation.whatsapp_instance_id;
+      
+      if (!instanceId) {
+        // Fallback: buscar qualquer instância conectada
+        const { data: activeInstance } = await supabase
+          .from('whatsapp_instances')
+          .select('id')
+          .eq('status', 'connected')
+          .limit(1)
+          .maybeSingle();
+        
+        instanceId = activeInstance?.id;
+      }
+      
+      if (instanceId) {
+        try {
+          await supabase.functions.invoke('send-whatsapp-message', {
+            body: {
+              instance_id: instanceId,
+              phone_number: contact.phone,
+              whatsapp_id: contact.whatsapp_id,
+              message: queueMessage
+            }
+          });
+          console.log('[route-conversation] ✅ Mensagem de fila enviada via WhatsApp');
+        } catch (whatsappError) {
+          console.error('[route-conversation] ❌ Erro ao enviar via WhatsApp:', whatsappError);
+        }
+      } else {
+        console.log('[route-conversation] ⚠️ Nenhuma instância WhatsApp conectada para enviar mensagem');
+      }
+    }
 
     // Verificar posição na fila
     const { count: queuePosition } = await supabase
