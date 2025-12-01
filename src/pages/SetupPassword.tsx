@@ -43,7 +43,7 @@ export default function SetupPassword() {
 
     try {
       const response = await supabase.functions.invoke('send-verification-code', {
-        body: { email: userEmail }
+        body: { email: userEmail, type: 'employee' }
       });
 
       if (response.error) {

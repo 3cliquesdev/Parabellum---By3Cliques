@@ -18,7 +18,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { email } = await req.json();
+    const { email, type = 'employee' } = await req.json();
 
     if (!email) {
       return new Response(JSON.stringify({ error: 'Email é obrigatório' }), {
@@ -27,7 +27,32 @@ serve(async (req) => {
       });
     }
 
-    console.log('[send-verification-code] Gerando código para:', email);
+    console.log('[send-verification-code] Gerando código para:', email, 'type:', type);
+
+    // Define branding based on type
+    const branding = type === 'customer' ? {
+      name: 'Seu Armazém Drop',
+      from: 'Seu Armazém Drop <suporte@seuarmazemdrop.com.br>',
+      subject: '🔐 Código de Verificação - Seu Armazém Drop',
+      logo: 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-seuarmazemdrop.png',
+      greeting: 'Olá!',
+      systemName: 'Seu Armazém Drop',
+      primaryColor: '#f97316',
+      headerColor: '#1e293b',
+      description: 'Recebemos uma solicitação de verificação no Seu Armazém Drop.',
+      footer: 'Equipe Seu Armazém Drop'
+    } : {
+      name: 'Parabellum Security',
+      from: 'Parabellum Security <sistema@parabellum.work>',
+      subject: '🔐 CÓDIGO DE VERIFICAÇÃO: Acesso ao Sistema Parabellum',
+      logo: 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2',
+      greeting: 'Prezado(a) Colaborador(a),',
+      systemName: 'Parabellum / 3 Cliques',
+      primaryColor: '#2563eb',
+      headerColor: '#1e3a5f',
+      description: 'Recebemos uma solicitação de acesso à sua conta no sistema Parabellum / 3 Cliques.',
+      footer: 'Atenciosamente,<br><strong style="color: #1e293b;">Equipe Parabellum Security</strong>'
+    };
 
     // Rate limit: máximo 10 códigos por email por hora (aumentado para desenvolvimento)
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -67,17 +92,19 @@ serve(async (req) => {
     // Enviar email via Resend
     const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
     
+    console.log('[send-verification-code] Enviando email com branding:', branding.name);
+    
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: 'Parabellum Security <sistema@parabellum.work>',
+      from: branding.from,
       to: [email],
-      subject: '🔐 CÓDIGO DE VERIFICAÇÃO: Acesso ao Sistema Parabellum',
+      subject: branding.subject,
       html: `
         <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb;">
           
         <!-- HEADER COM LOGO -->
-        <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-          <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-               alt="PARABELLUM" 
+        <div style="background: linear-gradient(135deg, ${branding.headerColor} 0%, ${branding.primaryColor} 100%); padding: 30px; text-align: center;">
+          <img src="${branding.logo}" 
+               alt="${branding.name}" 
                style="max-width: 200px; height: auto;" />
         </div>
           
@@ -86,15 +113,15 @@ serve(async (req) => {
             
             <!-- SAUDAÇÃO -->
             <p style="color: #1f2937; font-size: 16px; margin: 0 0 20px 0;">
-              Prezado(a) Colaborador(a),
+              ${branding.greeting}
             </p>
             
             <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
-              Recebemos uma solicitação de acesso à sua conta no <strong>Parabellum / 3 Cliques</strong>.
+              ${branding.description}
             </p>
             
             <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
-              Para garantir a segurança dos seus dados, utilize o código de verificação única (OTP) abaixo para completar o login:
+              Para garantir a segurança dos seus dados, utilize o código de verificação única (OTP) abaixo:
             </p>
             
             <!-- CÓDIGO OTP - DESTAQUE PRINCIPAL -->
@@ -116,11 +143,10 @@ serve(async (req) => {
                 ⚠️ ALERTA DE SEGURANÇA
               </h3>
               <p style="color: #78350f; font-size: 13px; line-height: 1.6; margin: 0 0 10px 0;">
-                <strong>Nunca compartilhe:</strong> A equipe Parabellum / 3 Cliques <u>jamais</u> solicitará este código por telefone, WhatsApp ou SMS.
+                <strong>Nunca compartilhe:</strong> A equipe ${branding.systemName} <u>jamais</u> solicitará este código por telefone, WhatsApp ou SMS.
               </p>
               <p style="color: #78350f; font-size: 13px; line-height: 1.6; margin: 0;">
-                <strong>Não foi você?</strong> Se você não solicitou este código, sua credencial pode estar comprometida. 
-                Altere sua senha imediatamente e notifique o departamento de segurança.
+                <strong>Não foi você?</strong> Se você não solicitou este código, ignore este email.
               </p>
             </div>
             
@@ -132,7 +158,7 @@ serve(async (req) => {
               <table style="width: 100%; font-size: 13px; color: #4b5563;">
                 <tr>
                   <td style="padding: 5px 0; color: #6b7280;">Sistema:</td>
-                  <td style="padding: 5px 0; font-weight: 500;">Parabellum / 3 Cliques</td>
+                  <td style="padding: 5px 0; font-weight: 500;">${branding.systemName}</td>
                 </tr>
                 <tr>
                   <td style="padding: 5px 0; color: #6b7280;">Data/Hora:</td>
@@ -153,11 +179,11 @@ serve(async (req) => {
           </div>
           
           <!-- FOOTER -->
-          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #1e3a5f;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: ${branding.headerColor};">
             <tr>
               <td align="center" style="padding: 25px;">
-                
-                <!-- Logos lado a lado -->
+                ${type === 'employee' ? `
+                <!-- Logos lado a lado (APENAS PARA COLABORADORES) -->
                 <table cellpadding="0" cellspacing="0" border="0" align="center">
                   <tr>
                     <td style="padding: 0 8px;">
@@ -186,7 +212,15 @@ serve(async (req) => {
                 <p style="color: #64748b; margin: 0; font-size: 11px;">
                   Ambiente Seguro
                 </p>
-                
+                ` : `
+                <!-- Footer Cliente (SIMPLES) -->
+                <p style="color: #ffffff; margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">
+                  ${branding.footer}
+                </p>
+                <p style="color: #94a3b8; margin: 0; font-size: 11px;">
+                  Este é um email automático. Por favor, não responda.
+                </p>
+                `}
               </td>
             </tr>
           </table>

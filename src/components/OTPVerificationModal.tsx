@@ -13,9 +13,10 @@ interface OTPVerificationModalProps {
   email: string;
   onVerified: (contactId: string) => void;
   onCancel: () => void;
+  type?: 'customer' | 'employee';
 }
 
-export function OTPVerificationModal({ open, email, onVerified, onCancel }: OTPVerificationModalProps) {
+export function OTPVerificationModal({ open, email, onVerified, onCancel, type = 'customer' }: OTPVerificationModalProps) {
   const [code, setCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -57,7 +58,7 @@ export function OTPVerificationModal({ open, email, onVerified, onCancel }: OTPV
 
     try {
       const { error: resendError } = await supabase.functions.invoke('send-verification-code', {
-        body: { email }
+        body: { email, type }
       });
 
       if (resendError) throw resendError;
