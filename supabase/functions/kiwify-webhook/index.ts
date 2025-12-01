@@ -214,6 +214,33 @@ serve(async (req) => {
     const payload: KiwifyWebhookPayload = JSON.parse(bodyText);
     console.log('[kiwify-webhook] Received:', payload.order_status, payload.order_id);
 
+    // ============================================
+    // DEFENSIVE VALIDATION: Check required fields
+    // ============================================
+    if (!payload.order_status) {
+      console.error('[kiwify-webhook] ❌ Missing order_status');
+      return new Response(
+        JSON.stringify({ error: 'Missing order_status in payload' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!payload.Customer) {
+      console.error('[kiwify-webhook] ❌ Missing Customer data');
+      return new Response(
+        JSON.stringify({ error: 'Missing Customer in payload' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!payload.Product) {
+      console.error('[kiwify-webhook] ❌ Missing Product data');
+      return new Response(
+        JSON.stringify({ error: 'Missing Product in payload' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { order_status, Customer, Product, Commissions, order_id } = payload;
 
     // ============================================
@@ -224,9 +251,9 @@ serve(async (req) => {
       .insert({
         event_type: order_status,
         order_id: order_id,
-        customer_email: Customer.email,
-        product_id: Product.product_id,
-        offer_id: Product.offer_id || null,
+        customer_email: Customer?.email || 'unknown',
+        product_id: Product?.product_id || 'unknown',
+        offer_id: Product?.offer_id || null,
         payload: payload,
         processed: false,
       })
