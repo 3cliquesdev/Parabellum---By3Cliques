@@ -83,7 +83,7 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
 
         // Enviar código OTP
         const { data: otpData, error: sendError } = await supabase.functions.invoke('send-verification-code', {
-          body: { email: values.email }
+          body: { email: values.email, type: 'customer' }
         });
 
         if (sendError) throw sendError;
