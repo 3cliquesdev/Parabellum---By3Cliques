@@ -170,33 +170,53 @@ serve(async (req) => {
       let hasMoreInWindow = true;
 
       while (hasMoreInWindow) {
-        const salesResponse = await fetch(
-          `https://public-api.kiwify.com/v1/sales?page_number=${page}&page_size=100&updated_at_start_date=${startDateStr}&updated_at_end_date=${endDateStr}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${access_token}`,
-              'x-kiwify-account-id': accountId,
-              'Content-Type': 'application/json',
-            },
+        let retries = 0;
+        let success = false;
+        
+        while (!success && retries < 3) {
+          const salesResponse = await fetch(
+            `https://public-api.kiwify.com/v1/sales?page_number=${page}&page_size=100&updated_at_start_date=${startDateStr}&updated_at_end_date=${endDateStr}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${access_token}`,
+                'x-kiwify-account-id': accountId,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+
+          if (salesResponse.status === 429) {
+            retries++;
+            console.log(`[sync-kiwify-sales] ⏳ Rate limited (tentativa ${retries}/3), aguardando 30s...`);
+            await new Promise(resolve => setTimeout(resolve, 30000));
+            continue;
           }
-        );
 
-        if (!salesResponse.ok) {
-          const errorText = await salesResponse.text().catch(() => '');
-          throw new Error(`Falha ao buscar vendas: ${salesResponse.status} - ${errorText}`);
+          if (!salesResponse.ok) {
+            const errorText = await salesResponse.text().catch(() => '');
+            throw new Error(`Falha ao buscar vendas: ${salesResponse.status} - ${errorText}`);
+          }
+
+          const salesData = await salesResponse.json();
+          const windowSales: KiwifySale[] = salesData.data || [];
+          allSales = allSales.concat(windowSales);
+
+          hasMoreInWindow = windowSales.length === 100;
+          page++;
+          success = true;
+
+          // Rate limiting entre páginas: 1 segundo
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-
-        const salesData = await salesResponse.json();
-        const windowSales: KiwifySale[] = salesData.data || [];
-        allSales = allSales.concat(windowSales);
-
-        hasMoreInWindow = windowSales.length === 100;
-        page++;
-
-        // Rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        if (!success) {
+          throw new Error('Máximo de tentativas atingido após rate limiting');
+        }
       }
 
+      // Rate limiting entre janelas de 90 dias: 2 segundos
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       // Move window to previous period
       windowEnd = new Date(windowStart.getTime() - dayMs);
     }
