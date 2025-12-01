@@ -149,7 +149,7 @@ serve(async (req) => {
         {
           headers: {
             'Authorization': `Bearer ${access_token}`,
-            'x-kiwify-account-id': accountId,
+            'X-Kiwify-Account-Id': accountId,
             'Content-Type': 'application/json',
           },
         }
