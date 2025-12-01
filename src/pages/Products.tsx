@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function Products() {
-  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { isAdmin, isGeneralManager, loading: roleLoading } = useUserRole();
   const { data: products, isLoading } = useProducts();
   const deleteProduct = useDeleteProduct();
 
@@ -38,7 +38,7 @@ export default function Products() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !isGeneralManager) {
     return (
       <div className="min-h-screen p-6 flex items-center justify-center">
         <div className="text-center">
