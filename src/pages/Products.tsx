@@ -7,23 +7,6 @@ import { Shield, Loader2, Plus, Edit, Trash2, Package, ExternalLink } from "luci
 import { useProducts, useDeleteProduct } from "@/hooks/useProducts";
 import { ProductDialog } from "@/components/ProductDialog";
 
-// Helper function to calculate product price from offers
-const formatProductPrice = (offers: any[] | null | undefined) => {
-  if (!offers || offers.length === 0) return "R$ 0,00";
-  
-  const activeOffers = offers.filter(o => o.is_active);
-  if (activeOffers.length === 0) return "R$ 0,00";
-  
-  const prices = activeOffers.map(o => o.price);
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
-  
-  if (minPrice === maxPrice) {
-    return `R$ ${minPrice.toFixed(2).replace('.', ',')}`;
-  }
-  
-  return `R$ ${minPrice.toFixed(2).replace('.', ',')} - R$ ${maxPrice.toFixed(2).replace('.', ',')}`;
-};
 import {
   AlertDialog,
   AlertDialogAction,
@@ -136,19 +119,7 @@ export default function Products() {
                       <CardDescription className="mt-2">
                         {product.description}
                       </CardDescription>
-                    )}
-                    
-                    {/* Price Display */}
-                    <div className="flex items-center gap-2 mt-3">
-                      <span className="text-lg font-bold text-green-600">
-                        {formatProductPrice(product.product_offers)}
-                      </span>
-                      {product.product_offers && product.product_offers.length > 0 && (
-                        <Badge variant="outline" className="text-xs">
-                          {product.product_offers.length} oferta(s)
-                        </Badge>
-                      )}
-                    </div>
+                     )}
                     
                     {/* Kiwify ID Badge */}
                     {product.external_id && (

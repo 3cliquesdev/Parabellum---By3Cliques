@@ -101,8 +101,8 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
           <div className="flex flex-col items-center mb-6">
             <Avatar className="h-20 w-20 bg-primary/10 flex items-center justify-center mb-3">
               <span className="text-2xl font-semibold text-primary">
-                {contact.first_name[0]}
-                {contact.last_name[0]}
+                {contact.first_name?.[0] || ''}
+                {contact.last_name?.[0] || ''}
               </span>
             </Avatar>
             <h3 className="text-lg font-semibold text-foreground text-center">
