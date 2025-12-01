@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle } from "lucide-react";
+import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
@@ -22,6 +22,7 @@ import TransferConversationDialog from "@/components/TransferConversationDialog"
 import { CreateTicketFromInboxDialog } from "@/components/CreateTicketFromInboxDialog";
 import CopilotSuggestionCard from "@/components/CopilotSuggestionCard";
 import CloseConversationDialog from "@/components/CloseConversationDialog";
+import DealDialog from "@/components/DealDialog";
 import { SafeHTML } from "@/components/SafeHTML";
 import { MessageStatusIndicator } from "@/components/MessageStatusIndicator";
 import { AIDebugTooltip } from "@/components/AIDebugTooltip";
@@ -54,6 +55,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [createTicketDialogOpen, setCreateTicketDialogOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [createDealDialogOpen, setCreateDealDialogOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { isAdmin, isManager } = useUserRole();
@@ -214,6 +216,13 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             conversation={conversation}
             userId={user?.id || ""}
           />
+          {createDealDialogOpen && (
+            <DealDialog
+              prefilledContactId={conversation.contacts?.id}
+              trigger={<></>}
+              onOpenChange={(open) => setCreateDealDialogOpen(open)}
+            />
+          )}
         </>
       )}
       
@@ -302,6 +311,16 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   <span className="text-xs">Devolver para IA</span>
                 </Button>
               )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCreateDealDialogOpen(true)}
+                className="h-8 gap-1"
+              >
+                <DollarSign className="h-4 w-4" />
+                <span className="text-xs">Negócio</span>
+              </Button>
 
               <Button
                 variant="outline"
