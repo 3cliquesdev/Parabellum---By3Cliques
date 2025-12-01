@@ -13,8 +13,9 @@ export const useCreatePersona = () => {
       system_prompt: string;
       temperature?: number;
       max_tokens?: number;
-      knowledge_base_paths?: string[];
+      knowledge_base_paths?: string[] | null;
       is_active?: boolean;
+      use_priority_instructions?: boolean;
     }) => {
       // Debug completo para RLS
       const { data: { user } } = await supabase.auth.getUser();

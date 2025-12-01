@@ -925,10 +925,13 @@ Responda APENAS: skip ou search`
     // Detectar se é contexto financeiro na mensagem atual
     const isFinancialContext = FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
     
-    // FASE 1: Criar instrução prioritária que vai NO INÍCIO do prompt
+    // FASE 1: Criar instrução prioritária que vai NO INÍCIO do prompt (se habilitado)
     let priorityInstruction = '';
     
-    if (contactHasEmail && responseChannel === 'whatsapp') {
+    // ✅ CONTROLE: Só usar priorityInstruction se persona tiver use_priority_instructions=true
+    const usePriorityInstructions = persona.use_priority_instructions === true;
+    
+    if (usePriorityInstructions && contactHasEmail && responseChannel === 'whatsapp') {
       const maskedEmail = contactEmail.replace(/(.{1})(.*)(@.*)/, '$1***$3');
       
       // CASO 1: Contexto FINANCEIRO - Precisa verificação OTP
@@ -983,7 +986,7 @@ Status: ${contactStatus}
 → Mostre que reconhecemos o cliente`;
       }
       
-    } else if (!contactHasEmail && responseChannel === 'whatsapp') {
+    } else if (usePriorityInstructions && !contactHasEmail && responseChannel === 'whatsapp') {
       // FASE 4: Lead (não tem email) - seguir Identity Wall e direcionar para comercial após verificação
       priorityInstruction = `🚨🚨🚨 INSTRUÇÃO PRIORITÁRIA - IGNORE TUDO ABAIXO ATÉ SEGUIR ISSO 🚨🚨🚨
 

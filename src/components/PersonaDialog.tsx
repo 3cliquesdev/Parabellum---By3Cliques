@@ -21,6 +21,7 @@ interface PersonaDialogProps {
     max_tokens: number | null;
     knowledge_base_paths: string[] | null;
     is_active: boolean | null;
+    use_priority_instructions: boolean | null;
   };
   onOpenChange?: (open: boolean) => void;
 }
@@ -34,6 +35,7 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
   const [maxTokens, setMaxTokens] = useState(500);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
+  const [usePriorityInstructions, setUsePriorityInstructions] = useState(false);
 
   const createPersona = useCreatePersona();
   const updatePersona = useUpdatePersona();
@@ -48,6 +50,7 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       setMaxTokens(persona.max_tokens ?? 500);
       setSelectedCategories(persona.knowledge_base_paths ?? []);
       setIsActive(persona.is_active ?? true);
+      setUsePriorityInstructions(persona.use_priority_instructions ?? false);
     } else {
       setName("");
       setRole("");
@@ -56,6 +59,7 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       setMaxTokens(500);
       setSelectedCategories([]);
       setIsActive(true);
+      setUsePriorityInstructions(false);
     }
   }, [persona, open]);
 
@@ -70,6 +74,7 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       max_tokens: maxTokens,
       knowledge_base_paths: selectedCategories.length > 0 ? selectedCategories : null,
       is_active: isActive,
+      use_priority_instructions: usePriorityInstructions,
     };
 
     if (persona) {
@@ -213,6 +218,24 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
               id="isActive"
               checked={isActive}
               onCheckedChange={setIsActive}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-4 border rounded-lg bg-amber-50 dark:bg-amber-950/20">
+            <div className="flex-1">
+              <Label htmlFor="usePriorityInstructions" className="flex items-center gap-2">
+                🔐 Instruções Prioritárias
+                <span className="text-xs font-normal text-amber-600 dark:text-amber-500">(Requer Autorização)</span>
+              </Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Quando ativado, usa instruções personalizadas para boas-vindas e verificação OTP. 
+                <span className="text-amber-600 dark:text-amber-500 font-medium"> Apenas Admin/Manager podem ativar.</span>
+              </p>
+            </div>
+            <Switch
+              id="usePriorityInstructions"
+              checked={usePriorityInstructions}
+              onCheckedChange={setUsePriorityInstructions}
             />
           </div>
 
