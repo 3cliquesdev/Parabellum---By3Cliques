@@ -20,8 +20,8 @@ export default function ImportClients() {
 
   // Redirecionar se não for admin
   useEffect(() => {
-    if (!roleLoading && role !== null && role !== 'admin') {
-      navigate('/dashboard');
+    if (!roleLoading && role !== null && role !== 'admin' && role !== 'general_manager') {
+      navigate('/');
     }
   }, [role, roleLoading, navigate]);
 

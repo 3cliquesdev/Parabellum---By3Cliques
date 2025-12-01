@@ -69,8 +69,8 @@ export default function Analytics() {
 
   // Permission validation - only admin and manager can access Analytics
   useEffect(() => {
-    if (!roleLoading && role !== null && role === 'sales_rep') {
-      navigate('/dashboard');
+  if (!roleLoading && role !== null && role === 'sales_rep') {
+    navigate('/');
     }
   }, [roleLoading, role, navigate]);
 

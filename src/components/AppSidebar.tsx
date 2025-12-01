@@ -613,7 +613,7 @@ export function AppSidebar() {
                   </SidebarGroupContent>
                 </SidebarGroup>
 
-                {isAdmin && (
+                {(isAdmin || isGeneralManager) && (
                   <SidebarGroup>
                     {!collapsed && <SidebarGroupLabel>Sistema</SidebarGroupLabel>}
                     <SidebarGroupContent>

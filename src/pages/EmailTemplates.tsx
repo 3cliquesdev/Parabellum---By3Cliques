@@ -54,8 +54,8 @@ export default function EmailTemplates() {
   const [previewTemplate, setPreviewTemplate] = useState<Tables<"email_templates"> | null>(null);
 
   // Verificar permissão de acesso
-  if (!roleLoading && role !== null && role !== 'admin' && role !== 'manager') {
-    navigate('/dashboard');
+  if (!roleLoading && role !== null && role !== 'admin' && role !== 'manager' && role !== 'general_manager') {
+    navigate('/');
     return null;
   }
 
