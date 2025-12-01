@@ -58,7 +58,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const [createDealDialogOpen, setCreateDealDialogOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
-  const { isAdmin, isManager } = useUserRole();
+  const { isAdmin, isManager, isSalesRep } = useUserRole();
   const { data: messages = [], isLoading: isMessagesLoading } = useMessages(conversation?.id || null);
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
   const { data: activePersona } = useActivePersona(conversation?.id || null);
@@ -312,15 +312,17 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                 </Button>
               )}
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCreateDealDialogOpen(true)}
-                className="h-8 gap-1"
-              >
-                <DollarSign className="h-4 w-4" />
-                <span className="text-xs">Negócio</span>
-              </Button>
+              {isSalesRep && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCreateDealDialogOpen(true)}
+                  className="h-8 gap-1"
+                >
+                  <DollarSign className="h-4 w-4" />
+                  <span className="text-xs">Negócio</span>
+                </Button>
+              )}
 
               <Button
                 variant="outline"
