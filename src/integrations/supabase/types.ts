@@ -247,6 +247,7 @@ export type Database = {
       ai_personas: {
         Row: {
           created_at: string | null
+          data_access: Json | null
           id: string
           is_active: boolean | null
           knowledge_base_paths: string[] | null
@@ -260,6 +261,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          data_access?: Json | null
           id?: string
           is_active?: boolean | null
           knowledge_base_paths?: string[] | null
@@ -273,6 +275,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          data_access?: Json | null
           id?: string
           is_active?: boolean | null
           knowledge_base_paths?: string[] | null

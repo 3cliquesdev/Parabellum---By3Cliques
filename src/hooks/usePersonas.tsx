@@ -7,7 +7,7 @@ export const usePersonas = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ai_personas")
-        .select("*")
+        .select("*, data_access")
         .order("created_at", { ascending: false });
 
       if (error) throw error;

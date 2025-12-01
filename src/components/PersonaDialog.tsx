@@ -39,6 +39,12 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
   const [isActive, setIsActive] = useState(true);
   const [usePriorityInstructions, setUsePriorityInstructions] = useState(false);
   const [hasGlobalAccess, setHasGlobalAccess] = useState(true);
+  
+  // Data Access Controls
+  const [accessCustomerData, setAccessCustomerData] = useState(true);
+  const [accessKnowledgeBase, setAccessKnowledgeBase] = useState(true);
+  const [accessOrderHistory, setAccessOrderHistory] = useState(false);
+  const [accessFinancialData, setAccessFinancialData] = useState(false);
 
   const createPersona = useCreatePersona();
   const updatePersona = useUpdatePersona();
@@ -55,6 +61,13 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       setIsActive(persona.is_active ?? true);
       setUsePriorityInstructions(persona.use_priority_instructions ?? false);
       setHasGlobalAccess(!persona.knowledge_base_paths || persona.knowledge_base_paths.length === 0);
+      
+      // Initialize data access from persona.data_access
+      const dataAccess = (persona as any).data_access;
+      setAccessCustomerData(dataAccess?.customer_data ?? true);
+      setAccessKnowledgeBase(dataAccess?.knowledge_base ?? true);
+      setAccessOrderHistory(dataAccess?.order_history ?? false);
+      setAccessFinancialData(dataAccess?.financial_data ?? false);
     } else {
       setName("");
       setRole("");
@@ -65,6 +78,12 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       setIsActive(true);
       setUsePriorityInstructions(false);
       setHasGlobalAccess(true);
+      
+      // Reset data access to defaults
+      setAccessCustomerData(true);
+      setAccessKnowledgeBase(true);
+      setAccessOrderHistory(false);
+      setAccessFinancialData(false);
     }
   }, [persona, open]);
 
@@ -80,6 +99,12 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       knowledge_base_paths: hasGlobalAccess ? null : (selectedCategories.length > 0 ? selectedCategories : null),
       is_active: isActive,
       use_priority_instructions: usePriorityInstructions,
+      data_access: {
+        customer_data: accessCustomerData,
+        knowledge_base: accessKnowledgeBase,
+        order_history: accessOrderHistory,
+        financial_data: accessFinancialData,
+      },
     };
 
     if (persona) {
@@ -278,6 +303,80 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
               checked={usePriorityInstructions}
               onCheckedChange={setUsePriorityInstructions}
             />
+          </div>
+
+          {/* NOVA SEÇÃO: ACESSO A DADOS */}
+          <div className="space-y-4 p-4 border-2 border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50/50 dark:bg-blue-950/20">
+            <div>
+              <Label className="text-base font-semibold text-blue-900 dark:text-blue-100">
+                🔒 Controle de Acesso a Dados
+              </Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Configure quais informações esta IA pode acessar e exibir aos clientes
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded border">
+                <div>
+                  <Label htmlFor="accessCustomerData" className="font-medium">
+                    👤 Dados do Cliente
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Nome, Email, Telefone, CPF</p>
+                </div>
+                <Switch
+                  id="accessCustomerData"
+                  checked={accessCustomerData}
+                  onCheckedChange={setAccessCustomerData}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded border">
+                <div>
+                  <Label htmlFor="accessKnowledgeBase" className="font-medium">
+                    📚 Base de Conhecimento
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Artigos e documentação</p>
+                </div>
+                <Switch
+                  id="accessKnowledgeBase"
+                  checked={accessKnowledgeBase}
+                  onCheckedChange={setAccessKnowledgeBase}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded border">
+                <div>
+                  <Label htmlFor="accessOrderHistory" className="font-medium">
+                    📦 Histórico de Pedidos
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Compras e transações</p>
+                </div>
+                <Switch
+                  id="accessOrderHistory"
+                  checked={accessOrderHistory}
+                  onCheckedChange={setAccessOrderHistory}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded border border-amber-300 dark:border-amber-700">
+                <div>
+                  <Label htmlFor="accessFinancialData" className="font-medium text-amber-700 dark:text-amber-400">
+                    💰 Dados Financeiros
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Saldo, transações, saques</p>
+                </div>
+                <Switch
+                  id="accessFinancialData"
+                  checked={accessFinancialData}
+                  onCheckedChange={setAccessFinancialData}
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+              ⚠️ <strong>Atenção:</strong> Desabilitar acesso a dados pode limitar a capacidade da IA de responder perguntas específicas.
+            </p>
           </div>
 
           <div className="flex gap-2 justify-end pt-4">

@@ -940,6 +940,15 @@ Responda APENAS: skip ou search`
     const maskedCPF = contactCPF.length >= 4 ? `***.***.***-${contactCPF.slice(-2)}` : 'Não cadastrado';
     const cpfLast4 = contactCPF.length >= 4 ? contactCPF.slice(-4) : '';
     
+    // 🔐 DEBUG: Log CPF data
+    console.log('[ai-autopilot-chat] 🔐 CPF DEBUG:', {
+      has_document: !!contact.document,
+      document_length: contact.document?.length,
+      maskedCPF: maskedCPF,
+      cpfLast4: cpfLast4,
+      contact_status: contact.status
+    });
+    
     // ============================================================
     // 🔒 DEFINIÇÕES UNIFICADAS DE CLIENTE (evita inconsistências)
     // ============================================================
@@ -1502,7 +1511,10 @@ Você quer:
 
 ${canShowFinancialData 
   ? `✅ Cliente VERIFICADO via OTP - Pode prosseguir com saque
-     CPF: ${maskedCPF}`
+     CPF cadastrado: ${maskedCPF}
+     
+     ⚠️ ATENÇÃO: Use EXATAMENTE o CPF fornecido acima: "${maskedCPF}"
+     NUNCA escreva "Não cadastrado" se o CPF foi fornecido.`
   : `❌ BLOQUEIO: Cliente NÃO verificou identidade via OTP nesta sessão.
      → NÃO mostre CPF ou Nome completo
      → NÃO permita criar ticket de saque
@@ -2174,6 +2186,41 @@ Seu saldo disponível: ${balanceFormatted}`;
               console.log('[ai-autopilot-chat] ✅ Ticket criado com sucesso:', ticket.id);
               
               ticketCreatedSuccessfully = true; // 🔒 Marcar sucesso (previne duplicação no fallback)
+              
+              // ✅ ENVIAR EMAIL DE CONFIRMAÇÃO
+              try {
+                console.log('[ai-autopilot-chat] 📧 Enviando email de confirmação do ticket...');
+                
+                const notificationResponse = await fetch(
+                  `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-ticket-notification`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+                    },
+                    body: JSON.stringify({
+                      ticket_id: ticket.id,
+                      ticket_number: ticket.id.substring(0, 8).toUpperCase(),
+                      customer_email: contact.email,
+                      customer_name: contactName,
+                      subject: args.subject,
+                      description: args.description,
+                      priority: args.priority || 'medium'
+                    })
+                  }
+                );
+
+                if (notificationResponse.ok) {
+                  console.log('[ai-autopilot-chat] ✅ Email de confirmação enviado com sucesso');
+                } else {
+                  const errorText = await notificationResponse.text();
+                  console.error('[ai-autopilot-chat] ⚠️ Falha ao enviar email:', errorText);
+                }
+              } catch (emailError) {
+                console.error('[ai-autopilot-chat] ⚠️ Erro ao enviar email de confirmação:', emailError);
+                // Não falhar o fluxo por causa de email
+              }
               
               // Link conversation to ticket
               await supabaseClient

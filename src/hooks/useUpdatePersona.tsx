@@ -21,6 +21,12 @@ export const useUpdatePersona = () => {
         knowledge_base_paths?: string[] | null;
         is_active?: boolean;
         use_priority_instructions?: boolean;
+        data_access?: {
+          customer_data?: boolean;
+          knowledge_base?: boolean;
+          order_history?: boolean;
+          financial_data?: boolean;
+        };
       };
     }) => {
       console.log('[useUpdatePersona] Updating persona:', id, data);
