@@ -1254,8 +1254,16 @@ Digite **"reenviar"** se precisar de um novo código.`;
     if (contactHasEmail) {
       const maskedEmail = maskEmail(contactEmail);
       
+      // Debug log comparando isFinancialRequest vs isFinancialContext
+      console.log('[ai-autopilot-chat] 🔐 FINANCIAL DETECTION DEBUG:', {
+        is_financial_request: isFinancialRequest,
+        is_financial_context: isFinancialContext,
+        message: customerMessage.substring(0, 50),
+        will_trigger_otp: isFinancialRequest && !hasRecentOTPVerification
+      });
+      
       // CASO 1: Contexto FINANCEIRO - Precisa verificação OTP
-      if (isFinancialContext && !hasRecentOTPVerification) {
+      if (isFinancialRequest && !hasRecentOTPVerification) {
         console.log('[ai-autopilot-chat] 🔐 DECISION POINT: FINANCIAL_OTP_BARRIER', {
           is_financial_context: true,
           has_recent_otp: false,
@@ -1339,7 +1347,7 @@ Por favor, **digite o código** que você recebeu para continuar.`;
         }
       }
       // CASO 2: Contexto NORMAL - Apenas boas-vindas (CORRIGIDO: removido !hasRecentOTPVerification)
-      else if (!isFinancialContext) {
+      else if (!isFinancialRequest) {
         console.log('[ai-autopilot-chat] ✅ Cliente conhecido - Boas-vindas sem OTP');
         
         priorityInstruction = `🚨🚨🚨 INSTRUÇÃO PRIORITÁRIA - IGNORE TUDO ABAIXO ATÉ SEGUIR ISSO 🚨🚨🚨
