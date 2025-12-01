@@ -408,7 +408,7 @@ async function handlePaidOrder(
       state: Customer.Address?.state || null,
       zip_code: Customer.Address?.zipcode || null,
       status: 'customer',
-      total_ltv: Commissions.product_base_price, // LTV inicial
+      total_ltv: Commissions.product_base_price / 100, // LTV inicial (centavos → reais)
       kiwify_customer_id: Customer.id,
       subscription_plan: Product.product_name,
       registration_date: new Date().toISOString(),
@@ -448,12 +448,13 @@ async function handlePaidOrder(
   }
 
   // 2.5 🆕 CRIAR DEAL COM STATUS "GANHO" E VALOR DA VENDA
+  const dealValue = Commissions.product_base_price / 100; // ✅ Converter centavos para reais
   const { data: wonDeal, error: dealError } = await supabase
     .from('deals')
     .insert({
       title: `Venda Kiwify: ${Product.product_name}`,
       contact_id: contact.id,
-      value: Commissions.product_base_price,
+      value: dealValue,
       currency: 'BRL',
       status: 'won',
       closed_at: new Date().toISOString(),
@@ -468,7 +469,7 @@ async function handlePaidOrder(
   if (dealError) {
     console.error('[kiwify-webhook] ❌ Erro ao criar deal ganho:', dealError);
   } else {
-    console.log('[kiwify-webhook] ✅ Deal ganho criado:', wonDeal.id, 'Valor: R$', Commissions.product_base_price);
+    console.log('[kiwify-webhook] ✅ Deal ganho criado:', wonDeal.id, 'Valor: R$', dealValue.toFixed(2));
   }
 
   // 3. Buscar produto por offer_id PRIMEIRO (se disponível), fallback para external_id
@@ -576,10 +577,10 @@ async function handlePaidOrder(
     action: 'new_customer_onboarding',
     contact_id: contact.id,
     deal_id: wonDeal?.id,
-    deal_value: Commissions.product_base_price,
+    deal_value: dealValue,
     playbook_ids,
     playbooks_count: playbook_ids.length,
-    message: `Novo cliente criado, Deal ganho criado (R$ ${Commissions.product_base_price}), Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)`
+    message: `Novo cliente criado, Deal ganho criado (R$ ${dealValue.toFixed(2)}), Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)`
   };
 }
 
@@ -598,7 +599,8 @@ async function handleUpsellOrder(
 
   // 1. ❌ NÃO criar usuário no Auth (já existe)
   // 2. ✅ Atualizar LTV somando valor da nova compra
-  const newLtv = (existingContact.total_ltv || 0) + Commissions.product_base_price;
+  const upsellValue = Commissions.product_base_price / 100; // ✅ Converter centavos para reais
+  const newLtv = (existingContact.total_ltv || 0) + upsellValue;
   
   await supabase
     .from('contacts')
@@ -617,7 +619,7 @@ async function handleUpsellOrder(
     .insert({
       title: `Upsell Kiwify: ${Product.product_name}`,
       contact_id: existingContact.id,
-      value: Commissions.product_base_price,
+      value: upsellValue,
       currency: 'BRL',
       status: 'won',
       closed_at: new Date().toISOString(),
@@ -631,7 +633,7 @@ async function handleUpsellOrder(
   if (dealError) {
     console.error('[kiwify-webhook] ❌ Erro ao criar deal upsell:', dealError);
   } else {
-    console.log('[kiwify-webhook] ✅ Deal upsell criado:', upsellDeal.id, 'Valor: R$', Commissions.product_base_price);
+    console.log('[kiwify-webhook] ✅ Deal upsell criado:', upsellDeal.id, 'Valor: R$', upsellValue.toFixed(2));
   }
 
   // 3. Buscar produto e playbooks (NOVA LÓGICA: offer_id primeiro)
@@ -767,12 +769,12 @@ async function handleUpsellOrder(
     action: 'upsell_processed',
     contact_id: existingContact.id,
     deal_id: upsellDeal?.id,
-    deal_value: Commissions.product_base_price,
+    deal_value: upsellValue,
     new_ltv: newLtv,
     playbook_ids,
     playbooks_count: playbook_ids.length,
     consultant_notified: !!existingContact.consultant_id,
-    message: `Upsell processado, Deal ganho criado (R$ ${Commissions.product_base_price}), LTV atualizado, ${playbook_ids.length} playbook(s) iniciado(s)`
+    message: `Upsell processado, Deal ganho criado (R$ ${upsellValue.toFixed(2)}), LTV atualizado, ${playbook_ids.length} playbook(s) iniciado(s)`
   };
 }
 
@@ -794,13 +796,13 @@ async function notifyConsultantUpsell(
       type: 'note',
       channel: 'other',
       content: `💰 UPSELL DETECTADO!
-Seu cliente ${contact.first_name} acabou de comprar ${Product.product_name} (R$ ${Commissions.product_base_price.toFixed(2)}).
+Seu cliente ${contact.first_name} acabou de comprar ${Product.product_name} (R$ ${(Commissions.product_base_price / 100).toFixed(2)}).
 Entre em contato para agradecer e garantir boa experiência!`,
       metadata: {
         notification_type: 'upsell_alert',
         consultant_id: consultantId,
         product: Product.product_name,
-        value: Commissions.product_base_price
+        value: Commissions.product_base_price / 100
       }
     });
 
@@ -844,7 +846,8 @@ async function handleSubscriptionRenewal(
   }
 
   // 2. Update LTV
-  const newLtv = (contact.total_ltv || 0) + Commissions.product_base_price;
+  const renewalValue = Commissions.product_base_price / 100; // ✅ Converter centavos para reais
+  const newLtv = (contact.total_ltv || 0) + renewalValue;
   
   await supabase
     .from('contacts')
@@ -866,7 +869,7 @@ async function handleSubscriptionRenewal(
       content: `✅ Renovação com Sucesso: ${Product.product_name} - LTV atualizado para R$ ${newLtv.toFixed(2)}`,
       metadata: { 
         product: Product.product_name, 
-        value: Commissions.product_base_price,
+        value: renewalValue,
         new_ltv: newLtv 
       }
     });
@@ -935,43 +938,49 @@ async function handleRecoveryOrder(
     .select()
     .single();
 
-  // 3. VERIFICAR DUPLICIDADE: Deal aberto já existe?
+  // 3. VERIFICAR DUPLICIDADE: Deal aberto já existe? (FUNCIONA MESMO SEM PRODUCT)
+  let dealQuery = supabase
+    .from('deals')
+    .select('id, title')
+    .eq('contact_id', contact.id)
+    .eq('status', 'open');
+
+  // Se tiver product, filtrar por product_id também
   if (product) {
-    const { data: existingDeal } = await supabase
-      .from('deals')
-      .select('id, title')
-      .eq('contact_id', contact.id)
-      .eq('product_id', product.id)
-      .eq('status', 'open')
-      .single();
+    dealQuery = dealQuery.eq('product_id', product.id);
+  } else {
+    // Sem product, verificar por título similar
+    dealQuery = dealQuery.ilike('title', `%${Product.product_name}%`);
+  }
 
-    if (existingDeal) {
-      // Apenas adicionar nota ao deal existente
-      await supabase
-        .from('interactions')
-        .insert({
-          customer_id: contact.id,
-          type: 'note',
-          channel: 'other',
-          content: `⚠️ Nova tentativa de compra falhou: ${order_status}`,
-          metadata: {
-            product: Product.product_name,
-            order_id,
-            reason: order_status,
-            deal_id: existingDeal.id
-          }
-        });
+  const { data: existingDeal } = await dealQuery.maybeSingle();
 
-      console.log('[kiwify-webhook] ℹ️ Nota adicionada ao deal existente:', existingDeal.id);
-      
-      return {
-        success: true,
-        action: 'note_added',
-        contact_id: contact.id,
-        deal_id: existingDeal.id,
-        message: 'Deal já existe, nota de nova tentativa adicionada'
-      };
-    }
+  if (existingDeal) {
+    // Apenas adicionar nota ao deal existente
+    await supabase
+      .from('interactions')
+      .insert({
+        customer_id: contact.id,
+        type: 'note',
+        channel: 'other',
+        content: `⚠️ Nova tentativa de compra falhou: ${order_status}`,
+        metadata: {
+          product: Product.product_name,
+          order_id,
+          reason: order_status,
+          deal_id: existingDeal.id
+        }
+      });
+
+    console.log('[kiwify-webhook] ℹ️ Nota adicionada ao deal existente:', existingDeal.id);
+    
+    return {
+      success: true,
+      action: 'note_added',
+      contact_id: contact.id,
+      deal_id: existingDeal.id,
+      message: 'Deal já existe, nota de nova tentativa adicionada'
+    };
   }
 
   // 4. Buscar stage "Recuperação"
@@ -989,11 +998,12 @@ async function handleRecoveryOrder(
   const { data: salesRepId } = await supabase.rpc('get_least_loaded_sales_rep');
 
   // 6. Criar Deal de Recuperação
+  const recoveryValue = Commissions.product_base_price / 100; // ✅ Converter centavos para reais
   const { data: deal } = await supabase
     .from('deals')
     .insert({
       title: `Recuperação - ${Product.product_name} - ${Customer.full_name}`,
-      value: Commissions.product_base_price,
+      value: recoveryValue,
       currency: 'BRL',
       status: 'open',
       stage_id: recoveryStage.id,
@@ -1015,7 +1025,7 @@ async function handleRecoveryOrder(
       content: `🚨 RECUPERAÇÃO URGENTE: ${order_status === 'refused' ? 'Pagamento recusado' : 'Carrinho abandonado'} - Ligar AGORA`,
       metadata: {
         product: Product.product_name,
-        value: Commissions.product_base_price,
+        value: recoveryValue,
         order_id,
         deal_id: deal?.id,
         assigned_to: salesRepId
@@ -1140,11 +1150,12 @@ async function handleOverduePayment(
   }
 
   // 5. Create overdue deal
+  const overdueValue = Commissions.product_base_price / 100; // ✅ Converter centavos para reais
   const { data: deal } = await supabase
     .from('deals')
     .insert({
       title: `Cobrança - ${Product.product_name} - ${Customer.full_name}`,
-      value: Commissions.product_base_price,
+      value: overdueValue,
       currency: 'BRL',
       status: 'open',
       stage_id: cobrancaStage.id,
