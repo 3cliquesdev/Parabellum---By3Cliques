@@ -30,7 +30,7 @@ export function ProductMappingDiagnostic() {
           name,
           external_id,
           delivery_group_id,
-          delivery_groups:delivery_group_id (
+          delivery_groups (
             id,
             name
           ),
