@@ -124,6 +124,42 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_support_channels: {
+        Row: {
+          channel_id: string
+          created_at: string | null
+          id: string
+          profile_id: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string | null
+          id?: string
+          profile_id: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string | null
+          id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_support_channels_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "support_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_support_channels_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_failure_logs: {
         Row: {
           contact_id: string | null
@@ -962,6 +998,7 @@ export type Database = {
           state_registration: string | null
           status: Database["public"]["Enums"]["customer_status"] | null
           subscription_plan: string | null
+          support_channel_id: string | null
           total_ltv: number | null
           whatsapp_id: string | null
           zip_code: string | null
@@ -1002,6 +1039,7 @@ export type Database = {
           state_registration?: string | null
           status?: Database["public"]["Enums"]["customer_status"] | null
           subscription_plan?: string | null
+          support_channel_id?: string | null
           total_ltv?: number | null
           whatsapp_id?: string | null
           zip_code?: string | null
@@ -1042,6 +1080,7 @@ export type Database = {
           state_registration?: string | null
           status?: Database["public"]["Enums"]["customer_status"] | null
           subscription_plan?: string | null
+          support_channel_id?: string | null
           total_ltv?: number | null
           whatsapp_id?: string | null
           zip_code?: string | null
@@ -1066,6 +1105,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_support_channel_id_fkey"
+            columns: ["support_channel_id"]
+            isOneToOne: false
+            referencedRelation: "support_channels"
             referencedColumns: ["id"]
           },
         ]
@@ -1164,6 +1210,7 @@ export type Database = {
           related_ticket_id: string | null
           session_token: string | null
           status: Database["public"]["Enums"]["conversation_status"]
+          support_channel_id: string | null
           whatsapp_instance_id: string | null
         }
         Insert: {
@@ -1183,6 +1230,7 @@ export type Database = {
           related_ticket_id?: string | null
           session_token?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
+          support_channel_id?: string | null
           whatsapp_instance_id?: string | null
         }
         Update: {
@@ -1202,6 +1250,7 @@ export type Database = {
           related_ticket_id?: string | null
           session_token?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
+          support_channel_id?: string | null
           whatsapp_instance_id?: string | null
         }
         Relationships: [
@@ -1238,6 +1287,13 @@ export type Database = {
             columns: ["related_ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_support_channel_id_fkey"
+            columns: ["support_channel_id"]
+            isOneToOne: false
+            referencedRelation: "support_channels"
             referencedColumns: ["id"]
           },
           {
@@ -2365,6 +2421,7 @@ export type Database = {
           name: string
           price: number | null
           requires_account_manager: boolean
+          support_channel_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2377,6 +2434,7 @@ export type Database = {
           name: string
           price?: number | null
           requires_account_manager?: boolean
+          support_channel_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2389,6 +2447,7 @@ export type Database = {
           name?: string
           price?: number | null
           requires_account_manager?: boolean
+          support_channel_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2397,6 +2456,13 @@ export type Database = {
             columns: ["delivery_group_id"]
             isOneToOne: false
             referencedRelation: "delivery_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_support_channel_id_fkey"
+            columns: ["support_channel_id"]
+            isOneToOne: false
+            referencedRelation: "support_channels"
             referencedColumns: ["id"]
           },
         ]
@@ -3001,6 +3067,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      support_channels: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+        }
+        Relationships: []
       }
       system_configurations: {
         Row: {

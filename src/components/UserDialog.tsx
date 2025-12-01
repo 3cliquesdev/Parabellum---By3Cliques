@@ -11,8 +11,11 @@ import { useUpdateUser } from "@/hooks/useUpdateUser";
 import { useAvatarUpload } from "@/hooks/useAvatarUpload";
 import { useProfileSkills } from "@/hooks/useProfileSkills";
 import { useUpdateProfileSkills } from "@/hooks/useUpdateProfileSkills";
+import { useAgentSupportChannels } from "@/hooks/useAgentSupportChannels";
+import { useUpdateAgentChannels } from "@/hooks/useUpdateAgentChannels";
 import AvatarUploader from "@/components/AvatarUploader";
 import SkillsMultiSelect from "@/components/SkillsMultiSelect";
+import { SupportChannelsMultiSelect } from "@/components/SupportChannelsMultiSelect";
 import { z } from "zod";
 
 const userSchema = z.object({
@@ -56,6 +59,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
   const [department, setDepartment] = useState<string>("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { data: departments } = useDepartments();
@@ -63,6 +67,8 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
   const { uploadAvatar, uploading: uploadingAvatar } = useAvatarUpload();
   const { data: profileSkills } = useProfileSkills(editUser?.id);
   const updateProfileSkills = useUpdateProfileSkills();
+  const { data: agentChannels } = useAgentSupportChannels(editUser?.id);
+  const updateAgentChannels = useUpdateAgentChannels();
 
   const isEditMode = !!editUser;
 
@@ -75,6 +81,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
       setJobTitle(editUser.job_title || "");
       setDepartment(editUser.department || "");
       setSelectedSkills(profileSkills?.map(ps => ps.skill_id) || []);
+      setSelectedChannels(agentChannels?.map(ac => ac.channel_id) || []);
     } else {
       // Reset form for creation mode
       setEmail("");
@@ -84,8 +91,9 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
       setJobTitle("");
       setDepartment("");
       setSelectedSkills([]);
+      setSelectedChannels([]);
     }
-  }, [editUser, open, profileSkills]);
+  }, [editUser, open, profileSkills, agentChannels]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,6 +134,14 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
           profileId: editUser.id,
           skillIds: selectedSkills,
         });
+
+        // Atualizar canais (apenas para support_agent)
+        if (role === 'support_agent') {
+          await updateAgentChannels.mutateAsync({
+            profileId: editUser.id,
+            channelIds: selectedChannels,
+          });
+        }
 
         onOpenChange(false);
         onSuccess();
@@ -393,13 +409,27 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
             {/* Habilidades - Apenas no modo edição */}
             {isEditMode && editUser && (
               <div className="space-y-2">
-                <Label>Habilidades do Agente</Label>
+                <Label>🎯 Habilidades do Agente</Label>
                 <p className="text-xs text-muted-foreground mb-2">
                   Selecione as habilidades para roteamento inteligente de conversas
                 </p>
                 <SkillsMultiSelect
                   selectedSkillIds={selectedSkills}
                   onSelectionChange={setSelectedSkills}
+                />
+              </div>
+            )}
+
+            {/* Canais de Atendimento - Apenas para support_agent no modo edição */}
+            {isEditMode && editUser && role === 'support_agent' && (
+              <div className="space-y-2">
+                <Label>📡 Canais de Atendimento</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Selecione os canais que este agente pode atender. Se nenhum canal for selecionado, o agente atenderá todos os canais.
+                </p>
+                <SupportChannelsMultiSelect
+                  selectedChannelIds={selectedChannels}
+                  onSelectionChange={setSelectedChannels}
                 />
               </div>
             )}

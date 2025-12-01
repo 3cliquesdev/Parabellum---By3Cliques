@@ -60,12 +60,14 @@ serve(async (req) => {
         contact_id,
         department,
         channel,
+        support_channel_id,
         whatsapp_instance_id,
         contacts (
           id,
           first_name,
           last_name,
           consultant_id,
+          support_channel_id,
           phone,
           whatsapp_id
         )
@@ -148,7 +150,7 @@ serve(async (req) => {
       console.log('[route-conversation] Consultant offline or unavailable');
     }
 
-    // 3. PRIORIDADE 2: SKILL-BASED ROUTING (Agentes com Skill Específica)
+    // 3. PRIORIDADE 2: SKILL-BASED ROUTING (Agentes com Skill Específica + Canal)
     let onlineAgents: any[] = [];
     let routingStrategy = 'load_balancing';
     let requiredSkillName: string | null = null;
@@ -156,6 +158,10 @@ serve(async (req) => {
     // 3.1 Identificar skill necessária baseada na análise da IA
     const aiCategory = aiAnalysis?.category?.toLowerCase();
     requiredSkillName = aiCategory ? SKILL_MAPPING[aiCategory] : null;
+
+    // 3.2 Identificar canal da conversa (herdado do contato)
+    const supportChannelId = conversation.support_channel_id || contact?.support_channel_id;
+    console.log('[route-conversation] 📡 Support channel:', supportChannelId || 'none');
     
     if (requiredSkillName) {
       console.log(`[route-conversation] 🎯 Skill-based routing: Looking for agents with skill "${requiredSkillName}"`);
@@ -184,6 +190,9 @@ serve(async (req) => {
             profiles_skills!inner(
               skill_id,
               skills!inner(name)
+            ),
+            agent_support_channels(
+              channel_id
             )
           `)
           .eq('availability_status', 'online')
@@ -198,11 +207,22 @@ serve(async (req) => {
           });
         });
         
+        // Filtrar por canal de atendimento
+        const agentsWithChannel = agentsWithSkill.filter(agent => {
+          const channels = agent.agent_support_channels || [];
+          // Se agente não tem nenhum canal, atende todos
+          if (channels.length === 0) return true;
+          // Se conversa não tem canal, qualquer agente pode atender
+          if (!supportChannelId) return true;
+          // Senão, verificar se agente atende o canal específico
+          return channels.some((ac: any) => ac.channel_id === supportChannelId);
+        });
+        
         // Filtrar por departamento se houver
-        if (conversation.department && agentsWithSkill.length > 0) {
-          onlineAgents = agentsWithSkill.filter(a => a.department === conversation.department);
+        if (conversation.department && agentsWithChannel.length > 0) {
+          onlineAgents = agentsWithChannel.filter(a => a.department === conversation.department);
         } else {
-          onlineAgents = agentsWithSkill;
+          onlineAgents = agentsWithChannel;
         }
         
         if (onlineAgents.length > 0) {
@@ -235,7 +255,13 @@ serve(async (req) => {
         
         let agentsQuery = supabase
           .from('profiles')
-          .select('id, full_name, availability_status, department')
+          .select(`
+            id, 
+            full_name, 
+            availability_status, 
+            department,
+            agent_support_channels(channel_id)
+          `)
           .eq('availability_status', 'online')
           .in('id', genericAgentUserIds);
 
@@ -245,8 +271,19 @@ serve(async (req) => {
         }
 
         const result = await agentsQuery;
-        genericAgents = result.data || [];
+        let allGenericAgents = result.data || [];
         agentsError = result.error;
+
+        // Filtrar por canal de atendimento
+        genericAgents = allGenericAgents.filter(agent => {
+          const channels = agent.agent_support_channels || [];
+          // Se agente não tem nenhum canal, atende todos
+          if (channels.length === 0) return true;
+          // Se conversa não tem canal, qualquer agente pode atender
+          if (!supportChannelId) return true;
+          // Senão, verificar se agente atende o canal específico
+          return channels.some((ac: any) => ac.channel_id === supportChannelId);
+        });
       }
       
       console.log('[route-conversation] 📊 Generic agents query result:', { 

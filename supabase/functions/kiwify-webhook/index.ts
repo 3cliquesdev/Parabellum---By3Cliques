@@ -283,7 +283,54 @@ async function handlePaidOrder(
   // ========================================
   console.log('[kiwify-webhook] 🆕 NOVO CLIENTE - Iniciando onboarding:', Customer.email);
 
-  // 1. Criar contact como CUSTOMER
+  // 1. Buscar produto por offer_id PRIMEIRO (se disponível), fallback para external_id
+  let product = null;
+  let offer = null;
+  
+  if (Product.offer_id) {
+    // NOVA LÓGICA: Buscar por offer_id em product_offers
+    const { data: offerData } = await supabase
+      .from('product_offers')
+      .select(`
+        id,
+        offer_id,
+        offer_name,
+        price,
+        products:product_id (
+          id,
+          name,
+          external_id,
+          delivery_group_id,
+          support_channel_id
+        )
+      `)
+      .eq('offer_id', Product.offer_id)
+      .eq('is_active', true)
+      .single();
+    
+    if (offerData) {
+      offer = offerData;
+      product = offerData.products;
+      console.log('[kiwify-webhook] ✅ Produto encontrado via offer_id:', Product.offer_id);
+    }
+  }
+  
+  // FALLBACK: Buscar por external_id (compatibilidade com sistema antigo)
+  if (!product) {
+    const { data: productData } = await supabase
+      .from('products')
+      .select('id, name, external_id, delivery_group_id, support_channel_id')
+      .eq('external_id', Product.product_id)
+      .single();
+    
+    product = productData;
+    
+    if (product) {
+      console.log('[kiwify-webhook] ⚠️ Produto encontrado via external_id (fallback):', Product.product_id);
+    }
+  }
+
+  // 2. Criar contact como CUSTOMER (com support_channel_id do produto)
   const nameParts = Customer.full_name.split(' ');
   const { data: contact } = await supabase
     .from('contacts')
@@ -300,6 +347,7 @@ async function handlePaidOrder(
       registration_date: new Date().toISOString(),
       last_kiwify_event: 'paid',
       last_kiwify_event_at: new Date().toISOString(),
+      support_channel_id: product?.support_channel_id || null, // 🆕 Herdar canal do produto
     })
     .select()
     .single();
@@ -333,51 +381,6 @@ async function handlePaidOrder(
   }
 
   // 3. Buscar produto por offer_id PRIMEIRO (se disponível), fallback para external_id
-  let product = null;
-  let offer = null;
-  
-  if (Product.offer_id) {
-    // NOVA LÓGICA: Buscar por offer_id em product_offers
-    const { data: offerData } = await supabase
-      .from('product_offers')
-      .select(`
-        id,
-        offer_id,
-        offer_name,
-        price,
-        products:product_id (
-          id,
-          name,
-          external_id,
-          delivery_group_id
-        )
-      `)
-      .eq('offer_id', Product.offer_id)
-      .eq('is_active', true)
-      .single();
-    
-    if (offerData) {
-      offer = offerData;
-      product = offerData.products;
-      console.log('[kiwify-webhook] ✅ Produto encontrado via offer_id:', Product.offer_id);
-    }
-  }
-  
-  // FALLBACK: Buscar por external_id (compatibilidade com sistema antigo)
-  if (!product) {
-    const { data: productData } = await supabase
-      .from('products')
-      .select('id, name, external_id, delivery_group_id')
-      .eq('external_id', Product.product_id)
-      .single();
-    
-    product = productData;
-    
-    if (product) {
-      console.log('[kiwify-webhook] ⚠️ Produto encontrado via external_id (fallback):', Product.product_id);
-    }
-  }
-
   let playbook_ids: string[] = [];
   
   if (!product) {
@@ -531,7 +534,8 @@ async function handleUpsellOrder(
           id,
           name,
           external_id,
-          delivery_group_id
+          delivery_group_id,
+          support_channel_id
         )
       `)
       .eq('offer_id', Product.offer_id)
@@ -547,7 +551,7 @@ async function handleUpsellOrder(
   if (!product) {
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, external_id, delivery_group_id')
+      .select('id, name, external_id, delivery_group_id, support_channel_id')
       .eq('external_id', Product.product_id)
       .single();
     
@@ -773,7 +777,18 @@ async function handleRecoveryOrder(
 ) {
   console.log('[kiwify-webhook] 🔴 RECUPERAÇÃO:', order_status, Customer.email);
 
-  // 1. Criar/Atualizar contact como LEAD
+  // 1. Buscar produto primeiro para obter support_channel_id
+  const { data: product } = await supabase
+    .from('products')
+    .select('id, name, external_id, support_channel_id')
+    .eq('external_id', Product.product_id)
+    .single();
+
+  if (!product) {
+    console.warn(`[kiwify-webhook] ⚠️ Produto não mapeado para recuperação - ID Kiwify: ${Product.product_id}`);
+  }
+
+  // 2. Criar/Atualizar contact como LEAD (com support_channel_id do produto)
   const nameParts = Customer.full_name.split(' ');
   const { data: contact } = await supabase
     .from('contacts')
@@ -787,26 +802,12 @@ async function handleRecoveryOrder(
       kiwify_customer_id: Customer.id,
       last_kiwify_event: order_status,
       last_kiwify_event_at: new Date().toISOString(),
+      support_channel_id: product?.support_channel_id || null, // 🆕 Herdar canal do produto
     }, {
       onConflict: 'email'
     })
     .select()
     .single();
-
-  if (!contact) {
-    throw new Error('Failed to create/update contact');
-  }
-
-  // 2. Buscar produto por external_id (Kiwify product_id)
-  const { data: product } = await supabase
-    .from('products')
-    .select('id, name, external_id')
-    .eq('external_id', Product.product_id)
-    .single();
-
-  if (!product) {
-    console.warn(`[kiwify-webhook] ⚠️ Produto não mapeado para recuperação - ID Kiwify: ${Product.product_id}`);
-  }
 
   // 3. VERIFICAR DUPLICIDADE: Deal aberto já existe?
   if (product) {
@@ -919,13 +920,21 @@ async function handleOverduePayment(
 ) {
   console.log('[kiwify-webhook] 🟠 INADIMPLÊNCIA:', order_status, Customer.email);
 
-  // 1. Update contact to OVERDUE status
+  // 1. Buscar produto para obter support_channel_id
+  const { data: product } = await supabase
+    .from('products')
+    .select('id, support_channel_id')
+    .eq('external_id', Product.product_id)
+    .single();
+
+  // 2. Update contact to OVERDUE status (com canal do produto)
   const { data: contact } = await supabase
     .from('contacts')
     .update({
       status: 'overdue',
       last_kiwify_event: order_status,
       last_kiwify_event_at: new Date().toISOString(),
+      support_channel_id: product?.support_channel_id || null,
     })
     .eq('email', Customer.email)
     .select('id, consultant_id')
@@ -1004,14 +1013,7 @@ async function handleOverduePayment(
     assigned_to = supportAgent?.id;
   }
 
-  // 5. Buscar produto por external_id
-  const { data: product } = await supabase
-    .from('products')
-    .select('id')
-    .eq('external_id', Product.product_id)
-    .single();
-
-  // 6. Create overdue deal
+  // 5. Create overdue deal
   const { data: deal } = await supabase
     .from('deals')
     .insert({

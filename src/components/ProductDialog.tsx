@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { useCreateProduct, useUpdateProduct } from "@/hooks/useProducts";
 import { useDeliveryGroups } from "@/hooks/useDeliveryGroups";
 import { useProductOffers, useCreateProductOffer, useDeleteProductOffer } from "@/hooks/useProductOffers";
+import { useSupportChannels } from "@/hooks/useSupportChannels";
 import { Plus, Trash2 } from "lucide-react";
 
 const productSchema = z.object({
@@ -39,6 +40,7 @@ const productSchema = z.object({
   description: z.string().optional(),
   external_id: z.string().optional(),
   delivery_group_id: z.string().optional(),
+  support_channel_id: z.string().optional(),
   requires_account_manager: z.boolean(),
   is_active: z.boolean(),
 });
@@ -54,6 +56,7 @@ interface ProductDialogProps {
     description: string | null;
     external_id: string | null;
     delivery_group_id: string | null;
+    support_channel_id: string | null;
     requires_account_manager: boolean;
     is_active: boolean;
     price: number | null;
@@ -68,6 +71,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const { data: deliveryGroups } = useDeliveryGroups();
+  const { data: supportChannels } = useSupportChannels();
   const { data: offers } = useProductOffers(product?.id || null);
   const createOffer = useCreateProductOffer();
   const deleteOffer = useDeleteProductOffer();
@@ -85,6 +89,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       description: product?.description || "",
       external_id: product?.external_id || "",
       delivery_group_id: product?.delivery_group_id || "none",
+      support_channel_id: product?.support_channel_id || "none",
       requires_account_manager: product?.requires_account_manager || false,
       is_active: product?.is_active ?? true,
     },
@@ -97,6 +102,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       description: product?.description || "",
       external_id: product?.external_id || "",
       delivery_group_id: product?.delivery_group_id || "none",
+      support_channel_id: product?.support_channel_id || "none",
       requires_account_manager: product?.requires_account_manager || false,
       is_active: product?.is_active ?? true,
     });
@@ -117,6 +123,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
 
   const onSubmit = async (data: ProductFormData) => {
     const delivery_group_id = data.delivery_group_id === "none" ? null : data.delivery_group_id;
+    const support_channel_id = data.support_channel_id === "none" ? null : data.support_channel_id;
 
     if (product) {
       await updateProduct.mutateAsync({
@@ -126,6 +133,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
           description: data.description || undefined,
           external_id: data.external_id || undefined,
           delivery_group_id: delivery_group_id || undefined,
+          support_channel_id: support_channel_id || undefined,
           requires_account_manager: data.requires_account_manager,
           is_active: data.is_active,
         },
@@ -136,6 +144,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
         description: data.description || undefined,
         external_id: data.external_id || undefined,
         delivery_group_id: delivery_group_id || undefined,
+        support_channel_id: support_channel_id || undefined,
         requires_account_manager: data.requires_account_manager,
         is_active: data.is_active,
       });
@@ -224,7 +233,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control}
                 name="external_id"
@@ -268,6 +277,41 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
                     </Select>
                     <FormDescription>
                       Automações disparadas na venda
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="support_channel_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>📡 Canal de Atendimento</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um canal (opcional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhum</SelectItem>
+                        {supportChannels?.map((channel) => (
+                          <SelectItem key={channel.id} value={channel.id}>
+                            <div className="flex items-center gap-2">
+                              <span 
+                                className="inline-block w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: channel.color }}
+                              />
+                              {channel.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Canal para distribuir atendimento
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

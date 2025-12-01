@@ -45,6 +45,7 @@ export function useCreateProduct() {
       description?: string;
       external_id?: string;
       delivery_group_id?: string | null;
+      support_channel_id?: string | null;
       requires_account_manager: boolean;
       is_active: boolean;
       price?: number;
@@ -89,6 +90,7 @@ export function useUpdateProduct() {
         description: string;
         external_id: string;
         delivery_group_id: string | null;
+        support_channel_id: string | null;
         requires_account_manager: boolean;
         is_active: boolean;
         price: number;
