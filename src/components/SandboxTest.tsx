@@ -14,7 +14,7 @@ import { useCreateRLHFFeedback } from "@/hooks/useCreateRLHFFeedback";
 import { useScenarioConfigs } from "@/hooks/useTrainingExamples";
 import { SaveTrainingDialog } from "./SaveTrainingDialog";
 import { PreChatForm } from "@/components/PreChatForm";
-import { Bot, Send, Trash2, Activity, Zap, ThumbsUp, ThumbsDown, Database, Brain, UserCheck, Play, Star } from "lucide-react";
+import { Bot, Send, Trash2, Activity, Zap, ThumbsUp, ThumbsDown, Database, Brain, UserCheck, Play, Star, GraduationCap, Check, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +30,11 @@ export function SandboxTest() {
   const [saveTrainingOpen, setSaveTrainingOpen] = useState(false);
   const [trainingData, setTrainingData] = useState<{ userMessage: string; assistantMessage: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // 🎓 MODO TREINAMENTO
+  const [trainingMode, setTrainingMode] = useState(false);
+  const [correctingMessage, setCorrectingMessage] = useState<number | null>(null);
+  const [correctionText, setCorrectionText] = useState("");
 
   const { data: personas } = usePersonas();
   const { data: scenarios } = useScenarioConfigs();
@@ -99,6 +104,36 @@ export function SandboxTest() {
   const handleSend = async () => {
     if (!input.trim() || !selectedPersonaId) return;
     
+    // 🎓 DETECTAR COMANDO /APRENDER
+    if (input.trim().startsWith('/aprender:')) {
+      const ruleContent = input.trim().substring(10).trim();
+      if (!ruleContent) {
+        toast.error('Digite a regra após /aprender:');
+        return;
+      }
+      
+      try {
+        const { error } = await supabase.functions.invoke('train-ai-pair', {
+          body: {
+            question: 'Comando de treinamento direto',
+            correctAnswer: ruleContent,
+            personaId: selectedPersonaId,
+            source: 'sandbox_command',
+          },
+        });
+
+        if (error) throw error;
+
+        toast.success('🎓 Regra gravada e memorizada!');
+        setInput('');
+        
+        return;
+      } catch (error: any) {
+        toast.error('Erro ao salvar regra: ' + error.message);
+        return;
+      }
+    }
+    
     const scenarioConfig = scenarios?.find(s => s.name.toLowerCase() === selectedScenario.toLowerCase());
     const messageWithScenario = scenarioConfig?.system_instruction 
       ? `${input}\n\n[SCENARIO_INSTRUCTION: ${scenarioConfig.system_instruction}]`
@@ -116,6 +151,43 @@ export function SandboxTest() {
       setIdentifiedCustomer(null);
       setCustomerContext(null);
     }
+  };
+
+  // 🎓 FUNÇÃO: Salvar Correção
+  const handleCorrection = async (messageIndex: number) => {
+    if (!correctionText.trim() || !selectedPersonaId) return;
+
+    const userMessage = messages[messageIndex - 1];
+    
+    if (!userMessage || userMessage.role !== 'user') {
+      toast.error('Mensagem do usuário não encontrada');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.functions.invoke('train-ai-pair', {
+        body: {
+          question: userMessage.content,
+          correctAnswer: correctionText,
+          personaId: selectedPersonaId,
+          source: 'sandbox_training',
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success('🎓 IA aprendeu! Nunca mais vai errar isso.');
+      setCorrectingMessage(null);
+      setCorrectionText('');
+    } catch (error: any) {
+      toast.error('Erro ao treinar: ' + error.message);
+    }
+  };
+
+  // 🎓 FUNÇÃO: Marcar Como Correto
+  const handleMarkCorrect = (messageIndex: number) => {
+    toast.success('✅ Resposta marcada como correta!');
+    setFeedbackGiven((prev) => new Set(prev).add(messageIndex));
   };
 
   const handleCustomerIdentified = async (contact: any, _departmentId: string) => {
@@ -304,6 +376,32 @@ export function SandboxTest() {
                   </Button>
                 </div>
               </div>
+              
+              {/* 🎓 MODO TREINAMENTO */}
+              <div className="flex items-center justify-between bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950 dark:to-blue-950 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+                <div className="flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4 text-purple-600" />
+                  <Label htmlFor="training-toggle" className="cursor-pointer font-medium">
+                    🎓 Modo Treinamento (Professor)
+                  </Label>
+                </div>
+                <Switch
+                  id="training-toggle"
+                  checked={trainingMode}
+                  onCheckedChange={setTrainingMode}
+                />
+              </div>
+              
+              {trainingMode && (
+                <div className="bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+                  <p className="text-xs text-purple-900 dark:text-purple-100">
+                    💡 <strong>Modo Professor ativo:</strong> Cada resposta da IA terá botões [✅ Correto] e [✏️ Corrigir]. Use para ensinar a IA imediatamente.
+                  </p>
+                  <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
+                    Você também pode usar o comando <code className="bg-purple-100 dark:bg-purple-900 px-1 rounded">/aprender: sua regra aqui</code>
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -360,25 +458,25 @@ export function SandboxTest() {
                       >
                         <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                       
-                      {message.tool_calls && message.tool_calls.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Zap className="h-3 w-3" />
-                            <span className="font-medium">Tools Chamadas:</span>
-                          </div>
-                          {message.tool_calls.map((tool: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className="text-xs bg-background/50 rounded p-2 space-y-1"
-                            >
-                              <p className="font-medium">{tool.function.name}</p>
-                              <pre className="text-xs overflow-x-auto">
-                                {JSON.stringify(JSON.parse(tool.function.arguments), null, 2)}
-                              </pre>
+                        {message.tool_calls && message.tool_calls.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Zap className="h-3 w-3" />
+                              <span className="font-medium">Tools Chamadas:</span>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                            {message.tool_calls.map((tool: any, idx: number) => (
+                              <div
+                                key={idx}
+                                className="text-xs bg-background/50 rounded p-2 space-y-1"
+                              >
+                                <p className="font-medium">{tool.function.name}</p>
+                                <pre className="text-xs overflow-x-auto">
+                                  {JSON.stringify(JSON.parse(tool.function.arguments), null, 2)}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         
                         <p className="text-xs opacity-60 mt-2">
                           {message.timestamp.toLocaleTimeString()}
@@ -387,40 +485,103 @@ export function SandboxTest() {
 
                       {/* Feedback buttons for assistant messages */}
                       {message.role === "assistant" && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                              "h-8 px-2",
-                              feedbackGiven.has(index) && "opacity-50"
-                            )}
-                            onClick={() => handleFeedback(index, message, "positive")}
-                            disabled={feedbackGiven.has(index)}
-                          >
-                            <ThumbsUp className="h-4 w-4 text-green-500" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                              "h-8 px-2",
-                              feedbackGiven.has(index) && "opacity-50"
-                            )}
-                            onClick={() => handleFeedback(index, message, "negative")}
-                            disabled={feedbackGiven.has(index)}
-                          >
-                            <ThumbsDown className="h-4 w-4 text-red-500" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={() => handleSaveAsTraining(index)}
-                            title="Salvar como exemplo de treinamento"
-                          >
-                            <Star className="h-4 w-4 text-yellow-500" />
-                          </Button>
+                        <div className="flex flex-col gap-2">
+                          {/* 🎓 MODO TREINAMENTO: Botões de Correção */}
+                          {trainingMode && !feedbackGiven.has(index) && (
+                            <div className="flex gap-2 p-2 bg-purple-50 dark:bg-purple-950 rounded-lg border border-purple-200 dark:border-purple-800">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1 border-green-500 text-green-700 hover:bg-green-50"
+                                onClick={() => handleMarkCorrect(index)}
+                              >
+                                <Check className="h-4 w-4 mr-1" />
+                                Correto
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1 border-orange-500 text-orange-700 hover:bg-orange-50"
+                                onClick={() => {
+                                  setCorrectingMessage(index);
+                                  setCorrectionText('');
+                                }}
+                              >
+                                <Pencil className="h-4 w-4 mr-1" />
+                                Corrigir
+                              </Button>
+                            </div>
+                          )}
+                          
+                          {/* Campo de correção */}
+                          {correctingMessage === index && (
+                            <div className="p-3 bg-orange-50 dark:bg-orange-950 rounded-lg border border-orange-200 dark:border-orange-800 space-y-2">
+                              <Label className="text-sm font-medium">✏️ Digite a resposta correta:</Label>
+                              <textarea
+                                className="w-full min-h-[100px] p-2 text-sm border rounded-md resize-vertical"
+                                placeholder="Digite como a IA deveria ter respondido..."
+                                value={correctionText}
+                                onChange={(e) => setCorrectionText(e.target.value)}
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleCorrection(index)}
+                                  disabled={!correctionText.trim()}
+                                >
+                                  <GraduationCap className="h-4 w-4 mr-1" />
+                                  Salvar Regra
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setCorrectingMessage(null);
+                                    setCorrectionText('');
+                                  }}
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Botões de feedback normais */}
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                "h-8 px-2",
+                                feedbackGiven.has(index) && "opacity-50"
+                              )}
+                              onClick={() => handleFeedback(index, message, "positive")}
+                              disabled={feedbackGiven.has(index)}
+                            >
+                              <ThumbsUp className="h-4 w-4 text-green-500" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                "h-8 px-2",
+                                feedbackGiven.has(index) && "opacity-50"
+                              )}
+                              onClick={() => handleFeedback(index, message, "negative")}
+                              disabled={feedbackGiven.has(index)}
+                            >
+                              <ThumbsDown className="h-4 w-4 text-red-500" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2"
+                              onClick={() => handleSaveAsTraining(index)}
+                              title="Salvar como exemplo de treinamento"
+                            >
+                              <Star className="h-4 w-4 text-yellow-500" />
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>
