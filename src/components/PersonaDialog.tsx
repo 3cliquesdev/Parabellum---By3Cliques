@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCreatePersona } from "@/hooks/useCreatePersona";
 import { useUpdatePersona } from "@/hooks/useUpdatePersona";
 import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
+import { TrainingExamplesTab } from "./TrainingExamplesTab";
 
 interface PersonaDialogProps {
   trigger: React.ReactNode;
@@ -101,10 +103,23 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       onOpenChange?.(isOpen);
     }}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{persona ? "Editar Persona" : "Nova Persona"}</DialogTitle>
+          <DialogDescription>
+            Configure o comportamento e conhecimento da IA para diferentes contextos
+          </DialogDescription>
         </DialogHeader>
+
+        <Tabs defaultValue="config" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="config">⚙️ Configuração</TabsTrigger>
+            <TabsTrigger value="training" disabled={!persona}>
+              🎓 Exemplos de Treinamento
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="config" className="space-y-4 mt-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nome da Persona</Label>
@@ -248,6 +263,12 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
             </Button>
           </div>
         </form>
+          </TabsContent>
+
+          <TabsContent value="training">
+            <TrainingExamplesTab personaId={persona?.id || null} />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

@@ -56,6 +56,16 @@ serve(async (req) => {
 
     console.log('[sandbox-chat] Persona loaded:', persona.name);
 
+    // 🎓 Buscar exemplos de treinamento (Few-Shot Learning)
+    const { data: trainingExamples } = await supabase
+      .from('ai_training_examples')
+      .select('*')
+      .eq('persona_id', personaId)
+      .eq('is_active', true)
+      .limit(10);
+
+    console.log('[sandbox-chat] Training examples found:', trainingExamples?.length || 0);
+
     // Build tools array from persona's linked tools
     const tools = persona.ai_persona_tools
       ?.filter((pt: any) => pt.ai_tools?.is_enabled)
@@ -145,6 +155,13 @@ Responda APENAS: skip ou search`
 
     // FASE 1: Query Expansion + Knowledge Base Search
     let knowledgeArticles: any[] = [];
+    const fewShotMessages = trainingExamples?.flatMap((example: any) => [
+      { role: 'user', content: example.input_text },
+      { role: 'assistant', content: example.ideal_output }
+    ]) || [];
+
+    console.log('[sandbox-chat] Few-shot messages prepared:', fewShotMessages.length);
+
     let systemPrompt = persona.system_prompt;
     let semanticSearchUsed = false;
     let queriesExecuted: string[] = [];
@@ -306,8 +323,16 @@ Você está conversando com um cliente identificado. Use essas informações par
 
     const aiMessages = [
       { role: "system", content: systemPrompt },
+      ...fewShotMessages,  // ✨ Injetar exemplos de treinamento
       ...messages
     ];
+
+    console.log('[sandbox-chat] Final messages structure:', {
+      system: 1,
+      fewShot: fewShotMessages.length,
+      conversation: messages.length,
+      total: aiMessages.length
+    });
 
     // Prepare AI call based on provider
     let actualProvider = aiProvider;

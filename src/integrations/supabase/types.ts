@@ -289,6 +289,36 @@ export type Database = {
           },
         ]
       }
+      ai_scenario_configs: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          system_instruction: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          system_instruction: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          system_instruction?: string
+        }
+        Relationships: []
+      }
       ai_suggestions: {
         Row: {
           context: Json | null
@@ -353,6 +383,56 @@ export type Database = {
           requires_auth?: boolean | null
         }
         Relationships: []
+      }
+      ai_training_examples: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          ideal_output: string
+          input_text: string
+          is_active: boolean | null
+          persona_id: string
+          scenario_type: string | null
+          updated_at: string | null
+          usage_count: number | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          ideal_output: string
+          input_text: string
+          is_active?: boolean | null
+          persona_id: string
+          scenario_type?: string | null
+          updated_at?: string | null
+          usage_count?: number | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          ideal_output?: string
+          input_text?: string
+          is_active?: boolean | null
+          persona_id?: string
+          scenario_type?: string | null
+          updated_at?: string | null
+          usage_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_training_examples_persona_id_fkey"
+            columns: ["persona_id"]
+            isOneToOne: false
+            referencedRelation: "ai_personas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_usage_logs: {
         Row: {
