@@ -140,42 +140,63 @@ serve(async (req) => {
     // 4. Buscar vendas com paginação
     console.log('[sync-kiwify-sales] 📥 Buscando vendas...');
     let allSales: KiwifySale[] = [];
-    let page = 1;
-    let hasMore = true;
 
+    const maxWindowDays = 90;
     const now = new Date();
     const daysBack = options.days_back ?? 365;
-    const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split('T')[0];
-    const endDate = now.toISOString().split('T')[0];
+    const overallStart = new Date(
+      now.getTime() - daysBack * 24 * 60 * 60 * 1000,
+    );
 
-    while (hasMore) {
-      const salesResponse = await fetch(
-        `https://public-api.kiwify.com/v1/sales?page_number=${page}&page_size=100&updated_at_start_date=${startDate}&updated_at_end_date=${endDate}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${access_token}`,
-            'x-kiwify-account-id': accountId,
-            'Content-Type': 'application/json',
-          },
-        }
+    const dayMs = 24 * 60 * 60 * 1000;
+    let windowEnd = now;
+
+    while (windowEnd >= overallStart) {
+      const windowStart = new Date(
+        Math.max(
+          overallStart.getTime(),
+          windowEnd.getTime() - (maxWindowDays - 1) * dayMs,
+        ),
       );
 
-      if (!salesResponse.ok) {
-        const errorText = await salesResponse.text().catch(() => '');
-        throw new Error(`Falha ao buscar vendas: ${salesResponse.status} - ${errorText}`);
+      const startDateStr = windowStart.toISOString().split('T')[0];
+      const endDateStr = windowEnd.toISOString().split('T')[0];
+
+      let page = 1;
+      let hasMoreInWindow = true;
+
+      while (hasMoreInWindow) {
+        const salesResponse = await fetch(
+          `https://public-api.kiwify.com/v1/sales?page_number=${page}&page_size=100&updated_at_start_date=${startDateStr}&updated_at_end_date=${endDateStr}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${access_token}`,
+              'x-kiwify-account-id': accountId,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (!salesResponse.ok) {
+          const errorText = await salesResponse.text().catch(() => '');
+          throw new Error(`Falha ao buscar vendas: ${salesResponse.status} - ${errorText}`);
+        }
+
+        const salesData = await salesResponse.json();
+        const windowSales: KiwifySale[] = salesData.data || [];
+        allSales = allSales.concat(windowSales);
+
+        hasMoreInWindow = windowSales.length === 100;
+        page++;
+
+        // Rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      const salesData = await salesResponse.json();
-      allSales = allSales.concat(salesData.data || []);
-      
-      hasMore = salesData.data && salesData.data.length === 100;
-      page++;
-      
-      // Rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Move window to previous period
+      windowEnd = new Date(windowStart.getTime() - dayMs);
     }
+
 
     // Atualizar total
     await supabaseClient
