@@ -183,7 +183,16 @@ serve(async (req) => {
     let authUsersCreated = 0;
     let dealsCreated = 0;
     let dealsUpdated = 0;
+    let customersChurned = 0;
+    let tagsAdded = 0;
     const errors: any[] = [];
+
+    // Buscar tag "Inadimplente" uma vez antes do loop
+    const { data: inadimplenteTag } = await supabaseClient
+      .from('tags')
+      .select('id')
+      .eq('name', 'Inadimplente')
+      .single();
 
     for (let i = 0; i < allSales.length; i++) {
       const sale = allSales[i];
@@ -217,7 +226,8 @@ serve(async (req) => {
               city: sale.customer.Address?.city,
               state: sale.customer.Address?.state,
               zip_code: sale.customer.Address?.zipcode,
-              status: 'customer',
+              status: sale.status === 'paid' ? 'customer' : 'churned',
+              blocked: sale.status !== 'paid',
               source: 'kiwify_sync',
             })
             .select()
@@ -226,6 +236,11 @@ serve(async (req) => {
           if (contactError) throw contactError;
           contact = newContact;
           contactsCreated++;
+
+          // Contabilizar clientes churned
+          if (sale.status !== 'paid') {
+            customersChurned++;
+          }
 
           // Criar auth.user se solicitado
           if (options.create_auth_users && contact) {
@@ -269,6 +284,29 @@ serve(async (req) => {
 
         if (!contact) continue;
 
+        // Adicionar tag "Inadimplente" para vendas não pagas (refunded/chargedback)
+        if (sale.status !== 'paid' && inadimplenteTag) {
+          const { data: existingTag } = await supabaseClient
+            .from('customer_tags')
+            .select('id')
+            .eq('customer_id', contact.id)
+            .eq('tag_id', inadimplenteTag.id)
+            .maybeSingle();
+
+          if (!existingTag) {
+            const { error: tagError } = await supabaseClient
+              .from('customer_tags')
+              .insert({
+                customer_id: contact.id,
+                tag_id: inadimplenteTag.id,
+              });
+
+            if (!tagError) {
+              tagsAdded++;
+            }
+          }
+        }
+
         // Calcular valores financeiros
         const grossValue = (sale.commissions?.product_base_price || 0) / 100;
         const netValue = (sale.commissions?.my_commission || sale.net_amount || 0) / 100;
@@ -304,7 +342,9 @@ serve(async (req) => {
           affiliate_commission: affiliateCommission,
           affiliate_name: affiliateName,
           affiliate_email: affiliateEmail,
-          status: sale.status === 'paid' ? 'won' : sale.status === 'refunded' ? 'lost' : 'won',
+          status: sale.status === 'paid' ? 'won' : 'lost',
+          lost_reason: sale.status === 'refunded' ? 'Reembolso' : 
+                       sale.status === 'chargedback' ? 'Chargeback' : null,
           currency: 'BRL',
           closed_at: sale.created_at,
           pipeline_id: pipeline?.id,
@@ -359,6 +399,8 @@ serve(async (req) => {
         auth_users_created: authUsersCreated,
         deals_created: dealsCreated,
         deals_updated: dealsUpdated,
+        customers_churned: customersChurned,
+        tags_added: tagsAdded,
         errors: errors,
       })
       .eq('id', jobId);
@@ -376,6 +418,8 @@ serve(async (req) => {
           auth_users_created: authUsersCreated,
           deals_created: dealsCreated,
           deals_updated: dealsUpdated,
+          customers_churned: customersChurned,
+          tags_added: tagsAdded,
           errors: errors.length,
         },
       }),

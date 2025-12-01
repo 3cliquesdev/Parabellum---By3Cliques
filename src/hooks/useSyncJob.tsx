@@ -13,6 +13,8 @@ interface SyncJob {
   auth_users_created: number;
   deals_created: number;
   deals_updated: number;
+  customers_churned?: number;
+  tags_added?: number;
   errors: any;
   options: any;
   started_at: string | null;
