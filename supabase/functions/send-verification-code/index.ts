@@ -179,11 +179,11 @@ serve(async (req) => {
           </div>
           
           <!-- FOOTER -->
-          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #1e3a5f;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: ${branding.headerColor};">
             <tr>
               <td align="center" style="padding: 25px;">
                 ${type === 'employee' ? `
-                <!-- Logos lado a lado -->
+                <!-- Logos lado a lado (APENAS PARA COLABORADORES) -->
                 <table cellpadding="0" cellspacing="0" border="0" align="center">
                   <tr>
                     <td style="padding: 0 8px;">
@@ -215,16 +215,12 @@ serve(async (req) => {
                 ` : `
                 <!-- Footer Cliente (SIMPLES) -->
                 <p style="color: #ffffff; margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">
-                  Seu Armazém Drop
+                  ${branding.footer}
                 </p>
                 <p style="color: #94a3b8; margin: 0; font-size: 11px;">
                   Este é um email automático. Por favor, não responda.
                 </p>
                 `}
-                
-              </td>
-            </tr>
-          </table>
               </td>
             </tr>
           </table>
