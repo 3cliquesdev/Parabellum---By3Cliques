@@ -95,6 +95,13 @@ const FINANCIAL_BARRIER_KEYWORDS = [
 
 // 🆕 Padrões de INTENÇÃO financeira (não keyword solta) - Usado globalmente
 const FINANCIAL_ACTION_PATTERNS = [
+  // Padrões melhorados para capturar variações naturais
+  /quero\s+(fazer\s+)?(um\s+)?saque/i,                // "quero fazer um saque", "quero saque"
+  /preciso\s+(fazer\s+)?(um\s+)?saque/i,              // "preciso fazer um saque"
+  /saque\s+(da\s+)?(minha\s+)?carteira/i,             // "saque da minha carteira"
+  /fazer\s+(um\s+)?saque/i,                           // "fazer saque"
+  
+  // Padrões existentes mantidos
   /quero\s+(sacar|reembolso|meu\s+dinheiro)/i,
   /preciso\s+(sacar|de\s+reembolso|do\s+meu\s+dinheiro)/i,
   /cadê\s+(meu\s+saldo|meu\s+dinheiro|meu\s+pix)/i,
@@ -104,6 +111,14 @@ const FINANCIAL_ACTION_PATTERNS = [
   /erro\s+(no|de)\s+pagamento/i,
   /quero\s+meu\s+dinheiro/i,
   /cobrar|cobraram\s+errado/i,
+  
+  // Novos padrões para melhor cobertura
+  /ver\s+(meu\s+)?saldo/i,                            // "quero ver meu saldo"
+  /consultar\s+(meu\s+)?saldo/i,                      // "consultar saldo"
+  /quanto\s+tenho\s+(de\s+)?saldo/i,                  // "quanto tenho de saldo"
+  /transferir\s+(meu\s+)?saldo/i,                     // "transferir meu saldo"
+  /retirar\s+(meu\s+)?dinheiro/i,                     // "retirar meu dinheiro"
+  /pagar.*pix/i,                                       // "pagar via pix"
 ];
 
 // 🆕 Perguntas INFORMATIVAS - NÃO criar ticket - Usado globalmente
