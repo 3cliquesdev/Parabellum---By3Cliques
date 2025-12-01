@@ -373,12 +373,12 @@ async function handlePaidOrder(
   // ========================================
   console.log('[kiwify-webhook] 🆕 NOVO CLIENTE - Iniciando onboarding:', Customer.email);
 
-  // 1. Buscar produto por offer_id PRIMEIRO (se disponível), fallback para external_id
+  // 1. Buscar produto por offer_id PRIMEIRO (se disponível), depois product_id como offer_id, fallback para external_id
   let product = null;
   let offer = null;
   
   if (Product.offer_id) {
-    // NOVA LÓGICA: Buscar por offer_id em product_offers
+    // PRIORIDADE 1: Buscar por offer_id explícito em product_offers
     const { data: offerData } = await supabase
       .from('product_offers')
       .select(`
@@ -405,7 +405,35 @@ async function handlePaidOrder(
     }
   }
   
-  // FALLBACK: Buscar por external_id (compatibilidade com sistema antigo)
+  // PRIORIDADE 2: 🆕 CRÍTICO - Tentar product_id como offer_id (Kiwify envia offer_id no campo product_id às vezes)
+  if (!product) {
+    const { data: offerData } = await supabase
+      .from('product_offers')
+      .select(`
+        id,
+        offer_id,
+        offer_name,
+        price,
+        products:product_id (
+          id,
+          name,
+          external_id,
+          delivery_group_id,
+          support_channel_id
+        )
+      `)
+      .eq('offer_id', Product.product_id)  // ← NOVA LÓGICA: buscar product_id como offer_id
+      .eq('is_active', true)
+      .single();
+    
+    if (offerData) {
+      offer = offerData;
+      product = offerData.products;
+      console.log('[kiwify-webhook] ✅ Produto encontrado via product_id→offer_id:', Product.product_id);
+    }
+  }
+  
+  // PRIORIDADE 3: Buscar por external_id (compatibilidade legacy)
   if (!product) {
     const { data: productData } = await supabase
       .from('products')
@@ -692,11 +720,12 @@ async function handleUpsellOrder(
     console.log('[kiwify-webhook] ✅ Deal upsell criado:', upsellDeal.id, 'Bruto: R$', grossValue.toFixed(2), 'Líquido: R$', netValue.toFixed(2));
   }
 
-  // 3. Buscar produto e playbooks (NOVA LÓGICA: offer_id primeiro)
+  // 3. Buscar produto e playbooks (NOVA LÓGICA: offer_id primeiro, product_id como offer_id, external_id)
   let product = null;
   let offer = null;
   
   if (Product.offer_id) {
+    // PRIORIDADE 1: Buscar por offer_id explícito
     const { data: offerData } = await supabase
       .from('product_offers')
       .select(`
@@ -719,9 +748,39 @@ async function handleUpsellOrder(
     if (offerData) {
       offer = offerData;
       product = offerData.products;
+      console.log('[kiwify-webhook] ✅ [UPSELL] Produto encontrado via offer_id:', Product.offer_id);
     }
   }
   
+  // PRIORIDADE 2: 🆕 CRÍTICO - Tentar product_id como offer_id
+  if (!product) {
+    const { data: offerData } = await supabase
+      .from('product_offers')
+      .select(`
+        id,
+        offer_id,
+        offer_name,
+        price,
+        products:product_id (
+          id,
+          name,
+          external_id,
+          delivery_group_id,
+          support_channel_id
+        )
+      `)
+      .eq('offer_id', Product.product_id)  // ← NOVA LÓGICA
+      .eq('is_active', true)
+      .single();
+    
+    if (offerData) {
+      offer = offerData;
+      product = offerData.products;
+      console.log('[kiwify-webhook] ✅ [UPSELL] Produto encontrado via product_id→offer_id:', Product.product_id);
+    }
+  }
+  
+  // PRIORIDADE 3: Buscar por external_id (compatibilidade legacy)
   if (!product) {
     const { data: productData } = await supabase
       .from('products')
@@ -730,6 +789,10 @@ async function handleUpsellOrder(
       .single();
     
     product = productData;
+    
+    if (product) {
+      console.log('[kiwify-webhook] ⚠️ [UPSELL] Produto encontrado via external_id (fallback):', Product.product_id);
+    }
   }
 
   // 4. Iniciar playbook(s) do novo produto (pular etapa de login)
