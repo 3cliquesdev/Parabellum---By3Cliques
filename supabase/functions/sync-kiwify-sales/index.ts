@@ -83,7 +83,7 @@ serve(async (req) => {
     const { data: job, error: jobError } = await supabaseClient
       .from('sync_jobs')
       .insert({
-        job_type: 'kiwify_sync',
+        job_type: 'kiwify_sales',
         status: 'running',
         started_at: new Date().toISOString(),
         created_by: options.user_id,

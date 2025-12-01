@@ -218,6 +218,12 @@ export default function KiwifyIntegrationCard() {
   const handleSyncKiwifySales = async (options: SyncOptions) => {
     setSyncOptionsOpen(false);
     
+    // Mostrar feedback imediato
+    toast({
+      title: "Sincronização iniciada",
+      description: "A importação de vendas está em andamento...",
+    });
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -814,17 +820,28 @@ export default function KiwifyIntegrationCard() {
             ) : (
               <Button
                 onClick={() => setSyncOptionsOpen(true)}
-                disabled={!apiConfigs?.client_id}
+                disabled={!apiConfigs?.client_id || lastSync?.status === 'running'}
                 className="w-full gap-2"
                 size="lg"
               >
-                <RefreshCw className="h-5 w-5" />
-                🔄 Importar Todas as Vendas
+                {lastSync?.status === 'running' ? (
+                  <>
+                    <RefreshCw className="h-5 w-5 animate-spin" />
+                    🔄 Sincronizando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-5 w-5" />
+                    🔄 Importar Todas as Vendas
+                  </>
+                )}
               </Button>
             )}
             <p className="text-xs text-muted-foreground text-center">
               {!apiConfigs?.client_id
                 ? "⚠️ Configure as credenciais da API antes de sincronizar"
+                : lastSync?.status === 'running' 
+                ? "⏳ Sincronização em andamento..."
                 : "Importa todas as vendas históricas da Kiwify para o CRM"}
             </p>
           </div>
