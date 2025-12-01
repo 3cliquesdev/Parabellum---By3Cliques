@@ -866,6 +866,25 @@ async function handleConnectionUpdate(supabase: any, payload: EvolutionWebhook, 
     .eq('id', instance.id);
 
   console.log('[handle-whatsapp-event] Instance status updated to:', newStatus);
+
+  // 🚨 ALERTA: Se desconectou, enviar notificação para admins
+  if (newStatus === 'disconnected') {
+    console.log(`[handle-whatsapp-event] 🚨 Instância ${instance.name} desconectada - enviando alerta`);
+    
+    const { error: alertError } = await supabase.functions.invoke('send-admin-alert', {
+      body: {
+        type: 'whatsapp_disconnected',
+        message: `🚨 WhatsApp "${instance.name}" desconectou`,
+        error: `A instância ${instance.instance_name} perdeu conexão com o servidor WhatsApp.`,
+      },
+    });
+
+    if (alertError) {
+      console.error('[handle-whatsapp-event] ❌ Erro ao enviar alerta:', alertError);
+    } else {
+      console.log('[handle-whatsapp-event] ✅ Alerta de desconexão enviado');
+    }
+  }
 }
 
 async function handleQRCodeUpdate(supabase: any, payload: EvolutionWebhook, instance: any) {

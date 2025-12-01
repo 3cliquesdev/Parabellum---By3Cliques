@@ -99,6 +99,13 @@ verify_jwt = false
 schedule = "* * * * *"
 region = "us-east-1"
 
+[functions.check-whatsapp-status]
+verify_jwt = false
+
+[functions.check-whatsapp-status.cron]
+schedule = "*/5 * * * *"
+region = "us-east-1"
+
 [functions.analyze-dashboard]
 verify_jwt = true
 

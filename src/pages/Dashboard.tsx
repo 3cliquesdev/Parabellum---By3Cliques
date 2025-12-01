@@ -24,6 +24,7 @@ import { RecentActionsWidget } from "@/components/widgets/RecentActionsWidget";
 import RottenDealsWidget from "@/components/widgets/RottenDealsWidget";
 import LostReasonsWidget from "@/components/widgets/LostReasonsWidget";
 import { SLAAlertWidget } from "@/components/widgets/SLAAlertWidget";
+import { WhatsAppStatusWidget } from "@/components/admin/WhatsAppStatusWidget";
 
 // Widgets Sales Rep
 import { MySalesWidget } from "@/components/widgets/MySalesWidget";
@@ -164,11 +165,16 @@ export default function Dashboard() {
           icon={Briefcase}
         />
         
-        {/* ROW 2: SLA Alert (full width) */}
+        {/* ROW 2: SLA Alert + WhatsApp Status */}
         {(role === "admin" || role === "manager") && (
-          <div className="col-span-full">
-            <SLAAlertWidget />
-          </div>
+          <>
+            <div className="col-span-full lg:col-span-3">
+              <SLAAlertWidget />
+            </div>
+            <div className="col-span-full lg:col-span-1">
+              <WhatsAppStatusWidget />
+            </div>
+          </>
         )}
         
         {/* ROW 3: Charts 2x2 */}
