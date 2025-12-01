@@ -187,7 +187,23 @@ export default function KiwifyIntegrationCard() {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        toast({
+          title: "❌ Erro na Sincronização",
+          description: error.message || "Falha ao sincronizar vendas da Kiwify",
+          variant: "destructive",
+        });
+        throw error;
+      }
+      
+      if (data?.error) {
+        toast({
+          title: "❌ Erro na Sincronização",
+          description: data.error || "Falha ao sincronizar vendas da Kiwify",
+          variant: "destructive",
+        });
+        return;
+      }
 
       // Iniciar tracking do job
       setCurrentJobId(data.job_id);
