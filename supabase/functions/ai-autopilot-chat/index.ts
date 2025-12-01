@@ -974,8 +974,10 @@ Responda APENAS: skip ou search`
     // Detectar se é contexto financeiro na mensagem atual
     const isFinancialContext = FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
     
-    // 🎯 BYPASS DA IA: Saudação Direta para Clientes Conhecidos (ANTES de construir prompt da IA)
-    if (intentType === 'skip' && !isFinancialContext) {
+    // 🎯 BYPASS DA IA: Saudação Direta APENAS na PRIMEIRA MENSAGEM da conversa
+    const isFirstMessage = messageHistory.length <= 1;
+    
+    if (intentType === 'skip' && !isFinancialContext && isFirstMessage) {
       // CASO 1: Cliente conhecido = saudação personalizada direta
       if (contactHasEmail) {
         console.log('[ai-autopilot-chat] 🎯 BYPASS DA IA - Saudação direta para cliente conhecido');
