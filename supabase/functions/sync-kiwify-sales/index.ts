@@ -143,9 +143,16 @@ serve(async (req) => {
     let page = 1;
     let hasMore = true;
 
+    const now = new Date();
+    const daysBack = options.days_back ?? 365;
+    const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0];
+    const endDate = now.toISOString().split('T')[0];
+
     while (hasMore) {
       const salesResponse = await fetch(
-        `https://public-api.kiwify.com/v1/sales?page_number=${page}&page_size=100`,
+        `https://public-api.kiwify.com/v1/sales?page_number=${page}&page_size=100&start_date=${startDate}&end_date=${endDate}`,
         {
           headers: {
             'Authorization': `Bearer ${access_token}`,
