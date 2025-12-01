@@ -3,10 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, AlertTriangle, Package, ExternalLink, Settings, AlertCircle } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { UnmappedProductsSection } from "./UnmappedProductsSection";
 
 interface ProductMappingStatus {
   id: string;
@@ -266,47 +264,9 @@ export function ProductMappingDiagnostic() {
         </CardContent>
       </Card>
 
-      {/* Unmapped Alerts */}
+      {/* Unmapped Products Section with Reprocessing */}
       {unmappedAlerts && unmappedAlerts.length > 0 && (
-        <Card className="border-destructive/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              Alertas de Produtos Não Mapeados ({unmappedAlerts.length})
-            </CardTitle>
-            <CardDescription>
-              Vendas recusadas por falta de mapeamento de produto
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {unmappedAlerts.map((alert) => {
-                const metadata = alert.metadata as any;
-                const productId = metadata?.product_id || 'ID desconhecido';
-                const productName = metadata?.product_name || 'Nome desconhecido';
-                
-                return (
-                  <Alert key={alert.id} variant="destructive">
-                    <AlertDescription className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="font-medium mb-1">{alert.title}</p>
-                        <p className="text-sm opacity-90 mb-2">{alert.message}</p>
-                        <div className="flex items-center gap-3 text-xs">
-                          <Badge variant="outline" className="font-mono">
-                            {productId}
-                          </Badge>
-                          <span className="opacity-75">
-                            {alert.created_at && format(new Date(alert.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                          </span>
-                        </div>
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+        <UnmappedProductsSection alerts={unmappedAlerts} products={products || []} />
       )}
     </div>
   );
