@@ -1832,6 +1832,8 @@ export type Database = {
           embedding: string | null
           id: string
           is_published: boolean
+          source: string | null
+          status: string | null
           tags: string[] | null
           title: string
           updated_at: string
@@ -1844,6 +1846,8 @@ export type Database = {
           embedding?: string | null
           id?: string
           is_published?: boolean
+          source?: string | null
+          status?: string | null
           tags?: string[] | null
           title: string
           updated_at?: string
@@ -1856,6 +1860,8 @@ export type Database = {
           embedding?: string | null
           id?: string
           is_published?: boolean
+          source?: string | null
+          status?: string | null
           tags?: string[] | null
           title?: string
           updated_at?: string
