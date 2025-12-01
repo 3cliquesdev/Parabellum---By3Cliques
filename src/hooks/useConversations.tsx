@@ -10,7 +10,7 @@ type Contact = Tables<"contacts"> & {
 };
 
 type Conversation = Tables<"conversations"> & {
-  contacts: Contact;
+  contacts: Contact | null;
   department_data?: {
     id: string;
     name: string;

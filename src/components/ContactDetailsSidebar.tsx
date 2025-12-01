@@ -66,6 +66,15 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
 
   const contact = conversation.contacts;
 
+  // Early return se não há contato
+  if (!contact) {
+    return (
+      <div className="w-96 border-l bg-slate-50 dark:bg-card flex items-center justify-center p-6">
+        <p className="text-muted-foreground text-sm">Contato não encontrado</p>
+      </div>
+    );
+  }
+
   const openTickets = contactTickets.filter(t => t.status !== 'closed' && t.status !== 'resolved');
   const recentTimeline = unifiedTimeline.slice(0, 10);
   
