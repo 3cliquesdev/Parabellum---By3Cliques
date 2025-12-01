@@ -830,12 +830,13 @@ Responda APENAS: skip ou search`
             knowledgeArticles = allArticles
               .sort((a: any, b: any) => b.similarity - a.similarity)
               .slice(0, 5)
-              .map((a: any) => ({
-                id: a.id,
-                title: a.title,
-                content: a.content,
-                category: a.category,
-              }));
+          .map((a: any) => ({
+            id: a.id,
+            title: a.title,
+            content: a.content,
+            category: a.category,
+            similarity: a.similarity, // 🆕 Preservar score de similaridade
+          }));
             
             console.log(`[ai-autopilot-chat] ✅ Query Expansion + Semantic: ${knowledgeArticles.length} artigos finais:`, 
               allArticles.slice(0, 5).map((a: any) => `${a.title} [${a.category}] (${(a.similarity * 100).toFixed(1)}%)`));
@@ -2017,7 +2018,8 @@ Sobre qual pedido você gostaria de saber mais?`;
           used_articles: knowledgeArticles.map(a => ({
             id: a.id,
             title: a.title,
-            category: a.category
+            category: a.category,
+            similarity: a.similarity ? `${Math.round(a.similarity * 100)}%` : undefined
           }))
         })
       })

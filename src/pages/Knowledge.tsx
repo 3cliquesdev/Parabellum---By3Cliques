@@ -1,14 +1,17 @@
 import { useState } from "react";
-import { Search, Plus, Edit, Trash2, BookOpen, Eye, EyeOff, Upload, Sparkles } from "lucide-react";
+import { Search, Plus, Edit, Trash2, BookOpen, Eye, EyeOff, Upload, Sparkles, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useKnowledgeArticles } from "@/hooks/useKnowledgeArticles";
 import { useDeleteKnowledgeArticle } from "@/hooks/useDeleteKnowledgeArticle";
 import { useGenerateBatchEmbeddings } from "@/hooks/useGenerateBatchEmbeddings";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useKnowledgeStats } from "@/hooks/useKnowledgeStats";
+import { KnowledgeBrainStatus } from "@/components/KnowledgeBrainStatus";
 import KnowledgeArticleDialog from "@/components/KnowledgeArticleDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -35,6 +38,7 @@ export default function Knowledge() {
   const deleteArticle = useDeleteKnowledgeArticle();
   const generateEmbeddings = useGenerateBatchEmbeddings();
   const { isAdmin, isManager } = useUserRole();
+  const { data: stats } = useKnowledgeStats();
 
   const canManageArticles = isAdmin || isManager;
 
@@ -99,6 +103,29 @@ export default function Knowledge() {
           </div>
         )}
       </div>
+
+      {/* Brain Status Widget */}
+      <KnowledgeBrainStatus />
+
+      {/* Alert for missing embeddings */}
+      {stats && stats.articlesWithEmbedding === 0 && stats.totalArticles > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>🔴 Busca Semântica Desabilitada</AlertTitle>
+          <AlertDescription>
+            Nenhum artigo possui embedding. A IA está usando busca por palavras-chave (menos precisa).
+            <Button
+              onClick={() => generateEmbeddings.mutate()}
+              disabled={generateEmbeddings.isPending}
+              className="mt-2"
+              size="sm"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              {generateEmbeddings.isPending ? "Gerando..." : "Gerar Embeddings Agora"}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Filters */}
       <Card>

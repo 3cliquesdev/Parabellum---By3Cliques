@@ -38,6 +38,7 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [usePriorityInstructions, setUsePriorityInstructions] = useState(false);
+  const [hasGlobalAccess, setHasGlobalAccess] = useState(true);
 
   const createPersona = useCreatePersona();
   const updatePersona = useUpdatePersona();
@@ -53,6 +54,7 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       setSelectedCategories(persona.knowledge_base_paths ?? []);
       setIsActive(persona.is_active ?? true);
       setUsePriorityInstructions(persona.use_priority_instructions ?? false);
+      setHasGlobalAccess(!persona.knowledge_base_paths || persona.knowledge_base_paths.length === 0);
     } else {
       setName("");
       setRole("");
@@ -62,6 +64,7 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       setSelectedCategories([]);
       setIsActive(true);
       setUsePriorityInstructions(false);
+      setHasGlobalAccess(true);
     }
   }, [persona, open]);
 
@@ -74,7 +77,7 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
       system_prompt: systemPrompt,
       temperature,
       max_tokens: maxTokens,
-      knowledge_base_paths: selectedCategories.length > 0 ? selectedCategories : null,
+      knowledge_base_paths: hasGlobalAccess ? null : (selectedCategories.length > 0 ? selectedCategories : null),
       is_active: isActive,
       use_priority_instructions: usePriorityInstructions,
     };
@@ -185,42 +188,65 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div>
-              <Label>Categorias da Base de Conhecimento</Label>
-              <p className="text-xs text-muted-foreground mt-1">
-                Selecione quais categorias esta persona pode acessar. Deixe vazio para acessar todas.
-              </p>
-            </div>
-            
-            {loadingCategories ? (
-              <p className="text-sm text-muted-foreground">Carregando categorias...</p>
-            ) : availableCategories.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma categoria encontrada. Crie artigos primeiro.</p>
-            ) : (
-              <div className="border rounded-lg p-4 space-y-2 max-h-[180px] overflow-y-auto">
-                {availableCategories.map((category) => (
-                  <div key={category} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`category-${category}`}
-                      checked={selectedCategories.includes(category)}
-                      onCheckedChange={() => toggleCategory(category)}
-                    />
-                <Label
-                  htmlFor={`category-${category}`}
-                  className="cursor-pointer"
-                >
-                  {category}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+              <div className="space-y-1">
+                <Label htmlFor="global-access" className="text-base">
+                  🌐 Acesso Global à Base de Conhecimento
                 </Label>
+                <p className="text-sm text-muted-foreground">
+                  Quando ativado, a persona pode acessar TODOS os artigos
+                </p>
+              </div>
+              <Switch
+                id="global-access"
+                checked={hasGlobalAccess}
+                onCheckedChange={(checked) => {
+                  setHasGlobalAccess(checked);
+                  if (checked) setSelectedCategories([]);
+                }}
+              />
+            </div>
+
+            {!hasGlobalAccess && (
+              <>
+                <div>
+                  <Label>🔒 Categorias Permitidas</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Selecione quais categorias esta persona pode consultar
+                  </p>
+                </div>
+                
+                {loadingCategories ? (
+                  <p className="text-sm text-muted-foreground">Carregando categorias...</p>
+                ) : availableCategories.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma categoria encontrada. Crie artigos primeiro.</p>
+                ) : (
+                  <div className="border rounded-lg p-4 space-y-2 max-h-[180px] overflow-y-auto">
+                    {availableCategories.map((category) => (
+                      <div key={category} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`category-${category}`}
+                          checked={selectedCategories.includes(category)}
+                          onCheckedChange={() => toggleCategory(category)}
+                        />
+                        <Label
+                          htmlFor={`category-${category}`}
+                          className="cursor-pointer"
+                        >
+                          {category}
+                        </Label>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-            
-            {selectedCategories.length > 0 && (
-              <div className="text-xs text-muted-foreground">
-                ✅ {selectedCategories.length} categoria(s) selecionada(s): {selectedCategories.join(", ")}
-              </div>
+                )}
+                
+                {selectedCategories.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    ✅ {selectedCategories.length} categoria(s) selecionada(s): {selectedCategories.join(", ")}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
