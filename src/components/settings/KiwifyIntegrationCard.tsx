@@ -117,10 +117,17 @@ export default function KiwifyIntegrationCard() {
 
   const saveApiConfigsMutation = useMutation({
     mutationFn: async () => {
+      // Validação: Verificar se todos os campos estão preenchidos
+      if (!apiCredentials.client_id?.trim() || 
+          !apiCredentials.client_secret?.trim() || 
+          !apiCredentials.account_id?.trim()) {
+        throw new Error("Preencha todos os campos (Client ID, Client Secret e Account ID)");
+      }
+
       const updates = [
-        { key: "kiwify_client_id", value: apiCredentials.client_id },
-        { key: "kiwify_client_secret", value: apiCredentials.client_secret },
-        { key: "kiwify_account_id", value: apiCredentials.account_id },
+        { key: "kiwify_client_id", value: apiCredentials.client_id.trim() },
+        { key: "kiwify_client_secret", value: apiCredentials.client_secret.trim() },
+        { key: "kiwify_account_id", value: apiCredentials.account_id.trim() },
       ];
 
       for (const config of updates) {
@@ -596,6 +603,7 @@ export default function KiwifyIntegrationCard() {
                   value={apiCredentials.client_id}
                   onChange={(e) => setApiCredentials({ ...apiCredentials, client_id: e.target.value })}
                   placeholder="Seu Client ID da Kiwify"
+                  className={!apiCredentials.client_id?.trim() ? "border-rose-500" : ""}
                 />
               </div>
               <div className="space-y-2">
@@ -606,6 +614,7 @@ export default function KiwifyIntegrationCard() {
                   value={apiCredentials.client_secret}
                   onChange={(e) => setApiCredentials({ ...apiCredentials, client_secret: e.target.value })}
                   placeholder="Seu Client Secret da Kiwify"
+                  className={!apiCredentials.client_secret?.trim() ? "border-rose-500" : ""}
                 />
               </div>
               <div className="space-y-2">
@@ -616,11 +625,28 @@ export default function KiwifyIntegrationCard() {
                   value={apiCredentials.account_id}
                   onChange={(e) => setApiCredentials({ ...apiCredentials, account_id: e.target.value })}
                   placeholder="Seu Account ID da Kiwify"
+                  className={!apiCredentials.account_id?.trim() ? "border-rose-500" : ""}
                 />
               </div>
+              
+              {(!apiCredentials.client_id?.trim() || 
+                !apiCredentials.client_secret?.trim() || 
+                !apiCredentials.account_id?.trim()) && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
+                  <p className="text-xs text-amber-900 dark:text-amber-100">
+                    ⚠️ Preencha todos os campos para salvar as credenciais
+                  </p>
+                </div>
+              )}
+
               <Button
                 onClick={() => saveApiConfigsMutation.mutate()}
-                disabled={saveApiConfigsMutation.isPending}
+                disabled={
+                  !apiCredentials.client_id?.trim() || 
+                  !apiCredentials.client_secret?.trim() || 
+                  !apiCredentials.account_id?.trim() ||
+                  saveApiConfigsMutation.isPending
+                }
                 className="w-full"
               >
                 {saveApiConfigsMutation.isPending ? (
