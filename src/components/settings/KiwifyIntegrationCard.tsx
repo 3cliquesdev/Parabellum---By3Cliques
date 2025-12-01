@@ -98,41 +98,75 @@ export default function KiwifyIntegrationCard() {
   const handleTestWebhook = async () => {
     setTestingWebhook(true);
     try {
+      const activeToken = tokens?.find((t) => t.is_active)?.token;
+      if (!activeToken) {
+        toast({
+          title: "Nenhum token ativo",
+          description: "Cadastre e ative um token antes de testar o webhook",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Payload de teste simulando uma venda da Kiwify
       const testPayload = {
         order_id: `TEST-${Date.now()}`,
-        order_status: 'paid',
+        order_status: "paid",
         Customer: {
-          id: 'test-customer-id',
-          full_name: 'Cliente Teste',
-          email: 'teste@example.com',
-          mobile_phone: '11999999999',
-          CPF: '12345678900',
+          id: "test-customer-id",
+          full_name: "Cliente Teste",
+          email: "teste@example.com",
+          mobile_phone: "11999999999",
+          CPF: "12345678900",
           Address: {
-            street: 'Rua Teste',
-            number: '123',
-            neighborhood: 'Bairro Teste',
-            city: 'São Paulo',
-            state: 'SP',
-            zipcode: '01234567'
-          }
+            street: "Rua Teste",
+            number: "123",
+            neighborhood: "Bairro Teste",
+            city: "São Paulo",
+            state: "SP",
+            zipcode: "01234567",
+          },
         },
         Product: {
-          product_id: 'test-product-id',
-          product_name: 'Produto Teste',
-          offer_id: 'test-offer-id'
+          product_id: "test-product-id",
+          product_name: "Produto Teste",
+          offer_id: "test-offer-id",
         },
         Commissions: {
-          product_base_price: 100
-        }
+          product_base_price: 100,
+        },
       };
 
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
+      // Precisamos usar EXACTAMENTE o mesmo body para assinar e enviar
+      const bodyText = JSON.stringify(testPayload);
+
+      // Gerar assinatura HMAC SHA-1 igual à Kiwify usando o token ativo
+      const encoder = new TextEncoder();
+      const keyData = encoder.encode(activeToken);
+      const messageData = encoder.encode(bodyText);
+
+      const cryptoKey = await crypto.subtle.importKey(
+        "raw",
+        keyData,
+        { name: "HMAC", hash: "SHA-1" },
+        false,
+        ["sign"]
+      );
+
+      const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, messageData);
+      const signatureHex = Array.from(new Uint8Array(signatureBuffer))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      const url = new URL(webhookUrl);
+      url.searchParams.set("signature", signatureHex);
+
+      const response = await fetch(url.toString(), {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(testPayload),
+        body: bodyText,
       });
 
       const result = await response.json();
@@ -160,7 +194,6 @@ export default function KiwifyIntegrationCard() {
       setTestingWebhook(false);
     }
   };
-
   return (
     <>
       <Card>
