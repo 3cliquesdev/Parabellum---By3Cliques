@@ -974,6 +974,115 @@ Responda APENAS: skip ou search`
     // Detectar se é contexto financeiro na mensagem atual
     const isFinancialContext = FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
     
+    // 🎯 BYPASS DA IA: Saudação Direta para Clientes Conhecidos (ANTES de construir prompt da IA)
+    if (intentType === 'skip' && !isFinancialContext) {
+      // CASO 1: Cliente conhecido = saudação personalizada direta
+      if (contactHasEmail) {
+        console.log('[ai-autopilot-chat] 🎯 BYPASS DA IA - Saudação direta para cliente conhecido');
+        
+        const directGreeting = `Olá ${contactName}! Bem-vindo(a) de volta! 😊 Como posso te ajudar hoje?`;
+        
+        // Salvar mensagem da IA
+        const { data: savedMsg } = await supabaseClient
+          .from('messages')
+          .insert({
+            conversation_id: conversationId,
+            content: directGreeting,
+            sender_type: 'user',
+            is_ai_generated: true,
+            channel: responseChannel
+          })
+          .select()
+          .single();
+        
+        // Enviar via WhatsApp se necessário
+        if (responseChannel === 'whatsapp') {
+          const { data: whatsappInstance } = await supabaseClient
+            .from('whatsapp_instances')
+            .select('*')
+            .eq('status', 'connected')
+            .limit(1)
+            .maybeSingle();
+          
+          if (whatsappInstance) {
+            await supabaseClient.functions.invoke('send-whatsapp-message', {
+              body: {
+                instance_id: whatsappInstance.id,
+                phone_number: contact.phone,
+                whatsapp_id: contact.whatsapp_id,
+                message: directGreeting
+              }
+            });
+          }
+        }
+        
+        return new Response(JSON.stringify({
+          response: directGreeting,
+          messageId: savedMsg?.id,
+          directGreeting: true,
+          debug: { 
+            reason: 'known_customer_greeting_bypass',
+            customer_name: contactName,
+            bypassed_ai: true
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // CASO 2: Lead novo sem email = pedir email direto
+      if (!contactHasEmail && responseChannel === 'whatsapp') {
+        console.log('[ai-autopilot-chat] 🎯 BYPASS DA IA - Pedindo email para lead novo');
+        
+        const leadGreeting = `Olá${contactName ? ' ' + contactName : ''}! Para garantir um atendimento personalizado e seguro, preciso que você me informe seu email.`;
+        
+        // Salvar mensagem da IA
+        const { data: savedMsg } = await supabaseClient
+          .from('messages')
+          .insert({
+            conversation_id: conversationId,
+            content: leadGreeting,
+            sender_type: 'user',
+            is_ai_generated: true,
+            channel: responseChannel
+          })
+          .select()
+          .single();
+        
+        // Enviar via WhatsApp
+        const { data: whatsappInstance } = await supabaseClient
+          .from('whatsapp_instances')
+          .select('*')
+          .eq('status', 'connected')
+          .limit(1)
+          .maybeSingle();
+        
+        if (whatsappInstance) {
+          await supabaseClient.functions.invoke('send-whatsapp-message', {
+            body: {
+              instance_id: whatsappInstance.id,
+              phone_number: contact.phone,
+              whatsapp_id: contact.whatsapp_id,
+              message: leadGreeting
+            }
+          });
+        }
+        
+        return new Response(JSON.stringify({
+          response: leadGreeting,
+          messageId: savedMsg?.id,
+          directGreeting: true,
+          needsEmail: true,
+          debug: { 
+            reason: 'new_lead_email_request_bypass',
+            bypassed_ai: true
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    
     // FASE 1: Criar instrução prioritária que vai NO INÍCIO do prompt (se habilitado)
     let priorityInstruction = '';
     
