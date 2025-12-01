@@ -91,6 +91,39 @@ export type Database = {
           },
         ]
       }
+      admin_alerts: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          message: string | null
+          metadata: Json | null
+          read_at: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string | null
+          metadata?: Json | null
+          read_at?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string | null
+          metadata?: Json | null
+          read_at?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
       ai_failure_logs: {
         Row: {
           contact_id: string | null
@@ -1822,6 +1855,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      kiwify_events: {
+        Row: {
+          created_at: string | null
+          customer_email: string | null
+          error_message: string | null
+          event_type: string
+          id: string
+          offer_id: string | null
+          order_id: string
+          payload: Json
+          processed: boolean | null
+          product_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_email?: string | null
+          error_message?: string | null
+          event_type: string
+          id?: string
+          offer_id?: string | null
+          order_id: string
+          payload: Json
+          processed?: boolean | null
+          product_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_email?: string | null
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          offer_id?: string | null
+          order_id?: string
+          payload?: Json
+          processed?: boolean | null
+          product_id?: string | null
+        }
+        Relationships: []
       }
       knowledge_articles: {
         Row: {

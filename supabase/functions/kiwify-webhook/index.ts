@@ -144,40 +144,97 @@ serve(async (req) => {
 
     const { order_status, Customer, Product, Commissions, order_id } = payload;
 
+    // ============================================
+    // REGISTRAR EVENTO NA TABELA DE AUDITORIA
+    // ============================================
+    const eventRecord = await supabase
+      .from('kiwify_events')
+      .insert({
+        event_type: order_status,
+        order_id: order_id,
+        customer_email: Customer.email,
+        product_id: Product.product_id,
+        offer_id: Product.offer_id || null,
+        payload: payload,
+        processed: false,
+      })
+      .select()
+      .single();
+
+    console.log('[kiwify-webhook] ✅ Event logged:', eventRecord.data?.id);
+
     let result;
-    switch (order_status) {
-      case 'paid':
-      case 'order_approved':
-        result = await handlePaidOrder(supabase, Customer, Product, Commissions, order_id);
-        break;
+    let error_message = null;
+    
+    try {
+      switch (order_status) {
+        case 'paid':
+        case 'order_approved':
+          result = await handlePaidOrder(supabase, Customer, Product, Commissions, order_id);
+          break;
+        
+        case 'subscription_renewed':
+          result = await handleSubscriptionRenewal(supabase, Customer, Product, Commissions);
+          break;
+        
+        case 'refused':
+        case 'cart_abandoned':
+        case 'payment_refused':
+          result = await handleRecoveryOrder(supabase, Customer, Product, Commissions, order_status, order_id);
+          break;
+        
+        case 'subscription_late':
+        case 'subscription_card_declined':
+          result = await handleOverduePayment(supabase, Customer, Product, Commissions, order_status);
+          break;
+        
+        case 'refunded':
+        case 'chargedback':
+        case 'subscription_canceled':
+          result = await handleChurnOrder(supabase, Customer, Product, order_status);
+          break;
+        
+        default:
+          console.log('[kiwify-webhook] Ignored status:', order_status);
+          
+          // Marcar evento como processado (ignorado)
+          if (eventRecord.data) {
+            await supabase
+              .from('kiwify_events')
+              .update({ processed: true })
+              .eq('id', eventRecord.data.id);
+          }
+          
+          return new Response(JSON.stringify({ ignored: true, status: order_status }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200
+          });
+      }
+
+      // Marcar evento como processado com sucesso
+      if (eventRecord.data) {
+        await supabase
+          .from('kiwify_events')
+          .update({ processed: true })
+          .eq('id', eventRecord.data.id);
+      }
+
+    } catch (processingError) {
+      error_message = processingError instanceof Error ? processingError.message : 'Unknown error';
+      console.error('[kiwify-webhook] Processing error:', error_message);
       
-      case 'subscription_renewed':
-        result = await handleSubscriptionRenewal(supabase, Customer, Product, Commissions);
-        break;
+      // Marcar evento como erro
+      if (eventRecord.data) {
+        await supabase
+          .from('kiwify_events')
+          .update({ 
+            processed: false,
+            error_message: error_message 
+          })
+          .eq('id', eventRecord.data.id);
+      }
       
-      case 'refused':
-      case 'cart_abandoned':
-      case 'payment_refused':
-        result = await handleRecoveryOrder(supabase, Customer, Product, Commissions, order_status, order_id);
-        break;
-      
-      case 'subscription_late':
-      case 'subscription_card_declined':
-        result = await handleOverduePayment(supabase, Customer, Product, Commissions, order_status);
-        break;
-      
-      case 'refunded':
-      case 'chargedback':
-      case 'subscription_canceled':
-        result = await handleChurnOrder(supabase, Customer, Product, order_status);
-        break;
-      
-      default:
-        console.log('[kiwify-webhook] Ignored status:', order_status);
-        return new Response(JSON.stringify({ ignored: true, status: order_status }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200
-        });
+      throw processingError;
     }
 
     return new Response(JSON.stringify(result), {
@@ -326,6 +383,7 @@ async function handlePaidOrder(
   if (!product) {
     console.warn(`[kiwify-webhook] ⚠️ Produto não mapeado - Offer ID: ${Product.offer_id || 'N/A'}, Product ID: ${Product.product_id}`);
     
+    // Registrar na timeline do cliente
     await supabase
       .from('interactions')
       .insert({
@@ -337,9 +395,32 @@ async function handlePaidOrder(
           product_name: Product.product_name,
           product_id: Product.product_id,
           offer_id: Product.offer_id,
+          price: Commissions.product_base_price,
           unmapped: true
         }
       });
+
+    // ============================================
+    // CRIAR ALERTA PARA ADMINISTRADORES
+    // ============================================
+    await supabase
+      .from('admin_alerts')
+      .insert({
+        type: 'unmapped_product',
+        title: '🛒 Novo Produto Kiwify Não Mapeado',
+        message: `Produto "${Product.product_name}" não está cadastrado no sistema. Cadastre manualmente para habilitar automações.`,
+        metadata: {
+          product_name: Product.product_name,
+          product_id: Product.product_id,
+          offer_id: Product.offer_id,
+          offer_name: offer?.offer_name || null,
+          price: Commissions.product_base_price,
+          customer_email: Customer.email,
+          order_id: order_id,
+        }
+      });
+    
+    console.log('[kiwify-webhook] 🔔 Admin alert created for unmapped product');
   } else if (product.delivery_group_id) {
     const { data: groupPlaybooks } = await supabase
       .from('group_playbooks')
