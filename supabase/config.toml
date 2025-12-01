@@ -142,5 +142,8 @@ verify_jwt = true
 [functions.generate-batch-embeddings]
 verify_jwt = true
 
+[functions.sync-kiwify-sales]
+verify_jwt = true
+
 [functions.test-email-send]
 verify_jwt = true
