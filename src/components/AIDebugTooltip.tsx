@@ -11,6 +11,7 @@ interface UsedArticle {
   id: string;
   title: string;
   category: string | null;
+  similarity?: string; // Ex: "89%"
 }
 
 interface AIDebugTooltipProps {
@@ -59,6 +60,11 @@ export function AIDebugTooltip({ usedArticles }: AIDebugTooltipProps) {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-slate-700 dark:text-zinc-300 font-medium">
                       {article.title}
+                      {article.similarity && (
+                        <span className="text-primary ml-1 font-semibold">
+                          ({article.similarity})
+                        </span>
+                      )}
                     </p>
                     {article.category && (
                       <Badge variant="secondary" className="text-xs mt-1">
