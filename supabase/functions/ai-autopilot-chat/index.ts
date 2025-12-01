@@ -67,8 +67,10 @@ const FALLBACK_PHRASES = [
   'unable to'
 ];
 
-const FINANCIAL_KEYWORDS = [
+// 🔐 BARREIRA FINANCEIRA UNIFICADA - Palavras que EXIGEM cliente identificado + OTP
+const FINANCIAL_BARRIER_KEYWORDS = [
   'saque',
+  'sacar',
   'saldo',
   'pix',
   'dinheiro',
@@ -77,20 +79,12 @@ const FINANCIAL_KEYWORDS = [
   'comissão',
   'carteira',
   'transferência',
-  'estorno'
-];
-
-// 🆕 BARREIRA FINANCEIRA - Palavras que EXIGEM cliente identificado antes de prosseguir
-const FINANCIAL_BARRIER_KEYWORDS = [
-  'reembolso',
+  'estorno',
   'cancelar',
   'cancelamento',
-  'saque',
-  'sacar',
   'devolução',
   'devolver',
-  'meu dinheiro',
-  'estorno'
+  'meu dinheiro'
 ];
 
 // 🆕 Padrões de INTENÇÃO financeira (não keyword solta) - Usado globalmente
@@ -947,12 +941,30 @@ Responda APENAS: skip ou search`
     const availableBalance = contact.account_balance || 0;
     const formattedBalance = `R$ ${availableBalance.toFixed(2)}`;
     
-    // FASE 1: Validação de Cliente Real para Saque
-    const isRealCustomer = !!contactCPF && contact.status === 'customer';
-    const canRequestWithdrawal = isRealCustomer;
-    const withdrawalBlockReason = !contactCPF 
+    // ============================================================
+    // 🔒 DEFINIÇÕES UNIFICADAS DE CLIENTE (evita inconsistências)
+    // ============================================================
+    const isContactVerified = !!contact.email && contact.status === 'customer';
+    const hasCompleteCadastro = !!contactCPF; // CPF cadastrado
+    const canAccessFinancialFeatures = isContactVerified && hasCompleteCadastro;
+    
+    console.log('[ai-autopilot-chat] 🔍 CUSTOMER STATUS:', {
+      contact_id: contact.id,
+      contact_name: contactName,
+      has_email: !!contact.email,
+      contact_status: contact.status,
+      has_cpf: hasCompleteCadastro,
+      is_contact_verified: isContactVerified,
+      can_access_financial_features: canAccessFinancialFeatures,
+      channel: responseChannel
+    });
+    
+    // Validação de Cliente Real para Saque (mantém compatibilidade)
+    const isRealCustomer = isContactVerified && hasCompleteCadastro;
+    const canRequestWithdrawal = canAccessFinancialFeatures;
+    const withdrawalBlockReason = !hasCompleteCadastro 
       ? 'CPF não cadastrado - não é cliente verificado'
-      : contact.status !== 'customer'
+      : !isContactVerified
         ? `Status atual: ${contact.status} - ainda não é cliente`
         : null;
     
@@ -961,18 +973,25 @@ Responda APENAS: skip ou search`
       customerMessage.toLowerCase().includes(keyword)
     );
 
-    // Verificar se tem verificação OTP recente (últimas 24h) para ESTE contato
+    // Verificar se tem verificação OTP recente (1 HORA para operações financeiras)
     const { data: recentVerification } = await supabaseClient
       .from('email_verifications')
       .select('*')
       .eq('email', contactEmail)
       .eq('verified', true)
-      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .gte('created_at', new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString()) // 1h ao invés de 24h
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
     const hasRecentOTPVerification = !!recentVerification;
+    
+    console.log('[ai-autopilot-chat] 🔍 FINANCIAL SECURITY CHECK:', {
+      is_financial_request: isFinancialRequest,
+      has_recent_otp: hasRecentOTPVerification,
+      otp_verified_at: recentVerification?.created_at || null,
+      can_show_financial_data: hasRecentOTPVerification && isRealCustomer
+    });
 
     // BARREIRA FINANCEIRA: Pedido financeiro SEM verificação OTP recente
     const financialBarrierActive = isFinancialRequest && !hasRecentOTPVerification;
@@ -1106,14 +1125,115 @@ Responda APENAS: skip ou search`
     // ✅ CONTROLE: Só usar priorityInstruction se persona tiver use_priority_instructions=true
     const usePriorityInstructions = persona.use_priority_instructions === true;
     
-    // 🚨 FASE 1: Identity Wall SEMPRE ATIVO (desacoplado de usePriorityInstructions)
-    // Reconhecimento de cliente e pedido de email são SEGURANÇA CRÍTICA
-    if (contactHasEmail && responseChannel === 'whatsapp') {
-      const maskedEmail = contactEmail.replace(/(.{1})(.*)(@.*)/, '$1***$3');
+    // ============================================================
+    // 🔐 DETECÇÃO AUTOMÁTICA DE CÓDIGO OTP (6 dígitos)
+    // ============================================================
+    const isOTPCode = /^\d{6}$/.test(customerMessage.trim());
+    
+    if (isOTPCode && contactHasEmail) {
+      console.log('[ai-autopilot-chat] 🔐 DECISION POINT: AUTO_OTP_VALIDATION', {
+        detected_otp_code: true,
+        contact_has_email: contactHasEmail,
+        will_bypass_ai: true
+      });
+      
+      try {
+        const { data: otpData, error: otpError } = await supabaseClient.functions.invoke('verify-code', {
+          body: { 
+            email: contactEmail,
+            code: customerMessage.trim()
+          }
+        });
+        
+        if (otpError) throw otpError;
+        
+        const directOTPSuccessResponse = otpData?.success 
+          ? `✅ **Código validado com sucesso!**
+
+Olá ${contactName}! Sua identidade foi confirmada. 
+
+Agora posso te ajudar com questões financeiras. Como posso te ajudar?`
+          : `❌ **Código inválido ou expirado**
+
+${otpData?.message || 'O código não é válido. Verifique e tente novamente.'}
+
+Digite **"reenviar"** se precisar de um novo código.`;
+        
+        // Salvar mensagem no banco
+        const { data: savedMsg } = await supabaseClient
+          .from('messages')
+          .insert({
+            conversation_id: conversationId,
+            content: directOTPSuccessResponse,
+            sender_type: 'user',
+            is_ai_generated: true,
+            channel: responseChannel
+          })
+          .select()
+          .single();
+        
+        // Enviar via WhatsApp se necessário
+        if (responseChannel === 'whatsapp' && contact?.phone) {
+          const { data: whatsappInstance } = await supabaseClient
+            .from('whatsapp_instances')
+            .select('*')
+            .eq('status', 'connected')
+            .limit(1)
+            .maybeSingle();
+          
+          if (whatsappInstance) {
+            await supabaseClient.functions.invoke('send-whatsapp-message', {
+              body: {
+                instance_id: whatsappInstance.id,
+                phone_number: contact.phone,
+                whatsapp_id: contact.whatsapp_id,
+                message: directOTPSuccessResponse
+              }
+            });
+          }
+        }
+        
+        console.log('[ai-autopilot-chat] ✅ OTP AUTO-VALIDATION COMPLETE:', {
+          otp_success: otpData?.success,
+          response_sent: true
+        });
+        
+        // ⚡ RETURN EARLY - OTP validado, não chamar IA
+        return new Response(JSON.stringify({
+          response: directOTPSuccessResponse,
+          messageId: savedMsg?.id,
+          otpValidated: otpData?.success || false,
+          debug: { 
+            reason: 'auto_otp_validation_bypass',
+            otp_success: otpData?.success,
+            bypassed_ai: true
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+        
+      } catch (error) {
+        console.error('[ai-autopilot-chat] ❌ Erro ao validar OTP automaticamente:', error);
+        // Se falhar, continua para IA tentar lidar
+      }
+    }
+    
+    // ============================================================
+    // 🚨 IDENTITY WALL - OTP AUTOMÁTICO PARA CONTEXTO FINANCEIRO
+    // ============================================================
+    // Funciona para TODOS os canais (não só WhatsApp)
+    if (contactHasEmail) {
+      const maskedEmail = maskEmail(contactEmail);
       
       // CASO 1: Contexto FINANCEIRO - Precisa verificação OTP
       if (isFinancialContext && !hasRecentOTPVerification) {
-        console.log('[ai-autopilot-chat] 🔐 Contexto financeiro detectado - Disparando OTP para segurança');
+        console.log('[ai-autopilot-chat] 🔐 DECISION POINT: FINANCIAL_OTP_BARRIER', {
+          is_financial_context: true,
+          has_recent_otp: false,
+          will_send_otp: true,
+          all_channels: true,
+          current_channel: responseChannel
+        });
         
         try {
           // Enviar OTP automaticamente
@@ -1122,14 +1242,13 @@ Responda APENAS: skip ou search`
           });
           
           // 🔐 BYPASS DIRETO - NÃO CHAMAR A IA
-          const safeEmail = maskEmail(contactEmail);
           const directOTPResponse = `🔐 **Verificação de Segurança**
 
 Olá ${contactName}! Você é nosso cliente, mas questões financeiras são delicadas.
 
 Para sua segurança, vou confirmar que é você mesmo.
 
-📧 Enviei um código de **6 dígitos** para **${safeEmail}**.
+📧 Enviei um código de **6 dígitos** para **${maskedEmail}**.
 
 Por favor, **digite o código** que você recebeu para continuar.`;
 
@@ -1147,7 +1266,7 @@ Por favor, **digite o código** que você recebeu para continuar.`;
             .single();
           
           // Enviar via WhatsApp se necessário
-          if (responseChannel === 'whatsapp') {
+          if (responseChannel === 'whatsapp' && contact?.phone) {
             const { data: whatsappInstance } = await supabaseClient
               .from('whatsapp_instances')
               .select('*')
@@ -1155,7 +1274,7 @@ Por favor, **digite o código** que você recebeu para continuar.`;
               .limit(1)
               .maybeSingle();
             
-            if (whatsappInstance && contact?.phone) {
+            if (whatsappInstance) {
               await supabaseClient.functions.invoke('send-whatsapp-message', {
                 body: {
                   instance_id: whatsappInstance.id,
@@ -1173,10 +1292,13 @@ Por favor, **digite o código** que você recebeu para continuar.`;
             messageId: savedMsg?.id,
             awaitingOTP: true,
             debug: { 
-              reason: 'financial_barrier_auto_otp_bypass',
-              email_sent_to: safeEmail,
+              reason: 'financial_barrier_auto_otp_all_channels',
+              email_sent_to: maskedEmail,
               bypassed_ai: true,
-              contact_name: contactName
+              contact_name: contactName,
+              channel: responseChannel,
+              is_contact_verified: isContactVerified,
+              can_access_financial: canAccessFinancialFeatures
             }
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
