@@ -14,6 +14,7 @@ export default function KiwifyIntegrationCard() {
   const queryClient = useQueryClient();
   const [copying, setCopying] = useState(false);
   const [addTokenDialogOpen, setAddTokenDialogOpen] = useState(false);
+  const [testingWebhook, setTestingWebhook] = useState(false);
 
   // Buscar tokens cadastrados
   const { data: tokens, isLoading: tokensLoading } = useQuery({
@@ -94,6 +95,72 @@ export default function KiwifyIntegrationCard() {
   const hasReceivedEvents = recentEvents && recentEvents.length > 0;
   const activeTokensCount = tokens?.filter(t => t.is_active).length || 0;
 
+  const handleTestWebhook = async () => {
+    setTestingWebhook(true);
+    try {
+      // Payload de teste simulando uma venda da Kiwify
+      const testPayload = {
+        order_id: `TEST-${Date.now()}`,
+        order_status: 'paid',
+        Customer: {
+          id: 'test-customer-id',
+          full_name: 'Cliente Teste',
+          email: 'teste@example.com',
+          mobile_phone: '11999999999',
+          CPF: '12345678900',
+          Address: {
+            street: 'Rua Teste',
+            number: '123',
+            neighborhood: 'Bairro Teste',
+            city: 'São Paulo',
+            state: 'SP',
+            zipcode: '01234567'
+          }
+        },
+        Product: {
+          product_id: 'test-product-id',
+          product_name: 'Produto Teste',
+          offer_id: 'test-offer-id'
+        },
+        Commissions: {
+          product_base_price: 100
+        }
+      };
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(testPayload),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "✅ Webhook testado com sucesso",
+          description: "Verifique a tabela de eventos abaixo",
+        });
+        queryClient.invalidateQueries({ queryKey: ["kiwify-events"] });
+      } else {
+        toast({
+          title: "⚠️ Webhook respondeu com erro",
+          description: result.error || "Verifique os logs do Edge Function",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "❌ Erro ao testar webhook",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setTestingWebhook(false);
+    }
+  };
+
   return (
     <>
       <Card>
@@ -139,6 +206,24 @@ export default function KiwifyIntegrationCard() {
                 <ExternalLink className="h-4 w-4" />
               </Button>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestWebhook}
+              disabled={testingWebhook || activeTokensCount === 0}
+              className="gap-2"
+            >
+              {testingWebhook ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Testando...
+                </>
+              ) : (
+                <>
+                  🧪 Testar Webhook
+                </>
+              )}
+            </Button>
           </div>
 
           {/* Tokens Cadastrados */}

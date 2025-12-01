@@ -128,7 +128,20 @@ serve(async (req) => {
 
     // Read body as text for signature verification
     const bodyText = await req.text();
-    const signature = req.headers.get('x-kiwify-signature');
+    
+    // ✅ CORREÇÃO: Aceitar assinatura de AMBAS as fontes (header OU query param)
+    // A Kiwify pode enviar a signature no header OU como query parameter
+    const url = new URL(req.url);
+    const signature = req.headers.get('x-kiwify-signature') 
+      || req.headers.get('x-signature')
+      || url.searchParams.get('signature');
+
+    console.log('[kiwify-webhook] 📥 Signature source:', {
+      fromHeaderKiwify: req.headers.get('x-kiwify-signature'),
+      fromHeaderGeneric: req.headers.get('x-signature'),
+      fromQueryParam: url.searchParams.get('signature'),
+      finalSignature: signature ? signature.substring(0, 20) + '...' : 'NOT FOUND'
+    });
 
     // 1️⃣ Tentar validar contra tokens cadastrados na tabela
     const { data: tokens } = await supabase
