@@ -8,6 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import {
   Select,
   SelectContent,
@@ -142,6 +144,32 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
           is_active: data.is_active,
         },
       });
+
+      // FASE 1: Vincular deals ao produto após mapeamento
+      if (data.external_id || offers?.length) {
+        const kiwifyIds = [
+          ...(data.external_id ? [data.external_id] : []),
+          ...(offers?.map(o => o.offer_id) || []),
+        ];
+
+        try {
+          const { data: linkResult } = await supabase.functions.invoke('link-deals-to-product', {
+            body: { 
+              product_id: product.id,
+              kiwify_product_ids: kiwifyIds,
+            },
+          });
+
+          if (linkResult?.linked_count > 0) {
+            toast({
+              title: "✅ Deals vinculados",
+              description: `${linkResult.linked_count} deal(s) foram vinculados ao produto ${data.name}`,
+            });
+          }
+        } catch (error) {
+          console.error('Erro ao vincular deals:', error);
+        }
+      }
     } else {
       await createProduct.mutateAsync({
         name: data.name,

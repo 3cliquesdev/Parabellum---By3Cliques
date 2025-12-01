@@ -3,7 +3,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, TrendingUp, Target, DollarSign, Briefcase } from "lucide-react";
 import { useConversionMetrics } from "@/hooks/useConversionMetrics";
-import { useFinancialStats } from "@/hooks/useFinancialStats";
+import { useKiwifyFinancials } from "@/hooks/useKiwifyFinancials";
 import { usePipelineValue } from "@/hooks/usePipelineValue";
 import { useDeals } from "@/hooks/useDeals";
 
@@ -40,7 +40,7 @@ export default function Dashboard() {
   
   // ✅ Todos os hooks no topo - antes de qualquer return condicional
   const { data: conversionStats } = useConversionMetrics();
-  const financialStats = useFinancialStats();
+  const { data: kiwifyFinancials } = useKiwifyFinancials();
   const { totalPipelineValue, weightedValue } = usePipelineValue();
   const { data: deals } = useDeals();
 
@@ -152,10 +152,11 @@ export default function Dashboard() {
           icon={Target}
         />
         <KPICard 
-          title="Saldo Líquido" 
-          value={formatCurrency(financialStats.balance)}
+          title="Receita Líquida" 
+          value={formatCurrency(kiwifyFinancials?.totalNetRevenue || 0)}
           trend="+8%"
           icon={DollarSign}
+          description="depositado pela Kiwify"
         />
         <KPICard 
           title="Deals Ativos" 

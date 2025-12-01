@@ -150,3 +150,10 @@ verify_jwt = true
 
 [functions.reprocess-unmapped-sales]
 verify_jwt = true
+
+[functions.link-deals-to-product]
+verify_jwt = true
+
+[functions.backfill-deal-products]
+verify_jwt = true
+

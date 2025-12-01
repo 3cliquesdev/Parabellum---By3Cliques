@@ -302,11 +302,11 @@ export default function Analytics() {
               endDate={endDate}
             />
 
-            {/* KPIs Financeiros + Top Afiliados */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <FinancialKPIsWidget startDate={startDate} endDate={endDate} />
-              <TopAffiliatesWidget startDate={startDate} endDate={endDate} />
-            </div>
+            {/* KPIs Financeiros (4 colunas) */}
+            <FinancialKPIsWidget startDate={startDate} endDate={endDate} />
+
+            {/* Top Afiliados (full width) */}
+            <TopAffiliatesWidget startDate={startDate} endDate={endDate} />
 
             {/* Evolução de Receita */}
             <RevenueBreakdownWidget startDate={startDate} endDate={endDate} />
