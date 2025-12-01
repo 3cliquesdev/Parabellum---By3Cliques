@@ -971,7 +971,9 @@ Responda APENAS: skip ou search`
     // ============================================================
     // 🔒 DEFINIÇÕES UNIFICADAS DE CLIENTE (evita inconsistências)
     // ============================================================
-    const isContactVerified = !!contact.email && contact.status === 'customer';
+    // ✅ CORREÇÃO: Cliente verificado = tem email cadastrado (independente de status)
+    // Status é atualizado automaticamente pelo webhook Kiwify quando há compra
+    const isContactVerified = !!contact.email;
     const hasCompleteCadastro = !!contactCPF; // CPF cadastrado
     const canAccessFinancialFeatures = isContactVerified && hasCompleteCadastro;
     
@@ -986,13 +988,13 @@ Responda APENAS: skip ou search`
       channel: responseChannel
     });
     
-    // Validação de Cliente Real para Saque (mantém compatibilidade)
-    const isRealCustomer = isContactVerified && hasCompleteCadastro;
+    // ✅ CORREÇÃO: Cliente real = tem email + tem CPF (independente de status)
+    const isRealCustomer = !!contact.email && hasCompleteCadastro;
     const canRequestWithdrawal = canAccessFinancialFeatures;
     const withdrawalBlockReason = !hasCompleteCadastro 
       ? 'CPF não cadastrado - não é cliente verificado'
-      : !isContactVerified
-        ? `Status atual: ${contact.status} - ainda não é cliente`
+      : !contact.email
+        ? 'Email não cadastrado - precisa se identificar primeiro'
         : null;
     
     // 🚨 PORTEIRO FINANCEIRO - Exige OTP SEMPRE para transações financeiras
