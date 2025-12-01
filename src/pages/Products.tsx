@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Loader2, Plus, Edit, Trash2, Package, ExternalLink } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Shield, Loader2, Plus, Edit, Trash2, Package, ExternalLink, Activity } from "lucide-react";
 import { useProducts, useDeleteProduct } from "@/hooks/useProducts";
 import { ProductDialog } from "@/components/ProductDialog";
+import { ProductMappingDiagnostic } from "@/components/products/ProductMappingDiagnostic";
 
 import {
   AlertDialog,
@@ -71,6 +73,22 @@ export default function Products() {
     setDialogOpen(true);
   };
 
+  // Listen for edit-product event from diagnostic
+  useEffect(() => {
+    const handleEditProductEvent = (event: CustomEvent) => {
+      const productId = event.detail;
+      const product = products?.find(p => p.id === productId);
+      if (product) {
+        handleEdit(product);
+      }
+    };
+
+    window.addEventListener('edit-product', handleEditProductEvent as EventListener);
+    return () => {
+      window.removeEventListener('edit-product', handleEditProductEvent as EventListener);
+    };
+  }, [products]);
+
   return (
     <div className="min-h-screen p-6">
       <div className="mb-6 flex items-center justify-between">
@@ -86,100 +104,120 @@ export default function Products() {
         </Button>
       </div>
 
-      {!products || products.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Package className="h-16 w-16 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              Nenhum produto cadastrado
-            </h3>
-            <p className="text-muted-foreground text-center mb-4">
-              Comece criando seu primeiro produto para configurar as regras de distribuição
-            </p>
-            <Button onClick={handleNewProduct}>
-              <Plus className="h-4 w-4 mr-2" />
-              Criar Primeiro Produto
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map((product) => (
-            <Card key={product.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="flex items-center gap-2 flex-wrap">
-                      {product.name}
-                      {!product.is_active && (
-                        <Badge variant="secondary">Inativo</Badge>
-                      )}
-                    </CardTitle>
-                     {product.description && (
-                      <CardDescription className="mt-2">
-                        {product.description}
-                      </CardDescription>
-                     )}
-                    
-                    {/* Kiwify ID Badge */}
-                    {product.external_id && (
-                      <div className="mt-2">
-                        <Badge variant="outline" className="text-xs">
-                          <ExternalLink className="h-3 w-3 mr-1" />
-                          Kiwify: {product.external_id}
-                        </Badge>
-                      </div>
-                    )}
-                    
-                    {/* Playbook Badge */}
-                    {product.onboarding_playbooks && product.onboarding_playbooks.length > 0 && (
-                      <div className="mt-2">
-                        <Badge className="bg-primary/10 text-primary border-primary/20">
-                          🎯 {product.onboarding_playbooks[0].name}
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    {product.requires_account_manager ? (
-                      <Badge className="bg-primary">
-                        Requer Consultor
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline">
-                        Self-Service
-                      </Badge>
-                    )}
-                  </div>
+      <Tabs defaultValue="products" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="products" className="gap-2">
+            <Package className="h-4 w-4" />
+            Produtos
+          </TabsTrigger>
+          <TabsTrigger value="diagnostic" className="gap-2">
+            <Activity className="h-4 w-4" />
+            Diagnóstico de Mapeamento
+          </TabsTrigger>
+        </TabsList>
 
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleEdit(product)}
-                    >
-                      <Edit className="h-4 w-4 mr-2" />
-                      Editar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDelete(product.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+        <TabsContent value="products" className="space-y-4">{/* ... keep existing code */}
+
+          {!products || products.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Package className="h-16 w-16 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  Nenhum produto cadastrado
+                </h3>
+                <p className="text-muted-foreground text-center mb-4">
+                  Comece criando seu primeiro produto para configurar as regras de distribuição
+                </p>
+                <Button onClick={handleNewProduct}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Criar Primeiro Produto
+                </Button>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {products.map((product) => (
+                <Card key={product.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="flex items-center gap-2 flex-wrap">
+                          {product.name}
+                          {!product.is_active && (
+                            <Badge variant="secondary">Inativo</Badge>
+                          )}
+                        </CardTitle>
+                         {product.description && (
+                          <CardDescription className="mt-2">
+                            {product.description}
+                          </CardDescription>
+                         )}
+                        
+                        {/* Kiwify ID Badge */}
+                        {product.external_id && (
+                          <div className="mt-2">
+                            <Badge variant="outline" className="text-xs">
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Kiwify: {product.external_id}
+                            </Badge>
+                          </div>
+                        )}
+                        
+                        {/* Playbook Badge */}
+                        {product.onboarding_playbooks && product.onboarding_playbooks.length > 0 && (
+                          <div className="mt-2">
+                            <Badge className="bg-primary/10 text-primary border-primary/20">
+                              🎯 {product.onboarding_playbooks[0].name}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        {product.requires_account_manager ? (
+                          <Badge className="bg-primary">
+                            Requer Consultor
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">
+                            Self-Service
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleEdit(product)}
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(product.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="diagnostic">
+          <ProductMappingDiagnostic />
+        </TabsContent>
+      </Tabs>
 
       <ProductDialog
         open={dialogOpen}
