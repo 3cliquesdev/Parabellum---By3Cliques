@@ -2,13 +2,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, Building2, Calendar, MessageCircle, MapPin, FileText } from "lucide-react";
+import { Mail, Phone, Building2, Calendar, MessageCircle, MapPin, FileText, Pencil, Eye, EyeOff } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
+import ContactDialog from "./ContactDialog";
 
 interface ContactInfoCardProps {
   contact: Tables<"contacts"> & {
@@ -27,6 +28,16 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
 export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
   const statusInfo = STATUS_CONFIG[contact.status || "lead"];
   const [showFullData, setShowFullData] = useState(false);
+  const [showCPF, setShowCPF] = useState(false);
+
+  const maskCPF = (cpf: string) => {
+    if (!cpf) return null;
+    const numbers = cpf.replace(/\D/g, '');
+    if (numbers.length === 11) {
+      return `***.***.${numbers.substring(6, 9)}-**`;
+    }
+    return cpf; // Não mascarar se não for CPF válido
+  };
 
   const handleCall = () => {
     if (contact.phone) window.open(`tel:${contact.phone}`);
@@ -137,17 +148,39 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
 
         {/* Collapsible Full Data */}
         <Collapsible open={showFullData} onOpenChange={setShowFullData}>
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="w-full justify-between" size="sm">
-              <span className="text-sm font-medium">Dados Completos</span>
-              <ChevronDown className={`h-4 w-4 transition-transform ${showFullData ? 'rotate-180' : ''}`} />
-            </Button>
-          </CollapsibleTrigger>
+          <div className="flex items-center justify-between mb-2">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="flex-1 justify-between">
+                <span className="text-sm font-medium">Dados Completos</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${showFullData ? 'rotate-180' : ''}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <ContactDialog 
+              contact={contact} 
+              trigger={
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              }
+            />
+          </div>
           <CollapsibleContent className="space-y-3 pt-3">
             {contact.document && (
               <div className="flex items-center gap-3 text-sm">
                 <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-foreground">CPF/CNPJ: {contact.document}</span>
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-foreground">
+                    CPF/CNPJ: {showCPF ? contact.document : maskCPF(contact.document)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setShowCPF(!showCPF)}
+                  >
+                    {showCPF ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </Button>
+                </div>
               </div>
             )}
             

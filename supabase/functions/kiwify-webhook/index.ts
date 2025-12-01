@@ -7,12 +7,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface KiwifyAddress {
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zipcode?: string;
+  country?: string;
+}
+
 interface KiwifyCustomer {
   id: string;
   full_name: string;
   email: string;
   mobile_phone?: string;
   CPF?: string;
+  birth_date?: string;
+  Address?: KiwifyAddress;
 }
 
 interface KiwifyProduct {
@@ -372,6 +385,14 @@ async function handlePaidOrder(
       last_name: nameParts.slice(1).join(' ') || nameParts[0],
       phone: Customer.mobile_phone,
       document: Customer.CPF,
+      birth_date: Customer.birth_date || null,
+      address: Customer.Address?.street || null,
+      address_number: Customer.Address?.number || null,
+      address_complement: Customer.Address?.complement || null,
+      neighborhood: Customer.Address?.neighborhood || null,
+      city: Customer.Address?.city || null,
+      state: Customer.Address?.state || null,
+      zip_code: Customer.Address?.zipcode || null,
       status: 'customer',
       total_ltv: Commissions.product_base_price, // LTV inicial
       kiwify_customer_id: Customer.id,
@@ -830,6 +851,14 @@ async function handleRecoveryOrder(
       last_name: nameParts.slice(1).join(' ') || nameParts[0],
       phone: Customer.mobile_phone,
       document: Customer.CPF,
+      birth_date: Customer.birth_date || null,
+      address: Customer.Address?.street || null,
+      address_number: Customer.Address?.number || null,
+      address_complement: Customer.Address?.complement || null,
+      neighborhood: Customer.Address?.neighborhood || null,
+      city: Customer.Address?.city || null,
+      state: Customer.Address?.state || null,
+      zip_code: Customer.Address?.zipcode || null,
       status: 'lead',
       kiwify_customer_id: Customer.id,
       last_kiwify_event: order_status,
