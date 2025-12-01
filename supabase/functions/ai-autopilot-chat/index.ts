@@ -542,7 +542,7 @@ serve(async (req) => {
       .from('ai_routing_rules')
       .select(`
         *,
-        ai_personas!inner(*)
+        ai_personas!inner(id, name, role, system_prompt, temperature, max_tokens, knowledge_base_paths, is_active, use_priority_instructions, data_access)
       `)
       .eq('channel', responseChannel)
       .eq('is_active', true)
@@ -572,6 +572,19 @@ serve(async (req) => {
 
     const persona = selectedRule.ai_personas as any;
     console.log(`[ai-autopilot-chat] Persona selecionada: ${persona.name} (${persona.id})`);
+    console.log('[ai-autopilot-chat] 🔐 Data Access Config:', persona.data_access);
+    
+    // ✅ Verificar permissões de acesso a dados da persona
+    const personaDataAccess = persona.data_access || {
+      customer_data: true,
+      knowledge_base: true,
+      order_history: false,
+      financial_data: false
+    };
+    
+    const canAccessCustomerData = personaDataAccess.customer_data !== false;
+    const canAccessKnowledgeBase = personaDataAccess.knowledge_base !== false;
+    const canAccessFinancialData = personaDataAccess.financial_data === true;
 
     // 🎓 Buscar exemplos de treinamento (Few-Shot Learning)
     const { data: trainingExamples } = await supabaseClient
@@ -738,9 +751,14 @@ Responda APENAS: skip ou search`
       // QUALQUER outra coisa: buscar na base de conhecimento
       console.log('[ai-autopilot-chat] 🔍 Search - consultando base de conhecimento...');
       
-      // FASE 1: Verificar se persona tem categorias específicas configuradas
-      const personaCategories = persona.knowledge_base_paths || [];
-      const hasPersonaCategories = personaCategories.length > 0;
+      // ✅ Verificar se persona tem permissão para acessar knowledge base
+      if (!canAccessKnowledgeBase) {
+        console.log('[ai-autopilot-chat] 🚫 Persona NÃO tem acesso à base de conhecimento - pulando busca');
+        knowledgeArticles = [];
+      } else {
+        // FASE 1: Verificar se persona tem categorias específicas configuradas
+        const personaCategories = persona.knowledge_base_paths || [];
+        const hasPersonaCategories = personaCategories.length > 0;
       
       console.log('[ai-autopilot-chat] 📂 Persona categories:', {
         persona_id: persona.id,
@@ -908,6 +926,7 @@ Responda APENAS: skip ou search`
           console.error('[ai-autopilot-chat] Erro na busca por palavras-chave:', keywordError);
         }
       }
+      } // Fechamento do else de canAccessKnowledgeBase
     }
 
     // 5. FASE 1: Identity Wall - Verificar se contato tem email
@@ -1004,8 +1023,8 @@ Responda APENAS: skip ou search`
     // BARREIRA FINANCEIRA: Pedido financeiro SEM verificação OTP recente
     const financialBarrierActive = isFinancialRequest && !hasRecentOTPVerification;
 
-    // Flag para mostrar dados sensíveis (só após OTP verificado)
-    const canShowFinancialData = hasRecentOTPVerification && isRealCustomer;
+    // Flag para mostrar dados sensíveis (só após OTP verificado + permissão da persona)
+    const canShowFinancialData = hasRecentOTPVerification && isRealCustomer && canAccessFinancialData;
     
     // FASE 3 & 4: Identity Wall + Diferenciação Cliente vs Lead
     let identityWallNote = '';
@@ -1515,19 +1534,23 @@ ${canShowFinancialData
      
      ⚠️ ATENÇÃO: Use EXATAMENTE o CPF fornecido acima: "${maskedCPF}"
      NUNCA escreva "Não cadastrado" se o CPF foi fornecido.`
-  : `❌ BLOQUEIO: Cliente NÃO verificou identidade via OTP nesta sessão.
-     → NÃO mostre CPF ou Nome completo
-     → NÃO permita criar ticket de saque
-     → Informe: "Para sua segurança, preciso verificar sua identidade primeiro. Qual seu email de compra?"`}
+  : !canAccessFinancialData
+    ? `❌ BLOQUEIO: Esta IA NÃO tem permissão para acessar dados financeiros.
+       → Transfira para um agente humano imediatamente com: request_human_agent
+       → Motivo: "Solicitação de dados financeiros requer assistência humana"`
+    : `❌ BLOQUEIO: Cliente NÃO verificou identidade via OTP nesta sessão.
+       → NÃO mostre CPF ou Nome completo
+       → NÃO permita criar ticket de saque
+       → Informe: "Para sua segurança, preciso verificar sua identidade primeiro. Qual seu email de compra?"`}
 
 **SE CLIENTE VERIFICADO via OTP, seguir passos:**
 
-1. **CONFIRMAÇÃO OBRIGATÓRIA DE DADOS:**
+    1. **CONFIRMAÇÃO OBRIGATÓRIA DE DADOS:**
    Apresente os dados do cliente e peça confirmação:
    
    "Vou confirmar seus dados para o saque:
    
-   👤 **Nome:** ${contactName}
+   👤 **Nome:** ${canAccessCustomerData ? contactName : '[Dados Protegidos]'}
    📄 **CPF:** ${maskedCPF}
    
    ⚠️ **Regra de Segurança:** O saque só pode ser feito via PIX para uma chave vinculada a este CPF cadastrado. Não é possível enviar para conta de terceiros.
