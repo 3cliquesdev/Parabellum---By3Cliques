@@ -91,6 +91,57 @@ export type Database = {
           },
         ]
       }
+      ai_failure_logs: {
+        Row: {
+          contact_id: string | null
+          conversation_id: string | null
+          created_at: string
+          customer_message: string | null
+          error_message: string
+          error_stack: string | null
+          id: string
+          notification_sent_at: string | null
+          notified_admin: boolean | null
+        }
+        Insert: {
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_message?: string | null
+          error_message: string
+          error_stack?: string | null
+          id?: string
+          notification_sent_at?: string | null
+          notified_admin?: boolean | null
+        }
+        Update: {
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_message?: string | null
+          error_message?: string
+          error_stack?: string | null
+          id?: string
+          notification_sent_at?: string | null
+          notified_admin?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_failure_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_failure_logs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_persona_tools: {
         Row: {
           created_at: string | null

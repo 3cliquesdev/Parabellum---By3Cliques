@@ -192,42 +192,51 @@ serve(async (req) => {
     
     console.log('[ai-autopilot-chat] Request received:', { conversationId, messagePreview: customerMessage?.substring(0, 50) });
 
-    // 1. Buscar conversa e informações do contato (ANTES do cache)
-    const { data: conversation, error: convError } = await supabaseClient
-      .from('conversations')
-      .select(`
-        *,
-        contacts!inner(
-          id, first_name, last_name, email, phone, whatsapp_id, company, status
-        )
-      `)
-      .eq('id', conversationId)
-      .single();
+    // 🚨 FASE 3: Declarar variáveis fora do try para acesso no catch
+    let conversation: any = null;
+    let responseChannel = 'web_chat';
+    let contact: any = null;
+    let department: string | null = null;
 
-    if (convError || !conversation) {
-      console.error('[ai-autopilot-chat] Conversa não encontrada:', convError);
-      return new Response(JSON.stringify({ error: 'Conversa não encontrada' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    // 🚨 FASE 3: Fallback Gracioso - Try-catch interno para capturar falhas da IA
+    try {
+      // 1. Buscar conversa e informações do contato (ANTES do cache)
+      const { data: conversationData, error: convError } = await supabaseClient
+        .from('conversations')
+        .select(`
+          *,
+          contacts!inner(
+            id, first_name, last_name, email, phone, whatsapp_id, company, status
+          )
+        `)
+        .eq('id', conversationId)
+        .single();
 
-    const contact = conversation.contacts as any;
-    const department = conversation.department || null;
+      if (convError || !conversationData) {
+        console.error('[ai-autopilot-chat] Conversa não encontrada:', convError);
+        return new Response(JSON.stringify({ error: 'Conversa não encontrada' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
-    // FASE 4: Buscar canal da ÚLTIMA mensagem do cliente (não da conversa)
-    const { data: lastCustomerMessage } = await supabaseClient
-      .from('messages')
-      .select('channel')
-      .eq('conversation_id', conversationId)
-      .eq('sender_type', 'contact')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      conversation = conversationData;
+      contact = conversation.contacts as any;
+      department = conversation.department || null;
 
-    const responseChannel = lastCustomerMessage?.channel || 'web_chat';
+      // FASE 4: Buscar canal da ÚLTIMA mensagem do cliente (não da conversa)
+      const { data: lastCustomerMessage } = await supabaseClient
+        .from('messages')
+        .select('channel')
+        .eq('conversation_id', conversationId)
+        .eq('sender_type', 'contact')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      responseChannel = lastCustomerMessage?.channel || 'web_chat';
     
-    console.log(`[ai-autopilot-chat] Canal da última mensagem: ${responseChannel}, Departamento: ${department}`);
+      console.log(`[ai-autopilot-chat] Canal da última mensagem: ${responseChannel}, Departamento: ${department}`);
 
     // FASE 1: Verificar se deve pular cache para experiência personalizada
     const contactHasEmailForCache = contact.email && contact.email.trim() !== '';
@@ -954,7 +963,9 @@ Responda APENAS: skip ou search`
     // ✅ CONTROLE: Só usar priorityInstruction se persona tiver use_priority_instructions=true
     const usePriorityInstructions = persona.use_priority_instructions === true;
     
-    if (usePriorityInstructions && contactHasEmail && responseChannel === 'whatsapp') {
+    // 🚨 FASE 1: Identity Wall SEMPRE ATIVO (desacoplado de usePriorityInstructions)
+    // Reconhecimento de cliente e pedido de email são SEGURANÇA CRÍTICA
+    if (contactHasEmail && responseChannel === 'whatsapp') {
       const maskedEmail = contactEmail.replace(/(.{1})(.*)(@.*)/, '$1***$3');
       
       // CASO 1: Contexto FINANCEIRO - Precisa verificação OTP
@@ -1009,7 +1020,7 @@ Status: ${contactStatus}
 → Mostre que reconhecemos o cliente`;
       }
       
-    } else if (usePriorityInstructions && !contactHasEmail && responseChannel === 'whatsapp') {
+    } else if (!contactHasEmail && responseChannel === 'whatsapp') {
       // FASE 4: Lead (não tem email) - seguir Identity Wall e direcionar para comercial após verificação
       priorityInstruction = `🚨🚨🚨 INSTRUÇÃO PRIORITÁRIA - IGNORE TUDO ABAIXO ATÉ SEGUIR ISSO 🚨🚨🚨
 
@@ -2249,6 +2260,105 @@ Sobre qual pedido você gostaria de saber mais?`;
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
+    } catch (aiError) {
+      // 🚨 FASE 3: IA FALHOU - Executar protocolo de emergência
+      console.error('[ai-autopilot-chat] 🔥 FALHA CRÍTICA DA IA:', aiError);
+      
+      const errorMessage = aiError instanceof Error ? aiError.message : 'Unknown error';
+      const errorStack = aiError instanceof Error ? aiError.stack : undefined;
+      
+      try {
+        // 1. Registrar falha no banco para monitoramento
+        const { data: failureLog } = await supabaseClient
+          .from('ai_failure_logs')
+          .insert({
+            conversation_id: conversationId,
+            error_message: errorMessage,
+            error_stack: errorStack,
+            customer_message: customerMessage,
+            contact_id: conversation?.contacts?.id,
+            notified_admin: false
+          })
+          .select()
+          .single();
+        
+        console.log('[ai-autopilot-chat] 📝 Falha registrada no log:', failureLog?.id);
+        
+        // 2. Enviar mensagem de fallback ao cliente
+        await supabaseClient
+          .from('messages')
+          .insert({
+            conversation_id: conversationId,
+            content: "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano! 🙏",
+            sender_type: 'agent',
+            sender_id: null,
+            is_ai_generated: true,
+            channel: responseChannel
+          });
+        
+        console.log('[ai-autopilot-chat] 💬 Mensagem de fallback enviada ao cliente');
+        
+        // 3. Trigger handoff automático (copilot mode)
+        await supabaseClient
+          .from('conversations')
+          .update({ 
+            ai_mode: 'copilot',
+            last_message_at: new Date().toISOString()
+          })
+          .eq('id', conversationId);
+        
+        console.log('[ai-autopilot-chat] 🤝 Handoff automático executado (ai_mode → copilot)');
+        
+        // 4. Rotear conversa para departamento apropriado
+        await supabaseClient.functions.invoke('route-conversation', {
+          body: { conversationId }
+        });
+        
+        console.log('[ai-autopilot-chat] 📮 Conversa roteada para fila humana');
+        
+        // 5. Notificar admin sobre a falha crítica
+        const contactName = conversation?.contacts 
+          ? `${conversation.contacts.first_name} ${conversation.contacts.last_name}`
+          : 'Cliente não identificado';
+        
+        await supabaseClient.functions.invoke('send-admin-alert', {
+          body: {
+            type: 'ai_failure',
+            message: `IA falhou ao responder cliente ${contactName}`,
+            error: errorMessage,
+            conversationId: conversationId,
+            contactName: contactName
+          }
+        });
+        
+        console.log('[ai-autopilot-chat] 📧 Admin notificado sobre falha crítica');
+        
+        // 6. Atualizar log marcando que admin foi notificado
+        if (failureLog?.id) {
+          await supabaseClient
+            .from('ai_failure_logs')
+            .update({ 
+              notified_admin: true,
+              notification_sent_at: new Date().toISOString()
+            })
+            .eq('id', failureLog.id);
+        }
+        
+      } catch (recoveryError) {
+        console.error('[ai-autopilot-chat] ❌ Erro no protocolo de recuperação:', recoveryError);
+      }
+      
+      // Retornar resposta indicando que houve fallback
+      return new Response(JSON.stringify({ 
+        status: 'fallback',
+        message: "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano! 🙏",
+        handoff_triggered: true,
+        admin_notified: true
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
   } catch (error) {
     console.error('[ai-autopilot-chat] Erro geral:', error);
