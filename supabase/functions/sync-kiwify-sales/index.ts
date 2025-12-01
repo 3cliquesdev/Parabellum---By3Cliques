@@ -58,6 +58,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let jobId: string | null = null;
+
   try {
     console.log('[sync-kiwify-sales] 🚀 Iniciando sincronização...');
 
@@ -94,7 +96,7 @@ serve(async (req) => {
       throw new Error('Falha ao criar job de sincronização');
     }
 
-    const jobId = job.id;
+    jobId = job.id;
     console.log('[sync-kiwify-sales] 📝 Job criado:', jobId);
 
     // 2. Buscar credenciais da API Kiwify
@@ -187,8 +189,8 @@ serve(async (req) => {
 
           if (salesResponse.status === 429) {
             retries++;
-            console.log(`[sync-kiwify-sales] ⏳ Rate limited (tentativa ${retries}/3), aguardando 30s...`);
-            await new Promise(resolve => setTimeout(resolve, 30000));
+            console.log(`[sync-kiwify-sales] ⏳ Rate limited (tentativa ${retries}/3), aguardando 1 minuto...`);
+            await new Promise(resolve => setTimeout(resolve, 60000));
             continue;
           }
 
@@ -205,8 +207,8 @@ serve(async (req) => {
           page++;
           success = true;
 
-          // Rate limiting entre páginas: 1 segundo
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Rate limiting entre páginas: 2 segundos
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
         
         if (!success) {
@@ -214,8 +216,8 @@ serve(async (req) => {
         }
       }
 
-      // Rate limiting entre janelas de 90 dias: 2 segundos
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Rate limiting entre janelas de 90 dias: 5 segundos
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
       // Move window to previous period
       windowEnd = new Date(windowStart.getTime() - dayMs);
@@ -483,6 +485,28 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('[sync-kiwify-sales] ❌ ERROR:', error);
+    
+    // SEMPRE atualizar o job para failed mesmo se crashar
+    if (jobId) {
+      try {
+        const supabaseClient = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+        
+        await supabaseClient
+          .from('sync_jobs')
+          .update({ 
+            status: 'failed', 
+            completed_at: new Date().toISOString(),
+            errors: [{ message: error.message }]
+          })
+          .eq('id', jobId);
+      } catch (updateError) {
+        console.error('[sync-kiwify-sales] ❌ Erro ao atualizar job:', updateError);
+      }
+    }
+    
     return new Response(
       JSON.stringify({ 
         error: error.message,
