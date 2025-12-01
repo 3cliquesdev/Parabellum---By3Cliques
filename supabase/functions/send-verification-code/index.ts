@@ -235,7 +235,13 @@ serve(async (req) => {
       
       // Detectar erro 403 do Resend (modo teste/desenvolvimento)
       const errorMessage = emailError.message || JSON.stringify(emailError);
-      if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+      const errorStatusCode = (emailError as any).statusCode;
+      const is403Error = errorStatusCode === 403 || 
+                         errorMessage.includes('403') || 
+                         errorMessage.includes('Forbidden') ||
+                         errorMessage.includes('not verified');
+      
+      if (is403Error) {
         console.log('[send-verification-code] ⚠️⚠️⚠️ MODO DESENVOLVIMENTO DETECTADO ⚠️⚠️⚠️');
         console.log('[send-verification-code] Resend API em modo teste ou sem domínio verificado');
         console.log('[send-verification-code] 🔑 CÓDIGO OTP PARA TESTES:', code);
