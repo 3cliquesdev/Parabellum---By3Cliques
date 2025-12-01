@@ -3154,6 +3154,7 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           created_items: number | null
+          customers_churned: number | null
           deals_created: number | null
           deals_updated: number | null
           errors: Json | null
@@ -3163,6 +3164,7 @@ export type Database = {
           processed_items: number | null
           started_at: string | null
           status: string | null
+          tags_added: number | null
           total_items: number | null
           updated_items: number | null
         }
@@ -3173,6 +3175,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           created_items?: number | null
+          customers_churned?: number | null
           deals_created?: number | null
           deals_updated?: number | null
           errors?: Json | null
@@ -3182,6 +3185,7 @@ export type Database = {
           processed_items?: number | null
           started_at?: string | null
           status?: string | null
+          tags_added?: number | null
           total_items?: number | null
           updated_items?: number | null
         }
@@ -3192,6 +3196,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           created_items?: number | null
+          customers_churned?: number | null
           deals_created?: number | null
           deals_updated?: number | null
           errors?: Json | null
@@ -3201,6 +3206,7 @@ export type Database = {
           processed_items?: number | null
           started_at?: string | null
           status?: string | null
+          tags_added?: number | null
           total_items?: number | null
           updated_items?: number | null
         }

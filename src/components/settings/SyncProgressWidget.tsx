@@ -1,6 +1,6 @@
 import { useSyncJob } from "@/hooks/useSyncJob";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, CheckCircle2, XCircle, Users, Key, Briefcase, Clock } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Users, Key, Briefcase, Clock, AlertTriangle, Tag } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface SyncProgressWidgetProps {
@@ -108,6 +108,26 @@ export default function SyncProgressWidget({ jobId }: SyncProgressWidgetProps) {
               <p className="text-sm font-semibold text-foreground">{job.deals_created}</p>
             </div>
           </div>
+
+          {(job.customers_churned ?? 0) > 0 && (
+            <div className="flex items-center gap-2 p-3 bg-rose-50 dark:bg-rose-950/20 rounded-lg border border-rose-200 dark:border-rose-900">
+              <XCircle className="h-4 w-4 text-rose-600" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-rose-900 dark:text-rose-100">Inadimplentes</p>
+                <p className="text-sm font-semibold text-rose-900 dark:text-rose-100">{job.customers_churned}</p>
+              </div>
+            </div>
+          )}
+
+          {(job.tags_added ?? 0) > 0 && (
+            <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
+              <Tag className="h-4 w-4 text-amber-600" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-amber-900 dark:text-amber-100">Tags adicionadas</p>
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">{job.tags_added}</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Estimated Time */}

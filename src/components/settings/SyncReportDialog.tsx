@@ -19,6 +19,8 @@ interface SyncReportDialogProps {
     auth_users_created: number;
     deals_created: number;
     deals_updated: number;
+    customers_churned?: number;
+    tags_added?: number;
     errors: number;
   };
 }
@@ -105,6 +107,34 @@ export default function SyncReportDialog({
               </div>
               <span className="font-semibold text-foreground">{stats.deals_updated}</span>
             </div>
+
+            {(stats.customers_churned ?? 0) > 0 && (
+              <div className="flex items-center justify-between p-3 bg-rose-50 dark:bg-rose-950/20 rounded-lg border border-rose-200 dark:border-rose-900">
+                <div className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4 text-rose-600" />
+                  <span className="text-sm text-rose-900 dark:text-rose-100">
+                    Clientes inadimplentes
+                  </span>
+                </div>
+                <span className="font-semibold text-rose-900 dark:text-rose-100">
+                  {stats.customers_churned}
+                </span>
+              </div>
+            )}
+
+            {(stats.tags_added ?? 0) > 0 && (
+              <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <span className="text-sm text-amber-900 dark:text-amber-100">
+                    Tags "Inadimplente" adicionadas
+                  </span>
+                </div>
+                <span className="font-semibold text-amber-900 dark:text-amber-100">
+                  {stats.tags_added}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Errors */}
