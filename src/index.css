@@ -6,11 +6,11 @@
   :root {
     /* LIGHT MODE - Enterprise Gray Shell */
     --background: 210 40% 98%;         /* Slate-50 - Gray Shell */
-    --foreground: 222.2 84% 4.9%;      /* Azul Quase Preto */
+    --foreground: 0 0% 5%;             /* Preto (#0D0D0D) */
     
     /* SIDEBAR - Variáveis Completas */
     --sidebar-background: 0 0% 100%;          /* Sidebar Branca */
-    --sidebar-foreground: 215.4 16.3% 25%;    /* Texto Escuro */
+    --sidebar-foreground: 0 0% 10%;           /* Preto (#1A1A1A) */
     --sidebar-primary: 221.2 83.2% 53.3%;     /* Azul Royal */
     --sidebar-primary-foreground: 0 0% 100%;  /* Branco */
     --sidebar-accent: 221.2 83.2% 95%;        /* Hover Azul Suave */
@@ -19,24 +19,24 @@
     --sidebar-ring: 221.2 83.2% 53.3%;        /* Foco Azul */
     
     --card: 0 0% 100%;                 /* Cards Brancos */
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 5%;        /* Preto */
     
     --primary: 221.2 83.2% 53.3%;      /* Tech Blue */
     --primary-foreground: 210 40% 98%; /* Texto Branco */
     
     --secondary: 210 40% 93%;          /* Cinza levemente mais escuro */
-    --secondary-foreground: 222.2 47.4% 15%; /* Texto MAIS escuro */
+    --secondary-foreground: 0 0% 10%;  /* Preto (#1A1A1A) */
     
     --border: 214.3 31.8% 83%;         /* Bordas Enterprise */
     --input: 214.3 31.8% 83%;
     --ring: 221.2 83.2% 53.3%;
     
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 30%; /* Contraste forte para light mode */
-    --text-secondary: 215.4 16.3% 40%; /* Texto secundário */
+    --muted-foreground: 0 0% 25%;      /* Cinza escuro (#404040) */
+    --text-secondary: 0 0% 35%;        /* Texto secundário */
     
     --accent: 210 40% 96.1%;            /* Hover cinza claro */
-    --accent-foreground: 222.2 84% 4.9%; /* Texto ESCURO no hover */
+    --accent-foreground: 0 0% 5%;       /* Preto */
     
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
@@ -49,7 +49,7 @@
     --info-foreground: 0 0% 100%;
     
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 0 0% 5%;     /* Preto */
     
     --radius: 1rem;  /* Soft radius for clean aesthetic */
     
