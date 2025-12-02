@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { Plus, TrendingUp, Flame, Skull, DollarSign } from "lucide-react";
+import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings } from "lucide-react";
 import { useDeals, useUpdateDeal, useUpdateDealStage } from "@/hooks/useDeals";
 import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
@@ -14,12 +14,14 @@ import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useRottenDeals } from "@/hooks/useRottenDeals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import confetti from "canvas-confetti";
 import KanbanColumn from "@/components/KanbanColumn";
 import KanbanStatusColumn from "@/components/KanbanStatusColumn";
 import KanbanCard from "@/components/KanbanCard";
 import DealDialog from "@/components/DealDialog";
 import PipelineDialog from "@/components/PipelineDialog";
+import PipelineStagesDialog from "@/components/deals/PipelineStagesDialog";
 import DragDropActionBar from "@/components/DragDropActionBar";
 import LostReasonDialog from "@/components/LostReasonDialog";
 import { PendingDealsQueue } from "@/components/deals/PendingDealsQueue";
@@ -359,6 +361,28 @@ export default function Deals() {
                   ))}
                 </SelectContent>
               </Select>
+              
+              {/* Pipeline Stages Config Button */}
+              {canManagePipelines && selectedPipeline && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <PipelineStagesDialog
+                          pipelineId={selectedPipeline}
+                          pipelineName={pipelines?.find(p => p.id === selectedPipeline)?.name}
+                          trigger={
+                            <Button variant="ghost" size="icon" className="h-9 w-9">
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                          }
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>Configurar Etapas</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           )}
 

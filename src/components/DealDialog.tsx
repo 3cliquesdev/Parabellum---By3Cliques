@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Target } from "lucide-react";
+import { Target, ArrowRightLeft } from "lucide-react";
 import { useCreateDeal, useUpdateDeal } from "@/hooks/useDeals";
 import { useContacts } from "@/hooks/useContacts";
 import { useOrganizations } from "@/hooks/useOrganizations";
@@ -37,6 +37,7 @@ import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useSalesReps } from "@/hooks/useSalesReps";
 import { useUserRole } from "@/hooks/useUserRole";
+import MoveToPipelineDialog from "@/components/deals/MoveToPipelineDialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 const dealSchema = z.object({
@@ -584,6 +585,26 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
                 )}
               />
             </div>
+
+            {/* Quick Action: Move to another Pipeline (only when editing) */}
+            {deal && pipelines && pipelines.length > 1 && (
+              <div className="border-t pt-4 mt-4">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <ArrowRightLeft className="h-4 w-4 text-purple-600" />
+                  Ações Rápidas
+                </h3>
+                <MoveToPipelineDialog
+                  deal={deal}
+                  trigger={
+                    <Button variant="outline" className="gap-2 w-full">
+                      <ArrowRightLeft className="h-4 w-4" />
+                      Mover para outro Pipeline
+                    </Button>
+                  }
+                  onSuccess={() => setOpen(false)}
+                />
+              </div>
+            )}
 
             <div className="flex justify-end gap-3">
               <Button
