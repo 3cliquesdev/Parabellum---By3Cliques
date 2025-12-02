@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Pencil, AlertCircle, CheckCircle, AlertTriangle, Skull, MessageSquare, Phone, FileText } from "lucide-react";
+import { Pencil, AlertCircle, CheckCircle, AlertTriangle, Skull, MessageSquare, Phone, FileText, ArrowRightLeft } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import DealDialog from "./DealDialog";
 import ContactSheet from "./ContactSheet";
+import MoveToPipelineDialog from "./deals/MoveToPipelineDialog";
 import { useNextActivity } from "@/hooks/useNextActivity";
 import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { cn } from "@/lib/utils";
@@ -281,6 +282,30 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
+                  {/* Move to Pipeline Button */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div onPointerDown={(e) => e.stopPropagation()}>
+                          <MoveToPipelineDialog
+                            deal={deal}
+                            trigger={
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <ArrowRightLeft className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>Mover para outro Pipeline</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
                   {/* Create Quote Button */}
                   <TooltipProvider>
                     <Tooltip>

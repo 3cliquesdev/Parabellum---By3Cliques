@@ -3119,6 +3119,7 @@ export type Database = {
       }
       stages: {
         Row: {
+          auto_move_config: Json | null
           created_at: string
           id: string
           name: string
@@ -3127,6 +3128,7 @@ export type Database = {
           probability: number | null
         }
         Insert: {
+          auto_move_config?: Json | null
           created_at?: string
           id?: string
           name: string
@@ -3135,6 +3137,7 @@ export type Database = {
           probability?: number | null
         }
         Update: {
+          auto_move_config?: Json | null
           created_at?: string
           id?: string
           name?: string
