@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign } from "lucide-react";
+import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
@@ -26,6 +26,11 @@ import DealDialog from "@/components/DealDialog";
 import { SafeHTML } from "@/components/SafeHTML";
 import { MessageStatusIndicator } from "@/components/MessageStatusIndicator";
 import { AIDebugTooltip } from "@/components/AIDebugTooltip";
+import { ChannelIcon } from "@/components/ChannelIcon";
+import { ChatComposer } from "@/components/ChatComposer";
+import { InternalNoteMessage } from "@/components/InternalNoteMessage";
+import { useCustomerTags } from "@/hooks/useCustomerTags";
+import { useMarkAsRead } from "@/hooks/useUnreadCount";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { Tables } from "@/integrations/supabase/types";
@@ -67,17 +72,30 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const takeControl = useTakeControl();
   const returnToAutopilot = useReturnToAutopilot();
   
+  // FASE 6: Tags do contato
+  const { data: customerTags = [] } = useCustomerTags(conversation?.contacts?.id || null);
+  
+  // FASE 4: Marcar como lido ao selecionar conversa
+  const { markAsRead } = useMarkAsRead();
+  
   // Ativa Autopilot trigger para responder automaticamente
   useAutopilotTrigger(conversation?.id || null);
 
   const contact = conversation?.contacts;
+  
+  // Marcar mensagens como lidas quando a conversa é selecionada
+  useEffect(() => {
+    if (conversation?.id) {
+      markAsRead(conversation.id);
+    }
+  }, [conversation?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // FASE 5 & 7: handleSendMessage com suporte a notas internas
+  const handleSendMessage = async (isInternal: boolean = false) => {
     if (!message.trim() || !conversation) return;
 
     if (isEmailMode) {
@@ -96,6 +114,20 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
     } else {
       const isWhatsApp = conversation.channel === 'whatsapp';
       const messageContent = message.trim();
+      
+      // FASE 7: Se é nota interna, salvar apenas no banco (não enviar para cliente)
+      if (isInternal) {
+        await sendMessage.mutateAsync({
+          conversation_id: conversation.id,
+          content: messageContent,
+          sender_type: "user",
+          sender_id: user?.id || null,
+          status: 'sent',
+          is_internal: true,
+        });
+        setMessage("");
+        return;
+      }
       
       // CRITICAL: Send to WhatsApp API FIRST, only save to DB if successful
       if (isWhatsApp && conversation.whatsapp_instance_id) {
@@ -230,30 +262,62 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
         <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-slate-50/50 dark:bg-background">
           <div className="flex-none border-b border-slate-200 dark:border-zinc-800 px-4 py-3 !bg-white dark:!bg-zinc-900/95 backdrop-blur flex items-center gap-3 justify-between">
             <div className="flex items-center gap-3">
-              <Avatar className="w-10 h-10 shrink-0">
-                {contact?.avatar_url ? (
-                  <AvatarImage src={contact.avatar_url} alt={`${contact.first_name} ${contact.last_name}`} />
-                ) : null}
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-semibold">
-                  {contact?.first_name?.[0] || ''}{contact?.last_name?.[0] || ''}
-                </AvatarFallback>
-              </Avatar>
+              {/* Avatar com ícone de canal */}
+              <div className="relative shrink-0">
+                <Avatar className="w-10 h-10">
+                  {contact?.avatar_url ? (
+                    <AvatarImage src={contact.avatar_url} alt={`${contact.first_name} ${contact.last_name}`} />
+                  ) : null}
+                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-semibold">
+                    {contact?.first_name?.[0] || ''}{contact?.last_name?.[0] || ''}
+                  </AvatarFallback>
+                </Avatar>
+                {/* FASE 2: Ícone de canal colorido */}
+                <div className="absolute -bottom-0.5 -right-0.5">
+                  <ChannelIcon channel={conversation.channel} size="sm" />
+                </div>
+              </div>
               <div>
-                <p className="font-medium text-slate-900 dark:text-zinc-100">
-                  {contact?.first_name} {contact?.last_name}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-slate-900 dark:text-zinc-100">
+                    {contact?.first_name} {contact?.last_name}
+                  </p>
+                  {/* FASE 6: Badge de Ticket vinculado */}
+                  {conversation.related_ticket_id && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 gap-1">
+                      <Ticket className="h-3 w-3" />
+                      #{conversation.related_ticket_id.slice(0, 8)}
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-xs text-slate-500 dark:text-zinc-400">
                   {contact?.email || contact?.phone}
                 </p>
+                {/* FASE 6: Tags do contato */}
+                {customerTags.length > 0 && (
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    {customerTags.slice(0, 3).map((ct: any) => (
+                      <Badge 
+                        key={ct.id} 
+                        variant="outline" 
+                        className="text-[10px] px-1.5 py-0 h-4"
+                        style={{
+                          borderColor: ct.tags?.color || undefined,
+                          color: ct.tags?.color || undefined,
+                          backgroundColor: ct.tags?.color ? `${ct.tags.color}15` : undefined,
+                        }}
+                      >
+                        {ct.tags?.name}
+                      </Badge>
+                    ))}
+                    {customerTags.length > 3 && (
+                      <span className="text-[10px] text-muted-foreground">+{customerTags.length - 3}</span>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center gap-2 mt-1">
-                  {/* FASE 5: Badge WhatsApp */}
-                  {conversation.channel === 'whatsapp' && (
-                    <Badge variant="success" className="text-xs">
-                      📱 WhatsApp
-                    </Badge>
-                  )}
                   {conversation.assigned_user && (
-                    <Badge variant="secondary" className="text-xs bg-slate-200 text-slate-700 dark:bg-zinc-700 dark:text-zinc-200">
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
                       {conversation.assigned_user.full_name}
                     </Badge>
                   )}
@@ -261,14 +325,14 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                     <>
                       <Badge 
                         variant={isAutopilot ? "default" : isCopilot ? "info" : "secondary"}
-                        className="text-xs"
+                        className="text-[10px] px-1.5 py-0 h-5"
                       >
                         {isAutopilot && "🤖 Autopilot"}
                         {isCopilot && "🧠 Copilot"}
                         {isDisabled && "👤 Manual"}
                       </Badge>
                       {activePersona && isAutopilot && (
-                        <Badge variant="secondary" className="text-xs bg-slate-200 text-slate-700 dark:bg-zinc-700 dark:text-zinc-200">
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
                           {activePersona.name}
                         </Badge>
                   )}
@@ -276,7 +340,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
               )}
               {/* Badge de Sessão Não Verificada */}
               {!((conversation.customer_metadata as any)?.session_verified ?? true) && (
-                <Badge variant="warning" className="text-xs">
+                <Badge variant="warning" className="text-[10px] px-1.5 py-0 h-5">
                   <AlertCircle className="h-3 w-3 mr-1" />
                   Não verificado
                 </Badge>
@@ -404,6 +468,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                       const isCustomer = message.sender_type === 'contact';
                       const isSystem = message.sender_type === 'system';
                       const isAI = message.is_ai_generated;
+                      const isInternalNote = message.is_internal;
                       
                       // Parse AI debug metadata
                       let usedArticles: any[] = [];
@@ -414,6 +479,18 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                         }
                       } catch (e) {
                         // Ignore parse errors
+                      }
+
+                      // FASE 8: Renderizar notas internas com estilo especial
+                      if (isInternalNote) {
+                        return (
+                          <InternalNoteMessage
+                            key={message.id}
+                            content={message.content}
+                            createdAt={message.created_at}
+                            senderName={message.sender?.full_name}
+                          />
+                        );
                       }
 
                       if (isSystem) {
@@ -560,7 +637,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                       />
                     </div>
                     <div className="flex justify-end items-center gap-2">
-                      <Button onClick={handleSendMessage} disabled={isSending || !message.trim() || !emailSubject.trim()}>
+                      <Button onClick={() => handleSendMessage(false)} disabled={isSending || !message.trim() || !emailSubject.trim()}>
                         <Mail className="h-4 w-4 mr-2" />
                         Enviar E-mail
                       </Button>
@@ -568,37 +645,14 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   </div>
                 </div>
               ) : (
-                <div className="flex-none bg-white/95 dark:bg-zinc-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-zinc-900/60 border-t border-slate-200 dark:border-zinc-800 p-4">
-                  <div className="max-w-3xl mx-auto flex gap-3 items-center">
-                    <SlashCommandMenu value={message} onChange={setMessage}>
-                      <Input
-                        placeholder={
-                          conversation.status === "closed"
-                            ? "Conversa encerrada - não é possível enviar mensagens"
-                            : "Digite sua mensagem ou / para macros..."
-                        }
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendMessage();
-                          }
-                        }}
-                        disabled={isSending || conversation.status === "closed"}
-                        className="flex-1 rounded-full bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 px-5 py-3 h-12"
-                      />
-                    </SlashCommandMenu>
-                    <Button 
-                      onClick={handleSendMessage} 
-                      disabled={isSending || !message.trim() || conversation.status === "closed"}
-                      size="icon"
-                      className="rounded-full h-12 w-12 shrink-0 shadow-md"
-                    >
-                      <Send className="h-5 w-5" />
-                    </Button>
-                  </div>
-                </div>
+                <ChatComposer
+                  message={message}
+                  setMessage={setMessage}
+                  onSendMessage={handleSendMessage}
+                  isSending={isSending}
+                  isDisabled={conversation.status === "closed"}
+                  placeholder="Digite sua mensagem ou / para macros..."
+                />
               )}
             </>
           )}

@@ -114,16 +114,25 @@ export function useMessages(conversationId: string | null) {
   return query;
 }
 
+// FASE 7: Tipo estendido para suportar is_internal
+type SendMessageParams = MessageInsert & { 
+  status?: 'sending' | 'sent' | 'failed'; 
+  delivery_error?: string | null;
+  is_internal?: boolean;
+};
+
 export function useSendMessage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (message: MessageInsert & { status?: 'sending' | 'sent' | 'failed'; delivery_error?: string | null }) => {
+    mutationFn: async (message: SendMessageParams) => {
       // ✅ FASE 2: Garantir canal para mensagens Web Chat
+      // ✅ FASE 7: Suporte a is_internal
       const messageWithChannel = {
         ...message,
         channel: message.channel || 'web_chat',
+        is_internal: message.is_internal || false,
       };
 
       const { data, error } = await supabase
@@ -134,11 +143,13 @@ export function useSendMessage() {
 
       if (error) throw error;
 
-      // Update conversation's last_message_at
-      await supabase
-        .from("conversations")
-        .update({ last_message_at: new Date().toISOString() })
-        .eq("id", message.conversation_id);
+      // Update conversation's last_message_at (apenas se não for nota interna)
+      if (!message.is_internal) {
+        await supabase
+          .from("conversations")
+          .update({ last_message_at: new Date().toISOString() })
+          .eq("id", message.conversation_id);
+      }
 
       return data;
     },

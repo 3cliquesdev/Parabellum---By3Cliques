@@ -2058,6 +2058,7 @@ export type Database = {
           delivery_error: string | null
           id: string
           is_ai_generated: boolean | null
+          is_internal: boolean | null
           is_read: boolean | null
           message_type: string | null
           sender_id: string | null
@@ -2074,6 +2075,7 @@ export type Database = {
           delivery_error?: string | null
           id?: string
           is_ai_generated?: boolean | null
+          is_internal?: boolean | null
           is_read?: boolean | null
           message_type?: string | null
           sender_id?: string | null
@@ -2090,6 +2092,7 @@ export type Database = {
           delivery_error?: string | null
           id?: string
           is_ai_generated?: boolean | null
+          is_internal?: boolean | null
           is_read?: boolean | null
           message_type?: string | null
           sender_id?: string | null
