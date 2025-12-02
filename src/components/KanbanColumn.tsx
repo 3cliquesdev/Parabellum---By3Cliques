@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, ChevronDown, ChevronUp } from "lucide-react";
 import KanbanCard from "./KanbanCard";
 import StageDialog from "./StageDialog";
-import { useUserRole } from "@/hooks/useUserRole";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Deal = Tables<"deals"> & {
@@ -21,7 +21,7 @@ interface KanbanColumnProps {
 
 export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
   const [showAll, setShowAll] = useState(false);
-  const LIMIT = 10;
+  const LIMIT = 5;
   
   const visibleDeals = showAll ? deals : deals.slice(0, LIMIT);
   const hasMore = deals.length > LIMIT;
@@ -34,8 +34,8 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
     },
   });
 
-  const { role } = useUserRole();
-  const isAdmin = role === "admin";
+  const { hasPermission } = useRolePermissions();
+  const canManageStages = hasPermission('deals.manage_stages');
 
   // Calculate financial metrics
   const totalValue = deals.reduce((sum, deal) => sum + (deal.value || 0), 0);
@@ -59,7 +59,7 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
             <span 
               className="w-2 h-2 rounded-full flex-shrink-0 bg-primary" 
             />
-            {isAdmin ? (
+          {canManageStages ? (
               <StageDialog
                 trigger={
                   <button className="text-sm font-semibold text-foreground hover:text-primary hover:underline cursor-pointer transition-colors">
@@ -72,7 +72,7 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
             ) : (
               <h3 className="text-sm font-semibold text-foreground">{stage.name}</h3>
             )}
-            {isAdmin && (
+            {canManageStages && (
               <StageDialog
                 trigger={
                   <Button variant="ghost" size="icon" className="h-6 w-6">
