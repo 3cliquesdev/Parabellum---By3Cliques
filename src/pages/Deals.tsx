@@ -10,6 +10,7 @@ import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useSalesReps } from "@/hooks/useSalesReps";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useRottenDeals } from "@/hooks/useRottenDeals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -43,14 +44,17 @@ export default function Deals() {
   const { data: deals, isLoading: dealsLoading } = useDeals(selectedPipeline);
   const { data: salesReps } = useSalesReps();
   const { role } = useUserRole();
+  const { hasPermission } = useRolePermissions();
   const { data: rottenDeals } = useRottenDeals();
   const updateDealStage = useUpdateDealStage();
   const updateDeal = useUpdateDeal();
   const { toast } = useToast();
   
-  const isManagerOrAdmin = role && (role === "admin" || role === "manager");
-  const isAdmin = role === "admin";
-  const canManagePipelines = role && ['admin', 'manager', 'general_manager'].includes(role);
+  // Dynamic permission checks
+  const canViewAllDeals = hasPermission('deals.view_all');
+  const canFilterByRep = hasPermission('deals.filter_by_rep');
+  const canManagePipelines = hasPermission('deals.manage_pipelines');
+  const canViewPendingQueue = hasPermission('deals.view_pending_queue');
 
   // Selecionar pipeline default ao carregar
   useEffect(() => {
@@ -83,13 +87,13 @@ export default function Deals() {
         break;
     }
     
-    // Filtrar por vendedor (apenas para admin/manager)
-    if (isManagerOrAdmin && selectedSalesRep !== "all") {
+    // Filtrar por vendedor (apenas quem tem permissão)
+    if (canFilterByRep && selectedSalesRep !== "all") {
       filtered = filtered.filter(d => d.assigned_to === selectedSalesRep);
     }
     
     return filtered;
-  }, [deals, filter, selectedSalesRep, isManagerOrAdmin, rottenDeals]);
+  }, [deals, filter, selectedSalesRep, canFilterByRep, rottenDeals]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -258,8 +262,8 @@ export default function Deals() {
           </div>
         </div>
 
-        {/* Fila de Deals Pendentes (apenas para gerentes) */}
-        {isManagerOrAdmin && (
+        {/* Fila de Deals Pendentes (apenas para quem tem permissão) */}
+        {canViewPendingQueue && (
           <div className="mb-6">
             <PendingDealsQueue />
           </div>
@@ -358,7 +362,7 @@ export default function Deals() {
           )}
 
           {/* Sales Rep Filter */}
-          {isManagerOrAdmin && salesReps && salesReps.length > 0 && (
+          {canFilterByRep && salesReps && salesReps.length > 0 && (
             <div className="flex items-center gap-3">
               <label className="text-sm font-medium text-foreground">
                 Filtrar por Vendedor:
