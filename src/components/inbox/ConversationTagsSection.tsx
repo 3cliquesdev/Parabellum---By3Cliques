@@ -52,13 +52,13 @@ export function ConversationTagsSection({ conversationId }: ConversationTagsSect
       
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground">
+          <Button variant="outline" size="sm" className="h-6 px-2 text-xs text-foreground border-border">
             <Tag className="h-3 w-3 mr-1" />
             Tag
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-56 p-2" align="start">
-          <div className="text-xs font-medium text-muted-foreground mb-2">Tags de Conversa</div>
+        <PopoverContent className="w-56 p-2 bg-popover border border-border z-50" align="start">
+          <div className="text-xs font-medium text-foreground mb-2">Tags de Conversa</div>
           <div className="space-y-1 max-h-48 overflow-y-auto">
             {allTags.length === 0 ? (
               <p className="text-xs text-muted-foreground py-2 text-center">
