@@ -43,7 +43,7 @@ export function useSalesReps() {
       // Buscar profiles correspondentes
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, job_title, avatar_url")
+        .select("id, full_name, job_title, avatar_url, availability_status")
         .in("id", userIds)
         .order("full_name");
 
