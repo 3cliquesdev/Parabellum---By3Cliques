@@ -233,48 +233,59 @@ export default function Inbox() {
           </TabsList>
         </Tabs>
 
-        {/* Department & Team Filters */}
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            size="sm"
-            variant={!departmentFilter && !teamFilter ? "default" : "outline"}
-            onClick={() => {
-              handleDepartmentFilter(null);
-              handleTeamFilter(null);
-            }}
-          >
-            🏢 Todos
-          </Button>
-          {activeDepartments.map((dept) => (
-            <Button
-              key={dept.id}
-              size="sm"
-              variant={departmentFilter === dept.id ? "default" : "outline"}
-              onClick={() => handleDepartmentFilter(dept.id)}
-              style={{
-                borderColor: departmentFilter === dept.id ? dept.color || undefined : undefined,
-              }}
-            >
-              {dept.name}
-            </Button>
-          ))}
-          {teams && teams.length > 0 && (
-            <>
-              <div className="w-px bg-border mx-1" />
-              {teams.slice(0, 3).map((team) => (
+        {/* Department & Team Filters - Separated Sections */}
+        <div className="flex gap-4 flex-wrap items-start">
+          {/* Departamentos */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Departamentos</span>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant={!departmentFilter && !teamFilter ? "default" : "outline"}
+                onClick={() => {
+                  handleDepartmentFilter(null);
+                  handleTeamFilter(null);
+                }}
+              >
+                Todos
+              </Button>
+              {activeDepartments.map((dept) => (
                 <Button
-                  key={team.id}
+                  key={dept.id}
                   size="sm"
-                  variant={teamFilter === team.id ? "default" : "outline"}
-                  onClick={() => handleTeamFilter(team.id)}
+                  variant={departmentFilter === dept.id ? "default" : "outline"}
+                  onClick={() => handleDepartmentFilter(dept.id)}
                   style={{
-                    borderColor: teamFilter === team.id ? team.color || undefined : undefined,
+                    borderColor: departmentFilter === dept.id ? dept.color || undefined : undefined,
                   }}
                 >
-                  👥 {team.name}
+                  {dept.name}
                 </Button>
               ))}
-            </>
+            </div>
+          </div>
+          
+          {/* Times - Seção separada com estilo diferenciado */}
+          {teams && teams.length > 0 && (
+            <div className="flex flex-col gap-1.5 border-l border-border pl-4">
+              <span className="text-xs font-medium text-muted-foreground">Times</span>
+              <div className="flex gap-2 flex-wrap">
+                {teams.map((team) => (
+                  <Button
+                    key={team.id}
+                    size="sm"
+                    variant={teamFilter === team.id ? "default" : "outline"}
+                    onClick={() => handleTeamFilter(team.id)}
+                    className={teamFilter !== team.id ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40" : ""}
+                    style={{
+                      borderColor: teamFilter === team.id ? team.color || undefined : undefined,
+                    }}
+                  >
+                    👥 {team.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>

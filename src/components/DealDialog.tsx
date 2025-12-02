@@ -71,13 +71,25 @@ type DealFormData = z.infer<typeof dealSchema>;
 
 interface DealDialogProps {
   deal?: Tables<"deals">;
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
   prefilledContactId?: string;
 }
 
-export default function DealDialog({ deal, trigger, onOpenChange, prefilledContactId }: DealDialogProps) {
-  const [open, setOpen] = useState(false);
+export default function DealDialog({ deal, trigger, open: externalOpen, onOpenChange, prefilledContactId }: DealDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  // Controlled vs Uncontrolled mode
+  const isControlled = externalOpen !== undefined;
+  const open = isControlled ? externalOpen : internalOpen;
+  
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!isControlled) {
+      setInternalOpen(newOpen);
+    }
+    onOpenChange?.(newOpen);
+  };
   const createDeal = useCreateDeal();
   const updateDeal = useUpdateDeal();
   const { data: contacts } = useContacts();
@@ -187,14 +199,13 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
       await createDeal.mutateAsync(payload);
     }
 
-    setOpen(false);
+    handleOpenChange(false);
     form.reset();
-    onOpenChange?.(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
@@ -601,7 +612,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
                       Mover para outro Pipeline
                     </Button>
                   }
-                  onSuccess={() => setOpen(false)}
+                  onSuccess={() => handleOpenChange(false)}
                 />
               </div>
             )}
@@ -610,7 +621,7 @@ export default function DealDialog({ deal, trigger, onOpenChange, prefilledConta
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setOpen(false)}
+                onClick={() => handleOpenChange(false)}
               >
                 Cancelar
               </Button>

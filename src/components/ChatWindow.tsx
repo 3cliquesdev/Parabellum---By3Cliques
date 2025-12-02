@@ -248,13 +248,11 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
             conversation={conversation}
             userId={user?.id || ""}
           />
-          {createDealDialogOpen && (
-            <DealDialog
-              prefilledContactId={conversation.contacts?.id}
-              trigger={<></>}
-              onOpenChange={(open) => setCreateDealDialogOpen(open)}
-            />
-          )}
+          <DealDialog
+            open={createDealDialogOpen}
+            onOpenChange={setCreateDealDialogOpen}
+            prefilledContactId={conversation.contacts?.id}
+          />
         </>
       )}
       
