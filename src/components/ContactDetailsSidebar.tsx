@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, Phone, Building2, Plus, FileText, Clock, AlertCircle, TrendingUp, Ticket } from "lucide-react";
+import ContactTagsSection from "./inbox/ContactTagsSection";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useContactTickets } from "@/hooks/useContactTickets";
@@ -187,6 +188,11 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
                 </div>
               </>
             )}
+
+            <Separator />
+            
+            {/* Tags Section */}
+            <ContactTagsSection contactId={contact.id} />
 
             <Separator />
 
