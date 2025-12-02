@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, ChevronDown, ChevronUp } from "lucide-react";
 import KanbanCard from "./KanbanCard";
 import StageDialog from "./StageDialog";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -19,6 +20,13 @@ interface KanbanColumnProps {
 }
 
 export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
+  const [showAll, setShowAll] = useState(false);
+  const LIMIT = 10;
+  
+  const visibleDeals = showAll ? deals : deals.slice(0, LIMIT);
+  const hasMore = deals.length > LIMIT;
+  const remaining = deals.length - LIMIT;
+
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
     data: {
@@ -103,13 +111,35 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
             isOver && "bg-primary/5 ring-2 ring-primary"
           )}
         >
-          {deals.map((deal) => (
+          {visibleDeals.map((deal) => (
             <KanbanCard key={deal.id} deal={deal} />
           ))}
           {deals.length === 0 && (
             <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
               Nenhum negócio
             </div>
+          )}
+
+          {/* Ver Mais / Ver Menos Button */}
+          {hasMore && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="w-full mt-2"
+              onClick={() => setShowAll(!showAll)}
+            >
+              {showAll ? (
+                <>
+                  <ChevronUp className="h-4 w-4 mr-1" />
+                  Mostrar menos
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4 mr-1" />
+                  Ver mais ({remaining})
+                </>
+              )}
+            </Button>
           )}
         </div>
       </div>

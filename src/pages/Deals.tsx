@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import confetti from "canvas-confetti";
 import KanbanColumn from "@/components/KanbanColumn";
+import KanbanStatusColumn from "@/components/KanbanStatusColumn";
 import KanbanCard from "@/components/KanbanCard";
 import DealDialog from "@/components/DealDialog";
 import PipelineDialog from "@/components/PipelineDialog";
@@ -389,10 +390,27 @@ export default function Deals() {
         <div className="overflow-x-auto pb-4">
           <ScrollArea className="w-full">
             <div className="flex gap-4 min-w-max">
+              {/* Regular stage columns - only show open deals */}
               {stages.map((stage) => {
-                const stageDeals = filteredDeals?.filter((deal) => deal.stage_id === stage.id) || [];
+                const stageDeals = filteredDeals?.filter(
+                  (deal) => deal.stage_id === stage.id && deal.status === "open"
+                ) || [];
                 return <KanbanColumn key={stage.id} stage={stage} deals={stageDeals as Deal[]} />;
               })}
+
+              {/* Virtual Won column */}
+              <KanbanStatusColumn 
+                status="won" 
+                title="✅ Ganho" 
+                deals={(filteredDeals?.filter(d => d.status === "won") || []) as Deal[]}
+              />
+
+              {/* Virtual Lost column */}
+              <KanbanStatusColumn 
+                status="lost" 
+                title="❌ Perdido" 
+                deals={(filteredDeals?.filter(d => d.status === "lost") || []) as Deal[]}
+              />
             </div>
             <ScrollBar orientation="horizontal" className="h-3 !visible" />
           </ScrollArea>
