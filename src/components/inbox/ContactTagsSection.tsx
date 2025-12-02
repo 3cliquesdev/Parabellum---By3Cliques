@@ -45,7 +45,7 @@ export default function ContactTagsSection({ contactId }: ContactTagsSectionProp
         </p>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-6 px-2">
+            <Button variant="outline" size="sm" className="h-6 px-2 text-foreground border-border">
               <Plus className="h-3 w-3 mr-1" />
               Adicionar
             </Button>
