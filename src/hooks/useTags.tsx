@@ -149,3 +149,80 @@ export function useContactTags(contactId?: string) {
     enabled: !!contactId,
   });
 }
+
+// Conversation Tags Hooks
+export function useConversationTags(conversationId?: string) {
+  return useQuery({
+    queryKey: ["conversation-tags", conversationId],
+    queryFn: async () => {
+      if (!conversationId) return [];
+      
+      const { data, error } = await supabase
+        .from("conversation_tags")
+        .select(`
+          id,
+          tag:tags(id, name, color, category)
+        `)
+        .eq("conversation_id", conversationId);
+
+      if (error) throw error;
+      return data.map(d => d.tag).filter(Boolean);
+    },
+    enabled: !!conversationId,
+  });
+}
+
+export function useAddConversationTag() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ conversationId, tagId }: { conversationId: string; tagId: string }) => {
+      const { data, error } = await supabase
+        .from("conversation_tags")
+        .insert({ conversation_id: conversationId, tag_id: tagId })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["conversation-tags", variables.conversationId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao adicionar tag",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useRemoveConversationTag() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ conversationId, tagId }: { conversationId: string; tagId: string }) => {
+      const { error } = await supabase
+        .from("conversation_tags")
+        .delete()
+        .eq("conversation_id", conversationId)
+        .eq("tag_id", tagId);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["conversation-tags", variables.conversationId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao remover tag",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}

@@ -29,6 +29,7 @@ import { AIDebugTooltip } from "@/components/AIDebugTooltip";
 import { ChannelIcon } from "@/components/ChannelIcon";
 import { ChatComposer } from "@/components/ChatComposer";
 import { InternalNoteMessage } from "@/components/InternalNoteMessage";
+import { ConversationTagsSection } from "@/components/inbox/ConversationTagsSection";
 import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { useMarkAsRead } from "@/hooks/useUnreadCount";
 import { supabase } from "@/integrations/supabase/client";
@@ -313,6 +314,10 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                     )}
                   </div>
                 )}
+                {/* Tags de Conversa */}
+                <div className="mt-1">
+                  <ConversationTagsSection conversationId={conversation.id} />
+                </div>
                 <div className="flex items-center gap-2 mt-1">
                   {conversation.assigned_user && (
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
