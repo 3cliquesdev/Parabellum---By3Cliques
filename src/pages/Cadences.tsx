@@ -16,9 +16,9 @@ export default function Cadences() {
   const { mutate: deleteCadence } = useDeleteCadence();
   const [selectedCadence, setSelectedCadence] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const { isAdmin, isManager } = useUserRole();
+  const { isAdmin, isManager, isGeneralManager } = useUserRole();
   
-  const canManage = isAdmin || isManager;
+  const canManage = isAdmin || isManager || isGeneralManager;
 
   const handleToggleActive = (cadence: any) => {
     updateCadence({

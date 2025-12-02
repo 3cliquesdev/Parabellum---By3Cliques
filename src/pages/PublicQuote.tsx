@@ -109,7 +109,7 @@ export default function PublicQuote() {
   }
 
   if (!quote) {
-    return <Navigate to="/not-found" replace />;
+    return <Navigate to="/" replace />;
   }
 
   const contact = quote.contacts as any;

@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 export default function KnowledgeImport() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isAdmin, isManager, loading: roleLoading } = useUserRole();
+  const { isAdmin, isManager, isGeneralManager, loading: roleLoading } = useUserRole();
   
   // CSV/Excel state
   const [csvData, setCsvData] = useState<any[]>([]);
@@ -217,7 +217,7 @@ export default function KnowledgeImport() {
     );
   }
 
-  if (!isAdmin && !isManager) {
+  if (!isAdmin && !isManager && !isGeneralManager) {
     return (
       <div className="container mx-auto py-8 px-4">
         <Card className="border-destructive">

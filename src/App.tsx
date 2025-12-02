@@ -149,7 +149,7 @@ const App = () => {
             <Route path="/goals" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "general_manager", "manager"]}><Layout><Goals /></Layout></ProtectedRoute>} />
             <Route path="/goals-management" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager", "support_manager"]}><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
             <Route path="/cadences" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager"]}><Layout><Cadences /></Layout></ProtectedRoute>} />
-            <Route path="/sales-tasks" element={<ProtectedRoute allowedRoles={["sales_rep"]}><Layout><SalesTasks /></Layout></ProtectedRoute>} />
+            <Route path="/sales-tasks" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager", "general_manager"]}><Layout><SalesTasks /></Layout></ProtectedRoute>} />
             <Route path="/support" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "cs_manager", "admin", "general_manager", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />
             <Route path="/knowledge" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "admin", "general_manager"]}><Layout><Knowledge /></Layout></ProtectedRoute>} />
             <Route path="/ai-studio/personas" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><AIStudio /></Layout></ProtectedRoute>} />
@@ -165,7 +165,7 @@ const App = () => {
             <Route path="/settings/knowledge-import" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><KnowledgeImport /></Layout></ProtectedRoute>} />
             <Route path="/settings/audit-logs" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><AuditLogs /></Layout></ProtectedRoute>} />
             <Route path="/settings/skills" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><SkillsSettings /></Layout></ProtectedRoute>} />
-            <Route path="/settings/whatsapp" element={<ProtectedRoute allowedRoles={["admin", "consultant"]}><WhatsAppSettings /></ProtectedRoute>} />
+            <Route path="/settings/whatsapp" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "consultant"]}><Layout><WhatsAppSettings /></Layout></ProtectedRoute>} />
             <Route path="/settings/webhooks" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><WebhooksSettings /></Layout></ProtectedRoute>} />
             <Route path="/settings/macros" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "support_agent", "support_manager", "consultant", "sales_rep"]}><Layout><Macros /></Layout></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
