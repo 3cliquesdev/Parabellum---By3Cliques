@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,10 +13,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { UserPlus, Edit, MoreVertical, Ban, CheckCircle, Archive, ArchiveRestore, Mail } from "lucide-react";
+import { UserPlus, Edit, MoreVertical, Ban, CheckCircle, Archive, ArchiveRestore, Mail, Users as UsersIcon, Shield } from "lucide-react";
 import UserDialog from "@/components/UserDialog";
 import { BlockUserDialog } from "@/components/BlockUserDialog";
 import { ArchiveUserDialog } from "@/components/ArchiveUserDialog";
+import { RolePermissionsManager } from "@/components/users/RolePermissionsManager";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useNavigate } from "react-router-dom";
 import { useUsers } from "@/hooks/useUsers";
@@ -61,6 +62,7 @@ export default function Users() {
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithRole | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'blocked' | 'archived'>('all');
+  const [mainTab, setMainTab] = useState<'users' | 'permissions'>('users');
   
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -177,161 +179,185 @@ export default function Users() {
             Gerencie os usuários do sistema e suas permissões
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Novo Usuário
-        </Button>
+        {mainTab === 'users' && (
+          <Button onClick={() => setDialogOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Novo Usuário
+          </Button>
+        )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Usuários Cadastrados</CardTitle>
-              <CardDescription>
-                Lista de todos os usuários com acesso ao sistema
-              </CardDescription>
-            </div>
-            <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-              <TabsList>
-                <TabsTrigger value="all">Todos</TabsTrigger>
-                <TabsTrigger value="active">Ativos</TabsTrigger>
-                <TabsTrigger value="blocked">Bloqueados</TabsTrigger>
-                <TabsTrigger value="archived">Arquivados</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Usuário</TableHead>
-                <TableHead>Cargo</TableHead>
-                <TableHead>Perfil de Acesso</TableHead>
-                <TableHead>Habilidades</TableHead>
-                <TableHead>Data de Criação</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers?.map((user) => (
-                <TableRow key={user.id} className={user.is_blocked || user.is_archived ? 'opacity-60' : ''}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-12 w-12 border-2 border-primary/20 transition-all hover:border-primary hover:scale-105">
-                        <AvatarImage src={user.avatar_url || undefined} />
-                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                          {user.full_name
-                            ?.split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .toUpperCase()
-                            .slice(0, 2) || "??"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{user.full_name || "Sem nome"}</span>
-                          {user.is_blocked && (
-                            <Badge variant="destructive" className="text-xs">
-                              🚫 Bloqueado
-                            </Badge>
-                          )}
-                          {user.is_archived && (
-                            <Badge variant="secondary" className="text-xs">
-                              📦 Arquivado
-                            </Badge>
-                          )}
+      {/* Main Tabs: Users vs Permissions */}
+      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'users' | 'permissions')}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="users" className="gap-2">
+            <UsersIcon className="h-4 w-4" />
+            Usuários
+          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="permissions" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Permissões
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="users">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Usuários Cadastrados</CardTitle>
+                  <CardDescription>
+                    Lista de todos os usuários com acesso ao sistema
+                  </CardDescription>
+                </div>
+                <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                  <TabsList>
+                    <TabsTrigger value="all">Todos</TabsTrigger>
+                    <TabsTrigger value="active">Ativos</TabsTrigger>
+                    <TabsTrigger value="blocked">Bloqueados</TabsTrigger>
+                    <TabsTrigger value="archived">Arquivados</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Usuário</TableHead>
+                    <TableHead>Cargo</TableHead>
+                    <TableHead>Perfil de Acesso</TableHead>
+                    <TableHead>Habilidades</TableHead>
+                    <TableHead>Data de Criação</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers?.map((user) => (
+                    <TableRow key={user.id} className={user.is_blocked || user.is_archived ? 'opacity-60' : ''}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-12 w-12 border-2 border-primary/20 transition-all hover:border-primary hover:scale-105">
+                            <AvatarImage src={user.avatar_url || undefined} />
+                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                              {user.full_name
+                                ?.split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()
+                                .slice(0, 2) || "??"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{user.full_name || "Sem nome"}</span>
+                              {user.is_blocked && (
+                                <Badge variant="destructive" className="text-xs">
+                                  🚫 Bloqueado
+                                </Badge>
+                              )}
+                              {user.is_archived && (
+                                <Badge variant="secondary" className="text-xs">
+                                  📦 Arquivado
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">{user.email}</span>
+                          </div>
                         </div>
-                        <span className="text-xs text-muted-foreground">{user.email}</span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {user.job_title || "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getRoleBadgeVariant(user.role)}>
-                      {roleLabels[user.role] || user.role}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <UserSkillsBadges userId={user.id} />
-                  </TableCell>
-                  <TableCell>
-                    {new Date(user.created_at).toLocaleDateString("pt-BR")}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem 
-                          onClick={() => handleEditClick(user)}
-                          disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
-                        >
-                          <Edit className="mr-2 h-4 w-4" /> Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleResendEmail(user)}>
-                          <Mail className="mr-2 h-4 w-4 text-blue-500" /> Reenviar Email
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {user.is_blocked ? (
-                          <DropdownMenuItem 
-                            onClick={() => handleUnblock(user)}
-                            disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
-                          >
-                            <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> Desbloquear
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem 
-                            onClick={() => handleBlock(user)} 
-                            className="text-destructive"
-                            disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
-                          >
-                            <Ban className="mr-2 h-4 w-4" /> Bloquear
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        {user.is_archived ? (
-                          <DropdownMenuItem 
-                            onClick={() => handleUnarchive(user)}
-                            disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
-                          >
-                            <ArchiveRestore className="mr-2 h-4 w-4" /> Desarquivar
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem 
-                            onClick={() => handleArchive(user)}
-                            disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
-                          >
-                            <Archive className="mr-2 h-4 w-4" /> Arquivar
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {(!filteredUsers || filteredUsers.length === 0) && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    Nenhum usuário encontrado
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {user.job_title || "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getRoleBadgeVariant(user.role)}>
+                          {roleLabels[user.role] || user.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <UserSkillsBadges userId={user.id} />
+                      </TableCell>
+                      <TableCell>
+                        {new Date(user.created_at).toLocaleDateString("pt-BR")}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              onClick={() => handleEditClick(user)}
+                              disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                            >
+                              <Edit className="mr-2 h-4 w-4" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleResendEmail(user)}>
+                              <Mail className="mr-2 h-4 w-4 text-blue-500" /> Reenviar Email
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {user.is_blocked ? (
+                              <DropdownMenuItem 
+                                onClick={() => handleUnblock(user)}
+                                disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                              >
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> Desbloquear
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem 
+                                onClick={() => handleBlock(user)} 
+                                className="text-destructive"
+                                disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                              >
+                                <Ban className="mr-2 h-4 w-4" /> Bloquear
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            {user.is_archived ? (
+                              <DropdownMenuItem 
+                                onClick={() => handleUnarchive(user)}
+                                disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                              >
+                                <ArchiveRestore className="mr-2 h-4 w-4" /> Desarquivar
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem 
+                                onClick={() => handleArchive(user)}
+                                disabled={user.role === 'admin' && isGeneralManager && !isAdmin}
+                              >
+                                <Archive className="mr-2 h-4 w-4" /> Arquivar
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {(!filteredUsers || filteredUsers.length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                        Nenhum usuário encontrado
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="permissions">
+          <RolePermissionsManager />
+        </TabsContent>
+      </Tabs>
 
       <UserDialog 
         open={dialogOpen} 

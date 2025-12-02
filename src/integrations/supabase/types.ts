@@ -2887,6 +2887,39 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          created_at: string | null
+          enabled: boolean | null
+          id: string
+          permission_category: string
+          permission_key: string
+          permission_label: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          enabled?: boolean | null
+          id?: string
+          permission_category?: string
+          permission_key: string
+          permission_label: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          enabled?: boolean | null
+          id?: string
+          permission_category?: string
+          permission_key?: string
+          permission_label?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       sales_goals: {
         Row: {
           assigned_to: string | null

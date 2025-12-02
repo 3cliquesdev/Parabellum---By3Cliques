@@ -9,7 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useKnowledgeArticles } from "@/hooks/useKnowledgeArticles";
 import { useDeleteKnowledgeArticle } from "@/hooks/useDeleteKnowledgeArticle";
 import { useGenerateBatchEmbeddings } from "@/hooks/useGenerateBatchEmbeddings";
-import { useUserRole } from "@/hooks/useUserRole";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useKnowledgeStats } from "@/hooks/useKnowledgeStats";
 import { KnowledgeBrainStatus } from "@/components/KnowledgeBrainStatus";
 import KnowledgeArticleDialog from "@/components/KnowledgeArticleDialog";
@@ -37,10 +37,11 @@ export default function Knowledge() {
   const { data: articles = [], isLoading } = useKnowledgeArticles({ searchQuery, category });
   const deleteArticle = useDeleteKnowledgeArticle();
   const generateEmbeddings = useGenerateBatchEmbeddings();
-  const { isAdmin, isManager } = useUserRole();
+  const { hasPermission } = useRolePermissions();
   const { data: stats } = useKnowledgeStats();
 
-  const canManageArticles = isAdmin || isManager;
+  // Dynamic permission check
+  const canManageArticles = hasPermission('knowledge.manage_articles');
 
   // Extract unique categories
   const categories = ["all", ...Array.from(new Set(articles.map(a => a.category).filter(Boolean)))];

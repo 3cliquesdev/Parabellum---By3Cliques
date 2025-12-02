@@ -1,4 +1,5 @@
 import { useUserRole } from "@/hooks/useUserRole";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +24,7 @@ import { TeamMemberProgressTable } from "@/components/TeamMemberProgressTable";
 
 export default function Goals() {
   const { role, isConsultant, loading: roleLoading } = useUserRole();
+  const { hasPermission } = useRolePermissions();
   const { user } = useAuth();
   
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
@@ -72,7 +74,7 @@ export default function Goals() {
             </div>
           </div>
 
-          {role === "admin" && <GoalDialog />}
+          {hasPermission('deals.set_goals') && <GoalDialog />}
         </div>
 
         {/* Period Filter */}
