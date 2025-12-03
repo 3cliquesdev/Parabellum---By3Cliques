@@ -57,6 +57,10 @@ const dealSchema = z.object({
   success_criteria: z.string().optional().nullable(),
   pain_points: z.string().optional().nullable(),
   churn_risk: z.enum(["low", "medium", "high"]).optional().nullable(),
+  // Campos de Lead (quando não há contact_id)
+  lead_email: z.string().email("Email inválido").optional().nullable(),
+  lead_phone: z.string().optional().nullable(),
+  lead_source: z.enum(["manual", "webchat", "whatsapp", "indicacao", "form"]).optional().nullable(),
 }).refine((data) => {
   if (data.status === "lost" && (!data.lost_reason || data.lost_reason.trim() === "")) {
     return false;
@@ -125,8 +129,13 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
       success_criteria: (deal as any)?.success_criteria || "",
       pain_points: (deal as any)?.pain_points || "",
       churn_risk: (deal as any)?.churn_risk || "",
+      lead_email: (deal as any)?.lead_email || "",
+      lead_phone: (deal as any)?.lead_phone || "",
+      lead_source: (deal as any)?.lead_source || "",
     },
   });
+
+  const watchContactId = form.watch("contact_id");
 
   const watchStatus = form.watch("status");
   const watchPipelineId = form.watch("pipeline_id");
@@ -187,6 +196,10 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
       success_criteria: data.success_criteria || null,
       pain_points: data.pain_points || null,
       churn_risk: data.churn_risk || null,
+      // Lead fields (quando não há contact_id)
+      lead_email: !data.contact_id ? (data.lead_email || null) : null,
+      lead_phone: !data.contact_id ? (data.lead_phone || null) : null,
+      lead_source: !data.contact_id ? (data.lead_source || null) : null,
     };
 
     console.log("[DealDialog] Payload to submit:", payload);
@@ -303,13 +316,19 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Contato (opcional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || undefined}>
+                  <Select 
+                    onValueChange={(value) => {
+                      field.onChange(value === "none" ? "" : value);
+                    }} 
+                    value={field.value || "none"}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione um contato" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="none">Nenhum (criar como Lead)</SelectItem>
                       {contacts?.map((contact) => (
                         <SelectItem key={contact.id} value={contact.id}>
                           {contact.first_name} {contact.last_name}
@@ -321,6 +340,76 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
                 </FormItem>
               )}
             />
+
+            {/* Lead Fields - Aparecem quando não há contato selecionado */}
+            {!watchContactId && (
+              <div className="space-y-4 p-4 rounded-lg border border-dashed border-primary/30 bg-primary/5">
+                <p className="text-sm font-medium text-primary">📝 Dados do Lead</p>
+                
+                <FormField
+                  control={form.control}
+                  name="lead_email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email do Lead</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="email" 
+                          placeholder="email@exemplo.com" 
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="lead_phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Telefone do Lead</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="tel" 
+                          placeholder="(00) 00000-0000" 
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="lead_source"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Origem do Lead</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a origem" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="manual">Manual</SelectItem>
+                          <SelectItem value="webchat">Web Chat</SelectItem>
+                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                          <SelectItem value="indicacao">Indicação</SelectItem>
+                          <SelectItem value="form">Formulário</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
 
             <FormField
               control={form.control}

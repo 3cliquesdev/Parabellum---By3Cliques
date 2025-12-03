@@ -13,13 +13,14 @@ import { ptBR } from "date-fns/locale";
 import DealDialog from "./DealDialog";
 import ContactSheet from "./ContactSheet";
 import MoveToPipelineDialog from "./deals/MoveToPipelineDialog";
+import LeadInfoPopover from "./deals/LeadInfoPopover";
 import { useNextActivity } from "@/hooks/useNextActivity";
 import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Deal = Tables<"deals"> & {
-  contacts: { first_name: string; last_name: string; phone?: string | null } | null;
+  contacts: { first_name: string; last_name: string; phone?: string | null; email?: string | null } | null;
   organizations: { name: string } | null;
   assigned_user: { id: string; full_name: string; avatar_url: string | null } | null;
 };
@@ -235,8 +236,8 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
               </p>
             )}
 
-            {/* Contact Info - Clickable */}
-            {deal.contacts && (
+            {/* Contact/Lead Info */}
+            {deal.contacts ? (
               <button
                 type="button"
                 onClick={(e) => {
@@ -248,7 +249,11 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
               >
                 {deal.contacts.first_name} {deal.contacts.last_name}
               </button>
-            )}
+            ) : (deal as any).lead_email ? (
+              <p className="text-sm text-muted-foreground mb-1 truncate">
+                {(deal as any).lead_email}
+              </p>
+            ) : null}
 
             {/* Organization */}
             {deal.organizations && (
@@ -282,6 +287,9 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
+                  {/* Lead Info Popover */}
+                  <LeadInfoPopover deal={deal} />
+                  
                   {/* Move to Pipeline Button */}
                   <TooltipProvider>
                     <Tooltip>

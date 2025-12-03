@@ -151,3 +151,39 @@
 .animate-shake {
   animation: shake 0.5s ease-in-out;
 }
+
+/* Custom Scrollbar Styles */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.3);
+  border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.3);
+  border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.5);
+}
+
+.scrollbar-thumb-primary\/30::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.3);
+}
+
+.scrollbar-track-muted\/20::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.2);
+}
+
+.hover\:scrollbar-thumb-primary\/50:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.5);
+}
