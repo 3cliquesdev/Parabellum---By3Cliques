@@ -2,23 +2,30 @@ import { useState } from "react";
 import { useTickets } from "@/hooks/useTickets";
 import { TicketsList } from "@/components/TicketsList";
 import { TicketDetails } from "@/components/TicketDetails";
+import { TicketCard } from "@/components/support/TicketCard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUsers } from "@/hooks/useUsers";
 import { useDepartments } from "@/hooks/useDepartments";
+import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
+import { PageContainer } from "@/components/ui/page-container";
 
 type FilterType = 'all' | 'mine' | 'unassigned';
+type MobileView = 'list' | 'details';
 
 export default function Support() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
+  const [mobileView, setMobileView] = useState<MobileView>('list');
   const { isSupportManager } = useUserRole();
   const { data: allUsers } = useUsers();
   const { data: departments } = useDepartments();
+  const isMobile = useIsMobileBreakpoint();
 
   const { data: allTickets = [], isLoading } = useTickets(undefined, filter, selectedAgentId || undefined);
   
@@ -32,23 +39,93 @@ export default function Support() {
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId);
   
-  // Auto-select primeiro ticket se nenhum selecionado
-  if (!selectedTicketId && tickets.length > 0) {
+  // Auto-select primeiro ticket se nenhum selecionado (desktop only)
+  if (!isMobile && !selectedTicketId && tickets.length > 0) {
     setSelectedTicketId(tickets[0].id);
   }
 
+  const handleSelectTicket = (ticketId: string) => {
+    setSelectedTicketId(ticketId);
+    if (isMobile) {
+      setMobileView('details');
+    }
+  };
+
+  const handleBackToList = () => {
+    setMobileView('list');
+  };
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
+      <PageContainer>
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </PageContainer>
     );
   }
 
+  // Mobile Layout
+  if (isMobile) {
+    // Mobile: Details View
+    if (mobileView === 'details' && selectedTicket) {
+      return (
+        <PageContainer>
+          <div className="flex-none border-b border-border px-4 py-3 bg-card flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={handleBackToList}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <h2 className="font-semibold truncate">Ticket #{selectedTicket.id.slice(0, 8)}</h2>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <TicketDetails ticket={selectedTicket} />
+          </div>
+        </PageContainer>
+      );
+    }
+
+    // Mobile: List View
+    return (
+      <PageContainer>
+        <div className="flex-none border-b border-border p-4 space-y-3 bg-card">
+          <h1 className="text-lg font-semibold text-foreground">Suporte</h1>
+
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterType)}>
+            <TabsList className="w-full">
+              <TabsTrigger value="all" className="flex-1 text-xs">Todos</TabsTrigger>
+              <TabsTrigger value="mine" className="flex-1 text-xs">Meus</TabsTrigger>
+              <TabsTrigger value="unassigned" className="flex-1 text-xs">Não Atribuídos</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto">
+          {tickets.length === 0 ? (
+            <div className="flex items-center justify-center h-full p-8">
+              <p className="text-muted-foreground text-center">Nenhum ticket encontrado</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border bg-card">
+              {tickets.map((ticket) => (
+                <TicketCard
+                  key={ticket.id}
+                  ticket={ticket}
+                  onClick={() => handleSelectTicket(ticket.id)}
+                  isSelected={ticket.id === selectedTicketId}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </PageContainer>
+    );
+  }
+
+  // Desktop Layout
   return (
-    <div className="h-screen flex flex-col">
+    <PageContainer>
       {/* Header */}
-      <div className="border-b-2 border-slate-200 dark:border-border p-4 space-y-3 bg-card">
+      <div className="flex-none border-b-2 border-slate-200 dark:border-border p-4 space-y-3 bg-card">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-white">Suporte</h1>
         </div>
@@ -103,7 +180,7 @@ export default function Support() {
           <TicketsList
             tickets={tickets}
             selectedTicketId={selectedTicketId}
-            onSelectTicket={setSelectedTicketId}
+            onSelectTicket={handleSelectTicket}
           />
         </div>
 
@@ -121,6 +198,6 @@ export default function Support() {
           )}
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }
