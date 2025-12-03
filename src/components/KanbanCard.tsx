@@ -262,12 +262,12 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
               </Badge>
             )}
 
-            {/* Bottom Row: Salesperson + Quick Actions */}
-            <div className="flex items-center justify-between pt-3 mt-3 border-t border-border">
-              {/* Assigned User */}
+            {/* Bottom Section: 2 linhas separadas */}
+            <div className="pt-3 mt-3 border-t border-border space-y-2">
+              {/* Linha 1: Vendedor */}
               {deal.assigned_user && (
                 <div className="flex items-center gap-2">
-                  <Avatar className="h-6 w-6">
+                  <Avatar className="h-5 w-5">
                     <AvatarImage 
                       src={deal.assigned_user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${deal.assigned_user.full_name}`} 
                       alt={deal.assigned_user.full_name} 
@@ -276,119 +276,112 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                       {deal.assigned_user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-xs text-muted-foreground">{deal.assigned_user.full_name}</span>
+                  <span className="text-xs text-muted-foreground truncate">{deal.assigned_user.full_name}</span>
                 </div>
               )}
 
-              {/* Quick Actions */}
+              {/* Linha 2: Quick Actions */}
               <div 
-                className="flex items-center gap-1" 
+                className="flex items-center gap-1 flex-wrap" 
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
               >
                 {/* Lead/Contact Info - 360 Badge - ALWAYS visible */}
                 <LeadInfoPopover deal={deal} />
                 
-                {/* Other actions - Visible on Hover */}
-                {isHovered && (
+                {/* Move to Pipeline Button */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div onPointerDown={(e) => e.stopPropagation()}>
+                        <MoveToPipelineDialog
+                          deal={deal}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ArrowRightLeft className="h-4 w-4" />
+                            </Button>
+                          }
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>Mover para outro Pipeline</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                {/* Create Quote Button */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/quotes/new?deal_id=${deal.id}`);
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <FileText className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Criar Proposta</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                {deal.contacts?.phone && (
                   <>
-                  
-                  {/* Move to Pipeline Button */}
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div onPointerDown={(e) => e.stopPropagation()}>
-                          <MoveToPipelineDialog
-                            deal={deal}
-                            trigger={
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <ArrowRightLeft className="h-4 w-4" />
-                              </Button>
-                            }
-                          />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>Mover para outro Pipeline</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const formattedPhone = formatWhatsAppNumber(deal.contacts?.phone || '');
+                              window.open(`https://wa.me/${formattedPhone}`, '_blank');
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>WhatsApp</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
 
-                  {/* Create Quote Button */}
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/quotes/new?deal_id=${deal.id}`);
-                          }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                        >
-                          <FileText className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Criar Proposta</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-
-                  {deal.contacts?.phone && (
-                    <>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const formattedPhone = formatWhatsAppNumber(deal.contacts?.phone || '');
-                                window.open(`https://wa.me/${formattedPhone}`, '_blank');
-                              }}
-                              onPointerDown={(e) => e.stopPropagation()}
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>WhatsApp</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Desktop: copiar para clipboard, Mobile: tel: link
-                                if (window.innerWidth > 768) {
-                                  copyPhoneToClipboard(deal.contacts?.phone || '');
-                                } else {
-                                  window.open(`tel:${deal.contacts?.phone}`, '_blank');
-                                }
-                              }}
-                              onPointerDown={(e) => e.stopPropagation()}
-                            >
-                              <Phone className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {window.innerWidth > 768 ? 'Copiar Telefone' : 'Ligar'}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </>
-                    )}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.innerWidth > 768) {
+                                copyPhoneToClipboard(deal.contacts?.phone || '');
+                              } else {
+                                window.open(`tel:${deal.contacts?.phone}`, '_blank');
+                              }
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            <Phone className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {window.innerWidth > 768 ? 'Copiar Telefone' : 'Ligar'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </>
                 )}
               </div>

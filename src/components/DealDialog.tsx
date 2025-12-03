@@ -315,27 +315,38 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
               name="contact_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Contato (opcional)</FormLabel>
-                  <Select 
-                    onValueChange={(value) => {
-                      field.onChange(value === "none" ? "" : value);
-                    }} 
-                    value={field.value || "none"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um contato" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhum (criar como Lead)</SelectItem>
-                      {contacts?.map((contact) => (
-                        <SelectItem key={contact.id} value={contact.id}>
-                          {contact.first_name} {contact.last_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>Contato</FormLabel>
+                  <div className="flex items-center gap-2">
+                    <Select 
+                      onValueChange={(value) => {
+                        field.onChange(value === "none" ? "" : value);
+                      }} 
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Selecione um contato" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhum</SelectItem>
+                        {contacts?.map((contact) => (
+                          <SelectItem key={contact.id} value={contact.id}>
+                            {contact.first_name} {contact.last_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant={!field.value ? "default" : "outline"}
+                      size="sm"
+                      className="whitespace-nowrap"
+                      onClick={() => field.onChange("")}
+                    >
+                      ➕ Criar Lead
+                    </Button>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}

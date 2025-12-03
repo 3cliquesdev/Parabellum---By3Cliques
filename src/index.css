@@ -188,33 +188,29 @@
   background: hsl(var(--primary) / 0.5);
 }
 
-/* Kanban Scroll - FORCED Visible */
-.kanban-scroll-container {
-  overflow-x: scroll !important;
-  overflow-y: hidden !important;
-  scrollbar-width: thin !important;
-  -webkit-overflow-scrolling: touch;
+/* Global scrollbar styling - visible in all browsers */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(221.2 83.2% 53.3% / 0.4) hsl(var(--muted) / 0.2);
 }
 
-.kanban-scroll-container::-webkit-scrollbar {
-  height: 16px !important;
-  display: block !important;
+*::-webkit-scrollbar {
+  height: 12px;
+  width: 12px;
+}
+
+*::-webkit-scrollbar-track {
   background: hsl(var(--muted) / 0.2);
+  border-radius: 6px;
 }
 
-.kanban-scroll-container::-webkit-scrollbar-track {
-  background: hsl(var(--muted) / 0.3);
-  border-radius: 8px;
-  margin: 0 8px;
+*::-webkit-scrollbar-thumb {
+  background: hsl(221.2 83.2% 53.3% / 0.4);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
-.kanban-scroll-container::-webkit-scrollbar-thumb {
-  background: hsl(var(--primary) / 0.5) !important;
-  border-radius: 8px;
-  border: 3px solid hsl(var(--background));
-  min-width: 60px;
-}
-
-.kanban-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--primary) / 0.7) !important;
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(221.2 83.2% 53.3% / 0.6);
 }

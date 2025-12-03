@@ -433,10 +433,17 @@ export default function Deals() {
 
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="relative">
-          {/* Scroll container with FORCED visible scrollbar */}
+          {/* Scroll container with FORCED visible scrollbar - inline styles para garantir */}
           <div 
-            className="kanban-scroll-container pb-4"
-            style={{ overflowX: 'scroll', overflowY: 'hidden', scrollbarWidth: 'auto' }}
+            className="pb-4"
+            style={{ 
+              overflowX: 'scroll', 
+              overflowY: 'hidden', 
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'hsl(221.2, 83.2%, 53.3%) transparent',
+              WebkitOverflowScrolling: 'touch',
+              minHeight: '100px'
+            }}
           >
             <div className="flex gap-2 min-w-max px-1 py-1">
               {/* Regular stage columns - only show open deals */}
