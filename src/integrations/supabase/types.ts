@@ -3815,6 +3815,18 @@ export type Database = {
           title: string
         }[]
       }
+      search_similar_articles: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          id: string
+          similarity: number
+          title: string
+        }[]
+      }
       update_article_embedding: {
         Args: { article_id: string; new_embedding: string }
         Returns: undefined
