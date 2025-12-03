@@ -148,6 +148,8 @@ Se não houver conhecimento útil, retorne: { "extracted_items": [], "confidence
           },
           { role: 'user', content: `TRANSCRIPT:\n${transcript.substring(0, 10000)}` }
         ],
+        temperature: 0.3, // Baixa temperatura para extração consistente
+        max_tokens: 2000,
       }),
     });
 
