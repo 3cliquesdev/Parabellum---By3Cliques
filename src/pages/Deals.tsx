@@ -26,6 +26,7 @@ import PipelineSalesRepsDialog from "@/components/deals/PipelineSalesRepsDialog"
 import DragDropActionBar from "@/components/DragDropActionBar";
 import LostReasonDialog from "@/components/LostReasonDialog";
 import { PendingDealsQueue } from "@/components/deals/PendingDealsQueue";
+import { KanbanScrollNavigation } from "@/components/deals/KanbanScrollNavigation";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Deal = Tables<"deals"> & {
@@ -432,47 +433,31 @@ export default function Deals() {
       </div>
 
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="relative">
-          {/* Scroll container with FORCED visible scrollbar - inline styles para garantir */}
-          <div 
-            className="pb-4"
-            style={{ 
-              overflowX: 'scroll', 
-              overflowY: 'hidden', 
-              scrollbarWidth: 'thin',
-              scrollbarColor: 'hsl(221.2, 83.2%, 53.3%) transparent',
-              WebkitOverflowScrolling: 'touch',
-              minHeight: '100px'
-            }}
-          >
-            <div className="flex gap-2 min-w-max px-1 py-1">
-              {/* Regular stage columns - only show open deals */}
-              {stages.map((stage) => {
-                const stageDeals = filteredDeals?.filter(
-                  (deal) => deal.stage_id === stage.id && deal.status === "open"
-                ) || [];
-                return <KanbanColumn key={stage.id} stage={stage} deals={stageDeals as Deal[]} />;
-              })}
+        <KanbanScrollNavigation>
+          <div className="flex gap-2 min-w-max px-12 py-1">
+            {/* Regular stage columns - only show open deals */}
+            {stages.map((stage) => {
+              const stageDeals = filteredDeals?.filter(
+                (deal) => deal.stage_id === stage.id && deal.status === "open"
+              ) || [];
+              return <KanbanColumn key={stage.id} stage={stage} deals={stageDeals as Deal[]} />;
+            })}
 
-              {/* Virtual Won column */}
-              <KanbanStatusColumn 
-                status="won" 
-                title="✅ Ganho" 
-                deals={(filteredDeals?.filter(d => d.status === "won") || []) as Deal[]}
-              />
+            {/* Virtual Won column */}
+            <KanbanStatusColumn 
+              status="won" 
+              title="✅ Ganho" 
+              deals={(filteredDeals?.filter(d => d.status === "won") || []) as Deal[]}
+            />
 
-              {/* Virtual Lost column */}
-              <KanbanStatusColumn 
-                status="lost" 
-                title="❌ Perdido" 
-                deals={(filteredDeals?.filter(d => d.status === "lost") || []) as Deal[]}
-              />
-            </div>
+            {/* Virtual Lost column */}
+            <KanbanStatusColumn 
+              status="lost" 
+              title="❌ Perdido" 
+              deals={(filteredDeals?.filter(d => d.status === "lost") || []) as Deal[]}
+            />
           </div>
-          
-          {/* Scroll hint indicator */}
-          <div className="absolute right-0 top-0 bottom-4 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none" />
-        </div>
+        </KanbanScrollNavigation>
 
         <DragOverlay>
           {activeDeal ? <KanbanCard deal={activeDeal} /> : null}
