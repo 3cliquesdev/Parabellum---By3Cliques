@@ -261,15 +261,65 @@ Deno.serve(async (req) => {
 async function executeEmailNode(supabase: any, item: QueueItem, contact: any, execution: PlaybookExecution) {
   console.log(`Executing email node: ${item.node_id}`);
   
-  const emailData = item.node_data;
+  const emailData = item.node_data || {};
+  let htmlContent = '';
+  let subject = emailData.subject || 'Mensagem da equipe';
   
-  // Call send-email edge function
+  // 1. Se tem template_id, buscar o template do banco
+  if (emailData.template_id) {
+    console.log(`Fetching email template: ${emailData.template_id}`);
+    
+    const { data: template, error: templateError } = await supabase
+      .from('email_templates')
+      .select('html_body, subject, name')
+      .eq('id', emailData.template_id)
+      .single();
+    
+    if (templateError || !template) {
+      console.error('Template not found:', templateError);
+      return { success: false, error: `Template não encontrado: ${emailData.template_id}` };
+    }
+    
+    console.log(`Template loaded: ${template.name}`);
+    
+    // Usar subject do template se não tiver no node
+    if (!emailData.subject && template.subject) {
+      subject = template.subject;
+    }
+    
+    // 2. Substituir variáveis no template
+    htmlContent = (template.html_body || '')
+      .replace(/\{\{first_name\}\}/gi, contact.first_name || 'Cliente')
+      .replace(/\{\{last_name\}\}/gi, contact.last_name || '')
+      .replace(/\{\{nome\}\}/gi, contact.first_name || 'Cliente')
+      .replace(/\{\{email\}\}/gi, contact.email || '')
+      .replace(/\{\{phone\}\}/gi, contact.phone || '')
+      .replace(/\{\{document\}\}/gi, contact.document || '')
+      .replace(/\{\{company\}\}/gi, contact.company || '');
+    
+  } else {
+    // Fallback para body ou message do node
+    htmlContent = emailData.body || emailData.message || '<p>Mensagem do seu playbook</p>';
+  }
+  
+  // Validar que temos email do contato
+  if (!contact.email) {
+    console.error('Contact has no email address');
+    return { success: false, error: 'Contato sem email cadastrado' };
+  }
+  
+  const toName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Cliente';
+  
+  console.log(`Sending email to: ${contact.email} (${toName}), subject: ${subject}`);
+  
+  // 3. Chamar send-email com todos os campos obrigatórios
   const { data, error } = await supabase.functions.invoke('send-email', {
     body: {
       to: contact.email,
-      subject: emailData.subject || 'Mensagem da equipe',
-      html: emailData.body || emailData.message || '',
-      contact_id: contact.id,
+      to_name: toName,
+      subject: subject,
+      html: htmlContent,
+      customer_id: contact.id,
     },
   });
 
