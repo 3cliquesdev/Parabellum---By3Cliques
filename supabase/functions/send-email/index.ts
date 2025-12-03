@@ -12,6 +12,7 @@ interface SendEmailRequest {
   subject: string;
   html: string;
   customer_id: string;
+  playbook_execution_id?: string;
 }
 
 serve(async (req) => {
@@ -21,9 +22,9 @@ serve(async (req) => {
   }
 
   try {
-    const { to, to_name, subject, html, customer_id }: SendEmailRequest = await req.json();
+    const { to, to_name, subject, html, customer_id, playbook_execution_id }: SendEmailRequest = await req.json();
 
-    console.log('[send-email] Request received:', { to, subject, customer_id });
+    console.log('[send-email] Request received:', { to, subject, customer_id, playbook_execution_id });
 
     // Validação
     if (!to || !subject || !html || !customer_id) {
@@ -103,7 +104,8 @@ serve(async (req) => {
         subject,
         html: emailHtml,
         tags: [
-          { name: 'customer_id', value: customer_id }
+          { name: 'customer_id', value: customer_id },
+          ...(playbook_execution_id ? [{ name: 'playbook_execution_id', value: playbook_execution_id }] : [])
         ]
       }),
     });
@@ -122,10 +124,26 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Insert tracking event
+    const { error: trackingError } = await supabase
+      .from('email_tracking_events')
+      .insert({
+        email_id: resendData.id,
+        customer_id,
+        playbook_execution_id: playbook_execution_id || null,
+        event_type: 'sent',
+        metadata: { to, subject, to_name }
+      });
+
+    if (trackingError) {
+      console.warn('[send-email] Warning: Failed to insert tracking event:', trackingError);
+    }
+
     const { error: interactionError } = await supabase
       .from('interactions')
       .insert({
         customer_id,
+        playbook_execution_id: playbook_execution_id || null,
         type: 'email_sent',
         content: `Email enviado: ${subject}`,
         channel: 'email',
@@ -141,7 +159,7 @@ serve(async (req) => {
       throw interactionError;
     }
 
-    console.log('[send-email] Interaction registered successfully');
+    console.log('[send-email] Interaction and tracking registered successfully');
 
     return new Response(
       JSON.stringify({ 

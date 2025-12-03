@@ -1787,6 +1787,51 @@ export type Database = {
           },
         ]
       }
+      email_tracking_events: {
+        Row: {
+          created_at: string | null
+          customer_id: string | null
+          email_id: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          playbook_execution_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id?: string | null
+          email_id: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          playbook_execution_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: string | null
+          email_id?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          playbook_execution_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_tracking_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_tracking_events_playbook_execution_id_fkey"
+            columns: ["playbook_execution_id"]
+            isOneToOne: false
+            referencedRelation: "playbook_executions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_verifications: {
         Row: {
           attempts: number | null

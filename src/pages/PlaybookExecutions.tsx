@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -17,10 +18,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Activity, CheckCircle, XCircle, Clock, AlertCircle, Eye, Play } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, AlertCircle, Eye, Play, BarChart3, ListChecks } from "lucide-react";
 import { usePlaybookExecutions } from "@/hooks/usePlaybookExecutions";
 import { useExecutionQueue } from "@/hooks/useExecutionQueue";
 import { useProcessPlaybookQueue } from "@/hooks/useProcessPlaybookQueue";
+import { PlaybookMetricsDashboard } from "@/components/playbooks/PlaybookMetricsDashboard";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -85,10 +87,10 @@ export default function PlaybookExecutions() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2 text-foreground">
             <Activity className="h-8 w-8" />
-            Execuções de Playbooks
+            Monitoramento de Playbooks
           </h1>
           <p className="text-muted-foreground mt-1">
-            Monitore o progresso e histórico de execuções dos playbooks
+            Dashboard de métricas e histórico de execuções
           </p>
         </div>
         <Button
@@ -101,126 +103,145 @@ export default function PlaybookExecutions() {
         </Button>
       </div>
 
-      {/* Métricas Resumidas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Execuções
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{executions?.length || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Em Execução
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {executions?.filter((e) => e.status === "running").length || 0}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Completas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {executions?.filter((e) => e.status.includes("completed")).length || 0}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Falhas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {executions?.filter((e) => e.status === "failed").length || 0}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Tabs defaultValue="dashboard" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="dashboard" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="executions" className="gap-2">
+            <ListChecks className="h-4 w-4" />
+            Execuções
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Tabela de Execuções */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Histórico de Execuções</CardTitle>
-          <CardDescription>
-            Lista completa de todas as execuções de playbooks
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-          ) : executions?.length === 0 ? (
-            <div className="text-center py-12">
-              <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground">Nenhuma execução registrada ainda</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Playbook</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Iniciado</TableHead>
-                  <TableHead>Nós Executados</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {executions?.map((execution) => (
-                  <TableRow key={execution.id}>
-                    <TableCell className="font-medium">
-                      {execution.contact?.first_name} {execution.contact?.last_name}
-                      <div className="text-xs text-muted-foreground">
-                        {execution.contact?.email}
-                      </div>
-                    </TableCell>
-                    <TableCell>{execution.playbook?.name}</TableCell>
-                    <TableCell>{getStatusBadge(execution.status)}</TableCell>
-                    <TableCell>
-                      {execution.started_at
-                        ? format(new Date(execution.started_at), "dd/MM/yyyy HH:mm", {
-                            locale: ptBR,
-                          })
-                        : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {Array.isArray(execution.nodes_executed)
-                        ? execution.nodes_executed.length
-                        : 0}{" "}
-                      nós
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedExecution(execution)}
-                        className="gap-2"
-                      >
-                        <Eye className="h-3 w-3" />
-                        Detalhes
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+        <TabsContent value="dashboard">
+          <PlaybookMetricsDashboard />
+        </TabsContent>
+
+        <TabsContent value="executions" className="space-y-6">
+          {/* Métricas Resumidas */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Execuções
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{executions?.length || 0}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Em Execução
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">
+                  {executions?.filter((e) => e.status === "running").length || 0}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Completas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {executions?.filter((e) => e.status.includes("completed")).length || 0}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Falhas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  {executions?.filter((e) => e.status === "failed").length || 0}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tabela de Execuções */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Histórico de Execuções</CardTitle>
+              <CardDescription>
+                Lista completa de todas as execuções de playbooks
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+              ) : executions?.length === 0 ? (
+                <div className="text-center py-12">
+                  <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                  <p className="text-muted-foreground">Nenhuma execução registrada ainda</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Playbook</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Iniciado</TableHead>
+                      <TableHead>Nós Executados</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {executions?.map((execution) => (
+                      <TableRow key={execution.id}>
+                        <TableCell className="font-medium">
+                          {execution.contact?.first_name} {execution.contact?.last_name}
+                          <div className="text-xs text-muted-foreground">
+                            {execution.contact?.email}
+                          </div>
+                        </TableCell>
+                        <TableCell>{execution.playbook?.name}</TableCell>
+                        <TableCell>{getStatusBadge(execution.status)}</TableCell>
+                        <TableCell>
+                          {execution.started_at
+                            ? format(new Date(execution.started_at), "dd/MM/yyyy HH:mm", {
+                                locale: ptBR,
+                              })
+                            : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {Array.isArray(execution.nodes_executed)
+                            ? execution.nodes_executed.length
+                            : 0}{" "}
+                          nós
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedExecution(execution)}
+                            className="gap-2"
+                          >
+                            <Eye className="h-3 w-3" />
+                            Detalhes
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Dialog de Detalhes */}
       <Dialog

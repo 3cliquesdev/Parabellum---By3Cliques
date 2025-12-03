@@ -320,6 +320,7 @@ async function executeEmailNode(supabase: any, item: QueueItem, contact: any, ex
       subject: subject,
       html: htmlContent,
       customer_id: contact.id,
+      playbook_execution_id: execution.id,
     },
   });
 
@@ -403,6 +404,48 @@ async function executeTaskNode(supabase: any, item: QueueItem, contact: any) {
     return { success: false, error: journeyError.message };
   }
 
+  // Determine assigned_to: contact.assigned_to → contact.consultant_id → round-robin fallback
+  let assignedTo = contact.assigned_to || contact.consultant_id;
+  
+  if (!assignedTo) {
+    console.log('No assigned_to or consultant_id, fetching available agent via round-robin...');
+    
+    // Get an available support agent or consultant
+    const { data: agents } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('id', 
+        supabase
+          .from('user_roles')
+          .select('user_id')
+          .in('role', ['consultant', 'support_agent'])
+      )
+      .eq('status', 'online')
+      .limit(1);
+    
+    if (agents && agents.length > 0) {
+      assignedTo = agents[0].id;
+      console.log('Assigned to available agent:', assignedTo);
+    } else {
+      // Fallback: get any consultant or admin
+      const { data: fallbackAgents } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('role', ['consultant', 'admin', 'manager'])
+        .limit(1);
+      
+      if (fallbackAgents && fallbackAgents.length > 0) {
+        assignedTo = fallbackAgents[0].user_id;
+        console.log('Assigned to fallback agent:', assignedTo);
+      }
+    }
+  }
+
+  if (!assignedTo) {
+    console.error('No agent available to assign task');
+    return { success: false, error: 'Nenhum agente disponível para atribuir tarefa' };
+  }
+
   // Create activity for assigned person
   const { error: activityError } = await supabase
     .from('activities')
@@ -411,7 +454,7 @@ async function executeTaskNode(supabase: any, item: QueueItem, contact: any) {
       title: taskData.label || 'Tarefa do Playbook',
       description: taskData.description || '',
       type: 'task',
-      assigned_to: contact.assigned_to || contact.consultant_id,
+      assigned_to: assignedTo,
       due_date: dueDate.toISOString(),
       completed: false,
     });

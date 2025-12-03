@@ -31,6 +31,9 @@ verify_jwt = true
 [functions.email-webhook]
 verify_jwt = false
 
+[functions.resend-webhook]
+verify_jwt = false
+
 [functions.get-users]
 verify_jwt = true
 
