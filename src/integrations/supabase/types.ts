@@ -3743,7 +3743,6 @@ export type Database = {
           title: string
         }[]
       }
-      generate_quote_number: { Args: never; Returns: string }
       generate_session_token: { Args: never; Returns: string }
       get_ai_usage_metrics: {
         Args: { p_end_date: string; p_start_date: string; p_user_id?: string }
