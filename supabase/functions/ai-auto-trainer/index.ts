@@ -401,7 +401,7 @@ serve(async (req) => {
         closed_at,
         conversation_ratings(rating)
       `)
-      .eq('status', 'resolved')
+      .eq('status', 'closed')
       .gte('closed_at', oneHourAgo)
       .limit(20); // Limitar para não sobrecarregar
 
@@ -411,7 +411,7 @@ serve(async (req) => {
 
     const eligibleConversations = (successConversations || []).filter((c: any) => {
       const rating = c.conversation_ratings?.[0]?.rating;
-      return rating >= 4 || c.status === 'resolved';
+      return rating >= 4 || c.status === 'closed';
     });
 
     console.log(`[ai-auto-trainer] Encontradas ${eligibleConversations.length} conversas elegíveis`);
@@ -502,11 +502,17 @@ serve(async (req) => {
       ai_model: aiModel,
     };
 
-    await supabase.from('audit_logs').insert({
+    const { error: auditError } = await supabase.from('audit_logs').insert({
       action: 'ai_auto_training',
       table_name: 'knowledge_articles',
       new_data: summary,
     });
+
+    if (auditError) {
+      console.error('[ai-auto-trainer] Erro salvando audit_log:', auditError);
+    } else {
+      console.log('[ai-auto-trainer] Audit log salvo com sucesso');
+    }
 
     console.log('[ai-auto-trainer] ✅ Execução concluída:', summary);
 
