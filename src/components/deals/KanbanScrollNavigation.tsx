@@ -84,11 +84,7 @@ export function KanbanScrollNavigation({ children }: KanbanScrollNavigationProps
         <div
           ref={scrollRef}
           onScroll={updateScrollState}
-          className="overflow-x-auto overflow-y-hidden pb-2 [&::-webkit-scrollbar]:hidden"
-          style={{
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}
+          className="overflow-x-auto overflow-y-hidden pb-4 kanban-scrollbar"
         >
           {children}
         </div>
