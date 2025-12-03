@@ -239,3 +239,36 @@
   scrollbar-width: auto;
   scrollbar-color: hsl(var(--primary) / 0.5) hsl(var(--muted));
 }
+
+/* App Shell - Prevent body scroll on desktop */
+@media (min-width: 1024px) {
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+
+/* Mobile-specific overrides */
+@media (max-width: 767px) {
+  .mobile-stack-nav {
+    @apply flex flex-col h-full;
+  }
+  
+  .mobile-header {
+    @apply flex-shrink-0 sticky top-0 z-10 bg-card border-b border-border;
+  }
+  
+  .mobile-content {
+    @apply flex-1 overflow-y-auto;
+  }
+}
+
+/* Utility classes for responsive layouts */
+.scroll-area {
+  @apply overflow-y-auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.no-scroll {
+  overflow: hidden !important;
+}

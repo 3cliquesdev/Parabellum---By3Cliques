@@ -12,6 +12,8 @@ import InboxFilterPopover, { type InboxFilters } from "@/components/inbox/InboxF
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ArrowLeft, User } from "lucide-react";
+import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -38,14 +40,20 @@ const DEFAULT_FILTERS: InboxFilters = {
   slaExpired: false,
 };
 
+type MobileView = "list" | "chat" | "details";
+
 export default function Inbox() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { role } = useUserRole();
+  const isMobile = useIsMobileBreakpoint();
   
   // Filter state
   const [filters, setFilters] = useState<InboxFilters>(DEFAULT_FILTERS);
+  
+  // Mobile navigation state
+  const [mobileView, setMobileView] = useState<MobileView>("list");
   
   // Smart default filter based on role
   const defaultFilter = (role === 'admin' || role === 'manager') ? 'all' : 'human_queue';
@@ -95,6 +103,25 @@ export default function Inbox() {
       params.delete("team");
     }
     navigate(`/inbox?${params.toString()}`);
+  };
+
+  const handleSelectConversation = (conversation: Conversation | null) => {
+    setActiveConversation(conversation);
+    if (isMobile && conversation) {
+      setMobileView("chat");
+    }
+  };
+
+  const handleBackToList = () => {
+    setMobileView("list");
+  };
+
+  const handleShowDetails = () => {
+    setMobileView("details");
+  };
+
+  const handleBackToChat = () => {
+    setMobileView("chat");
   };
 
   const filteredConversations = useMemo(() => {
@@ -181,6 +208,96 @@ export default function Inbox() {
     );
   }
 
+  // Mobile Layout - Stack Navigation
+  if (isMobile) {
+    // Mobile: Details View
+    if (mobileView === "details" && activeConversation) {
+      return (
+        <div className="flex flex-col h-full overflow-hidden">
+          <div className="flex-none border-b border-border px-4 py-3 bg-card flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={handleBackToChat}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <h2 className="font-semibold">Detalhes do Contato</h2>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <ContactDetailsSidebar conversation={activeConversation} />
+          </div>
+        </div>
+      );
+    }
+
+    // Mobile: Chat View
+    if (mobileView === "chat" && activeConversation) {
+      return (
+        <div className="flex flex-col h-full overflow-hidden">
+          <div className="flex-none border-b border-border px-4 py-3 bg-card flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={handleBackToList}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <span className="font-semibold truncate">
+                {activeConversation.contacts?.first_name} {activeConversation.contacts?.last_name}
+              </span>
+            </div>
+            <Button variant="ghost" size="sm" onClick={handleShowDetails}>
+              <User className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <ChatWindow conversation={activeConversation} />
+          </div>
+        </div>
+      );
+    }
+
+    // Mobile: List View
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex-none border-b border-border px-4 py-3 bg-card">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-foreground">Caixa de Entrada</h2>
+            <div className="text-sm text-muted-foreground">
+              {totalActiveCount} ativas
+            </div>
+          </div>
+          
+          {/* AI Mode Tabs - Compact for mobile */}
+          <Tabs value={filter} onValueChange={handleFilterChange}>
+            <TabsList className="w-full">
+              <TabsTrigger value="ai_queue" className="flex-1 text-xs gap-1">
+                🤖 IA
+                {aiQueueCount > 0 && (
+                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-xs">
+                    {aiQueueCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="human_queue" className="flex-1 text-xs gap-1">
+                👤 Humano
+                {humanQueueCount > 0 && (
+                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-xs">
+                    {humanQueueCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="all" className="flex-1 text-xs">Todas</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto">
+          <ConversationList
+            conversations={filteredConversations}
+            activeConversationId={activeConversation?.id || null}
+            onSelectConversation={handleSelectConversation}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop Layout - 3 Columns
   return (
     <div className="flex flex-col h-full overflow-hidden min-w-0">
       <div className="flex-none border-b-2 border-slate-200 dark:border-border px-4 py-3 bg-card">
@@ -294,7 +411,7 @@ export default function Inbox() {
         <ConversationList
           conversations={filteredConversations}
           activeConversationId={activeConversation?.id || null}
-          onSelectConversation={setActiveConversation}
+          onSelectConversation={handleSelectConversation}
         />
         <ChatWindow conversation={activeConversation} />
         <ContactDetailsSidebar conversation={activeConversation} />
