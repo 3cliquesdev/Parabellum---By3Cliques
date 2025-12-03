@@ -81,22 +81,13 @@ export function KanbanScrollNavigation({ children }: KanbanScrollNavigationProps
       <div
         ref={scrollRef}
         onScroll={updateScrollState}
-        className="overflow-x-auto overflow-y-hidden pb-2"
+        className="overflow-x-auto overflow-y-hidden pb-2 [&::-webkit-scrollbar]:hidden"
         style={{
           scrollbarWidth: "none",
           msOverflowStyle: "none",
         }}
       >
-        <style>
-          {`
-            .kanban-scroll-hide::-webkit-scrollbar {
-              display: none;
-            }
-          `}
-        </style>
-        <div className="kanban-scroll-hide">
-          {children}
-        </div>
+        {children}
       </div>
 
       {/* Right Arrow Button */}
