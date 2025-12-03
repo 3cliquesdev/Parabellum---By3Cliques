@@ -207,7 +207,7 @@ const adminStrategyItems = [
   { title: "Cadências", href: "/cadences", icon: RefreshCw },
   { title: "Automações", href: "/automations", icon: Zap },
   { title: "AI Studio", href: "/ai-studio/personas", icon: Brain },
-  { title: "🤖 AI Trainer", href: "/settings/integrations", icon: Brain },
+  { title: "🤖 AI Trainer", href: "/settings/ai-trainer", icon: Brain },
   { title: "Templates de Email", href: "/email-templates", icon: Mail },
   { title: "Formulários", href: "/forms", icon: FileText },
   { title: "Playbooks de Onboarding", href: "/onboarding-builder", icon: Workflow },
