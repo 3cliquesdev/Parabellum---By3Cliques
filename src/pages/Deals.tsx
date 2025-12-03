@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings } from "lucide-react";
+import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings, Users, ChevronLeft, ChevronRight } from "lucide-react";
 import { useDeals, useUpdateDeal, useUpdateDealStage } from "@/hooks/useDeals";
 import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
@@ -22,6 +22,7 @@ import KanbanCard from "@/components/KanbanCard";
 import DealDialog from "@/components/DealDialog";
 import PipelineDialog from "@/components/PipelineDialog";
 import PipelineStagesDialog from "@/components/deals/PipelineStagesDialog";
+import PipelineSalesRepsDialog from "@/components/deals/PipelineSalesRepsDialog";
 import DragDropActionBar from "@/components/DragDropActionBar";
 import LostReasonDialog from "@/components/LostReasonDialog";
 import { PendingDealsQueue } from "@/components/deals/PendingDealsQueue";
@@ -362,26 +363,46 @@ export default function Deals() {
                 </SelectContent>
               </Select>
               
-              {/* Pipeline Stages Config Button */}
+              {/* Pipeline Config Buttons */}
               {canManagePipelines && selectedPipeline && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div>
-                        <PipelineStagesDialog
-                          pipelineId={selectedPipeline}
-                          pipelineName={pipelines?.find(p => p.id === selectedPipeline)?.name}
-                          trigger={
-                            <Button variant="ghost" size="icon" className="h-9 w-9">
-                              <Settings className="h-4 w-4" />
-                            </Button>
-                          }
-                        />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>Configurar Etapas</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <PipelineSalesRepsDialog
+                            pipelineId={selectedPipeline}
+                            pipelineName={pipelines?.find(p => p.id === selectedPipeline)?.name}
+                            trigger={
+                              <Button variant="ghost" size="icon" className="h-9 w-9">
+                                <Users className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>Equipe do Pipeline</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <PipelineStagesDialog
+                            pipelineId={selectedPipeline}
+                            pipelineName={pipelines?.find(p => p.id === selectedPipeline)?.name}
+                            trigger={
+                              <Button variant="ghost" size="icon" className="h-9 w-9">
+                                <Settings className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>Configurar Etapas</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </>
               )}
             </div>
           )}
@@ -411,9 +432,10 @@ export default function Deals() {
       </div>
 
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="overflow-x-auto pb-4">
-          <ScrollArea className="w-full">
-            <div className="flex gap-4 min-w-max">
+        <div className="relative">
+          {/* Scroll container with visible scrollbar */}
+          <div className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-muted/20 hover:scrollbar-thumb-primary/50">
+            <div className="flex gap-3 min-w-max px-1 py-1">
               {/* Regular stage columns - only show open deals */}
               {stages.map((stage) => {
                 const stageDeals = filteredDeals?.filter(
@@ -436,8 +458,10 @@ export default function Deals() {
                 deals={(filteredDeals?.filter(d => d.status === "lost") || []) as Deal[]}
               />
             </div>
-            <ScrollBar orientation="horizontal" className="h-3 !visible" />
-          </ScrollArea>
+          </div>
+          
+          {/* Scroll hint indicator */}
+          <div className="absolute right-0 top-0 bottom-4 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none" />
         </div>
 
         <DragOverlay>

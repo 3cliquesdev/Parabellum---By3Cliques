@@ -51,8 +51,8 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
   };
 
   return (
-    <div className="flex-shrink-0 w-64">
-      <div className="bg-card/50 dark:bg-white/[0.02] rounded-xl p-3 border border-border/50 dark:border-white/5">
+    <div className="flex-shrink-0 w-60 min-w-[240px] max-w-[280px]">
+      <div className="bg-card/50 dark:bg-white/[0.02] rounded-xl p-2.5 border border-border/50 dark:border-white/5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             {/* Bolinha de cor da etapa */}
