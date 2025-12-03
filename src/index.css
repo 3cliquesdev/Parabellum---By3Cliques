@@ -188,28 +188,33 @@
   background: hsl(var(--primary) / 0.5);
 }
 
-/* Kanban Scroll - Always Visible */
+/* Kanban Scroll - FORCED Visible */
 .kanban-scroll-container {
   overflow-x: scroll !important;
-  scrollbar-width: auto;
+  overflow-y: hidden !important;
+  scrollbar-width: thin !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 .kanban-scroll-container::-webkit-scrollbar {
-  height: 14px;
+  height: 16px !important;
   display: block !important;
+  background: hsl(var(--muted) / 0.2);
 }
 
 .kanban-scroll-container::-webkit-scrollbar-track {
   background: hsl(var(--muted) / 0.3);
   border-radius: 8px;
+  margin: 0 8px;
 }
 
 .kanban-scroll-container::-webkit-scrollbar-thumb {
-  background: hsl(var(--primary) / 0.4);
+  background: hsl(var(--primary) / 0.5) !important;
   border-radius: 8px;
-  border: 2px solid hsl(var(--background));
+  border: 3px solid hsl(var(--background));
+  min-width: 60px;
 }
 
 .kanban-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--primary) / 0.6);
+  background: hsl(var(--primary) / 0.7) !important;
 }

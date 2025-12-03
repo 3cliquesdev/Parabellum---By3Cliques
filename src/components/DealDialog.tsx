@@ -343,8 +343,13 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
 
             {/* Lead Fields - Aparecem quando não há contato selecionado */}
             {!watchContactId && (
-              <div className="space-y-4 p-4 rounded-lg border border-dashed border-primary/30 bg-primary/5">
-                <p className="text-sm font-medium text-primary">📝 Dados do Lead</p>
+              <div className="space-y-4 p-4 rounded-lg border-2 border-dashed border-primary/40 bg-primary/5">
+                <div>
+                  <p className="text-sm font-semibold text-primary">📝 Dados do Lead</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Preencha os dados do lead abaixo. Para vincular um cliente existente, selecione um contato acima.
+                  </p>
+                </div>
                 
                 <FormField
                   control={form.control}

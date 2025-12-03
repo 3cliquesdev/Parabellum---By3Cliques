@@ -34,6 +34,9 @@ export default function LeadInfoPopover({ deal }: LeadInfoPopoverProps) {
 
   const hasAnyInfo = name || email || phone;
 
+  // SEMPRE mostrar o botão 360 - não retornar null
+  // O popover mostrará "Nenhuma informação" se não houver dados
+
   const formatWhatsAppNumber = (phoneNumber: string) => {
     const cleanPhone = phoneNumber.replace(/\D/g, "");
     if (!cleanPhone.startsWith("55") && cleanPhone.length >= 10 && cleanPhone.length <= 11) {
@@ -53,10 +56,6 @@ export default function LeadInfoPopover({ deal }: LeadInfoPopoverProps) {
       console.error("Erro ao copiar:", error);
     }
   };
-
-  if (!hasAnyInfo) {
-    return null;
-  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
