@@ -187,3 +187,29 @@
 .hover\:scrollbar-thumb-primary\/50:hover::-webkit-scrollbar-thumb {
   background: hsl(var(--primary) / 0.5);
 }
+
+/* Kanban Scroll - Always Visible */
+.kanban-scroll-container {
+  overflow-x: scroll !important;
+  scrollbar-width: auto;
+}
+
+.kanban-scroll-container::-webkit-scrollbar {
+  height: 14px;
+  display: block !important;
+}
+
+.kanban-scroll-container::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.3);
+  border-radius: 8px;
+}
+
+.kanban-scroll-container::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.4);
+  border-radius: 8px;
+  border: 2px solid hsl(var(--background));
+}
+
+.kanban-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.6);
+}

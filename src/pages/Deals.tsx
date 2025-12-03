@@ -433,9 +433,9 @@ export default function Deals() {
 
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="relative">
-          {/* Scroll container with visible scrollbar */}
-          <div className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-muted/20 hover:scrollbar-thumb-primary/50">
-            <div className="flex gap-3 min-w-max px-1 py-1">
+          {/* Scroll container with ALWAYS visible scrollbar */}
+          <div className="kanban-scroll-container overflow-x-scroll pb-4">
+            <div className="flex gap-2 min-w-max px-1 py-1">
               {/* Regular stage columns - only show open deals */}
               {stages.map((stage) => {
                 const stageDeals = filteredDeals?.filter(

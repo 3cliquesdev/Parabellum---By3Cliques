@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Info, Mail, Phone, MessageSquare, User, Building } from "lucide-react";
+import { Mail, Phone, MessageSquare, User, Building } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Deal = Tables<"deals"> & {
@@ -62,13 +62,13 @@ export default function LeadInfoPopover({ deal }: LeadInfoPopoverProps) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted"
+          variant="outline"
+          size="sm"
+          className="h-6 px-1.5 text-xs font-bold text-primary border-primary/30 bg-primary/5 hover:bg-primary/10"
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <Info className="h-4 w-4" />
+          360
         </Button>
       </PopoverTrigger>
       <PopoverContent

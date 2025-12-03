@@ -280,15 +280,18 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                 </div>
               )}
 
-              {/* Quick Actions - Visible on Hover */}
-              {isHovered && (
-                <div 
-                  className="flex items-center gap-1" 
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  {/* Lead Info Popover */}
-                  <LeadInfoPopover deal={deal} />
+              {/* Quick Actions */}
+              <div 
+                className="flex items-center gap-1" 
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                {/* Lead/Contact Info - 360 Badge - ALWAYS visible */}
+                <LeadInfoPopover deal={deal} />
+                
+                {/* Other actions - Visible on Hover */}
+                {isHovered && (
+                  <>
                   
                   {/* Move to Pipeline Button */}
                   <TooltipProvider>
@@ -385,9 +388,10 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
                         </Tooltip>
                       </TooltipProvider>
                     </>
-                  )}
-                </div>
-              )}
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </CardContent>
