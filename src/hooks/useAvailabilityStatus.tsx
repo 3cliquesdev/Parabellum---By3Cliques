@@ -2,14 +2,19 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
 
 type AvailabilityStatus = "online" | "busy" | "offline";
+
+// Intervalo de heartbeat (2 minutos)
+const HEARTBEAT_INTERVAL = 2 * 60 * 1000;
 
 export function useAvailabilityStatus() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitializedRef = useRef(false);
 
   // Fetch current status
   const { data: status, isLoading } = useQuery({
@@ -33,6 +38,28 @@ export function useAvailabilityStatus() {
     enabled: !!user,
   });
 
+  // Função de heartbeat - atualiza last_status_change para indicar atividade
+  const sendHeartbeat = useCallback(async () => {
+    if (!user) return;
+    
+    console.log("[useAvailabilityStatus] Sending heartbeat");
+    
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ 
+          last_status_change: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+      
+      if (error) {
+        console.error("[useAvailabilityStatus] Heartbeat error:", error);
+      }
+    } catch (err) {
+      console.error("[useAvailabilityStatus] Heartbeat failed:", err);
+    }
+  }, [user]);
+
   // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async (newStatus: AvailabilityStatus) => {
@@ -42,7 +69,10 @@ export function useAvailabilityStatus() {
 
       const { error } = await supabase
         .from("profiles")
-        .update({ availability_status: newStatus })
+        .update({ 
+          availability_status: newStatus,
+          last_status_change: new Date().toISOString(),
+        })
         .eq("id", user.id);
 
       if (error) throw error;
@@ -102,16 +132,81 @@ export function useAvailabilityStatus() {
     };
   }, [user, queryClient]);
 
-  // Auto-set to offline on logout
+  // Auto-set to online on mount + heartbeat
+  useEffect(() => {
+    if (!user || isInitializedRef.current) return;
+    
+    isInitializedRef.current = true;
+    
+    // Definir como online ao carregar
+    const setOnline = async () => {
+      console.log("[useAvailabilityStatus] Setting user online on mount");
+      await supabase
+        .from("profiles")
+        .update({ 
+          availability_status: "online",
+          last_status_change: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+      
+      queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
+    };
+    
+    setOnline();
+    
+    // Iniciar heartbeat
+    heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+    
+    return () => {
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+      }
+    };
+  }, [user, queryClient, sendHeartbeat]);
+
+  // Handle page visibility changes
+  useEffect(() => {
+    if (!user) return;
+    
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log("[useAvailabilityStatus] Tab visible - setting online");
+        await supabase
+          .from("profiles")
+          .update({ 
+            availability_status: "online",
+            last_status_change: new Date().toISOString(),
+          })
+          .eq("id", user.id);
+        queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, queryClient]);
+
+  // Tentar marcar offline ao fechar - backup (principal é o CRON check-inactive-users)
   useEffect(() => {
     if (!user) return;
 
     const handleBeforeUnload = async () => {
-      // Set status to offline when user closes browser/tab
-      await supabase
-        .from("profiles")
-        .update({ availability_status: "offline" })
-        .eq("id", user.id);
+      // Tenta marcar offline - pode não completar mas o CRON vai pegar
+      try {
+        await supabase
+          .from("profiles")
+          .update({ 
+            availability_status: "offline",
+            last_status_change: new Date().toISOString(),
+          })
+          .eq("id", user.id);
+        console.log("[useAvailabilityStatus] Marked offline on unload");
+      } catch (err) {
+        console.log("[useAvailabilityStatus] Unload offline failed - CRON will handle");
+      }
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
