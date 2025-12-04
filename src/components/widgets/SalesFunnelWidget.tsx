@@ -82,8 +82,9 @@ export function SalesFunnelWidget() {
         </CardTitle>
         <CardDescription>Distribuição por etapa do pipeline</CardDescription>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
+      <CardContent className="min-w-0">
+        <div className="w-full min-w-0">
+          <ResponsiveContainer width="100%" height={250}>
           <BarChart data={funnelData}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis dataKey="stageName" className="text-xs" />
@@ -113,7 +114,8 @@ export function SalesFunnelWidget() {
               ))}
             </Bar>
           </BarChart>
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
 
         {maxDrop > 30 && (
           <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">

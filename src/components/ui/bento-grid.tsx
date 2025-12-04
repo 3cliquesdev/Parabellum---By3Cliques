@@ -19,13 +19,13 @@ export function BentoGrid({ children, className, cols = 4 }: BentoGridProps) {
     1: "grid-cols-1",
     2: "grid-cols-1 sm:grid-cols-2",
     3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
-    4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+    4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
   };
 
   return (
     <div
       className={cn(
-        "grid gap-4 auto-rows-min",
+        "grid gap-3 lg:gap-3 xl:gap-4 auto-rows-min",
         colsClass[cols],
         className
       )}
@@ -38,9 +38,9 @@ export function BentoGrid({ children, className, cols = 4 }: BentoGridProps) {
 export function BentoCard({ children, className, span = "1", rowSpan = "1" }: BentoCardProps) {
   const spanClass = {
     "1": "col-span-1",
-    "2": "col-span-1 sm:col-span-2",
+    "2": "col-span-1 sm:col-span-2 lg:col-span-2",
     "3": "col-span-1 sm:col-span-2 lg:col-span-3",
-    "4": "col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-4",
+    "4": "col-span-full lg:col-span-4",
     "full": "col-span-full",
   };
 
@@ -50,7 +50,7 @@ export function BentoCard({ children, className, span = "1", rowSpan = "1" }: Be
   };
 
   return (
-    <div className={cn(spanClass[span], rowSpanClass[rowSpan], className)}>
+    <div className={cn(spanClass[span], rowSpanClass[rowSpan], "min-w-0", className)}>
       {children}
     </div>
   );

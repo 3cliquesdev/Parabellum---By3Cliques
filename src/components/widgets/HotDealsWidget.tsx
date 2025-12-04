@@ -80,9 +80,10 @@ export function HotDealsWidget() {
           Fechamento previsto nos próximos 7 dias
         </CardDescription>
       </CardHeader>
-      <CardContent className="pt-0">
-        <Table>
-          <TableHeader>
+      <CardContent className="pt-0 min-w-0">
+        <div className="overflow-x-auto w-full">
+          <Table className="min-w-[600px]">
+            <TableHeader>
             <TableRow>
               <TableHead>Cliente</TableHead>
               <TableHead>Negócio</TableHead>
@@ -155,7 +156,8 @@ export function HotDealsWidget() {
               );
             })}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );

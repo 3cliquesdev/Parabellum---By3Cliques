@@ -57,8 +57,9 @@ export function SalesByRepWidget() {
         </CardTitle>
         <CardDescription>Desempenho deste mês</CardDescription>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
+      <CardContent className="min-w-0">
+        <div className="w-full min-w-0">
+          <ResponsiveContainer width="100%" height={250}>
           <BarChart data={salesByRep} layout="vertical" margin={{ left: 20 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis type="number" className="text-xs" />
@@ -79,7 +80,8 @@ export function SalesByRepWidget() {
             />
             <Bar dataKey="totalSales" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
           </BarChart>
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );
