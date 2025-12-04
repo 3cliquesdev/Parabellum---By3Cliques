@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
 import { ImageUploader } from "@/components/ImageUploader";
 
 interface FormSettingsPanelProps {
@@ -26,10 +27,14 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
         folder="forms/logos"
       />
 
-      {/* Cores */}
-      <div className="grid grid-cols-2 gap-4">
+      <Separator />
+
+      {/* Cores de Fundo */}
+      <div className="space-y-4">
+        <h4 className="font-medium text-sm">Fundo</h4>
+        
         <div className="space-y-2">
-          <Label>Cor de Fundo</Label>
+          <Label>Cor de Fundo da Página</Label>
           <div className="flex gap-2">
             <Input
               type="color"
@@ -44,42 +49,201 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
             />
           </div>
         </div>
+
+        {/* Imagem de Fundo */}
+        <ImageUploader
+          label="Imagem de Fundo"
+          value={settings.background_image}
+          onChange={(url) => onChange({ background_image: url || undefined })}
+          folder="forms/backgrounds"
+          previewClassName="h-32"
+        />
+      </div>
+
+      <Separator />
+
+      {/* Card/Container */}
+      <div className="space-y-4">
+        <h4 className="font-medium text-sm">Cartão / Container</h4>
+        
         <div className="space-y-2">
-          <Label>Cor do Botão</Label>
+          <Label>Cor do Container</Label>
           <div className="flex gap-2">
             <Input
               type="color"
-              value={settings.button_color || "#2563EB"}
-              onChange={(e) => onChange({ button_color: e.target.value })}
+              value={settings.card_background_color || "#1a1a2e"}
+              onChange={(e) => onChange({ card_background_color: e.target.value })}
               className="w-12 h-9 p-1 cursor-pointer"
             />
             <Input
-              value={settings.button_color || "#2563EB"}
-              onChange={(e) => onChange({ button_color: e.target.value })}
+              value={settings.card_background_color || "#1a1a2e"}
+              onChange={(e) => onChange({ card_background_color: e.target.value })}
+              className="flex-1"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Opacidade do Container: {settings.card_opacity ?? 90}%</Label>
+          <Slider
+            value={[settings.card_opacity ?? 90]}
+            onValueChange={([val]) => onChange({ card_opacity: val })}
+            min={0}
+            max={100}
+            step={5}
+            className="w-full"
+          />
+          <p className="text-xs text-muted-foreground">
+            Valores menores criam efeito de glassmorphism
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Arredondamento: {settings.border_radius ?? 16}px</Label>
+          <Slider
+            value={[settings.border_radius ?? 16]}
+            onValueChange={([val]) => onChange({ border_radius: val })}
+            min={0}
+            max={30}
+            step={2}
+            className="w-full"
+          />
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Textos */}
+      <div className="space-y-4">
+        <h4 className="font-medium text-sm">Textos</h4>
+        
+        <div className="space-y-2">
+          <Label>Cor dos Textos/Labels</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={settings.text_color || "#ffffff"}
+              onChange={(e) => onChange({ text_color: e.target.value })}
+              className="w-12 h-9 p-1 cursor-pointer"
+            />
+            <Input
+              value={settings.text_color || "#ffffff"}
+              onChange={(e) => onChange({ text_color: e.target.value })}
               className="flex-1"
             />
           </div>
         </div>
       </div>
 
-      {/* Imagem de Fundo */}
-      <ImageUploader
-        label="Imagem de Fundo"
-        value={settings.background_image}
-        onChange={(url) => onChange({ background_image: url || undefined })}
-        folder="forms/backgrounds"
-        previewClassName="h-40"
-      />
+      <Separator />
+
+      {/* Inputs */}
+      <div className="space-y-4">
+        <h4 className="font-medium text-sm">Campos de Entrada</h4>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Fundo do Input</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.input_background_color || "#ffffff"}
+                onChange={(e) => onChange({ input_background_color: e.target.value })}
+                className="w-12 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.input_background_color || "#ffffff"}
+                onChange={(e) => onChange({ input_background_color: e.target.value })}
+                className="flex-1"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Texto do Input</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.input_text_color || "#000000"}
+                onChange={(e) => onChange({ input_text_color: e.target.value })}
+                className="w-12 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.input_text_color || "#000000"}
+                onChange={(e) => onChange({ input_text_color: e.target.value })}
+                className="flex-1"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Borda do Input</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={settings.input_border_color || "#e5e7eb"}
+              onChange={(e) => onChange({ input_border_color: e.target.value })}
+              className="w-12 h-9 p-1 cursor-pointer"
+            />
+            <Input
+              value={settings.input_border_color || "#e5e7eb"}
+              onChange={(e) => onChange({ input_border_color: e.target.value })}
+              className="flex-1"
+            />
+          </div>
+        </div>
+      </div>
 
       <Separator />
 
-      {/* Texto do Botão */}
-      <div className="space-y-2">
-        <Label>Texto do Botão</Label>
-        <Input
-          value={settings.button_text || "Continuar"}
-          onChange={(e) => onChange({ button_text: e.target.value })}
-        />
+      {/* Botão */}
+      <div className="space-y-4">
+        <h4 className="font-medium text-sm">Botão de Ação</h4>
+
+        <div className="space-y-2">
+          <Label>Texto do Botão</Label>
+          <Input
+            value={settings.button_text || "Continuar"}
+            onChange={(e) => onChange({ button_text: e.target.value })}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Cor do Botão</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.button_color || "#2563EB"}
+                onChange={(e) => onChange({ button_color: e.target.value })}
+                className="w-12 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.button_color || "#2563EB"}
+                onChange={(e) => onChange({ button_color: e.target.value })}
+                className="flex-1"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Cor do Texto</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.button_text_color || "#ffffff"}
+                onChange={(e) => onChange({ button_text_color: e.target.value })}
+                className="w-12 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.button_text_color || "#ffffff"}
+                onChange={(e) => onChange({ button_text_color: e.target.value })}
+                className="flex-1"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       <Separator />
