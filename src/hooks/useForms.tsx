@@ -13,7 +13,8 @@ export type FormFieldType =
   | "long_text"   // Textarea
   | "yes_no"      // Botões Sim/Não
   | "date"        // Calendário
-  | "number";     // Número
+  | "number"      // Número
+  | "file";       // Upload de arquivos
 
 export interface FieldLogic {
   condition: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
@@ -33,6 +34,11 @@ export interface FormField {
   logic?: FieldLogic;         // Lógica condicional
   min?: number;               // Para rating/number
   max?: number;               // Para rating/number
+  // File field specific
+  accept?: string;            // Tipos de arquivo aceitos (ex: "image/*,.pdf")
+  max_size_mb?: number;       // Tamanho máximo em MB
+  // Ticket mapping
+  ticket_field?: "subject" | "description" | "priority"; // Mapear para campo do ticket
 }
 
 export interface FormSettings {
@@ -48,9 +54,17 @@ export interface FormSettings {
   allow_back_navigation?: boolean;
 }
 
+export interface TicketSettings {
+  default_priority?: "low" | "medium" | "high" | "urgent";
+  default_category?: "financeiro" | "tecnico" | "bug" | "outro";
+  send_auto_reply?: boolean;
+  auto_reply_template?: string;
+}
+
 export interface FormSchema {
   fields: FormField[];
   settings?: FormSettings;
+  ticket_settings?: TicketSettings;
 }
 
 export type FormTargetType = "deal" | "ticket" | "internal_request";
@@ -85,12 +99,20 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   allow_back_navigation: true,
 };
 
+export const DEFAULT_TICKET_SETTINGS: TicketSettings = {
+  default_priority: "medium",
+  default_category: "outro",
+  send_auto_reply: true,
+  auto_reply_template: "Recebemos sua solicitação. Ticket #{{ticket_number}} criado. Nossa equipe entrará em contato em breve.",
+};
+
 export const createDefaultField = (type: FormFieldType = "text"): FormField => ({
   id: crypto.randomUUID(),
   type,
   label: getDefaultLabel(type),
   placeholder: getDefaultPlaceholder(type),
   required: false,
+  ...(type === "file" ? { accept: "image/*,.pdf,.doc,.docx", max_size_mb: 10 } : {}),
 });
 
 function getDefaultLabel(type: FormFieldType): string {
@@ -104,6 +126,7 @@ function getDefaultLabel(type: FormFieldType): string {
     yes_no: "Você concorda?",
     date: "Selecione uma data",
     number: "Informe um número",
+    file: "Anexe um arquivo",
   };
   return labels[type];
 }
@@ -119,6 +142,7 @@ function getDefaultPlaceholder(type: FormFieldType): string {
     yes_no: "",
     date: "DD/MM/AAAA",
     number: "0",
+    file: "",
   };
   return placeholders[type];
 }

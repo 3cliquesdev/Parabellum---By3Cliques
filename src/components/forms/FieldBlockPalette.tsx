@@ -9,7 +9,8 @@ import {
   AlignLeft, 
   ThumbsUp, 
   Calendar,
-  Hash
+  Hash,
+  Paperclip
 } from "lucide-react";
 
 interface FieldBlockPaletteProps {
@@ -26,6 +27,7 @@ const FIELD_BLOCKS: { type: FormFieldType; label: string; icon: React.ReactNode;
   { type: "yes_no", label: "Sim / Não", icon: <ThumbsUp className="h-4 w-4" />, description: "Resposta binária" },
   { type: "date", label: "Data", icon: <Calendar className="h-4 w-4" />, description: "Seletor de data" },
   { type: "number", label: "Número", icon: <Hash className="h-4 w-4" />, description: "Valor numérico" },
+  { type: "file", label: "Anexo", icon: <Paperclip className="h-4 w-4" />, description: "Upload de arquivos" },
 ];
 
 export function FieldBlockPalette({ onAddField }: FieldBlockPaletteProps) {

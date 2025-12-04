@@ -4,7 +4,8 @@ import { FormBuilderV2 } from "@/components/forms/FormBuilderV2";
 import { FormPreviewModal } from "@/components/forms/FormPreviewModal";
 import { FormRoutingConfig, FormRoutingSettings } from "@/components/forms/FormRoutingConfig";
 import { FormShareDialog } from "@/components/forms/FormShareDialog";
-import { useFormById, useCreateForm, useUpdateForm, FormSchema, DEFAULT_FORM_SETTINGS, FormTargetType, FormDistributionRule } from "@/hooks/useForms";
+import { TicketFieldMapping } from "@/components/forms/TicketFieldMapping";
+import { useFormById, useCreateForm, useUpdateForm, FormSchema, DEFAULT_FORM_SETTINGS, DEFAULT_TICKET_SETTINGS, FormTargetType, FormDistributionRule, TicketSettings } from "@/hooks/useForms";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,7 @@ export default function FormBuilderPage() {
   const [schema, setSchema] = useState<FormSchema>({
     fields: [],
     settings: DEFAULT_FORM_SETTINGS,
+    ticket_settings: DEFAULT_TICKET_SETTINGS,
   });
   const [routingSettings, setRoutingSettings] = useState<FormRoutingSettings>({
     target_type: "deal",
@@ -42,7 +44,10 @@ export default function FormBuilderPage() {
     if (existingForm) {
       setName(existingForm.name);
       setDescription(existingForm.description || "");
-      setSchema(existingForm.schema);
+      setSchema({
+        ...existingForm.schema,
+        ticket_settings: existingForm.schema.ticket_settings || DEFAULT_TICKET_SETTINGS,
+      });
       setRoutingSettings({
         target_type: existingForm.target_type || "deal",
         target_department_id: existingForm.target_department_id || undefined,
@@ -92,6 +97,16 @@ export default function FormBuilderPage() {
     }
   };
 
+  const handleTicketSettingsChange = (ticketSettings: TicketSettings) => {
+    setSchema({ ...schema, ticket_settings: ticketSettings });
+  };
+
+  const handleFieldTicketMappingUpdate = (fieldId: string, ticketField: "subject" | "description" | "priority" | undefined) => {
+    const newFields = schema.fields.map(f => 
+      f.id === fieldId ? { ...f, ticket_field: ticketField } : f
+    );
+    setSchema({ ...schema, fields: newFields });
+  };
 
   if (isLoading && isEditing) {
     return (
@@ -100,6 +115,8 @@ export default function FormBuilderPage() {
       </div>
     );
   }
+
+  const isTicketMode = routingSettings.target_type === "ticket";
 
   return (
     <div className="min-h-screen bg-background">
@@ -116,7 +133,7 @@ export default function FormBuilderPage() {
                   {isEditing ? "Editar Formulário" : "Novo Formulário"}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Construtor Visual 2.0
+                  {isTicketMode ? "Web-to-Ticket" : "Construtor Visual 2.0"}
                 </p>
               </div>
             </div>
@@ -154,7 +171,7 @@ export default function FormBuilderPage() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Column: Form Info + Routing */}
+          {/* Left Column: Form Info + Routing + Ticket Config */}
           <div className="lg:col-span-1 space-y-6">
             {/* Form Info */}
             <Card>
@@ -167,7 +184,7 @@ export default function FormBuilderPage() {
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Ex: Formulário de Interesse"
+                    placeholder="Ex: Formulário de Suporte"
                   />
                 </div>
                 <div className="space-y-2">
@@ -186,6 +203,16 @@ export default function FormBuilderPage() {
               settings={routingSettings}
               onChange={setRoutingSettings}
             />
+
+            {/* Ticket Field Mapping (only for ticket type) */}
+            {isTicketMode && (
+              <TicketFieldMapping
+                fields={schema.fields}
+                ticketSettings={schema.ticket_settings || DEFAULT_TICKET_SETTINGS}
+                onChange={handleTicketSettingsChange}
+                onFieldUpdate={handleFieldTicketMappingUpdate}
+              />
+            )}
           </div>
 
           {/* Right Column: Form Builder */}

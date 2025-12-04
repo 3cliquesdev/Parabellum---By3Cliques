@@ -32,7 +32,7 @@ interface FormRoutingConfigProps {
 }
 
 const TARGET_TYPE_OPTIONS = [
-  { value: "deal", label: "Negócio (Deal)", icon: Briefcase, description: "Criar oportunidade no funil de vendas" },
+  { value: "deal", label: "Lead/Negócio", icon: Briefcase, description: "Criar oportunidade no funil de vendas" },
   { value: "ticket", label: "Ticket de Suporte", icon: Ticket, description: "Criar chamado na fila de suporte" },
   { value: "internal_request", label: "Solicitação Interna", icon: FileText, description: "Criar tarefa interna (RH, Financeiro)" },
 ];
@@ -56,9 +56,10 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
   };
 
   const selectedTargetType = TARGET_TYPE_OPTIONS.find(t => t.value === settings.target_type);
+  const isTicketMode = settings.target_type === "ticket";
 
   return (
-    <Card>
+    <Card className={isTicketMode ? "border-orange-500/30" : ""}>
       <CardHeader className="pb-4">
         <CardTitle className="text-base flex items-center gap-2">
           <Target className="h-4 w-4" />
@@ -73,6 +74,7 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
             {TARGET_TYPE_OPTIONS.map((option) => {
               const Icon = option.icon;
               const isSelected = settings.target_type === option.value;
+              const isTicket = option.value === "ticket";
               return (
                 <button
                   key={option.value}
@@ -80,15 +82,29 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
                   onClick={() => updateSetting("target_type", option.value as FormTargetType)}
                   className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
                     isSelected
-                      ? "border-primary bg-primary/5"
+                      ? isTicket 
+                        ? "border-orange-500 bg-orange-500/5"
+                        : "border-primary bg-primary/5"
                       : "border-border hover:border-muted-foreground/50"
                   }`}
                 >
-                  <div className={`p-2 rounded-md ${isSelected ? "bg-primary/10" : "bg-muted"}`}>
-                    <Icon className={`h-4 w-4 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
+                  <div className={`p-2 rounded-md ${
+                    isSelected 
+                      ? isTicket ? "bg-orange-500/10" : "bg-primary/10" 
+                      : "bg-muted"
+                  }`}>
+                    <Icon className={`h-4 w-4 ${
+                      isSelected 
+                        ? isTicket ? "text-orange-500" : "text-primary" 
+                        : "text-muted-foreground"
+                    }`} />
                   </div>
                   <div>
-                    <p className={`text-sm font-medium ${isSelected ? "text-primary" : "text-foreground"}`}>
+                    <p className={`text-sm font-medium ${
+                      isSelected 
+                        ? isTicket ? "text-orange-500" : "text-primary" 
+                        : "text-foreground"
+                    }`}>
                       {option.label}
                     </p>
                     <p className="text-xs text-muted-foreground">{option.description}</p>
@@ -101,7 +117,9 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
 
         {/* Department Selection */}
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Enviar para qual setor?</Label>
+          <Label className="text-sm font-medium">
+            {isTicketMode ? "Departamento de Destino" : "Enviar para qual setor?"}
+          </Label>
           <Select
             value={settings.target_department_id || ""}
             onValueChange={(v) => updateSetting("target_department_id", v || undefined)}
@@ -117,6 +135,11 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
               ))}
             </SelectContent>
           </Select>
+          {isTicketMode && (
+            <p className="text-xs text-muted-foreground">
+              Ex: Financeiro, Logística, Suporte Técnico
+            </p>
+          )}
         </div>
 
         {/* Pipeline Selection (only for deals) */}
@@ -196,7 +219,10 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
             <div>
               <Label className="text-sm font-medium">Notificar gestor</Label>
               <p className="text-xs text-muted-foreground">
-                Enviar alerta quando novo lead chegar
+                {isTicketMode 
+                  ? "Enviar alerta quando novo ticket chegar"
+                  : "Enviar alerta quando novo lead chegar"
+                }
               </p>
             </div>
           </div>

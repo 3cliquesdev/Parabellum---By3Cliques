@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +14,7 @@ interface FormSubmission {
   first_name: string;
   last_name: string;
   phone?: string;
+  attachments?: { field_id: string; url: string; filename: string }[];
 }
 
 serve(async (req) => {
@@ -25,7 +27,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { form_id, answers, email, first_name, last_name, phone }: FormSubmission = await req.json();
+    const { form_id, answers, email, first_name, last_name, phone, attachments }: FormSubmission = await req.json();
 
     // Validate required fields
     if (!form_id || !email || !first_name || !last_name) {
@@ -34,6 +36,8 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log(`Processing form submission: ${form_id} from ${email}`);
 
     // 1. Fetch form configuration
     const { data: form, error: formError } = await supabase
@@ -79,11 +83,9 @@ serve(async (req) => {
     let assigned_to = form.target_user_id;
 
     if (form.distribution_rule === "round_robin") {
-      // Get least loaded sales rep
       const { data: leastLoaded } = await supabase.rpc("get_least_loaded_sales_rep");
       assigned_to = leastLoaded || form.target_user_id;
     } else if (form.distribution_rule === "manager_only" && form.target_department_id) {
-      // Get department manager (first admin/manager in department)
       const { data: managers } = await supabase
         .from("profiles")
         .select("id")
@@ -93,14 +95,15 @@ serve(async (req) => {
     }
 
     // 4. Route based on target_type
-    let created_record = null;
+    let created_record: any = null;
+    const schema = form.schema || {};
+    const ticketSettings = schema.ticket_settings || {};
 
     if (form.target_type === "deal") {
       // Get first stage of target pipeline
       let pipeline_id = form.target_pipeline_id;
       
       if (!pipeline_id) {
-        // Get default pipeline
         const { data: defaultPipeline } = await supabase
           .from("pipelines")
           .select("id")
@@ -109,7 +112,6 @@ serve(async (req) => {
         pipeline_id = defaultPipeline?.id;
       }
 
-      // Get first stage
       const { data: firstStage } = await supabase
         .from("stages")
         .select("id")
@@ -118,7 +120,6 @@ serve(async (req) => {
         .limit(1)
         .single();
 
-      // Create deal
       const { data: deal, error: dealError } = await supabase
         .from("deals")
         .insert({
@@ -141,31 +142,127 @@ serve(async (req) => {
         created_record = { type: "deal", id: deal.id };
         console.log("Deal created:", deal.id);
       }
+
     } else if (form.target_type === "ticket") {
+      // ============= TICKET CREATION =============
+      
+      // Extract subject and description from field mappings or answers
+      const fields = schema.fields || [];
+      const subjectField = fields.find((f: any) => f.ticket_field === "subject");
+      const descriptionField = fields.find((f: any) => f.ticket_field === "description");
+
+      // Build subject
+      let subject = `Solicitação via Formulário: ${form.name}`;
+      if (subjectField && answers[subjectField.id]) {
+        subject = String(answers[subjectField.id]);
+      }
+
+      // Build description
+      let description = "";
+      if (descriptionField && answers[descriptionField.id]) {
+        description = String(answers[descriptionField.id]);
+      } else {
+        // Concatenate all answers
+        const answerLines = Object.entries(answers).map(([fieldId, value]) => {
+          const field = fields.find((f: any) => f.id === fieldId);
+          const label = field?.label || fieldId;
+          return `**${label}:** ${value}`;
+        });
+        description = answerLines.join("\n\n");
+      }
+
+      // Add attachments info to description if present
+      if (attachments && attachments.length > 0) {
+        description += "\n\n---\n**Anexos:**\n";
+        attachments.forEach(att => {
+          description += `- [${att.filename}](${att.url})\n`;
+        });
+      }
+
+      // Get priority
+      const priority = ticketSettings.default_priority || "medium";
+      const category = ticketSettings.default_category || "outro";
+
       // Create ticket
       const { data: ticket, error: ticketError } = await supabase
         .from("tickets")
         .insert({
-          subject: `Solicitação via Formulário: ${form.name}`,
-          description: `Respostas do formulário:\n${JSON.stringify(answers, null, 2)}`,
+          subject: subject,
+          description: description,
           contact_id: contact_id,
           department_id: form.target_department_id,
           assigned_to: assigned_to,
-          priority: "medium",
+          priority: priority,
+          category: category,
           status: "open",
           source: "form",
+          attachments: attachments || [],
         })
-        .select()
+        .select("*, ticket_number")
         .single();
 
       if (ticketError) {
         console.error("Ticket creation error:", ticketError);
       } else {
-        created_record = { type: "ticket", id: ticket.id };
-        console.log("Ticket created:", ticket.id);
+        created_record = { type: "ticket", id: ticket.id, ticket_number: ticket.ticket_number };
+        console.log("Ticket created:", ticket.id, "Number:", ticket.ticket_number);
+
+        // ============= AUTO-REPLY EMAIL =============
+        if (ticketSettings.send_auto_reply !== false) {
+          try {
+            const resendApiKey = Deno.env.get("RESEND_API_KEY");
+            if (resendApiKey) {
+              const resend = new Resend(resendApiKey);
+              
+              // Get sender config
+              const { data: senderConfig } = await supabase
+                .from("system_configurations")
+                .select("value")
+                .eq("key", "email_sender_customer")
+                .single();
+
+              const senderEmail = senderConfig?.value || "suporte@resend.dev";
+
+              // Build auto-reply message
+              let autoReplyMessage = ticketSettings.auto_reply_template || 
+                "Recebemos sua solicitação. Ticket #{{ticket_number}} criado. Nossa equipe entrará em contato em breve.";
+              
+              autoReplyMessage = autoReplyMessage
+                .replace("{{ticket_number}}", ticket.ticket_number || ticket.id.substring(0, 8))
+                .replace("{{customer_name}}", `${first_name} ${last_name}`)
+                .replace("{{subject}}", subject);
+
+              await resend.emails.send({
+                from: `Suporte <${senderEmail}>`,
+                to: [email],
+                subject: `Ticket #${ticket.ticket_number || ticket.id.substring(0, 8)} - Recebemos sua solicitação`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #2563eb;">Sua solicitação foi recebida!</h2>
+                    <p>Olá ${first_name},</p>
+                    <p>${autoReplyMessage}</p>
+                    <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
+                      <p style="margin: 0;"><strong>Número do Ticket:</strong> #${ticket.ticket_number || ticket.id.substring(0, 8)}</p>
+                      <p style="margin: 8px 0 0;"><strong>Assunto:</strong> ${subject}</p>
+                    </div>
+                    <p>Nossa equipe analisará sua solicitação e responderá o mais breve possível.</p>
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+                    <p style="color: #6b7280; font-size: 12px;">
+                      Este é um e-mail automático. Por favor, não responda diretamente.
+                    </p>
+                  </div>
+                `,
+              });
+              console.log("Auto-reply email sent to:", email);
+            }
+          } catch (emailError) {
+            console.error("Auto-reply email error:", emailError);
+            // Don't fail the submission if email fails
+          }
+        }
       }
+
     } else if (form.target_type === "internal_request") {
-      // Create activity as internal request
       const { data: activity, error: activityError } = await supabase
         .from("activities")
         .insert({
@@ -174,7 +271,7 @@ serve(async (req) => {
           type: "task",
           contact_id: contact_id,
           assigned_to: assigned_to,
-          due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // +24h
+          due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         })
         .select()
         .single();
@@ -189,10 +286,13 @@ serve(async (req) => {
 
     // 5. Notify manager if enabled
     if (form.notify_manager && form.target_department_id) {
-      // Create admin alert
+      const alertTitle = form.target_type === "ticket" 
+        ? `Novo ticket via formulário "${form.name}"`
+        : `Novo lead via formulário "${form.name}"`;
+
       await supabase.from("admin_alerts").insert({
-        type: "new_lead",
-        title: `Novo lead via formulário "${form.name}"`,
+        type: form.target_type === "ticket" ? "new_ticket" : "new_lead",
+        title: alertTitle,
         message: `${first_name} ${last_name} (${email}) enviou o formulário.`,
         metadata: {
           form_id: form.id,
@@ -213,8 +313,18 @@ serve(async (req) => {
         form_id: form.id,
         answers: answers,
         created_record: created_record,
+        attachments: attachments,
       },
     });
+
+    // Build success message
+    let successMessage = is_new_contact
+      ? "Obrigado pelo seu interesse! Entraremos em contato em breve."
+      : "Obrigado por voltar! Suas informações foram atualizadas.";
+
+    if (form.target_type === "ticket" && created_record) {
+      successMessage = `Sua solicitação foi registrada com sucesso. Ticket #${created_record.ticket_number || created_record.id.substring(0, 8)} criado.`;
+    }
 
     return new Response(
       JSON.stringify({
@@ -222,9 +332,7 @@ serve(async (req) => {
         contact_id,
         is_new_contact,
         created_record,
-        message: is_new_contact
-          ? "Obrigado pelo seu interesse! Entraremos em contato em breve."
-          : "Obrigado por voltar! Suas informações foram atualizadas.",
+        message: successMessage,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
