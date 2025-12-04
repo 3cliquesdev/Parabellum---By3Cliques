@@ -53,6 +53,9 @@ export interface FormSchema {
   settings?: FormSettings;
 }
 
+export type FormTargetType = "deal" | "ticket" | "internal_request";
+export type FormDistributionRule = "round_robin" | "manager_only" | "specific_user";
+
 export interface Form {
   id: string;
   name: string;
@@ -61,6 +64,13 @@ export interface Form {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  // Routing fields
+  target_type: FormTargetType;
+  target_department_id: string | null;
+  target_pipeline_id: string | null;
+  target_user_id: string | null;
+  distribution_rule: FormDistributionRule;
+  notify_manager: boolean;
 }
 
 // ==================== DEFAULT VALUES ====================
@@ -174,13 +184,29 @@ export function useCreateForm() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (form: { name: string; description?: string; schema: FormSchema }) => {
+    mutationFn: async (form: { 
+      name: string; 
+      description?: string; 
+      schema: FormSchema;
+      target_type?: FormTargetType;
+      target_department_id?: string;
+      target_pipeline_id?: string;
+      target_user_id?: string;
+      distribution_rule?: FormDistributionRule;
+      notify_manager?: boolean;
+    }) => {
       const { data, error } = await supabase
         .from("forms")
         .insert({
           name: form.name,
           description: form.description || null,
           schema: form.schema as any,
+          target_type: form.target_type || "deal",
+          target_department_id: form.target_department_id || null,
+          target_pipeline_id: form.target_pipeline_id || null,
+          target_user_id: form.target_user_id || null,
+          distribution_rule: form.distribution_rule || "round_robin",
+          notify_manager: form.notify_manager ?? true,
         })
         .select()
         .single();
@@ -215,7 +241,18 @@ export function useUpdateForm() {
       updates,
     }: {
       id: string;
-      updates: { name?: string; description?: string; schema?: FormSchema; is_active?: boolean };
+      updates: { 
+        name?: string; 
+        description?: string; 
+        schema?: FormSchema; 
+        is_active?: boolean;
+        target_type?: FormTargetType;
+        target_department_id?: string | null;
+        target_pipeline_id?: string | null;
+        target_user_id?: string | null;
+        distribution_rule?: FormDistributionRule;
+        notify_manager?: boolean;
+      };
     }) => {
       const updatePayload: any = { ...updates };
       if (updates.schema) {
