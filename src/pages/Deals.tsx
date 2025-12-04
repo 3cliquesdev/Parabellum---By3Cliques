@@ -3,9 +3,9 @@ import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings, Users, ChevronLeft, ChevronRight } from "lucide-react";
-import { useDeals, useUpdateDeal, useUpdateDealStage } from "@/hooks/useDeals";
+import { Input } from "@/components/ui/input";
+import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings, Users, Search } from "lucide-react";
+import { useDeals, useUpdateDeal, useUpdateDealStage, DealFilters } from "@/hooks/useDeals";
 import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useSalesReps } from "@/hooks/useSalesReps";
@@ -27,6 +27,8 @@ import DragDropActionBar from "@/components/DragDropActionBar";
 import LostReasonDialog from "@/components/LostReasonDialog";
 import { PendingDealsQueue } from "@/components/deals/PendingDealsQueue";
 import { KanbanScrollNavigation } from "@/components/deals/KanbanScrollNavigation";
+import DealFilterPopover from "@/components/deals/DealFilterPopover";
+import { ActiveFilterChips, generateDealFilterChips } from "@/components/ui/active-filter-chips";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Deal = Tables<"deals"> & {
@@ -39,14 +41,19 @@ export default function Deals() {
   const [searchParams] = useSearchParams();
   const filter = searchParams.get("filter") || "all";
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
-  const [selectedSalesRep, setSelectedSalesRep] = useState<string>("all");
   const [selectedPipeline, setSelectedPipeline] = useState<string>("");
   const [showLostDialog, setShowLostDialog] = useState(false);
   const [pendingLostDeal, setPendingLostDeal] = useState<Deal | null>(null);
   
+  // Advanced filters state
+  const [dealFilters, setDealFilters] = useState<DealFilters>({
+    search: "",
+    leadSource: [],
+  });
+  
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();
   const { data: stages, isLoading: stagesLoading } = useStages(selectedPipeline);
-  const { data: deals, isLoading: dealsLoading } = useDeals(selectedPipeline);
+  const { data: deals, isLoading: dealsLoading } = useDeals(selectedPipeline, dealFilters);
   const { data: salesReps } = useSalesReps();
   const { role } = useUserRole();
   const { hasPermission } = useRolePermissions();
@@ -57,7 +64,6 @@ export default function Deals() {
   
   // Dynamic permission checks
   const canViewAllDeals = hasPermission('deals.view_all');
-  const canFilterByRep = hasPermission('deals.filter_by_rep');
   const canManagePipelines = hasPermission('deals.manage_pipelines');
   const canViewPendingQueue = hasPermission('deals.view_pending_queue');
 
@@ -74,7 +80,7 @@ export default function Deals() {
     
     let filtered = deals;
     
-    // Filtrar por status
+    // Filter by status (URL param)
     switch (filter) {
       case "open":
         filtered = filtered.filter(d => d.status === "open");
@@ -86,19 +92,39 @@ export default function Deals() {
         filtered = filtered.filter(d => d.status === "lost");
         break;
       case "rotten":
-        // Filtrar apenas deals que estão em rottenDeals
         const rottenIds = new Set(rottenDeals?.map(d => d.id) || []);
         filtered = filtered.filter(d => rottenIds.has(d.id));
         break;
     }
     
-    // Filtrar por vendedor (apenas quem tem permissão)
-    if (canFilterByRep && selectedSalesRep !== "all") {
-      filtered = filtered.filter(d => d.assigned_to === selectedSalesRep);
-    }
-    
     return filtered;
-  }, [deals, filter, selectedSalesRep, canFilterByRep, rottenDeals]);
+  }, [deals, filter, rottenDeals]);
+
+  // Generate filter chips for display
+  const filterChips = useMemo(() => 
+    generateDealFilterChips(dealFilters, salesReps || []),
+    [dealFilters, salesReps]
+  );
+
+  const handleRemoveFilterChip = (key: string) => {
+    if (key.startsWith("leadSource_")) {
+      const source = key.replace("leadSource_", "");
+      setDealFilters({
+        ...dealFilters,
+        leadSource: dealFilters.leadSource.filter(s => s !== source),
+      });
+    } else if (key === "value" || key === "valueMin") {
+      setDealFilters({ ...dealFilters, valueMin: undefined });
+    } else if (key === "valueMax") {
+      setDealFilters({ ...dealFilters, valueMax: undefined });
+    } else {
+      setDealFilters({ ...dealFilters, [key]: undefined });
+    }
+  };
+
+  const clearAllFilters = () => {
+    setDealFilters({ search: "", leadSource: [] });
+  };
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -408,28 +434,34 @@ export default function Deals() {
             </div>
           )}
 
-          {/* Sales Rep Filter */}
-          {canFilterByRep && salesReps && salesReps.length > 0 && (
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-foreground">
-                Filtrar por Vendedor:
-              </label>
-              <Select value={selectedSalesRep} onValueChange={setSelectedSalesRep}>
-                <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="Selecione um vendedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os vendedores</SelectItem>
-                  {salesReps.map((rep) => (
-                    <SelectItem key={rep.id} value={rep.id}>
-                      {rep.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          {/* Advanced Filters */}
+          <DealFilterPopover
+            filters={dealFilters}
+            onFiltersChange={setDealFilters}
+          />
+
+          {/* Search Input */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar negócios..."
+              value={dealFilters.search}
+              onChange={(e) => setDealFilters({ ...dealFilters, search: e.target.value })}
+              className="pl-9 w-[250px]"
+            />
+          </div>
         </div>
+
+        {/* Active Filter Chips */}
+        {filterChips.length > 0 && (
+          <div className="mt-4">
+            <ActiveFilterChips
+              chips={filterChips}
+              onRemoveChip={handleRemoveFilterChip}
+              onClearAll={clearAllFilters}
+            />
+          </div>
+        )}
       </div>
 
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>

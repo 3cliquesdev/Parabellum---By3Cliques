@@ -1,58 +1,110 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
-import { useUserRole } from "@/hooks/useUserRole";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts">;
 type ContactInsert = TablesInsert<"contacts">;
 type ContactUpdate = TablesUpdate<"contacts">;
 
-interface ContactFilters {
+export interface ContactFilters {
   searchQuery?: string;
   customerType?: string;
   blocked?: string;
   subscriptionPlan?: string;
+  // Advanced filters
+  status?: string;
+  lastContactFilter?: string;
+  ltvMin?: number;
+  ltvMax?: number;
+  tags?: string[];
+  state?: string;
 }
 
 export function useContacts(filters?: ContactFilters) {
-  const { user } = useAuth();
-  const { role } = useUserRole();
-
   return useQuery({
-    queryKey: ["contacts", filters, user?.id, role],
+    queryKey: ["contacts", filters],
     queryFn: async () => {
       let query = supabase
         .from("contacts")
-        .select("*, organizations(name)")
+        .select(`
+          *,
+          organizations (name)
+        `)
         .order("created_at", { ascending: false });
 
+      // Basic filters
       if (filters?.searchQuery) {
         query = query.or(
-          `first_name.ilike.%${filters.searchQuery}%,last_name.ilike.%${filters.searchQuery}%,email.ilike.%${filters.searchQuery}%`
+          `first_name.ilike.%${filters.searchQuery}%,last_name.ilike.%${filters.searchQuery}%,email.ilike.%${filters.searchQuery}%,phone.ilike.%${filters.searchQuery}%`
         );
       }
 
-      // Filtros avançados
-      if (filters?.customerType && filters.customerType !== 'all') {
+      if (filters?.customerType && filters.customerType !== "all") {
         query = query.eq("customer_type", filters.customerType);
       }
 
-      if (filters?.blocked && filters.blocked !== 'all') {
-        query = query.eq("blocked", filters.blocked === 'true');
+      if (filters?.blocked && filters.blocked !== "all") {
+        query = query.eq("blocked", filters.blocked === "true");
       }
 
-      if (filters?.subscriptionPlan && filters.subscriptionPlan !== 'all') {
+      if (filters?.subscriptionPlan && filters.subscriptionPlan !== "all") {
         query = query.eq("subscription_plan", filters.subscriptionPlan);
       }
 
-      // Nota: RLS já permite sales_rep ver todos os contatos para SELECT
-      // Não aplicamos filtro aqui para permitir seleção no dropdown de deals
+      // Advanced filters
+      if (filters?.status && filters.status !== "all") {
+        query = query.eq("status", filters.status as "lead" | "customer" | "churned" | "overdue" | "inactive" | "qualified");
+      }
+
+      if (filters?.state && filters.state !== "all") {
+        query = query.eq("state", filters.state);
+      }
+
+      // LTV range
+      if (filters?.ltvMin !== undefined) {
+        query = query.gte("total_ltv", filters.ltvMin);
+      }
+      if (filters?.ltvMax !== undefined) {
+        query = query.lte("total_ltv", filters.ltvMax);
+      }
+
+      // Last contact filter
+      if (filters?.lastContactFilter) {
+        const now = new Date();
+        switch (filters.lastContactFilter) {
+          case "7days": {
+            const sevenDaysAgo = new Date(now);
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            query = query.lt("last_contact_date", sevenDaysAgo.toISOString());
+            break;
+          }
+          case "30days": {
+            const thirtyDaysAgo = new Date(now);
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            query = query.lt("last_contact_date", thirtyDaysAgo.toISOString());
+            break;
+          }
+          case "never":
+            query = query.is("last_contact_date", null);
+            break;
+        }
+      }
 
       const { data, error } = await query;
-
       if (error) throw error;
+
+      // Client-side tag filtering (requires JOIN that's complex in Supabase)
+      if (filters?.tags && filters.tags.length > 0) {
+        const { data: taggedContacts } = await supabase
+          .from("customer_tags")
+          .select("customer_id")
+          .in("tag_id", filters.tags);
+        
+        const taggedIds = new Set(taggedContacts?.map(t => t.customer_id) || []);
+        return data?.filter(c => taggedIds.has(c.id)) || [];
+      }
+
       return data;
     },
   });
