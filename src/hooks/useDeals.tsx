@@ -4,17 +4,29 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import type { DateRange } from "react-day-picker";
 
 type Deal = Tables<"deals">;
 type DealInsert = TablesInsert<"deals">;
 type DealUpdate = TablesUpdate<"deals">;
 
-export function useDeals(pipelineId?: string) {
+export interface DealFilters {
+  valueMin?: number;
+  valueMax?: number;
+  createdDateRange?: DateRange;
+  expectedCloseDateRange?: DateRange;
+  activityStatus?: string;
+  leadSource: string[];
+  assignedTo?: string;
+  search: string;
+}
+
+export function useDeals(pipelineId?: string, filters?: DealFilters) {
   const { user } = useAuth();
   const { role } = useUserRole();
 
   return useQuery({
-    queryKey: ["deals", pipelineId],
+    queryKey: ["deals", pipelineId, filters],
     queryFn: async () => {
       let query = supabase
         .from("deals")
@@ -28,14 +40,58 @@ export function useDeals(pipelineId?: string) {
         )
         .order("created_at", { ascending: false });
 
-      // Filtrar por pipeline se especificado
+      // Filter by pipeline
       if (pipelineId) {
         query = query.eq("pipeline_id", pipelineId);
       }
 
-      // Filtrar por usuário se for sales_rep
+      // Filter by user if sales_rep (RLS also enforces this)
       if (role === "sales_rep" && user) {
         query = query.eq("assigned_to", user.id);
+      }
+
+      // Advanced filters
+      if (filters) {
+        // Value range
+        if (filters.valueMin !== undefined) {
+          query = query.gte("value", filters.valueMin);
+        }
+        if (filters.valueMax !== undefined) {
+          query = query.lte("value", filters.valueMax);
+        }
+
+        // Created date range
+        if (filters.createdDateRange?.from) {
+          query = query.gte("created_at", filters.createdDateRange.from.toISOString());
+        }
+        if (filters.createdDateRange?.to) {
+          const endDate = new Date(filters.createdDateRange.to);
+          endDate.setHours(23, 59, 59, 999);
+          query = query.lte("created_at", endDate.toISOString());
+        }
+
+        // Expected close date range
+        if (filters.expectedCloseDateRange?.from) {
+          query = query.gte("expected_close_date", filters.expectedCloseDateRange.from.toISOString().split('T')[0]);
+        }
+        if (filters.expectedCloseDateRange?.to) {
+          query = query.lte("expected_close_date", filters.expectedCloseDateRange.to.toISOString().split('T')[0]);
+        }
+
+        // Lead source (multi-select)
+        if (filters.leadSource.length > 0) {
+          query = query.in("lead_source", filters.leadSource);
+        }
+
+        // Assigned to (for managers filtering)
+        if (filters.assignedTo) {
+          query = query.eq("assigned_to", filters.assignedTo);
+        }
+
+        // Search by title
+        if (filters.search) {
+          query = query.ilike("title", `%${filters.search}%`);
+        }
       }
 
       const { data, error } = await query;

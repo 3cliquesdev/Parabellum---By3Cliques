@@ -4,13 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -30,13 +23,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Search, Plus, Mail, Phone, Trash2, Eye, Filter } from "lucide-react";
-import { useContacts, useDeleteContact } from "@/hooks/useContacts";
+import { Search, Plus, Mail, Phone, Trash2, Eye } from "lucide-react";
+import { useContacts, useDeleteContact, ContactFilters } from "@/hooks/useContacts";
+import { useTags } from "@/hooks/useTags";
 import ContactDialog from "@/components/ContactDialog";
 import ContactSheet from "@/components/ContactSheet";
 import { ContactCard } from "@/components/contacts/ContactCard";
 import { PageContainer, PageHeader, PageContent, PageFilters } from "@/components/ui/page-container";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
+import ContactFilterPopover from "@/components/contacts/ContactFilterPopover";
+import { ActiveFilterChips, generateContactFilterChips } from "@/components/ui/active-filter-chips";
 import type { Tables } from "@/integrations/supabase/types";
 
 type ContactWithOrg = Tables<"contacts"> & {
@@ -48,18 +44,30 @@ export default function Contacts() {
   const navigate = useNavigate();
   const isMobile = useIsMobileBreakpoint();
   const filter = searchParams.get("filter") || "all";
-  const [searchQuery, setSearchQuery] = useState("");
-  const [customerType, setCustomerType] = useState("all");
-  const [blocked, setBlocked] = useState("all");
-  const [subscriptionPlan, setSubscriptionPlan] = useState("all");
   const [selectedContact, setSelectedContact] = useState<ContactWithOrg | null>(null);
   const [showContactSheet, setShowContactSheet] = useState(false);
   
+  // Advanced filters state
+  const [contactFilters, setContactFilters] = useState<ContactFilters & { search: string; tags: string[] }>({
+    search: "",
+    tags: [],
+    customerType: "all",
+    blocked: "all",
+    subscriptionPlan: "all",
+  });
+
+  const { data: tags } = useTags("customer");
   const { data: contacts, isLoading } = useContacts({
-    searchQuery,
-    customerType,
-    blocked,
-    subscriptionPlan,
+    searchQuery: contactFilters.search,
+    customerType: contactFilters.customerType,
+    blocked: contactFilters.blocked,
+    subscriptionPlan: contactFilters.subscriptionPlan,
+    status: contactFilters.status,
+    lastContactFilter: contactFilters.lastContactFilter,
+    ltvMin: contactFilters.ltvMin,
+    ltvMax: contactFilters.ltvMax,
+    tags: contactFilters.tags,
+    state: contactFilters.state,
   });
   const deleteContact = useDeleteContact();
 
@@ -81,6 +89,38 @@ export default function Contacts() {
         return contacts;
     }
   }, [contacts, filter]);
+
+  // Generate filter chips
+  const filterChips = useMemo(() => 
+    generateContactFilterChips(contactFilters, tags || []),
+    [contactFilters, tags]
+  );
+
+  const handleRemoveFilterChip = (key: string) => {
+    if (key.startsWith("tag_")) {
+      const tagId = key.replace("tag_", "");
+      setContactFilters({
+        ...contactFilters,
+        tags: contactFilters.tags.filter(t => t !== tagId),
+      });
+    } else if (key === "ltv" || key === "ltvMin") {
+      setContactFilters({ ...contactFilters, ltvMin: undefined });
+    } else if (key === "ltvMax") {
+      setContactFilters({ ...contactFilters, ltvMax: undefined });
+    } else {
+      setContactFilters({ ...contactFilters, [key]: undefined });
+    }
+  };
+
+  const clearAllFilters = () => {
+    setContactFilters({
+      search: "",
+      tags: [],
+      customerType: "all",
+      blocked: "all",
+      subscriptionPlan: "all",
+    });
+  };
 
   const handleContactClick = (contact: ContactWithOrg) => {
     if (isMobile) {
