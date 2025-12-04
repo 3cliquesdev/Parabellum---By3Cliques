@@ -1744,6 +1744,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          design_json: Json | null
           html_body: string
           id: string
           is_active: boolean
@@ -1756,6 +1757,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          design_json?: Json | null
           html_body: string
           id?: string
           is_active?: boolean
@@ -1768,6 +1770,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          design_json?: Json | null
           html_body?: string
           id?: string
           is_active?: boolean

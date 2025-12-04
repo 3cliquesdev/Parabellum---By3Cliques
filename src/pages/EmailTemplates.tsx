@@ -122,10 +122,16 @@ export default function EmailTemplates() {
             Crie e gerencie templates reutilizáveis para suas automações
           </p>
         </div>
-        <Button onClick={handleNewTemplate} size="lg" className="gap-2">
-          <Plus className="h-5 w-5" />
-          Novo Template
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate("/email-templates/builder")} size="lg" className="gap-2">
+            <Sparkles className="h-5 w-5" />
+            Editor Visual 2.0
+          </Button>
+          <Button onClick={handleNewTemplate} size="lg" className="gap-2">
+            <Plus className="h-5 w-5" />
+            Novo Template
+          </Button>
+        </div>
       </div>
 
       {/* Empty State */}

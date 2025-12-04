@@ -157,6 +157,7 @@ export function EmailTemplateDialog({
           trigger_type: data.trigger_type,
           is_active: data.is_active,
           variables: variables,
+          design_json: null,
         });
       }
       onOpenChange(false);
