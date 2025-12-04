@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { ImageUploader } from "@/components/ImageUploader";
 
 interface FormSettingsPanelProps {
   settings: FormSettings;
@@ -18,14 +19,12 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
       </div>
 
       {/* Logo */}
-      <div className="space-y-2">
-        <Label>Logo (URL)</Label>
-        <Input
-          value={settings.logo_url || ""}
-          onChange={(e) => onChange({ logo_url: e.target.value })}
-          placeholder="https://..."
-        />
-      </div>
+      <ImageUploader
+        label="Logo"
+        value={settings.logo_url}
+        onChange={(url) => onChange({ logo_url: url || undefined })}
+        folder="forms/logos"
+      />
 
       {/* Cores */}
       <div className="grid grid-cols-2 gap-4">
@@ -64,14 +63,13 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
       </div>
 
       {/* Imagem de Fundo */}
-      <div className="space-y-2">
-        <Label>Imagem de Fundo (URL)</Label>
-        <Input
-          value={settings.background_image || ""}
-          onChange={(e) => onChange({ background_image: e.target.value })}
-          placeholder="https://..."
-        />
-      </div>
+      <ImageUploader
+        label="Imagem de Fundo"
+        value={settings.background_image}
+        onChange={(url) => onChange({ background_image: url || undefined })}
+        folder="forms/backgrounds"
+        previewClassName="h-40"
+      />
 
       <Separator />
 

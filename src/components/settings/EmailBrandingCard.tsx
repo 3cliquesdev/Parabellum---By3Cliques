@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,7 @@ import {
   EmailBranding,
 } from "@/hooks/useEmailBranding";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ImageUploader } from "@/components/ImageUploader";
 
 interface BrandingDialogProps {
   open: boolean;
@@ -45,15 +46,31 @@ function BrandingDialog({ open, onOpenChange, branding }: BrandingDialogProps) {
   const updateMutation = useUpdateEmailBranding();
   
   const [formData, setFormData] = useState({
-    name: branding?.name || "",
-    logo_url: branding?.logo_url || "",
-    header_color: branding?.header_color || "#1e3a5f",
-    primary_color: branding?.primary_color || "#2563eb",
-    footer_text: branding?.footer_text || "",
-    footer_logo_url: branding?.footer_logo_url || "",
-    is_default_customer: branding?.is_default_customer || false,
-    is_default_employee: branding?.is_default_employee || false,
+    name: "",
+    logo_url: "",
+    header_color: "#1e3a5f",
+    primary_color: "#2563eb",
+    footer_text: "",
+    footer_logo_url: "",
+    is_default_customer: false,
+    is_default_employee: false,
   });
+
+  // Reset form when branding changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      setFormData({
+        name: branding?.name || "",
+        logo_url: branding?.logo_url || "",
+        header_color: branding?.header_color || "#1e3a5f",
+        primary_color: branding?.primary_color || "#2563eb",
+        footer_text: branding?.footer_text || "",
+        footer_logo_url: branding?.footer_logo_url || "",
+        is_default_customer: branding?.is_default_customer || false,
+        is_default_employee: branding?.is_default_employee || false,
+      });
+    }
+  }, [open, branding]);
 
   const handleSubmit = async () => {
     try {
@@ -129,25 +146,19 @@ function BrandingDialog({ open, onOpenChange, branding }: BrandingDialogProps) {
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="logo_url">URL do Logo (Header)</Label>
-            <Input
-              id="logo_url"
-              value={formData.logo_url || ""}
-              onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
-              placeholder="https://..."
-            />
-          </div>
+          <ImageUploader
+            label="Logo (Header)"
+            value={formData.logo_url}
+            onChange={(url) => setFormData({ ...formData, logo_url: url || "" })}
+            folder="email-branding/logos"
+          />
 
-          <div className="grid gap-2">
-            <Label htmlFor="footer_logo_url">URL do Logo (Footer)</Label>
-            <Input
-              id="footer_logo_url"
-              value={formData.footer_logo_url || ""}
-              onChange={(e) => setFormData({ ...formData, footer_logo_url: e.target.value })}
-              placeholder="https://..."
-            />
-          </div>
+          <ImageUploader
+            label="Logo (Footer)"
+            value={formData.footer_logo_url}
+            onChange={(url) => setFormData({ ...formData, footer_logo_url: url || "" })}
+            folder="email-branding/footer-logos"
+          />
 
           <div className="grid gap-2">
             <Label htmlFor="footer_text">Texto do Rodapé</Label>
@@ -297,11 +308,11 @@ export function EmailBrandingCard() {
             >
               <div className="flex items-center gap-4">
                 <div
-                  className="w-12 h-12 rounded flex items-center justify-center"
+                  className="w-12 h-12 rounded flex items-center justify-center overflow-hidden"
                   style={{ backgroundColor: branding.header_color }}
                 >
                   {branding.logo_url ? (
-                    <Image className="h-6 w-6 text-white" />
+                    <img src={branding.logo_url} alt={branding.name} className="h-8 w-8 object-contain" />
                   ) : (
                     <span className="text-white font-bold text-lg">
                       {branding.name.charAt(0)}

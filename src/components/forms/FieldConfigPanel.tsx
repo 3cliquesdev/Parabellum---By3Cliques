@@ -14,6 +14,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Plus, X, GitBranch } from "lucide-react";
 import { useState } from "react";
+import { ImageUploader } from "@/components/ImageUploader";
 
 interface FieldConfigPanelProps {
   field: FormField;
@@ -242,15 +243,16 @@ export function FieldConfigPanel({ field, allFields, onChange }: FieldConfigPane
         )}
       </div>
 
+      <Separator />
+
       {/* Imagem de Fundo */}
-      <div className="space-y-2">
-        <Label>Imagem de Fundo (URL)</Label>
-        <Input
-          value={field.image_url || ""}
-          onChange={(e) => onChange({ image_url: e.target.value })}
-          placeholder="https://..."
-        />
-      </div>
+      <ImageUploader
+        label="Imagem de Fundo"
+        value={field.image_url}
+        onChange={(url) => onChange({ image_url: url || undefined })}
+        folder="forms/field-backgrounds"
+        previewClassName="h-32"
+      />
     </div>
   );
 }

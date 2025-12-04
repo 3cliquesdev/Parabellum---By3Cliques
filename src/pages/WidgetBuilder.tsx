@@ -9,6 +9,7 @@ import { useDepartments } from "@/hooks/useDepartments";
 import { Copy, Check, Code2, Palette, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import WidgetPreview from "@/components/WidgetPreview";
+import { ImageUploader } from "@/components/ImageUploader";
 
 export default function WidgetBuilder() {
   const { data: departments } = useDepartments();
@@ -125,15 +126,12 @@ export default function WidgetBuilder() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="logo">URL do Logo (opcional)</Label>
-                <Input
-                  id="logo"
-                  value={config.logo}
-                  onChange={(e) => setConfig({ ...config, logo: e.target.value })}
-                  placeholder="https://seu-site.com/logo.png"
-                />
-              </div>
+              <ImageUploader
+                label="Logo (opcional)"
+                value={config.logo || null}
+                onChange={(url) => setConfig({ ...config, logo: url || "" })}
+                folder="widget/logos"
+              />
             </CardContent>
           </Card>
 
