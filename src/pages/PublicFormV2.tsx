@@ -2,14 +2,20 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useForm } from "@/hooks/useForms";
-import { FormField, FormSchema, FieldLogic, DEFAULT_FORM_SETTINGS } from "@/hooks/useForms";
+import { FormField, FormSchema, FieldLogic, DEFAULT_FORM_SETTINGS, FormSettings } from "@/hooks/useForms";
 import { useSubmitForm } from "@/hooks/useForms";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { RatingField, YesNoField, LongTextField, DateField, SelectField } from "@/components/forms/fields";
 import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+
+// Helper to convert hex to rgba
+function hexToRgba(hex: string, opacity: number = 1): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return `rgba(26, 26, 46, ${opacity})`;
+  return `rgba(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}, ${opacity})`;
+}
 
 interface PublicFormV2Props {
   formId?: string;
@@ -26,7 +32,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
 
   // Use prop schema for preview, or loaded form data
   const schema = propSchema || formData?.schema;
-  const settings = schema?.settings || DEFAULT_FORM_SETTINGS;
+  const settings = { ...DEFAULT_FORM_SETTINGS, ...schema?.settings };
   const fields = schema?.fields || [];
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -161,6 +167,22 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
     setAnswers(prev => ({ ...prev, [currentField.id]: value }));
   };
 
+  // Card styles based on settings
+  const cardOpacity = (settings.card_opacity ?? 90) / 100;
+  const cardStyles: React.CSSProperties = {
+    backgroundColor: hexToRgba(settings.card_background_color || "#1a1a2e", cardOpacity),
+    borderRadius: `${settings.border_radius ?? 16}px`,
+    backdropFilter: cardOpacity < 1 ? "blur(12px)" : undefined,
+    WebkitBackdropFilter: cardOpacity < 1 ? "blur(12px)" : undefined,
+  };
+
+  // Input styles - FORCED HIGH CONTRAST
+  const inputStyles: React.CSSProperties = {
+    backgroundColor: settings.input_background_color || "#ffffff",
+    color: settings.input_text_color || "#000000",
+    borderColor: settings.input_border_color || "#e5e7eb",
+  };
+
   // Loading state
   if (!isPreview && isLoadingForm) {
     return (
@@ -168,7 +190,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
         className="min-h-screen flex items-center justify-center"
         style={{ backgroundColor: settings.background_color }}
       >
-        <Loader2 className="h-8 w-8 animate-spin text-white" />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: settings.text_color }} />
       </div>
     );
   }
@@ -180,9 +202,9 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
         className="min-h-screen flex items-center justify-center"
         style={{ backgroundColor: settings.background_color }}
       >
-        <div className="text-center text-white">
+        <div className="text-center" style={{ color: settings.text_color }}>
           <h1 className="text-2xl font-bold mb-2">Formulário não encontrado</h1>
-          <p className="text-white/60">Este formulário pode ter sido desativado.</p>
+          <p style={{ opacity: 0.6 }}>Este formulário pode ter sido desativado.</p>
         </div>
       </div>
     );
@@ -202,7 +224,8 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="text-center max-w-md"
+          className="text-center max-w-md p-8"
+          style={cardStyles}
         >
           <motion.div
             initial={{ scale: 0 }}
@@ -212,10 +235,16 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
           >
             <Check className="h-10 w-10 text-white" />
           </motion.div>
-          <h1 className="text-3xl font-bold text-white mb-3">
+          <h1 
+            className="text-3xl font-bold mb-3"
+            style={{ color: settings.text_color }}
+          >
             {settings.thank_you_title || "Obrigado!"}
           </h1>
-          <p className="text-white/70 text-lg">
+          <p 
+            className="text-lg"
+            style={{ color: settings.text_color, opacity: 0.7 }}
+          >
             {settings.thank_you_message || "Suas respostas foram enviadas com sucesso."}
           </p>
         </motion.div>
@@ -250,7 +279,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
           {settings.show_progress_bar !== false && fields.length > 0 && (
             <div className="space-y-2">
               <Progress value={progress} className="h-1" />
-              <p className="text-xs text-white/50">
+              <p className="text-xs" style={{ color: settings.text_color, opacity: 0.5 }}>
                 {currentIndex + 1} de {fields.length}
               </p>
             </div>
@@ -270,18 +299,25 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: direction * -100 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="space-y-8"
+                className="p-6 sm:p-8"
+                style={cardStyles}
               >
                 {/* Question */}
-                <div className="space-y-2">
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white">
+                <div className="space-y-2 mb-8">
+                  <h1 
+                    className="text-2xl sm:text-3xl lg:text-4xl font-bold"
+                    style={{ color: settings.text_color }}
+                  >
                     {currentField.label}
                     {currentField.required && (
                       <span className="text-red-400 ml-1">*</span>
                     )}
                   </h1>
                   {currentField.description && (
-                    <p className="text-white/60 text-lg">
+                    <p 
+                      className="text-lg"
+                      style={{ color: settings.text_color, opacity: 0.6 }}
+                    >
                       {currentField.description}
                     </p>
                   )}
@@ -294,6 +330,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
                     value={answers[currentField.id]}
                     onChange={updateAnswer}
                     settings={settings}
+                    inputStyles={inputStyles}
                   />
                 </div>
               </motion.div>
@@ -311,7 +348,11 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
               <Button
                 variant="ghost"
                 onClick={handleBack}
-                className="text-white/70 hover:text-white hover:bg-white/10"
+                style={{ 
+                  color: settings.text_color,
+                  opacity: 0.7,
+                }}
+                className="hover:opacity-100"
               >
                 <ChevronLeft className="h-5 w-5 mr-1" />
                 Voltar
@@ -323,7 +364,11 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
           <Button
             onClick={handleNext}
             disabled={currentField?.required && !answers[currentField?.id]}
-            style={{ backgroundColor: settings.button_color }}
+            style={{ 
+              backgroundColor: settings.button_color,
+              color: settings.button_text_color,
+              borderRadius: `${Math.min(settings.border_radius ?? 16, 12)}px`,
+            }}
             className="px-8 py-6 text-lg font-semibold"
           >
             {currentIndex === fields.length - 1 ? (
@@ -342,10 +387,19 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
 
         {/* Keyboard Hint */}
         <div className="max-w-2xl mx-auto mt-4 text-center">
-          <p className="text-xs text-white/30">
-            Pressione <kbd className="px-1 py-0.5 bg-white/10 rounded">Enter ↵</kbd> para avançar
+          <p 
+            className="text-xs"
+            style={{ color: settings.text_color, opacity: 0.3 }}
+          >
+            Pressione <kbd 
+              className="px-1 py-0.5 rounded"
+              style={{ backgroundColor: hexToRgba(settings.text_color || "#fff", 0.1) }}
+            >Enter ↵</kbd> para avançar
             {settings.allow_back_navigation !== false && (
-              <> ou <kbd className="px-1 py-0.5 bg-white/10 rounded">Esc</kbd> para voltar</>
+              <> ou <kbd 
+                className="px-1 py-0.5 rounded"
+                style={{ backgroundColor: hexToRgba(settings.text_color || "#fff", 0.1) }}
+              >Esc</kbd> para voltar</>
             )}
           </p>
         </div>
@@ -359,10 +413,11 @@ interface FormFieldInputProps {
   field: FormField;
   value: any;
   onChange: (value: any) => void;
-  settings: any;
+  settings: FormSettings;
+  inputStyles: React.CSSProperties;
 }
 
-function FormFieldInput({ field, value, onChange, settings }: FormFieldInputProps) {
+function FormFieldInput({ field, value, onChange, settings, inputStyles }: FormFieldInputProps) {
   switch (field.type) {
     case "text":
     case "email":
@@ -374,53 +429,107 @@ function FormFieldInput({ field, value, onChange, settings }: FormFieldInputProp
           value={value || ""}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
-          className="h-14 text-lg bg-white/5 border-white/20 text-white placeholder:text-white/40 focus:border-primary"
+          className="h-14 text-lg"
+          style={inputStyles}
           autoFocus
         />
       );
 
     case "long_text":
       return (
-        <LongTextField
+        <textarea
           value={value || ""}
-          onChange={onChange}
+          onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
+          className="w-full min-h-[120px] p-4 text-lg rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+          style={inputStyles}
+          autoFocus
         />
       );
 
     case "select":
       return (
-        <SelectField
-          value={value}
-          onChange={onChange}
-          options={field.options || []}
-        />
+        <div className="space-y-2">
+          {field.options?.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onChange(option)}
+              className={`w-full p-4 text-left rounded-lg border transition-all ${
+                value === option 
+                  ? "ring-2 ring-primary" 
+                  : "hover:border-primary/50"
+              }`}
+              style={{
+                ...inputStyles,
+                borderColor: value === option 
+                  ? settings.button_color 
+                  : inputStyles.borderColor,
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
       );
 
     case "rating":
       return (
-        <RatingField
-          value={value}
-          onChange={onChange}
-          min={field.min ?? 0}
-          max={field.max ?? 10}
-        />
+        <div className="flex flex-wrap gap-2 justify-center">
+          {Array.from({ length: (field.max ?? 10) - (field.min ?? 0) + 1 }, (_, i) => i + (field.min ?? 0)).map((num) => (
+            <button
+              key={num}
+              type="button"
+              onClick={() => onChange(num)}
+              className={`w-12 h-12 rounded-lg font-bold transition-all ${
+                value === num 
+                  ? "ring-2 ring-primary" 
+                  : "hover:opacity-80"
+              }`}
+              style={{
+                backgroundColor: value === num ? settings.button_color : inputStyles.backgroundColor,
+                color: value === num ? settings.button_text_color : inputStyles.color,
+              }}
+            >
+              {num}
+            </button>
+          ))}
+        </div>
       );
 
     case "yes_no":
       return (
-        <YesNoField
-          value={value}
-          onChange={onChange}
-        />
+        <div className="flex gap-4 justify-center">
+          {["Sim", "Não"].map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(opt)}
+              className={`px-8 py-4 rounded-lg font-semibold text-lg transition-all ${
+                value === opt 
+                  ? "ring-2 ring-primary" 
+                  : "hover:opacity-80"
+              }`}
+              style={{
+                backgroundColor: value === opt ? settings.button_color : inputStyles.backgroundColor,
+                color: value === opt ? settings.button_text_color : inputStyles.color,
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
       );
 
     case "date":
       return (
-        <DateField
-          value={value ? new Date(value) : null}
-          onChange={(date) => onChange(date.toISOString())}
-          placeholder={field.placeholder}
+        <Input
+          type="date"
+          value={value ? value.split("T")[0] : ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-14 text-lg"
+          style={inputStyles}
+          autoFocus
         />
       );
 

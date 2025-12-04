@@ -47,6 +47,14 @@ export interface FormSettings {
   logo_url?: string;
   button_text?: string;
   button_color?: string;
+  button_text_color?: string;       // Cor do texto do botão
+  card_background_color?: string;   // Cor do container/cartão
+  card_opacity?: number;            // Opacidade (0-100) para glassmorphism
+  border_radius?: number;           // Arredondamento (0-30px)
+  text_color?: string;              // Cor dos textos/labels
+  input_background_color?: string;  // Fundo dos inputs
+  input_text_color?: string;        // Texto dos inputs
+  input_border_color?: string;      // Borda dos inputs
   thank_you_title?: string;
   thank_you_message?: string;
   redirect_url?: string;
@@ -93,6 +101,14 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   background_color: "#0a0a0a",
   button_text: "Continuar",
   button_color: "#2563EB",
+  button_text_color: "#ffffff",
+  card_background_color: "#1a1a2e",
+  card_opacity: 90,
+  border_radius: 16,
+  text_color: "#ffffff",
+  input_background_color: "#ffffff",
+  input_text_color: "#000000",
+  input_border_color: "#e5e7eb",
   thank_you_title: "Obrigado!",
   thank_you_message: "Suas respostas foram enviadas com sucesso.",
   show_progress_bar: true,
