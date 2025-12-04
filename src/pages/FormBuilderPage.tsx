@@ -169,10 +169,10 @@ export default function FormBuilderPage() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <main className="container mx-auto px-4 py-6 h-[calc(100vh-80px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
           {/* Left Column: Form Info + Routing + Ticket Config */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="lg:col-span-1 space-y-6 overflow-y-auto max-h-[calc(100vh-120px)] pr-2 scrollbar-thin">
             {/* Form Info */}
             <Card>
               <CardHeader className="pb-3">
@@ -216,7 +216,7 @@ export default function FormBuilderPage() {
           </div>
 
           {/* Right Column: Form Builder */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-3 overflow-y-auto max-h-[calc(100vh-120px)]">
             <FormBuilderV2
               schema={schema}
               onChange={setSchema}
