@@ -123,9 +123,9 @@ export default function KanbanColumn({ stage, deals }: KanbanColumnProps) {
           {/* Ver Mais / Ver Menos Button */}
           {hasMore && (
             <Button 
-              variant="ghost" 
+              variant="outline" 
               size="sm" 
-              className="w-full mt-2"
+              className="w-full mt-2 text-muted-foreground hover:text-foreground border-dashed"
               onClick={() => setShowAll(!showAll)}
             >
               {showAll ? (

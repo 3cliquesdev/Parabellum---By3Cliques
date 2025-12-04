@@ -104,12 +104,12 @@ export default function KanbanStatusColumn({ status, title, deals }: KanbanStatu
           {/* Ver Mais / Ver Menos Button */}
           {hasMore && (
             <Button 
-              variant="ghost" 
+              variant="outline" 
               size="sm" 
               className={cn(
-                "w-full mt-2",
-                status === "won" && "hover:bg-green-100 dark:hover:bg-green-900/30",
-                status === "lost" && "hover:bg-red-100 dark:hover:bg-red-900/30"
+                "w-full mt-2 text-muted-foreground hover:text-foreground border-dashed",
+                status === "won" && "border-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/30",
+                status === "lost" && "border-red-300 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/30"
               )}
               onClick={() => setShowAll(!showAll)}
             >
