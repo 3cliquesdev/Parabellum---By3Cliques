@@ -19,13 +19,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Workflow, Edit, Trash2, Copy, BarChart3, Sparkles } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Workflow, Edit, Trash2, Copy, BarChart3, Sparkles, Package, Link2 } from "lucide-react";
 import { usePlaybooks } from "@/hooks/usePlaybooks";
 import { useCreatePlaybook } from "@/hooks/useCreatePlaybook";
 import { useUpdatePlaybook } from "@/hooks/useUpdatePlaybook";
 import { useDeletePlaybook } from "@/hooks/useDeletePlaybook";
 import { useProducts } from "@/hooks/useProducts";
+import { usePlaybookProducts } from "@/hooks/usePlaybookProducts";
 import { Switch } from "@/components/ui/switch";
+import { PlaybookProductsTab } from "@/components/playbook/PlaybookProductsTab";
 
 // Lazy load do editor para não bloquear o carregamento da página
 const PlaybookEditor = lazy(() => import("@/components/playbook/PlaybookEditor"));
@@ -129,6 +132,9 @@ export default function OnboardingBuilder() {
   const templates = playbooks?.filter((p) => p.is_template) || [];
   const customPlaybooks = playbooks?.filter((p) => !p.is_template) || [];
 
+  // Get linked products count for a playbook
+  const { data: linkedProductsForEditing } = usePlaybookProducts(editingPlaybook?.id);
+
   if (showEditor) {
     return (
       <div className="p-6">
@@ -140,24 +146,76 @@ export default function OnboardingBuilder() {
             {name || "Configure o nome e produto antes de desenhar o fluxo"}
           </p>
         </div>
-        <Suspense fallback={
-          <Card className="p-8">
-            <div className="text-center">
-              <Workflow className="h-12 w-12 mx-auto mb-4 text-muted-foreground animate-pulse" />
-              <p className="text-muted-foreground">Carregando editor visual...</p>
-            </div>
-          </Card>
-        }>
-          <PlaybookEditor
-            initialFlow={flowDefinition}
-            onSave={handleSaveFlow}
-            onCancel={() => {
-              setShowEditor(false);
-              resetForm();
-            }}
-            isSaving={isSaving}
-          />
-        </Suspense>
+
+        {editingPlaybook ? (
+          <Tabs defaultValue="editor" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="editor" className="gap-2">
+                <Workflow className="h-4 w-4" />
+                Editor de Fluxo
+              </TabsTrigger>
+              <TabsTrigger value="products" className="gap-2">
+                <Link2 className="h-4 w-4" />
+                Produtos Vinculados
+                {linkedProductsForEditing && linkedProductsForEditing.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">{linkedProductsForEditing.length}</Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="editor">
+              <Suspense fallback={
+                <Card className="p-8">
+                  <div className="text-center">
+                    <Workflow className="h-12 w-12 mx-auto mb-4 text-muted-foreground animate-pulse" />
+                    <p className="text-muted-foreground">Carregando editor visual...</p>
+                  </div>
+                </Card>
+              }>
+                <PlaybookEditor
+                  initialFlow={flowDefinition}
+                  onSave={handleSaveFlow}
+                  onCancel={() => {
+                    setShowEditor(false);
+                    resetForm();
+                  }}
+                  isSaving={isSaving}
+                />
+              </Suspense>
+            </TabsContent>
+
+            <TabsContent value="products">
+              <PlaybookProductsTab
+                playbookId={editingPlaybook?.id}
+                playbookName={name}
+              />
+              <div className="mt-4">
+                <Button variant="outline" onClick={() => { setShowEditor(false); resetForm(); }}>
+                  Voltar
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <Suspense fallback={
+            <Card className="p-8">
+              <div className="text-center">
+                <Workflow className="h-12 w-12 mx-auto mb-4 text-muted-foreground animate-pulse" />
+                <p className="text-muted-foreground">Carregando editor visual...</p>
+              </div>
+            </Card>
+          }>
+            <PlaybookEditor
+              initialFlow={flowDefinition}
+              onSave={handleSaveFlow}
+              onCancel={() => {
+                setShowEditor(false);
+                resetForm();
+              }}
+              isSaving={isSaving}
+            />
+          </Suspense>
+        )}
       </div>
     );
   }

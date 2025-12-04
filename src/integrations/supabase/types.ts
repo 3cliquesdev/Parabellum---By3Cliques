@@ -2709,6 +2709,42 @@ export type Database = {
           },
         ]
       }
+      playbook_products: {
+        Row: {
+          created_at: string | null
+          id: string
+          playbook_id: string
+          product_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          playbook_id: string
+          product_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          playbook_id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playbook_products_playbook_id_fkey"
+            columns: ["playbook_id"]
+            isOneToOne: false
+            referencedRelation: "onboarding_playbooks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playbook_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_offers: {
         Row: {
           created_at: string | null

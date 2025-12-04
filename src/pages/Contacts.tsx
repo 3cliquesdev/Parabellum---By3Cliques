@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +34,7 @@ import { PageContainer, PageHeader, PageContent, PageFilters } from "@/component
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
 import ContactFilterPopover from "@/components/contacts/ContactFilterPopover";
 import { ActiveFilterChips, generateContactFilterChips } from "@/components/ui/active-filter-chips";
+import { ContactsBulkActions } from "@/components/contacts/ContactsBulkActions";
 import type { Tables } from "@/integrations/supabase/types";
 
 type ContactWithOrg = Tables<"contacts"> & {
@@ -46,6 +48,7 @@ export default function Contacts() {
   const filter = searchParams.get("filter") || "all";
   const [selectedContact, setSelectedContact] = useState<ContactWithOrg | null>(null);
   const [showContactSheet, setShowContactSheet] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
   // Advanced filters state
   const [contactFilters, setContactFilters] = useState<ContactFilters & { search: string; tags: string[] }>({
@@ -55,6 +58,22 @@ export default function Contacts() {
     blocked: "all",
     subscriptionPlan: "all",
   });
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(filteredContacts.map(c => c.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIds([...selectedIds, id]);
+    } else {
+      setSelectedIds(selectedIds.filter(i => i !== id));
+    }
+  };
 
   const { data: tags } = useTags("customer");
   const { data: contacts, isLoading } = useContacts({
@@ -211,6 +230,12 @@ export default function Contacts() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={selectedIds.length === filteredContacts.length && filteredContacts.length > 0}
+                      onCheckedChange={handleSelectAll}
+                    />
+                  </TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>E-mail</TableHead>
                   <TableHead>Telefone</TableHead>
@@ -227,6 +252,12 @@ export default function Contacts() {
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => handleContactClick(contact)}
                   >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.includes(contact.id)}
+                        onCheckedChange={(checked) => handleSelectOne(contact.id, checked as boolean)}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
@@ -339,6 +370,11 @@ export default function Contacts() {
           onOpenChange={setShowContactSheet}
         />
       )}
+
+      <ContactsBulkActions
+        selectedIds={selectedIds}
+        onClearSelection={() => setSelectedIds([])}
+      />
     </PageContainer>
   );
 }
