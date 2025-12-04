@@ -57,8 +57,9 @@ export function RevenueEvolutionWidget() {
         </CardTitle>
         <CardDescription>Últimos 6 meses</CardDescription>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
+      <CardContent className="min-w-0">
+        <div className="w-full min-w-0">
+          <ResponsiveContainer width="100%" height={250}>
           <AreaChart data={revenueData}>
             <defs>
               <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -85,7 +86,8 @@ export function RevenueEvolutionWidget() {
               fill="url(#colorRevenue)"
             />
           </AreaChart>
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );

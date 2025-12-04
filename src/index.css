@@ -248,6 +248,35 @@
   }
 }
 
+/* Density classes for medium/notebook screens (1024-1400px) */
+@media (min-width: 1024px) and (max-width: 1400px) {
+  .bento-compact {
+    @apply text-sm;
+  }
+  
+  .bento-compact .card {
+    @apply p-3;
+  }
+  
+  /* Reduce chart heights on notebooks */
+  .chart-compact {
+    max-height: 250px !important;
+  }
+  
+  /* Compact KPI cards */
+  [class*="CardHeader"] {
+    @apply pb-2;
+  }
+  
+  [class*="CardTitle"] {
+    @apply text-sm;
+  }
+  
+  [class*="CardDescription"] {
+    @apply text-xs;
+  }
+}
+
 /* Mobile-specific overrides */
 @media (max-width: 767px) {
   .mobile-stack-nav {

@@ -189,10 +189,10 @@ export default function Dashboard() {
           {/* ROW 2: SLA Alert + WhatsApp Status */}
           {(role === "admin" || role === "manager") && (
             <>
-              <BentoCard span="3">
+              <BentoCard span="2">
                 <SLAAlertWidget />
               </BentoCard>
-              <BentoCard>
+              <BentoCard span="2">
                 <WhatsAppStatusWidget />
               </BentoCard>
             </>
