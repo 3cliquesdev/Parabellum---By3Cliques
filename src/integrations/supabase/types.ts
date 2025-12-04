@@ -1869,31 +1869,77 @@ export type Database = {
         Row: {
           created_at: string | null
           description: string | null
+          distribution_rule:
+            | Database["public"]["Enums"]["form_distribution_rule"]
+            | null
           id: string
           is_active: boolean | null
           name: string
+          notify_manager: boolean | null
           schema: Json
+          target_department_id: string | null
+          target_pipeline_id: string | null
+          target_type: Database["public"]["Enums"]["form_target_type"] | null
+          target_user_id: string | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           description?: string | null
+          distribution_rule?:
+            | Database["public"]["Enums"]["form_distribution_rule"]
+            | null
           id?: string
           is_active?: boolean | null
           name: string
+          notify_manager?: boolean | null
           schema?: Json
+          target_department_id?: string | null
+          target_pipeline_id?: string | null
+          target_type?: Database["public"]["Enums"]["form_target_type"] | null
+          target_user_id?: string | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           description?: string | null
+          distribution_rule?:
+            | Database["public"]["Enums"]["form_distribution_rule"]
+            | null
           id?: string
           is_active?: boolean | null
           name?: string
+          notify_manager?: boolean | null
           schema?: Json
+          target_department_id?: string | null
+          target_pipeline_id?: string | null
+          target_type?: Database["public"]["Enums"]["form_target_type"] | null
+          target_user_id?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "forms_target_department_id_fkey"
+            columns: ["target_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forms_target_pipeline_id_fkey"
+            columns: ["target_pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forms_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       goal_milestones: {
         Row: {
@@ -4000,6 +4046,8 @@ export type Database = {
         | "overdue"
       deal_status: "open" | "won" | "lost"
       department_type: "comercial" | "suporte" | "marketing" | "operacional"
+      form_distribution_rule: "round_robin" | "manager_only" | "specific_user"
+      form_target_type: "deal" | "ticket" | "internal_request"
       interaction_type:
         | "email_sent"
         | "email_open"
@@ -4213,6 +4261,8 @@ export const Constants = {
       ],
       deal_status: ["open", "won", "lost"],
       department_type: ["comercial", "suporte", "marketing", "operacional"],
+      form_distribution_rule: ["round_robin", "manager_only", "specific_user"],
+      form_target_type: ["deal", "ticket", "internal_request"],
       interaction_type: [
         "email_sent",
         "email_open",

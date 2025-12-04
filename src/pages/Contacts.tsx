@@ -167,77 +167,35 @@ export default function Contacts() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar contatos..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={contactFilters.search}
+            onChange={(e) => setContactFilters({ ...contactFilters, search: e.target.value })}
             className="pl-9"
           />
         </div>
 
-        {/* Filters - Hidden on mobile for simplicity */}
-        {!isMobile && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
-            
-            <Select value={customerType} onValueChange={setCustomerType}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Tipo de Cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Tipos</SelectItem>
-                <SelectItem value="Cliente">Cliente</SelectItem>
-                <SelectItem value="Vendedor">Vendedor</SelectItem>
-                <SelectItem value="Fornecedor">Fornecedor</SelectItem>
-                <SelectItem value="Parceiro">Parceiro</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={blocked} onValueChange={setBlocked}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Status</SelectItem>
-                <SelectItem value="false">Ativos</SelectItem>
-                <SelectItem value="true">Bloqueados</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={subscriptionPlan} onValueChange={setSubscriptionPlan}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Plano" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Planos</SelectItem>
-                <SelectItem value="Free">Free</SelectItem>
-                <SelectItem value="Basic">Basic</SelectItem>
-                <SelectItem value="Premium">Premium</SelectItem>
-                <SelectItem value="Enterprise">Enterprise</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {(customerType !== 'all' || blocked !== 'all' || subscriptionPlan !== 'all') && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setCustomerType('all');
-                  setBlocked('all');
-                  setSubscriptionPlan('all');
-                }}
-              >
-                Limpar Filtros
-              </Button>
-            )}
-          </div>
-        )}
+        {/* Advanced Filters */}
+        <ContactFilterPopover
+          filters={contactFilters}
+          onFiltersChange={setContactFilters}
+        />
       </PageFilters>
+
+      {/* Active Filter Chips */}
+      {filterChips.length > 0 && (
+        <div className="px-4 md:px-6 pb-4">
+          <ActiveFilterChips
+            chips={filterChips}
+            onRemoveChip={handleRemoveFilterChip}
+            onClearAll={clearAllFilters}
+          />
+        </div>
+      )}
 
       <PageContent>
         {!filteredContacts || filteredContacts.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-12 text-center">
             <p className="text-muted-foreground">
-              {searchQuery ? "Nenhum contato encontrado" : "Nenhum contato cadastrado ainda"}
+              {contactFilters.search ? "Nenhum contato encontrado" : "Nenhum contato cadastrado ainda"}
             </p>
           </div>
         ) : isMobile ? (

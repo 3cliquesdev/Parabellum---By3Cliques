@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { FormBuilderV2 } from "@/components/forms/FormBuilderV2";
 import { FormPreviewModal } from "@/components/forms/FormPreviewModal";
-import { useFormById, useCreateForm, useUpdateForm, FormSchema, DEFAULT_FORM_SETTINGS } from "@/hooks/useForms";
+import { FormRoutingConfig, FormRoutingSettings } from "@/components/forms/FormRoutingConfig";
+import { FormShareDialog } from "@/components/forms/FormShareDialog";
+import { useFormById, useCreateForm, useUpdateForm, FormSchema, DEFAULT_FORM_SETTINGS, FormTargetType, FormDistributionRule } from "@/hooks/useForms";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, Loader2, Eye, Link2, Copy, Check } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Eye, Share2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function FormBuilderPage() {
@@ -26,8 +27,12 @@ export default function FormBuilderPage() {
     fields: [],
     settings: DEFAULT_FORM_SETTINGS,
   });
+  const [routingSettings, setRoutingSettings] = useState<FormRoutingSettings>({
+    target_type: "deal",
+    distribution_rule: "round_robin",
+    notify_manager: true,
+  });
   const [showPreview, setShowPreview] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const isEditing = !!formId;
@@ -38,6 +43,14 @@ export default function FormBuilderPage() {
       setName(existingForm.name);
       setDescription(existingForm.description || "");
       setSchema(existingForm.schema);
+      setRoutingSettings({
+        target_type: existingForm.target_type || "deal",
+        target_department_id: existingForm.target_department_id || undefined,
+        target_pipeline_id: existingForm.target_pipeline_id || undefined,
+        target_user_id: existingForm.target_user_id || undefined,
+        distribution_rule: existingForm.distribution_rule || "round_robin",
+        notify_manager: existingForm.notify_manager ?? true,
+      });
     }
   }, [existingForm]);
 
@@ -53,14 +66,25 @@ export default function FormBuilderPage() {
 
     setIsSaving(true);
     try {
+      const formData = {
+        name,
+        description,
+        schema,
+        target_type: routingSettings.target_type,
+        target_department_id: routingSettings.target_department_id || null,
+        target_pipeline_id: routingSettings.target_pipeline_id || null,
+        target_user_id: routingSettings.target_user_id || null,
+        distribution_rule: routingSettings.distribution_rule,
+        notify_manager: routingSettings.notify_manager,
+      };
+
       if (isEditing) {
         await updateForm.mutateAsync({
           id: formId!,
-          updates: { name, description, schema },
+          updates: formData,
         });
       } else {
-        const result = await createForm.mutateAsync({ name, description, schema });
-        // Navigate to edit mode after creation
+        const result = await createForm.mutateAsync(formData);
         navigate(`/forms/builder/${result.id}`, { replace: true });
       }
     } finally {
@@ -68,17 +92,6 @@ export default function FormBuilderPage() {
     }
   };
 
-  const handleCopyLink = () => {
-    if (!formId) return;
-    const url = `${window.location.origin}/f/${formId}`;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast({
-      title: "Link copiado!",
-      description: "O link do formulário foi copiado para a área de transferência.",
-    });
-  };
 
   if (isLoading && isEditing) {
     return (
@@ -110,14 +123,16 @@ export default function FormBuilderPage() {
 
             <div className="flex items-center gap-2">
               {isEditing && (
-                <Button variant="outline" onClick={handleCopyLink}>
-                  {copied ? (
-                    <Check className="h-4 w-4 mr-2" />
-                  ) : (
-                    <Link2 className="h-4 w-4 mr-2" />
-                  )}
-                  {copied ? "Copiado!" : "Copiar Link"}
-                </Button>
+                <FormShareDialog
+                  formId={formId!}
+                  formName={name}
+                  trigger={
+                    <Button variant="outline">
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Compartilhar
+                    </Button>
+                  }
+                />
               )}
               <Button variant="outline" onClick={() => setShowPreview(true)}>
                 <Eye className="h-4 w-4 mr-2" />
@@ -138,39 +153,50 @@ export default function FormBuilderPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
-        {/* Form Info */}
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Informações do Formulário</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Nome do Formulário *</Label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex: Formulário de Interesse"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Descrição (opcional)</Label>
-                <Input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descrição interna..."
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Left Column: Form Info + Routing */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Form Info */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Informações</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Nome *</Label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Formulário de Interesse"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Descrição</Label>
+                  <Input
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Descrição interna..."
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Form Builder */}
-        <FormBuilderV2
-          schema={schema}
-          onChange={setSchema}
-          onPreview={() => setShowPreview(true)}
-        />
+            {/* Routing Config */}
+            <FormRoutingConfig
+              settings={routingSettings}
+              onChange={setRoutingSettings}
+            />
+          </div>
+
+          {/* Right Column: Form Builder */}
+          <div className="lg:col-span-3">
+            <FormBuilderV2
+              schema={schema}
+              onChange={setSchema}
+              onPreview={() => setShowPreview(true)}
+            />
+          </div>
+        </div>
       </main>
 
       {/* Preview Modal */}
