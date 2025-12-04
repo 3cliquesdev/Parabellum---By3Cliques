@@ -154,10 +154,13 @@ export function EmailTemplateDialog({
           name: data.name,
           subject: data.subject,
           html_body: data.html_body,
-          trigger_type: data.trigger_type,
+          trigger_type: data.trigger_type || null,
           is_active: data.is_active,
           variables: variables,
           design_json: null,
+          branding_id: null,
+          department_id: null,
+          sender_id: null,
         });
       }
       onOpenChange(false);

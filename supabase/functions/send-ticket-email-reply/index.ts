@@ -14,6 +14,16 @@ interface EmailReplyRequest {
   message_content: string;
 }
 
+// Replace variables in text with actual values
+function replaceVariables(text: string, variables: Record<string, string>): string {
+  let result = text;
+  for (const [key, value] of Object.entries(variables)) {
+    const regex = new RegExp(`\\[${key}\\]`, 'gi');
+    result = result.replace(regex, value || '');
+  }
+  return result;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -40,7 +50,8 @@ serve(async (req) => {
         subject,
         channel,
         last_email_message_id,
-        customer_id
+        customer_id,
+        department
       `)
       .eq("id", ticket_id)
       .single();
@@ -65,7 +76,59 @@ serve(async (req) => {
 
     console.log("[send-ticket-email-reply] Sending email to:", customer.email);
 
-    // Gerar HTML do email
+    // Get branding and sender from get-email-template function
+    let fromName = "Seu Armazém Drop Suporte";
+    let fromEmail = "suporte@parabellum.work";
+    let headerColor = "#1e3a5f";
+    let brandName = "Seu Armazém Drop";
+    let footerText = "Seu Armazém Drop - Equipe de Suporte";
+
+    try {
+      // Try to get configured branding
+      const { data: branding } = await supabase
+        .from("email_branding")
+        .select("*")
+        .eq("is_default_customer", true)
+        .single();
+      
+      if (branding) {
+        headerColor = branding.header_color || headerColor;
+        brandName = branding.name || brandName;
+        footerText = branding.footer_text || footerText;
+      }
+
+      // Try to get sender for support department
+      if (ticket.department) {
+        const { data: sender } = await supabase
+          .from("email_senders")
+          .select("*")
+          .eq("department_id", ticket.department)
+          .single();
+        
+        if (sender) {
+          fromName = sender.from_name;
+          fromEmail = sender.from_email;
+        }
+      }
+
+      // Fallback to default sender
+      if (fromEmail === "suporte@parabellum.work") {
+        const { data: defaultSender } = await supabase
+          .from("email_senders")
+          .select("*")
+          .eq("is_default", true)
+          .single();
+        
+        if (defaultSender) {
+          fromName = defaultSender.from_name;
+          fromEmail = defaultSender.from_email;
+        }
+      }
+    } catch (configError) {
+      console.log("[send-ticket-email-reply] Using default branding:", configError);
+    }
+
+    // Gerar HTML do email com branding configurado
     const emailHtml = `
 <!DOCTYPE html>
 <html>
@@ -74,8 +137,8 @@ serve(async (req) => {
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
   <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-      <h2 style="color: white; margin: 0;">Seu Armazém Drop</h2>
+    <div style="background: linear-gradient(135deg, ${headerColor} 0%, ${headerColor}dd 100%); padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+      <h2 style="color: white; margin: 0;">${brandName}</h2>
     </div>
     
     <div style="border: 1px solid #e5e7eb; border-top: none; padding: 30px; border-radius: 0 0 8px 8px;">
@@ -94,9 +157,9 @@ serve(async (req) => {
       </p>
     </div>
     
-    <div style="margin-top: 20px; padding: 20px; text-align: center; background: #1e3a5f; border-radius: 8px;">
+    <div style="margin-top: 20px; padding: 20px; text-align: center; background: ${headerColor}; border-radius: 8px;">
       <p style="color: #94a3b8; margin: 0; font-size: 12px;">
-        Seu Armazém Drop - Equipe de Suporte<br/>
+        ${footerText}<br/>
         Ambiente Seguro
       </p>
     </div>
@@ -112,7 +175,7 @@ serve(async (req) => {
     }
 
     const resendPayload: any = {
-      from: "Seu Armazém Drop Suporte <suporte@parabellum.work>",
+      from: `${fromName} <${fromEmail}>`,
       to: [customer.email],
       subject: `Re: ${ticket.subject} [Ticket #${ticket_id.slice(0, 8)}]`,
       html: emailHtml,

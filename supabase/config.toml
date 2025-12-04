@@ -163,3 +163,9 @@ verify_jwt = false
 [functions.ai-auto-trainer.cron]
 schedule = "0 * * * *"
 region = "us-east-1"
+
+[functions.get-email-template]
+verify_jwt = true
+
+[functions.send-ticket-email-reply]
+verify_jwt = true

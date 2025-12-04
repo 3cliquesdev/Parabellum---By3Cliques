@@ -15,6 +15,9 @@ export interface EmailTemplate {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  branding_id: string | null;
+  department_id: string | null;
+  sender_id: string | null;
 }
 
 export function useEmailTemplates() {
@@ -51,6 +54,26 @@ export function useEmailTemplate(templateId: string | undefined) {
   });
 }
 
+export function useEmailTemplateByTrigger(triggerType: string | undefined) {
+  return useQuery({
+    queryKey: ["email-templates", "trigger", triggerType],
+    queryFn: async () => {
+      if (!triggerType) throw new Error("Trigger type is required");
+
+      const { data, error } = await supabase
+        .from("email_templates")
+        .select("*, email_branding(*), email_senders(*)")
+        .eq("trigger_type", triggerType)
+        .eq("is_active", true)
+        .single();
+
+      if (error && error.code !== "PGRST116") throw error;
+      return data;
+    },
+    enabled: !!triggerType,
+  });
+}
+
 export function useCreateEmailTemplate() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -60,10 +83,13 @@ export function useCreateEmailTemplate() {
       name: string;
       subject: string;
       html_body: string;
-      trigger_type?: string;
+      trigger_type?: string | null;
       is_active?: boolean;
       variables?: Json;
-      design_json?: Json;
+      design_json?: Json | null;
+      branding_id?: string | null;
+      department_id?: string | null;
+      sender_id?: string | null;
     }) => {
       const { data, error } = await supabase
         .from("email_templates")
@@ -75,6 +101,9 @@ export function useCreateEmailTemplate() {
           is_active: template.is_active ?? true,
           variables: template.variables || null,
           design_json: template.design_json || null,
+          branding_id: template.branding_id || null,
+          department_id: template.department_id || null,
+          sender_id: template.sender_id || null,
         })
         .select()
         .single();
@@ -113,10 +142,13 @@ export function useUpdateEmailTemplate() {
         name?: string;
         subject?: string;
         html_body?: string;
-        trigger_type?: string;
+        trigger_type?: string | null;
         is_active?: boolean;
         variables?: Json;
-        design_json?: Json;
+        design_json?: Json | null;
+        branding_id?: string | null;
+        department_id?: string | null;
+        sender_id?: string | null;
       };
     }) => {
       const { data, error } = await supabase

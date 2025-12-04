@@ -1740,41 +1740,133 @@ export type Database = {
         }
         Relationships: []
       }
+      email_branding: {
+        Row: {
+          created_at: string | null
+          footer_logo_url: string | null
+          footer_text: string | null
+          header_color: string | null
+          id: string
+          is_default_customer: boolean | null
+          is_default_employee: boolean | null
+          logo_url: string | null
+          name: string
+          primary_color: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          footer_logo_url?: string | null
+          footer_text?: string | null
+          header_color?: string | null
+          id?: string
+          is_default_customer?: boolean | null
+          is_default_employee?: boolean | null
+          logo_url?: string | null
+          name: string
+          primary_color?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          footer_logo_url?: string | null
+          footer_text?: string | null
+          header_color?: string | null
+          id?: string
+          is_default_customer?: boolean | null
+          is_default_employee?: boolean | null
+          logo_url?: string | null
+          name?: string
+          primary_color?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      email_senders: {
+        Row: {
+          created_at: string | null
+          department_id: string | null
+          from_email: string
+          from_name: string
+          id: string
+          is_default: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          department_id?: string | null
+          from_email: string
+          from_name: string
+          id?: string
+          is_default?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          department_id?: string | null
+          from_email?: string
+          from_name?: string
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_senders_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
+          branding_id: string | null
           created_at: string
           created_by: string | null
+          department_id: string | null
           design_json: Json | null
           html_body: string
           id: string
           is_active: boolean
           name: string
+          sender_id: string | null
           subject: string
           trigger_type: string | null
           updated_at: string
           variables: Json | null
         }
         Insert: {
+          branding_id?: string | null
           created_at?: string
           created_by?: string | null
+          department_id?: string | null
           design_json?: Json | null
           html_body: string
           id?: string
           is_active?: boolean
           name: string
+          sender_id?: string | null
           subject: string
           trigger_type?: string | null
           updated_at?: string
           variables?: Json | null
         }
         Update: {
+          branding_id?: string | null
           created_at?: string
           created_by?: string | null
+          department_id?: string | null
           design_json?: Json | null
           html_body?: string
           id?: string
           is_active?: boolean
           name?: string
+          sender_id?: string | null
           subject?: string
           trigger_type?: string | null
           updated_at?: string
@@ -1782,10 +1874,31 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "email_templates_branding_id_fkey"
+            columns: ["branding_id"]
+            isOneToOne: false
+            referencedRelation: "email_branding"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "email_templates_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_templates_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_templates_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "email_senders"
             referencedColumns: ["id"]
           },
         ]

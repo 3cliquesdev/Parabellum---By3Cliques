@@ -20,6 +20,7 @@ import Forms from "./pages/Forms";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import EmailTemplates from "./pages/EmailTemplates";
+import EmailSettingsPage from "./pages/EmailSettingsPage";
 import EmailBuilderPage from "./pages/EmailBuilderPage";
 import Products from "./pages/Products";
 import Departments from "./pages/Departments";
@@ -167,6 +168,7 @@ const App = () => {
             <Route path="/import-clients" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><ImportClients /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><Settings /></Layout></ProtectedRoute>} />
             <Route path="/settings/integrations" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><IntegrationsSettings /></Layout></ProtectedRoute>} />
+            <Route path="/settings/email" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><EmailSettingsPage /></ProtectedRoute>} />
             <Route path="/settings/ai-trainer" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><AITrainer /></Layout></ProtectedRoute>} />
             <Route path="/settings/email-templates" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><EmailTemplates /></ProtectedRoute>} />
             <Route path="/settings/products" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><Products /></Layout></ProtectedRoute>} />
