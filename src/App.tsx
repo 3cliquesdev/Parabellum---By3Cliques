@@ -23,6 +23,8 @@ import EmailTemplates from "./pages/EmailTemplates";
 import Products from "./pages/Products";
 import Departments from "./pages/Departments";
 import PublicForm from "./pages/PublicForm";
+import PublicFormV2 from "./pages/PublicFormV2";
+import FormBuilderPage from "./pages/FormBuilderPage";
 import PublicChat from "./pages/PublicChat";
 import PublicChatWindow from "./pages/PublicChatWindow";
 import ChatLinksSettings from "./pages/ChatLinksSettings";
@@ -142,6 +144,9 @@ const App = () => {
             <Route path="/quotes/new" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "sales_rep"]}><Layout><QuoteBuilder /></Layout></ProtectedRoute>} />
             <Route path="/public-quote/:token" element={<PublicQuote />} />
             <Route path="/forms" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><Forms /></Layout></ProtectedRoute>} />
+            <Route path="/forms/builder" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><FormBuilderPage /></ProtectedRoute>} />
+            <Route path="/forms/builder/:formId" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><FormBuilderPage /></ProtectedRoute>} />
+            <Route path="/f/:formId" element={<PublicFormV2 />} />
             <Route path="/users" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><Users /></Layout></ProtectedRoute>} />
             <Route path="/automations" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><Automations /></Layout></ProtectedRoute>} />
             <Route path="/email-templates" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><EmailTemplates /></Layout></ProtectedRoute>} />

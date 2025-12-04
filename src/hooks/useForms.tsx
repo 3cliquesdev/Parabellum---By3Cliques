@@ -2,17 +2,55 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+// ==================== TIPOS EXPANDIDOS PARA FORMULÁRIOS 2.0 ====================
+
+export type FormFieldType = 
+  | "text" 
+  | "email" 
+  | "phone" 
+  | "select" 
+  | "rating"      // Escala 0-10
+  | "long_text"   // Textarea
+  | "yes_no"      // Botões Sim/Não
+  | "date"        // Calendário
+  | "number";     // Número
+
+export interface FieldLogic {
+  condition: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
+  value: string;
+  jump_to: string; // ID do campo de destino
+}
+
 export interface FormField {
   id: string;
-  type: "text" | "email" | "phone" | "select";
+  type: FormFieldType;
   label: string;
+  description?: string;       // Texto de ajuda abaixo da pergunta
   placeholder?: string;
   required?: boolean;
-  options?: string[]; // For select fields
+  options?: string[];         // Para campos select
+  image_url?: string;         // Imagem de fundo da pergunta
+  logic?: FieldLogic;         // Lógica condicional
+  min?: number;               // Para rating/number
+  max?: number;               // Para rating/number
+}
+
+export interface FormSettings {
+  background_color?: string;
+  background_image?: string;
+  logo_url?: string;
+  button_text?: string;
+  button_color?: string;
+  thank_you_title?: string;
+  thank_you_message?: string;
+  redirect_url?: string;
+  show_progress_bar?: boolean;
+  allow_back_navigation?: boolean;
 }
 
 export interface FormSchema {
   fields: FormField[];
+  settings?: FormSettings;
 }
 
 export interface Form {
@@ -24,6 +62,58 @@ export interface Form {
   created_at: string;
   updated_at: string;
 }
+
+// ==================== DEFAULT VALUES ====================
+
+export const DEFAULT_FORM_SETTINGS: FormSettings = {
+  background_color: "#0a0a0a",
+  button_text: "Continuar",
+  button_color: "#2563EB",
+  thank_you_title: "Obrigado!",
+  thank_you_message: "Suas respostas foram enviadas com sucesso.",
+  show_progress_bar: true,
+  allow_back_navigation: true,
+};
+
+export const createDefaultField = (type: FormFieldType = "text"): FormField => ({
+  id: crypto.randomUUID(),
+  type,
+  label: getDefaultLabel(type),
+  placeholder: getDefaultPlaceholder(type),
+  required: false,
+});
+
+function getDefaultLabel(type: FormFieldType): string {
+  const labels: Record<FormFieldType, string> = {
+    text: "Qual é o seu nome?",
+    email: "Qual é o seu e-mail?",
+    phone: "Qual é o seu telefone?",
+    select: "Escolha uma opção",
+    rating: "De 0 a 10, como você avalia?",
+    long_text: "Conte-nos mais",
+    yes_no: "Você concorda?",
+    date: "Selecione uma data",
+    number: "Informe um número",
+  };
+  return labels[type];
+}
+
+function getDefaultPlaceholder(type: FormFieldType): string {
+  const placeholders: Record<FormFieldType, string> = {
+    text: "Digite aqui...",
+    email: "seu@email.com",
+    phone: "(00) 00000-0000",
+    select: "Selecione...",
+    rating: "",
+    long_text: "Escreva sua resposta...",
+    yes_no: "",
+    date: "DD/MM/AAAA",
+    number: "0",
+  };
+  return placeholders[type];
+}
+
+// ==================== HOOKS ====================
 
 export function useForms() {
   return useQuery({
@@ -51,6 +141,25 @@ export function useForm(formId: string | undefined) {
         .select("*")
         .eq("id", formId)
         .eq("is_active", true)
+        .single();
+
+      if (error) throw error;
+      return data as unknown as Form;
+    },
+    enabled: !!formId,
+  });
+}
+
+export function useFormById(formId: string | undefined) {
+  return useQuery({
+    queryKey: ["forms", formId, "any"],
+    queryFn: async () => {
+      if (!formId) throw new Error("Form ID is required");
+
+      const { data, error } = await supabase
+        .from("forms")
+        .select("*")
+        .eq("id", formId)
         .single();
 
       if (error) throw error;

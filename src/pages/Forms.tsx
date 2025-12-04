@@ -15,7 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, ExternalLink, Pencil, Trash2, Copy, Ticket } from "lucide-react";
+import { Plus, ExternalLink, Pencil, Trash2, Copy, Ticket, Sparkles } from "lucide-react";
 import { useForms, useDeleteForm, useUpdateForm } from "@/hooks/useForms";
 import FormDialog from "@/components/FormDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -95,14 +95,20 @@ export default function Forms() {
             <h2 className="text-3xl font-bold text-foreground">Formulários</h2>
             <p className="text-muted-foreground">Crie formulários para captar leads</p>
           </div>
-          <FormDialog
-            trigger={
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Novo Formulário
-              </Button>
-            }
-          />
+          <div className="flex gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => navigate("/forms/builder")}>
+              <Sparkles className="h-4 w-4" />
+              Builder 2.0
+            </Button>
+            <FormDialog
+              trigger={
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Novo Formulário
+                </Button>
+              }
+            />
+          </div>
         </div>
         
         <Tabs value={filter} onValueChange={handleFilterChange}>
