@@ -173,14 +173,12 @@ export default function Contacts() {
           />
         </div>
 
-        {/* Advanced Filters */}
         <ContactFilterPopover
           filters={contactFilters}
           onFiltersChange={setContactFilters}
         />
       </PageFilters>
 
-      {/* Active Filter Chips */}
       {filterChips.length > 0 && (
         <div className="px-4 md:px-6 pb-4">
           <ActiveFilterChips
@@ -199,7 +197,6 @@ export default function Contacts() {
             </p>
           </div>
         ) : isMobile ? (
-          /* Mobile: Card List */
           <div className="rounded-lg border border-border bg-card divide-y divide-border">
             {filteredContacts.map((contact: ContactWithOrg) => (
               <ContactCard
@@ -210,7 +207,6 @@ export default function Contacts() {
             ))}
           </div>
         ) : (
-          /* Desktop: Table */
           <div className="rounded-lg border border-border bg-card">
             <Table>
               <TableHeader>
@@ -336,7 +332,6 @@ export default function Contacts() {
         )}
       </PageContent>
 
-      {/* Contact Sheet - Desktop only */}
       {!isMobile && (
         <ContactSheet
           contact={selectedContact}
