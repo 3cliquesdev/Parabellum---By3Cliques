@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,20 +9,58 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ShieldCheck, Mail, Lock, LogOut } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/useAuth";
 import logoLight from "@/assets/logo-parabellum-light.png";
+import { User, Session } from "@supabase/supabase-js";
 
 type Step = "send_code" | "verify_otp" | "set_password";
 
 export default function SetupPassword() {
   const navigate = useNavigate();
-  const { user, signOut, loading: authLoading } = useAuth();
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [step, setStep] = useState<Step>("send_code");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Verificar sessão diretamente no componente para evitar race conditions
+  useEffect(() => {
+    let mounted = true;
+
+    const checkSession = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+        
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        setAuthLoading(false);
+      } catch (err) {
+        console.error("SetupPassword: Error checking session", err);
+        if (mounted) {
+          setAuthLoading(false);
+        }
+      }
+    };
+
+    checkSession();
+
+    // Listener para mudanças de auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (!mounted) return;
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Mostrar loading enquanto verifica autenticação
   if (authLoading) {
@@ -38,12 +76,19 @@ export default function SetupPassword() {
     return <Navigate to="/auth" replace />;
   }
 
-  const userEmail = user.email;
+const userEmail = user.email;
   const userName = user.user_metadata?.full_name || "Usuário";
 
   const handleLogout = async () => {
-    await signOut();
-    navigate("/auth");
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+      setUser(null);
+      setSession(null);
+      navigate("/auth");
+    } catch (error) {
+      console.error("Logout error:", error);
+      navigate("/auth");
+    }
   };
 
   const handleSendCode = async () => {
