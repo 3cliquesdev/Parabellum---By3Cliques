@@ -223,21 +223,21 @@ export default function Forms() {
                       asChild
                     >
                       <a
-                        href={`/public/form/${form.id}`}
+                        href={`/f/${form.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
                         <ExternalLink className="h-4 w-4" />
                       </a>
                     </Button>
-                    <FormDialog
-                      form={form}
-                      trigger={
-                        <Button variant="outline" size="sm">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      }
-                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/forms/builder/${form.id}`)}
+                      title="Editar no Builder 2.0"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                    </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="outline" size="sm">

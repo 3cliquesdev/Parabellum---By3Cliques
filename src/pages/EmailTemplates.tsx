@@ -223,19 +223,28 @@ export default function EmailTemplates() {
                     size="sm"
                     variant="outline"
                     onClick={() => handlePreview(template)}
-                    className="flex-1 gap-2"
+                    className="gap-2"
                   >
                     <Eye className="h-4 w-4" />
-                    Visualizar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(`/email-templates/builder/${template.id}`)}
+                    className="flex-1 gap-2"
+                    title="Editor Visual Drag & Drop"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Editor Visual
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => handleEdit(template)}
-                    className="flex-1 gap-2 hover:bg-yellow-500/10 hover:text-yellow-500 hover:border-yellow-500/50"
+                    className="gap-2 hover:bg-yellow-500/10 hover:text-yellow-500 hover:border-yellow-500/50"
+                    title="Editar metadados"
                   >
                     <Pencil className="h-4 w-4" />
-                    Editar
                   </Button>
                   <Button
                     size="sm"
