@@ -178,12 +178,19 @@ export default function EmailBuilderPage() {
       {/* Email Builder */}
       <div className="flex-1 container mx-auto px-4 pb-4">
         <Card className="h-[calc(100vh-280px)] overflow-hidden">
-          <EmailBuilderV2
-            initialDesign={existingTemplate?.design_json}
-            initialHtml={existingTemplate?.html_body}
-            onSave={handleSave}
-            isSaving={isSaving}
-          />
+          {/* Só renderiza o editor quando os dados estiverem prontos (evita race condition) */}
+          {(!isEditing || existingTemplate) ? (
+            <EmailBuilderV2
+              initialDesign={existingTemplate?.design_json}
+              initialHtml={existingTemplate?.html_body}
+              onSave={handleSave}
+              isSaving={isSaving}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          )}
         </Card>
       </div>
     </div>
