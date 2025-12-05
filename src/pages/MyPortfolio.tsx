@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePortfolioClients } from "@/hooks/usePortfolioClients";
 import { usePortfolioKPIs } from "@/hooks/usePortfolioKPIs";
 import { useManagerPortfolioClients } from "@/hooks/useManagerPortfolioClients";
 import { useManagerPortfolioKPIs } from "@/hooks/useManagerPortfolioKPIs";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,9 @@ import { CSGoalsWidget } from "@/components/widgets/CSGoalsWidget";
 export default function MyPortfolio() {
   const navigate = useNavigate();
   const { isAdmin, isManager, isCSManager } = useUserRole();
+  const { toast } = useToast();
   const isTeamView = isAdmin || isManager || isCSManager;
+  const hasShownNotification = useRef(false);
 
   // Use different hooks based on role
   const { data: individualClients, isLoading: isLoadingIndividual } = usePortfolioClients();
@@ -43,6 +46,24 @@ export default function MyPortfolio() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+
+  // Notificar consultor sobre novos clientes (apenas uma vez por sessão)
+  useEffect(() => {
+    if (!isLoading && clients && !hasShownNotification.current && !isTeamView) {
+      const newClientsCount = clients.filter(c => c.is_new_client).length;
+      
+      if (newClientsCount > 0) {
+        hasShownNotification.current = true;
+        setActiveTab("new"); // Auto-switch to new clients tab
+        toast({
+          title: `🎉 Você tem ${newClientsCount} ${newClientsCount === 1 ? 'novo cliente' : 'novos clientes'}!`,
+          description: "Confira os detalhes na aba 'Novos'.",
+          duration: 8000,
+        });
+      }
+    }
+  }, [isLoading, clients, isTeamView, toast]);
+
   const [qbrDialogOpen, setQbrDialogOpen] = useState(false);
   const [selectedClientForQBR, setSelectedClientForQBR] = useState<{
     id: string;
