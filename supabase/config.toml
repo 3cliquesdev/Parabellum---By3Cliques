@@ -169,3 +169,6 @@ verify_jwt = true
 
 [functions.send-ticket-email-reply]
 verify_jwt = true
+
+[functions.validate-deal-closure]
+verify_jwt = true

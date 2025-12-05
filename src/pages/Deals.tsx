@@ -25,10 +25,12 @@ import PipelineStagesDialog from "@/components/deals/PipelineStagesDialog";
 import PipelineSalesRepsDialog from "@/components/deals/PipelineSalesRepsDialog";
 import DragDropActionBar from "@/components/DragDropActionBar";
 import LostReasonDialog from "@/components/LostReasonDialog";
+import ValidateWonDealDialog from "@/components/deals/ValidateWonDealDialog";
 import { PendingDealsQueue } from "@/components/deals/PendingDealsQueue";
 import { KanbanScrollNavigation } from "@/components/deals/KanbanScrollNavigation";
 import DealFilterPopover from "@/components/deals/DealFilterPopover";
 import { ActiveFilterChips, generateDealFilterChips } from "@/components/ui/active-filter-chips";
+import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Deal = Tables<"deals"> & {
@@ -44,6 +46,8 @@ export default function Deals() {
   const [selectedPipeline, setSelectedPipeline] = useState<string>("");
   const [showLostDialog, setShowLostDialog] = useState(false);
   const [pendingLostDeal, setPendingLostDeal] = useState<Deal | null>(null);
+  const [showValidateWonDialog, setShowValidateWonDialog] = useState(false);
+  const [pendingWonDeal, setPendingWonDeal] = useState<Deal | null>(null);
   
   // Advanced filters state
   const [dealFilters, setDealFilters] = useState<DealFilters>({
@@ -145,32 +149,9 @@ export default function Deals() {
 
     // Check if dropped on action zones
     if (over.id === "won-zone") {
-      // Mark as WON
-      updateDeal.mutate(
-        { 
-          id: dealId, 
-          updates: { 
-            status: "won", 
-            closed_at: new Date().toISOString() 
-          } 
-        },
-        {
-          onSuccess: () => {
-            // Trigger confetti
-            confetti({
-              particleCount: 150,
-              spread: 70,
-              origin: { y: 0.6 },
-              colors: ['#FFD700', '#FFA500', '#FF6347', '#00FF00', '#1E90FF'],
-            });
-            
-            toast({
-              title: "🎉 Negócio Ganho!",
-              description: `${deal.title} foi marcado como ganho!`,
-            });
-          },
-        }
-      );
+      // Open validation dialog instead of marking as won directly
+      setPendingWonDeal(deal);
+      setShowValidateWonDialog(true);
       return;
     }
 
@@ -234,6 +215,64 @@ export default function Deals() {
           });
           setShowLostDialog(false);
           setPendingLostDeal(null);
+        },
+      }
+    );
+  };
+
+  const handleValidationSuccess = async (validatedData: {
+    value: number;
+    gross_value: number;
+    customer_email: string;
+    customer_name: string;
+    product_name: string;
+    order_ref: string;
+  }) => {
+    if (!pendingWonDeal) return;
+
+    updateDeal.mutate(
+      {
+        id: pendingWonDeal.id,
+        updates: {
+          status: "won",
+          value: validatedData.value,
+          gross_value: validatedData.gross_value,
+          closed_at: new Date().toISOString(),
+        },
+      },
+      {
+        onSuccess: async () => {
+          // Trigger confetti
+          confetti({
+            particleCount: 150,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#FFD700', '#FFA500', '#FF6347', '#00FF00', '#1E90FF'],
+          });
+
+          toast({
+            title: "🎉 Negócio Ganho!",
+            description: `Validado com Kiwify: ${formatCurrency(validatedData.value)}`,
+          });
+
+          // Log na timeline se houver contact_id
+          if (pendingWonDeal.contact_id) {
+            await supabase.from('interactions').insert({
+              customer_id: pendingWonDeal.contact_id,
+              type: 'note',
+              content: `✅ Negócio validado com transação Kiwify: ${validatedData.order_ref} - ${formatCurrency(validatedData.value)}`,
+              channel: 'other',
+              metadata: {
+                deal_id: pendingWonDeal.id,
+                kiwify_order_ref: validatedData.order_ref,
+                validated_value: validatedData.value,
+                validated_at: new Date().toISOString(),
+              },
+            });
+          }
+
+          setShowValidateWonDialog(false);
+          setPendingWonDeal(null);
         },
       }
     );
@@ -508,6 +547,14 @@ export default function Deals() {
         }}
         onConfirm={handleLostReasonConfirm}
         dealTitle={pendingLostDeal?.title || ""}
+      />
+
+      {/* Validate Won Deal Dialog */}
+      <ValidateWonDealDialog
+        open={showValidateWonDialog}
+        onOpenChange={setShowValidateWonDialog}
+        deal={pendingWonDeal}
+        onValidationSuccess={handleValidationSuccess}
       />
     </div>
   );

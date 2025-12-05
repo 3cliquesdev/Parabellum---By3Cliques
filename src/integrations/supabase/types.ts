@@ -2193,6 +2193,7 @@ export type Database = {
           error_message: string | null
           event_type: string
           id: string
+          linked_deal_id: string | null
           offer_id: string | null
           order_id: string
           payload: Json
@@ -2205,6 +2206,7 @@ export type Database = {
           error_message?: string | null
           event_type: string
           id?: string
+          linked_deal_id?: string | null
           offer_id?: string | null
           order_id: string
           payload: Json
@@ -2217,13 +2219,22 @@ export type Database = {
           error_message?: string | null
           event_type?: string
           id?: string
+          linked_deal_id?: string | null
           offer_id?: string | null
           order_id?: string
           payload?: Json
           processed?: boolean | null
           product_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "kiwify_events_linked_deal_id_fkey"
+            columns: ["linked_deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       kiwify_webhook_tokens: {
         Row: {
