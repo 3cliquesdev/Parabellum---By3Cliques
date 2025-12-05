@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useUserRole } from "@/hooks/useUserRole";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function Products() {
-  const { isAdmin, isGeneralManager, loading: roleLoading } = useUserRole();
+  const { hasPermission, loading: permLoading } = useRolePermissions();
   const { data: products, isLoading } = useProducts();
   const deleteProduct = useDeleteProduct();
 
@@ -69,7 +69,7 @@ export default function Products() {
     };
   }, [products]);
 
-  if (roleLoading || isLoading) {
+  if (permLoading || isLoading) {
     return (
       <div className="min-h-screen p-6 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -77,7 +77,7 @@ export default function Products() {
     );
   }
 
-  if (!isAdmin && !isGeneralManager) {
+  if (!hasPermission('products.manage')) {
     return (
       <div className="min-h-screen p-6 flex items-center justify-center">
         <div className="text-center">

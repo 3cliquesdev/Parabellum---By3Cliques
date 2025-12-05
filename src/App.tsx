@@ -172,7 +172,7 @@ const App = () => {
             <Route path="/settings/email" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><EmailSettingsPage /></ProtectedRoute>} />
             <Route path="/settings/ai-trainer" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><AITrainer /></Layout></ProtectedRoute>} />
             <Route path="/settings/email-templates" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><EmailTemplates /></ProtectedRoute>} />
-            <Route path="/settings/products" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><Products /></Layout></ProtectedRoute>} />
+            <Route path="/settings/products" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "support_manager"]}><Layout><Products /></Layout></ProtectedRoute>} />
             <Route path="/settings/delivery-groups" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><DeliveryGroups /></Layout></ProtectedRoute>} />
             <Route path="/settings/departments" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><Departments /></Layout></ProtectedRoute>} />
             <Route path="/settings/chat-links" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><ChatLinksSettings /></Layout></ProtectedRoute>} />
