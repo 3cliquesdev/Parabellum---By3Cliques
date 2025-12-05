@@ -626,39 +626,35 @@ async function handlePaidOrder(
     console.warn('[kiwify-webhook] Auth error:', authErr);
   }
 
-  // 2.5 🆕 CRIAR DEAL COM STATUS "GANHO" E VALOR DA VENDA
+  // 2.5 🆕 REGISTRAR VENDA ORGÂNICA (SEM CRIAR DEAL - vai para relatórios financeiros via kiwify_events)
   const grossValue = Commissions.product_base_price / 100;
   const netValue = (Commissions.my_commission || Commissions.product_base_price) / 100;
   const kiwifyFee = (Commissions.kiwify_fee || 0) / 100;
 
-  const { data: wonDeal, error: dealError } = await supabase
-    .from('deals')
+  // ✅ Registrar venda na timeline do cliente (dados financeiros preservados em kiwify_events)
+  await supabase
+    .from('interactions')
     .insert({
-      title: `Venda Kiwify: ${Product.product_name}`,
-      contact_id: contact.id,
-      value: netValue,              // Valor líquido como principal
-      gross_value: grossValue,      // Valor bruto
-      net_value: netValue,          // Valor líquido
-      kiwify_fee: kiwifyFee,        // Taxa Kiwify
-      affiliate_commission: affiliateCommission,  // Comissão afiliado
-      affiliate_name: affiliateName,              // Nome do afiliado
-      affiliate_email: affiliateEmail,            // Email do afiliado
-      currency: 'BRL',
-      status: 'won',
-      closed_at: new Date().toISOString(),
-      pipeline_id: '00000000-0000-0000-0000-000000000001', // Pipeline de Vendas
-      stage_id: '55555555-5555-5555-5555-555555555555', // Fechado
-      product_id: product?.id || null,
-      lead_source: 'kiwify',
-    })
-    .select()
-    .single();
+      customer_id: contact.id,
+      type: 'note',
+      channel: 'other',
+      content: `💰 Venda Kiwify Orgânica: ${Product.product_name} - Bruto: R$ ${grossValue.toFixed(2)}, Líquido: R$ ${netValue.toFixed(2)}`,
+      metadata: {
+        source: 'kiwify_organic',
+        product_name: Product.product_name,
+        product_id: Product.product_id,
+        offer_id: Product.offer_id || null,
+        gross_value: grossValue,
+        net_value: netValue,
+        kiwify_fee: kiwifyFee,
+        affiliate_commission: affiliateCommission,
+        affiliate_name: affiliateName,
+        affiliate_email: affiliateEmail,
+        order_id,
+      }
+    });
 
-  if (dealError) {
-    console.error('[kiwify-webhook] ❌ Erro ao criar deal ganho:', dealError);
-  } else {
-    console.log('[kiwify-webhook] ✅ Deal ganho criado:', wonDeal.id, 'Bruto: R$', grossValue.toFixed(2), 'Líquido: R$', netValue.toFixed(2));
-  }
+  console.log('[kiwify-webhook] ✅ Venda orgânica registrada (SEM deal): Bruto R$', grossValue.toFixed(2), 'Líquido R$', netValue.toFixed(2));
 
   // 3. Buscar produto por offer_id PRIMEIRO (se disponível), fallback para external_id
   let playbook_ids: string[] = [];
@@ -762,12 +758,11 @@ async function handlePaidOrder(
     success: true,
     action: 'new_customer_onboarding',
     contact_id: contact.id,
-    deal_id: wonDeal?.id,
-    deal_gross_value: grossValue,
-    deal_net_value: netValue,
+    sale_gross_value: grossValue,
+    sale_net_value: netValue,
     playbook_ids,
     playbooks_count: playbook_ids.length,
-    message: `Novo cliente criado, Deal ganho criado (Bruto: R$ ${grossValue.toFixed(2)}, Líquido: R$ ${netValue.toFixed(2)}), Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)`
+    message: `Novo cliente criado (venda orgânica R$ ${netValue.toFixed(2)}), Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)`
   };
 }
 
@@ -809,34 +804,28 @@ async function handleUpsellOrder(
     })
     .eq('id', existingContact.id);
 
-  // 2.5 🆕 CRIAR DEAL COM STATUS "GANHO" PARA UPSELL
-  const { data: upsellDeal, error: dealError } = await supabase
-    .from('deals')
+  // 2.5 🆕 REGISTRAR UPSELL ORGÂNICO (SEM CRIAR DEAL - vai para relatórios financeiros via kiwify_events)
+  await supabase
+    .from('interactions')
     .insert({
-      title: `Upsell Kiwify: ${Product.product_name}`,
-      contact_id: existingContact.id,
-      value: netValue,              // Valor líquido
-      gross_value: grossValue,      // Valor bruto
-      net_value: netValue,          // Valor líquido
-      kiwify_fee: kiwifyFee,        // Taxa Kiwify
-      affiliate_commission: upsellAffiliateCommission,  // Comissão afiliado
-      affiliate_name: upsellAffiliateName,              // Nome do afiliado
-      affiliate_email: upsellAffiliateEmail,            // Email do afiliado
-      currency: 'BRL',
-      status: 'won',
-      closed_at: new Date().toISOString(),
-      pipeline_id: '00000000-0000-0000-0000-000000000001', // Pipeline de Vendas
-      stage_id: '55555555-5555-5555-5555-555555555555', // Fechado
-      lead_source: 'kiwify_upsell',
-    })
-    .select()
-    .single();
+      customer_id: existingContact.id,
+      type: 'note',
+      channel: 'other',
+      content: `💰 Upsell Kiwify Orgânico: ${Product.product_name} - Bruto: R$ ${grossValue.toFixed(2)}, Líquido: R$ ${netValue.toFixed(2)}`,
+      metadata: {
+        source: 'kiwify_organic_upsell',
+        product_name: Product.product_name,
+        product_id: Product.product_id,
+        gross_value: grossValue,
+        net_value: netValue,
+        kiwify_fee: kiwifyFee,
+        affiliate_commission: upsellAffiliateCommission,
+        affiliate_name: upsellAffiliateName,
+        affiliate_email: upsellAffiliateEmail,
+      }
+    });
 
-  if (dealError) {
-    console.error('[kiwify-webhook] ❌ Erro ao criar deal upsell:', dealError);
-  } else {
-    console.log('[kiwify-webhook] ✅ Deal upsell criado:', upsellDeal.id, 'Bruto: R$', grossValue.toFixed(2), 'Líquido: R$', netValue.toFixed(2));
-  }
+  console.log('[kiwify-webhook] ✅ Upsell orgânico registrado (SEM deal): Bruto R$', grossValue.toFixed(2), 'Líquido R$', netValue.toFixed(2));
 
   // 3. Buscar produto e playbooks (NOVA LÓGICA: offer_id primeiro, product_id como offer_id, external_id)
   let product = null;
@@ -997,14 +986,13 @@ async function handleUpsellOrder(
     success: true,
     action: 'upsell_processed',
     contact_id: existingContact.id,
-    deal_id: upsellDeal?.id,
-    deal_gross_value: grossValue,
-    deal_net_value: netValue,
+    sale_gross_value: grossValue,
+    sale_net_value: netValue,
     new_ltv: newLtv,
     playbook_ids,
     playbooks_count: playbook_ids.length,
     consultant_notified: !!existingContact.consultant_id,
-    message: `Upsell processado, Deal ganho criado (Bruto: R$ ${grossValue.toFixed(2)}, Líquido: R$ ${netValue.toFixed(2)}), LTV atualizado, ${playbook_ids.length} playbook(s) iniciado(s)`
+    message: `Upsell orgânico registrado (R$ ${netValue.toFixed(2)}), LTV atualizado, ${playbook_ids.length} playbook(s) iniciado(s)`
   };
 }
 
