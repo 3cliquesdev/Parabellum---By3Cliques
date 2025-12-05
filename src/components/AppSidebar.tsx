@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
@@ -181,6 +182,11 @@ const salesManagerProductivityItems = [
   { title: "Relatórios", href: "/reports", icon: FileText },
 ];
 
+// Items que requerem permissão dinâmica
+const permissionBasedCadastrosItems = [
+  { title: "Produtos", href: "/settings/products", icon: Package, permission: "products.manage" },
+];
+
 // ============= ADMIN/GENERAL MANAGER MENU (👑) =============
 const adminOverviewItems = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -238,6 +244,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const { isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, isSupportManager, isFinancialManager, isCSManager, isGeneralManager, loading } = useUserRole();
+  const { hasPermission } = useRolePermissions();
   const { signOut, user, profile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -388,6 +395,20 @@ export function AppSidebar() {
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
+
+                {/* Cadastros com permissões dinâmicas para Support Manager */}
+                {permissionBasedCadastrosItems.some(item => hasPermission(item.permission)) && (
+                  <SidebarGroup>
+                    {!collapsed && <SidebarGroupLabel>📦 Cadastros</SidebarGroupLabel>}
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {permissionBasedCadastrosItems
+                          .filter(item => hasPermission(item.permission))
+                          .map(renderMenuItem)}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                )}
               </>
             ) : null}
 
@@ -571,6 +592,20 @@ export function AppSidebar() {
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
+
+                {/* Cadastros com permissões dinâmicas para Manager */}
+                {permissionBasedCadastrosItems.some(item => hasPermission(item.permission)) && (
+                  <SidebarGroup>
+                    {!collapsed && <SidebarGroupLabel>📦 Cadastros</SidebarGroupLabel>}
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {permissionBasedCadastrosItems
+                          .filter(item => hasPermission(item.permission))
+                          .map(renderMenuItem)}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                )}
               </>
             ) : null}
 
