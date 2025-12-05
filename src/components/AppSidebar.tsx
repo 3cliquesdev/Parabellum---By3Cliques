@@ -28,8 +28,7 @@ import {
   Receipt,
   RefreshCw,
   CheckCircle2,
-  Tags,
-  Radio
+  Tags
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -115,7 +114,6 @@ const csManagerMainItems = [
 const csManagerOnboardingItems = [
   { title: "Playbooks", href: "/onboarding-builder", icon: Workflow },
   { title: "Execuções", href: "/playbook-executions", icon: CheckSquare },
-  { title: "📢 Disparador em Massa", href: "/marketing/broadcast", icon: Radio },
 ];
 
 const csManagerOperationItems = [
@@ -214,7 +212,6 @@ const adminStrategyItems = [
   { title: "Formulários", href: "/forms", icon: FileText },
   { title: "Playbooks de Onboarding", href: "/onboarding-builder", icon: Workflow },
   { title: "Execuções de Playbooks", href: "/playbook-executions", icon: CheckSquare },
-  { title: "📢 Disparador em Massa", href: "/marketing/broadcast", icon: Radio },
 ];
 
 const adminReportsItems = [
