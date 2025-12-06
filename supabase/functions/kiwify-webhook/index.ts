@@ -337,6 +337,37 @@ serve(async (req) => {
     const { order_status, Customer, Product, Commissions, order_id } = payload;
 
     // ============================================
+    // IDEMPOTENCY CHECK: Prevent duplicate processing
+    // Check if this exact event was processed in last 5 minutes
+    // ============================================
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    
+    const { data: recentEvent } = await supabase
+      .from('kiwify_events')
+      .select('id, processed')
+      .eq('order_id', order_id)
+      .eq('event_type', order_status)
+      .gte('created_at', fiveMinutesAgo)
+      .limit(1)
+      .maybeSingle();
+    
+    if (recentEvent) {
+      console.log('[kiwify-webhook] ⚠️ DUPLICATE EVENT DETECTED - Skipping:', {
+        order_id,
+        event_type: order_status,
+        existing_event_id: recentEvent.id
+      });
+      return new Response(JSON.stringify({ 
+        status: 'skipped', 
+        reason: 'duplicate_event',
+        existing_event_id: recentEvent.id
+      }), { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+
+    // ============================================
     // REGISTRAR EVENTO NA TABELA DE AUDITORIA
     // ============================================
     const eventRecord = await supabase
@@ -1524,32 +1555,47 @@ async function handleChurnOrder(
   }
 
   // 5. Create Winback Deal in "Análise de Perda / Winback" stage
-  const { data: winbackStage } = await supabase
-    .from('stages')
-    .select('id, pipeline_id')
-    .eq('name', 'Análise de Perda / Winback')
-    .single();
+  // IDEMPOTENCY: Check if Winback deal already exists for this contact
+  const { data: existingWinbackDeal } = await supabase
+    .from('deals')
+    .select('id')
+    .eq('contact_id', contact.id)
+    .eq('status', 'open')
+    .ilike('title', 'Winback%')
+    .limit(1)
+    .maybeSingle();
 
   let deal_id = null;
 
-  if (winbackStage) {
-    const { data: deal } = await supabase
-      .from('deals')
-      .insert({
-        title: `Winback - ${Product.product_name} - ${Customer.full_name}`,
-        value: 0, // No value since it's a winback opportunity
-        currency: 'BRL',
-        status: 'open',
-        stage_id: winbackStage.id,
-        pipeline_id: winbackStage.pipeline_id,
-        contact_id: contact.id,
-        lost_reason: order_status,
-      })
-      .select()
+  if (existingWinbackDeal) {
+    deal_id = existingWinbackDeal.id;
+    console.log('[kiwify-webhook] ⚠️ Winback deal already exists, skipping creation:', deal_id);
+  } else {
+    const { data: winbackStage } = await supabase
+      .from('stages')
+      .select('id, pipeline_id')
+      .eq('name', 'Análise de Perda / Winback')
       .single();
 
-    deal_id = deal?.id;
-    console.log('[kiwify-webhook] 🔄 Winback deal created:', deal_id);
+    if (winbackStage) {
+      const { data: deal } = await supabase
+        .from('deals')
+        .insert({
+          title: `Winback - ${Product.product_name} - ${Customer.full_name}`,
+          value: 0, // No value since it's a winback opportunity
+          currency: 'BRL',
+          status: 'open',
+          stage_id: winbackStage.id,
+          pipeline_id: winbackStage.pipeline_id,
+          contact_id: contact.id,
+          lost_reason: order_status,
+        })
+        .select()
+        .single();
+
+      deal_id = deal?.id;
+      console.log('[kiwify-webhook] 🔄 Winback deal created:', deal_id);
+    }
   }
 
   // 6. Registrar interação de churn
