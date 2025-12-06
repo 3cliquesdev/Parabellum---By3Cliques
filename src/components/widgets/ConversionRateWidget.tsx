@@ -66,7 +66,7 @@ export function ConversionRateWidget({ daysBack = 90 }: ConversionRateWidgetProp
   }
 
   return (
-    <Card>
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Taxa de Conversão - Tendência</span>
