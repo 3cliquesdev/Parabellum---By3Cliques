@@ -96,8 +96,8 @@ export default function Analytics() {
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="space-y-8">
+    <div className="container mx-auto p-6 min-w-0 max-w-full overflow-x-hidden">
+      <div className="space-y-8 min-w-0 max-w-full">
         {/* Header Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -172,19 +172,19 @@ export default function Analytics() {
             <SupportKPIsWidget startDate={startDate} endDate={endDate} />
 
             {/* SLA Compliance + Team Efficiency */}
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2 min-w-0">
               <SLAComplianceWidget startDate={startDate} endDate={endDate} />
               <TeamEfficiencyWidget startDate={startDate} endDate={endDate} />
             </div>
 
             {/* Volume vs Resolution + Busy Hours Heatmap */}
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2 min-w-0">
               <VolumeResolutionWidget startDate={startDate} endDate={endDate} />
               <BusyHoursHeatmap startDate={startDate} endDate={endDate} />
             </div>
 
             {/* AI Insights + Sentiment Distribution */}
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2 min-w-0">
               <AIInsightsWidget startDate={startDate} endDate={endDate} />
               <SentimentDistributionWidget startDate={startDate} endDate={endDate} />
             </div>
@@ -210,7 +210,7 @@ export default function Analytics() {
             <AIEconomyWidget startDate={startDate} endDate={endDate} />
 
             {/* AI Usage + Top Topics */}
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2 min-w-0">
               <AIUsageWidget startDate={startDate} endDate={endDate} />
               <TopTopicsWidget startDate={startDate} endDate={endDate} />
             </div>
@@ -274,7 +274,7 @@ export default function Analytics() {
             <ChatConversionFunnel startDate={startDate} endDate={endDate} />
 
             {/* Revenue by Channel + Channel Quality */}
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2 min-w-0">
               <RevenueByChannelWidget startDate={startDate} endDate={endDate} />
               <ChannelQualityWidget startDate={startDate} endDate={endDate} />
             </div>

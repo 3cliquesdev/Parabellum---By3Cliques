@@ -57,15 +57,15 @@ export function ProductMarginTable({ startDate, endDate }: ProductMarginTablePro
   const products = data?.productBreakdown || [];
 
   return (
-    <Card>
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader>
         <CardTitle className="text-foreground">Análise por Produto/Oferta</CardTitle>
         <CardDescription>
           Breakdown financeiro detalhado mostrando margem líquida por produto
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="rounded-md border border-border overflow-hidden">
+      <CardContent className="min-w-0">
+        <div className="rounded-md border border-border overflow-x-auto min-w-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
