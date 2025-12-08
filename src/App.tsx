@@ -67,6 +67,7 @@ import AITrainer from "./pages/AITrainer";
 import SalesRecovery from "./pages/SalesRecovery";
 
 import ConsultantDetail from "./pages/ConsultantDetail";
+import Consultants from "./pages/Consultants";
 
 const queryClient = new QueryClient();
 
@@ -137,6 +138,7 @@ const App = () => {
             <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["consultant", "sales_rep", "general_manager", "manager", "admin", "cs_manager"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
             <Route path="/cs-management" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><CSManagement /></Layout></ProtectedRoute>} />
             <Route path="/cs-management/consultant/:id" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><ConsultantDetail /></Layout></ProtectedRoute>} />
+            <Route path="/consultants" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><Consultants /></Layout></ProtectedRoute>} />
             <Route path="/sales-management" element={<ProtectedRoute allowedRoles={["manager", "admin", "general_manager"]}><Layout><SalesManagement /></Layout></ProtectedRoute>} />
             <Route path="/sales-management/rep/:id" element={<ProtectedRoute allowedRoles={["manager", "admin", "general_manager"]}><Layout><SalesRepDetail /></Layout></ProtectedRoute>} />
             <Route path="/contacts" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "cs_manager", "admin", "general_manager", "manager"]}><Layout><Contacts /></Layout></ProtectedRoute>} />
