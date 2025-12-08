@@ -54,7 +54,15 @@ interface CustomerResult {
   status: string;
   is_lead: boolean;
   deal_id: string;
+  deal_status: string;
 }
+
+// Helper para determinar status de exibição baseado no deal.status
+const getDisplayStatus = (dealStatus: string): string => {
+  if (dealStatus === 'won') return 'customer';
+  if (dealStatus === 'open') return 'lead';
+  return 'churned';
+};
 
 export default function PlaybookExecutions() {
   const { data: executions, isLoading } = usePlaybookExecutions();
@@ -135,8 +143,9 @@ export default function PlaybookExecutions() {
           email: contact?.email || deal.lead_email,
           purchase_date: deal.created_at,
           product_name: (deal.products as any)?.name || "N/A",
-          status: isLead ? 'lead' : (contact?.status || 'unknown'),
+          status: getDisplayStatus(deal.status),
           is_lead: isLead,
+          deal_status: deal.status,
         });
       }
 
@@ -530,6 +539,7 @@ export default function PlaybookExecutions() {
                           <TableHead>Produto</TableHead>
                           <TableHead>Data Compra</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead>Origem</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -552,8 +562,13 @@ export default function PlaybookExecutions() {
                               {format(new Date(customer.purchase_date), "dd/MM/yyyy")}
                             </TableCell>
                             <TableCell>
-                              <Badge variant={customer.is_lead ? "outline" : customer.status === "customer" ? "default" : "secondary"}>
-                                {customer.is_lead ? "📋 Lead" : customer.status === "customer" ? "✅ Cliente" : customer.status}
+                              <Badge variant={customer.status === "customer" ? "success" : customer.status === "lead" ? "outline" : "destructive"}>
+                                {customer.status === "customer" ? "✅ Cliente" : customer.status === "lead" ? "📋 Lead" : "❌ Churned"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="text-xs">
+                                {customer.is_lead ? "🏷️ Lead Manual" : "🛒 Kiwify"}
                               </Badge>
                             </TableCell>
                           </TableRow>
