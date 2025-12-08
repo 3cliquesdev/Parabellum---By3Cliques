@@ -112,7 +112,8 @@ serve(async (req) => {
           contact_id: contactId,
           status: "running",
           current_node_id: firstNode.id,
-          execution_history: [{ nodeId: "start", timestamp: new Date().toISOString() }],
+          nodes_executed: [firstNode.id],
+          started_at: new Date().toISOString(),
         })
         .select()
         .single();
