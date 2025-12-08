@@ -34,13 +34,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Activity, CheckCircle, XCircle, Clock, AlertCircle, Eye, Play, BarChart3, ListChecks, Rocket, Search, Users, Calendar, Package, Loader2 } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, AlertCircle, Eye, Play, BarChart3, ListChecks, Rocket, Search, Users, Calendar, Package, Loader2, UserCog } from "lucide-react";
 import { usePlaybookExecutions } from "@/hooks/usePlaybookExecutions";
 import { useExecutionQueue } from "@/hooks/useExecutionQueue";
 import { useProcessPlaybookQueue } from "@/hooks/useProcessPlaybookQueue";
 import { usePlaybooks, useBulkTriggerPlaybook } from "@/hooks/usePlaybooks";
 import { useProducts } from "@/hooks/useProducts";
+import { useConsultants } from "@/hooks/useConsultants";
 import { PlaybookMetricsDashboard } from "@/components/playbooks/PlaybookMetricsDashboard";
+import { ExecutionOriginBadge } from "@/components/playbooks/ExecutionOriginBadge";
+import { ChangeConsultantDialog } from "@/components/playbooks/ChangeConsultantDialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -69,6 +72,14 @@ export default function PlaybookExecutions() {
   const [selectedExecution, setSelectedExecution] = useState<any>(null);
   const { data: queueItems } = useExecutionQueue(selectedExecution?.id);
   const processQueue = useProcessPlaybookQueue();
+  const { data: consultants } = useConsultants();
+
+  // Change consultant dialog state
+  const [changeConsultantData, setChangeConsultantData] = useState<{
+    contactId: string;
+    contactName: string;
+    currentConsultantId: string | null;
+  } | null>(null);
 
   // Broadcast state
   const [productId, setProductId] = useState<string>("all");
@@ -80,6 +91,13 @@ export default function PlaybookExecutions() {
   const [skipExisting, setSkipExisting] = useState(true);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Helper to get consultant name
+  const getConsultantName = (consultantId: string | null) => {
+    if (!consultantId) return null;
+    const consultant = consultants?.find((c) => c.id === consultantId);
+    return consultant?.full_name || null;
+  };
 
   const { data: products } = useProducts();
   const { data: playbooks } = usePlaybooks();
@@ -360,56 +378,91 @@ export default function PlaybookExecutions() {
                   <p className="text-muted-foreground">Nenhuma execução registrada ainda</p>
                 </div>
               ) : (
+              <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Playbook</TableHead>
+                      <TableHead>Origem</TableHead>
+                      <TableHead>Disparado por</TableHead>
+                      <TableHead>Consultor</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Iniciado</TableHead>
-                      <TableHead>Nós Executados</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {executions?.map((execution) => (
-                      <TableRow key={execution.id}>
-                        <TableCell className="font-medium">
-                          {execution.contact?.first_name} {execution.contact?.last_name}
-                          <div className="text-xs text-muted-foreground">
-                            {execution.contact?.email}
-                          </div>
-                        </TableCell>
-                        <TableCell>{execution.playbook?.name}</TableCell>
-                        <TableCell>{getStatusBadge(execution.status)}</TableCell>
-                        <TableCell>
-                          {execution.started_at
-                            ? format(new Date(execution.started_at), "dd/MM/yyyy HH:mm", {
-                                locale: ptBR,
-                              })
-                            : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {Array.isArray(execution.nodes_executed)
-                            ? execution.nodes_executed.length
-                            : 0}{" "}
-                          nós
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setSelectedExecution(execution)}
-                            className="gap-2"
-                          >
-                            <Eye className="h-3 w-3" />
-                            Detalhes
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {executions?.map((execution) => {
+                      const consultantName = getConsultantName(execution.contact?.consultant_id);
+                      return (
+                        <TableRow key={execution.id}>
+                          <TableCell className="font-medium">
+                            {execution.contact?.first_name} {execution.contact?.last_name}
+                            <div className="text-xs text-muted-foreground">
+                              {execution.contact?.email}
+                            </div>
+                          </TableCell>
+                          <TableCell>{execution.playbook?.name}</TableCell>
+                          <TableCell>
+                            <ExecutionOriginBadge triggeredBy={execution.triggered_by} />
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {execution.triggered_by_user?.full_name || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {consultantName ? (
+                              <Badge variant="outline" className="gap-1">
+                                <UserCog className="h-3 w-3" />
+                                {consultantName}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Aguardando</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(execution.status)}</TableCell>
+                          <TableCell>
+                            {execution.started_at
+                              ? format(new Date(execution.started_at), "dd/MM HH:mm", {
+                                  locale: ptBR,
+                                })
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {execution.contact && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    setChangeConsultantData({
+                                      contactId: execution.contact_id,
+                                      contactName: `${execution.contact.first_name} ${execution.contact.last_name}`,
+                                      currentConsultantId: execution.contact.consultant_id,
+                                    })
+                                  }
+                                  title="Alterar consultor"
+                                >
+                                  <UserCog className="h-3 w-3" />
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSelectedExecution(execution)}
+                                className="gap-2"
+                              >
+                                <Eye className="h-3 w-3" />
+                                Detalhes
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
+              </div>
               )}
             </CardContent>
           </Card>
@@ -689,13 +742,46 @@ export default function PlaybookExecutions() {
           <div className="space-y-4">
             {/* Informações Gerais */}
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-sm">Informações Gerais</CardTitle>
+                {selectedExecution?.contact && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setChangeConsultantData({
+                        contactId: selectedExecution.contact_id,
+                        contactName: `${selectedExecution.contact.first_name} ${selectedExecution.contact.last_name}`,
+                        currentConsultantId: selectedExecution.contact.consultant_id,
+                      })
+                    }
+                    className="gap-2"
+                  >
+                    <UserCog className="h-4 w-4" />
+                    Alterar Consultor
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status:</span>
                   {selectedExecution && getStatusBadge(selectedExecution.status)}
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Origem:</span>
+                  <ExecutionOriginBadge triggeredBy={selectedExecution?.triggered_by} />
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Disparado por:</span>
+                  <span>{selectedExecution?.triggered_by_user?.full_name || "Sistema"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Consultor:</span>
+                  <span>
+                    {getConsultantName(selectedExecution?.contact?.consultant_id) || (
+                      <span className="text-muted-foreground">Aguardando distribuição</span>
+                    )}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Iniciado:</span>
@@ -830,6 +916,15 @@ export default function PlaybookExecutions() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Change Consultant Dialog */}
+      <ChangeConsultantDialog
+        open={!!changeConsultantData}
+        onOpenChange={(open) => !open && setChangeConsultantData(null)}
+        contactId={changeConsultantData?.contactId || ""}
+        contactName={changeConsultantData?.contactName || ""}
+        currentConsultantId={changeConsultantData?.currentConsultantId}
+      />
     </div>
   );
 }

@@ -10,10 +10,11 @@ export function usePlaybookExecutions() {
         .select(`
           *,
           playbook:onboarding_playbooks(name, description),
-          contact:contacts(first_name, last_name, email)
+          contact:contacts(first_name, last_name, email, consultant_id),
+          triggered_by_user:profiles!playbook_executions_triggered_by_user_id_fkey(full_name)
         `)
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (error) throw error;
       return data;

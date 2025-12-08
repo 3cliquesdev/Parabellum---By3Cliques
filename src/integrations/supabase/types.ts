@@ -2625,6 +2625,8 @@ export type Database = {
           playbook_id: string
           started_at: string | null
           status: string
+          triggered_by: string | null
+          triggered_by_user_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2639,6 +2641,8 @@ export type Database = {
           playbook_id: string
           started_at?: string | null
           status?: string
+          triggered_by?: string | null
+          triggered_by_user_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2653,6 +2657,8 @@ export type Database = {
           playbook_id?: string
           started_at?: string | null
           status?: string
+          triggered_by?: string | null
+          triggered_by_user_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -2668,6 +2674,13 @@ export type Database = {
             columns: ["playbook_id"]
             isOneToOne: false
             referencedRelation: "onboarding_playbooks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playbook_executions_triggered_by_user_id_fkey"
+            columns: ["triggered_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

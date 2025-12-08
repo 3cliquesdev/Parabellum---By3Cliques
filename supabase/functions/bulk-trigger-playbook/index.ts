@@ -104,7 +104,16 @@ serve(async (req) => {
       
       console.log(`First node: id=${firstNode.id}, type=${firstNode.type}`);
 
-      // Create execution
+      // Get user ID from auth header
+      const authHeader = req.headers.get("Authorization");
+      let userId: string | null = null;
+      if (authHeader) {
+        const token = authHeader.replace("Bearer ", "");
+        const { data: { user } } = await supabase.auth.getUser(token);
+        userId = user?.id || null;
+      }
+
+      // Create execution with origin tracking
       const { data: execution, error: execError } = await supabase
         .from("playbook_executions")
         .insert({
@@ -114,6 +123,8 @@ serve(async (req) => {
           current_node_id: firstNode.id,
           nodes_executed: [firstNode.id],
           started_at: new Date().toISOString(),
+          triggered_by: "bulk",
+          triggered_by_user_id: userId,
         })
         .select()
         .single();
