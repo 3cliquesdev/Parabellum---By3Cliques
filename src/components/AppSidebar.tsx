@@ -228,6 +228,7 @@ const adminReportsItems = [
 
 // Cadastros separados de Sistema
 const adminCadastrosItems = [
+  { title: "Consultores", href: "/consultants", icon: Users },
   { title: "Tags", href: "/settings/tags", icon: Tags },
   { title: "Produtos", href: "/settings/products", icon: Package },
   { title: "Departamentos", href: "/settings/departments", icon: Building2 },
