@@ -44,6 +44,7 @@ const CATEGORY_LABELS: Record<string, { label: string; icon: string }> = {
   analytics: { label: "Analytics", icon: "📉" },
   settings: { label: "Configurações", icon: "⚙️" },
   audit: { label: "Auditoria", icon: "🔍" },
+  cadastros: { label: "Cadastros", icon: "📦" },
 };
 
 // Define category display order
@@ -51,7 +52,7 @@ const CATEGORY_ORDER = [
   'inbox', 'contacts', 'deals', 'tickets', 'quotes', 'forms',
   'playbooks', 'automations', 'email', 'ai', 
   'cs', 'sales', 'analytics',
-  'knowledge', 'cadences', 'products', 'users',
+  'cadastros', 'knowledge', 'cadences', 'products', 'users',
   'settings', 'audit', 'dashboard', 'reports'
 ];
 

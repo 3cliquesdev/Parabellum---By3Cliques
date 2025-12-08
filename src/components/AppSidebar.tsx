@@ -226,12 +226,12 @@ const adminReportsItems = [
   { title: "Relatórios", href: "/reports", icon: FileText },
 ];
 
-// Cadastros separados de Sistema
+// Cadastros separados de Sistema - agora com permissões dinâmicas
 const adminCadastrosItems = [
-  { title: "Consultores", href: "/consultants", icon: Users },
-  { title: "Tags", href: "/settings/tags", icon: Tags },
-  { title: "Produtos", href: "/settings/products", icon: Package },
-  { title: "Departamentos", href: "/settings/departments", icon: Building2 },
+  { title: "Consultores", href: "/consultants", icon: Users, permission: "cadastros.view_consultants" },
+  { title: "Tags", href: "/settings/tags", icon: Tags, permission: "cadastros.view_tags" },
+  { title: "Produtos", href: "/settings/products", icon: Package, permission: "cadastros.view_products" },
+  { title: "Departamentos", href: "/settings/departments", icon: Building2, permission: "cadastros.view_departments" },
 ];
 
 const adminSystemItems = [
@@ -658,26 +658,29 @@ export function AppSidebar() {
                   </SidebarGroupContent>
                 </SidebarGroup>
 
-                {(isAdmin || isGeneralManager) && (
-                  <>
-                    <SidebarGroup>
-                      {!collapsed && <SidebarGroupLabel>📦 Cadastros</SidebarGroupLabel>}
-                      <SidebarGroupContent>
-                        <SidebarMenu>
-                          {adminCadastrosItems.map(renderMenuItem)}
-                        </SidebarMenu>
-                      </SidebarGroupContent>
-                    </SidebarGroup>
+                {/* Cadastros com permissões dinâmicas */}
+                {adminCadastrosItems.some(item => hasPermission(item.permission)) && (
+                  <SidebarGroup>
+                    {!collapsed && <SidebarGroupLabel>📦 Cadastros</SidebarGroupLabel>}
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {adminCadastrosItems
+                          .filter(item => hasPermission(item.permission))
+                          .map(renderMenuItem)}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                )}
 
-                    <SidebarGroup>
-                      {!collapsed && <SidebarGroupLabel>⚙️ Sistema</SidebarGroupLabel>}
-                      <SidebarGroupContent>
-                        <SidebarMenu>
-                          {adminSystemItems.map(renderMenuItem)}
-                        </SidebarMenu>
-                      </SidebarGroupContent>
-                    </SidebarGroup>
-                  </>
+                {(isAdmin || isGeneralManager) && (
+                  <SidebarGroup>
+                    {!collapsed && <SidebarGroupLabel>⚙️ Sistema</SidebarGroupLabel>}
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {adminSystemItems.map(renderMenuItem)}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
                 )}
               </>
             ) : null}
