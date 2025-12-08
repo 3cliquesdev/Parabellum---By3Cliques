@@ -21,40 +21,5 @@ export function usePlaybooks() {
   });
 }
 
-export function useBulkTriggerPlaybook() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async ({
-      contactIds,
-      playbookId,
-      skipExisting = true,
-    }: {
-      contactIds: string[];
-      playbookId: string;
-      skipExisting?: boolean;
-    }) => {
-      const { data, error } = await supabase.functions.invoke("bulk-trigger-playbook", {
-        body: { contactIds, playbookId, skipExisting },
-      });
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["playbook-executions"] });
-      toast({
-        title: "Disparo iniciado!",
-        description: `${data?.processed || 0} clientes processados com sucesso.`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Erro no disparo",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-}
+// Re-export from dedicated file for backwards compatibility
+export { useBulkTriggerPlaybook } from "./useBulkTriggerPlaybook";

@@ -8,8 +8,9 @@ const corsHeaders = {
 
 interface BulkTriggerRequest {
   contactIds: string[];
+  dealIds?: string[];
   playbookId: string;
-  skipExisting: boolean;
+  skipExisting?: boolean;
 }
 
 serve(async (req) => {
@@ -22,11 +23,11 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { contactIds, playbookId, skipExisting }: BulkTriggerRequest = await req.json();
+    const { contactIds = [], dealIds = [], playbookId, skipExisting = true }: BulkTriggerRequest = await req.json();
 
-    if (!contactIds?.length || !playbookId) {
+    if ((!contactIds?.length && !dealIds?.length) || !playbookId) {
       return new Response(
-        JSON.stringify({ error: "contactIds and playbookId are required" }),
+        JSON.stringify({ error: "contactIds/dealIds and playbookId are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -47,7 +48,9 @@ serve(async (req) => {
 
     let skipped = 0;
     let processed = 0;
+    let leadsConverted = 0;
     const errors: string[] = [];
+    const totalItems = contactIds.length + dealIds.length;
 
     // Create tracking job
     const { data: job } = await supabase
@@ -55,16 +58,22 @@ serve(async (req) => {
       .insert({
         type: "bulk_playbook_trigger",
         status: "processing",
-        metadata: { playbookId, playbookName: playbook.name, totalContacts: contactIds.length },
+        metadata: { 
+          playbookId, 
+          playbookName: playbook.name, 
+          totalContacts: contactIds.length,
+          totalLeads: dealIds.length,
+          totalItems,
+        },
       })
       .select()
       .single();
 
     const jobId = job?.id;
 
-    // Get existing executions if skipExisting
+    // Get existing executions if skipExisting (only for contacts)
     let existingExecutions: Set<string> = new Set();
-    if (skipExisting) {
+    if (skipExisting && contactIds.length > 0) {
       const { data: existing } = await supabase
         .from("playbook_executions")
         .select("contact_id")
@@ -74,7 +83,55 @@ serve(async (req) => {
       existingExecutions = new Set((existing || []).map(e => e.contact_id));
     }
 
-    // Process contacts
+    // Helper function to process a contact
+    async function processContact(contactId: string, source: 'contact' | 'lead_converted') {
+      // Get first node from flow
+      const flowDefinition = playbook.flow_definition as any;
+      const nodes = flowDefinition?.nodes || [];
+      const firstNode = nodes.find((n: any) => n.type !== "start") || nodes[0];
+
+      if (!firstNode) {
+        throw new Error("No valid start node in playbook");
+      }
+
+      // Create execution
+      const { data: execution, error: execError } = await supabase
+        .from("playbook_executions")
+        .insert({
+          playbook_id: playbookId,
+          contact_id: contactId,
+          status: "running",
+          current_node_id: firstNode.id,
+          execution_history: [{ nodeId: "start", timestamp: new Date().toISOString() }],
+        })
+        .select()
+        .single();
+
+      if (execError) {
+        throw new Error(execError.message);
+      }
+
+      // Queue first node
+      await supabase.from("playbook_execution_queue").insert({
+        execution_id: execution.id,
+        node_id: firstNode.id,
+        node_type: firstNode.type,
+        node_data: firstNode.data,
+        scheduled_for: new Date().toISOString(),
+        status: "pending",
+      });
+
+      // Log interaction
+      await supabase.from("interactions").insert({
+        customer_id: contactId,
+        type: "note",
+        content: `Playbook "${playbook.name}" iniciado via disparo em massa${source === 'lead_converted' ? ' (lead convertido)' : ''}`,
+        channel: "other",
+        metadata: { playbook_id: playbookId, trigger: "bulk_action", job_id: jobId, source },
+      });
+    }
+
+    // Process existing contacts
     for (const contactId of contactIds) {
       try {
         // Skip if already has execution
@@ -83,59 +140,82 @@ serve(async (req) => {
           continue;
         }
 
-        // Get first node from flow
-        const flowDefinition = playbook.flow_definition as any;
-        const nodes = flowDefinition?.nodes || [];
-        const firstNode = nodes.find((n: any) => n.type !== "start") || nodes[0];
-
-        if (!firstNode) {
-          errors.push(`Contact ${contactId}: No valid start node in playbook`);
-          continue;
-        }
-
-        // Create execution
-        const { data: execution, error: execError } = await supabase
-          .from("playbook_executions")
-          .insert({
-            playbook_id: playbookId,
-            contact_id: contactId,
-            status: "running",
-            current_node_id: firstNode.id,
-            execution_history: [{ nodeId: "start", timestamp: new Date().toISOString() }],
-          })
-          .select()
-          .single();
-
-        if (execError) {
-          errors.push(`Contact ${contactId}: ${execError.message}`);
-          continue;
-        }
-
-        // Queue first node
-        await supabase.from("playbook_execution_queue").insert({
-          execution_id: execution.id,
-          node_id: firstNode.id,
-          node_type: firstNode.type,
-          node_data: firstNode.data,
-          scheduled_for: new Date().toISOString(),
-          status: "pending",
-        });
-
-        // Log interaction
-        await supabase.from("interactions").insert({
-          customer_id: contactId,
-          type: "note",
-          content: `Playbook "${playbook.name}" iniciado via disparo em massa`,
-          channel: "other",
-          metadata: { playbook_id: playbookId, trigger: "bulk_action", job_id: jobId },
-        });
-
+        await processContact(contactId, 'contact');
         processed++;
 
         // Rate limit - wait 200ms between each
         await new Promise(resolve => setTimeout(resolve, 200));
       } catch (err: any) {
         errors.push(`Contact ${contactId}: ${err.message}`);
+      }
+    }
+
+    // Process leads (deals without contact_id) - convert to contacts first
+    for (const dealId of dealIds) {
+      try {
+        // Fetch deal data
+        const { data: deal, error: dealError } = await supabase
+          .from("deals")
+          .select("id, title, lead_email, lead_phone, contact_id")
+          .eq("id", dealId)
+          .single();
+
+        if (dealError || !deal) {
+          errors.push(`Deal ${dealId}: Deal not found`);
+          continue;
+        }
+
+        // If deal already has a contact, use it
+        if (deal.contact_id) {
+          if (skipExisting && existingExecutions.has(deal.contact_id)) {
+            skipped++;
+            continue;
+          }
+          await processContact(deal.contact_id, 'contact');
+          processed++;
+          await new Promise(resolve => setTimeout(resolve, 200));
+          continue;
+        }
+
+        // Create contact from lead data
+        const leadName = deal.title?.split(' - ').slice(1).join(' - ') || deal.title || 'Lead';
+        const nameParts = leadName.split(' ');
+        const firstName = nameParts[0] || 'Lead';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
+        const { data: newContact, error: contactError } = await supabase
+          .from("contacts")
+          .insert({
+            first_name: firstName,
+            last_name: lastName,
+            email: deal.lead_email,
+            phone: deal.lead_phone,
+            status: "lead",
+            source: "bulk_trigger_conversion",
+          })
+          .select()
+          .single();
+
+        if (contactError) {
+          errors.push(`Deal ${dealId}: Failed to create contact - ${contactError.message}`);
+          continue;
+        }
+
+        // Update deal with contact_id
+        await supabase
+          .from("deals")
+          .update({ contact_id: newContact.id })
+          .eq("id", dealId);
+
+        // Process the new contact
+        await processContact(newContact.id, 'lead_converted');
+        processed++;
+        leadsConverted++;
+
+        // Rate limit
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch (err: any) {
+        errors.push(`Deal ${dealId}: ${err.message}`);
       }
     }
 
@@ -150,23 +230,27 @@ serve(async (req) => {
             playbookId,
             playbookName: playbook.name,
             totalContacts: contactIds.length,
+            totalLeads: dealIds.length,
+            totalItems,
             processed,
             skipped,
+            leadsConverted,
             errors: errors.length,
           },
         })
         .eq("id", jobId);
     }
 
-    console.log(`Bulk trigger completed: ${processed} processed, ${skipped} skipped, ${errors.length} errors`);
+    console.log(`Bulk trigger completed: ${processed} processed, ${skipped} skipped, ${leadsConverted} leads converted, ${errors.length} errors`);
 
     return new Response(
       JSON.stringify({
         success: true,
         jobId,
-        total: contactIds.length,
+        total: totalItems,
         processed,
         skipped,
+        leadsConverted,
         errors: errors.length,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

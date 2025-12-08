@@ -52,6 +52,8 @@ interface CustomerResult {
   purchase_date: string;
   product_name: string | null;
   status: string;
+  is_lead: boolean;
+  deal_id: string;
 }
 
 export default function PlaybookExecutions() {
@@ -75,20 +77,23 @@ export default function PlaybookExecutions() {
   const { data: playbooks } = usePlaybooks();
   const bulkTrigger = useBulkTriggerPlaybook();
 
-  // Search query for broadcast
+  // Search query for broadcast - includes both contacts AND leads (deals without contact_id)
   const { data: customers, isLoading: isSearching, refetch } = useQuery({
     queryKey: ["broadcast-search", productId, startDate, endDate, statusFilter],
     queryFn: async () => {
       let query = supabase
         .from("deals")
         .select(`
+          id,
           contact_id,
           created_at,
           status,
-          contacts!inner(id, first_name, last_name, email, status),
+          title,
+          lead_email,
+          lead_phone,
+          contacts(id, first_name, last_name, email, status),
           products(name)
-        `)
-        .not("contact_id", "is", null);
+        `);
 
       if (productId !== "all") {
         query = query.eq("product_id", productId);
@@ -111,17 +116,27 @@ export default function PlaybookExecutions() {
 
       for (const deal of data || []) {
         const contact = deal.contacts as any;
-        if (!contact || seen.has(contact.id)) continue;
-        seen.add(contact.id);
+        const isLead = !contact;
+        
+        // Use contact.id for customers, deal.id for leads
+        const uniqueId = contact?.id || deal.id;
+        if (seen.has(uniqueId)) continue;
+        seen.add(uniqueId);
+
+        // Extract name from deal title for leads (format: "Lead - Name" or "Product - Name")
+        const leadName = deal.title?.split(' - ').slice(1).join(' - ') || deal.title || 'Lead';
+        const nameParts = leadName.split(' ');
 
         results.push({
-          id: contact.id,
-          first_name: contact.first_name,
-          last_name: contact.last_name,
-          email: contact.email,
+          id: contact?.id || deal.id,
+          deal_id: deal.id,
+          first_name: contact?.first_name || nameParts[0] || 'Lead',
+          last_name: contact?.last_name || nameParts.slice(1).join(' ') || '',
+          email: contact?.email || deal.lead_email,
           purchase_date: deal.created_at,
           product_name: (deal.products as any)?.name || "N/A",
-          status: contact.status,
+          status: isLead ? 'lead' : (contact?.status || 'unknown'),
+          is_lead: isLead,
         });
       }
 
@@ -156,11 +171,17 @@ export default function PlaybookExecutions() {
   };
 
   const handleTrigger = async () => {
-    if (!selectedPlaybookId || selectedIds.size === 0) return;
+    if (!selectedPlaybookId || selectedIds.size === 0 || !customers) return;
+
+    // Separate leads (deal IDs) from contacts (contact IDs)
+    const selectedCustomers = customers.filter(c => selectedIds.has(c.id));
+    const contactIds = selectedCustomers.filter(c => !c.is_lead).map(c => c.id);
+    const dealIds = selectedCustomers.filter(c => c.is_lead).map(c => c.deal_id);
 
     try {
       await bulkTrigger.mutateAsync({
-        contactIds: Array.from(selectedIds),
+        contactIds,
+        dealIds,
         playbookId: selectedPlaybookId,
         skipExisting,
       });
@@ -531,8 +552,8 @@ export default function PlaybookExecutions() {
                               {format(new Date(customer.purchase_date), "dd/MM/yyyy")}
                             </TableCell>
                             <TableCell>
-                              <Badge variant={customer.status === "customer" ? "default" : "secondary"}>
-                                {customer.status}
+                              <Badge variant={customer.is_lead ? "outline" : customer.status === "customer" ? "default" : "secondary"}>
+                                {customer.is_lead ? "📋 Lead" : customer.status === "customer" ? "✅ Cliente" : customer.status}
                               </Badge>
                             </TableCell>
                           </TableRow>

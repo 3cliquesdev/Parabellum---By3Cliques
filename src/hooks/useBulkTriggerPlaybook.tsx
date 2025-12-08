@@ -4,8 +4,9 @@ import { useToast } from "@/hooks/use-toast";
 
 interface BulkTriggerParams {
   contactIds: string[];
+  dealIds?: string[];
   playbookId: string;
-  skipExisting: boolean;
+  skipExisting?: boolean;
 }
 
 interface BulkTriggerResult {
@@ -14,6 +15,7 @@ interface BulkTriggerResult {
   total: number;
   processed: number;
   skipped: number;
+  leadsConverted?: number;
 }
 
 export function useBulkTriggerPlaybook() {
