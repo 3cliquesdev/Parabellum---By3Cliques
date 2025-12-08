@@ -36,6 +36,7 @@ import ContactFilterPopover from "@/components/contacts/ContactFilterPopover";
 import { ActiveFilterChips, generateContactFilterChips } from "@/components/ui/active-filter-chips";
 import { ContactsBulkActions } from "@/components/contacts/ContactsBulkActions";
 import { ChangeConsultantDialog } from "@/components/playbooks/ChangeConsultantDialog";
+import { ConsultantClientsSheet } from "@/components/contacts/ConsultantClientsSheet";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useProfiles } from "@/hooks/useProfiles";
 import type { Tables } from "@/integrations/supabase/types";
@@ -53,6 +54,7 @@ export default function Contacts() {
   const [showContactSheet, setShowContactSheet] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [consultantDialogContact, setConsultantDialogContact] = useState<ContactWithOrg | null>(null);
+  const [consultantSheet, setConsultantSheet] = useState<{ id: string; name: string } | null>(null);
   
   const { isAdmin, isManager, isCSManager } = useUserRole();
   const canChangeConsultant = isAdmin || isManager || isCSManager;
@@ -299,21 +301,27 @@ export default function Contacts() {
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       {(() => {
                         const consultant = profiles?.find(p => p.id === contact.consultant_id);
                         return consultant ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-sm">{consultant.full_name}</span>
+                            {canChangeConsultant ? (
+                              <button
+                                className="text-sm text-primary hover:underline cursor-pointer font-medium"
+                                onClick={() => setConsultantSheet({ id: consultant.id, name: consultant.full_name || "" })}
+                              >
+                                {consultant.full_name}
+                              </button>
+                            ) : (
+                              <span className="text-sm">{consultant.full_name}</span>
+                            )}
                             {canChangeConsultant && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 w-6 p-0"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setConsultantDialogContact(contact);
-                                }}
+                                onClick={() => setConsultantDialogContact(contact)}
                               >
                                 <UserCog className="h-3 w-3" />
                               </Button>
@@ -327,10 +335,7 @@ export default function Contacts() {
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 w-6 p-0"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setConsultantDialogContact(contact);
-                                }}
+                                onClick={() => setConsultantDialogContact(contact)}
                               >
                                 <UserCog className="h-3 w-3" />
                               </Button>
@@ -432,6 +437,15 @@ export default function Contacts() {
           contactId={consultantDialogContact.id}
           contactName={`${consultantDialogContact.first_name} ${consultantDialogContact.last_name}`}
           currentConsultantId={consultantDialogContact.consultant_id}
+        />
+      )}
+
+      {consultantSheet && (
+        <ConsultantClientsSheet
+          open={!!consultantSheet}
+          onOpenChange={(open) => !open && setConsultantSheet(null)}
+          consultantId={consultantSheet.id}
+          consultantName={consultantSheet.name}
         />
       )}
     </PageContainer>
