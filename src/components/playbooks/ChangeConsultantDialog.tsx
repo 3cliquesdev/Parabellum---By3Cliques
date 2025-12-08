@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useConsultants } from "@/hooks/useConsultants";
+import { useActiveConsultants } from "@/hooks/useConsultants";
 import { UserCog, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -43,7 +43,7 @@ export function ChangeConsultantDialog({
   );
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: consultants, isLoading: loadingConsultants } = useConsultants();
+  const { data: consultants, isLoading: loadingConsultants } = useActiveConsultants();
   const { user } = useAuth();
 
   const mutation = useMutation({

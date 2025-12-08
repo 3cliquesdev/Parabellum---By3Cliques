@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { Search, Briefcase, AlertCircle, CheckCircle, Clock, DollarSign, Users, TrendingDown, UserPlus, Phone, Mail, FileText } from "lucide-react";
+import { Search, Briefcase, AlertCircle, CheckCircle, Clock, DollarSign, Users, TrendingDown, UserPlus, Phone, Mail, FileText, UserCog } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import FocusTodayWidget from "@/components/FocusTodayWidget";
@@ -23,6 +23,7 @@ import EarlyWarningWidget from "@/components/widgets/EarlyWarningWidget";
 import QBRGeneratorDialog from "@/components/QBRGeneratorDialog";
 import { useChurnPrediction } from "@/hooks/useChurnPrediction";
 import { CSGoalsWidget } from "@/components/widgets/CSGoalsWidget";
+import { ChangeConsultantDialog } from "@/components/playbooks/ChangeConsultantDialog";
 
 export default function MyPortfolio() {
   const navigate = useNavigate();
@@ -69,6 +70,13 @@ export default function MyPortfolio() {
     id: string;
     name: string;
     company: string | null;
+  } | null>(null);
+
+  // State for changing consultant
+  const [changeConsultantData, setChangeConsultantData] = useState<{
+    contactId: string;
+    contactName: string;
+    currentConsultantId: string | null;
   } | null>(null);
 
   // Filter clients based on tab
@@ -297,6 +305,22 @@ export default function MyPortfolio() {
                               {client.consultant_name?.[0] || "?"}
                             </AvatarFallback>
                           </Avatar>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setChangeConsultantData({
+                                contactId: client.id,
+                                contactName: `${client.first_name} ${client.last_name}`,
+                                currentConsultantId: client.consultant_id || null,
+                              });
+                            }}
+                            title="Alterar Consultor"
+                          >
+                            <UserCog className="h-4 w-4" />
+                          </Button>
                         </div>
                       )}
 
@@ -425,6 +449,15 @@ export default function MyPortfolio() {
           companyName={selectedClientForQBR.company}
         />
       )}
+
+      {/* Change Consultant Dialog */}
+      <ChangeConsultantDialog
+        open={!!changeConsultantData}
+        onOpenChange={(open) => !open && setChangeConsultantData(null)}
+        contactId={changeConsultantData?.contactId || ""}
+        contactName={changeConsultantData?.contactName || ""}
+        currentConsultantId={changeConsultantData?.currentConsultantId}
+      />
     </div>
   );
 }
