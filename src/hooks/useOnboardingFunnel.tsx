@@ -29,15 +29,15 @@ export function useOnboardingFunnel(startDate: Date, endDate: Date) {
 
       const uniqueLogins = new Set(executions?.map(e => e.contact_id)).size;
 
-      // Stage 3: Watched Video 1 (journey steps with video_completed=true)
-      const { data: videoSteps } = await supabase
-        .from('customer_journey_steps')
-        .select('contact_id')
-        .eq('video_completed', true)
+      // Stage 3: Email Delivered (email tracking events with delivered status)
+      const { data: emailEvents } = await supabase
+        .from('email_tracking_events')
+        .select('customer_id')
+        .eq('event_type', 'delivered')
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString());
 
-      const uniqueVideoWatchers = new Set(videoSteps?.map(s => s.contact_id)).size;
+      const uniqueEmailReceivers = new Set(emailEvents?.map(e => e.customer_id)).size;
 
       // Stage 4: Completed Onboarding (playbook_executions with status=completed)
       const { data: completions } = await supabase
@@ -52,7 +52,7 @@ export function useOnboardingFunnel(startDate: Date, endDate: Date) {
       const stages = [
         { stage: 'Compra Aprovada', count: purchaseCount || 0 },
         { stage: 'Primeiro Login', count: uniqueLogins },
-        { stage: 'Assistiu Vídeo 1', count: uniqueVideoWatchers },
+        { stage: 'Email Entregue', count: uniqueEmailReceivers },
         { stage: 'Concluiu Onboarding', count: uniqueCompletions }
       ];
 
