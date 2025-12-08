@@ -85,14 +85,24 @@ serve(async (req) => {
 
     // Helper function to process a contact
     async function processContact(contactId: string, source: 'contact' | 'lead_converted') {
+      console.log(`Processing contact: ${contactId}, source: ${source}`);
+      
       // Get first node from flow
       const flowDefinition = playbook.flow_definition as any;
+      console.log(`Flow definition type: ${typeof flowDefinition}, has nodes: ${!!flowDefinition?.nodes}`);
+      
       const nodes = flowDefinition?.nodes || [];
-      const firstNode = nodes.find((n: any) => n.type !== "start") || nodes[0];
-
+      console.log(`Total nodes: ${nodes.length}`);
+      
+      // Find first non-start node
+      const firstNode = nodes.find((n: any) => n.type !== "start" && n.type !== "trigger");
+      
       if (!firstNode) {
-        throw new Error("No valid start node in playbook");
+        console.error(`No valid node found. Available node types: ${nodes.map((n: any) => n.type).join(', ')}`);
+        throw new Error(`No valid start node in playbook. Available: ${nodes.map((n: any) => n.type).join(', ')}`);
       }
+      
+      console.log(`First node: id=${firstNode.id}, type=${firstNode.type}`);
 
       // Create execution
       const { data: execution, error: execError } = await supabase
@@ -108,11 +118,14 @@ serve(async (req) => {
         .single();
 
       if (execError) {
+        console.error(`Failed to create execution: ${execError.message}`);
         throw new Error(execError.message);
       }
+      
+      console.log(`Execution created: ${execution.id}`);
 
       // Queue first node
-      await supabase.from("playbook_execution_queue").insert({
+      const { error: queueError } = await supabase.from("playbook_execution_queue").insert({
         execution_id: execution.id,
         node_id: firstNode.id,
         node_type: firstNode.type,
@@ -120,6 +133,11 @@ serve(async (req) => {
         scheduled_for: new Date().toISOString(),
         status: "pending",
       });
+      
+      if (queueError) {
+        console.error(`Failed to queue node: ${queueError.message}`);
+        throw new Error(`Queue error: ${queueError.message}`);
+      }
 
       // Log interaction
       await supabase.from("interactions").insert({
@@ -129,6 +147,8 @@ serve(async (req) => {
         channel: "other",
         metadata: { playbook_id: playbookId, trigger: "bulk_action", job_id: jobId, source },
       });
+      
+      console.log(`Contact ${contactId} processed successfully`);
     }
 
     // Process existing contacts
