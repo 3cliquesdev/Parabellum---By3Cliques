@@ -2,6 +2,7 @@ import { useSearchParams } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, TrendingUp, Target, DollarSign, Briefcase } from "lucide-react";
+import { OnboardingWidget } from "@/components/widgets/OnboardingWidget";
 import { useConversionMetrics } from "@/hooks/useConversionMetrics";
 import { useKiwifyFinancials } from "@/hooks/useKiwifyFinancials";
 import { usePipelineValue } from "@/hooks/usePipelineValue";
@@ -223,6 +224,11 @@ export default function Dashboard() {
           </BentoCard>
           <BentoCard>
             <RecentActionsWidget />
+          </BentoCard>
+          
+          {/* ROW 6: Onboarding Progress (apenas se não completou) */}
+          <BentoCard span="full">
+            <OnboardingWidget />
           </BentoCard>
         </BentoGrid>
       </PageContent>
