@@ -32,6 +32,15 @@ export default function SalesRepDetail() {
   // Get sales rep info
   const salesRep = users?.find(u => u.id === salesRepId);
 
+  // Guard: ID não fornecido
+  if (!salesRepId) {
+    return (
+      <div className="flex items-center justify-center h-full p-8">
+        <p className="text-muted-foreground">ID do vendedor não fornecido</p>
+      </div>
+    );
+  }
+
   // Get current month for goals
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();

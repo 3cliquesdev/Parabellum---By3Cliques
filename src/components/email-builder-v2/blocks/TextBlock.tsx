@@ -1,6 +1,6 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
+import TiptapLink from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -16,8 +16,10 @@ interface TextBlockProps {
 export function TextBlock({ block, isSelected, onUpdate, readOnly }: TextBlockProps) {
   const editor = useEditor({
     extensions: [
-      StarterKit,
-      Link.configure({
+      StarterKit.configure({
+        // Desabilitar extensões que podem conflitar
+      }),
+      TiptapLink.configure({
         openOnClick: false,
       }),
       Placeholder.configure({
