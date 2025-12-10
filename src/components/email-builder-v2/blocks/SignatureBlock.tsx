@@ -38,10 +38,10 @@ export function SignatureBlock({ block, isSelected, onUpdate, readOnly }: Signat
           />
         )}
         <div className="flex-1">
-          <p className="font-semibold" style={{ color: block.styles.color }}>
+          <p className="font-semibold text-slate-900" style={{ color: block.styles.color }}>
             {block.content.name || "Nome do Remetente"}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-600">
             {block.content.role || "Cargo / Função"}
           </p>
           {block.content.email && (

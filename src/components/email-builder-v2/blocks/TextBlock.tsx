@@ -44,8 +44,8 @@ export function TextBlock({ block, isSelected, onUpdate, readOnly }: TextBlockPr
         isSelected && "ring-2 ring-primary ring-offset-2"
       )}
       style={{
-        backgroundColor: block.styles.backgroundColor,
-        color: block.styles.color,
+        backgroundColor: block.styles.backgroundColor || '#ffffff',
+        color: block.styles.color || '#1e293b',
         padding: block.styles.padding || "16px",
         textAlign: block.styles.textAlign,
         fontSize: block.styles.fontSize,
@@ -53,7 +53,7 @@ export function TextBlock({ block, isSelected, onUpdate, readOnly }: TextBlockPr
     >
       <EditorContent 
         editor={editor} 
-        className="prose prose-sm max-w-none dark:prose-invert focus:outline-none"
+        className="prose prose-sm max-w-none prose-slate focus:outline-none [&_*]:text-inherit"
       />
     </div>
   );

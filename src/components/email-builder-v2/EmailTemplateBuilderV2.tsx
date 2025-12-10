@@ -75,10 +75,10 @@ function DropZone({ children, isEmpty }: { children: React.ReactNode; isEmpty: b
       )}
     >
       {isEmpty ? (
-        <div className="text-center text-muted-foreground">
+        <div className="text-center text-slate-400">
           <Layout className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Arraste blocos da barra lateral</p>
-          <p className="text-xs mt-1">para começar a criar seu email</p>
+          <p className="text-sm text-slate-500">Arraste blocos da barra lateral</p>
+          <p className="text-xs mt-1 text-slate-400">para começar a criar seu email</p>
         </div>
       ) : (
         children
@@ -212,7 +212,7 @@ export function EmailTemplateBuilderV2({
           <div className="flex-1 overflow-auto bg-muted/30 p-6">
             <div
               className={cn(
-                "mx-auto bg-background shadow-lg rounded-lg overflow-hidden transition-all",
+                "mx-auto bg-white text-slate-900 shadow-lg rounded-lg overflow-hidden transition-all",
                 previewMode === "desktop" ? "max-w-2xl" : "max-w-sm"
               )}
             >
