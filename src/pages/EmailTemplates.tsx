@@ -10,12 +10,19 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
   Mail,
   Plus,
   Pencil,
   Trash2,
   Eye,
   Sparkles,
+  Layers,
 } from "lucide-react";
 import { EmailTemplateDialog } from "@/components/EmailTemplateDialog";
 import { useEmailTemplates } from "@/hooks/useEmailTemplates";
@@ -39,6 +46,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { EmailTemplatesV2List, CreateTemplateV2Dialog } from "@/components/email-builder-v2";
 
 export default function EmailTemplates() {
   const navigate = useNavigate();
@@ -46,6 +54,8 @@ export default function EmailTemplates() {
   const { data: templates, isLoading } = useEmailTemplates();
   const deleteMutation = useDeleteEmailTemplate();
 
+  const [activeTab, setActiveTab] = useState("v2");
+  const [createV2DialogOpen, setCreateV2DialogOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Tables<"email_templates"> | undefined>();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -113,26 +123,43 @@ export default function EmailTemplates() {
 
   return (
     <>
-      <div className="p-8 space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-4xl font-bold tracking-tight">Templates de Email</h1>
-          <p className="text-lg text-muted-foreground">
-            Crie e gerencie templates reutilizáveis para suas automações
-          </p>
+      <div className="p-8 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h1 className="text-4xl font-bold tracking-tight">Templates de Email</h1>
+            <p className="text-lg text-muted-foreground">
+              Crie e gerencie templates reutilizáveis para suas automações
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate("/email-templates/builder")} size="lg" className="gap-2">
-            <Sparkles className="h-5 w-5" />
-            Editor Visual 2.0
-          </Button>
-          <Button onClick={handleNewTemplate} size="lg" className="gap-2">
-            <Plus className="h-5 w-5" />
-            Novo Template
-          </Button>
-        </div>
-      </div>
+
+        {/* Tabs V1/V2 */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="v2" className="gap-2">
+              <Layers className="h-4 w-4" />
+              Editor V2 (Novo)
+            </TabsTrigger>
+            <TabsTrigger value="v1" className="gap-2">
+              <Mail className="h-4 w-4" />
+              Editor V1 (Legado)
+            </TabsTrigger>
+          </TabsList>
+
+          {/* V2 Content */}
+          <TabsContent value="v2" className="mt-6">
+            <EmailTemplatesV2List onCreateNew={() => setCreateV2DialogOpen(true)} />
+          </TabsContent>
+
+          {/* V1 Content */}
+          <TabsContent value="v1" className="mt-6">
+            <div className="flex justify-end mb-4">
+              <Button onClick={handleNewTemplate} className="gap-2">
+                <Plus className="h-5 w-5" />
+                Novo Template V1
+              </Button>
+            </div>
 
       {/* Empty State */}
       {!templates || templates.length === 0 ? (
@@ -141,13 +168,13 @@ export default function EmailTemplates() {
             <div className="rounded-full bg-primary/10 p-6 mb-6">
               <Mail className="h-16 w-16 text-primary" />
             </div>
-            <h3 className="text-2xl font-semibold mb-2">Nenhum template ainda</h3>
+            <h3 className="text-2xl font-semibold mb-2">Nenhum template V1</h3>
             <p className="text-muted-foreground mb-6 text-center max-w-md">
-              Templates de email permitem que você envie mensagens personalizadas automaticamente baseadas em eventos do CRM
+              Templates legados. Recomendamos usar o Editor V2 para novos templates.
             </p>
             <Button onClick={handleNewTemplate} size="lg" className="gap-2">
               <Sparkles className="h-5 w-5" />
-              Criar Primeiro Template
+              Criar Template V1
             </Button>
           </CardContent>
         </Card>
@@ -260,7 +287,14 @@ export default function EmailTemplates() {
           ))}
         </div>
       )}
+          </TabsContent>
+        </Tabs>
       </div>
+
+      <CreateTemplateV2Dialog
+        open={createV2DialogOpen}
+        onOpenChange={setCreateV2DialogOpen}
+      />
 
       <EmailTemplateDialog
         open={dialogOpen}
