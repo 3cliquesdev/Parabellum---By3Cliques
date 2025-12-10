@@ -15,12 +15,15 @@ export default {
     extend: {
       colors: {
         border: "hsl(var(--border))",
+        "border-muted": "hsl(var(--border-muted))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
+          hover: "hsl(var(--primary-hover))",
+          muted: "hsl(var(--primary-muted))",
           foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {
@@ -29,6 +32,7 @@ export default {
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
+          muted: "hsl(var(--destructive-muted))",
           foreground: "hsl(var(--destructive-foreground))",
         },
         muted: {
@@ -59,16 +63,33 @@ export default {
         },
         success: {
           DEFAULT: "hsl(var(--success))",
+          muted: "hsl(var(--success-muted))",
           foreground: "hsl(var(--success-foreground))",
         },
         warning: {
           DEFAULT: "hsl(var(--warning))",
+          muted: "hsl(var(--warning-muted))",
           foreground: "hsl(var(--warning-foreground))",
         },
         info: {
           DEFAULT: "hsl(var(--info))",
+          muted: "hsl(var(--info-muted))",
           foreground: "hsl(var(--info-foreground))",
         },
+        channel: {
+          whatsapp: "hsl(var(--channel-whatsapp))",
+          instagram: "hsl(var(--channel-instagram))",
+          email: "hsl(var(--channel-email))",
+          chat: "hsl(var(--channel-chat))",
+        },
+      },
+      zIndex: {
+        dropdown: "1000",
+        overlay: "1300",
+        modal: "1400",
+        popover: "1500",
+        toast: "1600",
+        tooltip: "1700",
       },
       borderRadius: {
         lg: "var(--radius)",

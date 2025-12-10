@@ -10,35 +10,35 @@ interface ChannelIconProps {
   className?: string;
 }
 
-// FASE 2: Ícones de canal coloridos (referência Octadesk/Zendesk)
+// Enterprise Channel Icons with Design System tokens
 const channelConfig: Record<string, { 
   icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  bgColor: string;
+  colorClass: string;
+  bgClass: string;
   label: string;
 }> = {
   whatsapp: { 
     icon: WhatsAppIcon, 
-    color: "text-[#25D366]", 
-    bgColor: "bg-green-100 dark:bg-green-950",
+    colorClass: "text-channel-whatsapp", 
+    bgClass: "bg-channel-whatsapp/10",
     label: "WhatsApp"
   },
   web_chat: { 
     icon: MessageCircle, 
-    color: "text-primary", 
-    bgColor: "bg-blue-100 dark:bg-blue-950",
+    colorClass: "text-channel-chat", 
+    bgClass: "bg-channel-chat/10",
     label: "Web Chat"
   },
   instagram: { 
     icon: Instagram, 
-    color: "text-[#E1306C]", 
-    bgColor: "bg-pink-100 dark:bg-pink-950",
+    colorClass: "text-channel-instagram", 
+    bgClass: "bg-channel-instagram/10",
     label: "Instagram"
   },
   email: { 
     icon: Mail, 
-    color: "text-slate-600 dark:text-slate-400", 
-    bgColor: "bg-slate-100 dark:bg-slate-800",
+    colorClass: "text-channel-email", 
+    bgClass: "bg-muted",
     label: "Email"
   },
 };
@@ -78,7 +78,7 @@ export function ChannelIcon({
   const Icon = config.icon;
 
   if (!showBackground) {
-    return <Icon className={cn(sizeClasses[size], config.color, className)} />;
+    return <Icon className={cn(sizeClasses[size], config.colorClass, className)} />;
   }
 
   return (
@@ -86,11 +86,11 @@ export function ChannelIcon({
       className={cn(
         "rounded-full flex items-center justify-center shrink-0",
         containerSizeClasses[size],
-        config.bgColor,
+        config.bgClass,
         className
       )}
     >
-      <Icon className={cn(sizeClasses[size], config.color)} />
+      <Icon className={cn(sizeClasses[size], config.colorClass)} />
     </div>
   );
 }

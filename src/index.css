@@ -4,107 +4,143 @@
 
 @layer base {
   :root {
-    /* LIGHT MODE - Enterprise Gray Shell */
-    --background: 210 40% 98%;         /* Slate-50 - Gray Shell */
-    --foreground: 0 0% 5%;             /* Preto (#0D0D0D) */
+    /* === BRAND === */
+    --background: 210 40% 98%;
+    --foreground: 0 0% 5%;
     
-    /* SIDEBAR - Variáveis Completas */
-    --sidebar-background: 0 0% 100%;          /* Sidebar Branca */
-    --sidebar-foreground: 0 0% 10%;           /* Preto (#1A1A1A) */
-    --sidebar-primary: 221.2 83.2% 53.3%;     /* Azul Royal */
-    --sidebar-primary-foreground: 0 0% 100%;  /* Branco */
-    --sidebar-accent: 221.2 83.2% 95%;        /* Hover Azul Suave */
-    --sidebar-accent-foreground: 221.2 83.2% 53.3%; /* Texto Azul no Hover */
-    --sidebar-border: 214.3 31.8% 85%;        /* Bordas Visíveis */
-    --sidebar-ring: 221.2 83.2% 53.3%;        /* Foco Azul */
+    --primary: 221.2 83.2% 53.3%;
+    --primary-hover: 221 83% 45%;
+    --primary-muted: 221 83% 96%;
+    --primary-foreground: 0 0% 100%;
     
-    --card: 0 0% 100%;                 /* Cards Brancos */
-    --card-foreground: 0 0% 5%;        /* Preto */
+    /* === SEMANTIC === */
+    --success: 142 76% 36%;
+    --success-muted: 142 76% 93%;
+    --success-foreground: 0 0% 100%;
     
-    --primary: 221.2 83.2% 53.3%;      /* Tech Blue */
-    --primary-foreground: 210 40% 98%; /* Texto Branco */
+    --warning: 38 100% 50%;
+    --warning-muted: 38 100% 93%;
+    --warning-foreground: 0 0% 20%;
     
-    --secondary: 210 40% 93%;          /* Cinza levemente mais escuro */
-    --secondary-foreground: 0 0% 10%;  /* Preto (#1A1A1A) */
+    --destructive: 0 84% 60%;
+    --destructive-muted: 0 84% 94%;
+    --destructive-foreground: 0 0% 100%;
     
-    --border: 214.3 31.8% 83%;         /* Bordas Enterprise */
+    --info: 199 89% 48%;
+    --info-muted: 199 89% 95%;
+    --info-foreground: 0 0% 100%;
+    
+    /* === CHANNEL COLORS (Enterprise) === */
+    --channel-whatsapp: 142 70% 49%;
+    --channel-instagram: 340 75% 50%;
+    --channel-email: 0 0% 45%;
+    --channel-chat: 221.2 83.2% 53.3%;
+    
+    /* === SURFACES === */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 5%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 0 0% 25%;
+    
+    --secondary: 210 40% 93%;
+    --secondary-foreground: 0 0% 10%;
+    
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 0 0% 5%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 5%;
+    
+    /* === BORDERS === */
+    --border: 214.3 31.8% 83%;
+    --border-muted: 214 32% 90%;
     --input: 214.3 31.8% 83%;
     --ring: 221.2 83.2% 53.3%;
     
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 0 0% 25%;      /* Cinza escuro (#404040) */
-    --text-secondary: 0 0% 35%;        /* Texto secundário */
+    /* === SIDEBAR === */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 10%;
+    --sidebar-primary: 221.2 83.2% 53.3%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 221.2 83.2% 95%;
+    --sidebar-accent-foreground: 221.2 83.2% 53.3%;
+    --sidebar-border: 214.3 31.8% 85%;
+    --sidebar-ring: 221.2 83.2% 53.3%;
     
-    --accent: 210 40% 96.1%;            /* Hover cinza claro */
-    --accent-foreground: 0 0% 5%;       /* Preto */
+    /* === RADIUS === */
+    --radius: 0.75rem;
     
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 0%;
-    --info: 221.2 83.2% 53.3%;
-    --info-foreground: 0 0% 100%;
-    
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 5%;     /* Preto */
-    
-    --radius: 1rem;  /* Soft radius for clean aesthetic */
-    
-    /* Soft shadows for floating effect */
-    --shadow-soft: 0 2px 20px rgba(0, 0, 0, 0.04);
-    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.02), 0 8px 24px rgba(0, 0, 0, 0.04);
-    --shadow-elevated: 0 4px 32px rgba(0, 0, 0, 0.08);
+    /* === SHADOWS === */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.05);
+    --shadow-lg: 0 10px 20px rgba(0,0,0,0.07);
+    --shadow-card: 0 1px 4px rgba(0,0,0,0.06);
+    --shadow-elevated: 0 8px 30px rgba(0,0,0,0.12);
   }
 
   .dark {
-    /* TRUE BLACK - Preto Sólido Neutro */
-    --background: 0 0% 1%;             /* #020202 - Preto quase absoluto */
-    --foreground: 0 0% 93%;            /* #EDEDED - zinc-100 */
-    
-    /* SIDEBAR - Variáveis Completas */
-    --sidebar-background: 0 0% 3%;     /* #080808 */
-    --sidebar-foreground: 0 0% 93%;
-    --sidebar-primary: 221.2 83.2% 53.3%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 0 0% 10%;        /* #1A1A1A */
-    --sidebar-accent-foreground: 0 0% 93%;
-    --sidebar-border: 0 0% 12%;        /* Bordas sutis */
-    --sidebar-ring: 221.2 83.2% 53.3%;
-    
-    --card: 0 0% 5%;                   /* #0D0D0D - Elevação zinco */
-    --card-foreground: 0 0% 93%;
+    /* === BRAND === */
+    --background: 0 0% 2%;
+    --foreground: 0 0% 92%;
     
     --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
+    --primary-hover: 221 83% 60%;
+    --primary-muted: 221 83% 15%;
+    --primary-foreground: 0 0% 100%;
     
-    --secondary: 0 0% 8%;              /* #141414 */
-    --secondary-foreground: 0 0% 93%;
+    /* === SEMANTIC === */
+    --success: 142 76% 36%;
+    --success-muted: 142 76% 15%;
+    --success-foreground: 0 0% 100%;
     
-    --border: 0 0% 15%;                /* #262626 - zinc-800 */
+    --warning: 38 100% 50%;
+    --warning-muted: 38 100% 15%;
+    --warning-foreground: 0 0% 100%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-muted: 0 84% 15%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --info: 199 89% 48%;
+    --info-muted: 199 89% 15%;
+    --info-foreground: 0 0% 100%;
+    
+    /* === CHANNEL COLORS (Enterprise) === */
+    --channel-whatsapp: 142 70% 49%;
+    --channel-instagram: 340 75% 50%;
+    --channel-email: 0 0% 55%;
+    --channel-chat: 221.2 83.2% 53.3%;
+    
+    /* === SURFACES === */
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 92%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 55%;
+    
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 0 0% 92%;
+    
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 92%;
+    
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 92%;
+    
+    /* === BORDERS === */
+    --border: 0 0% 15%;
+    --border-muted: 0 0% 8%;
     --input: 0 0% 15%;
     --ring: 221.2 83.2% 53.3%;
     
-    --muted: 0 0% 8%;                  /* #141414 */
-    --muted-foreground: 0 0% 55%;      /* #8C8C8C - zinc-400 */
-    
-    --accent: 0 0% 10%;                /* #1A1A1A */
-    --accent-foreground: 0 0% 93%;
-    
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 20% 98%;
-    
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 0%;
-    --info: 221.2 83.2% 53.3%;
-    --info-foreground: 0 0% 100%;
-    
-    --popover: 0 0% 5%;                /* Mesmo que card */
-    --popover-foreground: 0 0% 93%;
+    /* === SIDEBAR === */
+    --sidebar-background: 0 0% 3%;
+    --sidebar-foreground: 0 0% 92%;
+    --sidebar-primary: 221.2 83.2% 53.3%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 0 0% 92%;
+    --sidebar-border: 0 0% 12%;
+    --sidebar-ring: 221.2 83.2% 53.3%;
   }
 
   * {
