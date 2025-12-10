@@ -1740,6 +1740,50 @@ export type Database = {
         }
         Relationships: []
       }
+      email_block_conditions: {
+        Row: {
+          action: string | null
+          block_id: string
+          created_at: string | null
+          field: string
+          group_index: number | null
+          id: string
+          logic_group: string | null
+          operator: string
+          value: string
+        }
+        Insert: {
+          action?: string | null
+          block_id: string
+          created_at?: string | null
+          field: string
+          group_index?: number | null
+          id?: string
+          logic_group?: string | null
+          operator: string
+          value: string
+        }
+        Update: {
+          action?: string | null
+          block_id?: string
+          created_at?: string | null
+          field?: string
+          group_index?: number | null
+          id?: string
+          logic_group?: string | null
+          operator?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_block_conditions_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "email_template_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_branding: {
         Row: {
           created_at: string | null
@@ -1782,6 +1826,89 @@ export type Database = {
         }
         Relationships: []
       }
+      email_events: {
+        Row: {
+          created_at: string | null
+          event_data: Json | null
+          event_type: string
+          id: string
+          send_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          send_id: string
+        }
+        Update: {
+          created_at?: string | null
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          send_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_events_send_id_fkey"
+            columns: ["send_id"]
+            isOneToOne: false
+            referencedRelation: "email_sends"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_layout_library: {
+        Row: {
+          blocks: Json
+          category: string
+          created_at: string | null
+          created_by: string | null
+          default_styles: Json | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          is_system: boolean | null
+          name: string
+          preview_image_url: string | null
+          thumbnail_url: string | null
+          updated_at: string | null
+          usage_count: number | null
+        }
+        Insert: {
+          blocks?: Json
+          category: string
+          created_at?: string | null
+          created_by?: string | null
+          default_styles?: Json | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_system?: boolean | null
+          name: string
+          preview_image_url?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string | null
+          usage_count?: number | null
+        }
+        Update: {
+          blocks?: Json
+          category?: string
+          created_at?: string | null
+          created_by?: string | null
+          default_styles?: Json | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_system?: boolean | null
+          name?: string
+          preview_image_url?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string | null
+          usage_count?: number | null
+        }
+        Relationships: []
+      }
       email_senders: {
         Row: {
           created_at: string | null
@@ -1819,6 +1946,271 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_sends: {
+        Row: {
+          bounced_at: string | null
+          clicked_at: string | null
+          contact_id: string | null
+          deal_id: string | null
+          error_message: string | null
+          id: string
+          language_code: string | null
+          opened_at: string | null
+          recipient_email: string
+          resend_email_id: string | null
+          sent_at: string | null
+          status: string | null
+          subject: string
+          template_id: string | null
+          ticket_id: string | null
+          variables_used: Json | null
+          variant_id: string | null
+        }
+        Insert: {
+          bounced_at?: string | null
+          clicked_at?: string | null
+          contact_id?: string | null
+          deal_id?: string | null
+          error_message?: string | null
+          id?: string
+          language_code?: string | null
+          opened_at?: string | null
+          recipient_email: string
+          resend_email_id?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject: string
+          template_id?: string | null
+          ticket_id?: string | null
+          variables_used?: Json | null
+          variant_id?: string | null
+        }
+        Update: {
+          bounced_at?: string | null
+          clicked_at?: string | null
+          contact_id?: string | null
+          deal_id?: string | null
+          error_message?: string | null
+          id?: string
+          language_code?: string | null
+          opened_at?: string | null
+          recipient_email?: string
+          resend_email_id?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject?: string
+          template_id?: string | null
+          ticket_id?: string | null
+          variables_used?: Json | null
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_sends_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "email_template_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_template_blocks: {
+        Row: {
+          block_type: string
+          column_index: number | null
+          content: Json
+          created_at: string | null
+          id: string
+          parent_block_id: string | null
+          position: number
+          responsive: Json | null
+          styles: Json | null
+          template_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          block_type: string
+          column_index?: number | null
+          content?: Json
+          created_at?: string | null
+          id?: string
+          parent_block_id?: string | null
+          position: number
+          responsive?: Json | null
+          styles?: Json | null
+          template_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          block_type?: string
+          column_index?: number | null
+          content?: Json
+          created_at?: string | null
+          id?: string
+          parent_block_id?: string | null
+          position?: number
+          responsive?: Json | null
+          styles?: Json | null
+          template_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_blocks_parent_block_id_fkey"
+            columns: ["parent_block_id"]
+            isOneToOne: false
+            referencedRelation: "email_template_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_template_blocks_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_template_translations: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          language_code: string
+          preheader: string | null
+          subject: string
+          template_id: string
+          translated_blocks: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          language_code: string
+          preheader?: string | null
+          subject: string
+          template_id: string
+          translated_blocks?: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          language_code?: string
+          preheader?: string | null
+          subject?: string
+          template_id?: string
+          translated_blocks?: Json
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_translations_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_template_variants: {
+        Row: {
+          blocks_override: Json | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          is_control: boolean | null
+          preheader: string | null
+          subject: string
+          template_id: string
+          total_bounced: number | null
+          total_clicked: number | null
+          total_delivered: number | null
+          total_opened: number | null
+          total_sent: number | null
+          total_spam: number | null
+          updated_at: string | null
+          variant_name: string
+          weight_percent: number | null
+        }
+        Insert: {
+          blocks_override?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_control?: boolean | null
+          preheader?: string | null
+          subject: string
+          template_id: string
+          total_bounced?: number | null
+          total_clicked?: number | null
+          total_delivered?: number | null
+          total_opened?: number | null
+          total_sent?: number | null
+          total_spam?: number | null
+          updated_at?: string | null
+          variant_name: string
+          weight_percent?: number | null
+        }
+        Update: {
+          blocks_override?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_control?: boolean | null
+          preheader?: string | null
+          subject?: string
+          template_id?: string
+          total_bounced?: number | null
+          total_clicked?: number | null
+          total_delivered?: number | null
+          total_opened?: number | null
+          total_sent?: number | null
+          total_spam?: number | null
+          updated_at?: string | null
+          variant_name?: string
+          weight_percent?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_variants_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates_v2"
             referencedColumns: ["id"]
           },
         ]
@@ -1903,6 +2295,95 @@ export type Database = {
           },
         ]
       }
+      email_templates_v2: {
+        Row: {
+          ab_testing_enabled: boolean | null
+          branding_id: string | null
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          default_preheader: string | null
+          default_subject: string | null
+          department_id: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          legacy_template_id: string | null
+          name: string
+          sender_id: string | null
+          trigger_type: string | null
+          updated_at: string | null
+          version: number | null
+        }
+        Insert: {
+          ab_testing_enabled?: boolean | null
+          branding_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          default_preheader?: string | null
+          default_subject?: string | null
+          department_id?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          legacy_template_id?: string | null
+          name: string
+          sender_id?: string | null
+          trigger_type?: string | null
+          updated_at?: string | null
+          version?: number | null
+        }
+        Update: {
+          ab_testing_enabled?: boolean | null
+          branding_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          default_preheader?: string | null
+          default_subject?: string | null
+          department_id?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          legacy_template_id?: string | null
+          name?: string
+          sender_id?: string | null
+          trigger_type?: string | null
+          updated_at?: string | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_templates_v2_branding_id_fkey"
+            columns: ["branding_id"]
+            isOneToOne: false
+            referencedRelation: "email_branding"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_templates_v2_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_templates_v2_legacy_template_id_fkey"
+            columns: ["legacy_template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_templates_v2_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "email_senders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_tracking_events: {
         Row: {
           created_at: string | null
@@ -1947,6 +2428,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      email_variable_definitions: {
+        Row: {
+          category: string
+          created_at: string | null
+          data_type: string | null
+          description: string | null
+          display_name: string
+          id: string
+          is_active: boolean | null
+          sample_value: string | null
+          variable_key: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          data_type?: string | null
+          description?: string | null
+          display_name: string
+          id?: string
+          is_active?: boolean | null
+          sample_value?: string | null
+          variable_key: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          data_type?: string | null
+          description?: string | null
+          display_name?: string
+          id?: string
+          is_active?: boolean | null
+          sample_value?: string | null
+          variable_key?: string
+        }
+        Relationships: []
       }
       email_verifications: {
         Row: {
