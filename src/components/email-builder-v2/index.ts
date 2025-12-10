@@ -2,3 +2,8 @@ export { EmailTemplateBuilderV2 } from "./EmailTemplateBuilderV2";
 export { BlockSidebar } from "./BlockSidebar";
 export { BlockRenderer } from "./BlockRenderer";
 export { VariablesPicker } from "./VariablesPicker";
+export { BlockConditionsPanel } from "./BlockConditionsPanel";
+export { ABTestingPanel } from "./ABTestingPanel";
+export { LayoutLibrary } from "./LayoutLibrary";
+export { EmailTemplatesV2List } from "./EmailTemplatesV2List";
+export { CreateTemplateV2Dialog } from "./CreateTemplateV2Dialog";
