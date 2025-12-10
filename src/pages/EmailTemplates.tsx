@@ -30,6 +30,7 @@ import { useDeleteEmailTemplate } from "@/hooks/useDeleteEmailTemplate";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { Tables } from "@/integrations/supabase/types";
 import { SafeHTML } from "@/components/SafeHTML";
+import { MigrateTemplateButton } from "@/components/email-builder-v2/MigrateTemplateButton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -245,7 +246,7 @@ export default function EmailTemplates() {
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex gap-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-2">
                   <Button
                     size="sm"
                     variant="outline"
@@ -258,11 +259,11 @@ export default function EmailTemplates() {
                     size="sm"
                     variant="outline"
                     onClick={() => navigate(`/email-templates/builder/${template.id}`)}
-                    className="flex-1 gap-2"
+                    className="gap-2"
                     title="Editor Visual Drag & Drop"
                   >
                     <Sparkles className="h-4 w-4" />
-                    Editor Visual
+                    Editor
                   </Button>
                   <Button
                     size="sm"
@@ -281,6 +282,14 @@ export default function EmailTemplates() {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
+                </div>
+                
+                {/* Migration Button */}
+                <div className="pt-2 border-t">
+                  <MigrateTemplateButton 
+                    template={template} 
+                    onMigrated={() => setActiveTab("v2")} 
+                  />
                 </div>
               </CardContent>
             </Card>
