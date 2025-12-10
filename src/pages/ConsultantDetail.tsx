@@ -62,6 +62,15 @@ export default function ConsultantDetail() {
   // Get consultant info
   const consultant = users?.find(u => u.id === consultantId);
 
+  // Guard: ID não fornecido
+  if (!consultantId) {
+    return (
+      <div className="flex items-center justify-center h-full p-8">
+        <p className="text-muted-foreground">ID do consultor não fornecido</p>
+      </div>
+    );
+  }
+
   // Fetch clients for this consultant
   const { data: clients, isLoading, refetch } = useQuery({
     queryKey: ["portfolio-clients", consultantId],

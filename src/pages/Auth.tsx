@@ -55,7 +55,7 @@ export default function Auth() {
           navigate("/my-portfolio");
           break;
         case "sales_rep":
-          navigate("/dashboard");
+          navigate("/");
           break;
         case "admin":
           navigate("/analytics");
@@ -76,7 +76,7 @@ export default function Auth() {
           navigate("/analytics");
           break;
         default:
-          navigate("/dashboard");
+          navigate("/");
       }
     }
   }, [user, role, authLoading, roleLoading, navigate]);
