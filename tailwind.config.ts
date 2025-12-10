@@ -82,6 +82,12 @@ export default {
           email: "hsl(var(--channel-email))",
           chat: "hsl(var(--channel-chat))",
         },
+        text: {
+          primary: "hsl(var(--color-text-primary))",
+          secondary: "hsl(var(--color-text-secondary))",
+          muted: "hsl(var(--color-text-muted))",
+          inverse: "hsl(var(--color-text-inverse))",
+        },
       },
       zIndex: {
         dropdown: "1000",

@@ -8,6 +8,12 @@
     --background: 210 40% 98%;
     --foreground: 0 0% 5%;
     
+    /* === TEXT SEMANTIC TOKENS (Light Mode) === */
+    --color-text-primary: 0 0% 5%;
+    --color-text-secondary: 0 0% 35%;
+    --color-text-muted: 0 0% 55%;
+    --color-text-inverse: 0 0% 100%;
+    
     --primary: 221.2 83.2% 53.3%;
     --primary-hover: 221 83% 45%;
     --primary-muted: 221 83% 96%;
@@ -92,6 +98,12 @@
     --background: 0 0% 2%;
     --foreground: 0 0% 92%;
     
+    /* === TEXT SEMANTIC TOKENS (Dark Mode) === */
+    --color-text-primary: 0 0% 92%;
+    --color-text-secondary: 0 0% 70%;
+    --color-text-muted: 0 0% 55%;
+    --color-text-inverse: 0 0% 100%;
+    
     --primary: 221.2 83.2% 53.3%;
     --primary-hover: 221 83% 60%;
     --primary-muted: 221 83% 15%;
@@ -166,15 +178,15 @@
 /* Enterprise Typography & Density Utilities */
 @layer components {
   .text-enterprise-title {
-    @apply text-base font-semibold text-slate-900 dark:text-zinc-100;
+    @apply text-base font-semibold text-text-primary;
   }
   
   .text-enterprise-body {
-    @apply text-sm text-slate-600 dark:text-zinc-400;
+    @apply text-sm text-text-secondary;
   }
   
   .text-enterprise-label {
-    @apply text-xs font-medium text-slate-500 dark:text-zinc-500 uppercase tracking-wide;
+    @apply text-xs font-medium text-text-muted uppercase tracking-wide;
   }
   
   .card-compact {
