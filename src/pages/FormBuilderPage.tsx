@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { FormBuilderV2 } from "@/components/forms/FormBuilderV2";
+import { FormBuilderV3 } from "@/components/forms/v3";
 import { FormPreviewModal } from "@/components/forms/FormPreviewModal";
 import { FormRoutingConfig, FormRoutingSettings } from "@/components/forms/FormRoutingConfig";
 import { FormShareDialog } from "@/components/forms/FormShareDialog";
@@ -217,11 +218,22 @@ export default function FormBuilderPage() {
 
           {/* Right Column: Form Builder */}
           <div className="lg:col-span-3 overflow-y-auto max-h-[calc(100vh-120px)]">
-            <FormBuilderV2
-              schema={schema}
-              onChange={setSchema}
-              onPreview={() => setShowPreview(true)}
-            />
+            {isEditing ? (
+              <FormBuilderV3
+                formId={formId!}
+                schema={schema}
+                settings={schema.settings}
+                onSchemaChange={setSchema}
+                onSettingsChange={(settings) => setSchema({ ...schema, settings })}
+                onPreview={() => setShowPreview(true)}
+              />
+            ) : (
+              <FormBuilderV2
+                schema={schema}
+                onChange={setSchema}
+                onPreview={() => setShowPreview(true)}
+              />
+            )}
           </div>
         </div>
       </main>
