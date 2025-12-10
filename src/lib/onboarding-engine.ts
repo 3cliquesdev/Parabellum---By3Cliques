@@ -102,51 +102,59 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
 // Funções de validação para cada etapa
 export async function validateStep(stepKey: string): Promise<boolean> {
   try {
+    const client = supabase as unknown as {
+      from: (table: string) => {
+        select: (cols: string, opts?: { count: string; head: boolean }) => {
+          eq: (col: string, val: unknown) => Promise<{ count: number | null }>;
+        } & Promise<{ count: number | null }>;
+      };
+    };
+
     switch (stepKey) {
       case 'connect_channels': {
-        const { count } = await supabase
+        const result = await client
           .from('whatsapp_instances')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'connected') as { count: number | null };
-        return (count || 0) > 0;
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'connected');
+        return (result.count ?? 0) > 0;
       }
       
       case 'import_contacts': {
-        const { count } = await supabase
+        const result = await client
           .from('contacts')
-          .select('*', { count: 'exact', head: true }) as { count: number | null };
-        return (count || 0) > 0;
+          .select('id', { count: 'exact', head: true });
+        return (result.count ?? 0) > 0;
       }
       
       case 'create_pipeline': {
-        const { count } = await supabase
+        const result = await client
           .from('pipelines')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true) as { count: number | null };
-        return (count || 0) > 0;
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true);
+        return (result.count ?? 0) > 0;
       }
       
       case 'create_playbook': {
-        const { count } = await supabase
+        const result = await client
           .from('onboarding_playbooks')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true) as { count: number | null };
-        return (count || 0) > 0;
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true);
+        return (result.count ?? 0) > 0;
       }
       
       case 'activate_ai': {
-        const { count } = await supabase
+        const result = await client
           .from('ai_personas')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true) as { count: number | null };
-        return (count || 0) > 0;
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true);
+        return (result.count ?? 0) > 0;
       }
       
       case 'create_ticket': {
-        const { count } = await supabase
+        const result = await client
           .from('tickets')
-          .select('*', { count: 'exact', head: true }) as { count: number | null };
-        return (count || 0) > 0;
+          .select('id', { count: 'exact', head: true });
+        return (result.count ?? 0) > 0;
       }
       
       default:
