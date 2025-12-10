@@ -124,6 +124,50 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_onboarding_steps: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          status: string
+          step_key: string
+          updated_at: string | null
+          user_id: string
+          validated_by: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string
+          step_key: string
+          updated_at?: string | null
+          user_id: string
+          validated_by?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string
+          step_key?: string
+          updated_at?: string | null
+          user_id?: string
+          validated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_onboarding_steps_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_support_channels: {
         Row: {
           channel_id: string
@@ -3601,6 +3645,9 @@ export type Database = {
           job_title: string | null
           last_status_change: string | null
           manager_id: string | null
+          onboarding_completed: boolean | null
+          onboarding_completed_at: string | null
+          onboarding_progress: number | null
           updated_at: string | null
         }
         Insert: {
@@ -3620,6 +3667,9 @@ export type Database = {
           job_title?: string | null
           last_status_change?: string | null
           manager_id?: string | null
+          onboarding_completed?: boolean | null
+          onboarding_completed_at?: string | null
+          onboarding_progress?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -3639,6 +3689,9 @@ export type Database = {
           job_title?: string | null
           last_status_change?: string | null
           manager_id?: string | null
+          onboarding_completed?: boolean | null
+          onboarding_completed_at?: string | null
+          onboarding_progress?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -4719,6 +4772,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_onboarding_progress: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       check_duplicate_articles: {
         Args: {
           p_article_id?: string
