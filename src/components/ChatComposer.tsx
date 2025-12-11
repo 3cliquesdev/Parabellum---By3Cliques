@@ -1,38 +1,60 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SlashCommandMenu } from "@/components/SlashCommandMenu";
 import { MacrosPopover } from "@/components/MacrosPopover";
+import { ChannelSelector } from "@/components/ChannelSelector";
 import { Send, StickyNote, MessageCircle, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ChannelType, ChannelOption } from "@/hooks/useReplyChannel";
 
 export type MessageMode = "public" | "internal";
 
 interface ChatComposerProps {
   message: string;
   setMessage: (value: string) => void;
-  onSendMessage: (isInternal: boolean) => void;
+  onSendMessage: (isInternal: boolean, channel?: ChannelType) => void;
   isSending: boolean;
   isDisabled: boolean;
   placeholder?: string;
+  // Reply Smart props
+  selectedChannel?: ChannelType;
+  onChannelChange?: (channel: ChannelType) => void;
+  availableChannels?: ChannelOption[];
+  showChannelSelector?: boolean;
 }
 
-// FASE 5: Super Composer com tabs Público/Interno
+// FASE 5: Super Composer com tabs Público/Interno + Reply Smart
 export function ChatComposer({
   message,
   setMessage,
   onSendMessage,
   isSending,
   isDisabled,
-  placeholder = "Digite sua mensagem ou / para macros..."
+  placeholder = "Digite sua mensagem ou / para macros...",
+  selectedChannel = "web_chat",
+  onChannelChange,
+  availableChannels = [],
+  showChannelSelector = false,
 }: ChatComposerProps) {
   const [messageMode, setMessageMode] = useState<MessageMode>("public");
+  const [localChannel, setLocalChannel] = useState<ChannelType>(selectedChannel);
+
+  // Sincronizar com prop externa
+  useEffect(() => {
+    setLocalChannel(selectedChannel);
+  }, [selectedChannel]);
+
+  const handleChannelChange = (channel: ChannelType) => {
+    setLocalChannel(channel);
+    onChannelChange?.(channel);
+  };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      onSendMessage(messageMode === "internal");
+      onSendMessage(messageMode === "internal", localChannel);
     }
   };
 
@@ -40,12 +62,16 @@ export function ChatComposer({
     setMessage(content);
   };
 
+  const handleSend = () => {
+    onSendMessage(messageMode === "internal", localChannel);
+  };
+
   const isInternal = messageMode === "internal";
 
   return (
     <div className="flex-none bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-t border-slate-200 dark:border-zinc-800">
       {/* Tabs de Modo */}
-      <div className="px-4 pt-3">
+      <div className="px-4 pt-3 flex items-center justify-between gap-3">
         <Tabs value={messageMode} onValueChange={(v) => setMessageMode(v as MessageMode)}>
           <TabsList className="h-8 p-0.5 bg-slate-100 dark:bg-zinc-800">
             <TabsTrigger 
@@ -68,6 +94,16 @@ export function ChatComposer({
             </TabsTrigger>
           </TabsList>
         </Tabs>
+
+        {/* Reply Smart: Seletor de Canal */}
+        {showChannelSelector && !isInternal && availableChannels.length > 0 && (
+          <ChannelSelector
+            selectedChannel={localChannel}
+            onChannelChange={handleChannelChange}
+            availableChannels={availableChannels}
+            disabled={isDisabled || isSending}
+          />
+        )}
       </div>
 
       {/* Aviso de Nota Interna */}
@@ -106,7 +142,7 @@ export function ChatComposer({
 
           {/* Botão Enviar */}
           <Button 
-            onClick={() => onSendMessage(isInternal)}
+            onClick={handleSend}
             disabled={isSending || !message.trim() || isDisabled}
             size="icon"
             className={cn(
