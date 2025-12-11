@@ -4715,6 +4715,7 @@ export type Database = {
           created_at: string | null
           department_id: string | null
           id: string
+          inbox_enabled: boolean | null
           instance_name: string
           name: string
           phone_number: string | null
@@ -4730,6 +4731,7 @@ export type Database = {
           created_at?: string | null
           department_id?: string | null
           id?: string
+          inbox_enabled?: boolean | null
           instance_name: string
           name: string
           phone_number?: string | null
@@ -4745,6 +4747,7 @@ export type Database = {
           created_at?: string | null
           department_id?: string | null
           id?: string
+          inbox_enabled?: boolean | null
           instance_name?: string
           name?: string
           phone_number?: string | null

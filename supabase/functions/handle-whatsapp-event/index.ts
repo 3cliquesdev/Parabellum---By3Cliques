@@ -155,6 +155,16 @@ serve(async (req) => {
       );
     }
 
+    // ⏸️ Verificar se inbox está habilitado para esta instância
+    if (instance.inbox_enabled === false) {
+      console.log(`[handle-whatsapp-event] ⏸️ Inbox desabilitado para instância: ${instance.name}`);
+      console.log('[handle-whatsapp-event] Mensagem ignorada (instância apenas para envio)');
+      return new Response(
+        JSON.stringify({ success: true, skipped: true, reason: 'inbox_disabled' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Normalizar formato do evento (Evolution API v2 usa minúsculas com pontos)
     const normalizedEvent = normalizeEventType(payload.event);
     console.log('[handle-whatsapp-event] Normalized event:', normalizedEvent);

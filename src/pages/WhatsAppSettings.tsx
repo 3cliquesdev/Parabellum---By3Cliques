@@ -18,7 +18,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Smartphone, Settings, Trash2, QrCode, AlertTriangle, Zap, Activity, RefreshCw, Webhook, Stethoscope } from "lucide-react";
+import { Plus, MoreVertical, Smartphone, Settings, Trash2, QrCode, AlertTriangle, Zap, Activity, RefreshCw, Webhook, Stethoscope, Inbox, Send } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { useUpdateWhatsAppInstance } from "@/hooks/useWhatsAppInstances";
+import { toast } from "sonner";
 import { useWhatsAppInstances, useDeleteWhatsAppInstance, useConnectWhatsAppInstance, useResetWhatsAppInstance, useWhatsAppAPIStatus } from "@/hooks/useWhatsAppInstances";
 import { useTestWhatsAppConnection } from "@/hooks/useTestWhatsAppConnection";
 import { useSyncWhatsAppInstances } from "@/hooks/useSyncWhatsAppInstances";
@@ -36,6 +39,7 @@ export default function WhatsAppSettings() {
   const syncMutation = useSyncWhatsAppInstances();
   const reconfigureWebhookMutation = useReconfigureWebhook();
   const testWebhookMutation = useTestWebhook();
+  const updateMutation = useUpdateWhatsAppInstance();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -102,6 +106,19 @@ export default function WhatsAppSettings() {
   const handleTestWebhook = async (instance: any) => {
     const result = await testWebhookMutation.mutateAsync(instance.id);
     setWebhookDiagnostics({ ...result, instanceId: instance.id });
+  };
+
+  const handleToggleInbox = async (instanceId: string, enabled: boolean) => {
+    try {
+      await updateMutation.mutateAsync({ id: instanceId, inbox_enabled: enabled });
+      toast.success(
+        enabled 
+          ? "📥 Inbox habilitado - mensagens serão recebidas" 
+          : "📤 Inbox desabilitado - apenas envio"
+      );
+    } catch (error) {
+      toast.error("Erro ao atualizar configuração");
+    }
   };
 
   const getStatusIndicator = () => {
@@ -319,6 +336,7 @@ export default function WhatsAppSettings() {
                   <TableHead>Nome</TableHead>
                   <TableHead>Número</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Inbox</TableHead>
                   <TableHead>Vinculação</TableHead>
                   <TableHead className="w-[100px]">Ações</TableHead>
                 </TableRow>
@@ -340,6 +358,27 @@ export default function WhatsAppSettings() {
                       )}
                     </TableCell>
                     <TableCell>{getStatusBadge(instance.status)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={instance.inbox_enabled !== false}
+                          onCheckedChange={(checked) => handleToggleInbox(instance.id, checked)}
+                        />
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          {instance.inbox_enabled !== false ? (
+                            <>
+                              <Inbox className="w-3 h-3" />
+                              Ativo
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-3 h-3" />
+                              Só envio
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="space-y-1">
                         {instance.user ? (

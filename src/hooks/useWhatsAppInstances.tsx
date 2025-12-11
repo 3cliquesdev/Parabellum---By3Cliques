@@ -14,6 +14,7 @@ export interface WhatsAppInstance {
   ai_mode: 'autopilot' | 'copilot' | 'disabled';
   department_id: string | null;
   user_id: string | null;
+  inbox_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
