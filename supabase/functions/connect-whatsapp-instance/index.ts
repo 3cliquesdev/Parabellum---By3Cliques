@@ -154,37 +154,70 @@ Deno.serve(async (req) => {
     }
 
     // Configurar webhook automaticamente (após criar ou conectar)
-    try {
-      const webhookUrl = `${baseUrl}/webhook/set/${encodeURIComponent(instance.instance_name)}`;
-      const supabaseUrl = Deno.env.get("SUPABASE_URL");
-      
-      console.log('[connect-whatsapp-instance] Configuring webhook:', webhookUrl);
-      
-      const webhookResponse = await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "apikey": apiToken,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          url: `${supabaseUrl}/functions/v1/handle-whatsapp-event`,
-          enabled: true,
-          events: ["CONNECTION_UPDATE", "MESSAGES_UPSERT", "QRCODE_UPDATED"],
-        }),
-      });
-
-      if (webhookResponse.ok) {
-        console.log('[connect-whatsapp-instance] Webhook configured successfully');
-      } else {
-        const errorText = await webhookResponse.text();
-        console.error('[connect-whatsapp-instance] Webhook configuration failed:', {
-          status: webhookResponse.status,
-          body: errorText,
+    // CRÍTICO: NÃO silenciar erros - webhook é essencial para receber mensagens
+    const webhookSetUrl = `${baseUrl}/webhook/set/${encodeURIComponent(instance.instance_name)}`;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const webhookTargetUrl = `${supabaseUrl}/functions/v1/handle-whatsapp-event`;
+    
+    console.log('[connect-whatsapp-instance] 🔧 Configuring webhook...');
+    console.log('[connect-whatsapp-instance] Webhook SET URL:', webhookSetUrl);
+    console.log('[connect-whatsapp-instance] Target URL:', webhookTargetUrl);
+    
+    let webhookConfigured = false;
+    let webhookError: string | null = null;
+    
+    // Tentar configurar webhook com retries
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`[connect-whatsapp-instance] Webhook config attempt ${attempt}/3...`);
+        
+        const webhookResponse = await fetch(webhookSetUrl, {
+          method: "POST",
+          headers: {
+            "apikey": apiToken,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            url: webhookTargetUrl,
+            enabled: true,
+            events: ["CONNECTION_UPDATE", "MESSAGES_UPSERT", "QRCODE_UPDATED"],
+            webhook_by_events: false,
+          }),
         });
+
+        const responseText = await webhookResponse.text();
+        console.log(`[connect-whatsapp-instance] Webhook response ${attempt}:`, {
+          status: webhookResponse.status,
+          body: responseText,
+        });
+
+        if (webhookResponse.ok) {
+          webhookConfigured = true;
+          console.log('[connect-whatsapp-instance] ✅ Webhook configured successfully!');
+          break;
+        }
+        
+        webhookError = `HTTP ${webhookResponse.status}: ${responseText}`;
+        
+        // Esperar antes de retry
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      } catch (e) {
+        webhookError = e instanceof Error ? e.message : String(e);
+        console.error(`[connect-whatsapp-instance] Webhook attempt ${attempt} failed:`, webhookError);
+        
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
       }
-    } catch (webhookError) {
-      console.error('[connect-whatsapp-instance] Error configuring webhook:', webhookError);
-      // Não falhar a operação se o webhook der erro
+    }
+    
+    // Log resultado final do webhook
+    if (!webhookConfigured) {
+      console.error('[connect-whatsapp-instance] ⚠️ WEBHOOK NOT CONFIGURED after 3 attempts:', webhookError);
+      // Adicionar aviso no resultado mas não falhar a conexão
+      result.webhookWarning = `Webhook não configurado: ${webhookError}. Use o botão "Reconfigurar Webhook" para tentar novamente.`;
     }
 
     // Atualizar QR Code no banco (se disponível)
