@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { useConversations, type ConversationFilters } from "@/hooks/useConversations";
+import { useInboxView, useInboxCounts, type InboxFilters as InboxViewFiltersType } from "@/hooks/useInboxView";
+import { useConversations } from "@/hooks/useConversations";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useDepartments } from "@/hooks/useDepartments";
@@ -38,6 +39,9 @@ const DEFAULT_FILTERS: InboxFilters = {
   tags: [],
   search: "",
   slaExpired: false,
+  hasAudio: undefined,
+  hasAttachments: undefined,
+  aiMode: undefined,
 };
 
 type MobileView = "list" | "chat" | "details";
@@ -63,14 +67,27 @@ export default function Inbox() {
   const teamFilter = searchParams.get("team");
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   
-  // Convert InboxFilters to ConversationFilters for the hook
-  const conversationFilters: ConversationFilters = {
-    ...filters,
+  // Convert InboxFilters to InboxViewFilters for the optimized hook
+  const inboxViewFilters: InboxViewFiltersType = {
+    dateRange: filters.dateRange,
     channels: filters.channels,
     status: filters.status,
+    assignedTo: filters.assignedTo,
+    search: filters.search,
+    slaStatus: filters.slaExpired ? 'critical' : undefined,
+    hasAudio: filters.hasAudio,
+    hasAttachments: filters.hasAttachments,
+    aiMode: filters.aiMode as InboxViewFiltersType['aiMode'],
+    department: departmentFilter || undefined,
   };
   
-  const { data: conversations, isLoading } = useConversations(conversationFilters);
+  // Use optimized inbox_view for list (fast)
+  const { data: inboxItems, isLoading: inboxLoading } = useInboxView(inboxViewFilters);
+  const { data: counts } = useInboxCounts();
+  
+  // Use original hook to get full conversation data when selected
+  const { data: conversations, isLoading: convLoading } = useConversations();
+  
   const { data: departments } = useDepartments();
   const { data: teams } = useTeams();
   const { data: userTeams } = useUserTeams(user?.id);
@@ -170,27 +187,12 @@ export default function Inbox() {
     }
   }, [conversations, filter, departmentFilter, teamFilter, user?.id, role, userTeams]);
 
-  const aiQueueCount = conversations?.filter(c => 
-    c.ai_mode === 'autopilot' && 
-    (!departmentFilter || c.department === departmentFilter)
-  ).length || 0;
+  // Use optimized counts from inbox_view
+  const aiQueueCount = counts?.aiQueue || 0;
+  const humanQueueCount = counts?.humanQueue || 0;
+  const totalActiveCount = (counts?.aiQueue || 0) + (counts?.humanQueue || 0);
+  const slaCriticalCount = counts?.slaCritical || 0;
   
-  const humanQueueCount = conversations?.filter(c => {
-    const isHumanMode = c.ai_mode === 'copilot' || c.ai_mode === 'disabled';
-    const matchesDept = !departmentFilter || c.department === departmentFilter;
-    
-    if (role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager') {
-      return isHumanMode && matchesDept;
-    }
-    
-    return isHumanMode && c.assigned_to === user?.id && matchesDept;
-  }).length || 0;
-
-  const totalActiveCount = conversations?.filter(c => 
-    c.status !== 'closed' &&
-    (!departmentFilter || c.department === departmentFilter)
-  ).length || 0;
-
   const currentFilterCount = filteredConversations.length;
   const hasHiddenConversations = currentFilterCount === 0 && totalActiveCount > 0;
 
@@ -405,7 +407,7 @@ export default function Inbox() {
           conversations={filteredConversations}
           activeConversationId={activeConversation?.id || null}
           onSelectConversation={handleSelectConversation}
-          isLoading={isLoading}
+          isLoading={inboxLoading || convLoading}
         />
         <ChatWindow conversation={activeConversation} />
         <ContactDetailsSidebar conversation={activeConversation} />

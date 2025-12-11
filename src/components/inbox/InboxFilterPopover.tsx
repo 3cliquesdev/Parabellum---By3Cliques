@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Filter, X, Search } from "lucide-react";
+import { Filter, X, Search, Mic, Paperclip, Bot, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,10 @@ export interface InboxFilters {
   tags: string[];
   search: string;
   slaExpired: boolean;
+  // New advanced filters
+  hasAudio?: boolean;
+  hasAttachments?: boolean;
+  aiMode?: string;
 }
 
 interface InboxFilterPopoverProps {
@@ -38,15 +42,22 @@ interface InboxFilterPopoverProps {
 }
 
 const CHANNELS = [
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "web_chat", label: "Web Chat" },
-  { value: "email", label: "Email" },
+  { value: "whatsapp", label: "WhatsApp", icon: "📱" },
+  { value: "web_chat", label: "Web Chat", icon: "💬" },
+  { value: "email", label: "Email", icon: "📧" },
+  { value: "instagram", label: "Instagram", icon: "📸" },
 ];
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Aberto" },
   { value: "pending", label: "Pendente" },
   { value: "closed", label: "Resolvido" },
+];
+
+const AI_MODE_OPTIONS = [
+  { value: "autopilot", label: "🤖 Autopilot" },
+  { value: "copilot", label: "🧑‍✈️ Copilot" },
+  { value: "disabled", label: "❌ Desabilitado" },
 ];
 
 export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFilterPopoverProps) {
@@ -62,6 +73,9 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
     filters.tags.length,
     filters.search ? 1 : 0,
     filters.slaExpired ? 1 : 0,
+    filters.hasAudio ? 1 : 0,
+    filters.hasAttachments ? 1 : 0,
+    filters.aiMode ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   const handleChannelToggle = (channel: string) => {
@@ -94,13 +108,16 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
       tags: [],
       search: "",
       slaExpired: false,
+      hasAudio: undefined,
+      hasAttachments: undefined,
+      aiMode: undefined,
     });
   };
 
   return (
-    <div className="flex gap-2 items-center">
+    <div className="flex gap-2 items-center flex-wrap">
       {/* Search Input */}
-      <div className="relative flex-1">
+      <div className="relative flex-1 min-w-[200px]">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Buscar por nome, email, ID..."
@@ -110,15 +127,41 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
         />
       </div>
 
-      {/* SLA Expired Quick Filter */}
-      <Button
-        variant={filters.slaExpired ? "destructive" : "outline"}
-        size="sm"
-        onClick={() => onFiltersChange({ ...filters, slaExpired: !filters.slaExpired })}
-        className="whitespace-nowrap"
-      >
-        ⏰ SLA Crítico
-      </Button>
+      {/* Quick Filters */}
+      <div className="flex gap-1.5">
+        {/* SLA Expired */}
+        <Button
+          variant={filters.slaExpired ? "destructive" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange({ ...filters, slaExpired: !filters.slaExpired })}
+          className="gap-1.5"
+        >
+          <Clock className="h-3.5 w-3.5" />
+          SLA
+        </Button>
+
+        {/* Has Audio */}
+        <Button
+          variant={filters.hasAudio ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange({ ...filters, hasAudio: !filters.hasAudio })}
+          className="gap-1.5"
+        >
+          <Mic className="h-3.5 w-3.5" />
+          Áudio
+        </Button>
+
+        {/* Has Attachments */}
+        <Button
+          variant={filters.hasAttachments ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange({ ...filters, hasAttachments: !filters.hasAttachments })}
+          className="gap-1.5"
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+          Anexos
+        </Button>
+      </div>
 
       {/* Filter Popover */}
       <Popover open={open} onOpenChange={setOpen}>
@@ -133,7 +176,7 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-96 p-4" align="end">
+        <PopoverContent className="w-[400px] p-4" align="end">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-semibold">Filtros Avançados</h4>
             <Button variant="ghost" size="sm" onClick={clearFilters}>
@@ -142,7 +185,7 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
             </Button>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
             {/* Date Range */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Período</Label>
@@ -165,8 +208,9 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
                     />
                     <label
                       htmlFor={`channel-${channel.value}`}
-                      className="text-sm cursor-pointer"
+                      className="text-sm cursor-pointer flex items-center gap-1"
                     >
+                      <span>{channel.icon}</span>
                       {channel.label}
                     </label>
                   </div>
@@ -194,6 +238,27 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* AI Mode */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Modo IA</Label>
+              <Select
+                value={filters.aiMode || "all"}
+                onValueChange={(v) => onFiltersChange({ ...filters, aiMode: v === "all" ? undefined : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os modos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os modos</SelectItem>
+                  {AI_MODE_OPTIONS.map((mode) => (
+                    <SelectItem key={mode.value} value={mode.value}>
+                      {mode.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Assigned To */}
@@ -245,6 +310,35 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
                 </div>
               </div>
             )}
+
+            {/* Media Filters */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Mídia</Label>
+              <div className="flex flex-wrap gap-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="has-audio"
+                    checked={filters.hasAudio || false}
+                    onCheckedChange={(checked) => onFiltersChange({ ...filters, hasAudio: checked as boolean })}
+                  />
+                  <label htmlFor="has-audio" className="text-sm cursor-pointer flex items-center gap-1">
+                    <Mic className="h-3.5 w-3.5 text-muted-foreground" />
+                    Com áudio
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="has-attachments"
+                    checked={filters.hasAttachments || false}
+                    onCheckedChange={(checked) => onFiltersChange({ ...filters, hasAttachments: checked as boolean })}
+                  />
+                  <label htmlFor="has-attachments" className="text-sm cursor-pointer flex items-center gap-1">
+                    <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                    Com anexos
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
         </PopoverContent>
       </Popover>
