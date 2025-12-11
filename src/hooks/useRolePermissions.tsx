@@ -35,6 +35,9 @@ export function useRolePermissions() {
       return permMap;
     },
     enabled: !!role,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 
   const hasPermission = (key: string): boolean => {

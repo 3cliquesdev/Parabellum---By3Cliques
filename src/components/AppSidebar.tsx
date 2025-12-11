@@ -33,6 +33,7 @@ import {
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
+import { useRealtimePermissions } from "@/hooks/useRealtimePermissions";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
@@ -246,6 +247,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, isSupportManager, isFinancialManager, isCSManager, isGeneralManager, loading } = useUserRole();
   const { hasPermission } = useRolePermissions();
+  useRealtimePermissions(); // Sincronização em tempo real
   const { signOut, user, profile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
