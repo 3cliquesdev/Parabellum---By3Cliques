@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Send, Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign, Ticket } from "lucide-react";
+import { Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
 import { useSendEmail } from "@/hooks/useSendEmail";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,19 +15,16 @@ import { useActivePersona } from "@/hooks/useActivePersona";
 import { useTakeControl } from "@/hooks/useTakeControl";
 import { useReturnToAutopilot } from "@/hooks/useReturnToAutopilot";
 import { useAutopilotTrigger } from "@/hooks/useAutopilotTrigger";
-import { SlashCommandMenu } from "@/components/SlashCommandMenu";
 import TransferConversationDialog from "@/components/TransferConversationDialog";
 import { CreateTicketFromInboxDialog } from "@/components/CreateTicketFromInboxDialog";
 import CopilotSuggestionCard from "@/components/CopilotSuggestionCard";
 import CloseConversationDialog from "@/components/CloseConversationDialog";
 import DealDialog from "@/components/DealDialog";
-import { SafeHTML } from "@/components/SafeHTML";
-import { MessageStatusIndicator } from "@/components/MessageStatusIndicator";
-import { AIDebugTooltip } from "@/components/AIDebugTooltip";
 import { ChannelIcon } from "@/components/ChannelIcon";
-import { ChatComposer } from "@/components/ChatComposer";
 import { InternalNoteMessage } from "@/components/InternalNoteMessage";
 import { ConversationTagsSection } from "@/components/inbox/ConversationTagsSection";
+import { MessageBubble } from "@/components/inbox/MessageBubble";
+import { SuperComposer } from "@/components/inbox/SuperComposer";
 import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { useMarkAsRead } from "@/hooks/useUnreadCount";
 import { supabase } from "@/integrations/supabase/client";
@@ -484,7 +479,27 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                         // Ignore parse errors
                       }
 
-                      // FASE 8: Renderizar notas internas com estilo especial
+                      // Parse media attachments from message
+                      let attachments: any[] = [];
+                      try {
+                        if ((message as any).media_attachments) {
+                          attachments = (message as any).media_attachments
+                            .filter((a: any) => a.status === 'ready')
+                            .map((a: any) => ({
+                              id: a.id,
+                              url: a.public_url || a.presigned_url,
+                              mimeType: a.mime_type,
+                              filename: a.original_filename,
+                              size: a.file_size,
+                              waveformData: a.waveform_data,
+                              durationSeconds: a.duration_seconds,
+                            }));
+                        }
+                      } catch (e) {
+                        // Ignore parse errors
+                      }
+
+                      // Renderizar notas internas com estilo especial
                       if (isInternalNote) {
                         return (
                           <InternalNoteMessage
@@ -509,92 +524,27 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                       }
 
                       return (
-                        <div
+                        <MessageBubble
                           key={message.id}
-                          className={cn(
-                            "flex gap-2",
-                            isCustomer ? "justify-start" : "justify-end"
-                          )}
-                        >
-                          {isCustomer && (
-                            <Avatar className="w-9 h-9 shrink-0 shadow-sm">
-                              <AvatarFallback className="bg-gradient-to-br from-slate-400 to-slate-600 text-white text-sm font-semibold">
-                                {contact?.first_name?.[0] || ''}{contact?.last_name?.[0] || ''}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
-
-                          {!isCustomer && (
-                            <Avatar className="w-9 h-9 shrink-0 shadow-sm order-2">
-                              {isAI ? (
-                                <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600">
-                                  <Bot className="h-5 w-5 text-white" />
-                                </AvatarFallback>
-                              ) : message.sender ? (
-                                <>
-                                  {message.sender.avatar_url ? (
-                                    <AvatarImage src={message.sender.avatar_url} alt={message.sender.full_name} />
-                                  ) : null}
-                                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-semibold">
-                                    {message.sender.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                                  </AvatarFallback>
-                                </>
-                              ) : (
-                                <AvatarFallback>?</AvatarFallback>
-                              )}
-                            </Avatar>
-                          )}
-                          
-                          <div className={cn("flex flex-col", isCustomer ? "items-start" : "items-end")}>
-                            {!isCustomer && (
-                              <p className="text-xs text-muted-foreground mb-1 px-1 font-medium">
-                                {isAI ? "Assistente Virtual" : message.sender?.full_name}
-                                {message.sender?.job_title && (
-                                  <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
-                                    {message.sender.job_title}
-                                  </span>
-                                )}
-                              </p>
-                            )}
-                            
-                            <div
-                              className={cn(
-                                "max-w-[75%] px-4 py-3 shadow-sm",
-                                isCustomer
-                                  ? "bg-slate-900 text-white rounded-2xl rounded-tl-none"
-                                  : isAI
-                                  ? "bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 rounded-2xl rounded-tr-none text-violet-900 dark:text-violet-300"
-                                  : "bg-blue-600 dark:bg-blue-600/90 text-white rounded-2xl rounded-tr-none"
-                              )}
-                             >
-                              <SafeHTML 
-                                html={message.content}
-                                className="text-sm whitespace-pre-wrap break-words"
-                              />
-                              <div className={cn(
-                                "text-[10px] mt-1 flex items-center gap-1.5",
-                                isCustomer ? "text-slate-400 dark:text-zinc-500" : 
-                                isAI ? "text-violet-600 dark:text-violet-400 opacity-70" : 
-                                "text-white opacity-70"
-                              )}>
-                                <span>
-                                  {format(new Date(message.created_at), "HH:mm")}
-                                </span>
-                                {/* AI Debug Icon for Admins/Managers */}
-                                {isAI && (isAdmin || isManager) && (
-                                  <AIDebugTooltip usedArticles={usedArticles} />
-                                )}
-                                {/* Status indicator for user/agent messages */}
-                                {!isCustomer && (message as any).status && (
-                                  <MessageStatusIndicator 
-                                    status={(message as any).status}
-                                    className={isAI ? "text-violet-600 dark:text-violet-400" : "text-white"}
-                                  />
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                          content={message.content}
+                          createdAt={message.created_at}
+                          isCustomer={isCustomer}
+                          isAI={isAI}
+                          sender={message.sender ? {
+                            id: message.sender.id,
+                            full_name: message.sender.full_name,
+                            avatar_url: message.sender.avatar_url || null,
+                            job_title: message.sender.job_title || null,
+                          } : null}
+                          contactInitials={`${contact?.first_name?.[0] || ''}${contact?.last_name?.[0] || ''}`}
+                          channel={conversation.channel}
+                          showChannel={false}
+                          status={(message as any).status}
+                          usedArticles={usedArticles}
+                          isAdmin={isAdmin}
+                          isManager={isManager}
+                          attachments={attachments}
+                        />
                       );
                     })}
                     <div ref={messagesEndRef} />
@@ -648,13 +598,11 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   </div>
                 </div>
               ) : (
-                <ChatComposer
-                  message={message}
-                  setMessage={setMessage}
-                  onSendMessage={handleSendMessage}
-                  isSending={isSending}
+                <SuperComposer
+                  conversationId={conversation.id}
                   isDisabled={conversation.status === "closed"}
-                  placeholder="Digite sua mensagem ou / para macros..."
+                  whatsappInstanceId={conversation.whatsapp_instance_id}
+                  contactPhone={contact?.phone || contact?.whatsapp_id}
                 />
               )}
             </>

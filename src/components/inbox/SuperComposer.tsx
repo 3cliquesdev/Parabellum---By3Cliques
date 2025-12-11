@@ -5,22 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SlashCommandMenu } from "@/components/SlashCommandMenu";
 import { MacrosPopover } from "@/components/MacrosPopover";
-import { ChannelSelector } from "@/components/ChannelSelector";
 import { FileDropZone } from "./FileDropZone";
-import { MediaPreview } from "./MediaPreview";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { useSendMessage } from "@/hooks/useMessages";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Send,
   StickyNote,
   MessageCircle,
   AlertTriangle,
   Paperclip,
-  Smile,
-  Mic,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ChannelType, ChannelOption } from "@/hooks/useReplyChannel";
 
 export type MessageMode = "public" | "internal";
 
@@ -35,42 +33,27 @@ interface PendingAttachment {
   };
 }
 
-interface SuperComposerProps {
+export interface SuperComposerProps {
   conversationId: string;
-  message: string;
-  setMessage: (value: string) => void;
-  onSendMessage: (
-    isInternal: boolean,
-    channel?: ChannelType,
-    attachmentIds?: string[]
-  ) => void;
-  isSending: boolean;
-  isDisabled: boolean;
-  placeholder?: string;
-  selectedChannel?: ChannelType;
-  onChannelChange?: (channel: ChannelType) => void;
-  availableChannels?: ChannelOption[];
-  showChannelSelector?: boolean;
+  isDisabled?: boolean;
+  whatsappInstanceId?: string | null;
+  contactPhone?: string | null;
 }
 
 export function SuperComposer({
   conversationId,
-  message,
-  setMessage,
-  onSendMessage,
-  isSending,
-  isDisabled,
-  placeholder = "Digite sua mensagem ou / para macros...",
-  selectedChannel = "web_chat",
-  onChannelChange,
-  availableChannels = [],
-  showChannelSelector = false,
+  isDisabled = false,
+  whatsappInstanceId,
+  contactPhone,
 }: SuperComposerProps) {
+  const [message, setMessage] = useState("");
   const [messageMode, setMessageMode] = useState<MessageMode>("public");
-  const [localChannel, setLocalChannel] = useState<ChannelType>(selectedChannel);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [showAttachmentPicker, setShowAttachmentPicker] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  const { user } = useAuth();
+  const sendMessage = useSendMessage();
 
   const { upload, isUploading, progress } = useMediaUpload({
     conversationId,
@@ -93,15 +76,6 @@ export function SuperComposer({
     },
   });
 
-  useEffect(() => {
-    setLocalChannel(selectedChannel);
-  }, [selectedChannel]);
-
-  const handleChannelChange = (channel: ChannelType) => {
-    setLocalChannel(channel);
-    onChannelChange?.(channel);
-  };
-
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -115,7 +89,6 @@ export function SuperComposer({
   };
 
   const handleFileSelect = async (file: File) => {
-    // Add to pending with preview
     let preview: string | undefined;
     if (file.type.startsWith("image/")) {
       preview = URL.createObjectURL(file);
@@ -124,7 +97,6 @@ export function SuperComposer({
     setPendingAttachments((prev) => [...prev, { file, preview }]);
     setShowAttachmentPicker(false);
 
-    // Upload immediately
     await upload(file);
   };
 
@@ -138,33 +110,103 @@ export function SuperComposer({
     });
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const hasContent = message.trim() || pendingAttachments.some((a) => a.uploadedMedia);
+    if (!hasContent || !conversationId) return;
 
-    if (!hasContent) return;
+    const isInternal = messageMode === "internal";
+    const messageContent = message.trim();
 
-    const attachmentIds = pendingAttachments
-      .filter((a) => a.uploadedMedia)
-      .map((a) => a.uploadedMedia!.id);
+    try {
+      // Internal note - just save to database
+      if (isInternal) {
+        await sendMessage.mutateAsync({
+          conversation_id: conversationId,
+          content: messageContent,
+          sender_type: "user",
+          sender_id: user?.id || null,
+          status: 'sent',
+          is_internal: true,
+        });
+      } else if (whatsappInstanceId && contactPhone) {
+        // WhatsApp - send to Evolution API first
+        try {
+          const { data: instance } = await supabase
+            .from('whatsapp_instances')
+            .select('user_id')
+            .eq('id', whatsappInstanceId)
+            .single();
+          
+          let finalMessage = messageContent;
+          
+          if (instance?.user_id && instance.user_id !== user?.id) {
+            const userName = user?.user_metadata?.full_name || 'Agente';
+            finalMessage += `\n\n*^${userName}*`;
+          }
+          
+          const { error: evolutionError } = await supabase.functions.invoke('send-whatsapp-message', {
+            body: {
+              instance_id: whatsappInstanceId,
+              phone_number: contactPhone,
+              message: finalMessage,
+              delay: 1000,
+            }
+          });
 
-    onSendMessage(messageMode === "internal", localChannel, attachmentIds);
+          if (evolutionError) {
+            throw new Error(evolutionError.message || 'Failed to send WhatsApp message');
+          }
 
-    // Clear attachments
-    pendingAttachments.forEach((att) => {
-      if (att.preview) URL.revokeObjectURL(att.preview);
-    });
-    setPendingAttachments([]);
+          await sendMessage.mutateAsync({
+            conversation_id: conversationId,
+            content: messageContent,
+            sender_type: "user",
+            sender_id: user?.id || null,
+            status: 'sent',
+          });
+        } catch (error) {
+          console.error('[SuperComposer] WhatsApp send failed:', error);
+          
+          await sendMessage.mutateAsync({
+            conversation_id: conversationId,
+            content: messageContent,
+            sender_type: "user",
+            sender_id: user?.id || null,
+            status: 'failed',
+            delivery_error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      } else {
+        // Web chat - save directly
+        await sendMessage.mutateAsync({
+          conversation_id: conversationId,
+          content: messageContent,
+          sender_type: "user",
+          sender_id: user?.id || null,
+          status: 'sent',
+        });
+      }
+
+      // Clear state
+      setMessage("");
+      pendingAttachments.forEach((att) => {
+        if (att.preview) URL.revokeObjectURL(att.preview);
+      });
+      setPendingAttachments([]);
+    } catch (error) {
+      console.error('[SuperComposer] Send failed:', error);
+    }
   };
 
   const isInternal = messageMode === "internal";
   const hasAttachments = pendingAttachments.length > 0;
   const allUploaded = pendingAttachments.every((a) => a.uploadedMedia);
-  const canSend =
-    (message.trim() || (hasAttachments && allUploaded)) && !isUploading;
+  const isSending = sendMessage.isPending;
+  const canSend = (message.trim() || (hasAttachments && allUploaded)) && !isUploading;
 
   return (
     <div className="flex-none bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-t border-slate-200 dark:border-zinc-800">
-      {/* Tabs + Channel Selector */}
+      {/* Tabs */}
       <div className="px-4 pt-3 flex items-center justify-between gap-3">
         <Tabs
           value={messageMode}
@@ -191,15 +233,6 @@ export function SuperComposer({
             </TabsTrigger>
           </TabsList>
         </Tabs>
-
-        {showChannelSelector && !isInternal && availableChannels.length > 0 && (
-          <ChannelSelector
-            selectedChannel={localChannel}
-            onChannelChange={handleChannelChange}
-            availableChannels={availableChannels}
-            disabled={isDisabled || isSending}
-          />
-        )}
       </div>
 
       {/* Internal Note Warning */}
@@ -288,7 +321,7 @@ export function SuperComposer({
           <SlashCommandMenu value={message} onChange={setMessage}>
             <Textarea
               ref={textareaRef}
-              placeholder={isDisabled ? "Conversa encerrada" : placeholder}
+              placeholder={isDisabled ? "Conversa encerrada" : "Digite sua mensagem ou / para macros..."}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyPress}
