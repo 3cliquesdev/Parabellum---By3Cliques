@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useCreateWhatsAppInstance, useUpdateWhatsAppInstance } from "@/hooks/useWhatsAppInstances";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUsers } from "@/hooks/useUsers";
@@ -38,9 +39,6 @@ const formSchema = z.object({
     .refine((url) => {
       try {
         const hostname = new URL(url).hostname;
-        // Validar que o domínio tem pelo menos um ponto (TLD)
-        // Exemplos válidos: example.com, api.evolution.com
-        // Exemplos inválidos: localhost, cloudfy (sem extensão)
         const parts = hostname.split('.');
         return parts.length >= 2 && parts[parts.length - 1].length >= 2;
       } catch {
@@ -50,6 +48,7 @@ const formSchema = z.object({
   api_token: z.string().min(10, "Token inválido"),
   department_id: z.string().optional(),
   user_id: z.string().optional(),
+  inbox_enabled: z.boolean().default(true),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -94,6 +93,7 @@ export function WhatsAppInstanceDialog({
       api_token: "",
       department_id: "__none__",
       user_id: "__none__",
+      inbox_enabled: true,
     },
   });
 
@@ -108,6 +108,7 @@ export function WhatsAppInstanceDialog({
         api_token: instance.api_token,
         department_id: instance.department_id || "__none__",
         user_id: instance.user_id || "__none__",
+        inbox_enabled: instance.inbox_enabled !== false,
       });
     } else if (open && !instance) {
       console.log('[WhatsAppInstanceDialog] Reinicializando form para nova instância');
@@ -118,6 +119,7 @@ export function WhatsAppInstanceDialog({
         api_token: "",
         department_id: "__none__",
         user_id: "__none__",
+        inbox_enabled: true,
       });
     }
   }, [open, instance, form]);
@@ -129,6 +131,7 @@ export function WhatsAppInstanceDialog({
         ...data,
         department_id: data.department_id === "__none__" ? null : data.department_id,
         user_id: data.user_id === "__none__" ? null : data.user_id,
+        inbox_enabled: data.inbox_enabled,
       };
       
       if (instance) {
@@ -322,6 +325,28 @@ export function WhatsAppInstanceDialog({
                     Mensagens recebidas serão atribuídas diretamente a este usuário. Deixe vazio para roteamento geral.
                   </FormDescription>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="inbox_enabled"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base">Receber mensagens no Inbox</FormLabel>
+                    <FormDescription>
+                      Se desativado, esta instância será usada apenas para envio de mensagens.
+                      Mensagens recebidas serão ignoradas.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
                 </FormItem>
               )}
             />
