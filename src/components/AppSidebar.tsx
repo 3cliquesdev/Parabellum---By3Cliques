@@ -28,7 +28,8 @@ import {
   Receipt,
   RefreshCw,
   CheckCircle2,
-  Tags
+  Tags,
+  LucideIcon
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -62,190 +63,353 @@ import { ModeToggle } from "@/components/ModeToggle";
 import ProfileEditDialog from "@/components/ProfileEditDialog";
 import { AvailabilityToggle } from "@/components/AvailabilityToggle";
 
-// ============= SUPPORT AGENT MENU (🛡️) =============
-const supportAgentMainItems = [
-  { title: "Inbox", href: "/inbox", icon: MessageCircle },
-  { title: "Fila de Tickets", href: "/support", icon: Ticket },
-];
+// ============= MENU ITEM TYPE =============
+interface MenuItem {
+  title: string;
+  href: string;
+  icon: LucideIcon;
+  permission: string; // Chave de permissão obrigatória
+}
 
-const supportAgentToolsItems = [
-  { title: "Base de Conhecimento", href: "/knowledge", icon: Book },
-  { title: "Contatos", href: "/contacts", icon: Users },
-];
+// ============= MENU GROUPS DEFINITION =============
+interface MenuGroup {
+  label: string;
+  items: MenuItem[];
+}
 
-// ============= SUPPORT MANAGER MENU (👨‍💼) =============
-const supportManagerMainItems = [
-  { title: "Inbox", href: "/inbox", icon: MessageCircle },
-  { title: "Fila de Tickets", href: "/support", icon: Ticket },
-  { title: "Analytics", href: "/analytics", icon: BarChart3 },
-];
-
-const supportManagerToolsItems = [
-  { title: "Base de Conhecimento", href: "/knowledge", icon: Book },
-  { title: "Contatos", href: "/contacts", icon: Users },
-  { title: "Tags", href: "/settings/tags", icon: Tags },
-];
-
-const supportManagerManagementItems = [
-  { title: "Relatórios", href: "/reports", icon: FileText },
-  { title: "🎯 Definir Metas", href: "/goals-management", icon: Target },
-];
-
-// ============= FINANCIAL MANAGER MENU (💰) =============
-const financialManagerOverviewItems = [
-  { title: "Analytics", href: "/analytics", icon: BarChart3 },
-  { title: "Relatórios", href: "/reports", icon: FileText },
-];
-
-const financialManagerOperationsItems = [
-  { title: "Tickets Financeiros", href: "/support", icon: Ticket },
-  { title: "Cotações", href: "/quotes", icon: Receipt },
-  { title: "Inbox", href: "/inbox", icon: MessageCircle },
-];
-
-const financialManagerCadastrosItems = [
-  { title: "Contatos", href: "/contacts", icon: Users },
-];
-
-// ============= CS MANAGER MENU (👔) =============
-const csManagerMainItems = [
-  { title: "Dashboard CS", href: "/cs-management", icon: BarChart3 },
-  { title: "Carteiras", href: "/my-portfolio", icon: Briefcase },
-];
-
-const csManagerOnboardingItems = [
-  { title: "Playbooks", href: "/onboarding-builder", icon: Workflow },
-  { title: "Execuções", href: "/playbook-executions", icon: CheckSquare },
-];
-
-const csManagerOperationItems = [
-  { title: "Inbox", href: "/inbox", icon: MessageCircle },
-  { title: "Tickets", href: "/support", icon: Ticket },
-  { title: "Clientes", href: "/contacts", icon: Users },
-];
-
-const csManagerAnalysisItems = [
-  { title: "Analytics", href: "/analytics", icon: BarChart3 },
-  { title: "Relatórios", href: "/reports", icon: FileText },
-  { title: "🎯 Definir Metas", href: "/goals-management", icon: Target },
-];
-
-// ============= CONSULTANT MENU (🤝) =============
-const consultantMainItems = [
-  { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase },
-  { title: "Inbox", href: "/inbox", icon: MessageCircle },
-  { title: "Minhas Metas", href: "/goals", icon: Target },
-];
-
-const consultantClientItems = [
-  { title: "Contatos", href: "/contacts", icon: Users },
-  { title: "Tickets", href: "/support", icon: Headphones },
-];
-
-// ============= SALES REP MENU (🎯) =============
-const salesRepMainItems = [
-  { title: "Dashboard", href: "/", icon: LayoutDashboard },
-  { title: "Inbox", href: "/inbox", icon: MessageCircle },
-];
-
-const salesRepSalesItems = [
-  { title: "Negócios", href: "/deals", icon: DollarSign },
-  { title: "Propostas", href: "/quotes", icon: Receipt },
-  { title: "Contatos", href: "/contacts", icon: Users },
-  { title: "Organizações", href: "/organizations", icon: Building2 },
-];
-
-const salesRepProductivityItems = [
-  { title: "⚡ Workzone", href: "/sales-tasks", icon: CheckCircle2 },
-  { title: "Cadências", href: "/cadences", icon: RefreshCw },
-  { title: "Minhas Metas", href: "/goals", icon: Target },
-];
-
-// ============= SALES MANAGER MENU (📊) =============
-const salesManagerOverviewItems = [
-  { title: "Dashboard", href: "/", icon: LayoutDashboard },
-  { title: "Gestão de Vendas", href: "/sales-management", icon: TrendingUp },
-  { title: "Analytics", href: "/analytics", icon: BarChart3 },
-];
-
-const salesManagerSalesItems = [
-  { title: "Inbox", href: "/inbox", icon: MessageCircle },
-  { title: "Negócios", href: "/deals", icon: TrendingUp },
-  { title: "Propostas", href: "/quotes", icon: Receipt },
-  { title: "Contatos", href: "/contacts", icon: Users },
-  { title: "Organizações", href: "/organizations", icon: Building2 },
-];
-
-const salesManagerProductivityItems = [
-  { title: "Cadências", href: "/cadences", icon: RefreshCw },
-  { title: "Metas da Equipe", href: "/goals", icon: Target },
-  { title: "🎯 Definir Metas", href: "/goals-management", icon: Target },
-  { title: "Relatórios", href: "/reports", icon: FileText },
-];
-
-// Items que requerem permissão dinâmica
-const permissionBasedCadastrosItems = [
-  { title: "Produtos", href: "/settings/products", icon: Package, permission: "products.manage" },
-];
-
-// ============= ADMIN/GENERAL MANAGER MENU (👑) =============
-const adminOverviewItems = [
-  { title: "Dashboard", href: "/", icon: LayoutDashboard },
-  { title: "Gestão de Vendas", href: "/sales-management", icon: TrendingUp },
-  { title: "Dashboard CS", href: "/cs-management", icon: BarChart3 },
-  { title: "Analytics", href: "/analytics", icon: BarChart3 },
-];
-
-const adminOperationItems = [
-  { title: "Inbox", href: "/inbox", icon: MessageCircle },
-  { title: "Tickets", href: "/support", icon: Headphones },
-  { title: "Negócios", href: "/deals", icon: TrendingUp },
-  { title: "Propostas", href: "/quotes", icon: Receipt },
-  { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase },
-];
-
-const adminCrmItems = [
-  { title: "Contatos", href: "/contacts", icon: Users },
-  { title: "Organizações", href: "/organizations", icon: Building2 },
-  { title: "Base de Conhecimento", href: "/knowledge", icon: Book },
-];
-
-const adminStrategyItems = [
-  { title: "Cadências", href: "/cadences", icon: RefreshCw },
-  { title: "Automações", href: "/automations", icon: Zap },
-  { title: "AI Studio", href: "/ai-studio/personas", icon: Brain },
-  { title: "🤖 AI Trainer", href: "/settings/ai-trainer", icon: Brain },
-  { title: "Templates de Email", href: "/email-templates", icon: Mail },
-  { title: "Formulários", href: "/forms", icon: FileText },
-  { title: "Playbooks de Onboarding", href: "/onboarding-builder", icon: Workflow },
-  { title: "Execuções de Playbooks", href: "/playbook-executions", icon: CheckSquare },
-];
-
-const adminReportsItems = [
-  { title: "Metas", href: "/goals", icon: Target },
-  { title: "🎯 Definir Metas", href: "/goals-management", icon: Target },
-  { title: "Relatórios", href: "/reports", icon: FileText },
-];
-
-// Cadastros separados de Sistema - agora com permissões dinâmicas
-const adminCadastrosItems = [
+// ============= ALL MENU ITEMS WITH PERMISSIONS =============
+const allMenuItems: MenuItem[] = [
+  // Dashboard & Overview
+  { title: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" },
+  { title: "Gestão de Vendas", href: "/sales-management", icon: TrendingUp, permission: "sales.view_management" },
+  { title: "Dashboard CS", href: "/cs-management", icon: BarChart3, permission: "cs.view_management" },
+  { title: "Analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
+  
+  // Inbox & Support
+  { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
+  { title: "Fila de Tickets", href: "/support", icon: Ticket, permission: "tickets.view" },
+  { title: "Base de Conhecimento", href: "/knowledge", icon: Book, permission: "inbox.view_knowledge" },
+  
+  // Sales
+  { title: "Negócios", href: "/deals", icon: DollarSign, permission: "deals.view" },
+  { title: "Propostas", href: "/quotes", icon: Receipt, permission: "quotes.view" },
+  { title: "⚡ Workzone", href: "/sales-tasks", icon: CheckCircle2, permission: "sales.view_workzone" },
+  { title: "Cadências", href: "/cadences", icon: RefreshCw, permission: "cadences.manage" },
+  
+  // CS / Portfolio
+  { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase, permission: "cs.view_own_portfolio" },
+  
+  // CRM
+  { title: "Contatos", href: "/contacts", icon: Users, permission: "contacts.view" },
+  { title: "Organizações", href: "/organizations", icon: Building2, permission: "contacts.view_organizations" },
+  
+  // Goals & Reports
+  { title: "Minhas Metas", href: "/goals", icon: Target, permission: "goals.view_own" },
+  { title: "🎯 Definir Metas", href: "/goals-management", icon: Target, permission: "goals.set" },
+  { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
+  
+  // Automations & AI
+  { title: "Automações", href: "/automations", icon: Zap, permission: "automations.view" },
+  { title: "AI Studio", href: "/ai-studio/personas", icon: Brain, permission: "ai.manage_personas" },
+  { title: "🤖 AI Trainer", href: "/settings/ai-trainer", icon: Brain, permission: "ai.train" },
+  
+  // Email & Forms
+  { title: "Templates de Email", href: "/email-templates", icon: Mail, permission: "email.view_templates" },
+  { title: "Formulários", href: "/forms", icon: FileText, permission: "forms.view" },
+  
+  // Playbooks
+  { title: "Playbooks de Onboarding", href: "/onboarding-builder", icon: Workflow, permission: "playbooks.view" },
+  { title: "Execuções de Playbooks", href: "/playbook-executions", icon: CheckSquare, permission: "playbooks.view_executions" },
+  
+  // Cadastros
   { title: "Consultores", href: "/consultants", icon: Users, permission: "cadastros.view_consultants" },
   { title: "Tags", href: "/settings/tags", icon: Tags, permission: "cadastros.view_tags" },
   { title: "Produtos", href: "/settings/products", icon: Package, permission: "cadastros.view_products" },
   { title: "Departamentos", href: "/settings/departments", icon: Building2, permission: "cadastros.view_departments" },
+  
+  // System (admin only)
+  { title: "Usuários", href: "/users", icon: UserCog, permission: "settings.manage_users" },
+  { title: "Importar Clientes", href: "/import-clients", icon: Upload, permission: "contacts.import" },
+  { title: "Configurações", href: "/settings", icon: Settings, permission: "settings.view" },
 ];
 
-const adminSystemItems = [
-  { title: "Usuários", href: "/users", icon: UserCog },
-  { title: "Importar Clientes", href: "/import-clients", icon: Upload },
-  { title: "Configurações", href: "/settings", icon: Settings },
-];
+// ============= MENU STRUCTURE PER ROLE =============
+// Define a estrutura de grupos de menu para cada role
+// Cada item referencia a permission que será verificada dinamicamente
+
+const menuStructure: Record<string, MenuGroup[]> = {
+  // Support Agent
+  support_agent: [
+    {
+      label: "Principal",
+      items: [
+        { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
+        { title: "Fila de Tickets", href: "/support", icon: Ticket, permission: "tickets.view" },
+      ]
+    },
+    {
+      label: "Ferramentas",
+      items: [
+        { title: "Base de Conhecimento", href: "/knowledge", icon: Book, permission: "inbox.view_knowledge" },
+        { title: "Contatos", href: "/contacts", icon: Users, permission: "contacts.view" },
+      ]
+    }
+  ],
+  
+  // Support Manager
+  support_manager: [
+    {
+      label: "Principal",
+      items: [
+        { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
+        { title: "Fila de Tickets", href: "/support", icon: Ticket, permission: "tickets.view" },
+        { title: "Analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
+      ]
+    },
+    {
+      label: "Equipe",
+      items: [
+        { title: "Base de Conhecimento", href: "/knowledge", icon: Book, permission: "inbox.view_knowledge" },
+        { title: "Contatos", href: "/contacts", icon: Users, permission: "contacts.view" },
+        { title: "Tags", href: "/settings/tags", icon: Tags, permission: "cadastros.view_tags" },
+      ]
+    },
+    {
+      label: "Gestão",
+      items: [
+        { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
+        { title: "🎯 Definir Metas", href: "/goals-management", icon: Target, permission: "goals.set" },
+      ]
+    },
+    {
+      label: "📦 Cadastros",
+      items: [
+        { title: "Produtos", href: "/settings/products", icon: Package, permission: "cadastros.view_products" },
+      ]
+    }
+  ],
+  
+  // Financial Manager
+  financial_manager: [
+    {
+      label: "Visão Geral",
+      items: [
+        { title: "Analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
+        { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
+      ]
+    },
+    {
+      label: "Operações Financeiras",
+      items: [
+        { title: "Tickets Financeiros", href: "/support", icon: Ticket, permission: "tickets.view" },
+        { title: "Cotações", href: "/quotes", icon: Receipt, permission: "quotes.view" },
+        { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
+      ]
+    },
+    {
+      label: "Cadastros",
+      items: [
+        { title: "Contatos", href: "/contacts", icon: Users, permission: "contacts.view" },
+      ]
+    }
+  ],
+  
+  // CS Manager
+  cs_manager: [
+    {
+      label: "Gestão de CS",
+      items: [
+        { title: "Dashboard CS", href: "/cs-management", icon: BarChart3, permission: "cs.view_management" },
+        { title: "Carteiras", href: "/my-portfolio", icon: Briefcase, permission: "cs.view_own_portfolio" },
+      ]
+    },
+    {
+      label: "Onboarding",
+      items: [
+        { title: "Playbooks", href: "/onboarding-builder", icon: Workflow, permission: "playbooks.view" },
+        { title: "Execuções", href: "/playbook-executions", icon: CheckSquare, permission: "playbooks.view_executions" },
+      ]
+    },
+    {
+      label: "Operações",
+      items: [
+        { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
+        { title: "Tickets", href: "/support", icon: Ticket, permission: "tickets.view" },
+        { title: "Clientes", href: "/contacts", icon: Users, permission: "contacts.view" },
+      ]
+    },
+    {
+      label: "Análise",
+      items: [
+        { title: "Analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
+        { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
+        { title: "🎯 Definir Metas", href: "/goals-management", icon: Target, permission: "goals.set" },
+      ]
+    }
+  ],
+  
+  // Consultant
+  consultant: [
+    {
+      label: "Principal",
+      items: [
+        { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase, permission: "cs.view_own_portfolio" },
+        { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
+        { title: "Minhas Metas", href: "/goals", icon: Target, permission: "goals.view_own" },
+      ]
+    },
+    {
+      label: "Clientes",
+      items: [
+        { title: "Contatos", href: "/contacts", icon: Users, permission: "contacts.view" },
+        { title: "Tickets", href: "/support", icon: Headphones, permission: "tickets.view" },
+      ]
+    }
+  ],
+  
+  // Sales Rep
+  sales_rep: [
+    {
+      label: "Principal",
+      items: [
+        { title: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" },
+        { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
+      ]
+    },
+    {
+      label: "Vendas",
+      items: [
+        { title: "Negócios", href: "/deals", icon: DollarSign, permission: "deals.view" },
+        { title: "Propostas", href: "/quotes", icon: Receipt, permission: "quotes.view" },
+        { title: "Contatos", href: "/contacts", icon: Users, permission: "contacts.view" },
+        { title: "Organizações", href: "/organizations", icon: Building2, permission: "contacts.view_organizations" },
+      ]
+    },
+    {
+      label: "Produtividade",
+      items: [
+        { title: "⚡ Workzone", href: "/sales-tasks", icon: CheckCircle2, permission: "sales.view_workzone" },
+        { title: "Cadências", href: "/cadences", icon: RefreshCw, permission: "cadences.manage" },
+        { title: "Minhas Metas", href: "/goals", icon: Target, permission: "goals.view_own" },
+      ]
+    }
+  ],
+  
+  // Sales Manager
+  manager: [
+    {
+      label: "Visão Geral",
+      items: [
+        { title: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" },
+        { title: "Gestão de Vendas", href: "/sales-management", icon: TrendingUp, permission: "sales.view_management" },
+        { title: "Analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
+      ]
+    },
+    {
+      label: "Vendas",
+      items: [
+        { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
+        { title: "Negócios", href: "/deals", icon: TrendingUp, permission: "deals.view" },
+        { title: "Propostas", href: "/quotes", icon: Receipt, permission: "quotes.view" },
+        { title: "Contatos", href: "/contacts", icon: Users, permission: "contacts.view" },
+        { title: "Organizações", href: "/organizations", icon: Building2, permission: "contacts.view_organizations" },
+      ]
+    },
+    {
+      label: "Gestão",
+      items: [
+        { title: "Cadências", href: "/cadences", icon: RefreshCw, permission: "cadences.manage" },
+        { title: "Metas da Equipe", href: "/goals", icon: Target, permission: "goals.view_own" },
+        { title: "🎯 Definir Metas", href: "/goals-management", icon: Target, permission: "goals.set" },
+        { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
+      ]
+    },
+    {
+      label: "📦 Cadastros",
+      items: [
+        { title: "Produtos", href: "/settings/products", icon: Package, permission: "cadastros.view_products" },
+      ]
+    }
+  ],
+  
+  // Admin / General Manager
+  admin: [
+    {
+      label: "Visão Geral",
+      items: [
+        { title: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" },
+        { title: "Gestão de Vendas", href: "/sales-management", icon: TrendingUp, permission: "sales.view_management" },
+        { title: "Dashboard CS", href: "/cs-management", icon: BarChart3, permission: "cs.view_management" },
+        { title: "Analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
+      ]
+    },
+    {
+      label: "Operação",
+      items: [
+        { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
+        { title: "Tickets", href: "/support", icon: Headphones, permission: "tickets.view" },
+        { title: "Negócios", href: "/deals", icon: TrendingUp, permission: "deals.view" },
+        { title: "Propostas", href: "/quotes", icon: Receipt, permission: "quotes.view" },
+        { title: "Minha Carteira", href: "/my-portfolio", icon: Briefcase, permission: "cs.view_own_portfolio" },
+      ]
+    },
+    {
+      label: "CRM",
+      items: [
+        { title: "Contatos", href: "/contacts", icon: Users, permission: "contacts.view" },
+        { title: "Organizações", href: "/organizations", icon: Building2, permission: "contacts.view_organizations" },
+        { title: "Base de Conhecimento", href: "/knowledge", icon: Book, permission: "inbox.view_knowledge" },
+      ]
+    },
+    {
+      label: "Estratégia",
+      items: [
+        { title: "Cadências", href: "/cadences", icon: RefreshCw, permission: "cadences.manage" },
+        { title: "Automações", href: "/automations", icon: Zap, permission: "automations.view" },
+        { title: "AI Studio", href: "/ai-studio/personas", icon: Brain, permission: "ai.manage_personas" },
+        { title: "🤖 AI Trainer", href: "/settings/ai-trainer", icon: Brain, permission: "ai.train" },
+        { title: "Templates de Email", href: "/email-templates", icon: Mail, permission: "email.view_templates" },
+        { title: "Formulários", href: "/forms", icon: FileText, permission: "forms.view" },
+        { title: "Playbooks de Onboarding", href: "/onboarding-builder", icon: Workflow, permission: "playbooks.view" },
+        { title: "Execuções de Playbooks", href: "/playbook-executions", icon: CheckSquare, permission: "playbooks.view_executions" },
+      ]
+    },
+    {
+      label: "Relatórios",
+      items: [
+        { title: "Metas", href: "/goals", icon: Target, permission: "goals.view_own" },
+        { title: "🎯 Definir Metas", href: "/goals-management", icon: Target, permission: "goals.set" },
+        { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
+      ]
+    },
+    {
+      label: "📦 Cadastros",
+      items: [
+        { title: "Consultores", href: "/consultants", icon: Users, permission: "cadastros.view_consultants" },
+        { title: "Tags", href: "/settings/tags", icon: Tags, permission: "cadastros.view_tags" },
+        { title: "Produtos", href: "/settings/products", icon: Package, permission: "cadastros.view_products" },
+        { title: "Departamentos", href: "/settings/departments", icon: Building2, permission: "cadastros.view_departments" },
+      ]
+    },
+    {
+      label: "⚙️ Sistema",
+      items: [
+        { title: "Usuários", href: "/users", icon: UserCog, permission: "settings.manage_users" },
+        { title: "Importar Clientes", href: "/import-clients", icon: Upload, permission: "contacts.import" },
+        { title: "Configurações", href: "/settings", icon: Settings, permission: "settings.view" },
+      ]
+    }
+  ],
+};
+
+// Alias para general_manager usar o mesmo menu de admin
+menuStructure.general_manager = menuStructure.admin;
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, isSupportManager, isFinancialManager, isCSManager, isGeneralManager, loading } = useUserRole();
+  const { role, isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, isSupportManager, isFinancialManager, isCSManager, isGeneralManager, loading } = useUserRole();
   const { hasPermission } = useRolePermissions();
   useRealtimePermissions(); // Sincronização em tempo real
   const { signOut, user, profile } = useAuth();
@@ -254,6 +418,17 @@ export function AppSidebar() {
   const { status: availabilityStatus } = useAvailabilityStatus();
   const { data: slaAlerts = [] } = useSLAAlerts();
   const { theme } = useTheme();
+
+  // Determine which menu structure to use based on role
+  const getMenuStructure = (): MenuGroup[] => {
+    if (!role) return [];
+    
+    // Map role to menu structure key
+    const roleKey = role as string;
+    
+    // Return the structure for the role, or empty array if not found
+    return menuStructure[roleKey] || [];
+  };
 
   // Determine mode label and color
   const getModeInfo = () => {
@@ -288,11 +463,16 @@ export function AppSidebar() {
       title: "Logout realizado",
       description: "Até logo!",
     });
-    // Forçar recarregamento completo na tela de login para garantir limpeza de sessão
     window.location.href = "/auth";
   };
 
-  const renderMenuItem = (item: { title: string; href: string; icon: any }) => {
+  // Filter menu items based on permissions
+  const filterItemsByPermission = (items: MenuItem[]): MenuItem[] => {
+    return items.filter(item => hasPermission(item.permission));
+  };
+
+  // Render a single menu item
+  const renderMenuItem = (item: MenuItem) => {
     // Show SLA alert badge on Inbox for admins/managers/general_managers
     const showSLABadge = (isAdmin || isManager || isGeneralManager) && item.href === "/inbox" && slaAlerts.length > 0;
 
@@ -326,6 +506,9 @@ export function AppSidebar() {
       </SidebarMenuItem>
     );
   };
+
+  // Get filtered menu structure
+  const menuGroups = getMenuStructure();
 
   return (
     <Sidebar className={cn(
@@ -369,323 +552,25 @@ export function AppSidebar() {
           </div>
         ) : (
           <>
-            {/* ============= SUPPORT MANAGER VIEW (👨‍💼) ============= */}
-            {isSupportManager && !isAdmin && !isManager ? (
-              <>
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
+            {/* Render all menu groups dynamically based on permissions */}
+            {menuGroups.map((group) => {
+              // Filter items by permission
+              const filteredItems = filterItemsByPermission(group.items);
+              
+              // Only render group if it has visible items
+              if (filteredItems.length === 0) return null;
+              
+              return (
+                <SidebarGroup key={group.label}>
+                  {!collapsed && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {supportManagerMainItems.map(renderMenuItem)}
+                      {filteredItems.map(renderMenuItem)}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Equipe</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {supportManagerToolsItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Gestão</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {supportManagerManagementItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                {/* Cadastros com permissões dinâmicas para Support Manager */}
-                {permissionBasedCadastrosItems.some(item => hasPermission(item.permission)) && (
-                  <SidebarGroup>
-                    {!collapsed && <SidebarGroupLabel>📦 Cadastros</SidebarGroupLabel>}
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        {permissionBasedCadastrosItems
-                          .filter(item => hasPermission(item.permission))
-                          .map(renderMenuItem)}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </SidebarGroup>
-                )}
-              </>
-            ) : null}
-
-            {/* ============= SUPPORT AGENT VIEW (🛡️) ============= */}
-            {isSupportAgent && !isSupportManager && !isAdmin && !isManager ? (
-              <>
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {supportAgentMainItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Ferramentas</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {supportAgentToolsItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              </>
-            ) : null}
-
-            {/* ============= CS MANAGER VIEW (👔) ============= */}
-            {isCSManager && !isAdmin && !isManager ? (
-              <>
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Gestão de CS</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {csManagerMainItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Onboarding</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {csManagerOnboardingItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Operações</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {csManagerOperationItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Análise</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {csManagerAnalysisItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              </>
-            ) : null}
-
-            {/* ============= FINANCIAL MANAGER VIEW (💰) ============= */}
-            {isFinancialManager && !isAdmin && !isManager ? (
-              <>
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Visão Geral</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {financialManagerOverviewItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Operações Financeiras</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {financialManagerOperationsItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Cadastros</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {financialManagerCadastrosItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              </>
-            ) : null}
-
-            {/* ============= CONSULTANT VIEW (🤝) ============= */}
-            {isConsultant && !isAdmin && !isManager ? (
-              <>
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {consultantMainItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Clientes</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {consultantClientItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              </>
-            ) : null}
-
-            {/* ============= SALES REP VIEW (🎯) ============= */}
-            {isSalesRep && !isAdmin && !isManager && !isConsultant ? (
-              <>
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Principal</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {salesRepMainItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Vendas</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {salesRepSalesItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Produtividade</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {salesRepProductivityItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              </>
-            ) : null}
-
-            {/* ============= SALES MANAGER VIEW (📊) ============= */}
-            {isManager && !isAdmin && !isGeneralManager ? (
-              <>
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Visão Geral</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {salesManagerOverviewItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Vendas</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {salesManagerSalesItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Gestão</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {salesManagerProductivityItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                {/* Cadastros com permissões dinâmicas para Manager */}
-                {permissionBasedCadastrosItems.some(item => hasPermission(item.permission)) && (
-                  <SidebarGroup>
-                    {!collapsed && <SidebarGroupLabel>📦 Cadastros</SidebarGroupLabel>}
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        {permissionBasedCadastrosItems
-                          .filter(item => hasPermission(item.permission))
-                          .map(renderMenuItem)}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </SidebarGroup>
-                )}
-              </>
-            ) : null}
-
-            {/* ============= ADMIN/GENERAL_MANAGER VIEW (👑/🎖️) ============= */}
-            {isAdmin || isGeneralManager ? (
-              <>
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Visão Geral</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {adminOverviewItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Operação</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {adminOperationItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>CRM</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {adminCrmItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Estratégia</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {adminStrategyItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                  {!collapsed && <SidebarGroupLabel>Relatórios</SidebarGroupLabel>}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {adminReportsItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                {/* Cadastros com permissões dinâmicas */}
-                {adminCadastrosItems.some(item => hasPermission(item.permission)) && (
-                  <SidebarGroup>
-                    {!collapsed && <SidebarGroupLabel>📦 Cadastros</SidebarGroupLabel>}
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        {adminCadastrosItems
-                          .filter(item => hasPermission(item.permission))
-                          .map(renderMenuItem)}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </SidebarGroup>
-                )}
-
-                {(isAdmin || isGeneralManager) && (
-                  <SidebarGroup>
-                    {!collapsed && <SidebarGroupLabel>⚙️ Sistema</SidebarGroupLabel>}
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        {adminSystemItems.map(renderMenuItem)}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </SidebarGroup>
-                )}
-              </>
-            ) : null}
+              );
+            })}
           </>
         )}
       </SidebarContent>
