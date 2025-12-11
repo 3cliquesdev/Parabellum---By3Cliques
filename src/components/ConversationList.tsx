@@ -1,5 +1,5 @@
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConversationListItem } from "@/components/ConversationListItem";
+import { ConversationListSkeleton } from "@/components/inbox/MessageSkeleton";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -26,15 +26,15 @@ interface ConversationListProps {
   conversations: Conversation[];
   activeConversationId: string | null;
   onSelectConversation: (conversation: Conversation) => void;
+  isLoading?: boolean;
 }
 
-// FASE 4: Lista de conversas com SLA visual e contagem de não lidas
 export default function ConversationList({
   conversations,
   activeConversationId,
   onSelectConversation,
+  isLoading = false,
 }: ConversationListProps) {
-  // Hook para buscar contagem de não lidas de todas as conversas
   const conversationIds = conversations.map(c => c.id);
   const { data: unreadCounts = {} } = useUnreadCount(conversationIds);
 
@@ -42,14 +42,16 @@ export default function ConversationList({
     <div className="w-72 lg:w-80 shrink-0 border-r bg-card border-border flex flex-col h-full overflow-hidden">
       <div className="flex-none p-4 border-b border-border">
         <h2 className="text-lg font-semibold text-foreground">Conversas</h2>
-        {conversations.length > 0 && (
+        {!isLoading && conversations.length > 0 && (
           <p className="text-xs text-muted-foreground mt-0.5">
             {conversations.length} conversa{conversations.length !== 1 ? 's' : ''}
           </p>
         )}
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {conversations.length === 0 ? (
+        {isLoading ? (
+          <ConversationListSkeleton count={8} />
+        ) : conversations.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground">
             Nenhuma conversa ainda
           </div>

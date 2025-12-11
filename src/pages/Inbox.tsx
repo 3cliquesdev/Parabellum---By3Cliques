@@ -200,13 +200,6 @@ export default function Inbox() {
   const isTeamManager = teams?.some(t => t.manager_id === user?.id);
   const showTeamTab = isTeamManager || (userTeams && userTeams.length > 0);
 
-  if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
 
   // Mobile Layout - Stack Navigation
   if (isMobile) {
@@ -412,6 +405,7 @@ export default function Inbox() {
           conversations={filteredConversations}
           activeConversationId={activeConversation?.id || null}
           onSelectConversation={handleSelectConversation}
+          isLoading={isLoading}
         />
         <ChatWindow conversation={activeConversation} />
         <ContactDetailsSidebar conversation={activeConversation} />

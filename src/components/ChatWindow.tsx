@@ -25,6 +25,7 @@ import { InternalNoteMessage } from "@/components/InternalNoteMessage";
 import { ConversationTagsSection } from "@/components/inbox/ConversationTagsSection";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { SuperComposer } from "@/components/inbox/SuperComposer";
+import { MessageSkeleton } from "@/components/inbox/MessageSkeleton";
 import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { useMarkAsRead } from "@/hooks/useUnreadCount";
 import { supabase } from "@/integrations/supabase/client";
@@ -453,9 +454,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                 )}
                 
                 {isMessagesLoading ? (
-                  <div className="flex items-center justify-center h-32">
-                    <div className="text-slate-500 dark:text-zinc-400">Carregando mensagens...</div>
-                  </div>
+                  <MessageSkeleton count={6} />
                 ) : messages.length === 0 ? (
                   <div className="flex items-center justify-center h-32">
                     <div className="text-slate-500 dark:text-zinc-400">Nenhuma mensagem ainda</div>
