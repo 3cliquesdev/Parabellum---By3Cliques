@@ -16,11 +16,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Smartphone, Settings, Trash2, QrCode, AlertTriangle, Zap, Activity, RefreshCw } from "lucide-react";
+import { Plus, MoreVertical, Smartphone, Settings, Trash2, QrCode, AlertTriangle, Zap, Activity, RefreshCw, Webhook, Stethoscope } from "lucide-react";
 import { useWhatsAppInstances, useDeleteWhatsAppInstance, useConnectWhatsAppInstance, useResetWhatsAppInstance, useWhatsAppAPIStatus } from "@/hooks/useWhatsAppInstances";
 import { useTestWhatsAppConnection } from "@/hooks/useTestWhatsAppConnection";
 import { useSyncWhatsAppInstances } from "@/hooks/useSyncWhatsAppInstances";
+import { useReconfigureWebhook, useTestWebhook } from "@/hooks/useWhatsAppWebhook";
 import { WhatsAppInstanceDialog } from "@/components/WhatsAppInstanceDialog";
 import { QRCodeModal } from "@/components/QRCodeModal";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -32,11 +34,14 @@ export default function WhatsAppSettings() {
   const resetMutation = useResetWhatsAppInstance();
   const testConnectionMutation = useTestWhatsAppConnection();
   const syncMutation = useSyncWhatsAppInstances();
+  const reconfigureWebhookMutation = useReconfigureWebhook();
+  const testWebhookMutation = useTestWebhook();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selectedInstance, setSelectedInstance] = useState<any>(null);
   const [testResult, setTestResult] = useState<any>(null);
+  const [webhookDiagnostics, setWebhookDiagnostics] = useState<any>(null);
 
   // API Status for first instance (for demonstration)
   const firstInstance = instances?.[0];
@@ -87,6 +92,16 @@ export default function WhatsAppSettings() {
 
   const handleSync = async () => {
     await syncMutation.mutateAsync();
+  };
+
+  const handleReconfigureWebhook = async (instance: any) => {
+    setWebhookDiagnostics(null);
+    await reconfigureWebhookMutation.mutateAsync(instance.id);
+  };
+
+  const handleTestWebhook = async (instance: any) => {
+    const result = await testWebhookMutation.mutateAsync(instance.id);
+    setWebhookDiagnostics({ ...result, instanceId: instance.id });
   };
 
   const getStatusIndicator = () => {
@@ -251,6 +266,46 @@ export default function WhatsAppSettings() {
           </Alert>
         )}
 
+        {/* Webhook Diagnostics Display */}
+        {webhookDiagnostics && (
+          <Alert 
+            variant={webhookDiagnostics.overallStatus === "fail" ? "destructive" : "default"}
+            className={webhookDiagnostics.overallStatus === "pass" ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" : ""}
+          >
+            <Stethoscope className="h-4 w-4" />
+            <AlertTitle className="font-semibold">
+              {webhookDiagnostics.overallStatus === "pass" ? "✅" : webhookDiagnostics.overallStatus === "warn" ? "⚠️" : "❌"} Diagnóstico do Webhook
+            </AlertTitle>
+            <AlertDescription className="mt-2 space-y-3">
+              <p className="font-medium">{webhookDiagnostics.summary}</p>
+              <div className="space-y-2 text-sm">
+                {webhookDiagnostics.checks?.map((check: any, idx: number) => (
+                  <div key={idx} className="flex items-start gap-2 p-2 bg-background/50 rounded border">
+                    <span>
+                      {check.status === "pass" ? "✅" : check.status === "warn" ? "⚠️" : check.status === "fail" ? "❌" : "ℹ️"}
+                    </span>
+                    <div className="flex-1">
+                      <p className="font-medium">{check.name}</p>
+                      {check.details && (
+                        <pre className="text-xs mt-1 text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(check.details, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setWebhookDiagnostics(null)}
+              >
+                Fechar
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Instances Table */}
         <Card>
           {isLoading ? (
@@ -313,8 +368,23 @@ export default function WhatsAppSettings() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleTestConnection(instance)}>
                             <Activity className="w-4 h-4 mr-2" />
-                            🔍 Testar Conexão
+                            🔍 Testar Conexão API
                           </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleTestWebhook(instance)}
+                            disabled={testWebhookMutation.isPending}
+                          >
+                            <Stethoscope className="w-4 h-4 mr-2" />
+                            🩺 Diagnosticar Webhook
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleReconfigureWebhook(instance)}
+                            disabled={reconfigureWebhookMutation.isPending}
+                          >
+                            <Webhook className="w-4 h-4 mr-2" />
+                            🔧 Reconfigurar Webhook
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           {instance.status !== 'connected' && (
                             <DropdownMenuItem onClick={() => handleConnect(instance)}>
                               <QrCode className="w-4 h-4 mr-2" />
@@ -325,6 +395,7 @@ export default function WhatsAppSettings() {
                             <Settings className="w-4 h-4 mr-2" />
                             Configurar
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => handleHardReset(instance)}
                             className="text-orange-600"

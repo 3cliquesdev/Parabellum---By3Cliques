@@ -181,3 +181,9 @@ verify_jwt = false
 
 [functions.form-ai-suggest]
 verify_jwt = false
+
+[functions.reconfigure-whatsapp-webhook]
+verify_jwt = true
+
+[functions.test-whatsapp-webhook]
+verify_jwt = true
