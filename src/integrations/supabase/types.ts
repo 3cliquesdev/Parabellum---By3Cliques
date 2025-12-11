@@ -2888,6 +2888,78 @@ export type Database = {
           },
         ]
       }
+      inbox_view: {
+        Row: {
+          ai_mode: string | null
+          assigned_to: string | null
+          channels: string[] | null
+          contact_avatar: string | null
+          contact_email: string | null
+          contact_id: string
+          contact_name: string | null
+          contact_phone: string | null
+          conversation_id: string
+          created_at: string | null
+          department: string | null
+          has_attachments: boolean | null
+          has_audio: boolean | null
+          last_channel: string | null
+          last_message_at: string | null
+          last_sender_type: string | null
+          last_snippet: string | null
+          sla_status: string | null
+          status: string | null
+          unread_count: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ai_mode?: string | null
+          assigned_to?: string | null
+          channels?: string[] | null
+          contact_avatar?: string | null
+          contact_email?: string | null
+          contact_id: string
+          contact_name?: string | null
+          contact_phone?: string | null
+          conversation_id: string
+          created_at?: string | null
+          department?: string | null
+          has_attachments?: boolean | null
+          has_audio?: boolean | null
+          last_channel?: string | null
+          last_message_at?: string | null
+          last_sender_type?: string | null
+          last_snippet?: string | null
+          sla_status?: string | null
+          status?: string | null
+          unread_count?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ai_mode?: string | null
+          assigned_to?: string | null
+          channels?: string[] | null
+          contact_avatar?: string | null
+          contact_email?: string | null
+          contact_id?: string
+          contact_name?: string | null
+          contact_phone?: string | null
+          conversation_id?: string
+          created_at?: string | null
+          department?: string | null
+          has_attachments?: boolean | null
+          has_audio?: boolean | null
+          last_channel?: string | null
+          last_message_at?: string | null
+          last_sender_type?: string | null
+          last_snippet?: string | null
+          sla_status?: string | null
+          status?: string | null
+          unread_count?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       interactions: {
         Row: {
           channel: Database["public"]["Enums"]["communication_channel"]
@@ -4873,6 +4945,14 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      calculate_sla_status: {
+        Args: {
+          p_last_message_at: string
+          p_last_sender_type: string
+          p_status: string
+        }
+        Returns: string
+      }
       check_duplicate_articles: {
         Args: {
           p_article_id?: string
@@ -4983,6 +5063,10 @@ export type Database = {
           similarity: number
           title: string
         }[]
+      }
+      reset_inbox_unread_count: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
       }
       resolve_contact_by_identity: {
         Args: {
