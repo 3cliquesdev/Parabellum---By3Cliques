@@ -1025,6 +1025,7 @@ export type Database = {
           customer_type: string | null
           document: string | null
           email: string | null
+          external_ids: Json | null
           first_name: string
           id: string
           kiwify_customer_id: string | null
@@ -1066,6 +1067,7 @@ export type Database = {
           customer_type?: string | null
           document?: string | null
           email?: string | null
+          external_ids?: Json | null
           first_name: string
           id?: string
           kiwify_customer_id?: string | null
@@ -1107,6 +1109,7 @@ export type Database = {
           customer_type?: string | null
           document?: string | null
           email?: string | null
+          external_ids?: Json | null
           first_name?: string
           id?: string
           kiwify_customer_id?: string | null
@@ -4886,6 +4889,15 @@ export type Database = {
           similarity: number
           title: string
         }[]
+      }
+      resolve_contact_by_identity: {
+        Args: {
+          p_channel?: string
+          p_email?: string
+          p_external_id?: string
+          p_phone_e164?: string
+        }
+        Returns: string
       }
       search_similar_articles: {
         Args: {
