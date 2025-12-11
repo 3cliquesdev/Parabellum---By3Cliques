@@ -43,6 +43,8 @@ export function useRolePermissions() {
   const hasPermission = (key: string): boolean => {
     // Admin always has all permissions
     if (role === 'admin') return true;
+    // If still loading, deny by default (will re-render when loaded)
+    if (isLoading) return false;
     return permissions?.[key] ?? false;
   };
 

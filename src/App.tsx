@@ -128,71 +128,75 @@ const App = () => {
           <BrowserRouter>
           <RealtimeNotifications />
           <Routes>
+            {/* Public routes - no auth required */}
             <Route path="/auth" element={<Auth />} />
             <Route path="/setup-password" element={<SetupPassword />} />
             <Route path="/public/form/:formId" element={<PublicForm />} />
-          <Route path="/public-chat" element={<PublicChat />} />
-          <Route path="/public-chat/:conversationId" element={<PublicChatWindow />} />
+            <Route path="/public-chat" element={<PublicChat />} />
+            <Route path="/public-chat/:conversationId" element={<PublicChatWindow />} />
             <Route path="/open-ticket" element={<PublicTicketForm />} />
             <Route path="/tv" element={<TVMode />} />
-            <Route path="/" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager", "support_manager", "financial_manager"]}><Layout><Dashboard /></Layout></ProtectedRoute>} />
-            <Route path="/inbox" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "sales_rep", "cs_manager", "admin", "general_manager", "manager"]}><Layout><Inbox /></Layout></ProtectedRoute>} />
-            <Route path="/my-portfolio" element={<ProtectedRoute allowedRoles={["consultant", "sales_rep", "general_manager", "manager", "admin", "cs_manager"]}><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
-            <Route path="/cs-management" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><CSManagement /></Layout></ProtectedRoute>} />
-            <Route path="/cs-management/consultant/:id" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><ConsultantDetail /></Layout></ProtectedRoute>} />
-            <Route path="/consultants" element={<ProtectedRoute allowedRoles={["cs_manager", "admin", "general_manager"]}><Layout><Consultants /></Layout></ProtectedRoute>} />
-            <Route path="/sales-management" element={<ProtectedRoute allowedRoles={["manager", "admin", "general_manager"]}><Layout><SalesManagement /></Layout></ProtectedRoute>} />
-            <Route path="/sales-management/rep/:id" element={<ProtectedRoute allowedRoles={["manager", "admin", "general_manager"]}><Layout><SalesRepDetail /></Layout></ProtectedRoute>} />
-            <Route path="/contacts" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "cs_manager", "admin", "general_manager", "manager"]}><Layout><Contacts /></Layout></ProtectedRoute>} />
-            <Route path="/contacts/:id" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "cs_manager", "admin", "general_manager", "manager"]}><Layout><ContactDetails /></Layout></ProtectedRoute>} />
-            <Route path="/organizations" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "general_manager", "manager"]}><Layout><Organizations /></Layout></ProtectedRoute>} />
-            <Route path="/deals" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager"]}><Layout><Deals /></Layout></ProtectedRoute>} />
-            <Route path="/quotes" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "sales_rep", "financial_manager"]}><Layout><Quotes /></Layout></ProtectedRoute>} />
-            <Route path="/quotes/new" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "sales_rep"]}><Layout><QuoteBuilder /></Layout></ProtectedRoute>} />
             <Route path="/public-quote/:token" element={<PublicQuote />} />
-            <Route path="/forms" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><Forms /></Layout></ProtectedRoute>} />
-            <Route path="/forms/builder" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><FormBuilderPage /></ProtectedRoute>} />
-            <Route path="/forms/builder/:formId" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><FormBuilderPage /></ProtectedRoute>} />
             <Route path="/f/:formId" element={<PublicFormV2 />} />
-            <Route path="/users" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><Users /></Layout></ProtectedRoute>} />
-            <Route path="/automations" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><Automations /></Layout></ProtectedRoute>} />
-            <Route path="/email-templates" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><EmailTemplates /></Layout></ProtectedRoute>} />
-            <Route path="/email-templates/builder" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><EmailBuilderPage /></ProtectedRoute>} />
-            <Route path="/email-templates/builder/:templateId" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><EmailBuilderPage /></ProtectedRoute>} />
-            <Route path="/email-templates/v2/builder/:id" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><EmailBuilderV2Page /></ProtectedRoute>} />
-            <Route path="/onboarding-builder" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager"]}><Layout><OnboardingBuilder /></Layout></ProtectedRoute>} />
-            <Route path="/playbook-executions" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager"]}><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
-            <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager", "support_manager", "financial_manager"]}><Layout><Analytics /></Layout></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager", "support_manager", "financial_manager"]}><Layout><Reports /></Layout></ProtectedRoute>} />
-            <Route path="/goals" element={<ProtectedRoute allowedRoles={["sales_rep", "consultant", "admin", "general_manager", "manager"]}><Layout><Goals /></Layout></ProtectedRoute>} />
-            <Route path="/goals-management" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "cs_manager", "support_manager"]}><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
-            <Route path="/cadences" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "general_manager", "manager"]}><Layout><Cadences /></Layout></ProtectedRoute>} />
-            <Route path="/sales-tasks" element={<ProtectedRoute allowedRoles={["sales_rep", "admin", "manager", "general_manager"]}><Layout><SalesTasks /></Layout></ProtectedRoute>} />
-            <Route path="/support" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "financial_manager", "consultant", "cs_manager", "admin", "general_manager", "manager"]}><Layout><Support /></Layout></ProtectedRoute>} />
-            <Route path="/knowledge" element={<ProtectedRoute allowedRoles={["support_agent", "support_manager", "admin", "general_manager"]}><Layout><Knowledge /></Layout></ProtectedRoute>} />
-            <Route path="/ai-studio/personas" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><AIStudio /></Layout></ProtectedRoute>} />
-            <Route path="/import-clients" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><ImportClients /></Layout></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><Settings /></Layout></ProtectedRoute>} />
-            <Route path="/settings/integrations" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><IntegrationsSettings /></Layout></ProtectedRoute>} />
-            <Route path="/settings/email" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><EmailSettingsPage /></ProtectedRoute>} />
-            <Route path="/settings/ai-trainer" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><AITrainer /></Layout></ProtectedRoute>} />
-            <Route path="/settings/email-templates" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><EmailTemplates /></ProtectedRoute>} />
-            <Route path="/settings/products" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "support_manager"]}><Layout><Products /></Layout></ProtectedRoute>} />
-            <Route path="/settings/delivery-groups" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><DeliveryGroups /></Layout></ProtectedRoute>} />
-            <Route path="/settings/departments" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><Departments /></Layout></ProtectedRoute>} />
-            <Route path="/settings/chat-links" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><ChatLinksSettings /></Layout></ProtectedRoute>} />
-            <Route path="/settings/widget-builder" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><WidgetBuilder /></Layout></ProtectedRoute>} />
-            <Route path="/settings/knowledge-import" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><KnowledgeImport /></Layout></ProtectedRoute>} />
-            <Route path="/settings/audit-logs" element={<ProtectedRoute allowedRoles={["admin", "general_manager"]}><Layout><AuditLogs /></Layout></ProtectedRoute>} />
-            <Route path="/settings/skills" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><SkillsSettings /></Layout></ProtectedRoute>} />
-            <Route path="/settings/whatsapp" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "consultant"]}><Layout><WhatsAppSettings /></Layout></ProtectedRoute>} />
-            <Route path="/settings/webhooks" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><WebhooksSettings /></Layout></ProtectedRoute>} />
-            <Route path="/settings/macros" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "support_agent", "support_manager", "consultant", "sales_rep"]}><Layout><Macros /></Layout></ProtectedRoute>} />
-            <Route path="/settings/teams" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "support_manager"]}><Layout><Teams /></Layout></ProtectedRoute>} />
-            <Route path="/settings/tags" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager", "support_manager"]}><Layout><Tags /></Layout></ProtectedRoute>} />
-            <Route path="/settings/recovery" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><Layout><SalesRecovery /></Layout></ProtectedRoute>} />
-            <Route path="/admin-onboarding" element={<ProtectedRoute allowedRoles={["admin", "general_manager", "manager"]}><AdminOnboarding /></ProtectedRoute>} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+
+            {/* Protected routes - using requiredPermission for unified access control */}
+            <Route path="/" element={<ProtectedRoute requiredPermission="dashboard.access"><Layout><Dashboard /></Layout></ProtectedRoute>} />
+            <Route path="/inbox" element={<ProtectedRoute requiredPermission="inbox.access"><Layout><Inbox /></Layout></ProtectedRoute>} />
+            <Route path="/my-portfolio" element={<ProtectedRoute requiredPermission="cs.view_own_portfolio"><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
+            <Route path="/cs-management" element={<ProtectedRoute requiredPermission="cs.view_dashboard"><Layout><CSManagement /></Layout></ProtectedRoute>} />
+            <Route path="/cs-management/consultant/:id" element={<ProtectedRoute requiredPermission="cs.view_dashboard"><Layout><ConsultantDetail /></Layout></ProtectedRoute>} />
+            <Route path="/consultants" element={<ProtectedRoute requiredPermission="cs.view_dashboard"><Layout><Consultants /></Layout></ProtectedRoute>} />
+            <Route path="/sales-management" element={<ProtectedRoute requiredPermission="sales.view_dashboard"><Layout><SalesManagement /></Layout></ProtectedRoute>} />
+            <Route path="/sales-management/rep/:id" element={<ProtectedRoute requiredPermission="sales.view_dashboard"><Layout><SalesRepDetail /></Layout></ProtectedRoute>} />
+            <Route path="/contacts" element={<ProtectedRoute requiredPermission="contacts.view"><Layout><Contacts /></Layout></ProtectedRoute>} />
+            <Route path="/contacts/:id" element={<ProtectedRoute requiredPermission="contacts.view"><Layout><ContactDetails /></Layout></ProtectedRoute>} />
+            <Route path="/organizations" element={<ProtectedRoute requiredPermission="contacts.view"><Layout><Organizations /></Layout></ProtectedRoute>} />
+            <Route path="/deals" element={<ProtectedRoute requiredPermission="sales.view_deals"><Layout><Deals /></Layout></ProtectedRoute>} />
+            <Route path="/quotes" element={<ProtectedRoute requiredPermission="quotes.view"><Layout><Quotes /></Layout></ProtectedRoute>} />
+            <Route path="/quotes/new" element={<ProtectedRoute requiredPermission="quotes.create"><Layout><QuoteBuilder /></Layout></ProtectedRoute>} />
+            <Route path="/forms" element={<ProtectedRoute requiredPermission="forms.view"><Layout><Forms /></Layout></ProtectedRoute>} />
+            <Route path="/forms/builder" element={<ProtectedRoute requiredPermission="forms.create"><FormBuilderPage /></ProtectedRoute>} />
+            <Route path="/forms/builder/:formId" element={<ProtectedRoute requiredPermission="forms.edit"><FormBuilderPage /></ProtectedRoute>} />
+            <Route path="/users" element={<ProtectedRoute requiredPermission="settings.manage_users"><Layout><Users /></Layout></ProtectedRoute>} />
+            <Route path="/automations" element={<ProtectedRoute requiredPermission="automations.view"><Layout><Automations /></Layout></ProtectedRoute>} />
+            <Route path="/email-templates" element={<ProtectedRoute requiredPermission="email.manage_templates"><Layout><EmailTemplates /></Layout></ProtectedRoute>} />
+            <Route path="/email-templates/builder" element={<ProtectedRoute requiredPermission="email.manage_templates"><EmailBuilderPage /></ProtectedRoute>} />
+            <Route path="/email-templates/builder/:templateId" element={<ProtectedRoute requiredPermission="email.manage_templates"><EmailBuilderPage /></ProtectedRoute>} />
+            <Route path="/email-templates/v2/builder/:id" element={<ProtectedRoute requiredPermission="email.manage_templates"><EmailBuilderV2Page /></ProtectedRoute>} />
+            <Route path="/onboarding-builder" element={<ProtectedRoute requiredPermission="playbooks.view"><Layout><OnboardingBuilder /></Layout></ProtectedRoute>} />
+            <Route path="/playbook-executions" element={<ProtectedRoute requiredPermission="playbooks.view_executions"><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
+            <Route path="/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Analytics /></Layout></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Reports /></Layout></ProtectedRoute>} />
+            <Route path="/goals" element={<ProtectedRoute requiredPermission="goals.view_own"><Layout><Goals /></Layout></ProtectedRoute>} />
+            <Route path="/goals-management" element={<ProtectedRoute requiredPermission="goals.manage"><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
+            <Route path="/cadences" element={<ProtectedRoute requiredPermission="sales.manage_cadences"><Layout><Cadences /></Layout></ProtectedRoute>} />
+            <Route path="/sales-tasks" element={<ProtectedRoute requiredPermission="sales.view_deals"><Layout><SalesTasks /></Layout></ProtectedRoute>} />
+            <Route path="/support" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><Support /></Layout></ProtectedRoute>} />
+            <Route path="/knowledge" element={<ProtectedRoute requiredPermission="ai.manage_knowledge"><Layout><Knowledge /></Layout></ProtectedRoute>} />
+            <Route path="/ai-studio/personas" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AIStudio /></Layout></ProtectedRoute>} />
+            <Route path="/import-clients" element={<ProtectedRoute requiredPermission="contacts.import"><Layout><ImportClients /></Layout></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute requiredPermission="settings.view"><Layout><Settings /></Layout></ProtectedRoute>} />
+            <Route path="/settings/integrations" element={<ProtectedRoute requiredPermission="settings.manage_integrations"><Layout><IntegrationsSettings /></Layout></ProtectedRoute>} />
+            <Route path="/settings/email" element={<ProtectedRoute requiredPermission="email.manage_templates"><EmailSettingsPage /></ProtectedRoute>} />
+            <Route path="/settings/ai-trainer" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AITrainer /></Layout></ProtectedRoute>} />
+            <Route path="/settings/email-templates" element={<ProtectedRoute requiredPermission="email.manage_templates"><EmailTemplates /></ProtectedRoute>} />
+            <Route path="/settings/products" element={<ProtectedRoute requiredPermission="cadastros.view_products"><Layout><Products /></Layout></ProtectedRoute>} />
+            <Route path="/settings/delivery-groups" element={<ProtectedRoute requiredPermission="playbooks.view"><Layout><DeliveryGroups /></Layout></ProtectedRoute>} />
+            <Route path="/settings/departments" element={<ProtectedRoute requiredPermission="cadastros.view_departments"><Layout><Departments /></Layout></ProtectedRoute>} />
+            <Route path="/settings/chat-links" element={<ProtectedRoute requiredPermission="settings.manage_integrations"><Layout><ChatLinksSettings /></Layout></ProtectedRoute>} />
+            <Route path="/settings/widget-builder" element={<ProtectedRoute requiredPermission="settings.manage_integrations"><Layout><WidgetBuilder /></Layout></ProtectedRoute>} />
+            <Route path="/settings/knowledge-import" element={<ProtectedRoute requiredPermission="ai.manage_knowledge"><Layout><KnowledgeImport /></Layout></ProtectedRoute>} />
+            <Route path="/settings/audit-logs" element={<ProtectedRoute requiredPermission="audit.view_logs"><Layout><AuditLogs /></Layout></ProtectedRoute>} />
+            <Route path="/settings/skills" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SkillsSettings /></Layout></ProtectedRoute>} />
+            <Route path="/settings/whatsapp" element={<ProtectedRoute requiredPermission="settings.manage_integrations"><Layout><WhatsAppSettings /></Layout></ProtectedRoute>} />
+            <Route path="/settings/webhooks" element={<ProtectedRoute requiredPermission="settings.manage_integrations"><Layout><WebhooksSettings /></Layout></ProtectedRoute>} />
+            <Route path="/settings/macros" element={<ProtectedRoute requiredPermission="inbox.access"><Layout><Macros /></Layout></ProtectedRoute>} />
+            <Route path="/settings/teams" element={<ProtectedRoute requiredPermission="settings.manage_users"><Layout><Teams /></Layout></ProtectedRoute>} />
+            <Route path="/settings/tags" element={<ProtectedRoute requiredPermission="cadastros.view_tags"><Layout><Tags /></Layout></ProtectedRoute>} />
+            <Route path="/settings/recovery" element={<ProtectedRoute requiredPermission="playbooks.trigger_manual"><Layout><SalesRecovery /></Layout></ProtectedRoute>} />
+            <Route path="/admin-onboarding" element={<ProtectedRoute requiredPermission="settings.view"><AdminOnboarding /></ProtectedRoute>} />
+            
+            {/* Catch-all route - must be last */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
