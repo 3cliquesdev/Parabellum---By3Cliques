@@ -40,6 +40,7 @@ export interface InboxFilters {
   hasAttachments?: boolean;
   aiMode?: 'autopilot' | 'copilot' | 'disabled';
   department?: string;
+  tagId?: string;
 }
 
 export function useInboxView(filters?: InboxFilters) {
@@ -117,6 +118,17 @@ export function useInboxView(filters?: InboxFilters) {
       if (error) throw error;
 
       let result = data as InboxViewItem[];
+
+      // Tag filter - client-side via conversation_tags lookup
+      if (filters?.tagId) {
+        const { data: taggedConversations } = await supabase
+          .from("conversation_tags")
+          .select("conversation_id")
+          .eq("tag_id", filters.tagId);
+        
+        const taggedIds = new Set(taggedConversations?.map(tc => tc.conversation_id) || []);
+        result = result.filter(item => taggedIds.has(item.conversation_id));
+      }
 
       // Client-side search filter (for name, email, phone)
       if (filters?.search) {

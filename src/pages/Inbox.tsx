@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTeams, useUserTeams } from "@/hooks/useTeams";
+import { useTags } from "@/hooks/useTags";
 import ConversationList from "@/components/ConversationList";
 import ChatWindow from "@/components/ChatWindow";
 import ContactDetailsSidebar from "@/components/ContactDetailsSidebar";
@@ -65,6 +66,7 @@ export default function Inbox() {
   
   const departmentFilter = searchParams.get("dept");
   const teamFilter = searchParams.get("team");
+  const tagFilter = searchParams.get("tag");
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   
   // Convert InboxFilters to InboxViewFilters for the optimized hook
@@ -79,6 +81,7 @@ export default function Inbox() {
     hasAttachments: filters.hasAttachments,
     aiMode: filters.aiMode as InboxViewFiltersType['aiMode'],
     department: departmentFilter || undefined,
+    tagId: tagFilter || undefined,
   };
   
   // Use optimized inbox_view for list (fast)
@@ -91,6 +94,7 @@ export default function Inbox() {
   const { data: departments } = useDepartments();
   const { data: teams } = useTeams();
   const { data: userTeams } = useUserTeams(user?.id);
+  const { data: conversationTags } = useTags('conversation');
 
   const handleFilterChange = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -116,8 +120,21 @@ export default function Inbox() {
     if (teamId) {
       params.set("team", teamId);
       params.delete("dept");
+      params.delete("tag");
     } else {
       params.delete("team");
+    }
+    navigate(`/inbox?${params.toString()}`);
+  };
+
+  const handleTagFilter = (tagId: string | null) => {
+    const params = new URLSearchParams(searchParams);
+    if (tagId) {
+      params.set("tag", tagId);
+      params.delete("dept");
+      params.delete("team");
+    } else {
+      params.delete("tag");
     }
     navigate(`/inbox?${params.toString()}`);
   };
@@ -396,6 +413,38 @@ export default function Inbox() {
                     👥 {team.name}
                   </Button>
                 ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Tags - Seção separada para filtro rápido */}
+          {conversationTags && conversationTags.length > 0 && (
+            <div className="flex flex-col gap-1.5 border-l border-border pl-4">
+              <span className="text-xs font-medium text-muted-foreground">🏷️ Tags</span>
+              <div className="flex gap-2 flex-wrap max-w-md">
+                {conversationTags.slice(0, 8).map((tag) => (
+                  <Button
+                    key={tag.id}
+                    size="sm"
+                    variant={tagFilter === tag.id ? "default" : "outline"}
+                    onClick={() => handleTagFilter(tagFilter === tag.id ? null : tag.id)}
+                    className="gap-1.5"
+                    style={{
+                      borderColor: tagFilter === tag.id ? tag.color || undefined : undefined,
+                    }}
+                  >
+                    <span 
+                      className="w-2 h-2 rounded-full flex-shrink-0" 
+                      style={{ backgroundColor: tag.color || 'hsl(var(--muted))' }} 
+                    />
+                    <span className="truncate max-w-24">{tag.name}</span>
+                  </Button>
+                ))}
+                {conversationTags.length > 8 && (
+                  <span className="text-xs text-muted-foreground self-center">
+                    +{conversationTags.length - 8} mais
+                  </span>
+                )}
               </div>
             </div>
           )}
