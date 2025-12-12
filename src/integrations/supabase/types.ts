@@ -255,6 +255,45 @@ export type Database = {
           },
         ]
       }
+      ai_message_templates: {
+        Row: {
+          category: string
+          content: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          key: string
+          title: string
+          updated_at: string | null
+          variables: Json | null
+        }
+        Insert: {
+          category?: string
+          content: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          key: string
+          title: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          key?: string
+          title?: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Relationships: []
+      }
       ai_persona_tools: {
         Row: {
           created_at: string | null
@@ -4715,6 +4754,44 @@ export type Database = {
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_notification_rules: {
+        Row: {
+          created_at: string | null
+          email_template_id: string | null
+          event_type: string
+          id: string
+          is_active: boolean | null
+          ticket_category: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email_template_id?: string | null
+          event_type: string
+          id?: string
+          is_active?: boolean | null
+          ticket_category: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email_template_id?: string | null
+          event_type?: string
+          id?: string
+          is_active?: boolean | null
+          ticket_category?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_notification_rules_email_template_id_fkey"
+            columns: ["email_template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
             referencedColumns: ["id"]
           },
         ]
