@@ -3,7 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, X, Tag } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { X, Tag, Search } from "lucide-react";
 import { useTags, useConversationTags, useAddConversationTag, useRemoveConversationTag } from "@/hooks/useTags";
 
 interface ConversationTagsSectionProps {
@@ -12,12 +13,17 @@ interface ConversationTagsSectionProps {
 
 export function ConversationTagsSection({ conversationId }: ConversationTagsSectionProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const { data: allTags = [] } = useTags("conversation");
   const { data: conversationTags = [] } = useConversationTags(conversationId);
   const addTag = useAddConversationTag();
   const removeTag = useRemoveConversationTag();
 
   const conversationTagIds = conversationTags.map((t: any) => t.id);
+
+  const filteredTags = allTags.filter((tag: any) =>
+    tag.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   const handleToggleTag = (tagId: string, isChecked: boolean) => {
     if (isChecked) {
@@ -50,7 +56,10 @@ export function ConversationTagsSection({ conversationId }: ConversationTagsSect
         </Badge>
       ))}
       
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) setSearch("");
+      }}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-6 px-2 text-xs text-foreground border-border">
             <Tag className="h-3 w-3 mr-1" />
@@ -59,13 +68,22 @@ export function ConversationTagsSection({ conversationId }: ConversationTagsSect
         </PopoverTrigger>
         <PopoverContent className="w-56 p-2 bg-popover border border-border z-50" align="start">
           <div className="text-xs font-medium text-foreground mb-2">Tags de Conversa</div>
+          <div className="relative mb-2">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Input
+              placeholder="Buscar tag..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-7 text-xs pl-7"
+            />
+          </div>
           <div className="space-y-1 max-h-48 overflow-y-auto">
-            {allTags.length === 0 ? (
+            {filteredTags.length === 0 ? (
               <p className="text-xs text-muted-foreground py-2 text-center">
-                Nenhuma tag de conversa cadastrada
+                {search ? "Nenhuma tag encontrada" : "Nenhuma tag cadastrada"}
               </p>
             ) : (
-              allTags.map((tag: any) => (
+              filteredTags.map((tag: any) => (
                 <label
                   key={tag.id}
                   className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer"

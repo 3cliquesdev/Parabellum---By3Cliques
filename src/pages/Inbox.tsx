@@ -14,7 +14,9 @@ import InboxFilterPopover, { type InboxFilters } from "@/components/inbox/InboxF
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, User } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ArrowLeft, User, Search, Tag, X } from "lucide-react";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -31,6 +33,95 @@ type Conversation = Tables<"conversations"> & {
     job_title: string | null;
   } | null;
 };
+
+// Componente de dropdown de tags com pesquisa
+interface TagFilterDropdownProps {
+  tags: Array<{ id: string; name: string; color: string | null }>;
+  selectedTagId: string | null;
+  onSelect: (tagId: string | null) => void;
+}
+
+function TagFilterDropdown({ tags, selectedTagId, onSelect }: TagFilterDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filteredTags = tags.filter((tag) =>
+    tag.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const selectedTag = tags.find((t) => t.id === selectedTagId);
+
+  return (
+    <Popover open={open} onOpenChange={(isOpen) => {
+      setOpen(isOpen);
+      if (!isOpen) setSearch("");
+    }}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-2">
+          <Tag className="h-4 w-4" />
+          {selectedTag ? (
+            <>
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: selectedTag.color || 'hsl(var(--muted))' }}
+              />
+              <span className="max-w-24 truncate">{selectedTag.name}</span>
+              <X
+                className="h-3 w-3 hover:text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(null);
+                }}
+              />
+            </>
+          ) : (
+            "Tags"
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-2 bg-popover border border-border z-50" align="start">
+        <div className="relative mb-2">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+          <Input
+            placeholder="Buscar tag..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-7 text-xs pl-7"
+          />
+        </div>
+        <div className="space-y-1 max-h-64 overflow-y-auto">
+          {filteredTags.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-2 text-center">
+              {search ? "Nenhuma tag encontrada" : "Nenhuma tag cadastrada"}
+            </p>
+          ) : (
+            filteredTags.map((tag) => (
+              <button
+                key={tag.id}
+                onClick={() => {
+                  onSelect(selectedTagId === tag.id ? null : tag.id);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center gap-2 p-2 rounded text-sm hover:bg-muted transition-colors ${
+                  selectedTagId === tag.id ? "bg-muted" : ""
+                }`}
+              >
+                <span
+                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: tag.color || 'hsl(var(--muted))' }}
+                />
+                <span className="truncate">{tag.name}</span>
+                {selectedTagId === tag.id && (
+                  <span className="ml-auto text-primary">✓</span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const DEFAULT_FILTERS: InboxFilters = {
   dateRange: undefined,
@@ -417,35 +508,14 @@ export default function Inbox() {
             </div>
           )}
           
-          {/* Tags - Seção separada para filtro rápido */}
+          {/* Tags - Dropdown com pesquisa */}
           {conversationTags && conversationTags.length > 0 && (
-            <div className="flex flex-col gap-1.5 border-l border-border pl-4">
-              <span className="text-xs font-medium text-muted-foreground">🏷️ Tags</span>
-              <div className="flex gap-2 flex-wrap max-w-md">
-                {conversationTags.slice(0, 8).map((tag) => (
-                  <Button
-                    key={tag.id}
-                    size="sm"
-                    variant={tagFilter === tag.id ? "default" : "outline"}
-                    onClick={() => handleTagFilter(tagFilter === tag.id ? null : tag.id)}
-                    className="gap-1.5"
-                    style={{
-                      borderColor: tagFilter === tag.id ? tag.color || undefined : undefined,
-                    }}
-                  >
-                    <span 
-                      className="w-2 h-2 rounded-full flex-shrink-0" 
-                      style={{ backgroundColor: tag.color || 'hsl(var(--muted))' }} 
-                    />
-                    <span className="truncate max-w-24">{tag.name}</span>
-                  </Button>
-                ))}
-                {conversationTags.length > 8 && (
-                  <span className="text-xs text-muted-foreground self-center">
-                    +{conversationTags.length - 8} mais
-                  </span>
-                )}
-              </div>
+            <div className="flex items-center gap-2 border-l border-border pl-4">
+              <TagFilterDropdown
+                tags={conversationTags}
+                selectedTagId={tagFilter}
+                onSelect={handleTagFilter}
+              />
             </div>
           )}
         </div>
