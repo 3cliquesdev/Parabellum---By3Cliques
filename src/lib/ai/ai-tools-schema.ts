@@ -101,6 +101,11 @@ export const AI_TOOLS_SCHEMA = {
           metadata: {
             type: "object",
             description: "Dados adicionais (order_id, error_code, etc)"
+          },
+          pix_key_type: {
+            type: "string",
+            enum: ["cpf", "email", "telefone", "chave_aleatoria"],
+            description: "Tipo da chave PIX informada pelo cliente (apenas para tickets de saque)"
           }
         },
         required: ["department", "subject", "summary"]
