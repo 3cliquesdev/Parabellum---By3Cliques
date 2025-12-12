@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SlashCommandMenu } from "@/components/SlashCommandMenu";
 import { MacrosPopover } from "@/components/MacrosPopover";
 import { FileDropZone } from "./FileDropZone";
+import { AudioRecorder } from "./AudioRecorder";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useSendMessage } from "@/hooks/useMessages";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +17,7 @@ import {
   MessageCircle,
   AlertTriangle,
   Paperclip,
+  Mic,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -50,6 +52,7 @@ export function SuperComposer({
   const [messageMode, setMessageMode] = useState<MessageMode>("public");
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [showAttachmentPicker, setShowAttachmentPicker] = useState(false);
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const { user } = useAuth();
@@ -108,6 +111,12 @@ export function SuperComposer({
       }
       return prev.filter((_, i) => i !== index);
     });
+  };
+
+  const handleAudioComplete = async (audioFile: File) => {
+    setIsRecordingAudio(false);
+    setPendingAttachments((prev) => [...prev, { file: audioFile }]);
+    await upload(audioFile);
   };
 
   const handleSend = async () => {
@@ -286,67 +295,88 @@ export function SuperComposer({
       {/* Input Area */}
       <div className="p-4 pt-3">
         <div className="max-w-3xl mx-auto flex gap-2 items-end">
-          {/* Macros Button */}
-          <MacrosPopover
-            onSelectMacro={handleMacroSelect}
-            disabled={isDisabled || isSending}
-          />
+          {isRecordingAudio ? (
+            <AudioRecorder
+              onRecordingComplete={handleAudioComplete}
+              onCancel={() => setIsRecordingAudio(false)}
+              disabled={isDisabled}
+            />
+          ) : (
+            <>
+              {/* Macros Button */}
+              <MacrosPopover
+                onSelectMacro={handleMacroSelect}
+                disabled={isDisabled || isSending}
+              />
 
-          {/* Attachment Button */}
-          <Popover open={showAttachmentPicker} onOpenChange={setShowAttachmentPicker}>
-            <PopoverTrigger asChild>
+              {/* Audio Recording Button */}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-10 w-10 shrink-0"
+                onClick={() => setIsRecordingAudio(true)}
                 disabled={isDisabled || isSending}
               >
-                <Paperclip className="h-5 w-5 text-muted-foreground" />
+                <Mic className="h-5 w-5 text-muted-foreground" />
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-3" align="start">
-              <FileDropZone
-                onFileSelect={handleFileSelect}
-                disabled={isUploading}
-              />
-            </PopoverContent>
-          </Popover>
 
-          {/* Textarea with Slash Commands */}
-          <SlashCommandMenu value={message} onChange={setMessage}>
-            <Textarea
-              ref={textareaRef}
-              placeholder={isDisabled ? "Conversa encerrada" : "Digite sua mensagem ou / para macros..."}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyPress}
-              disabled={isSending || isDisabled}
-              rows={1}
-              className={cn(
-                "flex-1 min-h-[44px] max-h-32 resize-none py-3 px-4 rounded-2xl transition-colors",
-                isInternal
-                  ? "bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 focus-visible:ring-yellow-500"
-                  : "bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
-              )}
-            />
-          </SlashCommandMenu>
+              {/* Attachment Button */}
+              <Popover open={showAttachmentPicker} onOpenChange={setShowAttachmentPicker}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 shrink-0"
+                    disabled={isDisabled || isSending}
+                  >
+                    <Paperclip className="h-5 w-5 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-3" align="start">
+                  <FileDropZone
+                    onFileSelect={handleFileSelect}
+                    disabled={isUploading}
+                  />
+                </PopoverContent>
+              </Popover>
 
-          {/* Send Button */}
-          <Button
-            onClick={handleSend}
-            disabled={!canSend || isSending || isDisabled}
-            size="icon"
-            className={cn(
-              "rounded-full h-11 w-11 shrink-0 shadow-md transition-colors",
-              isInternal && "bg-yellow-500 hover:bg-yellow-600"
-            )}
-          >
-            {isInternal ? (
-              <StickyNote className="h-5 w-5" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
-          </Button>
+              {/* Textarea with Slash Commands */}
+              <SlashCommandMenu value={message} onChange={setMessage}>
+                <Textarea
+                  ref={textareaRef}
+                  placeholder={isDisabled ? "Conversa encerrada" : "Digite sua mensagem ou / para macros..."}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={handleKeyPress}
+                  disabled={isSending || isDisabled}
+                  rows={1}
+                  className={cn(
+                    "flex-1 min-h-[44px] max-h-32 resize-none py-3 px-4 rounded-2xl transition-colors",
+                    isInternal
+                      ? "bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 focus-visible:ring-yellow-500"
+                      : "bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
+                  )}
+                />
+              </SlashCommandMenu>
+
+              {/* Send Button */}
+              <Button
+                onClick={handleSend}
+                disabled={!canSend || isSending || isDisabled}
+                size="icon"
+                className={cn(
+                  "rounded-full h-11 w-11 shrink-0 shadow-md transition-colors",
+                  isInternal && "bg-yellow-500 hover:bg-yellow-600"
+                )}
+              >
+                {isInternal ? (
+                  <StickyNote className="h-5 w-5" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>
