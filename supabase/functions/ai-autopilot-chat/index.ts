@@ -2397,29 +2397,47 @@ Seu saldo disponível: ${balanceFormatted}`;
                                   (args.order_id ? `${args.issue_type.toUpperCase()} - Pedido ${args.order_id}` : 
                                    `${args.issue_type.toUpperCase()} - ${args.description.substring(0, 50)}`);
 
-            // FASE 4: Enriquecer internal_note para SAQUE com checklist estruturado
+            // FASE 4: Anotação estruturada para TODOS os tickets da IA
             const ticketType = args.ticket_type || 'outro';
-            let internalNote = `Ticket criado automaticamente pela IA${args.order_id ? `. Pedido: ${args.order_id}` : ''}`;
+            const createdAt = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
             
-            if (args.issue_type === 'saque' && args.withdrawal_amount) {
-              internalNote = `🤖 **TICKET DE SAQUE CRIADO VIA IA**
+            // Base estruturada para TODOS os tickets
+            let internalNote = `🤖 **TICKET CRIADO VIA IA**
 
-**🔐 DADOS DO CLIENTE:**
+📋 **RESUMO DA SOLICITAÇÃO:**
+${args.description}
+
+👤 **CLIENTE:**
 - Nome: ${contactName}
-- CPF: ${maskedCPF}
-- Tipo de Solicitação: ${ticketType === 'saque_carteira' ? 'Saque de Carteira Interna' : 'Outro'}
+- CPF: ${maskedCPF || 'Não cadastrado'}
+- Email: ${contact?.email || 'Não informado'}
+- Telefone: ${contact?.phone || 'Não informado'}
 
-**💰 DADOS DO SAQUE:**
+📂 **CLASSIFICAÇÃO:**
+- Tipo: ${args.issue_type || 'Não especificado'}
+- Categoria: ${ticketCategory}
+${args.order_id ? `- Pedido: ${args.order_id}` : ''}
+
+⏰ Criado em: ${createdAt}
+🤖 Via: Atendimento Automatizado (IA)`;
+            
+            // Enriquecimento específico para SAQUE
+            if (args.issue_type === 'saque' && args.withdrawal_amount) {
+              internalNote += `
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 **DADOS DO SAQUE:**
 - Valor Solicitado: R$ ${args.withdrawal_amount.toFixed(2)}
-- Chave PIX Informada: ${args.pix_key || 'Não informada'}
-- Confirmação do Cliente: ${args.customer_confirmation ? '✅ Sim' : '⚠️ Não confirmado'}
+- Tipo da Chave PIX: ${args.pix_key_type || 'Não especificado'}
+- Chave PIX: ${args.pix_key || 'Não informada'}
+- Confirmação do Cliente: ${args.customer_confirmation ? '✅ Dados conferidos pelo cliente' : '⚠️ Aguardando confirmação'}
 
-**⚠️ REGRAS:**
-- Prazo: 3-7 dias úteis
+⚠️ **REGRAS (até 7 dias úteis):**
 - Destino: APENAS conta do titular (CPF do cliente)
-- PIX terceiros: CANCELAR solicitação
+- PIX de terceiros: CANCELAR solicitação
 
-**📝 CHECKLIST FINANCEIRO:**
+📝 **CHECKLIST FINANCEIRO:**
 - [ ] Verificar saldo disponível
 - [ ] Confirmar titularidade da chave PIX
 - [ ] Processar transferência
