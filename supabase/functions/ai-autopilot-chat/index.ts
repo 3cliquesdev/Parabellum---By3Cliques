@@ -358,7 +358,7 @@ function createTicketSuccessMessage(
 📋 **Protocolo:** #${formattedId}
 💵 **Valor Solicitado:** R$ ${withdrawalData.amount.toFixed(2)}
 ${withdrawalData.cpf_last4 ? `🔐 **CPF (final):** ...${withdrawalData.cpf_last4}` : ''}
-⏱️ **Prazo:** 3 a 7 dias úteis
+⏱️ **Prazo:** até 7 dias úteis
 
 📧 **Você receberá um email confirmando a abertura do chamado.**
 🔔 **Quando o saque for processado, você será notificado por email também.**
@@ -1789,12 +1789,22 @@ ${canShowFinancialData
    Os dados estão corretos?"
 
 2. **SE CLIENTE CONFIRMAR (SIM):**
-   - Pergunte: "Qual o **valor** que você deseja sacar?"
-   - Pergunte: "Qual a sua **chave PIX** para receber? (deve ser do mesmo CPF)"
-   - ENTÃO execute create_ticket com:
+   - Envie EXATAMENTE esta mensagem formatada para coletar os dados:
+   
+   "Perfeito! Para processar seu saque, me envie os dados no seguinte formato:
+
+📋 **Nome completo:** [seu nome conforme cadastro]
+🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]
+🔐 **Chave PIX:** [sua chave completa]
+💰 **Valor:** [R$ X,XX ou 'valor total da carteira']
+
+⚠️ **Importante:** A chave PIX deve estar vinculada ao mesmo CPF cadastrado (${maskedCPF}). Não é possível transferir para conta de terceiros."
+
+   - AGUARDE o cliente enviar os dados no formato solicitado
+   - APÓS receber os dados, execute create_ticket com:
      - issue_type: "saque"
      - subject: "Solicitação de Saque - R$ [VALOR]"
-     - description: "Cliente ${contactName} solicita saque de R$ [VALOR]. Chave PIX: [CHAVE]. CPF: ${maskedCPF}"
+     - description: "Cliente ${contactName} solicita saque de R$ [VALOR]. Tipo PIX: [TIPO]. Chave PIX: [CHAVE]. CPF: ${maskedCPF}"
      - pix_key: [CHAVE_INFORMADA]
      - withdrawal_amount: [VALOR]
      - customer_confirmation: true
