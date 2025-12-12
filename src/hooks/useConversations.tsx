@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,6 +42,33 @@ const SLA_HOURS = 4; // Configurable SLA threshold
 export function useConversations(filters?: ConversationFilters) {
   const { user } = useAuth();
   const { role } = useUserRole();
+  const queryClient = useQueryClient();
+
+  // Realtime subscription for conversations
+  useEffect(() => {
+    const channel = supabase
+      .channel("conversations-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // Listen to INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "conversations",
+        },
+        (payload) => {
+          console.log("[Realtime] Conversation change:", payload.eventType, payload);
+          // Invalidate to refetch with full joins
+          queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        }
+      )
+      .subscribe((status) => {
+        console.log("[Realtime] Conversations subscription status:", status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   return useQuery({
     queryKey: ["conversations", user?.id, role, filters],
@@ -135,6 +163,9 @@ export function useConversations(filters?: ConversationFilters) {
 
       return result;
     },
+    // Reduce stale time for faster updates
+    staleTime: 10000, // 10 seconds
+    refetchOnWindowFocus: true,
   });
 }
 
