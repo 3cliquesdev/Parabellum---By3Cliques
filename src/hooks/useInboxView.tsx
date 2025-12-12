@@ -146,12 +146,16 @@ export function useInboxView(filters?: InboxFilters) {
 
       return result;
     },
-    staleTime: 30 * 1000, // 30 seconds cache (muito mais rápido que antes)
+    staleTime: 5000, // 5 seconds - faster updates
     refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    refetchInterval: 10000, // Poll every 10 seconds as fallback
   });
 
   // Realtime subscription para atualizações
   useEffect(() => {
+    console.log("[Realtime] Setting up inbox_view subscription...");
+    
     const channel = supabase
       .channel("inbox-view-changes")
       .on(
@@ -161,13 +165,17 @@ export function useInboxView(filters?: InboxFilters) {
           schema: "public",
           table: "inbox_view",
         },
-        () => {
+        (payload) => {
+          console.log("[Realtime] inbox_view change detected:", payload.eventType, payload);
           queryClient.invalidateQueries({ queryKey: ["inbox-view"] });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("[Realtime] inbox_view subscription status:", status);
+      });
 
     return () => {
+      console.log("[Realtime] Removing inbox_view channel");
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
