@@ -1,13 +1,37 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useWhatsAppInstances } from "@/hooks/useWhatsAppInstances";
-import { Loader2, MessageCircle, RefreshCw, Settings } from "lucide-react";
+import { useWhatsAppInstanceRealtime } from "@/hooks/useWhatsAppInstanceRealtime";
+import { Loader2, MessageCircle, RefreshCw, Settings, Clock, Activity } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export function WhatsAppStatusWidget() {
-  const { data: instances, isLoading, refetch } = useWhatsAppInstances();
+  const { data: instances, isLoading, refetch, isFetching } = useWhatsAppInstances();
   const navigate = useNavigate();
+  const [lastCheck, setLastCheck] = useState<Date>(new Date());
+
+  // Ativar Realtime subscription
+  useWhatsAppInstanceRealtime();
+
+  // Polling automático a cada 30 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refetch();
+      setLastCheck(new Date());
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [refetch]);
+
+  // Atualizar lastCheck quando refetch manual
+  const handleRefresh = () => {
+    refetch();
+    setLastCheck(new Date());
+  };
 
   if (isLoading) {
     return (
@@ -49,18 +73,24 @@ export function WhatsAppStatusWidget() {
             <CardTitle className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
               WhatsApp Status
+              {isFetching && <Loader2 className="h-3 w-3 animate-spin" />}
             </CardTitle>
-            <CardDescription>
-              {connectedCount} de {totalCount} instância(s) conectada(s)
+            <CardDescription className="flex items-center gap-2 mt-1">
+              <span>{connectedCount} de {totalCount} conectada(s)</span>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {formatDistanceToNow(lastCheck, { addSuffix: true, locale: ptBR })}
+              </span>
             </CardDescription>
           </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => refetch()}
+              onClick={handleRefresh}
+              disabled={isFetching}
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
             </Button>
             <Button
               variant="outline"
@@ -75,11 +105,12 @@ export function WhatsAppStatusWidget() {
       <CardContent>
         {disconnectedCount > 0 && (
           <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <p className="text-sm text-destructive font-medium">
-              🚨 {disconnectedCount} instância(s) desconectada(s)
+            <p className="text-sm text-destructive font-medium flex items-center gap-2">
+              <Activity className="h-4 w-4 animate-pulse" />
+              {disconnectedCount} instância(s) desconectada(s)
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Clique em "Configurações" para reconectar
+              Sistema tentando reconexão automática...
             </p>
           </div>
         )}
@@ -96,14 +127,28 @@ export function WhatsAppStatusWidget() {
                 } animate-pulse`} />
                 <div>
                   <p className="text-sm font-medium">{instance.name}</p>
-                  {instance.phone_number && (
-                    <p className="text-xs text-muted-foreground">{instance.phone_number}</p>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {instance.phone_number && (
+                      <p className="text-xs text-muted-foreground">{instance.phone_number}</p>
+                    )}
+                    {(instance as any).last_health_check && (
+                      <span className="text-xs text-muted-foreground">
+                        · Verificado {formatDistanceToNow(new Date((instance as any).last_health_check), { addSuffix: true, locale: ptBR })}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <Badge variant={getStatusVariant(instance.status)}>
-                {getStatusText(instance.status)}
-              </Badge>
+              <div className="flex items-center gap-2">
+                {(instance as any).consecutive_failures > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    {(instance as any).consecutive_failures} falha(s)
+                  </Badge>
+                )}
+                <Badge variant={getStatusVariant(instance.status)}>
+                  {getStatusText(instance.status)}
+                </Badge>
+              </div>
             </div>
           ))}
 

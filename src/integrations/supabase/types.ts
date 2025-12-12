@@ -4870,16 +4870,66 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_instance_health_log: {
+        Row: {
+          alert_sent: boolean | null
+          api_response: Json | null
+          created_at: string | null
+          detected_at: string | null
+          error_message: string | null
+          id: string
+          instance_id: string | null
+          resolved_at: string | null
+          restart_attempts: number | null
+          status: string
+        }
+        Insert: {
+          alert_sent?: boolean | null
+          api_response?: Json | null
+          created_at?: string | null
+          detected_at?: string | null
+          error_message?: string | null
+          id?: string
+          instance_id?: string | null
+          resolved_at?: string | null
+          restart_attempts?: number | null
+          status: string
+        }
+        Update: {
+          alert_sent?: boolean | null
+          api_response?: Json | null
+          created_at?: string | null
+          detected_at?: string | null
+          error_message?: string | null
+          id?: string
+          instance_id?: string | null
+          resolved_at?: string | null
+          restart_attempts?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_instance_health_log_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_instances: {
         Row: {
           ai_mode: string | null
           api_token: string
           api_url: string
+          auto_restart_enabled: boolean | null
+          consecutive_failures: number | null
           created_at: string | null
           department_id: string | null
           id: string
           inbox_enabled: boolean | null
           instance_name: string
+          last_health_check: string | null
           name: string
           phone_number: string | null
           qr_code_base64: string | null
@@ -4891,11 +4941,14 @@ export type Database = {
           ai_mode?: string | null
           api_token: string
           api_url: string
+          auto_restart_enabled?: boolean | null
+          consecutive_failures?: number | null
           created_at?: string | null
           department_id?: string | null
           id?: string
           inbox_enabled?: boolean | null
           instance_name: string
+          last_health_check?: string | null
           name: string
           phone_number?: string | null
           qr_code_base64?: string | null
@@ -4907,11 +4960,14 @@ export type Database = {
           ai_mode?: string | null
           api_token?: string
           api_url?: string
+          auto_restart_enabled?: boolean | null
+          consecutive_failures?: number | null
           created_at?: string | null
           department_id?: string | null
           id?: string
           inbox_enabled?: boolean | null
           instance_name?: string
+          last_health_check?: string | null
           name?: string
           phone_number?: string | null
           qr_code_base64?: string | null

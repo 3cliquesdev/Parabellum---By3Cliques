@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RealtimeNotifications from "./components/RealtimeNotifications";
+import { WhatsAppDisconnectMonitor } from "./components/WhatsAppDisconnectMonitor";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 
 // Pages
@@ -84,6 +85,7 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
           <RealtimeNotifications />
+          <WhatsAppDisconnectMonitor />
           <Routes>
             {/* Public routes - no auth required */}
             <Route path="/auth" element={<Auth />} />
