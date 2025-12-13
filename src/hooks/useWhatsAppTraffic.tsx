@@ -8,8 +8,15 @@ export interface WhatsAppTrafficData {
 }
 
 export function useWhatsAppTraffic(startDate: Date, endDate: Date) {
+  // Ajustar datas para início e fim do dia no timezone local
+  const adjustedStartDate = new Date(startDate);
+  adjustedStartDate.setHours(0, 0, 0, 0);
+  
+  const adjustedEndDate = new Date(endDate);
+  adjustedEndDate.setHours(23, 59, 59, 999);
+
   return useQuery({
-    queryKey: ['whatsapp-traffic', startDate.toISOString(), endDate.toISOString()],
+    queryKey: ['whatsapp-traffic', adjustedStartDate.toISOString(), adjustedEndDate.toISOString()],
     queryFn: async (): Promise<WhatsAppTrafficData[]> => {
       // Primeiro, buscar IDs de conversas do canal WhatsApp
       const { data: whatsappConversations, error: convError } = await supabase
@@ -30,8 +37,8 @@ export function useWhatsAppTraffic(startDate: Date, endDate: Date) {
         .from('messages')
         .select('created_at, sender_type, conversation_id')
         .in('conversation_id', conversationIds)
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString());
+        .gte('created_at', adjustedStartDate.toISOString())
+        .lte('created_at', adjustedEndDate.toISOString());
 
       if (error) throw error;
 
