@@ -303,7 +303,7 @@ async function generateDealsReport(supabase: any, filters: any) {
     .select(`
       id, title, value, status, currency, lost_reason,
       created_at, closed_at,
-      contacts:contact_id (first_name, last_name, email),
+      contacts:contact_id (first_name, last_name, email, kiwify_customer_id),
       profiles:assigned_to (full_name),
       stages:stage_id (name),
       pipelines:pipeline_id (name)
@@ -316,21 +316,48 @@ async function generateDealsReport(supabase: any, filters: any) {
   const { data, error } = await query;
   if (error) throw error;
 
-  return data.map((d: any) => ({
-    id: d.id,
-    title: d.title,
-    value: d.value,
-    currency: d.currency,
-    status: d.status,
-    lost_reason: d.lost_reason || '',
-    customer: `${d.contacts?.first_name || ''} ${d.contacts?.last_name || ''}`.trim(),
-    customer_email: d.contacts?.email || '',
-    sales_rep: d.profiles?.full_name || 'Não atribuído',
-    stage: d.stages?.name || '',
-    pipeline: d.pipelines?.name || '',
-    created_at: d.created_at,
-    closed_at: d.closed_at,
-  }));
+  // Buscar eventos Kiwify de cancelamento/reembolso
+  const { data: kiwifyEvents } = await supabase
+    .from('kiwify_events')
+    .select('order_id, event_type, created_at, customer_email')
+    .in('event_type', ['refunded', 'chargedback', 'refund_requested']);
+
+  // Criar mapa de cancelamentos por customer_email
+  const cancelMap = new Map();
+  kiwifyEvents?.forEach((e: any) => {
+    if (e.customer_email) {
+      cancelMap.set(e.customer_email.toLowerCase(), {
+        event_type: e.event_type,
+        cancelled_at: e.created_at
+      });
+    }
+  });
+
+  return data.map((d: any) => {
+    const customerEmail = d.contacts?.email?.toLowerCase();
+    const cancellation = customerEmail ? cancelMap.get(customerEmail) : null;
+    const commissionRate = 0.10; // 10% comissão
+    
+    return {
+      id: d.id,
+      title: d.title,
+      value: d.value || 0,
+      currency: d.currency,
+      status: d.status,
+      lost_reason: d.lost_reason || '',
+      customer: `${d.contacts?.first_name || ''} ${d.contacts?.last_name || ''}`.trim(),
+      customer_email: d.contacts?.email || '',
+      sales_rep: d.profiles?.full_name || 'Não atribuído',
+      stage: d.stages?.name || '',
+      pipeline: d.pipelines?.name || '',
+      created_at: d.created_at,
+      closed_at: d.closed_at,
+      kiwify_status: cancellation ? cancellation.event_type : 'active',
+      cancelled_at: cancellation?.cancelled_at || '',
+      commission: (d.value || 0) * commissionRate,
+      commission_lost: cancellation ? (d.value || 0) * commissionRate : 0,
+    };
+  });
 }
 
 async function generateCommissionsReport(supabase: any, filters: any) {
@@ -737,15 +764,26 @@ function convertToCSV(data: any[]): string {
   if (data.length === 0) return '';
 
   const headers = Object.keys(data[0]);
-  const csvRows = [headers.join(',')];
+  // Formato brasileiro: separador de colunas = ponto-e-vírgula
+  const csvRows = [headers.join(';')];
 
   for (const row of data) {
     const values = headers.map(header => {
-      const value = row[header];
-      const escaped = ('' + value).replace(/"/g, '""');
+      let value = row[header];
+      
+      // Converter números para formato brasileiro (vírgula decimal)
+      if (typeof value === 'number') {
+        value = value.toLocaleString('pt-BR', { 
+          minimumFractionDigits: 2, 
+          maximumFractionDigits: 2 
+        });
+      }
+      
+      // Escapar aspas duplas e envolver em aspas
+      const escaped = ('' + (value ?? '')).replace(/"/g, '""');
       return `"${escaped}"`;
     });
-    csvRows.push(values.join(','));
+    csvRows.push(values.join(';'));
   }
 
   return csvRows.join('\n');

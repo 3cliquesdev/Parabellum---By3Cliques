@@ -11,10 +11,25 @@ export function useWhatsAppTraffic(startDate: Date, endDate: Date) {
   return useQuery({
     queryKey: ['whatsapp-traffic', startDate.toISOString(), endDate.toISOString()],
     queryFn: async (): Promise<WhatsAppTrafficData[]> => {
-      // Query messages from WhatsApp channel in the date range
+      // Primeiro, buscar IDs de conversas do canal WhatsApp
+      const { data: whatsappConversations, error: convError } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('channel', 'whatsapp');
+
+      if (convError) throw convError;
+
+      const conversationIds = whatsappConversations?.map(c => c.id) || [];
+      
+      if (conversationIds.length === 0) {
+        return [];
+      }
+
+      // Buscar mensagens apenas dessas conversas WhatsApp
       const { data: messages, error } = await supabase
         .from('messages')
         .select('created_at, sender_type, conversation_id')
+        .in('conversation_id', conversationIds)
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString());
 
