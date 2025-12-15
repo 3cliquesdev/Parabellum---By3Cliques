@@ -45,8 +45,18 @@ const validators = {
     return digit2 === parseInt(cnpj[13]);
   },
   
+  // Validação de email básico (aceita qualquer domínio)
+  email: (value: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(value);
+  },
+  
+  // Validação de email corporativo (bloqueia pessoais)
   corporate_email: (value: string): boolean => {
-    const blockedDomains = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'live.com'];
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value)) return false;
+    
+    const blockedDomains = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'live.com', 'yahoo.com.br', 'uol.com.br', 'bol.com.br', 'terra.com.br'];
     const domain = value.split('@')[1]?.toLowerCase();
     return domain ? !blockedDomains.includes(domain) : false;
   },
@@ -59,6 +69,15 @@ const validators = {
   cep: (value: string): boolean => {
     const cep = value.replace(/\D/g, '');
     return cep.length === 8;
+  },
+  
+  url: (value: string): boolean => {
+    try {
+      new URL(value);
+      return true;
+    } catch {
+      return false;
+    }
   },
 };
 
@@ -166,6 +185,14 @@ serve(async (req) => {
       }
 
       if (!value) continue;
+
+      // Validação automática de email para campos do tipo email (se não tiver validation_type específico)
+      if (field.type === 'email' && !field.validation_type) {
+        if (!validators.email(value)) {
+          validationErrors[field.id] = field.validation_message || 'E-mail inválido';
+          continue;
+        }
+      }
 
       // Enterprise validations
       const validationType = field.validation_type;

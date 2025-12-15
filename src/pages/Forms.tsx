@@ -53,7 +53,7 @@ export default function Forms() {
   }, [forms, filter]);
 
   const copyFormLink = (formId: string) => {
-    const url = `${window.location.origin}/public/form/${formId}`;
+    const url = `${window.location.origin}/f/${formId}`;
     navigator.clipboard.writeText(url);
     toast({
       title: "Link copiado!",
