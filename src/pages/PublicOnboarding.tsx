@@ -40,13 +40,14 @@ interface OnboardingData {
 }
 
 export default function PublicOnboarding() {
-  const { executionId } = useParams<{ executionId: string }>();
+  const { executionId, playbookId } = useParams<{ executionId?: string; playbookId?: string }>();
   const [searchParams] = useSearchParams();
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<OnboardingData | null>(null);
   const [started, setStarted] = useState(false);
+  const [playbookInfo, setPlaybookInfo] = useState<{ name: string; description?: string } | null>(null);
   
   // Query params for personalization
   const customName = searchParams.get("name");
@@ -54,16 +55,37 @@ export default function PublicOnboarding() {
   const supportPhone = searchParams.get("phone") || "5511999999999";
 
   useEffect(() => {
-    loadOnboardingData();
-  }, [executionId]);
+    if (executionId) {
+      loadOnboardingData();
+    } else if (playbookId) {
+      loadPlaybookInfo();
+    } else {
+      setError("Link inválido");
+      setLoading(false);
+    }
+  }, [executionId, playbookId]);
+
+  async function loadPlaybookInfo() {
+    try {
+      const { data: playbook, error: playbookError } = await supabase
+        .from("onboarding_playbooks")
+        .select("name, description")
+        .eq("id", playbookId)
+        .single();
+
+      if (playbookError) throw playbookError;
+      if (!playbook) throw new Error("Playbook não encontrado");
+
+      setPlaybookInfo(playbook);
+    } catch (err: any) {
+      console.error("Error loading playbook info:", err);
+      setError(err.message || "Erro ao carregar informações do playbook");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function loadOnboardingData() {
-    if (!executionId) {
-      setError("ID de execução não fornecido");
-      setLoading(false);
-      return;
-    }
-
     try {
       // Fetch execution
       const { data: execution, error: execError } = await supabase
@@ -120,7 +142,57 @@ export default function PublicOnboarding() {
   }
 
   const displayName = customName || `${data?.contact?.first_name || ""} ${data?.contact?.last_name || ""}`.trim() || "Cliente";
-  const productName = customProduct || data?.playbook?.name || "nosso produto";
+  const productName = customProduct || playbookInfo?.name || data?.playbook?.name || "nosso produto";
+
+  // Se acessou via playbookId (preview do playbook)
+  if (playbookId && !executionId) {
+    if (loading) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+            <p className="text-muted-foreground">Carregando...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (error || !playbookInfo) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center p-4">
+          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-2xl shadow-xl p-8 max-w-md text-center">
+            <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">😕</span>
+            </div>
+            <h1 className="text-2xl font-bold text-foreground mb-2">Playbook não encontrado</h1>
+            <p className="text-muted-foreground">{error || "Este playbook não existe ou foi removido."}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Preview page for playbook (no execution)
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-2xl shadow-xl p-8 max-w-lg text-center">
+          <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="text-4xl">🎯</span>
+          </div>
+          <h1 className="text-3xl font-bold text-foreground mb-3">{playbookInfo.name}</h1>
+          {playbookInfo.description && (
+            <p className="text-muted-foreground mb-6">{playbookInfo.description}</p>
+          )}
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              Este é um link de preview do playbook. Para iniciar o onboarding, 
+              o cliente receberá um link personalizado após a compra.
+            </p>
+          </div>
+        </div>
+        <WhatsAppFloatingButton phone={supportPhone} customerName="Visitante" />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

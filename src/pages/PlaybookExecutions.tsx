@@ -34,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Activity, CheckCircle, XCircle, Clock, AlertCircle, Eye, Play, BarChart3, ListChecks, Rocket, Search, Users, Calendar, Package, Loader2, UserCog, Copy, ExternalLink } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, AlertCircle, Eye, Play, BarChart3, ListChecks, Rocket, Search, Users, Calendar, Package, Loader2, UserCog } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePlaybookExecutions } from "@/hooks/usePlaybookExecutions";
 import { useExecutionQueue } from "@/hooks/useExecutionQueue";
@@ -99,16 +99,6 @@ export default function PlaybookExecutions() {
     if (!consultantId) return null;
     const consultant = consultants?.find((c) => c.id === consultantId);
     return consultant?.full_name || null;
-  };
-
-  // Copy public onboarding link
-  const copyPublicLink = (executionId: string) => {
-    const url = `${window.location.origin}/public-onboarding/${executionId}`;
-    navigator.clipboard.writeText(url);
-    toast({
-      title: "Link copiado!",
-      description: "Link do onboarding guiado copiado para a área de transferência.",
-    });
   };
 
   const { data: products } = useProducts();
@@ -401,7 +391,6 @@ export default function PlaybookExecutions() {
                       <TableHead>Consultor</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Iniciado</TableHead>
-                      <TableHead>Link Público</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -440,28 +429,6 @@ export default function PlaybookExecutions() {
                                   locale: ptBR,
                                 })
                               : "-"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => copyPublicLink(execution.id)}
-                                title="Copiar link do onboarding"
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                asChild
-                                title="Abrir página de onboarding"
-                              >
-                                <a href={`/public-onboarding/${execution.id}`} target="_blank" rel="noopener noreferrer">
-                                  <ExternalLink className="h-3 w-3" />
-                                </a>
-                              </Button>
-                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">

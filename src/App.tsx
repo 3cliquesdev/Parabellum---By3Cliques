@@ -101,6 +101,7 @@ const App = () => {
             <Route path="/public-quote/:token" element={<PublicQuote />} />
             <Route path="/f/:formId" element={<PublicFormV2 />} />
             <Route path="/public-onboarding/:executionId" element={<PublicOnboarding />} />
+            <Route path="/public-onboarding/playbook/:playbookId" element={<PublicOnboarding />} />
 
             {/* Debug routes - dev only */}
             <Route path="/debug/routes" element={<DebugRoutes />} />

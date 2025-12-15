@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Workflow, Edit, Trash2, Copy, BarChart3, Sparkles, Package, Link2 } from "lucide-react";
+import { Plus, Workflow, Edit, Trash2, Copy, BarChart3, Sparkles, Package, Link2, ExternalLink } from "lucide-react";
 import { usePlaybooks } from "@/hooks/usePlaybooks";
 import { useCreatePlaybook } from "@/hooks/useCreatePlaybook";
 import { useUpdatePlaybook } from "@/hooks/useUpdatePlaybook";
@@ -29,6 +29,7 @@ import { useProducts } from "@/hooks/useProducts";
 import { usePlaybookProducts } from "@/hooks/usePlaybookProducts";
 import { Switch } from "@/components/ui/switch";
 import { PlaybookProductsTab } from "@/components/playbook/PlaybookProductsTab";
+import { useToast } from "@/hooks/use-toast";
 
 // Lazy load do editor para não bloquear o carregamento da página
 const PlaybookEditor = lazy(() => import("@/components/playbook/PlaybookEditor"));
@@ -39,6 +40,16 @@ export default function OnboardingBuilder() {
   const createPlaybook = useCreatePlaybook();
   const updatePlaybook = useUpdatePlaybook();
   const deletePlaybook = useDeletePlaybook();
+  const { toast } = useToast();
+
+  const copyPublicLink = (playbookId: string) => {
+    const url = `${window.location.origin}/public-onboarding/playbook/${playbookId}`;
+    navigator.clipboard.writeText(url);
+    toast({
+      title: "Link copiado!",
+      description: "Link do onboarding guiado copiado para a área de transferência.",
+    });
+  };
 
   const [showEditor, setShowEditor] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -325,6 +336,33 @@ export default function OnboardingBuilder() {
                       <BarChart3 className="h-4 w-4" />
                       <span>{playbook.execution_count || 0} execuções</span>
                     </div>
+                    
+                    {/* Botões de Link Público */}
+                    <div className="flex gap-1 mb-3">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => copyPublicLink(playbook.id)}
+                        className="flex-1 gap-1 text-xs"
+                      >
+                        <Copy className="h-3 w-3" />
+                        Copiar Link
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        asChild
+                      >
+                        <a 
+                          href={`/public-onboarding/playbook/${playbook.id}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </Button>
+                    </div>
+                    
                     <div className="flex gap-2">
                       <Button
                         size="sm"
