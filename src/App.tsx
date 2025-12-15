@@ -75,6 +75,7 @@ import Consultants from "./pages/Consultants";
 import DebugRoutes from "./pages/DebugRoutes";
 import AIMessagesSettings from "./pages/AIMessagesSettings";
 import TicketNotificationRulesSettings from "./pages/TicketNotificationRulesSettings";
+import PublicOnboarding from "./pages/PublicOnboarding";
 
 const queryClient = new QueryClient();
 
@@ -99,6 +100,7 @@ const App = () => {
             <Route path="/tv" element={<TVMode />} />
             <Route path="/public-quote/:token" element={<PublicQuote />} />
             <Route path="/f/:formId" element={<PublicFormV2 />} />
+            <Route path="/public-onboarding/:executionId" element={<PublicOnboarding />} />
 
             {/* Debug routes - dev only */}
             <Route path="/debug/routes" element={<DebugRoutes />} />
