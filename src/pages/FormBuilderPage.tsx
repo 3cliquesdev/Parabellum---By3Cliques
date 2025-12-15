@@ -6,7 +6,8 @@ import { FormPreviewModal } from "@/components/forms/FormPreviewModal";
 import { FormRoutingConfig, FormRoutingSettings } from "@/components/forms/FormRoutingConfig";
 import { FormShareDialog } from "@/components/forms/FormShareDialog";
 import { TicketFieldMapping } from "@/components/forms/TicketFieldMapping";
-import { useFormById, useCreateForm, useUpdateForm, FormSchema, DEFAULT_FORM_SETTINGS, DEFAULT_TICKET_SETTINGS, FormTargetType, FormDistributionRule, TicketSettings } from "@/hooks/useForms";
+import { DisplayModeSelector } from "@/components/forms/DisplayModeSelector";
+import { useFormById, useCreateForm, useUpdateForm, FormSchema, DEFAULT_FORM_SETTINGS, DEFAULT_TICKET_SETTINGS, FormTargetType, FormDistributionRule, TicketSettings, FormDisplayMode } from "@/hooks/useForms";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -203,6 +204,15 @@ export default function FormBuilderPage() {
             <FormRoutingConfig
               settings={routingSettings}
               onChange={setRoutingSettings}
+            />
+
+            {/* Display Mode Selector */}
+            <DisplayModeSelector
+              value={schema.settings?.display_mode || "conversational"}
+              onChange={(mode) => setSchema({ 
+                ...schema, 
+                settings: { ...schema.settings, display_mode: mode } 
+              })}
             />
 
             {/* Ticket Field Mapping (only for ticket type) */}

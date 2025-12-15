@@ -41,6 +41,8 @@ export interface FormField {
   ticket_field?: "subject" | "description" | "priority"; // Mapear para campo do ticket
 }
 
+export type FormDisplayMode = "single_page" | "conversational";
+
 export interface FormSettings {
   background_color?: string;
   background_image?: string;
@@ -60,6 +62,7 @@ export interface FormSettings {
   redirect_url?: string;
   show_progress_bar?: boolean;
   allow_back_navigation?: boolean;
+  display_mode?: FormDisplayMode;   // Página única ou conversacional
 }
 
 export interface TicketSettings {
@@ -113,6 +116,7 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   thank_you_message: "Suas respostas foram enviadas com sucesso.",
   show_progress_bar: true,
   allow_back_navigation: true,
+  display_mode: "conversational",
 };
 
 export const DEFAULT_TICKET_SETTINGS: TicketSettings = {

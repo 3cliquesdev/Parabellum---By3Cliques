@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { RatingField, YesNoField, LongTextField, DateField, SelectField } from "@/components/forms/fields";
+import { SinglePageFormView } from "@/components/forms/SinglePageFormView";
 import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 
 // Helper to convert hex to rgba
@@ -34,6 +35,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
   const schema = propSchema || formData?.schema;
   const settings = { ...DEFAULT_FORM_SETTINGS, ...schema?.settings };
   const fields = schema?.fields || [];
+  const displayMode = settings.display_mode || "conversational";
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
@@ -210,7 +212,12 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
     );
   }
 
-  // Success screen
+  // Single Page Mode - render all fields at once
+  if (displayMode === "single_page" && schema) {
+    return <SinglePageFormView schema={schema} isPreview={isPreview} />;
+  }
+
+  // Success screen (for conversational mode)
   if (isSubmitted) {
     return (
       <div 
@@ -251,6 +258,8 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
       </div>
     );
   }
+
+  // Conversational Mode (default) - one field at a time
 
   return (
     <div 
