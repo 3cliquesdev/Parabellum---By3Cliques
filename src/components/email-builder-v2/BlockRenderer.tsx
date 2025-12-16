@@ -51,7 +51,7 @@ export function BlockRenderer({
   const renderBlock = () => {
     switch (block.block_type) {
       case "text":
-        return <TextBlock block={block} isSelected={isSelected} onUpdate={onUpdate} readOnly={readOnly} />;
+        return <TextBlock block={block} isSelected={isSelected} onUpdate={onUpdate} onStyleUpdate={onStyleUpdate} readOnly={readOnly} />;
       case "image":
         return <ImageBlock block={block} isSelected={isSelected} onUpdate={onUpdate} readOnly={readOnly} />;
       case "button":

@@ -12,6 +12,7 @@ import { useSalesReps } from "@/hooks/useSalesReps";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useRottenDeals } from "@/hooks/useRottenDeals";
+import { useAuth } from "@/hooks/useAuth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -62,6 +63,7 @@ export default function Deals() {
   const { role } = useUserRole();
   const { hasPermission } = useRolePermissions();
   const { data: rottenDeals } = useRottenDeals();
+  const { user } = useAuth();
   const updateDealStage = useUpdateDealStage();
   const updateDeal = useUpdateDeal();
   const { toast } = useToast();
@@ -238,6 +240,8 @@ export default function Deals() {
           value: validatedData.value,
           gross_value: validatedData.gross_value,
           closed_at: new Date().toISOString(),
+          // Auto-atribuir ao usuário atual se não tiver responsável
+          assigned_to: pendingWonDeal.assigned_to || user?.id,
         },
       },
       {

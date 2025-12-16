@@ -48,6 +48,7 @@
     "@tiptap/extension-image": "^3.11.0",
     "@tiptap/extension-link": "^3.11.0",
     "@tiptap/extension-placeholder": "^3.11.0",
+    "@tiptap/extension-text-align": "^3.13.0",
     "@tiptap/pm": "^3.11.0",
     "@tiptap/react": "^3.11.0",
     "@tiptap/starter-kit": "^3.11.0",

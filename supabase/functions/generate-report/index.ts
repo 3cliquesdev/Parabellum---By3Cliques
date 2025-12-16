@@ -302,7 +302,7 @@ async function generateDealsReport(supabase: any, filters: any) {
     .from('deals')
     .select(`
       id, title, value, status, currency, lost_reason,
-      created_at, closed_at,
+      created_at, closed_at, lead_email, lead_phone,
       contacts:contact_id (first_name, last_name, email, phone, kiwify_customer_id),
       profiles:assigned_to (full_name),
       stages:stage_id (name),
@@ -317,38 +317,62 @@ async function generateDealsReport(supabase: any, filters: any) {
   const { data, error } = await query;
   if (error) throw error;
 
-  // Buscar eventos Kiwify de cancelamento/reembolso
+  // Buscar todos os eventos Kiwify para status de pagamento
   const { data: kiwifyEvents } = await supabase
     .from('kiwify_events')
-    .select('order_id, event_type, created_at, customer_email')
-    .in('event_type', ['refunded', 'chargedback', 'refund_requested']);
+    .select('order_id, event_type, created_at, customer_email, linked_deal_id');
 
-  // Criar mapa de cancelamentos por customer_email
-  const cancelMap = new Map();
+  // Criar mapa de eventos por deal_id e por email
+  const dealEventMap = new Map();
+  const emailEventMap = new Map();
   kiwifyEvents?.forEach((e: any) => {
+    if (e.linked_deal_id) {
+      dealEventMap.set(e.linked_deal_id, e);
+    }
     if (e.customer_email) {
-      cancelMap.set(e.customer_email.toLowerCase(), {
-        event_type: e.event_type,
-        cancelled_at: e.created_at
-      });
+      emailEventMap.set(e.customer_email.toLowerCase(), e);
     }
   });
 
   return data.map((d: any) => {
-    const customerEmail = d.contacts?.email?.toLowerCase();
-    const cancellation = customerEmail ? cancelMap.get(customerEmail) : null;
+    // Buscar email: priorizar lead_email, depois contact email
+    const email = d.lead_email || d.contacts?.email || '';
+    const customerEmail = email?.toLowerCase();
+    
+    // Buscar evento Kiwify pelo deal_id ou email
+    const kiwifyEvent = dealEventMap.get(d.id) || (customerEmail ? emailEventMap.get(customerEmail) : null);
     const commissionRate = 0.10; // 10% comissão
     
+    // Determinar status de pagamento
+    let statusPagamento = 'sem_vinculo';
+    if (kiwifyEvent) {
+      const eventType = kiwifyEvent.event_type;
+      if (eventType === 'paid' || eventType === 'order_approved') {
+        statusPagamento = 'paid';
+      } else if (eventType === 'refunded') {
+        statusPagamento = 'refunded';
+      } else if (eventType === 'chargedback') {
+        statusPagamento = 'chargedback';
+      } else if (eventType === 'refund_requested') {
+        statusPagamento = 'refund_requested';
+      } else {
+        statusPagamento = eventType;
+      }
+    }
+    
+    const isCancelled = ['refunded', 'chargedback', 'refund_requested'].includes(statusPagamento);
+    
     return {
-      // Campos na ordem solicitada pelo usuário (PT-BR)
-      email: d.contacts?.email || '',
+      // Campos principais
+      email: email,
       data_criacao: d.created_at,
-      nome: `${d.contacts?.first_name || ''} ${d.contacts?.last_name || ''}`.trim(),
+      nome: `${d.contacts?.first_name || ''} ${d.contacts?.last_name || ''}`.trim() || d.title,
       valor: d.value || 0,
       responsavel: d.profiles?.full_name || 'Não atribuído',
       produto: d.products?.name || 'Sem produto',
-      telefone: d.contacts?.phone || '',
+      telefone: d.lead_phone || d.contacts?.phone || '',
       status: d.status,
+      status_pagamento: statusPagamento,
       
       // Campos adicionais
       id: d.id,
@@ -358,10 +382,9 @@ async function generateDealsReport(supabase: any, filters: any) {
       etapa: d.stages?.name || '',
       pipeline: d.pipelines?.name || '',
       data_fechamento: d.closed_at || '',
-      status_kiwify: cancellation ? cancellation.event_type : 'ativo',
-      data_cancelamento: cancellation?.cancelled_at || '',
+      data_cancelamento: isCancelled ? kiwifyEvent?.created_at : '',
       comissao: (d.value || 0) * commissionRate,
-      comissao_perdida: cancellation ? (d.value || 0) * commissionRate : 0,
+      comissao_perdida: isCancelled ? (d.value || 0) * commissionRate : 0,
     };
   });
 }
