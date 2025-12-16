@@ -146,11 +146,15 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { form_id, answers, session_metadata } = await req.json();
+    const body = await req.json();
+    const { form_id, session_metadata } = body;
+    // Accept both 'answers' and 'responses' for compatibility
+    const answers = body.answers || body.responses;
 
     if (!form_id || !answers) {
+      console.error('[form-submit-v3] Missing required fields:', { form_id: !!form_id, answers: !!answers, body_keys: Object.keys(body) });
       return new Response(
-        JSON.stringify({ error: 'form_id and answers are required' }),
+        JSON.stringify({ error: 'form_id and answers/responses are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
