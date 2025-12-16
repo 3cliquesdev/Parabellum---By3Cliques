@@ -240,6 +240,8 @@ export default function Deals() {
           value: validatedData.value,
           gross_value: validatedData.gross_value,
           closed_at: new Date().toISOString(),
+          // Salvar email e nome do cliente Kiwify
+          lead_email: validatedData.customer_email,
           // Auto-atribuir ao usuário atual se não tiver responsável
           assigned_to: pendingWonDeal.assigned_to || user?.id,
         },
