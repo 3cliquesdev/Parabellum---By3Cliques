@@ -102,8 +102,38 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
         console.log(`📊 useKiwifyFinancials: Página ${page + 1}/${totalPages} - ${pageData?.length || 0} eventos`);
       }
 
-      const events = allEvents;
-      console.log(`✅ useKiwifyFinancials: ${events.length} eventos carregados (total real)`);
+      console.log(`✅ useKiwifyFinancials: ${allEvents.length} eventos carregados (total bruto)`);
+
+      // 🆕 CORREÇÃO 1: Buscar order_ids que foram reembolsados/chargebacks
+      const { data: refundedEvents } = await supabase
+        .from("kiwify_events")
+        .select("payload")
+        .in("event_type", ["refunded", "chargedback"]);
+
+      const refundedOrderIds = new Set<string>();
+      refundedEvents?.forEach(event => {
+        const orderId = (event.payload as any)?.order_id;
+        if (orderId) refundedOrderIds.add(orderId);
+      });
+      console.log(`📊 useKiwifyFinancials: ${refundedOrderIds.size} pedidos reembolsados/chargebacks excluídos`);
+
+      // 🆕 CORREÇÃO 2: Deduplicar eventos por order_id (webhooks duplicados)
+      const uniqueOrdersMap = new Map<string, any>();
+      allEvents.forEach(event => {
+        const orderId = (event.payload as any)?.order_id;
+        if (!orderId) return;
+        
+        // Pular pedidos que foram reembolsados/chargebacks
+        if (refundedOrderIds.has(orderId)) return;
+        
+        // Manter apenas o primeiro evento por order_id
+        if (!uniqueOrdersMap.has(orderId)) {
+          uniqueOrdersMap.set(orderId, event);
+        }
+      });
+
+      const events = Array.from(uniqueOrdersMap.values());
+      console.log(`✅ useKiwifyFinancials: ${events.length} pedidos únicos após deduplicação`);
 
       // Calcular totais a partir do payload dos eventos
       let totalGrossRevenue = 0;
@@ -135,7 +165,7 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
         totalCommission: number;
       }>();
 
-      events?.forEach(event => {
+      events.forEach(event => {
         const payload = event.payload as KiwifyEventPayload;
         const commissions = payload?.Commissions;
         
