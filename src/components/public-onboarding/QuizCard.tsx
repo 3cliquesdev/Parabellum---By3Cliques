@@ -5,13 +5,24 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { CheckCircle2, XCircle, HelpCircle, Sparkles } from "lucide-react";
 
+interface QuizOption {
+  id?: string;
+  text?: string;
+}
+
 interface QuizCardProps {
   question: string;
-  options: string[];
+  options: (string | QuizOption)[];
   correctOption: string;
   passed: boolean;
   onPass: () => void;
 }
+
+// Helper to normalize option to string
+const getOptionText = (option: string | QuizOption): string => {
+  if (typeof option === 'string') return option;
+  return option?.text || option?.id || '';
+};
 
 export function QuizCard({ question, options, correctOption, passed, onPass }: QuizCardProps) {
   const [selectedOption, setSelectedOption] = useState<string>("");
@@ -87,22 +98,25 @@ export function QuizCard({ question, options, correctOption, passed, onPass }: Q
               onValueChange={setSelectedOption}
               className="space-y-2 mb-4"
             >
-              {options.map((option, index) => (
-                <Label
-                  key={index}
-                  htmlFor={`option-${index}`}
-                  className={`
-                    flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                    ${selectedOption === option 
-                      ? "border-primary bg-primary/5" 
-                      : "border-border hover:border-primary/50 hover:bg-muted/50"
-                    }
-                  `}
-                >
-                  <RadioGroupItem value={option} id={`option-${index}`} />
-                  <span className="text-sm">{option}</span>
-                </Label>
-              ))}
+              {options.map((option, index) => {
+                const optionText = getOptionText(option);
+                return (
+                  <Label
+                    key={index}
+                    htmlFor={`option-${index}`}
+                    className={`
+                      flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
+                      ${selectedOption === optionText 
+                        ? "border-primary bg-primary/5" 
+                        : "border-border hover:border-primary/50 hover:bg-muted/50"
+                      }
+                    `}
+                  >
+                    <RadioGroupItem value={optionText} id={`option-${index}`} />
+                    <span className="text-sm">{optionText}</span>
+                  </Label>
+                );
+              })}
             </RadioGroup>
 
             <Button
