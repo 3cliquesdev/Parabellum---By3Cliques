@@ -195,9 +195,10 @@ export function useForm(formId: string | undefined) {
         .select("*")
         .eq("id", formId)
         .eq("is_active", true)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) return null;
       return data as unknown as Form;
     },
     enabled: !!formId,
@@ -214,9 +215,10 @@ export function useFormById(formId: string | undefined) {
         .from("forms")
         .select("*")
         .eq("id", formId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) return null;
       return data as unknown as Form;
     },
     enabled: !!formId,

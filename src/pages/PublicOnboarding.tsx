@@ -74,10 +74,11 @@ export default function PublicOnboarding() {
         .from("onboarding_playbooks")
         .select("name, description, support_phone")
         .eq("id", playbookId)
-        .single();
+        .eq("is_active", true)
+        .maybeSingle();
 
       if (playbookError) throw playbookError;
-      if (!playbook) throw new Error("Playbook não encontrado");
+      if (!playbook) throw new Error("Playbook não encontrado ou desativado");
 
       setPlaybookInfo(playbook);
     } catch (err: any) {
