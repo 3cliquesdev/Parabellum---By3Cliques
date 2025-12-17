@@ -4,7 +4,7 @@ import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface WorkflowNodeWrapperProps {
-  type: 'email' | 'delay' | 'task' | 'call' | 'condition' | 'approval';
+  type: 'email' | 'delay' | 'task' | 'call' | 'condition' | 'approval' | 'form';
   icon: LucideIcon;
   title: string;
   subtitle?: string;
@@ -39,6 +39,10 @@ const typeColors = {
   approval: {
     header: 'bg-orange-600 dark:bg-orange-700',
     border: 'border-orange-400 dark:border-orange-600',
+  },
+  form: {
+    header: 'bg-cyan-600 dark:bg-cyan-700',
+    border: 'border-cyan-400 dark:border-cyan-600',
   },
 };
 

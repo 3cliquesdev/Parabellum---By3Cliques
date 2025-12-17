@@ -7,20 +7,45 @@ import { NodeProps } from "reactflow";
 
 interface ConditionNodeData {
   label: string;
-  condition_type?: "email_opened" | "email_clicked" | "meeting_booked" | "tag_exists" | "status_change";
+  condition_type?: "email_opened" | "email_clicked" | "meeting_booked" | "tag_exists" | "status_change" | "form_score";
   condition_value?: string;
+  // Form score specific fields
+  score_form_id?: string;
+  score_form_name?: string;
+  score_name?: string;
+  score_operator?: "gt" | "lt" | "eq" | "gte" | "lte";
+  score_threshold?: number;
 }
 
-const conditionLabels = {
+const conditionLabels: Record<string, string> = {
   email_opened: "Email Aberto",
   email_clicked: "Email Clicado",
   meeting_booked: "Reunião Agendada",
   tag_exists: "Tag Existe",
   status_change: "Mudança de Status",
+  form_score: "Score do Formulário",
+};
+
+const operatorLabels: Record<string, string> = {
+  gt: ">",
+  lt: "<",
+  eq: "=",
+  gte: ">=",
+  lte: "<=",
 };
 
 export const ConditionNode = memo(({ data, selected }: NodeProps<ConditionNodeData>) => {
-  const subtitle = data.condition_type ? `Se: ${conditionLabels[data.condition_type]}` : undefined;
+  // Build subtitle based on condition type
+  let subtitle: string | undefined;
+  
+  if (data.condition_type === 'form_score') {
+    const op = data.score_operator ? operatorLabels[data.score_operator] : '?';
+    const threshold = data.score_threshold ?? '?';
+    const scoreName = data.score_name || 'score';
+    subtitle = `Se: ${scoreName} ${op} ${threshold}`;
+  } else if (data.condition_type) {
+    subtitle = `Se: ${conditionLabels[data.condition_type]}`;
+  }
 
   return (
     <WorkflowNodeWrapper
@@ -56,7 +81,12 @@ export const ConditionNode = memo(({ data, selected }: NodeProps<ConditionNodeDa
         </>
       }
     >
-      {data.condition_value && (
+      {data.condition_type === 'form_score' && data.score_form_name && (
+        <p className="text-xs text-muted-foreground italic">
+          📋 {data.score_form_name}
+        </p>
+      )}
+      {data.condition_type !== 'form_score' && data.condition_value && (
         <p className="text-xs text-muted-foreground italic">
           "{data.condition_value}"
         </p>
