@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 interface KiwifyEventPayload {
   order_id?: string;
   order_status?: string;
+  approved_date?: string; // Format: '2025-12-17 17:14'
   product_base_price?: number;
   product_name?: string;
   product_id?: string;
@@ -72,23 +73,22 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
   return useQuery({
     queryKey: ['kiwify-complete-metrics', startDate?.toISOString(), endDate?.toISOString(), minValue],
     queryFn: async (): Promise<KiwifyCompleteMetrics> => {
-      // Fetch all events for the period
+      // Format dates for approved_date comparison (YYYY-MM-DD)
+      const startDateStr = startDate ? startDate.toISOString().split('T')[0] : null;
+      const endDateStr = endDate ? endDate.toISOString().split('T')[0] : null;
+      
+      // Fetch all events (we'll filter by approved_date in JS since it's in payload)
       const allEvents: any[] = [];
       let page = 0;
       const pageSize = 1000;
       let hasMore = true;
 
       while (hasMore) {
-        let query = supabase
+        const query = supabase
           .from('kiwify_events')
           .select('event_type, payload, created_at')
           .range(page * pageSize, (page + 1) * pageSize - 1)
           .order('created_at', { ascending: false });
-
-        if (startDate && endDate) {
-          query = query.gte('created_at', startDate.toISOString())
-                       .lte('created_at', endDate.toISOString());
-        }
 
         const { data, error } = await query;
         if (error) throw error;
@@ -101,6 +101,20 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
           hasMore = false;
         }
       }
+      
+      // Helper to check if event is within date range using approved_date from payload
+      const isWithinDateRange = (payload: KiwifyEventPayload): boolean => {
+        if (!startDateStr || !endDateStr) return true;
+        
+        const approvedDate = payload?.approved_date;
+        if (!approvedDate) return false;
+        
+        // approved_date format: '2025-12-17 17:14' - extract just the date part
+        const eventDateStr = approvedDate.split(' ')[0];
+        
+        // Compare strings: startDateStr <= eventDateStr <= endDateStr
+        return eventDateStr >= startDateStr && eventDateStr <= endDateStr;
+      };
 
       // Track order_ids to dedupe
       const approvedOrderIds = new Set<string>();
@@ -125,6 +139,9 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         const orderId = payload?.order_id;
         
         if (!orderId) continue;
+        
+        // Filter by approved_date (actual sale date, not webhook reception date)
+        if (!isWithinDateRange(payload)) continue;
 
         // Get value in reais for minValue filter (centavos / 100)
         const grossValueReais = Number(payload?.Commissions?.product_base_price || 0) / 100;
