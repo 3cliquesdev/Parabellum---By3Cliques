@@ -15,12 +15,7 @@ interface TicketNotificationRequest {
   priority: "low" | "medium" | "high" | "urgent";
 }
 
-const priorityResponseTimes: Record<string, string> = {
-  urgent: "4 horas",
-  high: "8 horas",
-  medium: "24 horas",
-  low: "48 horas",
-};
+// SLA removido conforme solicitação do cliente - apenas prioridade será exibida
 
 const priorityColors: Record<string, string> = {
   urgent: "#EF4444",
@@ -41,8 +36,7 @@ function generateTicketEmailHTML(
   customer_name: string,
   subject: string,
   description: string,
-  priority: string,
-  estimated_response_time: string
+  priority: string
 ): string {
   const priorityColor = priorityColors[priority] || "#6B7280";
   const priorityLabel = priorityLabels[priority] || priority;
@@ -122,26 +116,12 @@ function generateTicketEmailHTML(
 
                 <tr>
                   <td style="padding-top: 20px;">
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td width="50%" valign="top">
-                          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">
-                            Prioridade:
-                          </p>
-                          <span style="display: inline-block; padding: 4px 12px; border-radius: 9999px; background-color: ${priorityColor}; color: #ffffff; font-size: 12px; font-weight: 600; margin-top: 4px;">
-                            ${priorityLabel}
-                          </span>
-                        </td>
-                        <td width="50%" valign="top">
-                          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">
-                            Tempo Estimado:
-                          </p>
-                          <p style="margin: 0; font-size: 14px; line-height: 20px; color: #111827;">
-                            ${estimated_response_time}
-                          </p>
-                        </td>
-                      </tr>
-                    </table>
+                    <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">
+                      Prioridade:
+                    </p>
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 9999px; background-color: ${priorityColor}; color: #ffffff; font-size: 12px; font-weight: 600; margin-top: 4px;">
+                      ${priorityLabel}
+                    </span>
                   </td>
                 </tr>
               </table>
@@ -214,17 +194,13 @@ serve(async (req) => {
       throw new Error("Missing required fields");
     }
 
-    // Calcular tempo estimado de resposta
-    const estimated_response_time = priorityResponseTimes[priority] || "24 horas";
-
     // Gerar HTML do email
     const html = generateTicketEmailHTML(
       ticket_number,
       customer_name,
       subject,
       description,
-      priority,
-      estimated_response_time
+      priority
     );
 
     // Enviar email via Resend API

@@ -217,52 +217,95 @@ export default function PublicOnboarding() {
       );
     }
 
-    // Public playbook start page - Clean design without form fields
+    // Public playbook start page - Premium design matching user's HTML
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-primary/10 flex items-center justify-center p-4">
-        <div className="bg-card/95 backdrop-blur-xl rounded-3xl shadow-2xl p-10 max-w-md w-full text-center border border-border/50">
-          {/* Icon/Logo */}
-          <div className="w-24 h-24 bg-gradient-to-br from-primary to-primary/70 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-lg shadow-primary/20">
-            <Play className="w-12 h-12 text-primary-foreground" />
+      <div className="relative flex min-h-screen w-full flex-col bg-gradient-to-b from-background via-background to-primary/5 overflow-hidden">
+        {/* Header */}
+        <header className="fixed top-0 left-0 w-full z-50">
+          <div className="w-full h-1 bg-muted">
+            <div className="h-full bg-primary transition-all duration-1000 ease-out w-[0%]"></div>
           </div>
-          
-          {/* Title */}
-          <h1 className="text-3xl font-bold text-foreground mb-4 tracking-tight">
-            {playbookInfo.name}
-          </h1>
-          
-          {/* Description */}
-          {playbookInfo.description && (
-            <p className="text-muted-foreground mb-8 text-lg leading-relaxed">
-              {playbookInfo.description}
+          <div className="mx-auto max-w-7xl px-6 md:px-12 py-6 flex justify-between items-center animate-fade-in">
+            <div className="flex items-center gap-6">
+              <img 
+                alt="Seu Armazém Drop" 
+                className="h-10 w-auto object-contain" 
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOvmj4FSaOAWFkqiThV2DYNv-FhkOW4Hdyl2LCSCoshUjR2133u4scoTk1QK1eiIWpff6mhnvuQJia1Id8iLbIJI7yfO8rccOI6tCo8M2S2o6epKVBVV2qrJ2vPhgOxDUCtsUfavfyxxMW33okBh6F_BiAz9qbmOYTrvc4CJhxcMd_QW3nUlecUjnbQh2mpC17ZuxPEGVEqcbR_gI0GBPRIE6_Zem3XHDsVgSKfl4n6iz-tDJj1B4PkcQWwYZkLZ5r_iYqxkp4IOI8"
+              />
+              <div className="h-6 w-px bg-border"></div>
+              <img 
+                alt="3CLIQUES" 
+                className="h-6 w-auto object-contain opacity-80" 
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBe_-Wt9LFoBHn6xzRaiqTTeKpfdIn-uZG6V0DnXKW5baUXpEDymzSfnqFxd9NO_zC1Re4l8rH31XwI2LsTEXX9igrJzevOStB9CpWcF0NRUs7COHpt6gEc0ZmLymFW1tihmyz_qr9_1_ukp_zON2iFyPb4rdb_jWeb1HKkVdDFzwzr9VMmPrVhB_o5d1nXntHqUGPDTQ37l2MqbrMntgLsBV1lbUjAEdjwk3E9LEl7pY9y8H2va46dVdixAvEhOK9dK2J9gJA7poc4"
+              />
+            </div>
+            <div className="hidden md:flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">v 2.0</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex flex-col items-center justify-center flex-grow w-full px-4 text-center pt-24">
+          <div className="max-w-4xl mx-auto flex flex-col items-center gap-8">
+            <div className="space-y-6">
+              <h1 className="animate-fade-in text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground leading-[1.05]">
+                Seja Bem Vindo ao Seu<br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
+                  {playbookInfo.name}
+                </span>
+              </h1>
+              
+              {playbookInfo.description && (
+                <p className="animate-fade-in text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto font-normal leading-relaxed" style={{ animationDelay: '0.2s' }}>
+                  {playbookInfo.description}
+                </p>
+              )}
+            </div>
+            
+            <div className="h-8 md:h-12"></div>
+            
+            <div className="animate-fade-in" style={{ animationDelay: '0.4s' }}>
+              <Button
+                onClick={handleStartPlaybook}
+                disabled={isStarting}
+                size="lg"
+                className="group flex items-center gap-3 px-8 py-6 text-lg font-medium rounded-full shadow-lg hover:shadow-xl hover:shadow-primary/30 transition-all duration-300 hover:scale-[1.02]"
+              >
+                {isStarting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Preparando...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Iniciar Meu Playbook</span>
+                    <Play className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </main>
+
+        {/* Footer */}
+        <footer className="absolute bottom-0 w-full py-8 text-center animate-fade-in" style={{ animationDelay: '0.5s' }}>
+          <div className="flex flex-col items-center justify-center gap-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+              <span className="inline-flex items-center gap-1">
+                📚 Guiado passo a passo
+              </span>
+              <span className="mx-1 opacity-50">•</span>
+              <span className="inline-flex items-center gap-1">
+                ✅ Conclusão leva a consultoria exclusiva
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground/60 mt-2">
+              © {new Date().getFullYear()} Armazém Drop. Todos os direitos reservados.
             </p>
-          )}
+          </div>
+        </footer>
 
-          {/* CTA Button - No form, direct action */}
-          <Button
-            onClick={handleStartPlaybook}
-            disabled={isStarting}
-            size="lg"
-            className="w-full h-14 text-lg font-semibold rounded-xl shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300"
-          >
-            {isStarting ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                Preparando...
-              </>
-            ) : (
-              <>
-                <Play className="w-5 h-5 mr-2" />
-                Iniciar sua Jornada
-              </>
-            )}
-          </Button>
-
-          {/* Footer text */}
-          <p className="text-xs text-muted-foreground mt-6">
-            Ao continuar, você concorda com nossos termos de uso.
-          </p>
-        </div>
         <WhatsAppFloatingButton phone={supportPhone} customerName="Visitante" />
       </div>
     );

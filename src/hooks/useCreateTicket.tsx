@@ -6,7 +6,7 @@ interface CreateTicketData {
   subject: string;
   description: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  category?: 'financeiro' | 'tecnico' | 'bug' | 'outro';
+  category?: string; // Agora é dinâmico
   customer_id: string;
   assigned_to?: string;
   conversation_id?: string;
@@ -20,9 +20,10 @@ export function useCreateTicket() {
 
   return useMutation({
     mutationFn: async (ticketData: CreateTicketData) => {
+      // Cast para permitir categorias dinâmicas do banco
       const { data, error } = await supabase
         .from("tickets")
-        .insert(ticketData)
+        .insert(ticketData as any)
         .select()
         .single();
 

@@ -72,6 +72,11 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
   // FASE 5: Agent Presence
   const { otherUsers, setTyping } = useTicketPresence(ticket.id);
 
+  // Filtrar apenas usuários de suporte para atribuição de tickets
+  const supportUsers = users.filter((user: any) => 
+    ['support_agent', 'support_manager', 'admin', 'manager'].includes(user.role)
+  );
+
   const handleStatusChange = (status: string) => {
     updateTicket.mutate({
       id: ticket.id,
@@ -280,7 +285,7 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="unassigned">Não atribuído</SelectItem>
-                {users.map((user) => (
+                {supportUsers.map((user: any) => (
                   <SelectItem key={user.id} value={user.id}>
                     {user.full_name}
                   </SelectItem>

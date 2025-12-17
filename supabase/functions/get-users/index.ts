@@ -110,7 +110,8 @@ Deno.serve(async (req) => {
       })
     );
 
-    const users = usersWithDetails.filter(u => u !== null);
+    // Filtrar apenas usuários ativos (não bloqueados)
+    const users = usersWithDetails.filter(u => u !== null && !u.is_blocked);
 
     return new Response(
       JSON.stringify({ users }),

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useCreateTicket } from "@/hooks/useCreateTicket";
 import { useContacts } from "@/hooks/useContacts";
 import { useDepartments } from "@/hooks/useDepartments";
+import { useTicketCategories, useCreateTicketCategory } from "@/hooks/useTicketCategories";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, Plus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface CreateTicketDialogProps {
@@ -29,18 +30,33 @@ interface CreateTicketDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Labels amigáveis para categorias
+const categoryLabels: Record<string, string> = {
+  duvida: "❓ Dúvida",
+  problema_tecnico: "🔧 Problema Técnico",
+  financeiro: "💰 Financeiro",
+  sugestao: "💡 Sugestão",
+  reclamacao: "😤 Reclamação",
+  saque: "💵 Saque",
+  outro: "📋 Outro",
+};
+
 export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogProps) {
   const createTicket = useCreateTicket();
   const { data: contacts = [] } = useContacts();
   const { data: departments = [] } = useDepartments();
+  const { data: categories = [] } = useTicketCategories();
+  const createCategory = useCreateTicketCategory();
 
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>("medium");
-  const [category, setCategory] = useState<'financeiro' | 'tecnico' | 'bug' | 'outro'>("outro");
+  const [category, setCategory] = useState<string>("outro");
   const [customerId, setCustomerId] = useState<string>("");
   const [departmentId, setDepartmentId] = useState<string>("");
   const [customerSearch, setCustomerSearch] = useState("");
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   const filteredContacts = contacts.filter((c) => {
     const search = customerSearch.toLowerCase();
@@ -50,6 +66,13 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   }).slice(0, 10);
 
   const selectedContact = contacts.find((c) => c.id === customerId);
+
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    await createCategory.mutateAsync({ name: newCategoryName.trim().toLowerCase().replace(/\s+/g, '_') });
+    setNewCategoryName("");
+    setShowNewCategory(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,18 +220,50 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
             </div>
 
             <div className="space-y-2">
-              <Label>Categoria</Label>
-              <Select value={category} onValueChange={(v) => setCategory(v as any)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="financeiro">💰 Financeiro</SelectItem>
-                  <SelectItem value="tecnico">🔧 Técnico</SelectItem>
-                  <SelectItem value="bug">🐛 Bug</SelectItem>
-                  <SelectItem value="outro">📋 Outro</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <Label>Categoria</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs"
+                  onClick={() => setShowNewCategory(!showNewCategory)}
+                >
+                  <Plus className="w-3 h-3 mr-1" />
+                  Nova
+                </Button>
+              </div>
+              {showNewCategory ? (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Nome da categoria"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    className="h-9"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleCreateCategory}
+                    disabled={createCategory.isPending}
+                  >
+                    {createCategory.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar"}
+                  </Button>
+                </div>
+              ) : (
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.name}>
+                        {categoryLabels[cat.name] || cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
 
