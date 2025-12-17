@@ -6,10 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -17,23 +14,15 @@ serve(async (req) => {
   try {
     const { metricsData, context, startDate, endDate } = await req.json();
 
-    if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY not configured');
-    }
-
     console.log(`[analyze-dashboard] Context: ${context}, Period: ${startDate} to ${endDate}`);
 
-    // Build context-specific system prompt
     const systemPrompts: Record<string, string> = {
       support: `Você é um Diretor de Operações de Suporte experiente com expertise em SLA, atendimento ao cliente e eficiência operacional. Analise os dados de suporte e forneça insights acionáveis sobre gargalos, tendências e oportunidades de melhoria.`,
-      
       sales: `Você é um Diretor Comercial experiente com expertise em funis de vendas, conversão e performance de equipes. Analise os dados de vendas e identifique oportunidades de crescimento, gargalos no pipeline e estratégias para aumentar a conversão.`,
-      
       ai: `Você é um especialista em IA aplicada a operações de negócios. Analise o uso de automação e inteligência artificial, identificando oportunidades de otimização, economia de custos e áreas onde a IA está gerando mais valor.`,
-      
       onboarding: `Você é um especialista em Customer Success e Onboarding. Analise a jornada de novos clientes, identifique pontos de atrito no onboarding e sugira melhorias para aumentar a taxa de adoção e reduzir time-to-value.`,
-      
       whatsapp: `Você é um especialista em comunicação omnichannel e WhatsApp Business. Analise o tráfego e engajamento no WhatsApp, identifique padrões de comportamento e sugira estratégias para melhorar a experiência do cliente.`,
+      financial: `Você é um Diretor Financeiro experiente com expertise em análise de receitas, margem de contribuição e performance de vendas. Analise os dados financeiros e forneça insights sobre tendências de faturamento, sazonalidade e oportunidades de crescimento.`,
     };
 
     const systemPrompt = systemPrompts[context] || systemPrompts.support;
@@ -57,12 +46,11 @@ Analise profundamente estes dados e forneça uma análise executiva estruturada 
 
 ### ⚠️ Gargalos Identificados
 - Aponte os principais problemas ou pontos de atenção.
-- Seja específico sobre onde está o problema (ex: "O tempo de primeira resposta subiu 30% em comparação com o período anterior").
+- Seja específico sobre onde está o problema.
 
 ### 💡 Sugestões Práticas
 - Dê recomendações acionáveis e específicas.
 - Priorize ações de alto impacto que a equipe pode implementar imediatamente.
-- Exemplos: "Alocar mais agentes no horário das 14h às 17h", "Revisar scripts de atendimento para melhorar CSAT".
 
 ---
 
@@ -73,39 +61,85 @@ Analise profundamente estes dados e forneça uma análise executiva estruturada 
 - Se os dados estiverem incompletos ou insuficientes, mencione isso.
 `;
 
-    console.log('[analyze-dashboard] Calling OpenAI GPT-4o-mini...');
+    let analysis: string | null = null;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500,
-      }),
-    });
+    // Try OpenAI first
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (OPENAI_API_KEY) {
+      console.log('[analyze-dashboard] Tentando OpenAI...');
+      try {
+        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 1500,
+          }),
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[analyze-dashboard] OpenAI error:', response.status, errorText);
-      throw new Error(`OpenAI API error: ${response.status}`);
+        if (openaiResponse.ok) {
+          const data = await openaiResponse.json();
+          analysis = data.choices?.[0]?.message?.content;
+          if (analysis) {
+            console.log('[analyze-dashboard] ✅ Análise gerada via OpenAI');
+          }
+        } else {
+          const errorText = await openaiResponse.text();
+          console.warn('[analyze-dashboard] OpenAI falhou:', openaiResponse.status, errorText);
+        }
+      } catch (err) {
+        console.warn('[analyze-dashboard] Erro OpenAI:', err);
+      }
     }
 
-    const data = await response.json();
-    const analysis = data.choices?.[0]?.message?.content;
+    // Fallback to Lovable AI
+    if (!analysis) {
+      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+      if (!LOVABLE_API_KEY) {
+        throw new Error('Nenhum provedor de AI disponível');
+      }
+
+      console.log('[analyze-dashboard] Tentando Lovable AI...');
+      const lovableResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+        }),
+      });
+
+      if (!lovableResponse.ok) {
+        const errorText = await lovableResponse.text();
+        console.error('[analyze-dashboard] Lovable AI error:', lovableResponse.status, errorText);
+        throw new Error(`AI API error: ${lovableResponse.status}`);
+      }
+
+      const lovableData = await lovableResponse.json();
+      analysis = lovableData.choices?.[0]?.message?.content;
+      
+      if (analysis) {
+        console.log('[analyze-dashboard] ✅ Análise gerada via Lovable AI');
+      }
+    }
 
     if (!analysis) {
-      throw new Error('No analysis generated');
+      throw new Error('Não foi possível gerar análise');
     }
-
-    console.log('[analyze-dashboard] ✅ Analysis generated successfully');
 
     return new Response(
       JSON.stringify({ analysis }),
