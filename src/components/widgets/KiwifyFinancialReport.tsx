@@ -468,6 +468,52 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
           )}
         </CardContent>
       </Card>
+
+      {/* Ranking de Top Afiliados */}
+      {data.topAffiliates && data.topAffiliates.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="h-5 w-5 text-purple-600" />
+              Top Afiliados
+            </CardTitle>
+            <CardDescription>
+              Afiliados que mais geraram vendas no período
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Afiliado</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead className="text-center">Vendas</TableHead>
+                    <TableHead className="text-right">Comissão Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.topAffiliates.slice(0, 10).map((affiliate, index) => (
+                    <TableRow key={affiliate.affiliateEmail + index}>
+                      <TableCell className="font-medium">{affiliate.affiliateName}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{affiliate.affiliateEmail}</TableCell>
+                      <TableCell className="text-center">{affiliate.salesCount}</TableCell>
+                      <TableCell className="text-right font-semibold text-purple-600">
+                        {formatCurrency(affiliate.totalCommission)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {data.topAffiliates.length > 10 && (
+              <p className="text-xs text-muted-foreground text-center mt-4">
+                Mostrando top 10 de {data.topAffiliates.length} afiliados
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

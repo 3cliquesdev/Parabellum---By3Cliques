@@ -52,6 +52,13 @@ interface StatusMetric {
   valor: number;
 }
 
+interface AffiliateMetric {
+  affiliateName: string;
+  affiliateEmail: string;
+  salesCount: number;
+  totalCommission: number;
+}
+
 export interface KiwifyCompleteMetrics {
   vendasAprovadas: number;
   vendasNovas: number;
@@ -71,6 +78,7 @@ export interface KiwifyCompleteMetrics {
   recusados: StatusMetric;
   cancelados: StatusMetric;
   porProduto: ProductMetric[];
+  topAffiliates: AffiliateMetric[];
   totalEventos: number;
 }
 
@@ -217,6 +225,7 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       let renovacoes = 0;
 
       const productMap = new Map<string, ProductMetric>();
+      const affiliateMap = new Map<string, AffiliateMetric>();
 
       for (const event of finalApprovedEvents) {
         const payload = event.payload as KiwifyEventPayload;
@@ -234,6 +243,25 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         receitaLiquida += netValue;
         taxaKiwify += kiwifyFee;
         comissaoAfiliados += affiliateFee;
+
+        // Track affiliate data
+        if (affiliateStore && affiliateFee > 0) {
+          const affiliateName = affiliateStore.custom_name || 'Nome não disponível';
+          const affiliateEmail = affiliateStore.email || 'Email não disponível';
+          const key = affiliateEmail !== 'Email não disponível' ? affiliateEmail : affiliateName;
+          
+          if (!affiliateMap.has(key)) {
+            affiliateMap.set(key, {
+              affiliateName,
+              affiliateEmail,
+              salesCount: 0,
+              totalCommission: 0
+            });
+          }
+          const affiliate = affiliateMap.get(key)!;
+          affiliate.salesCount++;
+          affiliate.totalCommission += affiliateFee;
+        }
         
         // Classify new vs renewal based on Subscription.charges.completed array
         const chargesCompleted = payload?.Subscription?.charges?.completed || [];
@@ -298,6 +326,7 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       const percentualLiquido = receitaBruta > 0 ? (receitaLiquida / receitaBruta) * 100 : 0;
 
       const porProduto = Array.from(productMap.values()).sort((a, b) => b.bruto - a.bruto);
+      const topAffiliates = Array.from(affiliateMap.values()).sort((a, b) => b.totalCommission - a.totalCommission);
 
       console.log('📊 Kiwify Metrics:', {
         totalEventos: allEvents.length,
@@ -326,6 +355,7 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         recusados,
         cancelados,
         porProduto,
+        topAffiliates,
         totalEventos: allEvents.length
       };
     },
