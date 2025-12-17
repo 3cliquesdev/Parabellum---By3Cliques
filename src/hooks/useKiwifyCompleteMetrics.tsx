@@ -22,7 +22,12 @@ interface KiwifyEventPayload {
     my_commission?: number;
     funds_status?: string;
     kiwify_fee?: number;
-    affiliate_commission?: number;
+    commissioned_stores?: Array<{
+      type: string;
+      value: number | string;
+      email?: string;
+      custom_name?: string;
+    }>;
   };
   Subscription?: {
     charges?: {
@@ -221,8 +226,9 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         const grossValue = Number(commissions?.product_base_price || 0) / 100;
         const netValue = Number(commissions?.my_commission || 0) / 100;
         const kiwifyFee = Number(commissions?.kiwify_fee || 0) / 100;
-        // Affiliate commission = gross - my_commission - kiwify_fee (difference goes to affiliate)
-        const affiliateFee = Math.max(0, grossValue - netValue - kiwifyFee);
+        // Extract affiliate commission from commissioned_stores array
+        const affiliateStore = commissions?.commissioned_stores?.find(s => s.type === 'affiliate');
+        const affiliateFee = Number(affiliateStore?.value || 0) / 100;
         
         receitaBruta += grossValue;
         receitaLiquida += netValue;
