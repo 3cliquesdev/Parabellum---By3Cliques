@@ -131,6 +131,12 @@ Deno.serve(async (req) => {
           case 'call':
             actionResult = await executeCallNode(supabaseAdmin, item, contact);
             break;
+          case 'form':
+            actionResult = await executeFormNode(supabaseAdmin, item, contact, execution as PlaybookExecution);
+            break;
+          case 'condition':
+            actionResult = await executeConditionNode(supabaseAdmin, item, flow, execution as PlaybookExecution);
+            break;
           default:
             console.warn(`Unknown node type: ${item.node_type}`);
             actionResult = { success: true, message: 'Skipped unknown node type' };
@@ -166,8 +172,8 @@ Deno.serve(async (req) => {
           })
           .eq('id', item.id);
 
-        // Queue next node if not a delay (delay queues internally)
-        if (item.node_type !== 'delay') {
+        // Queue next node if not a delay or form (they queue internally)
+        if (item.node_type !== 'delay' && item.node_type !== 'form' && item.node_type !== 'condition') {
           await queueNextNode(supabaseAdmin, item, flow, execution as PlaybookExecution);
         }
 
@@ -496,6 +502,204 @@ async function executeCallNode(supabase: any, item: QueueItem, contact: any) {
   return { success: true };
 }
 
+async function executeFormNode(supabase: any, item: QueueItem, contact: any, execution: PlaybookExecution) {
+  console.log(`Executing form node: ${item.node_id}`);
+  
+  const formData = item.node_data;
+  const formId = formData.form_id;
+  
+  if (!formId) {
+    console.error('Form node missing form_id');
+    return { success: false, error: 'Formulário não configurado' };
+  }
+
+  // Generate public form link with execution context
+  const publicFormUrl = `${Deno.env.get('PUBLIC_SITE_URL') || 'https://lovable.app'}/public-form/${formId}?execution_id=${execution.id}&contact_id=${contact.id}`;
+  
+  console.log(`Generated form link: ${publicFormUrl}`);
+
+  // Send email/notification to customer with form link
+  if (contact.email) {
+    const { error: emailError } = await supabase.functions.invoke('send-email', {
+      body: {
+        to: contact.email,
+        to_name: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Cliente',
+        subject: formData.email_subject || 'Por favor, preencha o formulário',
+        html: `
+          <p>Olá ${contact.first_name || 'Cliente'},</p>
+          <p>Precisamos que você preencha o formulário abaixo para continuar:</p>
+          <p><a href="${publicFormUrl}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;text-decoration:none;border-radius:8px;">Preencher Formulário</a></p>
+          <p>Este link é exclusivo para você.</p>
+        `,
+        customer_id: contact.id,
+        playbook_execution_id: execution.id,
+      },
+    });
+
+    if (emailError) {
+      console.error('Failed to send form email:', emailError);
+    }
+  }
+
+  // If pause_execution is true, mark execution as waiting and don't queue next node
+  if (formData.pause_execution) {
+    await supabase
+      .from('playbook_executions')
+      .update({ 
+        status: 'waiting_form',
+        current_node_id: item.node_id,
+      })
+      .eq('id', execution.id);
+
+    // Schedule timeout if configured
+    if (formData.timeout_days && formData.timeout_days > 0) {
+      const timeoutDate = new Date(Date.now() + formData.timeout_days * 24 * 60 * 60 * 1000);
+      
+      // Create a timeout check queue item
+      await supabase
+        .from('playbook_execution_queue')
+        .insert({
+          execution_id: execution.id,
+          node_id: `${item.node_id}_timeout`,
+          node_type: 'form_timeout',
+          node_data: { original_node_id: item.node_id },
+          scheduled_for: timeoutDate.toISOString(),
+          status: 'pending',
+          retry_count: 0,
+          max_retries: 1,
+        });
+    }
+
+    console.log(`Form node paused execution, waiting for submission: ${execution.id}`);
+    return { success: true, paused: true, form_url: publicFormUrl };
+  }
+
+  return { success: true, form_url: publicFormUrl };
+}
+
+async function executeConditionNode(supabase: any, item: QueueItem, flow: PlaybookFlow, execution: PlaybookExecution) {
+  console.log(`Executing condition node: ${item.node_id}`);
+  
+  const conditionData = item.node_data;
+  const conditionType = conditionData.condition_type;
+  
+  let conditionResult = false;
+
+  switch (conditionType) {
+    case 'form_score': {
+      // Get scores from execution context
+      const { data: execData } = await supabase
+        .from('playbook_executions')
+        .select('execution_context')
+        .eq('id', execution.id)
+        .single();
+      
+      const context = execData?.execution_context || {};
+      const formScores = context.form_scores || {};
+      const scoreName = conditionData.score_name || 'score';
+      const scoreValue = formScores[scoreName] ?? 0;
+      const threshold = conditionData.score_threshold ?? 0;
+      const operator = conditionData.score_operator || 'gte';
+
+      console.log(`Evaluating form_score: ${scoreName}=${scoreValue} ${operator} ${threshold}`);
+
+      switch (operator) {
+        case 'gt': conditionResult = scoreValue > threshold; break;
+        case 'gte': conditionResult = scoreValue >= threshold; break;
+        case 'lt': conditionResult = scoreValue < threshold; break;
+        case 'lte': conditionResult = scoreValue <= threshold; break;
+        case 'eq': conditionResult = scoreValue === threshold; break;
+        default: conditionResult = scoreValue >= threshold;
+      }
+      break;
+    }
+
+    case 'email_opened': {
+      // Check if contact opened specific email
+      const { data: emailSends } = await supabase
+        .from('email_sends')
+        .select('opened_at')
+        .eq('contact_id', execution.contact_id)
+        .eq('playbook_execution_id', execution.id)
+        .not('opened_at', 'is', null)
+        .limit(1);
+      
+      conditionResult = (emailSends?.length || 0) > 0;
+      break;
+    }
+
+    case 'email_clicked': {
+      const { data: emailSends } = await supabase
+        .from('email_sends')
+        .select('clicked_at')
+        .eq('contact_id', execution.contact_id)
+        .eq('playbook_execution_id', execution.id)
+        .not('clicked_at', 'is', null)
+        .limit(1);
+      
+      conditionResult = (emailSends?.length || 0) > 0;
+      break;
+    }
+
+    case 'tag_exists': {
+      const tagName = conditionData.condition_value;
+      const { data: tags } = await supabase
+        .from('customer_tags')
+        .select('id, tags!inner(name)')
+        .eq('customer_id', execution.contact_id)
+        .eq('tags.name', tagName)
+        .limit(1);
+      
+      conditionResult = (tags?.length || 0) > 0;
+      break;
+    }
+
+    default:
+      console.warn(`Unknown condition type: ${conditionType}`);
+      conditionResult = true; // Default to true path
+  }
+
+  const pathResult = conditionResult ? 'true' : 'false';
+  console.log(`Condition result: ${conditionResult}, taking path: ${pathResult}`);
+
+  // Find next node based on condition result (using sourceHandle)
+  const nextNodeId = findNextNodeWithHandle(item.node_id, flow, pathResult);
+  
+  if (!nextNodeId) {
+    // No next node for this path - mark execution as completed
+    await supabase
+      .from('playbook_executions')
+      .update({ status: 'completed', completed_at: new Date().toISOString() })
+      .eq('id', execution.id);
+    
+    console.log(`No next node for path ${pathResult}, execution completed: ${execution.id}`);
+    return { success: true, condition_result: conditionResult, path: pathResult };
+  }
+
+  const nextNode = flow.nodes.find(n => n.id === nextNodeId);
+  if (!nextNode) {
+    console.warn(`Next node not found: ${nextNodeId}`);
+    return { success: true, condition_result: conditionResult, path: pathResult };
+  }
+
+  // Queue next node based on condition result
+  await supabase
+    .from('playbook_execution_queue')
+    .insert({
+      execution_id: execution.id,
+      node_id: nextNode.id,
+      node_type: nextNode.type,
+      node_data: nextNode.data,
+      scheduled_for: new Date().toISOString(),
+      status: 'pending',
+      retry_count: 0,
+      max_retries: 3,
+    });
+
+  console.log(`Queued next node ${nextNode.id} for path ${pathResult}`);
+  return { success: true, condition_result: conditionResult, path: pathResult };
+}
+
 async function queueNextNode(supabase: any, currentItem: QueueItem, flow: PlaybookFlow, execution: PlaybookExecution) {
   const nextNodeId = findNextNode(currentItem.node_id, flow);
   
@@ -535,5 +739,14 @@ async function queueNextNode(supabase: any, currentItem: QueueItem, flow: Playbo
 
 function findNextNode(currentNodeId: string, flow: PlaybookFlow): string | null {
   const edge = flow.edges.find(e => e.source === currentNodeId);
+  return edge ? edge.target : null;
+}
+
+function findNextNodeWithHandle(currentNodeId: string, flow: PlaybookFlow, sourceHandle: string): string | null {
+  // For condition nodes, find edge with matching sourceHandle (true/false)
+  const edge = flow.edges.find(e => 
+    e.source === currentNodeId && 
+    (e as any).sourceHandle === sourceHandle
+  );
   return edge ? edge.target : null;
 }

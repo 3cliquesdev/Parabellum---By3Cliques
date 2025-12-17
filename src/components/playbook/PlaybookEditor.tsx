@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye, HelpCircle, Plus, Trash2, Play } from "lucide-react";
+import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye, HelpCircle, Plus, Trash2, Play, FileText } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -34,6 +34,7 @@ import { CallNode } from "./CallNode";
 import { ConditionNode } from "./ConditionNode";
 import { ApprovalNode } from "./ApprovalNode";
 import { ButtonEdge } from "./ButtonEdge";
+import { FormNode } from "./FormNode";
 import { DraggableBlock } from "./DraggableBlock";
 import { RichTextEditor } from "./RichTextEditor";
 import { VideoEmbedField } from "./VideoEmbedField";
@@ -41,6 +42,7 @@ import { AttachmentsUploader } from "./AttachmentsUploader";
 import { PlaybookStepViewer } from "./PlaybookStepViewer";
 import { PlaybookSimulator } from "./PlaybookSimulator";
 import { useEmailTemplates } from "@/hooks/useEmailTemplates";
+import { useForms } from "@/hooks/useForms";
 
 export const nodeTypes = {
   email: EmailNode,
@@ -49,6 +51,7 @@ export const nodeTypes = {
   call: CallNode,
   condition: ConditionNode,
   approval: ApprovalNode,
+  form: FormNode,
 };
 
 const edgeTypes = {
@@ -71,6 +74,7 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { data: emailTemplates } = useEmailTemplates();
+  const { data: forms } = useForms();
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({
@@ -109,6 +113,7 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
         ...(type === "call" && { description: "Descrição da ligação" }),
         ...(type === "condition" && { condition_type: "email_opened", condition_value: "" }),
         ...(type === "approval" && { approver_role: "consultant", approval_message: "Revisar antes de continuar" }),
+        ...(type === "form" && { form_id: "", form_name: "", pause_execution: true, timeout_days: 3 }),
       },
     };
     setNodes((nds) => [...nds, newNode]);
@@ -227,6 +232,7 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
             <DraggableBlock type="call" icon={Phone} label="Ligação" />
             <DraggableBlock type="condition" icon={GitBranch} label="Condição" />
             <DraggableBlock type="approval" icon={UserCheck} label="Aprovação" />
+            <DraggableBlock type="form" icon={FileText} label="Formulário" />
           </div>
         </div>
 
@@ -465,17 +471,89 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                       <SelectItem value="meeting_booked">Reunião Agendada</SelectItem>
                       <SelectItem value="tag_exists">Tag Existe</SelectItem>
                       <SelectItem value="status_change">Mudança de Status</SelectItem>
+                      <SelectItem value="form_score">Score do Formulário</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label>Valor da Condição</Label>
-                  <Input
-                    value={selectedNode.data.condition_value || ""}
-                    onChange={(e) => updateNodeData("condition_value", e.target.value)}
-                    placeholder="Ex: nome do email, tag, etc"
-                  />
-                </div>
+                
+                {/* Form Score specific fields */}
+                {selectedNode.data.condition_type === "form_score" && (
+                  <>
+                    <div>
+                      <Label>Formulário</Label>
+                      <Select
+                        value={selectedNode.data.score_form_id || ""}
+                        onValueChange={(value) => {
+                          const form = forms?.find(f => f.id === value);
+                          updateNodeData("score_form_id", value);
+                          updateNodeData("score_form_name", form?.name || "");
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o formulário..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {forms?.filter(f => f.is_active).map((form) => (
+                            <SelectItem key={form.id} value={form.id}>
+                              {form.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Nome do Score</Label>
+                      <Input
+                        value={selectedNode.data.score_name || ""}
+                        onChange={(e) => updateNodeData("score_name", e.target.value)}
+                        placeholder="Ex: qualificacao, engagement"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Nome definido no calculatedScores do formulário
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label>Operador</Label>
+                        <Select
+                          value={selectedNode.data.score_operator || "gte"}
+                          onValueChange={(value) => updateNodeData("score_operator", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="gt">&gt; Maior que</SelectItem>
+                            <SelectItem value="gte">≥ Maior ou igual</SelectItem>
+                            <SelectItem value="lt">&lt; Menor que</SelectItem>
+                            <SelectItem value="lte">≤ Menor ou igual</SelectItem>
+                            <SelectItem value="eq">= Igual a</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Threshold</Label>
+                        <Input
+                          type="number"
+                          value={selectedNode.data.score_threshold ?? 0}
+                          onChange={(e) => updateNodeData("score_threshold", parseInt(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {/* Standard condition value */}
+                {selectedNode.data.condition_type !== "form_score" && (
+                  <div>
+                    <Label>Valor da Condição</Label>
+                    <Input
+                      value={selectedNode.data.condition_value || ""}
+                      onChange={(e) => updateNodeData("condition_value", e.target.value)}
+                      placeholder="Ex: nome do email, tag, etc"
+                    />
+                  </div>
+                )}
               </>
             )}
             {selectedNode.type === "approval" && (
@@ -503,6 +581,51 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                     onChange={(e) => updateNodeData("approval_message", e.target.value)}
                     placeholder="Mensagem a ser exibida ao aprovador..."
                   />
+                </div>
+              </>
+            )}
+            {selectedNode.type === "form" && (
+              <>
+                <div>
+                  <Label>Formulário</Label>
+                  <Select
+                    value={selectedNode.data.form_id || ""}
+                    onValueChange={(value) => {
+                      const form = forms?.find(f => f.id === value);
+                      updateNodeData("form_id", value);
+                      updateNodeData("form_name", form?.name || "");
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o formulário..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {forms?.filter(f => f.is_active).map((form) => (
+                        <SelectItem key={form.id} value={form.id}>
+                          {form.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Pausar até resposta</Label>
+                  <Switch
+                    checked={selectedNode.data.pause_execution ?? true}
+                    onCheckedChange={(checked) => updateNodeData("pause_execution", checked)}
+                  />
+                </div>
+                <div>
+                  <Label>Timeout (dias)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={selectedNode.data.timeout_days ?? 3}
+                    onChange={(e) => updateNodeData("timeout_days", parseInt(e.target.value) || 0)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    0 = Sem timeout. Se o cliente não responder, continua após este tempo.
+                  </p>
                 </div>
               </>
             )}

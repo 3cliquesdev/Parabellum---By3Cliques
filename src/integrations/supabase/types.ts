@@ -3585,6 +3585,7 @@ export type Database = {
           created_at: string | null
           current_node_id: string | null
           errors: Json | null
+          execution_context: Json | null
           id: string
           nodes_executed: Json | null
           playbook_id: string
@@ -3601,6 +3602,7 @@ export type Database = {
           created_at?: string | null
           current_node_id?: string | null
           errors?: Json | null
+          execution_context?: Json | null
           id?: string
           nodes_executed?: Json | null
           playbook_id: string
@@ -3617,6 +3619,7 @@ export type Database = {
           created_at?: string | null
           current_node_id?: string | null
           errors?: Json | null
+          execution_context?: Json | null
           id?: string
           nodes_executed?: Json | null
           playbook_id?: string
