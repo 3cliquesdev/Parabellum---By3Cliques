@@ -12,12 +12,21 @@ interface KiwifyEventPayload {
     email?: string;
     full_name?: string;
   };
+  Product?: {
+    product_name?: string;
+    product_id?: string;
+  };
   Commissions?: {
     product_base_price?: number;
     my_commission?: number;
     funds_status?: string;
     kiwify_fee?: number;
     affiliate_commission?: number;
+  };
+  Subscription?: {
+    charges?: {
+      completed?: any[];
+    };
   };
   purchase_number?: number;
 }
@@ -38,37 +47,24 @@ interface StatusMetric {
 }
 
 export interface KiwifyCompleteMetrics {
-  // VENDAS
   vendasAprovadas: number;
   vendasNovas: number;
   renovacoes: number;
-  
-  // RECEITAS
   receitaBruta: number;
   taxaKiwify: number;
   comissaoAfiliados: number;
   receitaLiquida: number;
-  
-  // PERCENTUAIS
   percentualTaxaKiwify: number;
   percentualComissao: number;
   percentualLiquido: number;
-  
-  // CANCELAMENTOS / CHURN
   reembolsos: StatusMetric;
   chargebacks: StatusMetric;
   reembolsosPendentes: StatusMetric;
   taxaChurn: number;
-  
-  // PAGAMENTOS PENDENTES
   aguardandoPagamento: StatusMetric;
   recusados: StatusMetric;
   cancelados: StatusMetric;
-  
-  // POR PRODUTO
   porProduto: ProductMetric[];
-  
-  // RESUMO GERAL
   totalEventos: number;
 }
 
@@ -76,14 +72,6 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
   return useQuery({
     queryKey: ['kiwify-complete-metrics', startDate?.toISOString(), endDate?.toISOString(), minValue],
     queryFn: async (): Promise<KiwifyCompleteMetrics> => {
-      // Build date filter
-      let dateFilter = '';
-      if (startDate && endDate) {
-        const startISO = startDate.toISOString();
-        const endISO = endDate.toISOString();
-        dateFilter = `and.created_at.gte.${startISO},and.created_at.lte.${endISO}`;
-      }
-
       // Fetch all events for the period
       const allEvents: any[] = [];
       let page = 0;
@@ -103,7 +91,6 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         }
 
         const { data, error } = await query;
-
         if (error) throw error;
         
         if (data && data.length > 0) {
@@ -115,15 +102,6 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         }
       }
 
-      // Separate events by type
-      const approvedEvents: any[] = [];
-      const refundedEvents: any[] = [];
-      const chargebackEvents: any[] = [];
-      const refundRequestedEvents: any[] = [];
-      const waitingPaymentEvents: any[] = [];
-      const refusedEvents: any[] = [];
-      const canceledEvents: any[] = [];
-
       // Track order_ids to dedupe
       const approvedOrderIds = new Set<string>();
       const refundedOrderIds = new Set<string>();
@@ -133,54 +111,67 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       const refusedOrderIds = new Set<string>();
       const canceledOrderIds = new Set<string>();
 
+      // Separate events by type with deduplication
+      const approvedEvents: any[] = [];
+      const refundedEvents: any[] = [];
+      const chargebackEvents: any[] = [];
+      const refundRequestedEvents: any[] = [];
+      const waitingPaymentEvents: any[] = [];
+      const refusedEvents: any[] = [];
+      const canceledEvents: any[] = [];
+
       for (const event of allEvents) {
         const payload = event.payload as KiwifyEventPayload;
         const orderId = payload?.order_id;
-        const grossValue = Number(payload?.Commissions?.product_base_price || payload?.product_base_price || 0);
         
-        // Filter by minimum value
-        if (grossValue < minValue) continue;
+        if (!orderId) continue;
+
+        // Get value in reais for minValue filter (centavos / 100)
+        const grossValueReais = Number(payload?.Commissions?.product_base_price || 0) / 100;
+        
+        // Filter by minimum value (in reais)
+        if (minValue > 0 && grossValueReais < minValue) continue;
 
         switch (event.event_type) {
           case 'paid':
           case 'order_approved':
-            if (orderId && !approvedOrderIds.has(orderId)) {
+            if (!approvedOrderIds.has(orderId)) {
               approvedOrderIds.add(orderId);
               approvedEvents.push(event);
             }
             break;
           case 'refunded':
-            if (orderId && !refundedOrderIds.has(orderId)) {
+            if (!refundedOrderIds.has(orderId)) {
               refundedOrderIds.add(orderId);
               refundedEvents.push(event);
             }
             break;
           case 'chargedback':
-            if (orderId && !chargebackOrderIds.has(orderId)) {
+            if (!chargebackOrderIds.has(orderId)) {
               chargebackOrderIds.add(orderId);
               chargebackEvents.push(event);
             }
             break;
           case 'refund_requested':
-            if (orderId && !refundRequestedOrderIds.has(orderId)) {
+            if (!refundRequestedOrderIds.has(orderId)) {
               refundRequestedOrderIds.add(orderId);
               refundRequestedEvents.push(event);
             }
             break;
           case 'waiting_payment':
-            if (orderId && !waitingPaymentOrderIds.has(orderId)) {
+            if (!waitingPaymentOrderIds.has(orderId)) {
               waitingPaymentOrderIds.add(orderId);
               waitingPaymentEvents.push(event);
             }
             break;
           case 'refused':
-            if (orderId && !refusedOrderIds.has(orderId)) {
+            if (!refusedOrderIds.has(orderId)) {
               refusedOrderIds.add(orderId);
               refusedEvents.push(event);
             }
             break;
           case 'canceled':
-            if (orderId && !canceledOrderIds.has(orderId)) {
+            if (!canceledOrderIds.has(orderId)) {
               canceledOrderIds.add(orderId);
               canceledEvents.push(event);
             }
@@ -195,9 +186,6 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         return orderId && !canceledApprovedOrderIds.has(orderId);
       });
 
-      // Track customer emails for new vs renewal classification
-      const customerPurchaseCounts = new Map<string, number>();
-
       // Calculate metrics for approved sales
       let receitaBruta = 0;
       let receitaLiquida = 0;
@@ -206,43 +194,36 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       let vendasNovas = 0;
       let renovacoes = 0;
 
-      // Product breakdown
       const productMap = new Map<string, ProductMetric>();
 
       for (const event of finalApprovedEvents) {
         const payload = event.payload as KiwifyEventPayload;
         const commissions = payload?.Commissions;
         
-        const grossValue = Number(commissions?.product_base_price || payload?.product_base_price || 0);
-        const netValue = Number(commissions?.my_commission || 0);
-        const kiwifyFee = Number(commissions?.kiwify_fee || 0);
-        const affiliateFee = Number(commissions?.affiliate_commission || 0);
+        // Convert centavos to reais (divide by 100)
+        const grossValue = Number(commissions?.product_base_price || 0) / 100;
+        const netValue = Number(commissions?.my_commission || 0) / 100;
+        const kiwifyFee = Number(commissions?.kiwify_fee || 0) / 100;
+        const affiliateFee = Number(commissions?.affiliate_commission || 0) / 100;
         
         receitaBruta += grossValue;
         receitaLiquida += netValue;
         taxaKiwify += kiwifyFee;
         comissaoAfiliados += affiliateFee;
         
-        // Classify new vs renewal based on purchase_number or customer email count
-        const purchaseNumber = payload?.purchase_number || 1;
-        const customerEmail = payload?.Customer?.email?.toLowerCase() || '';
+        // Classify new vs renewal based on Subscription.charges.completed array
+        const chargesCompleted = payload?.Subscription?.charges?.completed || [];
+        const isRenewal = chargesCompleted.length > 1;
         
-        if (customerEmail) {
-          const currentCount = customerPurchaseCounts.get(customerEmail) || 0;
-          customerPurchaseCounts.set(customerEmail, currentCount + 1);
-          
-          if (purchaseNumber > 1 || currentCount > 0) {
-            renovacoes++;
-          } else {
-            vendasNovas++;
-          }
+        if (isRenewal) {
+          renovacoes++;
         } else {
           vendasNovas++;
         }
 
-        // Product breakdown
-        const productName = payload?.product_name || 'Produto Desconhecido';
-        const productId = payload?.product_id || 'unknown';
+        // Product breakdown - use Product object path
+        const productName = payload?.Product?.product_name || payload?.product_name || 'Produto Desconhecido';
+        const productId = payload?.Product?.product_id || payload?.product_id || 'unknown';
         
         if (!productMap.has(productId)) {
           productMap.set(productId, {
@@ -264,12 +245,12 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         product.comissaoAfiliados += affiliateFee;
       }
 
-      // Calculate status metrics
+      // Calculate status metrics (in reais)
       const calculateStatusMetric = (events: any[]): StatusMetric => {
         let valor = 0;
         for (const event of events) {
           const payload = event.payload as KiwifyEventPayload;
-          const grossValue = Number(payload?.Commissions?.product_base_price || payload?.product_base_price || 0);
+          const grossValue = Number(payload?.Commissions?.product_base_price || 0) / 100;
           valor += grossValue;
         }
         return { quantidade: events.length, valor };
@@ -282,21 +263,25 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       const recusados = calculateStatusMetric(refusedEvents);
       const cancelados = calculateStatusMetric(canceledEvents);
 
-      // Calculate churn rate (refunds + chargebacks / total approved * 100)
+      // Calculate churn rate
       const totalCancelamentos = reembolsos.quantidade + chargebacks.quantidade;
       const totalVendasBase = finalApprovedEvents.length + totalCancelamentos;
-      const taxaChurn = totalVendasBase > 0 
-        ? (totalCancelamentos / totalVendasBase) * 100 
-        : 0;
+      const taxaChurn = totalVendasBase > 0 ? (totalCancelamentos / totalVendasBase) * 100 : 0;
 
       // Calculate percentages
       const percentualTaxaKiwify = receitaBruta > 0 ? (taxaKiwify / receitaBruta) * 100 : 0;
       const percentualComissao = receitaBruta > 0 ? (comissaoAfiliados / receitaBruta) * 100 : 0;
       const percentualLiquido = receitaBruta > 0 ? (receitaLiquida / receitaBruta) * 100 : 0;
 
-      // Sort products by gross revenue
-      const porProduto = Array.from(productMap.values())
-        .sort((a, b) => b.bruto - a.bruto);
+      const porProduto = Array.from(productMap.values()).sort((a, b) => b.bruto - a.bruto);
+
+      console.log('📊 Kiwify Metrics:', {
+        totalEventos: allEvents.length,
+        vendasAprovadas: finalApprovedEvents.length,
+        receitaBruta: receitaBruta.toFixed(2),
+        receitaLiquida: receitaLiquida.toFixed(2),
+        taxaKiwify: taxaKiwify.toFixed(2)
+      });
 
       return {
         vendasAprovadas: finalApprovedEvents.length,
@@ -320,6 +305,6 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         totalEventos: allEvents.length
       };
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    staleTime: 5 * 60 * 1000,
   });
 }
