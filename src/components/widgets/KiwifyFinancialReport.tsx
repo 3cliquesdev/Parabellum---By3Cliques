@@ -159,7 +159,7 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
       </Card>
 
       {/* KPIs Principais */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         {/* Vendas Aprovadas */}
         <Card>
           <CardContent className="p-6">
@@ -197,21 +197,41 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
           </CardContent>
         </Card>
 
-        {/* Taxas Totais */}
+        {/* Taxa Kiwify */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Taxas Totais</p>
+                <p className="text-sm font-medium text-muted-foreground">Taxa Kiwify</p>
                 <p className="text-3xl font-bold text-orange-500">
-                  {formatCurrency(data.taxaKiwify + data.comissaoAfiliados)}
+                  {formatCurrency(data.taxaKiwify)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  {formatPercent(data.percentualTaxaKiwify + data.percentualComissao)} do bruto
+                  {formatPercent(data.percentualTaxaKiwify)} do bruto
                 </p>
               </div>
               <div className="h-12 w-12 rounded-full bg-orange-500/10 flex items-center justify-center">
                 <Percent className="h-6 w-6 text-orange-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Comissão Afiliados */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Comissão Afiliados</p>
+                <p className="text-3xl font-bold text-purple-500">
+                  {formatCurrency(data.comissaoAfiliados)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {formatPercent(data.percentualComissao)} do bruto
+                </p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-purple-500/10 flex items-center justify-center">
+                <Users className="h-6 w-6 text-purple-500" />
               </div>
             </div>
           </CardContent>
