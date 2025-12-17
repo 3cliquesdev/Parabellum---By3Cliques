@@ -15,8 +15,11 @@ export function useTickets(
   const { user } = useAuth();
   const { role } = useUserRole();
 
+  // Roles that can see all tickets
+  const canSeeAllTickets = ['admin', 'manager', 'support_manager', 'cs_manager', 'general_manager', 'financial_manager'].includes(role || '');
+
   return useQuery({
-    queryKey: ["tickets", statusFilter, assignedFilter, agentFilter, advancedFilters, user?.id],
+    queryKey: ["tickets", statusFilter, assignedFilter, agentFilter, advancedFilters, user?.id, role],
     queryFn: async () => {
       if (!user) return [];
 
@@ -55,15 +58,30 @@ export function useTickets(
         query = query.eq("status", statusFilter);
       }
 
-      // Filtro por atribuição
-      if (assignedFilter === 'mine') {
-        query = query.eq("assigned_to", user.id);
-      } else if (assignedFilter === 'unassigned') {
-        query = query.is("assigned_to", null);
+      // CRITICAL: Support agents can only see their assigned tickets or unassigned tickets
+      // Managers/admins can see all tickets
+      if (!canSeeAllTickets) {
+        // Support agent: only see assigned to self OR unassigned
+        if (assignedFilter === 'mine') {
+          query = query.eq("assigned_to", user.id);
+        } else if (assignedFilter === 'unassigned') {
+          query = query.is("assigned_to", null);
+        } else {
+          // "all" for support_agent means their tickets + unassigned
+          query = query.or(`assigned_to.eq.${user.id},assigned_to.is.null`);
+        }
+      } else {
+        // Manager/admin logic: can see all
+        if (assignedFilter === 'mine') {
+          query = query.eq("assigned_to", user.id);
+        } else if (assignedFilter === 'unassigned') {
+          query = query.is("assigned_to", null);
+        }
+        // "all" for managers = no filter (see everything)
       }
 
       // Filtro por agente específico (para support_manager auditar)
-      if (agentFilter) {
+      if (agentFilter && canSeeAllTickets) {
         query = query.eq("assigned_to", agentFilter);
       }
 

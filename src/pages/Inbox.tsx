@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ArrowLeft, User, Search, Tag, X } from "lucide-react";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -521,16 +522,32 @@ export default function Inbox() {
         </div>
       </div>
       
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        <ConversationList
-          conversations={filteredConversations}
-          activeConversationId={activeConversation?.id || null}
-          onSelectConversation={handleSelectConversation}
-          isLoading={inboxLoading || convLoading}
-        />
-        <ChatWindow conversation={activeConversation} />
-        <ContactDetailsSidebar conversation={activeConversation} />
-      </div>
+      {/* Resizable 3-Column Layout */}
+      <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0">
+        {/* Conversation List Panel */}
+        <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+          <ConversationList
+            conversations={filteredConversations}
+            activeConversationId={activeConversation?.id || null}
+            onSelectConversation={handleSelectConversation}
+            isLoading={inboxLoading || convLoading}
+          />
+        </ResizablePanel>
+        
+        <ResizableHandle withHandle />
+        
+        {/* Chat Window Panel */}
+        <ResizablePanel defaultSize={50} minSize={30}>
+          <ChatWindow conversation={activeConversation} />
+        </ResizablePanel>
+        
+        <ResizableHandle withHandle />
+        
+        {/* Contact Details Panel */}
+        <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+          <ContactDetailsSidebar conversation={activeConversation} />
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

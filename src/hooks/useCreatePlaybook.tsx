@@ -6,6 +6,7 @@ interface CreatePlaybookData {
   name: string;
   description?: string;
   product_id?: string;
+  support_phone?: string;
   flow_definition: any;
   is_active?: boolean;
 }

@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Workflow, Edit, Trash2, Copy, BarChart3, Sparkles, Package, Link2, ExternalLink } from "lucide-react";
+import { Plus, Workflow, Edit, Trash2, Copy, BarChart3, Sparkles, Package, Link2, ExternalLink, Phone } from "lucide-react";
 import { usePlaybooks } from "@/hooks/usePlaybooks";
 import { useCreatePlaybook } from "@/hooks/useCreatePlaybook";
 import { useUpdatePlaybook } from "@/hooks/useUpdatePlaybook";
@@ -60,6 +60,7 @@ export default function OnboardingBuilder() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [productId, setProductId] = useState<string>();
+  const [supportPhone, setSupportPhone] = useState("5511999999999");
   const [flowDefinition, setFlowDefinition] = useState<any>(null);
 
   const handleCreateFromTemplate = (template: any) => {
@@ -74,6 +75,7 @@ export default function OnboardingBuilder() {
     setName(playbook.name);
     setDescription(playbook.description || "");
     setProductId(playbook.product_id);
+    setSupportPhone(playbook.support_phone || "5511999999999");
     setFlowDefinition(playbook.flow_definition);
     setShowEditor(true);
   };
@@ -99,6 +101,7 @@ export default function OnboardingBuilder() {
           name,
           description,
           product_id: productId,
+          support_phone: supportPhone,
           flow_definition: flow,
         },
         { onSuccess, onError }
@@ -109,6 +112,7 @@ export default function OnboardingBuilder() {
           name,
           description,
           product_id: productId,
+          support_phone: supportPhone,
           flow_definition: flow,
         },
         { onSuccess, onError }
@@ -129,6 +133,7 @@ export default function OnboardingBuilder() {
     setName("");
     setDescription("");
     setProductId(undefined);
+    setSupportPhone("5511999999999");
     setFlowDefinition(null);
     setEditingPlaybook(null);
   };
@@ -436,6 +441,20 @@ export default function OnboardingBuilder() {
               </Select>
               <p className="text-xs text-muted-foreground mt-1">
                 Quando associado a um produto, executa automaticamente quando deal é ganho
+              </p>
+            </div>
+            <div>
+              <Label className="flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                WhatsApp de Suporte
+              </Label>
+              <Input
+                value={supportPhone}
+                onChange={(e) => setSupportPhone(e.target.value)}
+                placeholder="5511999999999"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Número do WhatsApp para o botão de suporte na página pública do playbook
               </p>
             </div>
           </div>

@@ -4,10 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { ThankYouView } from "@/components/public-onboarding/ThankYouView";
 import { WizardView } from "@/components/public-onboarding/WizardView";
 import { WhatsAppFloatingButton } from "@/components/public-onboarding/WhatsAppFloatingButton";
-import { Loader2, Play, Mail, User } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
 interface OnboardingData {
@@ -53,17 +51,15 @@ export default function PublicOnboarding() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<OnboardingData | null>(null);
   const [started, setStarted] = useState(false);
-  const [playbookInfo, setPlaybookInfo] = useState<{ name: string; description?: string } | null>(null);
+  const [playbookInfo, setPlaybookInfo] = useState<{ name: string; description?: string; support_phone?: string } | null>(null);
   
-  // Form state for starting playbook
-  const [formEmail, setFormEmail] = useState("");
-  const [formName, setFormName] = useState("");
+  // Form state for starting playbook - REMOVED email/name requirement
   const [isStarting, setIsStarting] = useState(false);
   
   // Query params for personalization
   const customName = searchParams.get("name");
   const customProduct = searchParams.get("product");
-  const supportPhone = searchParams.get("phone") || "5511999999999";
+  const supportPhone = playbookInfo?.support_phone || searchParams.get("phone") || "5511999999999";
 
   useEffect(() => {
     if (executionId) {
@@ -80,7 +76,7 @@ export default function PublicOnboarding() {
     try {
       const { data: playbook, error: playbookError } = await supabase
         .from("onboarding_playbooks")
-        .select("name, description")
+        .select("name, description, support_phone")
         .eq("id", playbookId)
         .single();
 
@@ -152,32 +148,20 @@ export default function PublicOnboarding() {
     }
   }
 
-  async function handleStartPlaybook(e: React.FormEvent) {
-    e.preventDefault();
-    
-    if (!playbookId || !formEmail.trim() || !formName.trim()) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Por favor, preencha seu nome e email.",
-        variant: "destructive",
-      });
-      return;
-    }
+  async function handleStartPlaybook() {
+    if (!playbookId) return;
 
     setIsStarting(true);
 
     try {
-      // Split name into first and last
-      const nameParts = formName.trim().split(" ");
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(" ") || "";
-
+      // Start playbook without collecting user info - creates anonymous execution
       const { data: result, error } = await supabase.functions.invoke('public-start-playbook', {
         body: {
           playbook_id: playbookId,
-          email: formEmail.trim(),
-          first_name: firstName,
-          last_name: lastName,
+          // Create anonymous contact with unique identifier
+          email: `anon_${Date.now()}@playbook.temp`,
+          first_name: "Visitante",
+          last_name: "",
         },
       });
 
@@ -185,8 +169,8 @@ export default function PublicOnboarding() {
       if (!result?.success) throw new Error(result?.error || "Erro ao iniciar playbook");
 
       toast({
-        title: "Onboarding iniciado!",
-        description: "Redirecionando para seu onboarding...",
+        title: "Iniciando sua jornada!",
+        description: "Redirecionando...",
       });
 
       // Redirect to execution page
@@ -233,74 +217,50 @@ export default function PublicOnboarding() {
       );
     }
 
-    // Public playbook start page
+    // Public playbook start page - Clean design without form fields
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center p-4">
-        <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl shadow-2xl p-8 max-w-lg w-full">
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Play className="w-10 h-10 text-primary" />
-            </div>
-            <h1 className="text-3xl font-bold text-foreground mb-3">{playbookInfo.name}</h1>
-            {playbookInfo.description && (
-              <p className="text-muted-foreground">{playbookInfo.description}</p>
-            )}
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-primary/10 flex items-center justify-center p-4">
+        <div className="bg-card/95 backdrop-blur-xl rounded-3xl shadow-2xl p-10 max-w-md w-full text-center border border-border/50">
+          {/* Icon/Logo */}
+          <div className="w-24 h-24 bg-gradient-to-br from-primary to-primary/70 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-lg shadow-primary/20">
+            <Play className="w-12 h-12 text-primary-foreground" />
           </div>
+          
+          {/* Title */}
+          <h1 className="text-3xl font-bold text-foreground mb-4 tracking-tight">
+            {playbookInfo.name}
+          </h1>
+          
+          {/* Description */}
+          {playbookInfo.description && (
+            <p className="text-muted-foreground mb-8 text-lg leading-relaxed">
+              {playbookInfo.description}
+            </p>
+          )}
 
-          <form onSubmit={handleStartPlaybook} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-foreground flex items-center gap-2">
-                <User className="w-4 h-4" />
-                Seu Nome Completo
-              </Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="Digite seu nome"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                required
-                className="h-12"
-              />
-            </div>
+          {/* CTA Button - No form, direct action */}
+          <Button
+            onClick={handleStartPlaybook}
+            disabled={isStarting}
+            size="lg"
+            className="w-full h-14 text-lg font-semibold rounded-xl shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300"
+          >
+            {isStarting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                Preparando...
+              </>
+            ) : (
+              <>
+                <Play className="w-5 h-5 mr-2" />
+                Iniciar sua Jornada
+              </>
+            )}
+          </Button>
 
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-foreground flex items-center gap-2">
-                <Mail className="w-4 h-4" />
-                Seu Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="Digite seu email"
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                required
-                className="h-12"
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={isStarting}
-              className="w-full h-12 text-lg font-semibold mt-6"
-            >
-              {isStarting ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  Iniciando...
-                </>
-              ) : (
-                <>
-                  <Play className="w-5 h-5 mr-2" />
-                  Iniciar Onboarding
-                </>
-              )}
-            </Button>
-          </form>
-
-          <p className="text-xs text-muted-foreground text-center mt-6">
-            Ao continuar, você concorda com nossos termos de uso e política de privacidade.
+          {/* Footer text */}
+          <p className="text-xs text-muted-foreground mt-6">
+            Ao continuar, você concorda com nossos termos de uso.
           </p>
         </div>
         <WhatsAppFloatingButton phone={supportPhone} customerName="Visitante" />

@@ -6,13 +6,14 @@ import { TicketCard } from "@/components/support/TicketCard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Plus } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUsers } from "@/hooks/useUsers";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
 import { PageContainer } from "@/components/ui/page-container";
 import { TicketFilterPopover, defaultTicketFilters, type TicketFilters } from "@/components/support/TicketFilterPopover";
+import { CreateTicketDialog } from "@/components/support/CreateTicketDialog";
 
 type FilterType = 'all' | 'mine' | 'unassigned';
 type MobileView = 'list' | 'details';
@@ -24,6 +25,7 @@ export default function Support() {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<MobileView>('list');
   const [ticketFilters, setTicketFilters] = useState<TicketFilters>(defaultTicketFilters);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const { isSupportManager } = useUserRole();
   const { data: allUsers } = useUsers();
   const { data: departments } = useDepartments();
@@ -135,6 +137,10 @@ export default function Support() {
       <div className="flex-none border-b-2 border-slate-200 dark:border-border p-4 space-y-3 bg-card">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-white">Suporte</h1>
+          <Button onClick={() => setCreateDialogOpen(true)} size="sm">
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Ticket
+          </Button>
         </div>
 
         {/* Assignment Tabs + Filters Row */}
@@ -212,6 +218,9 @@ export default function Support() {
           )}
         </div>
       </div>
+
+      {/* Create Ticket Dialog */}
+      <CreateTicketDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
     </PageContainer>
   );
 }
