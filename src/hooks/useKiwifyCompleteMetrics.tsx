@@ -326,7 +326,7 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       const percentualLiquido = receitaBruta > 0 ? (receitaLiquida / receitaBruta) * 100 : 0;
 
       const porProduto = Array.from(productMap.values()).sort((a, b) => b.bruto - a.bruto);
-      const topAffiliates = Array.from(affiliateMap.values()).sort((a, b) => b.totalCommission - a.totalCommission);
+      const topAffiliates = Array.from(affiliateMap.values()).sort((a, b) => b.salesCount - a.salesCount);
 
       console.log('📊 Kiwify Metrics:', {
         totalEventos: allEvents.length,
