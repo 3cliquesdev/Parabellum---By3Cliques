@@ -176,6 +176,20 @@ Deno.serve(async (req) => {
 
     console.log(`[public-start-playbook] Execution created: ${execution.id}`);
 
+    // Reset journey steps for this contact to guarantee a clean onboarding start
+    // (prevents immediately landing on the completion screen due to old/completed steps)
+    const { error: resetStepsError } = await supabaseClient
+      .from('customer_journey_steps')
+      .delete()
+      .eq('contact_id', contact.id);
+
+    if (resetStepsError) {
+      console.error('[public-start-playbook] Failed to reset journey steps:', resetStepsError);
+      // Don't hard-fail here: we can still attempt to insert fresh steps below.
+    } else {
+      console.log(`[public-start-playbook] Journey steps reset for contact ${contact.id}`);
+    }
+
     // Create customer_journey_steps from playbook task nodes
     const taskNodes = nodes.filter(n => n.type === 'task');
     console.log(`[public-start-playbook] Creating ${taskNodes.length} journey steps from task nodes`);
@@ -183,7 +197,7 @@ Deno.serve(async (req) => {
     for (let i = 0; i < taskNodes.length; i++) {
       const node = taskNodes[i];
       const nodeData = node.data || {};
-      
+
       const { error: stepError } = await supabaseClient
         .from('customer_journey_steps')
         .insert({
