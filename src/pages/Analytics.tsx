@@ -30,10 +30,8 @@ import { useEffect, useState, useMemo } from "react";
 import { BarChart3, Sparkles, Headphones, TrendingUp, Brain, Rocket, MessageCircle, DollarSign } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DateRange } from "react-day-picker";
-import { FinancialKPIsWidget } from "@/components/widgets/FinancialKPIsWidget";
-import { RevenueBreakdownWidget } from "@/components/widgets/RevenueBreakdownWidget";
-import { ProductMarginTable } from "@/components/widgets/ProductMarginTable";
-import { TopAffiliatesWidget } from "@/components/widgets/TopAffiliatesWidget";
+import { KiwifyFinancialReport } from "@/components/widgets/KiwifyFinancialReport";
+import { ChurnWidget } from "@/components/widgets/ChurnWidget";
 
 export default function Analytics() {
   const { role, loading: roleLoading } = useUserRole();
@@ -302,17 +300,8 @@ export default function Analytics() {
               endDate={endDate}
             />
 
-            {/* KPIs Financeiros (4 colunas) */}
-            <FinancialKPIsWidget startDate={startDate} endDate={endDate} />
-
-            {/* Top Afiliados (full width) */}
-            <TopAffiliatesWidget startDate={startDate} endDate={endDate} />
-
-            {/* Evolução de Receita */}
-            <RevenueBreakdownWidget startDate={startDate} endDate={endDate} />
-
-            {/* Tabela por Produto */}
-            <ProductMarginTable startDate={startDate} endDate={endDate} />
+            {/* Relatório Financeiro Completo */}
+            <KiwifyFinancialReport startDate={startDate} endDate={endDate} />
           </TabsContent>
         </Tabs>
 
