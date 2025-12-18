@@ -3,6 +3,7 @@ import { useCreateTicket } from "@/hooks/useCreateTicket";
 import { useContacts } from "@/hooks/useContacts";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTicketCategories, useCreateTicketCategory } from "@/hooks/useTicketCategories";
+import { useUsers } from "@/hooks/useUsers";
 import {
   Dialog,
   DialogContent,
@@ -57,6 +58,16 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const [customerSearch, setCustomerSearch] = useState("");
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [assignedTo, setAssignedTo] = useState<string>("");
+
+  const { data: users = [] } = useUsers();
+  
+  // Filtrar usuários que podem receber tickets
+  const supportUsers = users.filter(u => 
+    ['support_agent', 'support_manager', 'admin', 'manager'].includes(u.role) &&
+    !u.is_blocked &&
+    !u.is_archived
+  );
 
   const filteredContacts = contacts.filter((c) => {
     const search = customerSearch.toLowerCase();
@@ -86,6 +97,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
       category,
       customer_id: customerId,
       department_id: departmentId || undefined,
+      assigned_to: assignedTo || undefined,
     });
 
     // Reset form
@@ -95,6 +107,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
     setCategory("outro");
     setCustomerId("");
     setDepartmentId("");
+    setAssignedTo("");
     setCustomerSearch("");
     onOpenChange(false);
   };
@@ -267,22 +280,41 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
             </div>
           </div>
 
-          {/* Department */}
-          <div className="space-y-2">
-            <Label>Departamento</Label>
-            <Select value={departmentId || "none"} onValueChange={(v) => setDepartmentId(v === "none" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um departamento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Nenhum</SelectItem>
-                {activeDepartments.map((dept) => (
-                  <SelectItem key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Department & Assign Row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Departamento</Label>
+              <Select value={departmentId || "none"} onValueChange={(v) => setDepartmentId(v === "none" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  {activeDepartments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Atribuir a</Label>
+              <Select value={assignedTo || "none"} onValueChange={(v) => setAssignedTo(v === "none" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">📥 Fila de Espera</SelectItem>
+                  {supportUsers.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.full_name || user.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <DialogFooter>
