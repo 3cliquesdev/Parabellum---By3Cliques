@@ -4,6 +4,7 @@ import { useContacts } from "@/hooks/useContacts";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTicketCategories, useCreateTicketCategory } from "@/hooks/useTicketCategories";
 import { useUsers } from "@/hooks/useUsers";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   Dialog,
   DialogContent,
@@ -44,7 +45,6 @@ const categoryLabels: Record<string, string> = {
 
 export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogProps) {
   const createTicket = useCreateTicket();
-  const { data: contacts = [] } = useContacts();
   const { data: departments = [] } = useDepartments();
   const { data: categories = [] } = useTicketCategories();
   const createCategory = useCreateTicketCategory();
@@ -60,6 +60,14 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const [newCategoryName, setNewCategoryName] = useState("");
   const [assignedTo, setAssignedTo] = useState<string>("");
 
+  // Debounce search to avoid query on every keystroke
+  const debouncedSearch = useDebouncedValue(customerSearch, 300);
+  
+  // Server-side search - only query when there's a search term
+  const { data: contacts = [] } = useContacts(
+    debouncedSearch.length >= 2 ? { searchQuery: debouncedSearch } : undefined
+  );
+
   const { data: users = [] } = useUsers();
   
   // Filtrar usuários que podem receber tickets
@@ -69,12 +77,8 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
     !u.is_archived
   );
 
-  const filteredContacts = contacts.filter((c) => {
-    const search = customerSearch.toLowerCase();
-    const fullName = `${c.first_name} ${c.last_name}`.toLowerCase();
-    const email = (c.email || "").toLowerCase();
-    return fullName.includes(search) || email.includes(search);
-  }).slice(0, 10);
+  // Contacts already filtered server-side, just limit results
+  const filteredContacts = contacts.slice(0, 10);
 
   const selectedContact = contacts.find((c) => c.id === customerId);
 

@@ -27,6 +27,7 @@ import {
 import { Search, Plus, Mail, Phone, Trash2, Eye, UserCog } from "lucide-react";
 import { useContacts, useDeleteContact, ContactFilters } from "@/hooks/useContacts";
 import { useTags } from "@/hooks/useTags";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import ContactDialog from "@/components/ContactDialog";
 import ContactSheet from "@/components/ContactSheet";
 import { ContactCard } from "@/components/contacts/ContactCard";
@@ -69,6 +70,9 @@ export default function Contacts() {
     subscriptionPlan: "all",
   });
 
+  // Debounce search to avoid query on every keystroke
+  const debouncedSearch = useDebouncedValue(contactFilters.search, 300);
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedIds(filteredContacts.map(c => c.id));
@@ -87,7 +91,7 @@ export default function Contacts() {
 
   const { data: tags } = useTags("customer");
   const { data: contacts, isLoading } = useContacts({
-    searchQuery: contactFilters.search,
+    searchQuery: debouncedSearch,
     customerType: contactFilters.customerType,
     blocked: contactFilters.blocked,
     subscriptionPlan: contactFilters.subscriptionPlan,
