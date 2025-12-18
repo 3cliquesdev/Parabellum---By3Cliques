@@ -125,15 +125,27 @@ serve(async (req) => {
     // Fallback para dados vazios
     if (!data || data.length === 0) {
       console.warn('[generate-report] No data found for filters:', filters);
-      data = [];
+      
+      // Retornar CSV vazio com mensagem
+      if (format === 'csv') {
+        const emptyCSV = 'Sem dados para os filtros selecionados';
+        return new Response(emptyCSV, {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${fileName}.csv"`,
+          },
+        });
+      }
     }
 
     if (format === 'csv') {
       const csv = convertToCSV(data);
+      console.log('[generate-report] CSV generated, length:', csv.length);
       return new Response(csv, {
         headers: {
           ...corsHeaders,
-          'Content-Type': 'text/csv',
+          'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="${fileName}.csv"`,
         },
       });
@@ -171,6 +183,8 @@ serve(async (req) => {
 async function generateTicketsReport(supabase: any, filters: any) {
   const { startDate, endDate, departmentId, agentId } = filters;
   
+  console.log('[tickets_all] Starting with filters:', { startDate, endDate, departmentId, agentId });
+  
   let query = supabase
     .from('tickets')
     .select(`
@@ -181,27 +195,50 @@ async function generateTicketsReport(supabase: any, filters: any) {
       departments:department_id (name)
     `);
 
-  if (startDate) query = query.gte('created_at', startDate);
-  if (endDate) query = query.lte('created_at', endDate);
-  if (departmentId) query = query.eq('department_id', departmentId);
-  if (agentId) query = query.eq('assigned_to', agentId);
+  if (startDate) {
+    console.log('[tickets_all] Filtering by startDate:', startDate);
+    query = query.gte('created_at', startDate);
+  }
+  if (endDate) {
+    console.log('[tickets_all] Filtering by endDate:', endDate);
+    query = query.lte('created_at', endDate);
+  }
+  if (departmentId && departmentId !== '') {
+    console.log('[tickets_all] Filtering by departmentId:', departmentId);
+    query = query.eq('department_id', departmentId);
+  }
+  if (agentId && agentId !== '') {
+    console.log('[tickets_all] Filtering by agentId:', agentId);
+    query = query.eq('assigned_to', agentId);
+  }
 
   const { data, error } = await query;
-  if (error) throw error;
+  
+  if (error) {
+    console.error('[tickets_all] Query error:', error);
+    throw error;
+  }
+  
+  console.log(`[tickets_all] Found ${data?.length || 0} tickets`);
+  
+  if (!data || data.length === 0) {
+    console.log('[tickets_all] No tickets found, returning empty array with headers');
+    return [];
+  }
 
   return data.map((t: any) => ({
     id: t.id,
-    subject: t.subject,
+    assunto: t.subject,
     status: t.status,
-    priority: t.priority,
-    category: t.category,
-    customer_name: `${t.contacts?.first_name || ''} ${t.contacts?.last_name || ''}`.trim(),
-    customer_email: t.contacts?.email || '',
-    agent_name: t.profiles?.full_name || 'Não atribuído',
-    department: t.departments?.name || 'N/A',
-    created_at: t.created_at,
-    first_response_at: t.first_response_at,
-    resolved_at: t.resolved_at,
+    prioridade: t.priority,
+    categoria: t.category,
+    cliente: `${t.contacts?.first_name || ''} ${t.contacts?.last_name || ''}`.trim(),
+    email_cliente: t.contacts?.email || '',
+    agente: t.profiles?.full_name || 'Não atribuído',
+    departamento: t.departments?.name || 'N/A',
+    criado_em: t.created_at,
+    primeira_resposta: t.first_response_at || '',
+    resolvido_em: t.resolved_at || '',
   }));
 }
 
@@ -674,119 +711,215 @@ async function generateTeamGoalsPerformanceReport(supabase: any, filters: any) {
 async function generateKiwifyDetailedSalesReport(supabase: any, filters: any) {
   const { startDate, endDate } = filters;
   
+  console.log('[kiwify_detailed_sales] Fetching from kiwify_events...');
+  
+  // Buscar eventos de pagamento do Kiwify
   let query = supabase
-    .from('deals')
-    .select(`
-      id, title, value, gross_value, net_value, kiwify_fee, affiliate_commission,
-      status, currency, created_at, closed_at,
-      contacts:contact_id (first_name, last_name, email, document),
-      products:product_id (name)
-    `)
-    .in('status', ['won', 'lost'])
-    .or('title.ilike.%Kiwify%,title.ilike.%Upsell%');
+    .from('kiwify_events')
+    .select('*')
+    .in('event_type', ['paid', 'order_approved', 'refunded', 'chargedback']);
 
   if (startDate) query = query.gte('created_at', startDate);
   if (endDate) query = query.lte('created_at', endDate);
 
-  const { data, error } = await query;
-  if (error) throw error;
+  const { data: events, error } = await query;
+  if (error) {
+    console.error('[kiwify_detailed_sales] Error:', error);
+    throw error;
+  }
+  
+  console.log(`[kiwify_detailed_sales] Found ${events?.length || 0} events`);
 
-  return data.map((d: any) => ({
-    id: d.id,
-    data: d.created_at,
-    cliente: `${d.contacts?.first_name || ''} ${d.contacts?.last_name || ''}`.trim(),
-    email: d.contacts?.email || '',
-    cpf_cnpj: d.contacts?.document || '',
-    produto: d.products?.name || 'Produto não identificado',
-    valor_bruto: d.gross_value || d.value || 0,
-    valor_liquido: d.net_value || (d.value * 0.7) || 0,
-    taxa_kiwify: d.kiwify_fee || 0,
-    comissao_afiliado: d.affiliate_commission || 0,
-    status: d.status,
-  }));
+  // Buscar ofertas mapeadas
+  const { data: offers } = await supabase
+    .from('product_offers')
+    .select('kiwify_offer_id, offer_name, products:product_id(name)');
+  
+  const offerMap = new Map();
+  offers?.forEach((o: any) => {
+    offerMap.set(o.kiwify_offer_id, {
+      offer_name: o.offer_name,
+      product_name: o.products?.name || 'Produto não identificado'
+    });
+  });
+
+  return (events || []).map((e: any) => {
+    const payload = e.payload || {};
+    const subscription = payload.Subscription || {};
+    const charges = subscription.charges || {};
+    const plan = subscription.plan || {};
+    const customer = payload.Customer || {};
+    const affiliate = payload.trackingParameters?.aff || payload.Affiliate || {};
+    
+    // Extrair valores financeiros
+    const grossValue = parseFloat(charges.completed_at_value || plan.price || 0) / 100;
+    const affiliateComm = parseFloat(payload.affiliate_commission || affiliate.commission_value || 0) / 100;
+    const kiwifyFee = grossValue * 0.0899; // ~9% taxa Kiwify estimada
+    const netValue = grossValue - kiwifyFee - affiliateComm;
+    
+    // Buscar nome da oferta
+    const offerInfo = offerMap.get(e.offer_id) || { offer_name: 'Oferta não mapeada', product_name: 'Produto não identificado' };
+    const offerName = payload.Product?.offer_name || plan.name || offerInfo.offer_name || 'N/A';
+    const productName = payload.Product?.name || offerInfo.product_name || 'Produto não identificado';
+    
+    return {
+      data: e.created_at,
+      order_id: e.order_id,
+      offer_id: e.offer_id || 'Sem ID',
+      oferta: offerName,
+      produto: productName,
+      cliente: customer.full_name || payload.customer_name || '',
+      email: e.customer_email || customer.email || '',
+      cpf: customer.CPF || '',
+      telefone: customer.phone || '',
+      valor_bruto: grossValue,
+      taxa_kiwify: kiwifyFee,
+      comissao_afiliado: affiliateComm,
+      valor_liquido: netValue,
+      afiliado: affiliate.name || affiliate.email || 'Direto',
+      status: e.event_type,
+      linked_deal_id: e.linked_deal_id || '',
+    };
+  });
 }
 
 async function generateAffiliateCommissionsReport(supabase: any, filters: any) {
   const { startDate, endDate } = filters;
   
+  console.log('[affiliate_commissions] Fetching from kiwify_events...');
+  
+  // Buscar eventos de pagamento
   let query = supabase
-    .from('deals')
-    .select('affiliate_commission, title, created_at')
-    .eq('status', 'won')
-    .gt('affiliate_commission', 0);
+    .from('kiwify_events')
+    .select('*')
+    .in('event_type', ['paid', 'order_approved']);
 
   if (startDate) query = query.gte('created_at', startDate);
   if (endDate) query = query.lte('created_at', endDate);
 
-  const { data, error } = await query;
-  if (error) throw error;
+  const { data: events, error } = await query;
+  if (error) {
+    console.error('[affiliate_commissions] Error:', error);
+    throw error;
+  }
+  
+  console.log(`[affiliate_commissions] Found ${events?.length || 0} events`);
 
-  // Group by affiliate (extracted from title or metadata)
+  // Agrupar por afiliado
   const affiliateMap = new Map<string, any>();
   
-  data.forEach((d: any) => {
-    const affiliate = 'Afiliado'; // Placeholder - pode ser extraído do title ou metadata
-    if (!affiliateMap.has(affiliate)) {
-      affiliateMap.set(affiliate, {
-        afiliado: affiliate,
-        email: 'N/A',
+  (events || []).forEach((e: any) => {
+    const payload = e.payload || {};
+    const affiliate = payload.trackingParameters?.aff || payload.Affiliate || {};
+    const subscription = payload.Subscription || {};
+    const charges = subscription.charges || {};
+    const plan = subscription.plan || {};
+    
+    const affiliateName = affiliate.name || affiliate.email || 'Venda Direta';
+    const affiliateEmail = affiliate.email || 'N/A';
+    const grossValue = parseFloat(charges.completed_at_value || plan.price || 0) / 100;
+    const affiliateComm = parseFloat(payload.affiliate_commission || affiliate.commission_value || 0) / 100;
+    
+    if (!affiliateMap.has(affiliateName)) {
+      affiliateMap.set(affiliateName, {
+        afiliado: affiliateName,
+        email: affiliateEmail,
         total_vendas: 0,
+        valor_total_vendas: 0,
         comissao_total: 0,
       });
     }
-    const aff = affiliateMap.get(affiliate);
+    
+    const aff = affiliateMap.get(affiliateName);
     aff.total_vendas++;
-    aff.comissao_total += d.affiliate_commission || 0;
+    aff.valor_total_vendas += grossValue;
+    aff.comissao_total += affiliateComm;
   });
 
-  return Array.from(affiliateMap.values());
+  return Array.from(affiliateMap.values()).sort((a, b) => b.comissao_total - a.comissao_total);
 }
 
 async function generateMarginAnalysisReport(supabase: any, filters: any) {
   const { startDate, endDate } = filters;
   
-  let query = supabase
-    .from('deals')
-    .select(`
-      gross_value, net_value, kiwify_fee, affiliate_commission,
-      products:product_id (name)
-    `)
-    .eq('status', 'won');
-
-  if (startDate) query = query.gte('closed_at', startDate);
-  if (endDate) query = query.lte('closed_at', endDate);
-
-  const { data, error } = await query;
-  if (error) throw error;
-
-  // Group by product
-  const productMap = new Map<string, any>();
+  console.log('[margin_analysis] Fetching from kiwify_events...');
   
-  data.forEach((d: any) => {
-    const productName = d.products?.name || 'Produto não identificado';
-    if (!productMap.has(productName)) {
-      productMap.set(productName, {
-        produto: productName,
-        total_vendas: 0,
-        valor_bruto: 0,
-        valor_liquido: 0,
-        taxas: 0,
-        comissoes: 0,
-      });
-    }
-    const product = productMap.get(productName);
-    product.total_vendas++;
-    product.valor_bruto += d.gross_value || 0;
-    product.valor_liquido += d.net_value || 0;
-    product.taxas += d.kiwify_fee || 0;
-    product.comissoes += d.affiliate_commission || 0;
+  // Buscar eventos de pagamento
+  let query = supabase
+    .from('kiwify_events')
+    .select('*')
+    .in('event_type', ['paid', 'order_approved']);
+
+  if (startDate) query = query.gte('created_at', startDate);
+  if (endDate) query = query.lte('created_at', endDate);
+
+  const { data: events, error } = await query;
+  if (error) {
+    console.error('[margin_analysis] Error:', error);
+    throw error;
+  }
+  
+  console.log(`[margin_analysis] Found ${events?.length || 0} events`);
+
+  // Buscar ofertas mapeadas
+  const { data: offers } = await supabase
+    .from('product_offers')
+    .select('kiwify_offer_id, offer_name, products:product_id(name)');
+  
+  const offerMap = new Map();
+  offers?.forEach((o: any) => {
+    offerMap.set(o.kiwify_offer_id, {
+      offer_name: o.offer_name,
+      product_name: o.products?.name || 'Produto não identificado'
+    });
   });
 
-  return Array.from(productMap.values()).map(p => ({
+  // Agrupar por oferta (offer_id)
+  const offerStatsMap = new Map<string, any>();
+  
+  (events || []).forEach((e: any) => {
+    const payload = e.payload || {};
+    const subscription = payload.Subscription || {};
+    const charges = subscription.charges || {};
+    const plan = subscription.plan || {};
+    const affiliate = payload.trackingParameters?.aff || payload.Affiliate || {};
+    
+    const offerId = e.offer_id || 'sem_offer_id';
+    const offerInfo = offerMap.get(offerId) || { offer_name: payload.Product?.offer_name || plan.name || 'Oferta não mapeada', product_name: payload.Product?.name || 'Produto não identificado' };
+    
+    const grossValue = parseFloat(charges.completed_at_value || plan.price || 0) / 100;
+    const affiliateComm = parseFloat(payload.affiliate_commission || affiliate.commission_value || 0) / 100;
+    const kiwifyFee = grossValue * 0.0899;
+    const netValue = grossValue - kiwifyFee - affiliateComm;
+    
+    const key = offerId;
+    
+    if (!offerStatsMap.has(key)) {
+      offerStatsMap.set(key, {
+        offer_id: offerId,
+        oferta: offerInfo.offer_name,
+        produto: offerInfo.product_name,
+        total_vendas: 0,
+        valor_bruto: 0,
+        taxas_kiwify: 0,
+        comissoes_afiliados: 0,
+        valor_liquido: 0,
+      });
+    }
+    
+    const stats = offerStatsMap.get(key);
+    stats.total_vendas++;
+    stats.valor_bruto += grossValue;
+    stats.taxas_kiwify += kiwifyFee;
+    stats.comissoes_afiliados += affiliateComm;
+    stats.valor_liquido += netValue;
+  });
+
+  return Array.from(offerStatsMap.values()).map(p => ({
     ...p,
+    ticket_medio: p.total_vendas > 0 ? (p.valor_bruto / p.total_vendas) : 0,
     margem_percentual: p.valor_bruto > 0 ? ((p.valor_liquido / p.valor_bruto) * 100).toFixed(1) + '%' : '0%',
-    taxa_media: p.total_vendas > 0 ? (p.taxas / p.total_vendas).toFixed(2) : 0,
-  }));
+  })).sort((a, b) => b.valor_bruto - a.valor_bruto);
 }
 
 function convertToCSV(data: any[]): string {
