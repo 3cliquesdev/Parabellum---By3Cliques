@@ -65,6 +65,11 @@ interface KiwifyWebhookPayload {
   Subscription?: {
     id: string;
     status: string;
+    plan?: {
+      id: string;      // ← ESSE É O OFFER_ID REAL
+      name: string;    // ← ESSE É O NOME DA OFERTA
+      frequency?: string;
+    };
   };
 }
 
@@ -370,6 +375,18 @@ serve(async (req) => {
     // ============================================
     // REGISTRAR EVENTO NA TABELA DE AUDITORIA
     // ============================================
+    
+    // 🔧 CORREÇÃO CRÍTICA: Extrair offer_id de Subscription.plan.id (fonte correta da Kiwify)
+    const extractedOfferId = payload.Subscription?.plan?.id || Product?.offer_id || null;
+    const extractedOfferName = payload.Subscription?.plan?.name || null;
+    
+    console.log('[kiwify-webhook] 📋 Offer extraction:', {
+      from_subscription_plan: payload.Subscription?.plan?.id,
+      from_product_offer_id: Product?.offer_id,
+      final_offer_id: extractedOfferId,
+      offer_name: extractedOfferName
+    });
+    
     const eventRecord = await supabase
       .from('kiwify_events')
       .insert({
@@ -377,7 +394,7 @@ serve(async (req) => {
         order_id: order_id,
         customer_email: Customer?.email || 'unknown',
         product_id: Product?.product_id || 'unknown',
-        offer_id: Product?.offer_id || null,
+        offer_id: extractedOfferId,
         payload: payload,
         processed: false,
       })
@@ -393,11 +410,11 @@ serve(async (req) => {
       switch (order_status) {
         case 'paid':
         case 'order_approved':
-          result = await handlePaidOrder(supabase, Customer, Product, Commissions, order_id);
+          result = await handlePaidOrder(supabase, Customer, Product, Commissions, order_id, payload);
           break;
         
         case 'subscription_renewed':
-          result = await handleSubscriptionRenewal(supabase, Customer, Product, Commissions);
+          result = await handleSubscriptionRenewal(supabase, Customer, Product, Commissions, payload);
           break;
         
         case 'refused':
@@ -483,7 +500,8 @@ async function handlePaidOrder(
   Customer: KiwifyCustomer,
   Product: KiwifyProduct,
   Commissions: KiwifyCommissions,
-  order_id: string
+  order_id: string,
+  payload: KiwifyWebhookPayload
 ) {
   console.log('[kiwify-webhook] 💚 PAID - Verificando existência:', Customer.email);
   console.log('[kiwify-webhook] 📊 Customer data:', {
@@ -528,8 +546,20 @@ async function handlePaidOrder(
   let product = null;
   let offer = null;
   
-  if (Product.offer_id) {
-    // PRIORIDADE 1: Buscar por offer_id explícito em product_offers
+  // 🔧 CORREÇÃO: Usar Subscription.plan.id como fonte principal de offer_id
+  const subscriptionOfferId = payload.Subscription?.plan?.id;
+  const subscriptionOfferName = payload.Subscription?.plan?.name;
+  const productOfferId = Product.offer_id;
+  
+  console.log('[kiwify-webhook] 🔍 Buscando produto com:', {
+    subscription_offer_id: subscriptionOfferId,
+    subscription_offer_name: subscriptionOfferName,
+    product_offer_id: productOfferId,
+    product_id: Product.product_id
+  });
+  
+  // PRIORIDADE 1: Buscar por Subscription.plan.id (fonte correta da Kiwify)
+  if (subscriptionOfferId) {
     const { data: offerData } = await supabase
       .from('product_offers')
       .select(`
@@ -545,14 +575,42 @@ async function handlePaidOrder(
           support_channel_id
         )
       `)
-      .eq('offer_id', Product.offer_id)
+      .eq('offer_id', subscriptionOfferId)
       .eq('is_active', true)
       .single();
     
     if (offerData) {
       offer = offerData;
       product = offerData.products;
-      console.log('[kiwify-webhook] ✅ Produto encontrado via offer_id:', Product.offer_id);
+      console.log('[kiwify-webhook] ✅ Produto encontrado via Subscription.plan.id:', subscriptionOfferId);
+    }
+  }
+  
+  // PRIORIDADE 2: Buscar por Product.offer_id (fallback legacy)
+  if (!product && productOfferId) {
+    const { data: offerData } = await supabase
+      .from('product_offers')
+      .select(`
+        id,
+        offer_id,
+        offer_name,
+        price,
+        products:product_id (
+          id,
+          name,
+          external_id,
+          delivery_group_id,
+          support_channel_id
+        )
+      `)
+      .eq('offer_id', productOfferId)
+      .eq('is_active', true)
+      .single();
+    
+    if (offerData) {
+      offer = offerData;
+      product = offerData.products;
+      console.log('[kiwify-webhook] ✅ Produto encontrado via Product.offer_id:', productOfferId);
     }
   }
   
@@ -1078,7 +1136,8 @@ async function handleSubscriptionRenewal(
   supabase: any,
   Customer: KiwifyCustomer,
   Product: KiwifyProduct,
-  Commissions: KiwifyCommissions
+  Commissions: KiwifyCommissions,
+  payload: KiwifyWebhookPayload
 ) {
   console.log('[kiwify-webhook] 🔄 RENOVAÇÃO:', Customer.email);
 
@@ -1091,7 +1150,7 @@ async function handleSubscriptionRenewal(
 
   if (!contact) {
     console.warn('[kiwify-webhook] Customer not found for renewal, treating as new order');
-    return handlePaidOrder(supabase, Customer, Product, Commissions, 'renewal-fallback');
+    return handlePaidOrder(supabase, Customer, Product, Commissions, 'renewal-fallback', payload);
   }
 
   // 2. Update LTV

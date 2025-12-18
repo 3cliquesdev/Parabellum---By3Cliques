@@ -196,3 +196,6 @@ verify_jwt = true
 
 [functions.public-start-playbook]
 verify_jwt = false
+
+[functions.fix-kiwify-offer-ids]
+verify_jwt = true

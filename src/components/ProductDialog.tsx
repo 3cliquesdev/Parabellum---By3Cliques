@@ -35,7 +35,8 @@ import { useCreateProduct, useUpdateProduct } from "@/hooks/useProducts";
 import { useDeliveryGroups } from "@/hooks/useDeliveryGroups";
 import { useProductOffers, useCreateProductOffer, useDeleteProductOffer } from "@/hooks/useProductOffers";
 import { useSupportChannels } from "@/hooks/useSupportChannels";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Download } from "lucide-react";
+import { ImportKiwifyOffersDialog } from "@/components/products/ImportKiwifyOffersDialog";
 
 const productSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
@@ -87,6 +88,7 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
     offer_name: "",
     price: 0,
   });
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
@@ -405,6 +407,15 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
                     <h3 className="text-sm font-semibold text-foreground">Ofertas Vinculadas (Kiwify)</h3>
                     <p className="text-xs text-muted-foreground">Vincule múltiplas ofertas ao mesmo produto</p>
                   </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setImportDialogOpen(true)}
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    Importar do Kiwify
+                  </Button>
                 </div>
 
                 {/* Lista de ofertas existentes */}
@@ -487,6 +498,16 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
             </div>
           </form>
         </Form>
+
+        {/* Import Dialog */}
+        {product && (
+          <ImportKiwifyOffersDialog
+            open={importDialogOpen}
+            onOpenChange={setImportDialogOpen}
+            productId={product.id}
+            productName={product.name}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
