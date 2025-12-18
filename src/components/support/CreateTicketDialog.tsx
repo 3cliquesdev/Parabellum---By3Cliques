@@ -135,7 +135,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
             {selectedContact ? (
               <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">
+                  <p className="font-medium text-foreground">
                     {selectedContact.first_name} {selectedContact.last_name}
                   </p>
                   <p className="text-sm text-muted-foreground">{selectedContact.email}</p>

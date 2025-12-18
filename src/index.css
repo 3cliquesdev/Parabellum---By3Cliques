@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  /* Defensive rule: ensure text visibility in common container contexts */
+  .bg-muted, .bg-muted\/50, .bg-card, .bg-background, .bg-popover, .bg-secondary {
+    color: hsl(var(--foreground));
+  }
+  
   :root {
     /* === BRAND === */
     --background: 210 40% 98%;
