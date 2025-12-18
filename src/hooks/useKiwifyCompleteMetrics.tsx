@@ -115,15 +115,24 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         }
       }
       
-      // Helper to check if event is within date range using approved_date from payload
-      const isWithinDateRange = (payload: KiwifyEventPayload): boolean => {
+      // Helper to check if event is within date range using approved_date from payload or created_at as fallback
+      const isWithinDateRange = (payload: KiwifyEventPayload, createdAt: string): boolean => {
         if (!startDateStr || !endDateStr) return true;
         
+        // Try approved_date first, then fall back to created_at
         const approvedDate = payload?.approved_date;
-        if (!approvedDate) return false;
+        let eventDateStr: string;
         
-        // approved_date format: '2025-12-17 17:14' - extract just the date part
-        const eventDateStr = approvedDate.split(' ')[0];
+        if (approvedDate) {
+          // approved_date format: '2025-12-17 17:14' - extract just the date part
+          eventDateStr = approvedDate.split(' ')[0];
+        } else if (createdAt) {
+          // created_at is ISO format - extract date part
+          eventDateStr = createdAt.split('T')[0];
+        } else {
+          // No date available - include by default
+          return true;
+        }
         
         // Compare strings: startDateStr <= eventDateStr <= endDateStr
         return eventDateStr >= startDateStr && eventDateStr <= endDateStr;
@@ -153,8 +162,8 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         
         if (!orderId) continue;
         
-        // Filter by approved_date (actual sale date, not webhook reception date)
-        if (!isWithinDateRange(payload)) continue;
+        // Filter by approved_date (actual sale date, not webhook reception date) or created_at as fallback
+        if (!isWithinDateRange(payload, event.created_at)) continue;
 
         // Get value in reais for minValue filter (centavos / 100)
         const grossValueReais = Number(payload?.Commissions?.product_base_price || 0) / 100;
