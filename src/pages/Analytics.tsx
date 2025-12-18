@@ -314,11 +314,11 @@ export default function Analytics() {
               endDate={endDate}
             />
 
-            {/* Dashboard de Vendas por Oferta */}
-            <SalesByOfferDashboard />
-
             {/* Relatório Financeiro Completo */}
             <KiwifyFinancialReport startDate={startDate} endDate={endDate} />
+
+            {/* Dashboard de Vendas por Oferta */}
+            <SalesByOfferDashboard />
           </TabsContent>
         </Tabs>
 

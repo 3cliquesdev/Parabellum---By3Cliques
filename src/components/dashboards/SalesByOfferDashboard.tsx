@@ -129,57 +129,6 @@ export default function SalesByOfferDashboard() {
   
   return (
     <div className="space-y-6">
-      {/* KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Faturamento Bruto</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalGross)}</div>
-            <p className="text-xs text-muted-foreground">Total de vendas Kiwify</p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Faturamento Líquido</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalNet)}</div>
-            <p className="text-xs text-muted-foreground">Após taxas e comissões</p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Vendas</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalSales}</div>
-            <p className="text-xs text-muted-foreground">
-              Ticket médio: {formatCurrency(totalSales > 0 ? totalGross / totalSales : 0)}
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card className={unmappedOffers.length > 0 ? "border-yellow-500" : ""}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ofertas Não Mapeadas</CardTitle>
-            <AlertTriangle className={`h-4 w-4 ${unmappedOffers.length > 0 ? 'text-yellow-500' : 'text-muted-foreground'}`} />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{unmappedOffers.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {unmappedOffers.length > 0 ? 'Vincule no cadastro de produtos' : 'Todas mapeadas!'}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-      
       {/* Chart */}
       <Card>
         <CardHeader>
