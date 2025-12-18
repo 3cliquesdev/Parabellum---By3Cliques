@@ -26,6 +26,15 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Search, Plus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { TicketAttachments } from "@/components/TicketAttachments";
+import { useToast } from "@/hooks/use-toast";
+
+interface Attachment {
+  url: string;
+  type: string;
+  name: string;
+  uploaded_at?: string;
+}
 
 interface CreateTicketDialogProps {
   open: boolean;
@@ -48,6 +57,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const { data: departments = [] } = useDepartments();
   const { data: categories = [] } = useTicketCategories();
   const createCategory = useCreateTicketCategory();
+  const { toast } = useToast();
 
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
@@ -59,6 +69,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [assignedTo, setAssignedTo] = useState<string>("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   // Debounce search to avoid query on every keystroke
   const debouncedSearch = useDebouncedValue(customerSearch, 300);
@@ -94,6 +105,16 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
     if (!subject.trim() || !customerId) return;
 
+    // Validar evidência obrigatória
+    if (attachments.length === 0) {
+      toast({
+        title: "Evidência obrigatória",
+        description: "É necessário anexar pelo menos 1 foto como evidência do ticket.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     await createTicket.mutateAsync({
       subject: subject.trim(),
       description: description.trim(),
@@ -102,6 +123,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
       customer_id: customerId,
       department_id: departmentId || undefined,
       assigned_to: assignedTo || undefined,
+      attachments,
     });
 
     // Reset form
@@ -113,6 +135,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
     setDepartmentId("");
     setAssignedTo("");
     setCustomerSearch("");
+    setAttachments([]);
     onOpenChange(false);
   };
 
@@ -321,11 +344,20 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
             </div>
           </div>
 
+          {/* Evidência Obrigatória */}
+          <div className="space-y-2">
+            <TicketAttachments
+              attachments={attachments}
+              onAttachmentsChange={setAttachments}
+              requireEvidence={true}
+            />
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={createTicket.isPending || !customerId || !subject.trim()}>
+            <Button type="submit" disabled={createTicket.isPending || !customerId || !subject.trim() || attachments.length === 0}>
               {createTicket.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
