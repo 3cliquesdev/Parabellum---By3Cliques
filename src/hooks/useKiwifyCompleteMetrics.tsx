@@ -60,13 +60,6 @@ interface OfferMetric {
   liquido: number;
 }
 
-interface UnmappedOffer {
-  offer_id: string;
-  offer_name: string;
-  product_name: string;
-  vendas: number;
-  bruto: number;
-}
 
 interface StatusMetric {
   quantidade: number;
@@ -100,7 +93,6 @@ export interface KiwifyCompleteMetrics {
   cancelados: StatusMetric;
   porProduto: ProductMetric[];
   porOferta: OfferMetric[];
-  ofertasNaoMapeadas: UnmappedOffer[];
   topAffiliates: AffiliateMetric[];
   totalEventos: number;
 }
@@ -373,23 +365,6 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       const porOferta = Array.from(offerMap.values()).sort((a, b) => b.vendas - a.vendas);
       const topAffiliates = Array.from(affiliateMap.values()).sort((a, b) => b.salesCount - a.salesCount);
 
-      // Fetch mapped offers to identify unmapped ones
-      const { data: mappedOffers } = await supabase
-        .from('product_offers')
-        .select('offer_id');
-      
-      const mappedIds = new Set(mappedOffers?.map(o => o.offer_id) || []);
-      
-      const ofertasNaoMapeadas: UnmappedOffer[] = porOferta
-        .filter(o => !mappedIds.has(o.offer_id))
-        .map(o => ({
-          offer_id: o.offer_id,
-          offer_name: o.offer_name,
-          product_name: o.product_name,
-          vendas: o.vendas,
-          bruto: o.bruto
-        }));
-
       console.log('📊 Kiwify Metrics:', {
         totalEventos: allEvents.length,
         vendasAprovadas: finalApprovedEvents.length,
@@ -418,7 +393,6 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         cancelados,
         porProduto,
         porOferta,
-        ofertasNaoMapeadas,
         topAffiliates,
         totalEventos: allEvents.length
       };

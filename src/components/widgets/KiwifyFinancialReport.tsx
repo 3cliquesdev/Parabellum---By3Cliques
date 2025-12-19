@@ -501,61 +501,6 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
         </Card>
       )}
 
-      {/* Ofertas Não Mapeadas */}
-      {data.ofertasNaoMapeadas && data.ofertasNaoMapeadas.length > 0 && (
-        <Card className="border-yellow-500/30">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                Ofertas Não Mapeadas
-              </CardTitle>
-              <Badge variant="outline" className="text-yellow-600 border-yellow-500">
-                {data.ofertasNaoMapeadas.length} ofertas
-              </Badge>
-            </div>
-            <CardDescription>
-              Ofertas com vendas que não estão vinculadas a produtos no sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Oferta</TableHead>
-                    <TableHead>Offer ID</TableHead>
-                    <TableHead className="text-right">Vendas</TableHead>
-                    <TableHead className="text-right">Receita Bruta</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.ofertasNaoMapeadas.slice(0, 10).map((offer) => (
-                    <TableRow key={offer.offer_id}>
-                      <TableCell className="font-medium max-w-[200px] truncate">
-                        {offer.offer_name}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-xs font-mono max-w-[150px] truncate">
-                        {offer.offer_id}
-                      </TableCell>
-                      <TableCell className="text-right">{offer.vendas}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(offer.bruto)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            {data.ofertasNaoMapeadas.length > 10 && (
-              <p className="text-xs text-muted-foreground text-center mt-4">
-                Mostrando top 10 de {data.ofertasNaoMapeadas.length} ofertas não mapeadas
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Tabela de Produtos */}
       <Card>
         <CardHeader>
