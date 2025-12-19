@@ -33,6 +33,10 @@ interface KiwifyEventPayload {
     charges?: {
       completed?: any[];
     };
+    plan?: {
+      id?: string;
+      name?: string;
+    };
   };
   purchase_number?: number;
 }
@@ -45,6 +49,23 @@ interface ProductMetric {
   liquido: number;
   taxaKiwify: number;
   comissaoAfiliados: number;
+}
+
+interface OfferMetric {
+  offer_id: string;
+  offer_name: string;
+  product_name: string;
+  vendas: number;
+  bruto: number;
+  liquido: number;
+}
+
+interface UnmappedOffer {
+  offer_id: string;
+  offer_name: string;
+  product_name: string;
+  vendas: number;
+  bruto: number;
 }
 
 interface StatusMetric {
@@ -78,6 +99,8 @@ export interface KiwifyCompleteMetrics {
   recusados: StatusMetric;
   cancelados: StatusMetric;
   porProduto: ProductMetric[];
+  porOferta: OfferMetric[];
+  ofertasNaoMapeadas: UnmappedOffer[];
   topAffiliates: AffiliateMetric[];
   totalEventos: number;
 }
@@ -226,6 +249,7 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
 
       const productMap = new Map<string, ProductMetric>();
       const affiliateMap = new Map<string, AffiliateMetric>();
+      const offerMap = new Map<string, OfferMetric>();
 
       for (const event of finalApprovedEvents) {
         const payload = event.payload as KiwifyEventPayload;
@@ -295,6 +319,26 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         product.liquido += netValue;
         product.taxaKiwify += kiwifyFee;
         product.comissaoAfiliados += affiliateFee;
+
+        // Offer breakdown - use Subscription.plan.id or fallback
+        const offerId = payload?.Subscription?.plan?.id || productId;
+        const offerName = payload?.Subscription?.plan?.name || productName;
+        
+        if (!offerMap.has(offerId)) {
+          offerMap.set(offerId, {
+            offer_id: offerId,
+            offer_name: offerName,
+            product_name: productName,
+            vendas: 0,
+            bruto: 0,
+            liquido: 0
+          });
+        }
+        
+        const offer = offerMap.get(offerId)!;
+        offer.vendas++;
+        offer.bruto += grossValue;
+        offer.liquido += netValue;
       }
 
       // Calculate status metrics (in reais)
@@ -326,7 +370,25 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       const percentualLiquido = receitaBruta > 0 ? (receitaLiquida / receitaBruta) * 100 : 0;
 
       const porProduto = Array.from(productMap.values()).sort((a, b) => b.bruto - a.bruto);
+      const porOferta = Array.from(offerMap.values()).sort((a, b) => b.vendas - a.vendas);
       const topAffiliates = Array.from(affiliateMap.values()).sort((a, b) => b.salesCount - a.salesCount);
+
+      // Fetch mapped offers to identify unmapped ones
+      const { data: mappedOffers } = await supabase
+        .from('product_offers')
+        .select('offer_id');
+      
+      const mappedIds = new Set(mappedOffers?.map(o => o.offer_id) || []);
+      
+      const ofertasNaoMapeadas: UnmappedOffer[] = porOferta
+        .filter(o => !mappedIds.has(o.offer_id))
+        .map(o => ({
+          offer_id: o.offer_id,
+          offer_name: o.offer_name,
+          product_name: o.product_name,
+          vendas: o.vendas,
+          bruto: o.bruto
+        }));
 
       console.log('📊 Kiwify Metrics:', {
         totalEventos: allEvents.length,
@@ -355,6 +417,8 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         recusados,
         cancelados,
         porProduto,
+        porOferta,
+        ofertasNaoMapeadas,
         topAffiliates,
         totalEventos: allEvents.length
       };
