@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useKiwifyCompleteMetrics } from "@/hooks/useKiwifyCompleteMetrics";
-import { DollarSign, TrendingUp, TrendingDown, ShoppingCart, RefreshCw, AlertTriangle, Percent, Users, Package } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, ShoppingCart, RefreshCw, AlertTriangle, Percent, Users, Package, Tag } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,6 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 
 interface KiwifyFinancialReportProps {
   startDate?: Date;
@@ -417,6 +419,142 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
           </CardContent>
         </Card>
       </div>
+
+      {/* Vendas por Oferta - Gráfico */}
+      {data.porOferta && data.porOferta.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Tag className="h-5 w-5 text-blue-500" />
+              Vendas por Oferta
+            </CardTitle>
+            <CardDescription>
+              Top 10 ofertas por quantidade de vendas
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              config={{
+                vendas: { label: "Vendas", color: "hsl(var(--primary))" },
+              }}
+              className="h-[300px] w-full"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={data.porOferta.slice(0, 10).map(o => ({
+                    name: o.offer_name.length > 25 ? o.offer_name.substring(0, 25) + '...' : o.offer_name,
+                    vendas: o.vendas,
+                    bruto: o.bruto,
+                  }))}
+                  layout="vertical"
+                  margin={{ left: 20, right: 20 }}
+                >
+                  <XAxis type="number" />
+                  <YAxis type="category" dataKey="name" width={180} tick={{ fontSize: 12 }} />
+                  <Tooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="vendas" radius={[0, 4, 4, 0]}>
+                    {data.porOferta.slice(0, 10).map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={`hsl(var(--primary) / ${1 - index * 0.08})`} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+            
+            {/* Tabela de Ofertas */}
+            <div className="overflow-x-auto mt-6">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Oferta</TableHead>
+                    <TableHead>Produto</TableHead>
+                    <TableHead className="text-right">Vendas</TableHead>
+                    <TableHead className="text-right">Receita Bruta</TableHead>
+                    <TableHead className="text-right">Receita Líquida</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.porOferta.slice(0, 10).map((offer) => (
+                    <TableRow key={offer.offer_id}>
+                      <TableCell className="font-medium max-w-[200px] truncate">
+                        {offer.offer_name}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm max-w-[150px] truncate">
+                        {offer.product_name}
+                      </TableCell>
+                      <TableCell className="text-right">{offer.vendas}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(offer.bruto)}</TableCell>
+                      <TableCell className="text-right text-green-600 font-medium">
+                        {formatCurrency(offer.liquido)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {data.porOferta.length > 10 && (
+              <p className="text-xs text-muted-foreground text-center mt-4">
+                Mostrando top 10 de {data.porOferta.length} ofertas
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Ofertas Não Mapeadas */}
+      {data.ofertasNaoMapeadas && data.ofertasNaoMapeadas.length > 0 && (
+        <Card className="border-yellow-500/30">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                Ofertas Não Mapeadas
+              </CardTitle>
+              <Badge variant="outline" className="text-yellow-600 border-yellow-500">
+                {data.ofertasNaoMapeadas.length} ofertas
+              </Badge>
+            </div>
+            <CardDescription>
+              Ofertas com vendas que não estão vinculadas a produtos no sistema
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Oferta</TableHead>
+                    <TableHead>Offer ID</TableHead>
+                    <TableHead className="text-right">Vendas</TableHead>
+                    <TableHead className="text-right">Receita Bruta</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.ofertasNaoMapeadas.slice(0, 10).map((offer) => (
+                    <TableRow key={offer.offer_id}>
+                      <TableCell className="font-medium max-w-[200px] truncate">
+                        {offer.offer_name}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs font-mono max-w-[150px] truncate">
+                        {offer.offer_id}
+                      </TableCell>
+                      <TableCell className="text-right">{offer.vendas}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(offer.bruto)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {data.ofertasNaoMapeadas.length > 10 && (
+              <p className="text-xs text-muted-foreground text-center mt-4">
+                Mostrando top 10 de {data.ofertasNaoMapeadas.length} ofertas não mapeadas
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabela de Produtos */}
       <Card>
