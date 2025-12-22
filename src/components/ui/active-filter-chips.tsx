@@ -60,7 +60,7 @@ export function generateDealFilterChips(
     expectedCloseDateRange?: { from?: Date; to?: Date };
     activityStatus?: string;
     leadSource: string[];
-    assignedTo: string[];
+    assignedTo?: string[];
   },
   salesReps?: { id: string; full_name: string }[]
 ): FilterChip[] {
@@ -112,7 +112,7 @@ export function generateDealFilterChips(
     chips.push({ key: `leadSource_${source}`, label: `Origem: ${sourceLabels[source] || source}` });
   });
 
-  if (filters.assignedTo && salesReps) {
+  if (filters.assignedTo && filters.assignedTo.length > 0 && salesReps) {
     filters.assignedTo.forEach((repId) => {
       const rep = salesReps.find(r => r.id === repId);
       if (rep) {

@@ -29,7 +29,7 @@ export interface DealFilters {
   expectedCloseDateRange?: DateRange;
   activityStatus?: string;
   leadSource: string[];
-  assignedTo: string[];
+  assignedTo?: string[];
   search: string;
 }
 
@@ -65,13 +65,14 @@ export default function DealFilterPopover({ filters, onFiltersChange }: DealFilt
     filters.expectedCloseDateRange?.from ? 1 : 0,
     filters.activityStatus ? 1 : 0,
     filters.leadSource.length,
-    filters.assignedTo.length,
+    filters.assignedTo?.length || 0,
   ].reduce((a, b) => a + b, 0);
 
   const handleRepToggle = (repId: string) => {
-    const newReps = filters.assignedTo.includes(repId)
-      ? filters.assignedTo.filter(r => r !== repId)
-      : [...filters.assignedTo, repId];
+    const currentReps = filters.assignedTo || [];
+    const newReps = currentReps.includes(repId)
+      ? currentReps.filter(r => r !== repId)
+      : [...currentReps, repId];
     onFiltersChange({ ...filters, assignedTo: newReps });
   };
 
@@ -230,7 +231,7 @@ export default function DealFilterPopover({ filters, onFiltersChange }: DealFilt
                   <div key={rep.id} className="flex items-center space-x-2">
                     <Checkbox
                       id={`rep-${rep.id}`}
-                      checked={filters.assignedTo.includes(rep.id)}
+                      checked={(filters.assignedTo || []).includes(rep.id)}
                       onCheckedChange={() => handleRepToggle(rep.id)}
                     />
                     <label

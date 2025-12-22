@@ -17,7 +17,7 @@ export interface DealFilters {
   expectedCloseDateRange?: DateRange;
   activityStatus?: string;
   leadSource: string[];
-  assignedTo: string[];
+  assignedTo?: string[];
   search: string;
 }
 

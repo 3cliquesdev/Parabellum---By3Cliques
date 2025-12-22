@@ -124,7 +124,7 @@ export default function Deals() {
       const repId = key.replace("assignedTo_", "");
       setDealFilters({
         ...dealFilters,
-        assignedTo: dealFilters.assignedTo.filter(r => r !== repId),
+        assignedTo: (dealFilters.assignedTo || []).filter(r => r !== repId),
       });
     } else if (key === "value" || key === "valueMin") {
       setDealFilters({ ...dealFilters, valueMin: undefined });
