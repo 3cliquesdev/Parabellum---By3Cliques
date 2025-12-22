@@ -10,6 +10,7 @@ interface GenerateReportParams {
     departmentId?: string;
     agentId?: string;
     status?: string;
+    pipelineId?: string;
   };
   format: 'csv' | 'pdf';
 }

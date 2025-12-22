@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { useGenerateReport } from "@/hooks/useGenerateReport";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUsers } from "@/hooks/useUsers";
-
+import { usePipelines } from "@/hooks/usePipelines";
 interface ReportFilterPanelProps {
   report: {
     id: string;
@@ -33,11 +33,13 @@ export default function ReportFilterPanel({ report, open, onOpenChange }: Report
   const [reportFormat, setReportFormat] = useState<'csv' | 'pdf'>('csv');
   const [departmentId, setDepartmentId] = useState<string>('');
   const [agentId, setAgentId] = useState<string>('');
+  const [pipelineId, setPipelineId] = useState<string>('');
   const [enableSchedule, setEnableSchedule] = useState(false);
   const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
 
   const { data: departments } = useDepartments();
   const { data: users } = useUsers();
+  const { data: pipelines } = usePipelines();
   const generateReport = useGenerateReport();
 
   const handleDownload = () => {
@@ -48,6 +50,7 @@ export default function ReportFilterPanel({ report, open, onOpenChange }: Report
         endDate: dateRange.to.toISOString(),
         departmentId: departmentId || undefined,
         agentId: agentId || undefined,
+        pipelineId: pipelineId || undefined,
       },
       format: reportFormat,
     });
@@ -205,6 +208,25 @@ export default function ReportFilterPanel({ report, open, onOpenChange }: Report
                     {users?.map((user) => (
                       <SelectItem key={user.id} value={user.id}>
                         {user.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {report.id === 'deals_won_lost' && (
+              <div>
+                <Label>Funil (opcional)</Label>
+                <Select value={pipelineId} onValueChange={setPipelineId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos os funis" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Todos os funis</SelectItem>
+                    {pipelines?.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

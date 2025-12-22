@@ -333,7 +333,9 @@ async function generateCSATReport(supabase: any, filters: any) {
 }
 
 async function generateDealsReport(supabase: any, filters: any) {
-  const { startDate, endDate, status } = filters;
+  const { startDate, endDate, status, pipelineId } = filters;
+  
+  console.log('[deals_won_lost] Starting with filters:', { startDate, endDate, status, pipelineId });
   
   let query = supabase
     .from('deals')
@@ -350,6 +352,10 @@ async function generateDealsReport(supabase: any, filters: any) {
   if (startDate) query = query.gte('created_at', startDate);
   if (endDate) query = query.lte('created_at', endDate);
   if (status) query = query.eq('status', status);
+  if (pipelineId && pipelineId !== '') {
+    console.log('[deals_won_lost] Filtering by pipelineId:', pipelineId);
+    query = query.eq('pipeline_id', pipelineId);
+  }
 
   const { data, error } = await query;
   if (error) throw error;
