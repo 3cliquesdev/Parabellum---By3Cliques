@@ -228,15 +228,22 @@ export default function DealFilterPopover({ filters, onFiltersChange }: DealFilt
               <Label className="text-sm font-medium mb-2 block">Responsável</Label>
               <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
                 {salesReps.map((rep) => (
-                  <div key={rep.id} className="flex items-center space-x-2">
+                  <div 
+                    key={rep.id} 
+                    className="flex items-center space-x-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Checkbox
                       id={`rep-${rep.id}`}
                       checked={(filters.assignedTo || []).includes(rep.id)}
-                      onCheckedChange={() => handleRepToggle(rep.id)}
+                      onCheckedChange={(checked) => {
+                        handleRepToggle(rep.id);
+                      }}
                     />
                     <label
                       htmlFor={`rep-${rep.id}`}
                       className="text-sm cursor-pointer truncate"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {rep.full_name}
                     </label>
