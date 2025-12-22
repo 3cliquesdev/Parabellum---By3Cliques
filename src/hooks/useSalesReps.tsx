@@ -9,24 +9,14 @@ export function useSalesReps() {
     queryFn: async () => {
       console.log("[useSalesReps] Fetching sales reps...");
       
-      // Filtrar apenas funcionários internos (excluir clientes com role="user")
-      const employeeRoles = [
-        'admin',
-        'general_manager',
-        'manager',
-        'sales_rep',
-        'consultant',
-        'support_agent',
-        'support_manager',
-        'financial_manager',
-        'cs_manager'
-      ] as const;
+      // Filtrar apenas vendedores (sales_rep e consultant)
+      const salesRoles = ['sales_rep', 'consultant'] as const;
       
       // Primeiro buscar user_ids com roles de funcionários
       const { data: userRoles, error: rolesError } = await supabase
         .from("user_roles")
         .select("user_id")
-        .in("role", employeeRoles);
+        .in("role", salesRoles);
 
       if (rolesError) {
         console.error("[useSalesReps] Error fetching user roles:", rolesError);

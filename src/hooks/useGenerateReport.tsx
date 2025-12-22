@@ -58,8 +58,14 @@ export function useGenerateReport() {
     },
     onError: (error: any) => {
       console.error('Error generating report:', error);
+      
+      // Extrair mensagem de erro mais detalhada
+      const errorMessage = error?.context?.body?.error 
+        || error?.message 
+        || 'Tente novamente mais tarde';
+      
       toast.error('Erro ao gerar relatório', {
-        description: error.message || 'Tente novamente mais tarde',
+        description: errorMessage,
       });
     },
   });
