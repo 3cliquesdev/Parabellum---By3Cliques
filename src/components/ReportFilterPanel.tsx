@@ -31,9 +31,9 @@ export default function ReportFilterPanel({ report, open, onOpenChange }: Report
     to: new Date(),
   });
   const [reportFormat, setReportFormat] = useState<'csv' | 'pdf'>('csv');
-  const [departmentId, setDepartmentId] = useState<string>('');
-  const [agentId, setAgentId] = useState<string>('');
-  const [pipelineId, setPipelineId] = useState<string>('');
+  const [departmentId, setDepartmentId] = useState<string>('__all__');
+  const [agentId, setAgentId] = useState<string>('__all__');
+  const [pipelineId, setPipelineId] = useState<string>('__all__');
   const [enableSchedule, setEnableSchedule] = useState(false);
   const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
 
@@ -48,9 +48,9 @@ export default function ReportFilterPanel({ report, open, onOpenChange }: Report
       filters: {
         startDate: dateRange.from.toISOString(),
         endDate: dateRange.to.toISOString(),
-        departmentId: departmentId || undefined,
-        agentId: agentId || undefined,
-        pipelineId: pipelineId || undefined,
+        departmentId: departmentId === '__all__' ? undefined : departmentId,
+        agentId: agentId === '__all__' ? undefined : agentId,
+        pipelineId: pipelineId === '__all__' ? undefined : pipelineId,
       },
       format: reportFormat,
     });
@@ -185,7 +185,7 @@ export default function ReportFilterPanel({ report, open, onOpenChange }: Report
                     <SelectValue placeholder="Todos os departamentos" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos</SelectItem>
+                    <SelectItem value="__all__">Todos</SelectItem>
                     {departments?.map((dept) => (
                       <SelectItem key={dept.id} value={dept.id}>
                         {dept.name}
@@ -204,7 +204,7 @@ export default function ReportFilterPanel({ report, open, onOpenChange }: Report
                     <SelectValue placeholder="Todos os agentes" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos</SelectItem>
+                    <SelectItem value="__all__">Todos</SelectItem>
                     {users?.map((user) => (
                       <SelectItem key={user.id} value={user.id}>
                         {user.full_name}
@@ -223,7 +223,7 @@ export default function ReportFilterPanel({ report, open, onOpenChange }: Report
                     <SelectValue placeholder="Todos os funis" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos os funis</SelectItem>
+                    <SelectItem value="__all__">Todos os funis</SelectItem>
                     {pipelines?.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name}
