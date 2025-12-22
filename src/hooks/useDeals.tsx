@@ -17,7 +17,7 @@ export interface DealFilters {
   expectedCloseDateRange?: DateRange;
   activityStatus?: string;
   leadSource: string[];
-  assignedTo?: string;
+  assignedTo: string[];
   search: string;
 }
 
@@ -83,9 +83,9 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
           query = query.in("lead_source", filters.leadSource);
         }
 
-        // Assigned to (for managers filtering)
-        if (filters.assignedTo) {
-          query = query.eq("assigned_to", filters.assignedTo);
+        // Assigned to (for managers filtering) - multi-select
+        if (filters.assignedTo && filters.assignedTo.length > 0) {
+          query = query.in("assigned_to", filters.assignedTo);
         }
 
         // Search by title

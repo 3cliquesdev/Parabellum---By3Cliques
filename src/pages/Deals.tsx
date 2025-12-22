@@ -54,6 +54,7 @@ export default function Deals() {
   const [dealFilters, setDealFilters] = useState<DealFilters>({
     search: "",
     leadSource: [],
+    assignedTo: [],
   });
   
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();
@@ -119,6 +120,12 @@ export default function Deals() {
         ...dealFilters,
         leadSource: dealFilters.leadSource.filter(s => s !== source),
       });
+    } else if (key.startsWith("assignedTo_")) {
+      const repId = key.replace("assignedTo_", "");
+      setDealFilters({
+        ...dealFilters,
+        assignedTo: dealFilters.assignedTo.filter(r => r !== repId),
+      });
     } else if (key === "value" || key === "valueMin") {
       setDealFilters({ ...dealFilters, valueMin: undefined });
     } else if (key === "valueMax") {
@@ -129,7 +136,7 @@ export default function Deals() {
   };
 
   const clearAllFilters = () => {
-    setDealFilters({ search: "", leadSource: [] });
+    setDealFilters({ search: "", leadSource: [], assignedTo: [] });
   };
 
   const handleDragStart = (event: DragStartEvent) => {

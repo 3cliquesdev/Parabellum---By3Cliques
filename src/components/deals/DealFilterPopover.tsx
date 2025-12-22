@@ -29,7 +29,7 @@ export interface DealFilters {
   expectedCloseDateRange?: DateRange;
   activityStatus?: string;
   leadSource: string[];
-  assignedTo?: string;
+  assignedTo: string[];
   search: string;
 }
 
@@ -65,8 +65,15 @@ export default function DealFilterPopover({ filters, onFiltersChange }: DealFilt
     filters.expectedCloseDateRange?.from ? 1 : 0,
     filters.activityStatus ? 1 : 0,
     filters.leadSource.length,
-    filters.assignedTo ? 1 : 0,
+    filters.assignedTo.length,
   ].reduce((a, b) => a + b, 0);
+
+  const handleRepToggle = (repId: string) => {
+    const newReps = filters.assignedTo.includes(repId)
+      ? filters.assignedTo.filter(r => r !== repId)
+      : [...filters.assignedTo, repId];
+    onFiltersChange({ ...filters, assignedTo: newReps });
+  };
 
   const handleSourceToggle = (source: string) => {
     const newSources = filters.leadSource.includes(source)
@@ -83,7 +90,7 @@ export default function DealFilterPopover({ filters, onFiltersChange }: DealFilt
       expectedCloseDateRange: undefined,
       activityStatus: undefined,
       leadSource: [],
-      assignedTo: undefined,
+      assignedTo: [],
       search: filters.search,
     });
   };
@@ -214,29 +221,27 @@ export default function DealFilterPopover({ filters, onFiltersChange }: DealFilt
             </div>
           </div>
 
-          {/* Assigned To - Only for managers */}
+          {/* Assigned To - Only for managers - Multi-select with checkboxes */}
           {canFilterByRep && salesReps && salesReps.length > 0 && (
             <div>
               <Label className="text-sm font-medium mb-2 block">Responsável</Label>
-              <Select
-                value={filters.assignedTo || "all"}
-                onValueChange={(v) => onFiltersChange({ 
-                  ...filters, 
-                  assignedTo: v === "all" ? undefined : v 
-                })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os vendedores" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os vendedores</SelectItem>
-                  {salesReps.map((rep) => (
-                    <SelectItem key={rep.id} value={rep.id}>
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                {salesReps.map((rep) => (
+                  <div key={rep.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`rep-${rep.id}`}
+                      checked={filters.assignedTo.includes(rep.id)}
+                      onCheckedChange={() => handleRepToggle(rep.id)}
+                    />
+                    <label
+                      htmlFor={`rep-${rep.id}`}
+                      className="text-sm cursor-pointer truncate"
+                    >
                       {rep.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
