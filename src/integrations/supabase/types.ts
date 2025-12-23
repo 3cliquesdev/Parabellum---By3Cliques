@@ -4843,6 +4843,7 @@ export type Database = {
           channel: string | null
           conversation_id: string | null
           created_at: string
+          created_by: string | null
           customer_id: string
           department_id: string | null
           description: string
@@ -4870,6 +4871,7 @@ export type Database = {
           channel?: string | null
           conversation_id?: string | null
           created_at?: string
+          created_by?: string | null
           customer_id: string
           department_id?: string | null
           description: string
@@ -4897,6 +4899,7 @@ export type Database = {
           channel?: string | null
           conversation_id?: string | null
           created_at?: string
+          created_by?: string | null
           customer_id?: string
           department_id?: string | null
           description?: string

@@ -20,10 +20,16 @@ export function useCreateTicket() {
 
   return useMutation({
     mutationFn: async (ticketData: CreateTicketData) => {
+      // Buscar usuário atual para definir created_by
+      const { data: { user } } = await supabase.auth.getUser();
+      
       // Cast para permitir categorias dinâmicas do banco
       const { data, error } = await supabase
         .from("tickets")
-        .insert(ticketData as any)
+        .insert({
+          ...ticketData,
+          created_by: user?.id,
+        } as any)
         .select()
         .single();
 
