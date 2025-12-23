@@ -43,9 +43,22 @@ export function useCreateTicket() {
       });
     },
     onError: (error: Error) => {
+      console.error('Ticket creation error:', error);
+      
+      let description = error.message;
+      
+      // Tratamento específico para erros de RLS
+      if (error.message.includes('row-level security')) {
+        description = "Você não tem permissão para criar tickets. Verifique se você possui uma role válida (support_agent, support_manager, admin, manager).";
+      } else if (error.message.includes('violates foreign key')) {
+        description = "Cliente ou usuário inválido. Verifique os dados e tente novamente.";
+      } else if (error.message.includes('not-null constraint')) {
+        description = "Campos obrigatórios não preenchidos. Verifique os dados e tente novamente.";
+      }
+      
       toast({
         title: "Erro ao criar ticket",
-        description: error.message,
+        description,
         variant: "destructive",
       });
     },
