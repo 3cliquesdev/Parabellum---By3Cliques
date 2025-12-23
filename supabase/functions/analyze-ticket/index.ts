@@ -149,11 +149,12 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
       const errorText = await response.text();
       console.error(`[analyze-ticket] AI Gateway error: ${response.status}`, errorText);
       
-      // GRACEFUL DEGRADATION: Return fallback values for known errors
-      if (response.status === 429 || response.status === 503 || response.status === 502) {
+      // GRACEFUL DEGRADATION: Return fallback values for known errors (including 402 payment required)
+      if (response.status === 429 || response.status === 503 || response.status === 502 || response.status === 402) {
         const errorReason = response.status === 429 ? 'rate_limit' : 
                            response.status === 503 ? 'service_unavailable' :
-                           response.status === 502 ? 'bad_gateway' : 'unknown';
+                           response.status === 502 ? 'bad_gateway' : 
+                           response.status === 402 ? 'credits_depleted' : 'unknown';
         
         console.warn(`[analyze-ticket] ⚠️ AI Gateway error ${response.status}, returning fallback for mode: ${mode}`);
         
@@ -163,23 +164,33 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
         switch (mode) {
           case 'sentiment':
             fallbackResult = 'neutro'; // Safe default sentiment
-            fallbackMessage = 'Análise de sentimento indisponível';
+            fallbackMessage = response.status === 402 
+              ? 'Créditos de IA esgotados. Adicione créditos ao seu workspace.' 
+              : 'Análise de sentimento indisponível';
             break;
           case 'summary':
             fallbackResult = 'Resumo indisponível temporariamente. Por favor, revise a conversa manualmente.';
-            fallbackMessage = 'Sistema de resumo temporariamente indisponível';
+            fallbackMessage = response.status === 402 
+              ? 'Créditos de IA esgotados' 
+              : 'Sistema de resumo temporariamente indisponível';
             break;
           case 'reply':
             fallbackResult = 'Obrigado pela sua mensagem. Nossa equipe irá analisar seu caso e retornar em breve.';
-            fallbackMessage = 'Sugestão de resposta temporariamente indisponível';
+            fallbackMessage = response.status === 402 
+              ? 'Créditos de IA esgotados' 
+              : 'Sugestão de resposta temporariamente indisponível';
             break;
           case 'tags':
             fallbackResult = ''; // Empty tags
-            fallbackMessage = 'Sistema de tags temporariamente indisponível';
+            fallbackMessage = response.status === 402 
+              ? 'Créditos de IA esgotados' 
+              : 'Sistema de tags temporariamente indisponível';
             break;
           default:
             fallbackResult = 'Resultado não disponível';
-            fallbackMessage = 'Serviço temporariamente indisponível';
+            fallbackMessage = response.status === 402 
+              ? 'Créditos de IA esgotados' 
+              : 'Serviço temporariamente indisponível';
         }
         
         return new Response(JSON.stringify({ 
@@ -190,15 +201,6 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
           message: fallbackMessage
         }), {
           status: 200, // ✅ Return 200 with fallback instead of error
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ 
-          error: 'AI credits depleted. Please add credits to your workspace.' 
-        }), {
-          status: 402,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
