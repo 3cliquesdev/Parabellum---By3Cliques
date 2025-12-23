@@ -287,7 +287,7 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
                 <SelectItem value="unassigned">Não atribuído</SelectItem>
                 {supportUsers.map((user: any) => (
                   <SelectItem key={user.id} value={user.id}>
-                    {user.full_name}
+                    {user.full_name || user.email || 'Usuário sem nome'}
                   </SelectItem>
                 ))}
               </SelectContent>
