@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Brain, Loader2, Zap, FileText, Table, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Brain, Loader2, Zap, FileText, Table, AlertTriangle, MessageSquare } from "lucide-react";
 import { UniversalFileUploader } from "@/components/UniversalFileUploader";
 import { DocumentUploader } from "@/components/DocumentUploader";
 import { KnowledgeColumnMapper } from "@/components/KnowledgeColumnMapper";
@@ -15,10 +15,15 @@ import { DataPreviewTable } from "@/components/DataPreviewTable";
 import { KnowledgeImportProgress } from "@/components/KnowledgeImportProgress";
 import { useImportKnowledge } from "@/hooks/useImportKnowledge";
 import { useImportDocument } from "@/hooks/useImportDocument";
+import { useImportOctadesk } from "@/hooks/useImportOctadesk";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
+import { OctadeskFileUploader } from "@/components/octadesk/OctadeskFileUploader";
+import { OctadeskConversationTable } from "@/components/octadesk/OctadeskConversationTable";
+import { OctadeskImportConfig, OctadeskImportOptions } from "@/components/octadesk/OctadeskImportConfig";
+import { OctadeskConversation } from "@/utils/octadeskParser";
+import { Progress } from "@/components/ui/progress";
 const LOG_PREFIX = '[KnowledgeImport]';
 
 const logInfo = (message: string, data?: Record<string, unknown>) => {
@@ -64,8 +69,14 @@ export default function KnowledgeImport() {
   const [documentMode, setDocumentMode] = useState<'full_document' | 'split_sections'>('full_document');
   const [documentImportResult, setDocumentImportResult] = useState<any>(null);
 
+  // Octadesk state
+  const [octadeskConversations, setOctadeskConversations] = useState<OctadeskConversation[]>([]);
+  const [octadeskSelectedIds, setOctadeskSelectedIds] = useState<Set<string>>(new Set());
+  const [octadeskImportResult, setOctadeskImportResult] = useState<any>(null);
+
   const csvImportMutation = useImportKnowledge();
   const documentImportMutation = useImportDocument();
+  const { importConversations, isImporting: isOctadeskImporting, progress: octadeskProgress } = useImportOctadesk();
 
   useEffect(() => {
     logInfo('Component mounted', { timestamp: new Date().toISOString() });
@@ -181,6 +192,42 @@ export default function KnowledgeImport() {
     setDocumentCategory("Importado");
     setDocumentTags("");
     setDocumentImportResult(null);
+  };
+
+  const handleOctadeskDataParsed = useCallback((conversations: OctadeskConversation[]) => {
+    logInfo('Octadesk data parsed', { conversationCount: conversations.length });
+    setOctadeskConversations(conversations);
+    setOctadeskSelectedIds(new Set());
+    setOctadeskImportResult(null);
+    setImportError(null);
+  }, []);
+
+  const handleOctadeskImport = async (options: OctadeskImportOptions) => {
+    const selectedConversations = octadeskConversations.filter(c => octadeskSelectedIds.has(c.id));
+    
+    logInfo('Starting Octadesk import', { 
+      selectedCount: selectedConversations.length,
+      options 
+    });
+
+    try {
+      const result = await importConversations(selectedConversations, options);
+      setOctadeskImportResult(result);
+      logInfo('Octadesk import completed', { 
+        articlesCreated: result.articlesCreated,
+        skipped: result.skipped,
+        failed: result.failed 
+      });
+    } catch (error) {
+      logError('Octadesk import failed', error);
+      setImportError(error instanceof Error ? error.message : 'Erro na importação');
+    }
+  };
+
+  const handleClearOctadesk = () => {
+    setOctadeskConversations([]);
+    setOctadeskSelectedIds(new Set());
+    setOctadeskImportResult(null);
   };
 
   const handleImportCsv = async () => {
@@ -401,7 +448,7 @@ export default function KnowledgeImport() {
 
       {/* Tabs */}
       <Tabs defaultValue="spreadsheets" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-lg grid-cols-3">
           <TabsTrigger value="spreadsheets" className="gap-2">
             <Table className="h-4 w-4" />
             Planilhas
@@ -409,6 +456,10 @@ export default function KnowledgeImport() {
           <TabsTrigger value="documents" className="gap-2">
             <FileText className="h-4 w-4" />
             Documentos
+          </TabsTrigger>
+          <TabsTrigger value="octadesk" className="gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Octadesk
           </TabsTrigger>
         </TabsList>
 
@@ -651,6 +702,80 @@ export default function KnowledgeImport() {
                   isProcessing={false}
                 />
               )}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Octadesk Tab */}
+        <TabsContent value="octadesk" className="space-y-6">
+          {/* Step 1: Upload JSON */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-foreground">Etapa 1: Upload do Arquivo Octadesk</h2>
+            <OctadeskFileUploader 
+              onDataParsed={handleOctadeskDataParsed}
+              isLoading={isOctadeskImporting}
+            />
+          </div>
+
+          {/* Step 2: Select Conversations */}
+          {octadeskConversations.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-foreground">Etapa 2: Selecionar Conversas</h2>
+              <OctadeskConversationTable
+                conversations={octadeskConversations}
+                selectedIds={octadeskSelectedIds}
+                onSelectionChange={setOctadeskSelectedIds}
+              />
+            </div>
+          )}
+
+          {/* Step 3: Config and Import */}
+          {octadeskConversations.length > 0 && !octadeskImportResult && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                {octadeskProgress && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Processando...</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Progress value={(octadeskProgress.processed / octadeskProgress.total) * 100} />
+                      <p className="text-sm text-muted-foreground">
+                        {octadeskProgress.processed} de {octadeskProgress.total} conversas processadas
+                      </p>
+                      <div className="flex gap-4 text-sm">
+                        <span className="text-green-600">✓ {octadeskProgress.success} criados</span>
+                        <span className="text-yellow-600">○ {octadeskProgress.skipped} pulados</span>
+                        <span className="text-red-600">✗ {octadeskProgress.failed} falhas</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+              <div>
+                <OctadeskImportConfig
+                  selectedCount={octadeskSelectedIds.size}
+                  onImport={handleOctadeskImport}
+                  isImporting={isOctadeskImporting}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Result */}
+          {octadeskImportResult && (
+            <div className="space-y-4">
+              <KnowledgeImportProgress
+                progress={octadeskImportResult.articlesCreated + octadeskImportResult.skipped + octadeskImportResult.failed}
+                total={octadeskImportResult.articlesCreated + octadeskImportResult.skipped + octadeskImportResult.failed}
+                created={octadeskImportResult.articlesCreated}
+                skipped={octadeskImportResult.skipped}
+                errors={octadeskImportResult.errors}
+                isProcessing={false}
+              />
+              <Button variant="outline" onClick={handleClearOctadesk}>
+                Importar Mais Conversas
+              </Button>
             </div>
           )}
         </TabsContent>
