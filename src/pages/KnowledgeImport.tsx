@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Brain, Loader2, Zap, FileText, Table } from "lucide-react";
+import { ArrowLeft, Brain, Loader2, Zap, FileText, Table, AlertTriangle } from "lucide-react";
 import { UniversalFileUploader } from "@/components/UniversalFileUploader";
 import { DocumentUploader } from "@/components/DocumentUploader";
 import { KnowledgeColumnMapper } from "@/components/KnowledgeColumnMapper";
@@ -17,6 +17,24 @@ import { useImportKnowledge } from "@/hooks/useImportKnowledge";
 import { useImportDocument } from "@/hooks/useImportDocument";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+const LOG_PREFIX = '[KnowledgeImport]';
+
+const logInfo = (message: string, data?: Record<string, unknown>) => {
+  console.info(`${LOG_PREFIX} ${message}`, data ? JSON.stringify(data, null, 2) : '');
+};
+
+const logError = (message: string, error?: unknown, context?: Record<string, unknown>) => {
+  const errorDetails = error instanceof Error 
+    ? { message: error.message, stack: error.stack }
+    : error ? { raw: String(error) } : null;
+  console.error(`${LOG_PREFIX} ${message}`, { error: errorDetails, context });
+};
+
+const logWarn = (message: string, data?: Record<string, unknown>) => {
+  console.warn(`${LOG_PREFIX} ${message}`, data ? JSON.stringify(data, null, 2) : '');
+};
 
 export default function KnowledgeImport() {
   const navigate = useNavigate();
@@ -35,6 +53,7 @@ export default function KnowledgeImport() {
   const [csvMode, setCsvMode] = useState<'raw_history' | 'ready_faq'>('ready_faq');
   const [csvImportResult, setCsvImportResult] = useState<any>(null);
   const [hasManualMapping, setHasManualMapping] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   // Document state
   const [documentText, setDocumentText] = useState<string>("");
@@ -49,13 +68,18 @@ export default function KnowledgeImport() {
   const documentImportMutation = useImportDocument();
 
   useEffect(() => {
-    console.log('[KnowledgeImport] Role check:', { 
+    logInfo('Component mounted', { timestamp: new Date().toISOString() });
+  }, []);
+
+  useEffect(() => {
+    logInfo('Role check', { 
       roleLoading, 
       isAdmin, 
       isManager,
-      hasAccess: isAdmin || isManager 
+      isGeneralManager,
+      hasAccess: isAdmin || isManager || isGeneralManager
     });
-  }, [roleLoading, isAdmin, isManager]);
+  }, [roleLoading, isAdmin, isManager, isGeneralManager]);
 
   // Auto-detect column mapping for CSV
   useEffect(() => {
@@ -99,18 +123,38 @@ export default function KnowledgeImport() {
     setMapping(newMapping);
   }, [csvHeaders, hasManualMapping]);
 
-  const handleDataParsed = (data: any[], headers: string[]) => {
+  const handleDataParsed = useCallback((data: any[], headers: string[]) => {
+    logInfo('Data parsed from file', { 
+      rowCount: data.length, 
+      headerCount: headers.length,
+      headers,
+      sampleData: data.slice(0, 2).map(row => Object.keys(row))
+    });
+    
     setCsvData(data);
     setCsvHeaders(headers);
     setCsvImportResult(null);
-  };
+    setImportError(null);
+    
+    if (data.length === 0 && headers.length === 0) {
+      logInfo('File cleared or empty data received');
+    }
+  }, []);
 
-  const handleTextExtracted = (text: string, fileName: string, pageCount?: number) => {
+  const handleTextExtracted = useCallback((text: string, fileName: string, pageCount?: number) => {
+    logInfo('Document text extracted', { 
+      fileName, 
+      textLength: text.length,
+      pageCount,
+      preview: text.substring(0, 100) + '...'
+    });
+    
     setDocumentText(text);
     setDocumentFileName(fileName);
     setDocumentPageCount(pageCount);
     setDocumentImportResult(null);
-  };
+    setImportError(null);
+  }, []);
 
   const handleMappingChange = (field: string, csvColumn: string) => {
     setHasManualMapping(true);
@@ -140,7 +184,18 @@ export default function KnowledgeImport() {
   };
 
   const handleImportCsv = async () => {
+    logInfo('Starting CSV import', { 
+      totalRows: csvData.length,
+      mode: csvMode,
+      mapping 
+    });
+    
+    setImportError(null);
+
     if (mapping.input === '__none__' || mapping.output === '__none__') {
+      const error = "Mapeamento incompleto: colunas de Entrada e Saída são obrigatórias.";
+      logWarn('Import validation failed', { reason: 'incomplete_mapping', mapping });
+      setImportError(error);
       toast({
         title: "Mapeamento incompleto",
         description: "Você precisa mapear pelo menos as colunas de Entrada e Saída.",
@@ -149,14 +204,31 @@ export default function KnowledgeImport() {
       return;
     }
 
-    const rows = csvData.map(row => ({
-      input: String(row[mapping.input] || ''),
-      output: String(row[mapping.output] || ''),
-      category: mapping.category !== '__none__' ? String(row[mapping.category] || '') : undefined,
-      tags: mapping.tags !== '__none__' ? String(row[mapping.tags] || '') : undefined,
-    })).filter(row => row.input && row.output);
+    const rows = csvData.map((row, index) => {
+      const mapped = {
+        input: String(row[mapping.input] || ''),
+        output: String(row[mapping.output] || ''),
+        category: mapping.category !== '__none__' ? String(row[mapping.category] || '') : undefined,
+        tags: mapping.tags !== '__none__' ? String(row[mapping.tags] || '') : undefined,
+      };
+      
+      if (!mapped.input || !mapped.output) {
+        logWarn('Row skipped due to missing data', { rowIndex: index, hasInput: !!mapped.input, hasOutput: !!mapped.output });
+      }
+      
+      return mapped;
+    }).filter(row => row.input && row.output);
+
+    logInfo('Rows prepared for import', { 
+      originalCount: csvData.length,
+      validCount: rows.length,
+      skippedCount: csvData.length - rows.length
+    });
 
     if (rows.length === 0) {
+      const error = "Nenhuma linha válida encontrada com Entrada e Saída preenchidas.";
+      logWarn('No valid rows', { mapping, sampleRow: csvData[0] });
+      setImportError(error);
       toast({
         title: "Nenhum dado válido",
         description: "Não foram encontradas linhas com Entrada e Saída preenchidas.",
@@ -166,19 +238,54 @@ export default function KnowledgeImport() {
     }
 
     try {
+      logInfo('Calling import mutation', { rowCount: rows.length, mode: csvMode });
+      const startTime = Date.now();
+      
       const result = await csvImportMutation.mutateAsync({
         rows,
         mode: csvMode,
         source: 'manual_import',
       });
+      
+      const duration = Date.now() - startTime;
+      logInfo('Import completed successfully', { 
+        duration: `${duration}ms`,
+        created: result.created,
+        skipped: result.skipped,
+        errors: result.errors?.length || 0
+      });
+      
       setCsvImportResult(result);
+      
+      if (result.errors && result.errors.length > 0) {
+        logWarn('Import completed with errors', { errors: result.errors });
+      }
     } catch (error) {
-      console.error('CSV import error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido na importação';
+      logError('CSV import failed', error, { rowCount: rows.length, mode: csvMode });
+      setImportError(errorMessage);
+      toast({
+        title: "Erro na importação",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
   };
 
   const handleImportDocument = async () => {
+    logInfo('Starting document import', { 
+      fileName: documentFileName,
+      textLength: documentText.length,
+      category: documentCategory,
+      mode: documentMode
+    });
+    
+    setImportError(null);
+
     if (!documentText.trim()) {
+      const error = "Nenhum texto extraído do documento.";
+      logWarn('Document import validation failed', { reason: 'empty_text' });
+      setImportError(error);
       toast({
         title: "Nenhum texto extraído",
         description: "Faça upload de um documento primeiro.",
@@ -190,6 +297,14 @@ export default function KnowledgeImport() {
     try {
       const tagsArray = documentTags.split(',').map(t => t.trim()).filter(Boolean);
       
+      logInfo('Calling document import mutation', { 
+        textLength: documentText.length,
+        tagsCount: tagsArray.length,
+        mode: documentMode
+      });
+      
+      const startTime = Date.now();
+      
       const result = await documentImportMutation.mutateAsync({
         text: documentText,
         fileName: documentFileName,
@@ -198,9 +313,27 @@ export default function KnowledgeImport() {
         mode: documentMode,
       });
       
+      const duration = Date.now() - startTime;
+      logInfo('Document import completed', { 
+        duration: `${duration}ms`,
+        created: result.created,
+        errors: result.errors?.length || 0
+      });
+      
       setDocumentImportResult(result);
+      
+      if (result.errors && result.errors.length > 0) {
+        logWarn('Document import completed with errors', { errors: result.errors });
+      }
     } catch (error) {
-      console.error('Document import error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido na importação';
+      logError('Document import failed', error, { fileName: documentFileName, mode: documentMode });
+      setImportError(errorMessage);
+      toast({
+        title: "Erro na importação",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
   };
 
@@ -256,6 +389,15 @@ export default function KnowledgeImport() {
           </p>
         </div>
       </div>
+
+      {/* Error Alert */}
+      {importError && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Erro na importação</AlertTitle>
+          <AlertDescription>{importError}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Tabs */}
       <Tabs defaultValue="spreadsheets" className="w-full">
