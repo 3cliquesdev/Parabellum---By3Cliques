@@ -199,3 +199,6 @@ verify_jwt = false
 
 [functions.fix-kiwify-offer-ids]
 verify_jwt = true
+
+[functions.import-octadesk]
+verify_jwt = true
