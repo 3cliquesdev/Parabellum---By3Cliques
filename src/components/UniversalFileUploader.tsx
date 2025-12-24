@@ -3,25 +3,98 @@ import Papa from 'papaparse';
 import readXlsxFile from 'read-excel-file';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, X, FileSpreadsheet } from 'lucide-react';
+import { Upload, X, FileSpreadsheet, FileJson } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface UniversalFileUploaderProps {
   onDataParsed: (data: any[], headers: string[]) => void;
 }
 
+interface JsonKnowledgeItem {
+  input: string;
+  output: string;
+  category?: string;
+  tags?: string;
+}
+
 export function UniversalFileUploader({ onDataParsed }: UniversalFileUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isJsonFile, setIsJsonFile] = useState(false);
   const { toast } = useToast();
+
+  const validateJsonStructure = (data: unknown): data is JsonKnowledgeItem[] => {
+    if (!Array.isArray(data)) {
+      return false;
+    }
+    
+    if (data.length === 0) {
+      return false;
+    }
+
+    // Check if all items have required fields
+    return data.every(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        'input' in item &&
+        'output' in item &&
+        typeof item.input === 'string' &&
+        typeof item.output === 'string'
+    );
+  };
 
   const handleFile = useCallback(
     async (selectedFile: File) => {
       const fileType = selectedFile.name.toLowerCase();
       
       try {
-        if (fileType.endsWith('.csv')) {
+        if (fileType.endsWith('.json')) {
+          // Parse JSON
+          setIsJsonFile(true);
+          const text = await selectedFile.text();
+          
+          let jsonData: unknown;
+          try {
+            jsonData = JSON.parse(text);
+          } catch {
+            toast({
+              title: 'JSON inválido',
+              description: 'O arquivo não contém um JSON válido.',
+              variant: 'destructive',
+            });
+            return;
+          }
+
+          if (!validateJsonStructure(jsonData)) {
+            toast({
+              title: 'Estrutura inválida',
+              description: 'O JSON deve ser um array com objetos contendo "input" e "output".',
+              variant: 'destructive',
+            });
+            return;
+          }
+
+          // Convert JSON to table format for compatibility
+          const headers = ['input', 'output', 'category', 'tags'];
+          const data = jsonData.map((item) => ({
+            input: item.input,
+            output: item.output,
+            category: item.category || '',
+            tags: item.tags || '',
+          }));
+
+          onDataParsed(data, headers);
+          setFile(selectedFile);
+          
+          toast({
+            title: 'JSON carregado',
+            description: `${data.length} itens encontrados no arquivo.`,
+          });
+
+        } else if (fileType.endsWith('.csv')) {
           // Parse CSV
+          setIsJsonFile(false);
           Papa.parse(selectedFile, {
             header: true,
             skipEmptyLines: true,
@@ -42,6 +115,7 @@ export function UniversalFileUploader({ onDataParsed }: UniversalFileUploaderPro
           });
         } else if (fileType.endsWith('.xlsx') || fileType.endsWith('.xls')) {
           // Parse Excel
+          setIsJsonFile(false);
           const rows = await readXlsxFile(selectedFile);
           
           if (rows.length > 0) {
@@ -60,7 +134,7 @@ export function UniversalFileUploader({ onDataParsed }: UniversalFileUploaderPro
         } else {
           toast({
             title: 'Formato não suportado',
-            description: 'Apenas arquivos CSV, XLSX e XLS são aceitos.',
+            description: 'Apenas arquivos CSV, XLSX, XLS e JSON são aceitos.',
             variant: 'destructive',
           });
         }
@@ -110,6 +184,7 @@ export function UniversalFileUploader({ onDataParsed }: UniversalFileUploaderPro
 
   const clearFile = useCallback(() => {
     setFile(null);
+    setIsJsonFile(false);
     onDataParsed([], []);
   }, [onDataParsed]);
 
@@ -119,7 +194,11 @@ export function UniversalFileUploader({ onDataParsed }: UniversalFileUploaderPro
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <FileSpreadsheet className="h-8 w-8 text-primary" />
+              {isJsonFile ? (
+                <FileJson className="h-8 w-8 text-primary" />
+              ) : (
+                <FileSpreadsheet className="h-8 w-8 text-primary" />
+              )}
               <div>
                 <p className="font-medium text-foreground">{file.name}</p>
                 <p className="text-sm text-muted-foreground">
@@ -157,7 +236,7 @@ export function UniversalFileUploader({ onDataParsed }: UniversalFileUploaderPro
         </p>
         <input
           type="file"
-          accept=".csv,.xlsx,.xls"
+          accept=".csv,.xlsx,.xls,.json"
           onChange={handleFileInput}
           className="hidden"
           id="file-upload"
@@ -168,7 +247,7 @@ export function UniversalFileUploader({ onDataParsed }: UniversalFileUploaderPro
           </Button>
         </label>
         <p className="text-xs text-muted-foreground mt-4">
-          Formatos aceitos: CSV, XLSX, XLS
+          Formatos aceitos: CSV, XLSX, XLS, JSON
         </p>
       </div>
     </div>
