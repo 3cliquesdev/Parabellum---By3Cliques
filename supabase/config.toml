@@ -1,5 +1,8 @@
 project_id = "zaeozfdjhrmblfaxsyuu"
 
+[functions.import-kiwify-contacts]
+verify_jwt = true
+
 [functions.upload-chat-media]
 verify_jwt = true
 

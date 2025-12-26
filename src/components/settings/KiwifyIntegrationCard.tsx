@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ShoppingCart, Copy, ExternalLink, CheckCircle2, AlertTriangle, Loader2, Plus, Trash2, Key, RefreshCw, Settings, History, Clock } from "lucide-react";
+import { ShoppingCart, Copy, ExternalLink, CheckCircle2, AlertTriangle, Loader2, Plus, Trash2, Key, RefreshCw, Settings, History, Clock, Users, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +26,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function KiwifyIntegrationCard() {
   const { toast } = useToast();
@@ -39,6 +47,13 @@ export default function KiwifyIntegrationCard() {
   const [syncStats, setSyncStats] = useState<any>(null);
   const [apiConfigOpen, setApiConfigOpen] = useState(false);
   const [syncHistoryOpen, setSyncHistoryOpen] = useState(false);
+  
+  // Estado para importação de contatos
+  const [importContactsOpen, setImportContactsOpen] = useState(false);
+  const [importDaysBack, setImportDaysBack] = useState("365");
+  const [updateExisting, setUpdateExisting] = useState(false);
+  const [importingContacts, setImportingContacts] = useState(false);
+  const [importJobId, setImportJobId] = useState<string | null>(null);
   
   const [apiCredentials, setApiCredentials] = useState({
     client_id: "",
@@ -299,6 +314,91 @@ export default function KiwifyIntegrationCard() {
         description: error.message,
         variant: "destructive",
       });
+    }
+  };
+
+  // Função para importar apenas contatos (sem deals)
+  const handleImportContacts = async () => {
+    setImportContactsOpen(false);
+    setImportingContacts(true);
+    
+    toast({
+      title: "Importação iniciada",
+      description: "Importando apenas contatos PAID (sem deals)...",
+    });
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { data, error } = await supabase.functions.invoke("import-kiwify-contacts", {
+        body: {
+          days_back: parseInt(importDaysBack),
+          update_existing: updateExisting,
+          user_id: user?.id,
+        },
+      });
+
+      if (error) {
+        toast({
+          title: "❌ Erro na Importação",
+          description: error.message || "Falha ao importar contatos da Kiwify",
+          variant: "destructive",
+        });
+        setImportingContacts(false);
+        return;
+      }
+      
+      if (data?.error) {
+        toast({
+          title: "❌ Erro na Importação",
+          description: data.error || "Falha ao importar contatos da Kiwify",
+          variant: "destructive",
+        });
+        setImportingContacts(false);
+        return;
+      }
+
+      // Iniciar tracking do job
+      setImportJobId(data.job_id);
+
+      // Quando job completar, mostrar relatório
+      const checkJobCompletion = setInterval(async () => {
+        const { data: job } = await supabase
+          .from("sync_jobs")
+          .select("*")
+          .eq("id", data.job_id)
+          .single();
+
+        if (job && (job.status === "completed" || job.status === "failed")) {
+          clearInterval(checkJobCompletion);
+          setImportJobId(null);
+          setImportingContacts(false);
+          
+          queryClient.invalidateQueries({ queryKey: ["kiwify-last-sync"] });
+          queryClient.invalidateQueries({ queryKey: ["kiwify-sync-history"] });
+          
+          if (job.status === "completed") {
+            toast({
+              title: "✅ Importação Concluída",
+              description: `${job.contacts_created || 0} contatos criados, ${job.updated_items || 0} atualizados`,
+            });
+          } else {
+            toast({
+              title: "❌ Importação falhou",
+              description: "Verifique os logs para mais detalhes",
+              variant: "destructive",
+            });
+          }
+        }
+      }, 2000);
+
+    } catch (error: any) {
+      toast({
+        title: "❌ Erro ao iniciar importação",
+        description: error.message,
+        variant: "destructive",
+      });
+      setImportingContacts(false);
     }
   };
 
@@ -813,8 +913,47 @@ export default function KiwifyIntegrationCard() {
 
           <Separator />
 
-          {/* Botão de Sincronização */}
-          <div className="space-y-3">
+          {/* Botões de Ação */}
+          <div className="space-y-4">
+            {/* Importar Apenas Contatos (NOVO) */}
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg border border-emerald-200 dark:border-emerald-900">
+              <div className="flex items-start gap-3">
+                <Users className="h-5 w-5 text-emerald-600 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
+                    Importar Apenas Contatos (Paid)
+                  </p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
+                    Importa clientes com vendas pagas, sem criar deals. Ideal para cadastrar clientes antigos.
+                  </p>
+                  {importJobId ? (
+                    <SyncProgressWidget jobId={importJobId} />
+                  ) : (
+                    <Button
+                      onClick={() => setImportContactsOpen(true)}
+                      disabled={!apiConfigs?.client_id || importingContacts}
+                      className="mt-3 gap-2"
+                      variant="outline"
+                      size="sm"
+                    >
+                      {importingContacts ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Importando...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-4 w-4" />
+                          Importar Apenas Contatos
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Sincronizar Vendas (existente) */}
             {currentJobId ? (
               <SyncProgressWidget jobId={currentJobId} />
             ) : (
@@ -832,7 +971,7 @@ export default function KiwifyIntegrationCard() {
                 ) : (
                   <>
                     <RefreshCw className="h-5 w-5" />
-                    🔄 Importar Todas as Vendas
+                    🔄 Importar Todas as Vendas (com Deals)
                   </>
                 )}
               </Button>
@@ -842,7 +981,7 @@ export default function KiwifyIntegrationCard() {
                 ? "⚠️ Configure as credenciais da API antes de sincronizar"
                 : lastSync?.status === 'running' 
                 ? "⏳ Sincronização em andamento..."
-                : "Importa todas as vendas históricas da Kiwify para o CRM"}
+                : "Importa vendas + cria deals no pipeline"}
             </p>
           </div>
 
@@ -975,6 +1114,68 @@ export default function KiwifyIntegrationCard() {
                 </p>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Importação de Contatos */}
+      <Dialog open={importContactsOpen} onOpenChange={setImportContactsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-emerald-600" />
+              Importar Apenas Contatos
+            </DialogTitle>
+            <DialogDescription>
+              Importa clientes com vendas PAID diretamente para a base de contatos, sem criar deals.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Período de importação</Label>
+              <Select value={importDaysBack} onValueChange={setImportDaysBack}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o período" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">Últimos 30 dias</SelectItem>
+                  <SelectItem value="90">Últimos 90 dias</SelectItem>
+                  <SelectItem value="180">Últimos 6 meses</SelectItem>
+                  <SelectItem value="365">Último 1 ano</SelectItem>
+                  <SelectItem value="730">Últimos 2 anos</SelectItem>
+                  <SelectItem value="1095">Últimos 3 anos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="update-existing"
+                checked={updateExisting}
+                onCheckedChange={(checked) => setUpdateExisting(checked === true)}
+              />
+              <Label htmlFor="update-existing" className="text-sm font-normal">
+                Atualizar contatos existentes (telefone, documento, etc.)
+              </Label>
+            </div>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
+              <p className="text-xs text-amber-900 dark:text-amber-100">
+                ⚠️ <strong>Importante:</strong> Esta importação cria APENAS contatos. Nenhum deal será criado. 
+                Use para cadastrar clientes antigos que não estão na base.
+              </p>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setImportContactsOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleImportContacts} className="gap-2">
+                <Download className="h-4 w-4" />
+                Iniciar Importação
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
