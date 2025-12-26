@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import AddKiwifyTokenDialog from "./AddKiwifyTokenDialog";
 import SyncOptionsDialog, { SyncOptions } from "./SyncOptionsDialog";
 import SyncProgressWidget from "./SyncProgressWidget";
+import KiwifyQueueProgressWidget from "./KiwifyQueueProgressWidget";
 import SyncReportDialog from "./SyncReportDialog";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -317,14 +318,14 @@ export default function KiwifyIntegrationCard() {
     }
   };
 
-  // Função para importar apenas contatos (sem deals)
+  // Função para importar apenas contatos (sem deals) - via fila
   const handleImportContacts = async () => {
     setImportContactsOpen(false);
     setImportingContacts(true);
     
     toast({
-      title: "Importação iniciada",
-      description: "Importando apenas contatos PAID (sem deals)...",
+      title: "Criando fila de importação",
+      description: "Preparando janelas de 90 dias para processamento...",
     });
     
     try {
@@ -341,7 +342,7 @@ export default function KiwifyIntegrationCard() {
       if (error) {
         toast({
           title: "❌ Erro na Importação",
-          description: error.message || "Falha ao importar contatos da Kiwify",
+          description: error.message || "Falha ao criar fila de importação",
           variant: "destructive",
         });
         setImportingContacts(false);
@@ -351,17 +352,23 @@ export default function KiwifyIntegrationCard() {
       if (data?.error) {
         toast({
           title: "❌ Erro na Importação",
-          description: data.error || "Falha ao importar contatos da Kiwify",
+          description: data.error || "Falha ao criar fila de importação",
           variant: "destructive",
         });
         setImportingContacts(false);
         return;
       }
 
+      // Mostrar feedback de quantas janelas foram criadas
+      toast({
+        title: "✅ Fila de importação criada",
+        description: `${data.windows_created} janelas de 90 dias agendadas. O CRON processará automaticamente.`,
+      });
+
       // Iniciar tracking do job
       setImportJobId(data.job_id);
 
-      // Quando job completar, mostrar relatório
+      // Polling para verificar progresso
       const checkJobCompletion = setInterval(async () => {
         const { data: job } = await supabase
           .from("sync_jobs")
@@ -369,7 +376,7 @@ export default function KiwifyIntegrationCard() {
           .eq("id", data.job_id)
           .single();
 
-        if (job && (job.status === "completed" || job.status === "failed")) {
+        if (job && (job.status === "completed" || job.status === "failed" || job.status === "completed_with_errors")) {
           clearInterval(checkJobCompletion);
           setImportJobId(null);
           setImportingContacts(false);
@@ -377,9 +384,9 @@ export default function KiwifyIntegrationCard() {
           queryClient.invalidateQueries({ queryKey: ["kiwify-last-sync"] });
           queryClient.invalidateQueries({ queryKey: ["kiwify-sync-history"] });
           
-          if (job.status === "completed") {
+          if (job.status === "completed" || job.status === "completed_with_errors") {
             toast({
-              title: "✅ Importação Concluída",
+              title: job.status === "completed" ? "✅ Importação Concluída" : "⚠️ Importação Concluída com Erros",
               description: `${job.contacts_created || 0} contatos criados, ${job.updated_items || 0} atualizados`,
             });
           } else {
@@ -390,7 +397,7 @@ export default function KiwifyIntegrationCard() {
             });
           }
         }
-      }, 2000);
+      }, 5000); // Verificar a cada 5 segundos
 
     } catch (error: any) {
       toast({
@@ -927,7 +934,9 @@ export default function KiwifyIntegrationCard() {
                     Importa clientes com vendas pagas, sem criar deals. Ideal para cadastrar clientes antigos.
                   </p>
                   {importJobId ? (
-                    <SyncProgressWidget jobId={importJobId} />
+                    <div className="mt-3">
+                      <KiwifyQueueProgressWidget jobId={importJobId} />
+                    </div>
                   ) : (
                     <Button
                       onClick={() => setImportContactsOpen(true)}

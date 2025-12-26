@@ -3110,6 +3110,71 @@ export type Database = {
           },
         ]
       }
+      kiwify_import_queue: {
+        Row: {
+          completed_at: string | null
+          contacts_created: number | null
+          contacts_skipped: number | null
+          contacts_updated: number | null
+          created_at: string
+          id: string
+          job_id: string
+          last_error: string | null
+          max_retries: number
+          retry_count: number
+          sales_fetched: number | null
+          scheduled_for: string
+          started_at: string | null
+          status: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          completed_at?: string | null
+          contacts_created?: number | null
+          contacts_skipped?: number | null
+          contacts_updated?: number | null
+          created_at?: string
+          id?: string
+          job_id: string
+          last_error?: string | null
+          max_retries?: number
+          retry_count?: number
+          sales_fetched?: number | null
+          scheduled_for?: string
+          started_at?: string | null
+          status?: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          completed_at?: string | null
+          contacts_created?: number | null
+          contacts_skipped?: number | null
+          contacts_updated?: number | null
+          created_at?: string
+          id?: string
+          job_id?: string
+          last_error?: string | null
+          max_retries?: number
+          retry_count?: number
+          sales_fetched?: number | null
+          scheduled_for?: string
+          started_at?: string | null
+          status?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kiwify_import_queue_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "sync_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kiwify_webhook_tokens: {
         Row: {
           created_at: string

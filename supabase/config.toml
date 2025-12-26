@@ -3,6 +3,13 @@ project_id = "zaeozfdjhrmblfaxsyuu"
 [functions.import-kiwify-contacts]
 verify_jwt = true
 
+[functions.process-kiwify-import-queue]
+verify_jwt = false
+
+[functions.process-kiwify-import-queue.cron]
+schedule = "*/2 * * * *"
+region = "us-east-1"
+
 [functions.upload-chat-media]
 verify_jwt = true
 
