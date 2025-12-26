@@ -205,3 +205,6 @@ verify_jwt = true
 
 [functions.test-octadesk]
 verify_jwt = true
+
+[functions.fetch-tracking]
+verify_jwt = true
