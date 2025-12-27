@@ -54,21 +54,23 @@ export function LinkedClientsTable({ clients, consultants, isLoading }: LinkedCl
   const paginatedClients = filteredClients.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const exportToCSV = () => {
-    const headers = ["Cliente", "Email", "Telefone", "Consultor", "Status", "Data Cadastro"];
+    const headers = ["client_id", "client_name", "email", "phone", "consultant_id", "consultant_name", "status", "created_at"];
     const rows = filteredClients.map((c) => [
+      c.id,
       `${c.first_name} ${c.last_name}`,
       c.email || "",
       c.phone || "",
+      c.consultant_id,
       c.consultant_name,
       c.status,
-      format(new Date(c.created_at), "dd/MM/yyyy", { locale: ptBR }),
+      format(new Date(c.created_at), "yyyy-MM-dd", { locale: ptBR }),
     ]);
 
     const csv = [headers.join(";"), ...rows.map((r) => r.join(";"))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `clientes-vinculados-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    link.download = `distribuicao-clientes-${format(new Date(), "yyyy-MM-dd")}.csv`;
     link.click();
   };
 

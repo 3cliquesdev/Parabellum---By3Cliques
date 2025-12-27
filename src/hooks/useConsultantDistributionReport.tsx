@@ -221,6 +221,91 @@ export function useConsultantDistributionReport() {
     },
   });
 
+  // Mutação para atualizar vínculos em lote via planilha
+  const updateClientConsultantsMutation = useMutation({
+    mutationFn: async (updates: { client_id: string; consultant_id: string }[]) => {
+      // Validar que temos dados
+      if (!updates.length) {
+        throw new Error("Nenhuma atualização para processar");
+      }
+
+      // Limite de segurança
+      if (updates.length > 1000) {
+        throw new Error("Limite máximo de 1000 atualizações por vez");
+      }
+
+      // Buscar consultores válidos
+      const { data: validConsultants } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "consultant");
+
+      const validConsultantIds = new Set(validConsultants?.map((c) => c.user_id) || []);
+
+      // Buscar clientes válidos
+      const clientIds = updates.map((u) => u.client_id);
+      const { data: validClients } = await supabase
+        .from("contacts")
+        .select("id")
+        .in("id", clientIds);
+
+      const validClientIds = new Set(validClients?.map((c) => c.id) || []);
+
+      // Separar válidos e inválidos
+      const validUpdates: { client_id: string; consultant_id: string }[] = [];
+      const errors: string[] = [];
+
+      for (const update of updates) {
+        if (!validClientIds.has(update.client_id)) {
+          errors.push(`Cliente não encontrado: ${update.client_id}`);
+          continue;
+        }
+        if (!validConsultantIds.has(update.consultant_id)) {
+          errors.push(`Consultor inválido: ${update.consultant_id}`);
+          continue;
+        }
+        validUpdates.push(update);
+      }
+
+      // Executar updates válidos
+      let successCount = 0;
+      for (const update of validUpdates) {
+        const { error } = await supabase
+          .from("contacts")
+          .update({ consultant_id: update.consultant_id })
+          .eq("id", update.client_id);
+
+        if (!error) {
+          successCount++;
+        } else {
+          errors.push(`Erro ao atualizar ${update.client_id}: ${error.message}`);
+        }
+      }
+
+      return {
+        success: successCount > 0,
+        successCount,
+        totalProcessed: updates.length,
+        errors,
+      };
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Importação concluída",
+        description: `${data.successCount} de ${data.totalProcessed} clientes atualizados`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["consultant-distribution"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro na importação",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     stats: statsQuery.data,
     isLoadingStats: statsQuery.isLoading,
@@ -233,5 +318,7 @@ export function useConsultantDistributionReport() {
     isLoadingUnlinked: unlinkedClientsQuery.isLoading,
     distributeBatch: distributeBatchMutation.mutate,
     isDistributing: distributeBatchMutation.isPending,
+    updateClientConsultants: updateClientConsultantsMutation.mutateAsync,
+    isUpdatingConsultants: updateClientConsultantsMutation.isPending,
   };
 }
