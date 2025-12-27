@@ -72,6 +72,7 @@ import SalesRecovery from "./pages/SalesRecovery";
 import AdminOnboarding from "./pages/AdminOnboarding";
 import ConsultantDetail from "./pages/ConsultantDetail";
 import Consultants from "./pages/Consultants";
+import ConsultantDistribution from "./pages/reports/ConsultantDistribution";
 import DebugRoutes from "./pages/DebugRoutes";
 import AIMessagesSettings from "./pages/AIMessagesSettings";
 import TicketNotificationRulesSettings from "./pages/TicketNotificationRulesSettings";
@@ -134,6 +135,7 @@ const App = () => {
             <Route path="/playbook-executions" element={<ProtectedRoute requiredPermission="playbooks.view_executions"><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Analytics /></Layout></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute requiredPermission="reports.access"><Layout><Reports /></Layout></ProtectedRoute>} />
+            <Route path="/reports/consultant-distribution" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ConsultantDistribution /></Layout></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute requiredPermission="goals.view_own"><Layout><Goals /></Layout></ProtectedRoute>} />
             <Route path="/goals-management" element={<ProtectedRoute requiredPermission="goals.set"><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
             <Route path="/cadences" element={<ProtectedRoute requiredPermission="cadences.manage"><Layout><Cadences /></Layout></ProtectedRoute>} />

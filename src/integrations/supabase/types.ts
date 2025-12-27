@@ -5259,6 +5259,10 @@ export type Database = {
         Args: { p_contact_id: string }
         Returns: Json
       }
+      distribute_unassigned_customers_batch: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
       find_similar_articles: {
         Args: {
           article_id: string

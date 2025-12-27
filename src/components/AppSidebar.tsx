@@ -144,6 +144,7 @@ const universalMenuGroups: MenuGroup[] = [
     items: [
       { title: "🎯 Definir Metas", href: "/goals-management", icon: Target, permission: "goals.set" },
       { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
+      { title: "📊 Distribuição", href: "/reports/consultant-distribution", icon: BarChart3, permission: "analytics.view" },
     ]
   },
   {
