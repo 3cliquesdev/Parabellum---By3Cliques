@@ -43,7 +43,8 @@ export function useFraudDetection(filters: FraudDetectionFilters = {}) {
         .from('kiwify_events')
         .select('payload, offer_id, created_at, order_id')
         .in('event_type', ['paid', 'order_approved'])
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(5000);
 
       if (startDate) {
         query = query.gte('created_at', startDate.toISOString());

@@ -16,10 +16,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function FraudDetection() {
   const [filters, setFilters] = useState<FraudDetectionFilters>({
-    minPurchases: 2,
-    maxValue: 50, // Ofertas promocionais geralmente são até R$50
-    startDate: subDays(new Date(), 90),
-    endDate: new Date()
+    minPurchases: 2
+    // Sem filtros restritivos por padrão para mostrar todos os dados
   });
 
   const { data, isLoading, refetch } = useFraudDetection(filters);
