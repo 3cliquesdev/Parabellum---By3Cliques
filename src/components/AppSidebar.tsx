@@ -29,6 +29,7 @@ import {
   RefreshCw,
   CheckCircle2,
   Tags,
+  AlertTriangle,
   LucideIcon
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -145,6 +146,7 @@ const universalMenuGroups: MenuGroup[] = [
       { title: "🎯 Definir Metas", href: "/goals-management", icon: Target, permission: "goals.set" },
       { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
       { title: "📊 Distribuição", href: "/reports/consultant-distribution", icon: BarChart3, permission: "reports.distribution" },
+      { title: "🚨 Detecção de Fraude", href: "/reports/fraud-detection", icon: AlertTriangle, permission: "analytics.view" },
     ]
   },
   {

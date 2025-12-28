@@ -48,6 +48,7 @@ import Knowledge from "./pages/Knowledge";
 import PublicTicketForm from "./pages/PublicTicketForm";
 import AIStudio from "./pages/AIStudio";
 import MyPortfolio from "./pages/MyPortfolio";
+import FraudDetection from "./pages/reports/FraudDetection";
 import CSManagement from "./pages/CSManagement";
 import SalesManagement from "./pages/SalesManagement";
 import SalesRepDetail from "./pages/SalesRepDetail";
@@ -136,6 +137,7 @@ const App = () => {
             <Route path="/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Analytics /></Layout></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute requiredPermission="reports.access"><Layout><Reports /></Layout></ProtectedRoute>} />
             <Route path="/reports/consultant-distribution" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ConsultantDistribution /></Layout></ProtectedRoute>} />
+            <Route path="/reports/fraud-detection" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><FraudDetection /></Layout></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute requiredPermission="goals.view_own"><Layout><Goals /></Layout></ProtectedRoute>} />
             <Route path="/goals-management" element={<ProtectedRoute requiredPermission="goals.set"><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
             <Route path="/cadences" element={<ProtectedRoute requiredPermission="cadences.manage"><Layout><Cadences /></Layout></ProtectedRoute>} />
