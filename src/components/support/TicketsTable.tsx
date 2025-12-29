@@ -1,0 +1,241 @@
+import { format, isToday, isYesterday } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
+import { Clock, AlertCircle, CheckCircle, UserPen, AlertTriangle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+
+interface Ticket {
+  id: string;
+  ticket_number?: string | null;
+  subject: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed';
+  created_at: string;
+  due_date: string | null;
+  created_by?: string | null;
+  assigned_to?: string | null;
+  customer: {
+    id?: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+    avatar_url?: string;
+  } | null;
+  assigned_user?: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  } | null;
+  created_by_user?: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  } | {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  }[] | null;
+  department?: {
+    id: string;
+    name: string;
+    color?: string | null;
+  } | null;
+}
+
+interface TicketsTableProps {
+  tickets: Ticket[];
+  selectedTicketId: string | null;
+  onSelectTicket: (ticketId: string) => void;
+  selectedTicketIds?: string[];
+  onToggleSelect?: (ticketId: string) => void;
+  onToggleSelectAll?: () => void;
+}
+
+const statusConfig = {
+  open: { icon: Clock, color: "text-blue-500", bg: "bg-blue-500" },
+  in_progress: { icon: Clock, color: "text-primary", bg: "bg-primary" },
+  waiting_customer: { icon: AlertCircle, color: "text-yellow-500", bg: "bg-yellow-500" },
+  resolved: { icon: CheckCircle, color: "text-green-500", bg: "bg-green-500" },
+  closed: { icon: CheckCircle, color: "text-muted-foreground", bg: "bg-muted-foreground" },
+};
+
+const statusLabels = {
+  open: 'Novo',
+  in_progress: 'Em Análise',
+  waiting_customer: 'Aguardando',
+  resolved: 'Resolvido',
+  closed: 'Fechado',
+};
+
+const priorityColors = {
+  low: 'bg-blue-500',
+  medium: 'bg-yellow-500',
+  high: 'bg-orange-500',
+  urgent: 'bg-red-500',
+};
+
+function formatTicketDate(dateString: string): string {
+  const date = new Date(dateString);
+  if (isToday(date)) {
+    return `Hoje ${format(date, 'HH:mm')}`;
+  }
+  if (isYesterday(date)) {
+    return `Ontem ${format(date, 'HH:mm')}`;
+  }
+  return format(date, "dd MMM", { locale: ptBR });
+}
+
+function isSlaExpired(dueDate: string | null, status: string): boolean {
+  if (!dueDate || ['resolved', 'closed'].includes(status)) return false;
+  return new Date(dueDate) < new Date();
+}
+
+export function TicketsTable({ 
+  tickets, 
+  selectedTicketId, 
+  onSelectTicket,
+  selectedTicketIds = [],
+  onToggleSelect,
+  onToggleSelectAll,
+}: TicketsTableProps) {
+  const { user } = useAuth();
+
+  if (tickets.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full p-8 text-center bg-card">
+        <p className="text-muted-foreground">Nenhum ticket encontrado</p>
+      </div>
+    );
+  }
+
+  const allSelected = tickets.length > 0 && selectedTicketIds.length === tickets.length;
+  const someSelected = selectedTicketIds.length > 0 && selectedTicketIds.length < tickets.length;
+
+  return (
+    <div className="h-full flex flex-col bg-card">
+      {/* Table Header */}
+      <div className="flex-none border-b border-border bg-muted/50">
+        <div className="grid grid-cols-[40px_100px_1fr_160px_140px_120px_90px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          {onToggleSelectAll && (
+            <div className="flex items-center justify-center">
+              <Checkbox 
+                checked={allSelected}
+                onCheckedChange={onToggleSelectAll}
+                className={someSelected ? "data-[state=checked]:bg-primary/50" : ""}
+              />
+            </div>
+          )}
+          {!onToggleSelectAll && <div />}
+          <div>Protocolo</div>
+          <div>Assunto</div>
+          <div>Solicitante</div>
+          <div>Responsável</div>
+          <div>Departamento</div>
+          <div className="text-right">Data</div>
+        </div>
+      </div>
+
+      {/* Table Body */}
+      <ScrollArea className="flex-1">
+        <div className="divide-y divide-border">
+          {tickets.map((ticket) => {
+            const StatusIcon = statusConfig[ticket.status].icon;
+            const isSelected = selectedTicketId === ticket.id;
+            const isChecked = selectedTicketIds.includes(ticket.id);
+            const slaExpired = isSlaExpired(ticket.due_date, ticket.status);
+            const isCreatedByMe = ticket.created_by === user?.id;
+            const isAssignedToOther = ticket.assigned_to && ticket.assigned_to !== user?.id;
+            const showCreatedByMeBadge = isCreatedByMe && isAssignedToOther;
+
+            return (
+              <div
+                key={ticket.id}
+                onClick={() => onSelectTicket(ticket.id)}
+                className={cn(
+                  "grid grid-cols-[40px_100px_1fr_160px_140px_120px_90px] gap-2 px-3 py-3 cursor-pointer transition-colors items-center",
+                  isSelected 
+                    ? "bg-primary/5 border-l-2 border-primary" 
+                    : "hover:bg-accent/50 border-l-2 border-transparent"
+                )}
+              >
+                {/* Checkbox */}
+                <div 
+                  className="flex items-center justify-center"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleSelect?.(ticket.id);
+                  }}
+                >
+                  {onToggleSelect && (
+                    <Checkbox checked={isChecked} />
+                  )}
+                </div>
+
+                {/* Protocol + Status */}
+                <div className="flex items-center gap-2">
+                  <div className={cn("w-2 h-2 rounded-full flex-shrink-0", statusConfig[ticket.status].bg)} />
+                  {slaExpired && (
+                    <AlertTriangle className="w-3 h-3 text-destructive flex-shrink-0" />
+                  )}
+                  <span className="text-xs font-mono text-muted-foreground truncate">
+                    {ticket.ticket_number || `#${ticket.id.slice(0, 6)}`}
+                  </span>
+                </div>
+
+                {/* Subject */}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm font-medium truncate text-foreground">
+                    {ticket.subject}
+                  </span>
+                  {showCreatedByMeBadge && (
+                    <span className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                      <UserPen className="h-2.5 w-2.5" />
+                    </span>
+                  )}
+                  <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", priorityColors[ticket.priority])} />
+                </div>
+
+                {/* Requester */}
+                <div className="text-sm text-muted-foreground truncate">
+                  {ticket.customer?.first_name} {ticket.customer?.last_name}
+                </div>
+
+                {/* Assignee */}
+                <div className="text-sm text-muted-foreground truncate">
+                  {ticket.assigned_user?.full_name || (
+                    <span className="text-muted-foreground/50 italic">Não atribuído</span>
+                  )}
+                </div>
+
+                {/* Department */}
+                <div className="text-sm truncate">
+                  {ticket.department?.name ? (
+                    <span 
+                      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                      style={{ 
+                        backgroundColor: ticket.department.color ? `${ticket.department.color}20` : undefined,
+                        color: ticket.department.color || undefined
+                      }}
+                    >
+                      {ticket.department.name}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground/50">—</span>
+                  )}
+                </div>
+
+                {/* Date */}
+                <div className="text-xs text-muted-foreground text-right">
+                  {formatTicketDate(ticket.created_at)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
