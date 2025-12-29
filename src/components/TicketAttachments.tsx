@@ -147,7 +147,7 @@ export function TicketAttachments({
                   </div>
                 )}
                 
-                {/* Overlay with actions */}
+                {/* Overlay with actions - Evidências não podem ser removidas */}
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <Button
                     size="sm"
@@ -156,15 +156,6 @@ export function TicketAttachments({
                   >
                     <ExternalLink className="w-4 h-4" />
                   </Button>
-                  {!readonly && (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => removeAttachment(index)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  )}
                 </div>
 
                 {/* File type badge */}
