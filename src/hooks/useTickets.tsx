@@ -8,7 +8,7 @@ type TicketStatus = 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | '
 
 export function useTickets(
   statusFilter?: TicketStatus, 
-  assignedFilter?: 'mine' | 'unassigned' | 'all', 
+  assignedFilter?: 'mine' | 'unassigned' | 'all' | 'created_by_me', 
   agentFilter?: string,
   advancedFilters?: TicketFilters
 ) {
@@ -66,11 +66,13 @@ export function useTickets(
       // CRITICAL: Support agents can only see their assigned tickets or unassigned tickets
       // Managers/admins can see all tickets
       if (!canSeeAllTickets) {
-        // Support agent: only see assigned to self OR unassigned
+        // Support agent filters
         if (assignedFilter === 'mine') {
           query = query.eq("assigned_to", user.id);
         } else if (assignedFilter === 'unassigned') {
           query = query.is("assigned_to", null);
+        } else if (assignedFilter === 'created_by_me') {
+          query = query.eq("created_by", user.id);
         } else {
           // "all" for support_agent means: assigned to self, unassigned, OR created by self
           query = query.or(`assigned_to.eq.${user.id},assigned_to.is.null,created_by.eq.${user.id}`);
@@ -81,6 +83,8 @@ export function useTickets(
           query = query.eq("assigned_to", user.id);
         } else if (assignedFilter === 'unassigned') {
           query = query.is("assigned_to", null);
+        } else if (assignedFilter === 'created_by_me') {
+          query = query.eq("created_by", user.id);
         }
         // "all" for managers = no filter (see everything)
       }
