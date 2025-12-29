@@ -761,6 +761,60 @@ export type Database = {
           },
         ]
       }
+      business_holidays: {
+        Row: {
+          created_at: string | null
+          date: string
+          description: string
+          id: string
+          is_recurring: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          description: string
+          id?: string
+          is_recurring?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          description?: string
+          id?: string
+          is_recurring?: boolean | null
+        }
+        Relationships: []
+      }
+      business_hours_config: {
+        Row: {
+          created_at: string | null
+          day_of_week: number
+          end_time: string
+          id: string
+          is_working_day: boolean | null
+          start_time: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          day_of_week: number
+          end_time?: string
+          id?: string
+          is_working_day?: boolean | null
+          start_time?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          is_working_day?: boolean | null
+          start_time?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       cadence_enrollments: {
         Row: {
           cadence_id: string
@@ -4514,6 +4568,53 @@ export type Database = {
           },
         ]
       }
+      sla_policies: {
+        Row: {
+          category_id: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          priority: string | null
+          resolution_time_unit: string
+          resolution_time_value: number
+          response_time_unit: string
+          response_time_value: number
+          updated_at: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          priority?: string | null
+          resolution_time_unit?: string
+          resolution_time_value?: number
+          response_time_unit?: string
+          response_time_value?: number
+          updated_at?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          priority?: string | null
+          resolution_time_unit?: string
+          resolution_time_value?: number
+          response_time_unit?: string
+          response_time_value?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sla_policies_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stages: {
         Row: {
           auto_move_config: Json | null
@@ -5275,6 +5376,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_business_due_date: {
+        Args: {
+          p_start_date: string
+          p_time_unit: string
+          p_time_value: number
+        }
+        Returns: string
+      }
       calculate_onboarding_progress: {
         Args: { p_user_id: string }
         Returns: number

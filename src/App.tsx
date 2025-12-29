@@ -79,6 +79,7 @@ import DebugRoutes from "./pages/DebugRoutes";
 import AIMessagesSettings from "./pages/AIMessagesSettings";
 import TicketNotificationRulesSettings from "./pages/TicketNotificationRulesSettings";
 import PublicOnboarding from "./pages/PublicOnboarding";
+import SLASettings from "./pages/SLASettings";
 import CustomerFiscalData from "./pages/CustomerFiscalData";
 
 const queryClient = new QueryClient();
@@ -171,6 +172,7 @@ const App = () => {
             <Route path="/settings/recovery" element={<ProtectedRoute requiredPermission="settings.recovery"><Layout><SalesRecovery /></Layout></ProtectedRoute>} />
             <Route path="/settings/ai-messages" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AIMessagesSettings /></Layout></ProtectedRoute>} />
             <Route path="/settings/ticket-notifications" element={<ProtectedRoute requiredPermission="email.manage_templates"><Layout><TicketNotificationRulesSettings /></Layout></ProtectedRoute>} />
+            <Route path="/settings/sla" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SLASettings /></Layout></ProtectedRoute>} />
             <Route path="/admin-onboarding" element={<ProtectedRoute requiredPermission="settings.view"><AdminOnboarding /></ProtectedRoute>} />
             
             {/* Catch-all route - must be last */}

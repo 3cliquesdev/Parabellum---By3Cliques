@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Database, Mail, Webhook, Loader2, FileText, MessageCircle, Brain, Smartphone, Package, Key, Zap, Settings as SettingsIcon } from "lucide-react";
+import { Shield, Database, Mail, Webhook, Loader2, FileText, MessageCircle, Brain, Smartphone, Package, Key, Zap, Settings as SettingsIcon, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -235,6 +235,21 @@ export default function Settings() {
           <CardContent>
             <Button variant="outline" onClick={() => navigate('/settings/delivery-groups')}>
               Gerenciar Grupos
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              SLA e Prazos
+            </CardTitle>
+            <CardDescription>Configure políticas de SLA e dias úteis</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => navigate('/settings/sla')}>
+              Configurar SLA
             </Button>
           </CardContent>
         </Card>
