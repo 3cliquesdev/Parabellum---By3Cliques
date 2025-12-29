@@ -69,9 +69,15 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
       });
 
       onDataParsed(data, headers);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao processar Excel:', error);
-      alert('Erro ao processar planilha Excel');
+      
+      // Verificar se é arquivo .xls (formato antigo não suportado)
+      if (error?.message?.includes('invalid zip') || error?.code === 13) {
+        alert('Formato .xls (Excel 97-2003) não suportado.\n\nPor favor, abra o arquivo no Excel e salve como:\n• .xlsx (Excel moderno)\n• .csv (separado por ponto-e-vírgula)');
+      } else {
+        alert('Erro ao processar planilha Excel. Verifique se o arquivo não está corrompido.');
+      }
       setFile(null);
     }
   }, [onDataParsed]);
@@ -82,7 +88,13 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
     const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
 
     if (!isCSV && !isExcel) {
-      alert('Por favor, selecione um arquivo CSV ou Excel (.xlsx, .xls)');
+      alert('Por favor, selecione um arquivo CSV ou Excel (.xlsx)');
+      return;
+    }
+
+    // Arquivo .xls (antigo) - avisar antes de tentar processar
+    if (fileName.endsWith('.xls') && !fileName.endsWith('.xlsx')) {
+      alert('Formato .xls (Excel 97-2003) não suportado.\n\nPor favor, abra o arquivo no Excel e salve como:\n• .xlsx (Excel moderno)\n• .csv (separado por ponto-e-vírgula)');
       return;
     }
 
@@ -142,7 +154,7 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
           <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
           <h3 className="text-lg font-semibold mb-2">Arraste sua planilha aqui</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Aceita arquivos Excel (.xlsx, .xls) ou CSV
+            Aceita arquivos Excel (.xlsx) ou CSV
           </p>
           <label htmlFor="file-upload">
             <Button variant="outline" className="cursor-pointer" asChild>
@@ -152,7 +164,7 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
           <input
             id="file-upload"
             type="file"
-            accept=".csv,.xlsx,.xls,.txt"
+            accept=".csv,.xlsx,.txt"
             onChange={handleFileInput}
             className="hidden"
           />
