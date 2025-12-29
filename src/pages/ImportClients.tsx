@@ -119,10 +119,13 @@ export default function ImportClients() {
   };
 
   const downloadTemplate = () => {
-    const template = `email,nome,sobrenome,telefone,empresa,cpf/cnpj,ie,endereco,numero,complemento,bairro,cidade,estado,cep,data_nascimento,tipo,bloqueado,plano,data_cadastro,ultimo_pagamento,proximo_pagamento,pedidos_recentes,saldo
-exemplo@email.com,João,Silva,(11) 99999-9999,Empresa Exemplo,123.456.789-00,987654321,Rua Aldo Focosi,111,Sala 10,Centro,Ribeirão Preto,SP,14091-310,1990-01-15,Cliente,não,Premium,2024-01-15,2024-12-01,2025-01-01,5,1500.00`;
+    // Template com ponto-e-vírgula (padrão Excel Brasil) e BOM para UTF-8
+    const template = `email;nome;sobrenome;telefone;empresa;cpf/cnpj;ie;endereco;numero;complemento;bairro;cidade;estado;cep;data_nascimento;tipo;bloqueado;plano;data_cadastro;ultimo_pagamento;proximo_pagamento;pedidos_recentes;saldo
+exemplo@email.com;João;Silva;(11) 99999-9999;Empresa Exemplo;123.456.789-00;987654321;Rua Aldo Focosi;111;Sala 10;Centro;Ribeirão Preto;SP;14091-310;15/01/1990;Cliente;não;Premium;15/01/2024;01/12/2024;01/01/2025;5;1500,00`;
     
-    const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
+    // BOM UTF-8 para Excel reconhecer caracteres especiais
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + template], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = 'template_importacao_clientes.csv';
