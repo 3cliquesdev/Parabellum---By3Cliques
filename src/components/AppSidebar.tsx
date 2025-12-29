@@ -44,6 +44,7 @@ import logoDark from "@/assets/logo-parabellum-dark.png";
 import { useAvailabilityStatus } from "@/hooks/useAvailabilityStatus";
 import { useNavigate } from "react-router-dom";
 import { useSLAAlerts } from "@/hooks/useSLAAlerts";
+import { useMyPendingCounts } from "@/hooks/useMyPendingCounts";
 import {
   Sidebar,
   SidebarContent,
@@ -181,6 +182,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { status: availabilityStatus } = useAvailabilityStatus();
   const { data: slaAlerts = [] } = useSLAAlerts();
+  const { data: myPendingCounts } = useMyPendingCounts();
   const { theme } = useTheme();
 
   // Determine mode label and color
@@ -234,6 +236,18 @@ export function AppSidebar() {
   const renderMenuItem = (item: MenuItem) => {
     // Show SLA alert badge on Inbox for admins/managers/general_managers
     const showSLABadge = (isAdmin || isManager || isGeneralManager) && item.href === "/inbox" && slaAlerts.length > 0;
+    
+    // Badge de pendências pessoais - Inbox
+    const inboxBadge = item.href === "/inbox" && (myPendingCounts?.inbox || 0) > 0;
+    const inboxCount = myPendingCounts?.inbox || 0;
+    
+    // Badge de pendências pessoais - Tickets
+    const ticketsBadge = item.href === "/support" && (myPendingCounts?.tickets || 0) > 0;
+    const ticketsCount = myPendingCounts?.tickets || 0;
+    
+    // Determinar qual badge mostrar (prioridade: SLA > pendências pessoais)
+    const showPersonalBadge = !showSLABadge && (inboxBadge || ticketsBadge);
+    const personalCount = inboxBadge ? inboxCount : ticketsCount;
 
     return (
       <SidebarMenuItem key={item.href}>
@@ -241,7 +255,7 @@ export function AppSidebar() {
           <NavLink
             to={item.href}
             end={item.href === "/"}
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-slate-700 dark:text-slate-300 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            className="flex items-center gap-3 px-3 py-2 rounded-md text-slate-700 dark:text-slate-300 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors relative"
             activeClassName="bg-primary/10 text-primary font-medium border-l-2 border-primary hover:bg-primary/10 hover:text-primary"
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
@@ -253,11 +267,21 @@ export function AppSidebar() {
                     {slaAlerts.length}
                   </Badge>
                 )}
+                {showPersonalBadge && (
+                  <Badge className="text-xs px-1.5 py-0 bg-primary text-primary-foreground">
+                    {personalCount}
+                  </Badge>
+                )}
               </span>
             )}
             {collapsed && showSLABadge && (
               <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] flex items-center justify-center text-white font-bold">
                 {slaAlerts.length}
+              </span>
+            )}
+            {collapsed && showPersonalBadge && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] flex items-center justify-center text-primary-foreground font-bold">
+                {personalCount}
               </span>
             )}
           </NavLink>
