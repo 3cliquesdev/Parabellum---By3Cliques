@@ -182,7 +182,11 @@ exemplo@email.com;João;Silva;(11) 99999-9999;Empresa Exemplo;123.456.789-00;987
                 onClick={handleImport}
                 disabled={!mapping.email || csvData.length === 0 || importMutation.isPending}
               >
-                {importMutation.isPending ? 'Importando...' : `Importar ${csvData.length} Contatos`}
+                {importMutation.isPending 
+                  ? importMutation.progress.total > 0 
+                    ? `Importando ${importMutation.progress.current}/${importMutation.progress.total}...`
+                    : 'Importando...' 
+                  : `Importar ${csvData.length} Contatos`}
               </Button>
             </div>
           </>
