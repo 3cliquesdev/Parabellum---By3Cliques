@@ -75,6 +75,7 @@ export default function FiscalExport() {
       let query = supabase
         .from("contacts")
         .select("id, first_name, last_name, email, phone, document, customer_type, zip_code, address, address_number, address_complement, neighborhood, city, state, state_registration, status, created_at")
+        .neq("customer_type", "Vendedor")
         .order("created_at", { ascending: false }) as any;
 
       if (statusFilter !== "all") {
