@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Ticket } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import type { Tables } from "@/integrations/supabase/types";
@@ -274,6 +274,118 @@ export default function RealtimeNotifications() {
       };
     } catch (error) {
       console.error("[RealtimeNotifications] Error setting up SLA listener", error);
+    }
+  }, [user, navigate, play, showBrowserNotification, queryClient]);
+
+  // Listen for ticket comment notifications
+  useEffect(() => {
+    if (!user) return;
+
+    console.log("[RealtimeNotifications] Setting up ticket comment listener");
+
+    try {
+      const channel = supabase
+        .channel("ticket-comments-notifications")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "ticket_comments",
+          },
+          async (payload) => {
+            console.log("[RealtimeNotifications] New ticket comment:", payload);
+
+            const comment = payload.new as any;
+
+            // Don't notify for own comments
+            if (comment.created_by === user.id) {
+              return;
+            }
+
+            // Fetch ticket details to check relationships
+            const { data: ticket, error } = await supabase
+              .from("tickets")
+              .select(`
+                id,
+                ticket_number,
+                subject,
+                created_by,
+                assigned_to
+              `)
+              .eq("id", comment.ticket_id)
+              .single();
+
+            if (error || !ticket) {
+              console.error("Error fetching ticket:", error);
+              return;
+            }
+
+            // Notify if current user is the ticket creator and someone else commented
+            if (ticket.created_by === user.id) {
+              play();
+
+              toast(
+                "📩 Nova resposta no seu ticket",
+                {
+                  description: `#${ticket.ticket_number}: ${ticket.subject}`,
+                  icon: <Ticket className="h-4 w-4" />,
+                  action: {
+                    label: "Ver",
+                    onClick: () => navigate(`/support?ticket=${ticket.id}`),
+                  },
+                  duration: 10000,
+                }
+              );
+
+              if (document.hidden) {
+                showBrowserNotification(
+                  "Nova resposta no seu ticket",
+                  `#${ticket.ticket_number}: ${ticket.subject}`
+                );
+              }
+            }
+
+            // Notify if current user is assigned and the creator commented
+            if (ticket.assigned_to === user.id && ticket.created_by === comment.created_by) {
+              play();
+
+              toast(
+                "📨 Criador respondeu no ticket",
+                {
+                  description: `#${ticket.ticket_number}: ${ticket.subject}`,
+                  icon: <Ticket className="h-4 w-4" />,
+                  action: {
+                    label: "Ver",
+                    onClick: () => navigate(`/support?ticket=${ticket.id}`),
+                  },
+                  duration: 10000,
+                }
+              );
+
+              if (document.hidden) {
+                showBrowserNotification(
+                  "Criador respondeu no ticket",
+                  `#${ticket.ticket_number}: ${ticket.subject}`
+                );
+              }
+            }
+
+            // Invalidate tickets query
+            queryClient.invalidateQueries({ queryKey: ["tickets"] });
+            queryClient.invalidateQueries({ queryKey: ["ticket-comments"] });
+          }
+        )
+        .subscribe((status) => {
+          console.log("RealtimeNotifications ticket comments subscription status:", status);
+        });
+
+      return () => {
+        console.log("[RealtimeNotifications] Cleaning up ticket comment listener");
+        supabase.removeChannel(channel);
+      };
+    } catch (error) {
+      console.error("[RealtimeNotifications] Error setting up ticket comment listener", error);
     }
   }, [user, navigate, play, showBrowserNotification, queryClient]);
 

@@ -45,6 +45,11 @@ export function useTickets(
             full_name,
             avatar_url
           ),
+          created_by_user:profiles!tickets_created_by_fkey(
+            id,
+            full_name,
+            avatar_url
+          ),
           department:departments(
             id,
             name,
