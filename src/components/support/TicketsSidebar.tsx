@@ -7,7 +7,9 @@ import {
   User, 
   CheckCircle, 
   AlertTriangle,
-  FolderOpen
+  FolderOpen,
+  Archive,
+  XCircle
 } from "lucide-react";
 
 export type SidebarFilter = 
@@ -19,7 +21,8 @@ export type SidebarFilter =
   | 'closed'
   | 'my_open' 
   | 'unassigned' 
-  | 'sla_expired';
+  | 'sla_expired'
+  | 'archived';
 
 interface TicketsSidebarProps {
   selectedFilter: SidebarFilter;
@@ -32,6 +35,7 @@ interface FilterItem {
   icon: React.ReactNode;
   countKey: string;
   variant?: 'danger' | 'warning' | 'success' | 'default';
+  indent?: boolean;
 }
 
 const mainFilters: FilterItem[] = [
@@ -41,12 +45,16 @@ const mainFilters: FilterItem[] = [
   { key: 'sla_expired', label: 'SLA vencido', icon: <AlertTriangle className="w-4 h-4" />, countKey: 'sla_expired', variant: 'danger' },
 ];
 
-const statusFilters: FilterItem[] = [
+const activeStatusFilters: FilterItem[] = [
   { key: 'open', label: 'Novos', icon: <Clock className="w-4 h-4" />, countKey: 'open' },
   { key: 'in_progress', label: 'Em análise', icon: <Clock className="w-4 h-4" />, countKey: 'in_progress' },
   { key: 'waiting_customer', label: 'Aguardando cliente', icon: <AlertCircle className="w-4 h-4" />, countKey: 'waiting_customer', variant: 'warning' },
-  { key: 'resolved', label: 'Resolvidos', icon: <CheckCircle className="w-4 h-4" />, countKey: 'resolved', variant: 'success' },
-  { key: 'closed', label: 'Fechados', icon: <CheckCircle className="w-4 h-4" />, countKey: 'closed' },
+];
+
+const archivedFilters: FilterItem[] = [
+  { key: 'archived', label: 'Todos arquivados', icon: <Archive className="w-4 h-4" />, countKey: 'archived' },
+  { key: 'resolved', label: 'Resolvidos', icon: <CheckCircle className="w-4 h-4" />, countKey: 'resolved', variant: 'success', indent: true },
+  { key: 'closed', label: 'Fechados', icon: <XCircle className="w-4 h-4" />, countKey: 'closed', indent: true },
 ];
 
 export function TicketsSidebar({ selectedFilter, onFilterChange }: TicketsSidebarProps) {
@@ -67,6 +75,7 @@ export function TicketsSidebar({ selectedFilter, onFilterChange }: TicketsSideba
         onClick={() => onFilterChange(item.key)}
         className={cn(
           "w-full flex items-center justify-between px-3 py-2 text-sm rounded-md transition-colors text-left",
+          item.indent && "pl-7",
           isSelected 
             ? "bg-primary/10 text-primary font-medium" 
             : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -106,13 +115,28 @@ export function TicketsSidebar({ selectedFilter, onFilterChange }: TicketsSideba
         <div className="border-t border-border" />
       </div>
 
-      {/* Status Filters */}
+      {/* Active Status Filters */}
       <div className="px-3 pb-3">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-3">
           Por Status
         </p>
         <div className="space-y-1">
-          {statusFilters.map(renderFilterItem)}
+          {activeStatusFilters.map(renderFilterItem)}
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="px-3 py-2">
+        <div className="border-t border-border" />
+      </div>
+
+      {/* Archived Section */}
+      <div className="px-3 pb-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-3">
+          Arquivados
+        </p>
+        <div className="space-y-1">
+          {archivedFilters.map(renderFilterItem)}
         </div>
       </div>
     </div>
