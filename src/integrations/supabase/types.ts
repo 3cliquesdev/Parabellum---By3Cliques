@@ -3304,6 +3304,78 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_distribution_logs: {
+        Row: {
+          assigned_by: string | null
+          assigned_to: string | null
+          contact_id: string | null
+          created_at: string | null
+          deal_id: string | null
+          distribution_type: string
+          id: string
+          metadata: Json | null
+          previous_assigned_to: string | null
+        }
+        Insert: {
+          assigned_by?: string | null
+          assigned_to?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          distribution_type?: string
+          id?: string
+          metadata?: Json | null
+          previous_assigned_to?: string | null
+        }
+        Update: {
+          assigned_by?: string | null
+          assigned_to?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          distribution_type?: string
+          id?: string
+          metadata?: Json | null
+          previous_assigned_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_distribution_logs_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_distribution_logs_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_distribution_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_distribution_logs_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_distribution_logs_previous_assigned_to_fkey"
+            columns: ["previous_assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_attachments: {
         Row: {
           conversation_id: string | null

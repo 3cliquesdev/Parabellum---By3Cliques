@@ -75,6 +75,7 @@ import ConsultantDetail from "./pages/ConsultantDetail";
 import Consultants from "./pages/Consultants";
 import ConsultantDistribution from "./pages/reports/ConsultantDistribution";
 import FiscalExport from "./pages/reports/FiscalExport";
+import SalesRepDistribution from "./pages/reports/SalesRepDistribution";
 import DebugRoutes from "./pages/DebugRoutes";
 import AIMessagesSettings from "./pages/AIMessagesSettings";
 import TicketNotificationRulesSettings from "./pages/TicketNotificationRulesSettings";
@@ -143,6 +144,7 @@ const App = () => {
             <Route path="/reports/consultant-distribution" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ConsultantDistribution /></Layout></ProtectedRoute>} />
             <Route path="/reports/fiscal-export" element={<ProtectedRoute requiredPermission="reports.access"><Layout><FiscalExport /></Layout></ProtectedRoute>} />
             <Route path="/reports/fraud-detection" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><FraudDetection /></Layout></ProtectedRoute>} />
+            <Route path="/reports/sales-distribution" element={<ProtectedRoute requiredPermission="reports.lead_distribution"><Layout><SalesRepDistribution /></Layout></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute requiredPermission="goals.view_own"><Layout><Goals /></Layout></ProtectedRoute>} />
             <Route path="/goals-management" element={<ProtectedRoute requiredPermission="goals.set"><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
             <Route path="/cadences" element={<ProtectedRoute requiredPermission="cadences.manage"><Layout><Cadences /></Layout></ProtectedRoute>} />
