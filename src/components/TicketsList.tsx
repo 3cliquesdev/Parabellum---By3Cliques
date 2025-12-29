@@ -3,8 +3,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AlertCircle, Clock, CheckCircle } from "lucide-react";
+import { AlertCircle, Clock, CheckCircle, UserPen } from "lucide-react";
 import { SLABadge } from "./SLABadge";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Ticket {
   id: string;
@@ -14,6 +15,8 @@ interface Ticket {
   status: 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed';
   created_at: string;
   due_date: string | null;
+  created_by?: string | null;
+  assigned_to?: string | null;
   customer: {
     first_name: string;
     last_name: string;
@@ -24,6 +27,15 @@ interface Ticket {
     full_name: string;
     avatar_url?: string;
   } | null;
+  created_by_user?: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  } | {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  }[] | null;
 }
 
 interface TicketsListProps {
@@ -63,6 +75,8 @@ const statusLabels = {
 };
 
 export function TicketsList({ tickets, selectedTicketId, onSelectTicket }: TicketsListProps) {
+  const { user } = useAuth();
+
   if (tickets.length === 0) {
     return (
       <div className="flex items-center justify-center h-full p-8 text-center">
@@ -76,7 +90,13 @@ export function TicketsList({ tickets, selectedTicketId, onSelectTicket }: Ticke
   return (
     <ScrollArea className="h-full">
       <div className="divide-y divide-border">
-        {tickets.map((ticket) => (
+        {tickets.map((ticket) => {
+          // Check if current user created this ticket but it's assigned to someone else
+          const isCreatedByMe = ticket.created_by === user?.id;
+          const isAssignedToOther = ticket.assigned_to && ticket.assigned_to !== user?.id;
+          const showCreatedByMeBadge = isCreatedByMe && isAssignedToOther;
+
+          return (
           <div
             key={ticket.id}
             onClick={() => onSelectTicket(ticket.id)}
@@ -126,6 +146,14 @@ export function TicketsList({ tickets, selectedTicketId, onSelectTicket }: Ticke
                     {statusLabels[ticket.status]}
                   </Badge>
 
+                  {/* Badge: Você criou */}
+                  {showCreatedByMeBadge && (
+                    <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                      <UserPen className="h-3 w-3" />
+                      Você criou
+                    </Badge>
+                  )}
+
                   {ticket.assigned_user && (
                     <span className="text-xs text-slate-600 dark:text-slate-400">
                       → {ticket.assigned_user.full_name}
@@ -135,7 +163,8 @@ export function TicketsList({ tickets, selectedTicketId, onSelectTicket }: Ticke
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </ScrollArea>
   );

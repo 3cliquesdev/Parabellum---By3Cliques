@@ -14,12 +14,13 @@ import { FinancialApprovalBar } from "@/components/FinancialApprovalBar";
 import { TransferToFinancialDialog } from "@/components/TransferToFinancialDialog";
 import { MergeTicketDialog } from "@/components/MergeTicketDialog";
 import { ChannelBadge } from "@/components/ChannelBadge";
+import { TicketTimeline } from "@/components/TicketTimeline";
 import { useTicketPresence } from "@/hooks/useTicketPresence";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, Clock, CheckCircle, Sparkles, Copy, ArrowRight, Users, GitMerge, ExternalLink } from "lucide-react";
+import { AlertCircle, Clock, CheckCircle, Sparkles, Copy, ArrowRight, Users, GitMerge, ExternalLink, User } from "lucide-react";
 import { useState } from "react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useUsers } from "@/hooks/useUsers";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -207,12 +208,40 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
               </div>
             )}
             
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Criado {formatDistanceToNow(new Date(ticket.created_at), { 
-                addSuffix: true, 
-                locale: ptBR 
-              })}
-            </p>
+            {/* Creator Info */}
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <User className="h-4 w-4" />
+              <span>Criado por</span>
+              {ticket.created_by_user ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={ticket.created_by_user.avatar_url} />
+                          <AvatarFallback className="text-[10px]">
+                            {ticket.created_by_user.full_name?.split(' ').map((n: string) => n[0]).join('') || '?'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{ticket.created_by_user.full_name}</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{ticket.created_by_user.full_name}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <span className="text-muted-foreground">Cliente</span>
+              )}
+              <span>em</span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                {format(new Date(ticket.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </span>
+              <span className="text-muted-foreground">
+                ({formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true, locale: ptBR })})
+              </span>
+            </div>
           </div>
           
           <div className="flex gap-2">
@@ -329,6 +358,9 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
           readonly={ticket.status === 'resolved' || ticket.status === 'closed'}
           requireEvidence={isFinancialTicket}
         />
+
+        {/* Ticket Timeline/History */}
+        <TicketTimeline ticketId={ticket.id} />
         
         {/* Smart Reply Section */}
         <Card>
