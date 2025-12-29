@@ -15,7 +15,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { TicketFilterPopover, defaultTicketFilters, type TicketFilters } from "@/components/support/TicketFilterPopover";
 import { CreateTicketDialog } from "@/components/support/CreateTicketDialog";
 
-type FilterType = 'all' | 'mine' | 'unassigned';
+type FilterType = 'all' | 'mine' | 'unassigned' | 'created_by_me';
 type MobileView = 'list' | 'details';
 
 export default function Support() {
@@ -103,7 +103,8 @@ export default function Support() {
             <TabsList className="w-full">
               <TabsTrigger value="all" className="flex-1 text-xs">Todos</TabsTrigger>
               <TabsTrigger value="mine" className="flex-1 text-xs">Meus</TabsTrigger>
-              <TabsTrigger value="unassigned" className="flex-1 text-xs">Não Atribuídos</TabsTrigger>
+              <TabsTrigger value="created_by_me" className="flex-1 text-xs">Criados</TabsTrigger>
+              <TabsTrigger value="unassigned" className="flex-1 text-xs">Não Atrib.</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -149,6 +150,7 @@ export default function Support() {
             <TabsList>
               <TabsTrigger value="all">Todos</TabsTrigger>
               <TabsTrigger value="mine">Meus</TabsTrigger>
+              <TabsTrigger value="created_by_me">Criados por Mim</TabsTrigger>
               <TabsTrigger value="unassigned">Não Atribuídos</TabsTrigger>
             </TabsList>
           </Tabs>
