@@ -67,8 +67,8 @@ export function useTickets(
         } else if (assignedFilter === 'unassigned') {
           query = query.is("assigned_to", null);
         } else {
-          // "all" for support_agent means their tickets + unassigned
-          query = query.or(`assigned_to.eq.${user.id},assigned_to.is.null`);
+          // "all" for support_agent means: assigned to self, unassigned, OR created by self
+          query = query.or(`assigned_to.eq.${user.id},assigned_to.is.null,created_by.eq.${user.id}`);
         }
       } else {
         // Manager/admin logic: can see all

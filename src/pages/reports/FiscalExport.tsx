@@ -116,46 +116,90 @@ export default function FiscalExport() {
     setSelectedIds(newSet);
   };
 
-  const handleExport = () => {
-    const contactsToExport = filteredContacts.filter(
-      (c) => selectedIds.size === 0 || selectedIds.has(c.id)
-    );
-
-    // Criar CSV
+  // Download empty template
+  const handleDownloadTemplate = () => {
     const headers = [
-      "Nome Completo",
-      "Email",
-      "Telefone",
-      "Tipo",
+      "Valor do Serviço",
       "CPF/CNPJ",
-      "Inscrição Estadual",
-      "CEP",
+      "Razão Social/Nome",
       "Endereço",
       "Número",
       "Complemento",
       "Bairro",
       "Cidade",
       "UF",
-      "Endereço Completo",
-      "Dados Completos",
+      "CEP",
+      "E-mail",
+      "Nome do produto",
+      "Calcular valor líquido?",
+      "Código do Serviço",
+      "Tem retenção?",
+      "IRRF",
+      "PIS/PASEP",
+      "COFINS",
+      "CSLL",
+    ];
+
+    const csvContent = headers.join(";");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "modelo_notas_emissao.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExport = () => {
+    const contactsToExport = filteredContacts.filter(
+      (c) => selectedIds.size === 0 || selectedIds.has(c.id)
+    );
+
+    // CSV no formato exato do modelo NF-e
+    const headers = [
+      "Valor do Serviço",
+      "CPF/CNPJ",
+      "Razão Social/Nome",
+      "Endereço",
+      "Número",
+      "Complemento",
+      "Bairro",
+      "Cidade",
+      "UF",
+      "CEP",
+      "E-mail",
+      "Nome do produto",
+      "Calcular valor líquido?",
+      "Código do Serviço",
+      "Tem retenção?",
+      "IRRF",
+      "PIS/PASEP",
+      "COFINS",
+      "CSLL",
     ];
 
     const rows = contactsToExport.map((c) => [
-      `${c.first_name} ${c.last_name}`.trim(),
-      c.email || "",
-      c.phone || "",
-      c.customer_type === "PJ" ? "Pessoa Jurídica" : "Pessoa Física",
+      "", // Valor do Serviço - a ser preenchido pelo financeiro
       c.document ? formatDocument(c.document) : "",
-      c.state_registration || "",
-      c.zip_code ? formatCEP(c.zip_code) : "",
+      `${c.first_name} ${c.last_name}`.trim(),
       c.address || "",
       c.address_number || "",
       c.address_complement || "",
       c.neighborhood || "",
       c.city || "",
       c.state || "",
-      formatAddress(c),
-      isDataComplete(c) ? "Sim" : "Não",
+      c.zip_code ? formatCEP(c.zip_code) : "",
+      c.email || "",
+      "Venda curso", // Nome do produto fixo
+      "Não", // Calcular valor líquido
+      "", // Código do Serviço
+      "Não", // Tem retenção
+      "", // IRRF
+      "", // PIS/PASEP
+      "", // COFINS
+      "", // CSLL
     ]);
 
     const csvContent = [
@@ -168,7 +212,7 @@ export default function FiscalExport() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `contatos_nf_${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = `notas_emissao_${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -280,7 +324,11 @@ export default function FiscalExport() {
               </div>
             </div>
 
-            <div className="flex items-end ml-auto">
+            <div className="flex items-end ml-auto gap-2">
+              <Button variant="outline" onClick={handleDownloadTemplate}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Baixar Modelo
+              </Button>
               <Button onClick={handleExport} disabled={filteredContacts.length === 0}>
                 <Download className="mr-2 h-4 w-4" />
                 Exportar {selectedIds.size > 0 ? `(${selectedIds.size})` : `(${filteredContacts.length})`}
