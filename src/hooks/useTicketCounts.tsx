@@ -13,6 +13,7 @@ export interface TicketCounts {
   unassigned: number;
   sla_expired: number;
   total: number;
+  archived: number;
 }
 
 export function useTicketCounts() {
@@ -35,6 +36,7 @@ export function useTicketCounts() {
           unassigned: 0,
           sla_expired: 0,
           total: 0,
+          archived: 0,
         };
       }
 
@@ -66,10 +68,13 @@ export function useTicketCounts() {
         my_open: 0,
         unassigned: 0,
         sla_expired: 0,
-        total: tickets?.length || 0,
+        total: 0,
+        archived: 0,
       };
 
       tickets?.forEach(ticket => {
+        const isArchived = ['resolved', 'closed'].includes(ticket.status);
+        
         // Status counts
         if (ticket.status === 'open') counts.open++;
         if (ticket.status === 'in_progress') counts.in_progress++;
@@ -77,13 +82,23 @@ export function useTicketCounts() {
         if (ticket.status === 'resolved') counts.resolved++;
         if (ticket.status === 'closed') counts.closed++;
 
+        // Total = apenas ativos (não arquivados)
+        if (!isArchived) {
+          counts.total++;
+        }
+
+        // Archived = resolved + closed
+        if (isArchived) {
+          counts.archived++;
+        }
+
         // My open tickets
-        if (ticket.assigned_to === user.id && !['resolved', 'closed'].includes(ticket.status)) {
+        if (ticket.assigned_to === user.id && !isArchived) {
           counts.my_open++;
         }
 
-        // Unassigned
-        if (!ticket.assigned_to) {
+        // Unassigned (apenas ativos)
+        if (!ticket.assigned_to && !isArchived) {
           counts.unassigned++;
         }
 
@@ -91,7 +106,7 @@ export function useTicketCounts() {
         if (
           ticket.due_date && 
           new Date(ticket.due_date) < now && 
-          !['resolved', 'closed'].includes(ticket.status)
+          !isArchived
         ) {
           counts.sla_expired++;
         }

@@ -37,12 +37,17 @@ export default function Support() {
         return { assignedFilter: 'unassigned' as const };
       case 'sla_expired':
         return { advancedFilters: { search: '', status: [], priority: [], category: [], channel: [], dateRange: undefined, slaExpired: true } };
+      case 'archived':
+        return { advancedFilters: { search: '', status: ['resolved', 'closed'], priority: [], category: [], channel: [], dateRange: undefined, slaExpired: false } };
       case 'open':
       case 'in_progress':
       case 'waiting_customer':
       case 'resolved':
       case 'closed':
         return { advancedFilters: { search: '', status: [sidebarFilter], priority: [], category: [], channel: [], dateRange: undefined, slaExpired: false } };
+      case 'all':
+        // "Todos" now excludes archived tickets
+        return { advancedFilters: { search: '', status: ['open', 'in_progress', 'waiting_customer'], priority: [], category: [], channel: [], dateRange: undefined, slaExpired: false } };
       default:
         return {};
     }
