@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 interface ContactRow {
   email: string;
@@ -35,18 +36,58 @@ interface ImportResult {
   errors: Array<{ row: number; email: string; error: string }>;
 }
 
+const CHUNK_SIZE = 100; // Processar 100 contatos por vez
+
+async function processChunk(contacts: ContactRow[]): Promise<ImportResult> {
+  const { data, error } = await supabase.functions.invoke('bulk-import-contacts', {
+    body: { contacts },
+  });
+
+  if (error) throw error;
+  return data as ImportResult;
+}
+
 export function useImportContacts() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (contacts: ContactRow[]): Promise<ImportResult> => {
-      const { data, error } = await supabase.functions.invoke('bulk-import-contacts', {
-        body: { contacts },
-      });
+      const totalContacts = contacts.length;
+      setProgress({ current: 0, total: totalContacts });
+      
+      const result: ImportResult = {
+        created: 0,
+        updated: 0,
+        errors: [],
+      };
 
-      if (error) throw error;
-      return data as ImportResult;
+      // Processar em chunks para evitar timeout
+      for (let i = 0; i < totalContacts; i += CHUNK_SIZE) {
+        const chunk = contacts.slice(i, i + CHUNK_SIZE);
+        
+        try {
+          const chunkResult = await processChunk(chunk);
+          result.created += chunkResult.created;
+          result.updated += chunkResult.updated;
+          result.errors.push(...chunkResult.errors);
+        } catch (error: any) {
+          console.error(`[Import] Chunk ${i / CHUNK_SIZE + 1} failed:`, error);
+          // Adicionar todos os contatos do chunk como erro
+          chunk.forEach((contact, index) => {
+            result.errors.push({
+              row: i + index + 1,
+              email: contact.email || 'N/A',
+              error: error.message || 'Erro no processamento do lote',
+            });
+          });
+        }
+        
+        setProgress({ current: Math.min(i + CHUNK_SIZE, totalContacts), total: totalContacts });
+      }
+
+      return result;
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
@@ -57,6 +98,8 @@ export function useImportContacts() {
           result.errors.length > 0 ? `, ${result.errors.length} erros` : ''
         }`,
       });
+      
+      setProgress({ current: 0, total: 0 });
     },
     onError: (error: Error) => {
       toast({
@@ -64,6 +107,12 @@ export function useImportContacts() {
         description: error.message,
         variant: "destructive",
       });
+      setProgress({ current: 0, total: 0 });
     },
   });
+
+  return {
+    ...mutation,
+    progress,
+  };
 }
