@@ -13,25 +13,51 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleFile = useCallback((selectedFile: File) => {
-    if (!selectedFile.name.endsWith('.csv')) {
-      alert('Por favor, selecione um arquivo CSV');
+    const fileName = selectedFile.name.toLowerCase();
+    if (!fileName.endsWith('.csv') && !fileName.endsWith('.txt')) {
+      alert('Por favor, selecione um arquivo CSV ou TXT');
       return;
     }
 
     setFile(selectedFile);
 
-    Papa.parse(selectedFile, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const headers = results.meta.fields || [];
-        onDataParsed(results.data, headers);
-      },
-      error: (error) => {
-        console.error('Erro ao processar CSV:', error);
-        alert('Erro ao processar arquivo CSV');
-      },
-    });
+    // Ler arquivo como texto para detectar encoding e delimitador
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      let content = e.target?.result as string;
+      
+      // Remover BOM se existir
+      if (content.charCodeAt(0) === 0xFEFF) {
+        content = content.slice(1);
+      }
+
+      Papa.parse(content, {
+        header: true,
+        skipEmptyLines: true,
+        delimiter: '', // Auto-detectar delimitador (vírgula ou ponto-e-vírgula)
+        complete: (results) => {
+          const headers = results.meta.fields || [];
+          if (headers.length === 0 || results.data.length === 0) {
+            alert('Arquivo vazio ou formato inválido. Verifique se o arquivo está no formato correto.');
+            setFile(null);
+            return;
+          }
+          onDataParsed(results.data, headers);
+        },
+        error: (error) => {
+          console.error('Erro ao processar CSV:', error);
+          alert('Erro ao processar arquivo CSV');
+          setFile(null);
+        },
+      });
+    };
+
+    reader.onerror = () => {
+      alert('Erro ao ler arquivo');
+      setFile(null);
+    };
+
+    reader.readAsText(selectedFile, 'UTF-8');
   }, [onDataParsed]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
