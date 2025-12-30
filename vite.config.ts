@@ -47,13 +47,16 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB limit
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/,
-            handler: 'CacheFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'static-assets',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 }
+              cacheName: 'static-assets-v2',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 }
             }
           },
           {
