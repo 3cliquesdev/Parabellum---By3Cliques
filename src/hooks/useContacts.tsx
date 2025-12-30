@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "./useAuth";
+import { useUserRole } from "./useUserRole";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts">;
@@ -22,8 +24,11 @@ export interface ContactFilters {
 }
 
 export function useContacts(filters?: ContactFilters) {
+  const { user } = useAuth();
+  const { role } = useUserRole();
+
   return useQuery({
-    queryKey: ["contacts", filters],
+    queryKey: ["contacts", filters, user?.id, role],
     queryFn: async () => {
       let query = supabase
         .from("contacts")
@@ -107,6 +112,7 @@ export function useContacts(filters?: ContactFilters) {
 
       return data;
     },
+    enabled: role !== undefined,
   });
 }
 

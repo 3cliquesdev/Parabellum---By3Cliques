@@ -14,7 +14,7 @@ export function useActivities({ contactId, dealId, completed }: UseActivitiesOpt
   const { role } = useUserRole();
 
   return useQuery({
-    queryKey: ["activities", contactId, dealId, completed, user?.id],
+    queryKey: ["activities", contactId, dealId, completed, user?.id, role],
     queryFn: async () => {
       if (!user) return [];
 
@@ -53,6 +53,6 @@ export function useActivities({ contactId, dealId, completed }: UseActivitiesOpt
       if (error) throw error;
       return data || [];
     },
-    enabled: !!user,
+    enabled: !!user && role !== undefined,
   });
 }
