@@ -68,7 +68,8 @@ export default function Dashboard() {
   }
 
   // VENDEDOR: Dashboard Pessoal - Bento Grid
-  if (role && (role as string) === "sales_rep") {
+  // Garantir que user.id existe antes de renderizar widgets
+  if (role && (role as string) === "sales_rep" && user?.id) {
     return (
       <PageContainer>
         <PageHeader 

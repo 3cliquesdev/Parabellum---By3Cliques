@@ -119,7 +119,7 @@ export function MyPerformanceWidget({ userId }: MyPerformanceWidgetProps) {
               <p className="text-sm text-muted-foreground">Meta Mensal</p>
             </div>
             <p className="text-sm font-semibold text-foreground">
-              ${performanceData?.mySales.toLocaleString()} / ${performanceData?.monthlyGoal.toLocaleString()}
+              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(performanceData?.mySales || 0)} / {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(performanceData?.monthlyGoal || 0)}
             </p>
           </div>
           <Progress value={performanceData?.goalProgress || 0} className="h-2" />
@@ -131,7 +131,7 @@ export function MyPerformanceWidget({ userId }: MyPerformanceWidgetProps) {
         <div className="pt-4 border-t border-border">
           <p className="text-sm text-muted-foreground">Vendas Este Mês</p>
           <p className="text-xl font-semibold text-foreground">
-            ${performanceData?.mySales.toLocaleString() || 0}
+            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(performanceData?.mySales || 0)}
           </p>
         </div>
       </CardContent>
