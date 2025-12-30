@@ -166,6 +166,7 @@ export function useConversations(filters?: ConversationFilters) {
     // Reduce stale time for faster updates
     staleTime: 10000, // 10 seconds
     refetchOnWindowFocus: true,
+    enabled: !!user && role !== undefined,
   });
 }
 

@@ -59,5 +59,6 @@ export function useSalesByRep() {
         (a, b) => b.totalSales - a.totalSales
       );
     },
+    enabled: role !== undefined,
   });
 }
