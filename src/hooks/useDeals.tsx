@@ -23,7 +23,7 @@ export interface DealFilters {
 
 export function useDeals(pipelineId?: string, filters?: DealFilters) {
   const { user } = useAuth();
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
 
   return useQuery({
     queryKey: ["deals", pipelineId, filters, user?.id, role],
@@ -98,7 +98,7 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
       if (error) throw error;
       return data;
     },
-    enabled: !!role,
+    enabled: !roleLoading,
     placeholderData: keepPreviousData,
   });
 }

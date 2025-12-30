@@ -5,7 +5,7 @@ import { useUserRole } from "./useUserRole";
 
 export function useSalesFunnel(pipelineId?: string) {
   const { user } = useAuth();
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
 
   return useQuery({
     queryKey: ["sales-funnel", pipelineId, user?.id, role],
@@ -65,6 +65,6 @@ export function useSalesFunnel(pipelineId?: string) {
         (a, b) => a.position - b.position
       );
     },
-    enabled: !!role,
+    enabled: !roleLoading,
   });
 }

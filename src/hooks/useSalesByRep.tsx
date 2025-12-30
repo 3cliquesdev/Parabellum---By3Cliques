@@ -5,7 +5,7 @@ import { useUserRole } from "./useUserRole";
 
 export function useSalesByRep() {
   const { user } = useAuth();
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
 
   return useQuery({
     queryKey: ["sales-by-rep", user?.id, role],
@@ -59,6 +59,6 @@ export function useSalesByRep() {
         (a, b) => b.totalSales - a.totalSales
       );
     },
-    enabled: !!role,
+    enabled: !roleLoading,
   });
 }

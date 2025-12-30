@@ -25,7 +25,7 @@ export interface ContactFilters {
 
 export function useContacts(filters?: ContactFilters) {
   const { user } = useAuth();
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
 
   return useQuery({
     queryKey: ["contacts", filters, user?.id, role],
@@ -112,7 +112,7 @@ export function useContacts(filters?: ContactFilters) {
 
       return data;
     },
-    enabled: !!role,
+    enabled: !roleLoading,
   });
 }
 

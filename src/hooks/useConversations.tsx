@@ -41,7 +41,7 @@ const SLA_HOURS = 4; // Configurable SLA threshold
 
 export function useConversations(filters?: ConversationFilters) {
   const { user } = useAuth();
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
   const queryClient = useQueryClient();
 
   // Realtime subscription for conversations
@@ -166,7 +166,7 @@ export function useConversations(filters?: ConversationFilters) {
     // Reduce stale time for faster updates
     staleTime: 10000, // 10 seconds
     refetchOnWindowFocus: true,
-    enabled: !!user && !!role,
+    enabled: !!user && !roleLoading,
   });
 }
 

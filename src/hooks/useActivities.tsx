@@ -11,7 +11,7 @@ interface UseActivitiesOptions {
 
 export function useActivities({ contactId, dealId, completed }: UseActivitiesOptions = {}) {
   const { user } = useAuth();
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
 
   return useQuery({
     queryKey: ["activities", contactId, dealId, completed, user?.id, role],
@@ -53,6 +53,6 @@ export function useActivities({ contactId, dealId, completed }: UseActivitiesOpt
       if (error) throw error;
       return data || [];
     },
-    enabled: !!user && !!role,
+    enabled: !!user && !roleLoading,
   });
 }

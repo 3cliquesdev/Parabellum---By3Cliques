@@ -5,7 +5,7 @@ import { useUserRole } from "./useUserRole";
 
 export function useHotDeals() {
   const { user } = useAuth();
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
 
   return useQuery({
     queryKey: ["hot-deals", user?.id, role],
@@ -50,6 +50,6 @@ export function useHotDeals() {
 
       return deals || [];
     },
-    enabled: !!role,
+    enabled: !roleLoading,
   });
 }
