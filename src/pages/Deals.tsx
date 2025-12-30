@@ -61,7 +61,7 @@ export default function Deals() {
   const { data: stages, isLoading: stagesLoading } = useStages(selectedPipeline);
   const { data: deals, isLoading: dealsLoading } = useDeals(selectedPipeline, dealFilters);
   const { data: salesReps } = useSalesReps();
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
   const { hasPermission } = useRolePermissions();
   const { data: rottenDeals } = useRottenDeals();
   const { user } = useAuth();
@@ -291,7 +291,7 @@ export default function Deals() {
     );
   };
 
-  if (dealsLoading || stagesLoading || pipelinesLoading) {
+  if (dealsLoading || stagesLoading || pipelinesLoading || roleLoading) {
     return (
       <div className="p-8">
         <div className="flex items-center justify-center h-64">
