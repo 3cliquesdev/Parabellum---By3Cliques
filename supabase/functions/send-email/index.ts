@@ -13,6 +13,18 @@ interface SendEmailRequest {
   html: string;
   customer_id: string;
   playbook_execution_id?: string;
+  is_customer_email?: boolean; // Default: true - usa branding de cliente
+  branding_id?: string; // Opcional: branding específico
+}
+
+interface EmailBranding {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  footer_logo_url: string | null;
+  header_color: string | null;
+  primary_color: string | null;
+  footer_text: string | null;
 }
 
 serve(async (req) => {
@@ -22,15 +34,69 @@ serve(async (req) => {
   }
 
   try {
-    const { to, to_name, subject, html, customer_id, playbook_execution_id }: SendEmailRequest = await req.json();
+    const { 
+      to, 
+      to_name, 
+      subject, 
+      html, 
+      customer_id, 
+      playbook_execution_id,
+      is_customer_email = true,
+      branding_id
+    }: SendEmailRequest = await req.json();
 
-    console.log('[send-email] Request received:', { to, subject, customer_id, playbook_execution_id });
+    console.log('[send-email] Request received:', { to, subject, customer_id, playbook_execution_id, is_customer_email, branding_id });
 
     // Validação
     if (!to || !subject || !html || !customer_id) {
       console.error('[send-email] Missing fields:', { to: !!to, subject: !!subject, html: !!html, customer_id: !!customer_id });
       throw new Error('Missing required fields: to, subject, html, customer_id');
     }
+
+    // Inicializar Supabase
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Buscar branding do banco de dados
+    let branding: EmailBranding | null = null;
+    
+    if (branding_id) {
+      // Branding específico fornecido
+      const { data, error } = await supabase
+        .from('email_branding')
+        .select('*')
+        .eq('id', branding_id)
+        .single();
+      
+      if (!error && data) {
+        branding = data;
+        console.log('[send-email] Using specific branding:', data.name);
+      }
+    }
+    if (!branding) {
+      // Buscar branding padrão baseado no tipo de email
+      const brandingColumn = is_customer_email ? 'is_default_customer' : 'is_default_employee';
+      const { data, error } = await supabase
+        .from('email_branding')
+        .select('*')
+        .eq(brandingColumn, true)
+        .single();
+      
+      if (!error && data) {
+        branding = data;
+        console.log(`[send-email] Using default ${is_customer_email ? 'customer' : 'employee'} branding:`, data.name);
+      }
+    }
+    // Valores de fallback caso não encontre branding
+    const brandName = branding?.name || 'Seu Armazém Drop';
+    const headerColor = branding?.header_color || '#1e3a5f';
+    const primaryColor = branding?.primary_color || '#2c5282';
+    const footerText = branding?.footer_text || `${brandName} - Equipe de Suporte`;
+    const logoUrl = branding?.logo_url;
+    const footerLogoUrl = branding?.footer_logo_url;
+
+    console.log('[send-email] Branding applied:', { brandName, headerColor, hasLogo: !!logoUrl });
 
     // Enviar email via Resend
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
@@ -40,6 +106,19 @@ serve(async (req) => {
     }
 
     console.log('[send-email] Sending email via Resend API...');
+    
+    // Construir header com logo ou texto
+    const headerContent = logoUrl 
+      ? `<img src="${logoUrl}" alt="${brandName}" style="max-width: 200px; height: auto;" />`
+      : `<h2 style="color: white; margin: 0; font-size: 24px; font-weight: bold;">${brandName}</h2>`;
+
+    // Construir footer
+    const footerLogoContent = footerLogoUrl
+      ? `<img src="${footerLogoUrl}" alt="${brandName}" width="100" style="display: block; max-width: 100px; height: auto;" />`
+      : logoUrl
+        ? `<img src="${logoUrl}" alt="${brandName}" width="100" style="display: block; max-width: 100px; height: auto;" />`
+        : '';
+
     const emailHtml = `
       <!DOCTYPE html>
       <html>
@@ -48,38 +127,29 @@ serve(async (req) => {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
           <div style="max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-              <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-                   alt="PARABELLUM" 
-                   style="max-width: 200px; height: auto;" />
+            <div style="background: linear-gradient(135deg, ${headerColor} 0%, ${primaryColor} 100%); padding: 30px; text-align: center;">
+              ${headerContent}
             </div>
             <div style="padding: 30px; background: #f8fafc;">
               ${html}
             </div>
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #1e3a5f;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: ${headerColor};">
               <tr>
                 <td align="center" style="padding: 25px;">
-                  <table cellpadding="0" cellspacing="0" border="0" align="center">
-                    <tr>
-                      <td style="padding: 0 8px;">
-                        <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-                             alt="PARABELLUM" 
-                             width="100"
-                             style="display: block; max-width: 100px; height: auto;" />
-                      </td>
-                      <td style="padding: 0 8px;">
-                        <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-3cliques-email.png?v=2" 
-                             alt="3 CLIQUES" 
-                             width="80"
-                             style="display: block; max-width: 80px; height: auto;" />
-                      </td>
-                    </tr>
-                  </table>
+                  ${footerLogoContent ? `
+                    <table cellpadding="0" cellspacing="0" border="0" align="center">
+                      <tr>
+                        <td style="padding: 0 8px;">
+                          ${footerLogoContent}
+                        </td>
+                      </tr>
+                    </table>
+                  ` : ''}
                   <p style="color: #ffffff; margin: 15px 0 10px 0; font-size: 14px; font-weight: 600;">
-                    PARABELLUM by 3Cliques
+                    ${brandName}
                   </p>
                   <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
-                    Equipe Comercial
+                    ${footerText}
                   </p>
                   <p style="color: #64748b; margin: 0; font-size: 11px;">
                     Ambiente Seguro
@@ -92,6 +162,20 @@ serve(async (req) => {
       </html>
     `;
 
+    // Buscar sender configurado
+    let senderEmail = 'contato@parabellum.work';
+    let senderName = brandName;
+
+    const { data: senderConfig } = await supabase
+      .from('system_configurations')
+      .select('value')
+      .eq('key', 'email_sender_customer')
+      .single();
+    
+    if (senderConfig?.value) {
+      senderEmail = senderConfig.value;
+    }
+
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -99,12 +183,13 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Seu Armazém Drop <contato@parabellum.work>',
+        from: `${senderName} <${senderEmail}>`,
         to: [`${to_name} <${to}>`],
         subject,
         html: emailHtml,
         tags: [
           { name: 'customer_id', value: customer_id },
+          { name: 'branding', value: brandName },
           ...(playbook_execution_id ? [{ name: 'playbook_execution_id', value: playbook_execution_id }] : [])
         ]
       }),
@@ -119,11 +204,6 @@ serve(async (req) => {
     const resendData = await resendResponse.json();
     console.log('[send-email] Email sent successfully:', resendData);
 
-    // Registrar interação email_sent no Supabase
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
     // Insert tracking event
     const { error: trackingError } = await supabase
       .from('email_tracking_events')
@@ -132,7 +212,7 @@ serve(async (req) => {
         customer_id,
         playbook_execution_id: playbook_execution_id || null,
         event_type: 'sent',
-        metadata: { to, subject, to_name }
+        metadata: { to, subject, to_name, branding: brandName }
       });
 
     if (trackingError) {
@@ -151,6 +231,7 @@ serve(async (req) => {
           email_id: resendData.id,
           to,
           subject,
+          branding: brandName,
         }
       });
 
@@ -165,6 +246,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         email_id: resendData.id,
+        branding_used: brandName,
         message: 'Email enviado e interação registrada'
       }),
       {

@@ -300,7 +300,7 @@ async function executeSendEmailToCustomer(automation: Automation, triggerData: a
 
   console.log('[executeSendEmailToCustomer] Template variables replaced');
 
-  // Chamar send-email Edge Function
+  // Chamar send-email Edge Function com branding de cliente
   const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-email', {
     body: {
       to: contact.email,
@@ -308,6 +308,8 @@ async function executeSendEmailToCustomer(automation: Automation, triggerData: a
       subject: subject,
       html: html_body,
       customer_id: contact.id,
+      is_customer_email: true, // Usar branding de cliente
+      branding_id: template.branding_id || null, // Usar branding específico do template se configurado
     },
   });
 
