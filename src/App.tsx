@@ -8,6 +8,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RealtimeNotifications from "./components/RealtimeNotifications";
 import { WhatsAppDisconnectMonitor } from "./components/WhatsAppDisconnectMonitor";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 
 // Pages
 import Dashboard from "./pages/Dashboard";
@@ -90,6 +91,7 @@ const App = () => {
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
+          <UpdatePrompt />
           <Toaster />
           <Sonner />
           <BrowserRouter>
