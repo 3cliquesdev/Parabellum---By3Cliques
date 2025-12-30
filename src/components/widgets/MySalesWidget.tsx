@@ -69,7 +69,10 @@ export function MySalesWidget({ userId }: MySalesWidgetProps) {
           <div>
             <p className="text-xs text-muted-foreground">Total de Vendas</p>
             <p className="text-2xl font-semibold text-slate-900 dark:text-white">
-              ${salesData?.totalSales.toLocaleString() || 0}
+              {new Intl.NumberFormat("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              }).format(salesData?.totalSales || 0)}
             </p>
           </div>
           <TrendingUp className="h-6 w-6 text-primary" />

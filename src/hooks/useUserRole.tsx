@@ -5,9 +5,9 @@ import { useAuth } from "./useAuth";
 type AppRole = "admin" | "user" | "manager" | "sales_rep" | "consultant" | "support_agent" | "support_manager" | "financial_manager" | "cs_manager" | "general_manager" | null;
 
 export function useUserRole() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
-  const { data: role, isLoading: loading } = useQuery({
+  const { data: role, isLoading: roleLoading } = useQuery({
     queryKey: ["user-role", user?.id],
     queryFn: async () => {
       if (!user) {
@@ -60,10 +60,8 @@ export function useUserRole() {
     refetchOnMount: true,
   });
 
-  const isConsultant = role === "consultant";
-  const isSupportAgent = role === "support_agent";
-  const isSupportManager = role === "support_manager";
-  const isFinancialManager = role === "financial_manager";
+  // Loading é true se auth ainda está carregando OU se role está carregando
+  const loading = authLoading || roleLoading;
 
   return {
     role: role ?? null,
