@@ -53,6 +53,6 @@ export function useActivities({ contactId, dealId, completed }: UseActivitiesOpt
       if (error) throw error;
       return data || [];
     },
-    enabled: !!user && role !== undefined,
+    enabled: !!user && !!role,
   });
 }

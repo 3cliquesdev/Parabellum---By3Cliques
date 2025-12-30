@@ -112,7 +112,7 @@ export function useContacts(filters?: ContactFilters) {
 
       return data;
     },
-    enabled: role !== undefined,
+    enabled: !!role,
   });
 }
 

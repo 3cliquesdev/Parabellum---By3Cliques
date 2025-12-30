@@ -291,7 +291,7 @@ export default function Deals() {
     );
   };
 
-  if (dealsLoading || stagesLoading || pipelinesLoading || roleLoading) {
+  if (dealsLoading || stagesLoading || pipelinesLoading || roleLoading || !role) {
     return (
       <div className="p-8">
         <div className="flex items-center justify-center h-64">

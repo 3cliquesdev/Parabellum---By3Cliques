@@ -65,6 +65,6 @@ export function useSalesFunnel(pipelineId?: string) {
         (a, b) => a.position - b.position
       );
     },
-    enabled: role !== undefined,
+    enabled: !!role,
   });
 }
