@@ -81,32 +81,194 @@ const validators = {
   },
 };
 
-// Formula parser for calculations
+// Safe formula parser for calculations - NO eval/new Function
+// Only allows: numbers, basic math operators, field references, and IF statements
 function evaluateFormula(formula: string, fieldValues: Record<string, any>): { success: boolean; value: any; error?: string } {
   try {
+    // Step 1: Replace field references {field_name} with actual values
     let expression = formula;
-    
-    // Replace field references {field_name} with values
     const fieldPattern = /\{([^}]+)\}/g;
+    
     expression = expression.replace(fieldPattern, (match, fieldName) => {
       const value = fieldValues[fieldName];
       if (value === undefined || value === null) return '0';
-      if (typeof value === 'string') return `"${value}"`;
-      return String(value);
+      if (typeof value === 'number') return String(value);
+      if (typeof value === 'boolean') return value ? '1' : '0';
+      // For strings, try to parse as number, otherwise return 0
+      const numValue = parseFloat(String(value));
+      return isNaN(numValue) ? '0' : String(numValue);
     });
-    
-    // Replace IF statements
-    const ifPattern = /IF\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)/gi;
-    expression = expression.replace(ifPattern, (match, condition, trueVal, falseVal) => {
-      return `(${condition} ? ${trueVal} : ${falseVal})`;
-    });
-    
-    // Safe evaluation
-    const result = new Function(`"use strict"; return (${expression});`)();
+
+    // Step 2: Handle IF statements recursively
+    const processIf = (expr: string): string => {
+      const ifPattern = /IF\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)/gi;
+      let result = expr;
+      let match;
+      
+      while ((match = ifPattern.exec(result)) !== null) {
+        const condition = match[1].trim();
+        const trueVal = match[2].trim();
+        const falseVal = match[3].trim();
+        
+        // Evaluate the condition safely
+        const condResult = safeEvaluateCondition(condition);
+        const replacement = condResult ? trueVal : falseVal;
+        
+        result = result.substring(0, match.index) + replacement + result.substring(match.index + match[0].length);
+        ifPattern.lastIndex = 0; // Reset for next iteration
+      }
+      
+      return result;
+    };
+
+    expression = processIf(expression);
+
+    // Step 3: Safe mathematical evaluation using tokenization
+    const result = safeEvaluateMath(expression);
     return { success: true, value: result };
   } catch (error) {
+    console.error('[form-submit-v3] Formula evaluation error:', error);
     return { success: false, value: null, error: String(error) };
   }
+}
+
+// Safe condition evaluator - only allows comparison operators
+function safeEvaluateCondition(condition: string): boolean {
+  // Match patterns like: value1 > value2, value1 == value2, etc.
+  const comparisonPattern = /^\s*(-?\d+(?:\.\d+)?)\s*(>=|<=|>|<|==|!=)\s*(-?\d+(?:\.\d+)?)\s*$/;
+  const match = condition.match(comparisonPattern);
+  
+  if (!match) {
+    console.warn('[form-submit-v3] Invalid condition format:', condition);
+    return false;
+  }
+  
+  const left = parseFloat(match[1]);
+  const operator = match[2];
+  const right = parseFloat(match[3]);
+  
+  switch (operator) {
+    case '>': return left > right;
+    case '<': return left < right;
+    case '>=': return left >= right;
+    case '<=': return left <= right;
+    case '==': return left === right;
+    case '!=': return left !== right;
+    default: return false;
+  }
+}
+
+// Safe math evaluator - only allows numbers and basic operators (+, -, *, /, %, parentheses)
+function safeEvaluateMath(expression: string): number {
+  // Remove all whitespace
+  expression = expression.replace(/\s+/g, '');
+  
+  // Validate: only allow numbers, operators, parentheses, and decimal points
+  const allowedPattern = /^[0-9+\-*/%.()]+$/;
+  if (!allowedPattern.test(expression)) {
+    throw new Error(`Invalid characters in expression: ${expression}`);
+  }
+  
+  // Prevent dangerous patterns (function calls, property access)
+  const dangerousPatterns = [
+    /[a-zA-Z_$]/, // No letters/identifiers
+    /\[\s*\]/, // No array access
+    /\.\s*[a-zA-Z]/, // No property access
+  ];
+  
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(expression)) {
+      throw new Error(`Unsafe pattern detected in expression: ${expression}`);
+    }
+  }
+  
+  // Parse and evaluate using a safe recursive descent parser
+  return parseExpression(expression);
+}
+
+// Recursive descent parser for safe math evaluation
+function parseExpression(expr: string): number {
+  let pos = 0;
+  
+  function parseNumber(): number {
+    let numStr = '';
+    const start = pos;
+    
+    // Handle negative numbers
+    if (expr[pos] === '-') {
+      numStr += '-';
+      pos++;
+    }
+    
+    while (pos < expr.length && (/[0-9.]/.test(expr[pos]))) {
+      numStr += expr[pos];
+      pos++;
+    }
+    
+    if (numStr === '' || numStr === '-') {
+      throw new Error(`Expected number at position ${start}`);
+    }
+    
+    return parseFloat(numStr);
+  }
+  
+  function parseFactor(): number {
+    if (expr[pos] === '(') {
+      pos++; // skip '('
+      const result = parseAddSub();
+      if (expr[pos] !== ')') {
+        throw new Error('Missing closing parenthesis');
+      }
+      pos++; // skip ')'
+      return result;
+    }
+    return parseNumber();
+  }
+  
+  function parseMulDiv(): number {
+    let left = parseFactor();
+    
+    while (pos < expr.length && (expr[pos] === '*' || expr[pos] === '/' || expr[pos] === '%')) {
+      const op = expr[pos];
+      pos++;
+      const right = parseFactor();
+      
+      if (op === '*') left = left * right;
+      else if (op === '/') {
+        if (right === 0) throw new Error('Division by zero');
+        left = left / right;
+      }
+      else if (op === '%') {
+        if (right === 0) throw new Error('Modulo by zero');
+        left = left % right;
+      }
+    }
+    
+    return left;
+  }
+  
+  function parseAddSub(): number {
+    let left = parseMulDiv();
+    
+    while (pos < expr.length && (expr[pos] === '+' || expr[pos] === '-')) {
+      const op = expr[pos];
+      pos++;
+      const right = parseMulDiv();
+      
+      if (op === '+') left = left + right;
+      else left = left - right;
+    }
+    
+    return left;
+  }
+  
+  const result = parseAddSub();
+  
+  if (pos < expr.length) {
+    throw new Error(`Unexpected character at position ${pos}: ${expr[pos]}`);
+  }
+  
+  return result;
 }
 
 // Evaluate condition
