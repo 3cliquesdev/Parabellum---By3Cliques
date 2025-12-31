@@ -52,7 +52,7 @@ import MyPortfolio from "./pages/MyPortfolio";
 import FraudDetection from "./pages/reports/FraudDetection";
 import CSManagement from "./pages/CSManagement";
 import SalesManagement from "./pages/SalesManagement";
-import SalesDashboard from "./pages/SalesDashboard";
+
 import SalesRepDetail from "./pages/SalesRepDetail";
 import OnboardingBuilder from "./pages/OnboardingBuilder";
 import PlaybookExecutions from "./pages/PlaybookExecutions";
@@ -135,7 +135,7 @@ const App = () => {
             <Route path="/consultants" element={<ProtectedRoute requiredPermission="cadastros.view_consultants"><Layout><Consultants /></Layout></ProtectedRoute>} />
             <Route path="/sales-management" element={<ProtectedRoute requiredPermission="sales.view_management"><Layout><SalesManagement /></Layout></ProtectedRoute>} />
             <Route path="/sales-management/rep/:id" element={<ProtectedRoute requiredPermission="sales.view_management"><Layout><SalesRepDetail /></Layout></ProtectedRoute>} />
-            <Route path="/sales-dashboard" element={<ProtectedRoute requiredPermission="sales.view_management"><Layout><SalesDashboard /></Layout></ProtectedRoute>} />
+            
             <Route path="/contacts" element={<ProtectedRoute requiredPermission="contacts.view"><Layout><Contacts /></Layout></ProtectedRoute>} />
             <Route path="/contacts/:id" element={<ProtectedRoute requiredPermission="contacts.view"><Layout><ContactDetails /></Layout></ProtectedRoute>} />
             <Route path="/organizations" element={<ProtectedRoute requiredPermission="contacts.view_organizations"><Layout><Organizations /></Layout></ProtectedRoute>} />

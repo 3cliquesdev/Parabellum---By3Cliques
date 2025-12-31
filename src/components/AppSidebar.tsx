@@ -89,7 +89,6 @@ const universalMenuGroups: MenuGroup[] = [
     items: [
       { title: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" },
       { title: "Gestão de Vendas", href: "/sales-management", icon: TrendingUp, permission: "sales.view_management" },
-      { title: "Métricas de Vendas", href: "/sales-dashboard", icon: BarChart3, permission: "sales.view_management" },
       { title: "Dashboard CS", href: "/cs-management", icon: BarChart3, permission: "cs.view_management" },
       { title: "Analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
     ]

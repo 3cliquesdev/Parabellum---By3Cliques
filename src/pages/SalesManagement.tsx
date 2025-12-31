@@ -13,6 +13,8 @@ import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import { MonthlyWonDealsChart } from "@/components/widgets/MonthlyWonDealsChart";
+import { StageConversionChart } from "@/components/widgets/StageConversionChart";
 
 export default function SalesManagement() {
   const navigate = useNavigate();
@@ -123,8 +125,14 @@ export default function SalesManagement() {
           </Card>
         </div>
 
-        {/* Seção Visual - 2 colunas */}
+        {/* Seção Visual - Grid 2x2 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {/* Evolução Mensal de Vendas */}
+          <MonthlyWonDealsChart />
+
+          {/* Taxa de Conversão por Estágio */}
+          <StageConversionChart />
+
           {/* Gráfico de Rosca - Distribuição do Funil */}
           <Card className="p-5">
             <h3 className="text-base font-semibold text-foreground mb-3">📊 Distribuição do Funil</h3>
