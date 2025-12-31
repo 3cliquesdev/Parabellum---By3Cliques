@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, ChevronDown } from "lucide-react";
-import { format, startOfToday, startOfYesterday, endOfYesterday, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, subYears } from "date-fns";
+import { format, startOfToday, startOfYesterday, endOfYesterday, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, subYears, subDays, startOfQuarter, endOfQuarter } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
@@ -20,12 +20,11 @@ export interface DateRangePickerProps {
   className?: string;
 }
 
-type PresetKey = 'today' | 'yesterday' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'lastYear' | 'custom';
+type PresetKey = 'today' | 'yesterday' | 'thisWeek' | 'lastWeek' | 'last30Days' | 'last90Days' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear' | 'lastYear' | 'custom';
 
-const presets: Record<PresetKey, { label: string; icon: string; getRange: () => DateRange }> = {
+const presets: Record<PresetKey, { label: string; getRange: () => DateRange }> = {
   today: {
     label: 'Hoje',
-    icon: '📅',
     getRange: () => ({
       from: startOfToday(),
       to: startOfToday(),
@@ -33,7 +32,6 @@ const presets: Record<PresetKey, { label: string; icon: string; getRange: () => 
   },
   yesterday: {
     label: 'Ontem',
-    icon: '📅',
     getRange: () => ({
       from: startOfYesterday(),
       to: endOfYesterday(),
@@ -41,7 +39,6 @@ const presets: Record<PresetKey, { label: string; icon: string; getRange: () => 
   },
   thisWeek: {
     label: 'Esta Semana',
-    icon: '📅',
     getRange: () => ({
       from: startOfWeek(new Date(), { locale: ptBR }),
       to: endOfWeek(new Date(), { locale: ptBR }),
@@ -49,15 +46,27 @@ const presets: Record<PresetKey, { label: string; icon: string; getRange: () => 
   },
   lastWeek: {
     label: 'Semana Passada',
-    icon: '📅',
     getRange: () => ({
       from: startOfWeek(subWeeks(new Date(), 1), { locale: ptBR }),
       to: endOfWeek(subWeeks(new Date(), 1), { locale: ptBR }),
     }),
   },
+  last30Days: {
+    label: 'Últimos 30 dias',
+    getRange: () => ({
+      from: subDays(new Date(), 30),
+      to: new Date(),
+    }),
+  },
+  last90Days: {
+    label: 'Últimos 90 dias',
+    getRange: () => ({
+      from: subDays(new Date(), 90),
+      to: new Date(),
+    }),
+  },
   thisMonth: {
     label: 'Este Mês',
-    icon: '📅',
     getRange: () => ({
       from: startOfMonth(new Date()),
       to: endOfMonth(new Date()),
@@ -65,15 +74,20 @@ const presets: Record<PresetKey, { label: string; icon: string; getRange: () => 
   },
   lastMonth: {
     label: 'Mês Passado',
-    icon: '📅',
     getRange: () => ({
       from: startOfMonth(subMonths(new Date(), 1)),
       to: endOfMonth(subMonths(new Date(), 1)),
     }),
   },
+  thisQuarter: {
+    label: 'Este Trimestre',
+    getRange: () => ({
+      from: startOfQuarter(new Date()),
+      to: endOfQuarter(new Date()),
+    }),
+  },
   thisYear: {
     label: 'Este Ano',
-    icon: '📅',
     getRange: () => ({
       from: startOfYear(new Date()),
       to: endOfYear(new Date()),
@@ -81,7 +95,6 @@ const presets: Record<PresetKey, { label: string; icon: string; getRange: () => 
   },
   lastYear: {
     label: 'Ano Passado',
-    icon: '📅',
     getRange: () => ({
       from: startOfYear(subYears(new Date(), 1)),
       to: endOfYear(subYears(new Date(), 1)),
@@ -89,7 +102,6 @@ const presets: Record<PresetKey, { label: string; icon: string; getRange: () => 
   },
   custom: {
     label: 'Personalizado',
-    icon: '🎯',
     getRange: () => ({
       from: undefined,
       to: undefined,
@@ -97,7 +109,7 @@ const presets: Record<PresetKey, { label: string; icon: string; getRange: () => 
   },
 };
 
-const presetOrder: PresetKey[] = ['today', 'yesterday', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth', 'thisYear', 'lastYear'];
+const presetOrder: PresetKey[] = ['today', 'yesterday', 'thisWeek', 'lastWeek', 'last30Days', 'last90Days', 'thisMonth', 'lastMonth', 'thisQuarter', 'thisYear', 'lastYear'];
 
 export function DateRangePicker({ value, onChange, className }: DateRangePickerProps) {
   const [activePreset, setActivePreset] = useState<PresetKey>('thisMonth');
@@ -122,7 +134,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
     if (activePreset === 'custom' && value?.from && value?.to) {
       return `${format(value.from, "dd/MM/yyyy", { locale: ptBR })} - ${format(value.to, "dd/MM/yyyy", { locale: ptBR })}`;
     }
-    return `${presets[activePreset].icon} ${presets[activePreset].label}`;
+    return presets[activePreset].label;
   };
 
   return (
@@ -145,7 +157,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
                 activePreset === key && "bg-accent font-medium"
               )}
             >
-              {presets[key].icon} {presets[key].label}
+              {presets[key].label}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
