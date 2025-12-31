@@ -4,20 +4,40 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useSalesManagerKPIs } from "@/hooks/useSalesManagerKPIs";
+import { DateRange } from "react-day-picker";
+import { startOfMonth, endOfMonth, formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { 
+  DollarSign, TrendingUp, Target, Briefcase, Clock, PlusCircle, BarChart3,
+  Eye, ChevronLeft, ChevronRight, Flame
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+// Hooks
+import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useSalesRepPerformance } from "@/hooks/useSalesRepPerformance";
 import { useRottenDeals } from "@/hooks/useRottenDeals";
-import { DollarSign, TrendingUp, Zap, Flame, Eye, ChevronLeft, ChevronRight, Clock } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
-import { MonthlyWonDealsChart } from "@/components/widgets/MonthlyWonDealsChart";
-import { StageConversionChart } from "@/components/widgets/StageConversionChart";
+
+// Premium Widgets
+import { DateRangePicker } from "@/components/DateRangePicker";
+import { DashboardExportPDF } from "@/components/premium/DashboardExportPDF";
+import { PremiumKPICard } from "@/components/widgets/premium/PremiumKPICard";
+import { RevenueTimelineChart } from "@/components/widgets/premium/RevenueTimelineChart";
+import { TopPerformersWidget } from "@/components/widgets/premium/TopPerformersWidget";
+import { TeamActivitiesWidget } from "@/components/widgets/premium/TeamActivitiesWidget";
+import { PipelineFunnelChart } from "@/components/widgets/premium/PipelineFunnelChart";
 
 export default function SalesManagement() {
   const navigate = useNavigate();
-  const { data: kpis, isLoading: kpisLoading } = useSalesManagerKPIs();
+  
+  // Date range state - default to current month
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => ({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  }));
+  
+  // Data hooks
+  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics(dateRange);
   const { data: salesReps, isLoading: salesRepsLoading } = useSalesRepPerformance();
   const { data: rottenDeals, isLoading: rottenLoading } = useRottenDeals();
   
@@ -34,189 +54,172 @@ export default function SalesManagement() {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(value);
   };
 
-  // Prepare data for donut chart
-  const funnelData = kpis?.funnelDistribution.map((stage, index) => ({
-    name: stage.stageName,
-    value: stage.count,
-    color: `hsl(${221.2 - (index * 20)}, 83.2%, ${53.3 + (index * 10)}%)`,
-  })) || [];
-  
-  const totalDealsInFunnel = funnelData.reduce((sum, item) => sum + item.value, 0);
-
   return (
-    <div className="container mx-auto p-3 md:p-4 space-y-3">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard do Gerente de Vendas</h1>
-            <p className="text-sm text-muted-foreground mt-1">Visão estratégica da operação comercial</p>
-          </div>
+    <div className="container mx-auto p-3 md:p-4 space-y-4">
+      {/* Header with Date Filter */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Gestão de Vendas</h1>
+          <p className="text-sm text-muted-foreground">Métricas premium com filtro por período</p>
         </div>
-
-        {/* KPIs Compactos - Grid 4 colunas */}
+        <div className="flex items-center gap-3">
+          <DateRangePicker 
+            value={dateRange} 
+            onChange={setDateRange}
+          />
+          <DashboardExportPDF 
+            containerId="sales-management-content" 
+            dateRange={dateRange}
+          />
+        </div>
+      </div>
+      
+      <div id="sales-management-content" className="space-y-4">
+        {/* ROW 1: KPIs Principais */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Pipeline Total */}
-          <Card className="p-4 h-28 flex flex-col justify-between">
-            {kpisLoading ? (
-              <Skeleton className="h-full" />
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Pipeline Total</span>
-                  <DollarSign className="w-4 h-4 text-blue-600" />
-                </div>
-                <div className="text-3xl font-bold text-foreground truncate">{formatCurrency(kpis?.pipelineTotal || 0)}</div>
-                <p className="text-xs text-muted-foreground">Valor em aberto</p>
-              </>
-            )}
-          </Card>
-
-          {/* Vendas do Mês */}
-          <Card className="p-4 h-28 flex flex-col justify-between">
-            {kpisLoading ? (
-              <Skeleton className="h-full" />
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Vendas do Mês</span>
-                  <TrendingUp className="w-4 h-4 text-emerald-600" />
-                </div>
-                <div className="text-3xl font-bold text-foreground truncate">{formatCurrency(kpis?.revenueWonThisMonth || 0)}</div>
-                <p className="text-xs text-muted-foreground">{kpis?.dealsWonThisMonth || 0} deals ganhos</p>
-              </>
-            )}
-          </Card>
-
-          {/* Taxa de Conversão */}
-          <Card className="p-4 h-28 flex flex-col justify-between">
-            {kpisLoading ? (
-              <Skeleton className="h-full" />
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Conversão</span>
-                  <Zap className="w-4 h-4 text-amber-600" />
-                </div>
-                <div className="text-3xl font-bold text-foreground">{kpis?.conversionRate.toFixed(1)}%</div>
-                <p className="text-xs text-muted-foreground">Won vs Total</p>
-              </>
-            )}
-          </Card>
-
-          {/* Hot Deals */}
-          <Card className="p-4 h-28 flex flex-col justify-between">
-            {kpisLoading ? (
-              <Skeleton className="h-full" />
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Hot Deals</span>
-                  <Flame className="w-4 h-4 text-orange-600" />
-                </div>
-                <div className="text-3xl font-bold text-foreground">{kpis?.hotDealsCount || 0}</div>
-                <p className="text-xs text-muted-foreground">Fechando em 7 dias</p>
-              </>
-            )}
-          </Card>
+          <PremiumKPICard
+            title="Receita Fechada"
+            value={formatCurrency(metrics?.revenueWon || 0)}
+            subtitle="no período"
+            change={metrics?.revenueChange}
+            icon={DollarSign}
+            iconColor="text-emerald-600"
+            isLoading={metricsLoading}
+            variant="success"
+            tooltip="Receita total de deals ganhos no período selecionado"
+          />
+          <PremiumKPICard
+            title="Pipeline Previsto"
+            value={formatCurrency(metrics?.weightedPipeline || 0)}
+            subtitle="ponderado por probabilidade"
+            icon={BarChart3}
+            iconColor="text-blue-600"
+            isLoading={metricsLoading}
+            tooltip="Soma dos valores de deals abertos multiplicados pela probabilidade"
+          />
+          <PremiumKPICard
+            title="Taxa de Conversão"
+            value={`${(metrics?.conversionRate || 0).toFixed(1)}%`}
+            subtitle={`${metrics?.dealsWon || 0} ganhos / ${(metrics?.dealsWon || 0) + (metrics?.dealsLost || 0)} fechados`}
+            change={metrics?.conversionChange}
+            icon={Target}
+            iconColor="text-purple-600"
+            isLoading={metricsLoading}
+            tooltip="Percentual de deals ganhos sobre total de deals fechados"
+          />
+          <PremiumKPICard
+            title="Ciclo de Vendas"
+            value={`${metrics?.avgSalesCycle || 0} dias`}
+            subtitle="tempo médio até fechamento"
+            change={metrics?.salesCycleChange}
+            changeLabel="dias vs anterior"
+            icon={Clock}
+            iconColor="text-amber-600"
+            isLoading={metricsLoading}
+            tooltip="Média de dias desde criação até fechamento do deal"
+          />
+        </div>
+        
+        {/* ROW 2: KPIs Secundários */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <PremiumKPICard
+            title="Pipeline Total"
+            value={formatCurrency(metrics?.pipelineTotal || 0)}
+            subtitle={`${metrics?.dealsOpen || 0} deals abertos`}
+            icon={Briefcase}
+            iconColor="text-primary"
+            isLoading={metricsLoading}
+          />
+          <PremiumKPICard
+            title="Deals Ganhos"
+            value={metrics?.dealsWon || 0}
+            subtitle="no período"
+            icon={TrendingUp}
+            iconColor="text-emerald-600"
+            isLoading={metricsLoading}
+            variant="success"
+          />
+          <PremiumKPICard
+            title="Deals Perdidos"
+            value={metrics?.dealsLost || 0}
+            subtitle="no período"
+            icon={Target}
+            iconColor="text-red-500"
+            isLoading={metricsLoading}
+            variant="danger"
+          />
+          <PremiumKPICard
+            title="Novos Deals"
+            value={metrics?.newDealsCreated || 0}
+            subtitle="criados no período"
+            change={metrics?.newDealsChange}
+            icon={PlusCircle}
+            iconColor="text-blue-600"
+            isLoading={metricsLoading}
+          />
+        </div>
+        
+        {/* ROW 3: Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <RevenueTimelineChart dateRange={dateRange} />
+          <PipelineFunnelChart />
+        </div>
+        
+        {/* ROW 4: Rankings + Activities */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <TopPerformersWidget dateRange={dateRange} />
+          <TeamActivitiesWidget dateRange={dateRange} />
         </div>
 
-        {/* Seção Visual - Grid 2x2 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {/* Evolução Mensal de Vendas */}
-          <MonthlyWonDealsChart />
+        {/* ROW 5: Negócios Estagnados */}
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="w-4 h-4 text-amber-600" />
+            <h3 className="text-base font-semibold text-foreground">Negócios Estagnados</h3>
+            <Badge variant="warning" className="text-xs">{rottenDeals?.length || 0}</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Deals sem movimentação há mais de 14 dias. Ação imediata necessária.
+          </p>
 
-          {/* Taxa de Conversão por Estágio */}
-          <StageConversionChart />
-
-          {/* Gráfico de Rosca - Distribuição do Funil */}
-          <Card className="p-5">
-            <h3 className="text-base font-semibold text-foreground mb-3">📊 Distribuição do Funil</h3>
-            {kpisLoading ? (
-              <Skeleton className="h-48" />
-            ) : (
-              <div className="relative h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={funnelData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={80}
-                      paddingAngle={3}
-                      dataKey="value"
-                    >
-                      {funnelData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                {/* Número no centro */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <div className="text-3xl font-bold text-foreground">{totalDealsInFunnel}</div>
-                  <div className="text-xs text-muted-foreground">Deals</div>
-                </div>
-              </div>
-            )}
-            <div className="flex items-center justify-center gap-4 mt-3 flex-wrap">
-              {funnelData.map((stage, index) => (
-                <div key={index} className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.color }}></div>
-                  <span className="text-xs text-muted-foreground">{stage.name}</span>
+          {rottenLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-16" />
+              ))}
+            </div>
+          ) : rottenDeals && rottenDeals.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {rottenDeals.slice(0, 6).map((deal) => (
+                <div key={deal.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm text-foreground truncate">{deal.title}</div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {formatCurrency(deal.value || 0)} • {deal.daysSinceUpdate} dias parado
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 flex-shrink-0" onClick={() => navigate(`/deals`)}>
+                    <Eye className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               ))}
             </div>
-          </Card>
-
-          {/* Negócios Estagnados - Compacto */}
-          <Card className="p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-4 h-4 text-amber-600" />
-              <h3 className="text-base font-semibold text-foreground">🚨 Negócios Estagnados</h3>
-              <Badge variant="warning" className="text-xs">{kpis?.rottenDealsCount || 0}</Badge>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Flame className="w-10 h-10 mx-auto mb-2 opacity-20" />
+              <p className="text-sm">Nenhum deal estagnado</p>
             </div>
-            <p className="text-xs text-muted-foreground mb-3">
-              Deals sem movimentação há mais de 14 dias. Ação imediata necessária.
-            </p>
+          )}
+        </Card>
 
-            {rottenLoading ? (
-              <div className="space-y-2">
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-16" />
-                ))}
-              </div>
-            ) : rottenDeals && rottenDeals.length > 0 ? (
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                {rottenDeals.slice(0, 5).map((deal) => (
-                  <div key={deal.id} className="flex items-center justify-between p-2 border rounded-lg hover:bg-accent/50 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-foreground truncate">{deal.title}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {formatCurrency(deal.value || 0)} • {deal.daysSinceUpdate} dias parado
-                      </div>
-                    </div>
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 flex-shrink-0" onClick={() => navigate(`/deals`)}>
-                      <Eye className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Clock className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                <p className="text-sm">Nenhum deal estagnado 🎉</p>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        {/* Performance do Time - Full Width + Paginação */}
+        {/* ROW 6: Performance do Time - Full Width + Paginação */}
         <Card className="p-5">
-          <h2 className="text-base font-semibold text-foreground mb-4">📊 Performance do Time de Vendas</h2>
+          <h2 className="text-base font-semibold text-foreground mb-4">Performance do Time de Vendas</h2>
           
           {salesRepsLoading ? (
             <div className="space-y-3">
@@ -332,5 +335,6 @@ export default function SalesManagement() {
           )}
         </Card>
       </div>
+    </div>
   );
 }
