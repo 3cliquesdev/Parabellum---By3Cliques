@@ -29,8 +29,12 @@ import LostReasonDialog from "@/components/LostReasonDialog";
 import ValidateWonDealDialog from "@/components/deals/ValidateWonDealDialog";
 import { PendingDealsQueue } from "@/components/deals/PendingDealsQueue";
 import { KanbanScrollNavigation } from "@/components/deals/KanbanScrollNavigation";
-import DealFilterPopover from "@/components/deals/DealFilterPopover";
+import { AdvancedDealFiltersModal } from "@/components/deals/AdvancedDealFiltersModal";
+import { SavedFiltersDropdown } from "@/components/deals/filters/SavedFiltersDropdown";
+import { SortBySelect, SortByOption } from "@/components/deals/filters/SortBySelect";
 import { ActiveFilterChips, generateDealFilterChips } from "@/components/ui/active-filter-chips";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -55,6 +59,9 @@ export default function Deals() {
     search: "",
     leadSource: [],
     assignedTo: [],
+    status: [],
+    stageIds: [],
+    sortBy: "created_at_desc",
   });
   
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();

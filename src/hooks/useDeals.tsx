@@ -10,7 +10,15 @@ type Deal = Tables<"deals">;
 type DealInsert = TablesInsert<"deals">;
 type DealUpdate = TablesUpdate<"deals">;
 
+export type SortByOption = 
+  | "created_at_desc" 
+  | "value_desc" 
+  | "value_asc" 
+  | "probability_desc" 
+  | "expected_close_asc";
+
 export interface DealFilters {
+  // Existing filters
   valueMin?: number;
   valueMax?: number;
   createdDateRange?: DateRange;
@@ -19,6 +27,14 @@ export interface DealFilters {
   leadSource: string[];
   assignedTo?: string[];
   search: string;
+  
+  // New advanced filters
+  status?: string[];           // ['open', 'won', 'lost']
+  stageIds?: string[];         // IDs of selected stages
+  probabilityMin?: number;     // 0-100
+  probabilityMax?: number;     // 0-100
+  updatedDateRange?: DateRange;
+  sortBy?: SortByOption;
 }
 
 export function useDeals(pipelineId?: string, filters?: DealFilters) {
@@ -37,8 +53,7 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
           organizations (name),
           assigned_user:profiles!deals_assigned_to_fkey (id, full_name, avatar_url)
         `
-        )
-        .order("created_at", { ascending: false });
+        );
 
       // Filter by pipeline
       if (pipelineId) {
@@ -52,12 +67,30 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
 
       // Advanced filters
       if (filters) {
+        // Status filter (NEW)
+        if (filters.status && filters.status.length > 0) {
+          query = query.in("status", filters.status as ("open" | "won" | "lost")[]);
+        }
+
+        // Stage filter (NEW)
+        if (filters.stageIds && filters.stageIds.length > 0) {
+          query = query.in("stage_id", filters.stageIds);
+        }
+
         // Value range
         if (filters.valueMin !== undefined) {
           query = query.gte("value", filters.valueMin);
         }
         if (filters.valueMax !== undefined) {
           query = query.lte("value", filters.valueMax);
+        }
+
+        // Probability range (NEW)
+        if (filters.probabilityMin !== undefined) {
+          query = query.gte("probability", filters.probabilityMin);
+        }
+        if (filters.probabilityMax !== undefined) {
+          query = query.lte("probability", filters.probabilityMax);
         }
 
         // Created date range
@@ -78,6 +111,16 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
           query = query.lte("expected_close_date", filters.expectedCloseDateRange.to.toISOString().split('T')[0]);
         }
 
+        // Updated date range (NEW)
+        if (filters.updatedDateRange?.from) {
+          query = query.gte("updated_at", filters.updatedDateRange.from.toISOString());
+        }
+        if (filters.updatedDateRange?.to) {
+          const endDate = new Date(filters.updatedDateRange.to);
+          endDate.setHours(23, 59, 59, 999);
+          query = query.lte("updated_at", endDate.toISOString());
+        }
+
         // Lead source (multi-select)
         if (filters.leadSource.length > 0) {
           query = query.in("lead_source", filters.leadSource);
@@ -92,6 +135,30 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
         if (filters.search) {
           query = query.ilike("title", `%${filters.search}%`);
         }
+
+        // Sorting (NEW)
+        const sortBy = filters.sortBy || "created_at_desc";
+        switch (sortBy) {
+          case "value_desc":
+            query = query.order("value", { ascending: false, nullsFirst: false });
+            break;
+          case "value_asc":
+            query = query.order("value", { ascending: true, nullsFirst: false });
+            break;
+          case "probability_desc":
+            query = query.order("probability", { ascending: false, nullsFirst: false });
+            break;
+          case "expected_close_asc":
+            query = query.order("expected_close_date", { ascending: true, nullsFirst: false });
+            break;
+          case "created_at_desc":
+          default:
+            query = query.order("created_at", { ascending: false });
+            break;
+        }
+      } else {
+        // Default ordering
+        query = query.order("created_at", { ascending: false });
       }
 
       const { data, error } = await query;
