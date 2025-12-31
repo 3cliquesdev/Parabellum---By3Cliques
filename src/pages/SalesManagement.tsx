@@ -1,5 +1,4 @@
 import { useState } from "react";
-import Layout from "@/components/Layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -48,8 +47,7 @@ export default function SalesManagement() {
   const totalDealsInFunnel = funnelData.reduce((sum, item) => sum + item.value, 0);
 
   return (
-    <Layout>
-      <div className="container mx-auto p-3 md:p-4 space-y-3">
+    <div className="container mx-auto p-3 md:p-4 space-y-3">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -334,6 +332,5 @@ export default function SalesManagement() {
           )}
         </Card>
       </div>
-    </Layout>
   );
 }
