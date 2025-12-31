@@ -98,7 +98,7 @@ export default function RealtimeNotifications() {
     } catch (error) {
       console.error("RealtimeNotifications: Error setting up listener", error);
     }
-  }, [user, location.pathname, navigate, queryClient]);
+  }, [user, navigate, queryClient]); // Removed location.pathname to prevent re-subscriptions on route change
 
   // Listen for conversation assignments (FASE 4: Advanced Notifications)
   useEffect(() => {

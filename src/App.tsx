@@ -84,7 +84,16 @@ import PublicOnboarding from "./pages/PublicOnboarding";
 import SLASettings from "./pages/SLASettings";
 import CustomerFiscalData from "./pages/CustomerFiscalData";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30 * 1000, // 30 seconds - reduces refetches
+      gcTime: 5 * 60 * 1000, // 5 minutes - garbage collection time
+      retry: 1, // Only retry once on failure
+      refetchOnWindowFocus: false, // Reduce unnecessary refetches
+    },
+  },
+});
 
 const App = () => {
   return (
