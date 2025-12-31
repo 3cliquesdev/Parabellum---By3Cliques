@@ -83,6 +83,7 @@ import TicketNotificationRulesSettings from "./pages/TicketNotificationRulesSett
 import PublicOnboarding from "./pages/PublicOnboarding";
 import SLASettings from "./pages/SLASettings";
 import CustomerFiscalData from "./pages/CustomerFiscalData";
+import SuperAdminPanel from "./pages/SuperAdminPanel";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -187,6 +188,7 @@ const App = () => {
             <Route path="/settings/ticket-notifications" element={<ProtectedRoute requiredPermission="email.manage_templates"><Layout><TicketNotificationRulesSettings /></Layout></ProtectedRoute>} />
             <Route path="/settings/sla" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SLASettings /></Layout></ProtectedRoute>} />
             <Route path="/admin-onboarding" element={<ProtectedRoute requiredPermission="settings.view"><AdminOnboarding /></ProtectedRoute>} />
+            <Route path="/super-admin" element={<ProtectedRoute allowedRoles={["admin"]}><Layout><SuperAdminPanel /></Layout></ProtectedRoute>} />
             
             {/* Catch-all route - must be last */}
             <Route path="*" element={<NotFound />} />

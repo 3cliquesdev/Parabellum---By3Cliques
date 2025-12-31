@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   Tags,
   AlertTriangle,
+  Crown,
   LucideIcon
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -167,6 +168,12 @@ const universalMenuGroups: MenuGroup[] = [
       { title: "Usuários", href: "/users", icon: UserCog, permission: "settings.manage_users" },
       { title: "Importar Clientes", href: "/import-clients", icon: Upload, permission: "contacts.import" },
       { title: "Configurações", href: "/settings", icon: Settings, permission: "settings.view" },
+    ]
+  },
+  {
+    label: "👑 SUPER ADMIN",
+    items: [
+      { title: "Painel Admin", href: "/super-admin", icon: Crown, permission: "super_admin.access" },
     ]
   }
 ];
