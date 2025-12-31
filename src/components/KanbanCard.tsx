@@ -204,7 +204,7 @@ export default function KanbanCard({ deal }: KanbanCardProps) {
 
           {/* Área draggable */}
           <div {...listeners} {...attributes}>
-            <h4 className="font-semibold text-foreground mb-2 pl-8 pr-8">{deal.title}</h4>
+            <h4 className="font-semibold text-foreground mb-2 pl-8 pr-8 line-clamp-2" title={deal.title}>{deal.title}</h4>
 
             {/* Customer Tags */}
             {customerTags && customerTags.length > 0 && (
