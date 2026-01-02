@@ -99,7 +99,32 @@ self.addEventListener('online', () => {
 // Helper functions para IndexedDB
 function openDatabase() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('CRMChatDB', 1);
+    const request = indexedDB.open('CRMChatDB', 2);
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      
+      // Criar stores se não existirem (sincronizado com db.ts)
+      if (!db.objectStoreNames.contains('messages')) {
+        db.createObjectStore('messages', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('conversations')) {
+        db.createObjectStore('conversations', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('messageQueue')) {
+        db.createObjectStore('messageQueue', { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains('tickets')) {
+        db.createObjectStore('tickets', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('deals')) {
+        db.createObjectStore('deals', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('contacts')) {
+        db.createObjectStore('contacts', { keyPath: 'id' });
+      }
+    };
+    
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
