@@ -27,7 +27,8 @@ const priorityConfig = {
 
 const statusConfig = {
   open: { label: "Aberto", className: "bg-blue-500" },
-  pending: { label: "Pendente", className: "bg-yellow-500" },
+  in_progress: { label: "Em Andamento", className: "bg-orange-500" },
+  waiting_customer: { label: "Aguardando Cliente", className: "bg-yellow-500" },
   resolved: { label: "Resolvido", className: "bg-green-500" },
   closed: { label: "Fechado", className: "bg-gray-500" },
 };
