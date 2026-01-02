@@ -118,7 +118,7 @@ export function TicketsTable({
     <div className="h-full flex flex-col bg-card">
       {/* Table Header */}
       <div className="flex-none border-b border-border bg-muted/50">
-        <div className="grid grid-cols-[40px_100px_1fr_160px_140px_120px_90px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="grid grid-cols-[40px_90px_minmax(120px,1.5fr)_minmax(140px,1fr)_minmax(130px,1fr)_minmax(100px,0.8fr)_80px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {onToggleSelectAll && (
             <div className="flex items-center justify-center">
               <Checkbox 
@@ -155,7 +155,7 @@ export function TicketsTable({
                 key={ticket.id}
                 onClick={() => onSelectTicket(ticket.id)}
                 className={cn(
-                  "grid grid-cols-[40px_100px_1fr_160px_140px_120px_90px] gap-2 px-3 py-3 cursor-pointer transition-colors items-center",
+                  "grid grid-cols-[40px_90px_minmax(120px,1.5fr)_minmax(140px,1fr)_minmax(130px,1fr)_minmax(100px,0.8fr)_80px] gap-2 px-3 py-3 cursor-pointer transition-colors items-center",
                   isSelected 
                     ? "bg-primary/5 border-l-2 border-primary" 
                     : "hover:bg-accent/50 border-l-2 border-transparent"
