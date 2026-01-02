@@ -45,13 +45,11 @@ const validators = {
     return digit2 === parseInt(cnpj[13]);
   },
   
-  // Validação de email básico (aceita qualquer domínio)
   email: (value: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(value);
   },
   
-  // Validação de email corporativo (bloqueia pessoais)
   corporate_email: (value: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(value)) return false;
@@ -82,10 +80,8 @@ const validators = {
 };
 
 // Safe formula parser for calculations - NO eval/new Function
-// Only allows: numbers, basic math operators, field references, and IF statements
 function evaluateFormula(formula: string, fieldValues: Record<string, any>): { success: boolean; value: any; error?: string } {
   try {
-    // Step 1: Replace field references {field_name} with actual values
     let expression = formula;
     const fieldPattern = /\{([^}]+)\}/g;
     
@@ -94,12 +90,10 @@ function evaluateFormula(formula: string, fieldValues: Record<string, any>): { s
       if (value === undefined || value === null) return '0';
       if (typeof value === 'number') return String(value);
       if (typeof value === 'boolean') return value ? '1' : '0';
-      // For strings, try to parse as number, otherwise return 0
       const numValue = parseFloat(String(value));
       return isNaN(numValue) ? '0' : String(numValue);
     });
 
-    // Step 2: Handle IF statements recursively
     const processIf = (expr: string): string => {
       const ifPattern = /IF\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)/gi;
       let result = expr;
@@ -109,21 +103,16 @@ function evaluateFormula(formula: string, fieldValues: Record<string, any>): { s
         const condition = match[1].trim();
         const trueVal = match[2].trim();
         const falseVal = match[3].trim();
-        
-        // Evaluate the condition safely
         const condResult = safeEvaluateCondition(condition);
         const replacement = condResult ? trueVal : falseVal;
-        
         result = result.substring(0, match.index) + replacement + result.substring(match.index + match[0].length);
-        ifPattern.lastIndex = 0; // Reset for next iteration
+        ifPattern.lastIndex = 0;
       }
       
       return result;
     };
 
     expression = processIf(expression);
-
-    // Step 3: Safe mathematical evaluation using tokenization
     const result = safeEvaluateMath(expression);
     return { success: true, value: result };
   } catch (error) {
@@ -132,9 +121,7 @@ function evaluateFormula(formula: string, fieldValues: Record<string, any>): { s
   }
 }
 
-// Safe condition evaluator - only allows comparison operators
 function safeEvaluateCondition(condition: string): boolean {
-  // Match patterns like: value1 > value2, value1 == value2, etc.
   const comparisonPattern = /^\s*(-?\d+(?:\.\d+)?)\s*(>=|<=|>|<|==|!=)\s*(-?\d+(?:\.\d+)?)\s*$/;
   const match = condition.match(comparisonPattern);
   
@@ -158,22 +145,17 @@ function safeEvaluateCondition(condition: string): boolean {
   }
 }
 
-// Safe math evaluator - only allows numbers and basic operators (+, -, *, /, %, parentheses)
 function safeEvaluateMath(expression: string): number {
-  // Remove all whitespace
   expression = expression.replace(/\s+/g, '');
-  
-  // Validate: only allow numbers, operators, parentheses, and decimal points
   const allowedPattern = /^[0-9+\-*/%.()]+$/;
   if (!allowedPattern.test(expression)) {
     throw new Error(`Invalid characters in expression: ${expression}`);
   }
   
-  // Prevent dangerous patterns (function calls, property access)
   const dangerousPatterns = [
-    /[a-zA-Z_$]/, // No letters/identifiers
-    /\[\s*\]/, // No array access
-    /\.\s*[a-zA-Z]/, // No property access
+    /[a-zA-Z_$]/,
+    /\[\s*\]/,
+    /\.\s*[a-zA-Z]/,
   ];
   
   for (const pattern of dangerousPatterns) {
@@ -182,11 +164,9 @@ function safeEvaluateMath(expression: string): number {
     }
   }
   
-  // Parse and evaluate using a safe recursive descent parser
   return parseExpression(expression);
 }
 
-// Recursive descent parser for safe math evaluation
 function parseExpression(expr: string): number {
   let pos = 0;
   
@@ -194,7 +174,6 @@ function parseExpression(expr: string): number {
     let numStr = '';
     const start = pos;
     
-    // Handle negative numbers
     if (expr[pos] === '-') {
       numStr += '-';
       pos++;
@@ -214,12 +193,12 @@ function parseExpression(expr: string): number {
   
   function parseFactor(): number {
     if (expr[pos] === '(') {
-      pos++; // skip '('
+      pos++;
       const result = parseAddSub();
       if (expr[pos] !== ')') {
         throw new Error('Missing closing parenthesis');
       }
-      pos++; // skip ')'
+      pos++;
       return result;
     }
     return parseNumber();
@@ -271,7 +250,6 @@ function parseExpression(expr: string): number {
   return result;
 }
 
-// Evaluate condition
 function evaluateCondition(condition: any, fieldValues: Record<string, any>): boolean {
   const fieldValue = fieldValues[condition.field_id];
   const targetValue = condition.value;
@@ -308,13 +286,11 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Extract client IP for rate limiting
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
                      req.headers.get('x-real-ip') || 
                      req.headers.get('cf-connecting-ip') ||
                      'unknown';
 
-    // Rate limit check: 10 requests per minute, block for 60 minutes if exceeded
     const { data: rateLimitOk } = await supabase.rpc('check_rate_limit', {
       p_identifier: clientIp,
       p_action_type: 'form_submission',
@@ -333,13 +309,8 @@ serve(async (req) => {
 
     const body = await req.json();
     const { form_id, session_metadata } = body;
-    // Accept both 'answers' and 'responses' for compatibility
     const answers = body.answers || body.responses;
 
-    // ============================================
-    // ENTERPRISE VALIDATION: Validate request structure
-    // ============================================
-    
     // Validate form_id is UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!form_id || typeof form_id !== 'string' || !uuidRegex.test(form_id)) {
@@ -350,7 +321,6 @@ serve(async (req) => {
       );
     }
 
-    // Validate answers is an object
     if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
       console.error('[form-submit-v3] Invalid answers format:', typeof answers);
       return new Response(
@@ -359,20 +329,18 @@ serve(async (req) => {
       );
     }
 
-    // Validate answer values - max length and sanitization
+    // Validate and sanitize answers
     const sanitizedAnswers: Record<string, any> = {};
-    const MAX_ANSWER_LENGTH = 10000; // 10KB per answer
-    const MAX_TOTAL_SIZE = 1000000; // 1MB total
+    const MAX_ANSWER_LENGTH = 10000;
+    const MAX_TOTAL_SIZE = 1000000;
     
     let totalSize = 0;
     for (const [key, value] of Object.entries(answers)) {
-      // Validate key format (should be a field ID - alphanumeric/underscore/hyphen)
       if (!/^[a-zA-Z0-9_-]+$/.test(key) || key.length > 100) {
         console.warn('[form-submit-v3] Skipping invalid answer key:', key);
         continue;
       }
       
-      // Handle different value types
       if (value === null || value === undefined) {
         sanitizedAnswers[key] = null;
       } else if (typeof value === 'string') {
@@ -388,7 +356,6 @@ serve(async (req) => {
         sanitizedAnswers[key] = value;
         totalSize += String(value).length;
       } else if (Array.isArray(value)) {
-        // For multi-select fields
         sanitizedAnswers[key] = value.map(v => typeof v === 'string' ? v.trim() : v);
         totalSize += JSON.stringify(value).length;
       } else {
@@ -405,7 +372,6 @@ serve(async (req) => {
     }
 
     console.log(`[form-submit-v3] Validated ${Object.keys(sanitizedAnswers).length} answers, total size: ${totalSize} bytes`);
-
     console.log(`[form-submit-v3] Processing form ${form_id}`);
 
     // Fetch form with fields
@@ -426,11 +392,10 @@ serve(async (req) => {
     const fields = schema?.fields || [];
     const validationErrors: Record<string, string> = {};
 
-    // Step 1: Validate all fields using sanitized answers
+    // Step 1: Validate all fields
     for (const field of fields) {
       const value = sanitizedAnswers[field.id];
       
-      // Required validation
       if (field.required && (!value || value === '')) {
         validationErrors[field.id] = field.validation_message || `${field.label} é obrigatório`;
         continue;
@@ -438,7 +403,6 @@ serve(async (req) => {
 
       if (!value) continue;
 
-      // Validação automática de email para campos do tipo email (se não tiver validation_type específico)
       if (field.type === 'email' && !field.validation_type) {
         if (!validators.email(value)) {
           validationErrors[field.id] = field.validation_message || 'E-mail inválido';
@@ -446,7 +410,6 @@ serve(async (req) => {
         }
       }
 
-      // Enterprise validations
       const validationType = field.validation_type;
       if (validationType && validators[validationType as keyof typeof validators]) {
         const isValid = validators[validationType as keyof typeof validators](value);
@@ -455,7 +418,6 @@ serve(async (req) => {
         }
       }
 
-      // Custom regex validation
       if (field.validation_regex) {
         const regex = new RegExp(field.validation_regex);
         if (!regex.test(value)) {
@@ -542,33 +504,42 @@ serve(async (req) => {
       console.error('[form-submit-v3] Submission error:', submissionError);
     }
 
-    // Step 4.5: Handle target_type routing (ticket/deal creation based on form config)
+    // ============================================
+    // STEP 4.5: FULL ROUTING LOGIC BASED ON target_type
+    // Uses get_assignee_for_form() to determine assignment
+    // ============================================
+    
+    // Get assignee using the database function
+    let assignedTo: string | null = null;
+    if (form.distribution_rule && form.target_department_id) {
+      const { data: assigneeId } = await supabase.rpc('get_assignee_for_form', {
+        p_distribution_rule: form.distribution_rule,
+        p_target_user_id: form.target_user_id || null,
+        p_department_id: form.target_department_id
+      });
+      assignedTo = assigneeId;
+      console.log(`[form-submit-v3] Assignee determined: ${assignedTo} (rule: ${form.distribution_rule})`);
+    }
+
+    // TARGET TYPE: TICKET
     if (form.target_type === 'ticket' && contactId) {
-      console.log(`[form-submit-v3] Form has target_type=ticket, creating ticket automatically`);
+      console.log(`[form-submit-v3] Creating TICKET with routing`);
       
       const ticketSettings = schema?.ticket_settings || {};
       
-      // Build subject from field with ticket_field='subject' or first text field or default
+      // Build subject
       const subjectField = fields.find((f: any) => f.ticket_field === 'subject');
-      const firstTextField = fields.find((f: any) => f.type === 'text' || f.type === 'short_text');
-      let ticketSubject = 'Solicitação via formulário';
-      
+      let ticketSubject = ticketSettings.default_subject || `Solicitação via ${form.name}`;
       if (subjectField && sanitizedAnswers[subjectField.id]) {
         ticketSubject = sanitizedAnswers[subjectField.id];
-      } else if (ticketSettings.default_subject) {
-        ticketSubject = ticketSettings.default_subject;
-      } else {
-        ticketSubject = `Solicitação via ${form.name}`;
       }
       
-      // Build description from field with ticket_field='description' or all answers
+      // Build description
       const descriptionField = fields.find((f: any) => f.ticket_field === 'description');
       let ticketDescription = '';
-      
       if (descriptionField && sanitizedAnswers[descriptionField.id]) {
         ticketDescription = sanitizedAnswers[descriptionField.id];
       } else {
-        // Build description from all answers
         const descriptionLines = fields.map((f: any) => {
           const val = sanitizedAnswers[f.id];
           if (!val || val === '') return null;
@@ -577,16 +548,16 @@ serve(async (req) => {
         ticketDescription = descriptionLines.join('\n\n');
       }
       
-      // Create ticket with customer_id (NOT contact_id - tickets table uses customer_id)
       const { data: newTicket, error: ticketError } = await supabase
         .from('tickets')
         .insert({
-          customer_id: contactId,  // Correct column name
+          customer_id: contactId,
           subject: ticketSubject,
           description: ticketDescription,
           priority: ticketSettings.default_priority || 'medium',
           category: ticketSettings.default_category || 'outro',
           department_id: form.target_department_id || null,
+          assigned_to: assignedTo, // ROUTING: use the assignee from get_assignee_for_form
           status: 'open',
           channel: 'form',
         })
@@ -594,9 +565,9 @@ serve(async (req) => {
         .single();
       
       if (ticketError) {
-        console.error('[form-submit-v3] Error creating ticket from target_type:', ticketError);
+        console.error('[form-submit-v3] Error creating ticket:', ticketError);
       } else if (newTicket) {
-        console.log(`[form-submit-v3] Ticket created: ${newTicket.id}, number: ${newTicket.ticket_number}`);
+        console.log(`[form-submit-v3] Ticket created: ${newTicket.id}, assigned_to: ${assignedTo}`);
         
         // Send auto-reply email if enabled
         if (ticketSettings.send_auto_reply && email) {
@@ -622,15 +593,122 @@ serve(async (req) => {
                 priority: newTicket.priority,
               },
             });
-            console.log('[form-submit-v3] Auto-reply email sent for target_type ticket');
+            console.log('[form-submit-v3] Auto-reply email sent');
           } catch (emailError) {
             console.error('[form-submit-v3] Failed to send auto-reply email:', emailError);
+          }
+        }
+        
+        // Notify manager if enabled
+        if (form.notify_manager && form.target_department_id) {
+          try {
+            // Get department manager
+            const { data: deptManager } = await supabase
+              .from('profiles')
+              .select('id, email, first_name')
+              .eq('department', form.target_department_id)
+              .limit(1)
+              .single();
+            
+            if (deptManager) {
+              console.log(`[form-submit-v3] Manager notification would be sent to: ${deptManager.email}`);
+              // Could invoke email function here for manager notification
+            }
+          } catch (notifyError) {
+            console.error('[form-submit-v3] Failed to notify manager:', notifyError);
           }
         }
       }
     }
 
-    // Step 5: Execute automations
+    // TARGET TYPE: DEAL
+    if (form.target_type === 'deal' && contactId) {
+      console.log(`[form-submit-v3] Creating DEAL with routing`);
+      
+      const pipelineId = form.target_pipeline_id;
+      if (pipelineId) {
+        // Get first stage of the pipeline
+        const { data: firstStage } = await supabase
+          .from('stages')
+          .select('id')
+          .eq('pipeline_id', pipelineId)
+          .order('position', { ascending: true })
+          .limit(1)
+          .single();
+
+        const dealTitle = `Lead via ${form.name}`;
+        
+        const { data: newDeal, error: dealError } = await supabase
+          .from('deals')
+          .insert({
+            title: dealTitle,
+            contact_id: contactId,
+            pipeline_id: pipelineId,
+            stage_id: firstStage?.id,
+            assigned_to: assignedTo, // ROUTING: use the assignee from get_assignee_for_form
+            status: 'open',
+            value: 0,
+          })
+          .select()
+          .single();
+
+        if (dealError) {
+          console.error('[form-submit-v3] Error creating deal:', dealError);
+        } else if (newDeal) {
+          console.log(`[form-submit-v3] Deal created: ${newDeal.id}, assigned_to: ${assignedTo}`);
+        }
+      } else {
+        console.warn('[form-submit-v3] target_type=deal but no target_pipeline_id configured');
+      }
+    }
+
+    // TARGET TYPE: INTERNAL REQUEST
+    if (form.target_type === 'internal_request') {
+      console.log(`[form-submit-v3] Creating INTERNAL REQUEST with routing`);
+      
+      // Build title from first text field or form name
+      const titleField = fields.find((f: any) => f.type === 'text' || f.type === 'short_text');
+      const requestTitle = titleField && sanitizedAnswers[titleField.id] 
+        ? sanitizedAnswers[titleField.id] 
+        : `Solicitação Interna via ${form.name}`;
+      
+      // Build description from all answers
+      const descriptionLines = fields.map((f: any) => {
+        const val = sanitizedAnswers[f.id];
+        if (!val || val === '') return null;
+        return `**${f.label}:** ${val}`;
+      }).filter(Boolean);
+      const requestDescription = descriptionLines.join('\n\n');
+      
+      const { data: newRequest, error: requestError } = await supabase
+        .from('internal_requests')
+        .insert({
+          title: requestTitle,
+          description: requestDescription,
+          department_id: form.target_department_id || null,
+          assigned_to: assignedTo, // ROUTING: use the assignee from get_assignee_for_form
+          contact_id: contactId,
+          form_submission_id: submission?.id,
+          priority: 'medium',
+          status: 'pending',
+          metadata: {
+            form_id,
+            form_name: form.name,
+            answers: sanitizedAnswers,
+            calculated_scores: calculatedScores,
+          }
+        })
+        .select()
+        .single();
+
+      if (requestError) {
+        console.error('[form-submit-v3] Error creating internal request:', requestError);
+      } else if (newRequest) {
+        console.log(`[form-submit-v3] Internal request created: ${newRequest.id}, assigned_to: ${assignedTo}`);
+      }
+    }
+
+    // Step 5: Execute form automations
     const { data: automations } = await supabase
       .from('form_automations')
       .select('*')
@@ -644,7 +722,6 @@ serve(async (req) => {
       for (const automation of automations) {
         let shouldTrigger = false;
 
-        // Evaluate trigger
         if (automation.trigger_type === 'on_submit') {
           shouldTrigger = true;
         } else if (automation.trigger_type === 'on_score_threshold') {
@@ -728,7 +805,7 @@ serve(async (req) => {
               const ticketCategory = actionConfig?.category || 'general';
               
               const { data: newTicket } = await supabase.from('tickets').insert({
-                customer_id: contactId,  // Fixed: tickets table uses customer_id, not contact_id
+                customer_id: contactId,
                 subject: ticketSubject,
                 description: ticketDescription,
                 priority: ticketPriority,
@@ -737,10 +814,8 @@ serve(async (req) => {
                 channel: 'form',
               }).select().single();
 
-              // Send notification email to customer
               if (newTicket && email) {
                 try {
-                  // Get customer name from contact
                   const { data: contact } = await supabase
                     .from('contacts')
                     .select('first_name, last_name')
@@ -771,7 +846,6 @@ serve(async (req) => {
 
             case 'add_tag':
               if (actionConfig?.tag_id) {
-                // Check if tag already exists before inserting
                 const { data: existingTag } = await supabase
                   .from('customer_tags')
                   .select('id')
@@ -844,6 +918,7 @@ serve(async (req) => {
         contact_id: contactId,
         calculated_scores: calculatedScores,
         automations_triggered: automationsTriggered.length,
+        assigned_to: assignedTo,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
