@@ -162,9 +162,19 @@ serve(async (req) => {
       </html>
     `;
 
+    // Função para sanitizar nome removendo caracteres não-ASCII
+    const sanitizeName = (name: string): string => {
+      // Remove acentos e caracteres especiais
+      return name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove diacríticos
+        .replace(/[^\x00-\x7F]/g, '')    // Remove caracteres não-ASCII restantes
+        .trim();
+    };
+
     // Buscar sender configurado
     let senderEmail = 'contato@parabellum.work';
-    let senderName = brandName;
+    let senderName = sanitizeName(brandName); // Sanitizar nome do sender
 
     const { data: senderConfig } = await supabase
       .from('system_configurations')

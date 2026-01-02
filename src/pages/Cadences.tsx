@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Play, Pause, Users, CheckCircle, MessageSquare } from "lucide-react";
+import { Plus, Play, Pause, Users, CheckCircle, MessageSquare, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { useUpdateCadence } from "@/hooks/useUpdateCadence";
 import { useDeleteCadence } from "@/hooks/useDeleteCadence";
 import { useCadenceEnrollments } from "@/hooks/useCadenceEnrollments";
 import CadenceDialog from "@/components/CadenceDialog";
+import { CadenceEnrollDialog } from "@/components/CadenceEnrollDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Cadences() {
@@ -16,6 +17,7 @@ export default function Cadences() {
   const { mutate: deleteCadence } = useDeleteCadence();
   const [selectedCadence, setSelectedCadence] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [enrollDialogCadence, setEnrollDialogCadence] = useState<{ id: string; name: string } | null>(null);
   const { isAdmin, isManager, isGeneralManager } = useUserRole();
   
   const canManage = isAdmin || isManager || isGeneralManager;
@@ -140,13 +142,14 @@ export default function Cadences() {
               onEdit={handleEdit}
               onToggleActive={handleToggleActive}
               onDelete={deleteCadence}
+              onEnroll={() => setEnrollDialogCadence({ id: cadence.id, name: cadence.name })}
               canManage={canManage}
             />
           ))
         )}
       </div>
 
-      {/* Dialog */}
+      {/* Dialogs */}
       <CadenceDialog
         cadence={selectedCadence}
         open={isDialogOpen}
@@ -154,6 +157,12 @@ export default function Cadences() {
           setIsDialogOpen(open);
           if (!open) setSelectedCadence(null);
         }}
+      />
+
+      <CadenceEnrollDialog
+        cadence={enrollDialogCadence}
+        open={!!enrollDialogCadence}
+        onOpenChange={(open) => !open && setEnrollDialogCadence(null)}
       />
     </div>
   );
@@ -164,10 +173,11 @@ interface CadenceCardProps {
   onEdit: (cadence: any) => void;
   onToggleActive: (cadence: any) => void;
   onDelete: (id: string) => void;
+  onEnroll: () => void;
   canManage: boolean;
 }
 
-function CadenceCard({ cadence, onEdit, onToggleActive, onDelete, canManage }: CadenceCardProps) {
+function CadenceCard({ cadence, onEdit, onToggleActive, onDelete, onEnroll, canManage }: CadenceCardProps) {
   const { data: enrollments } = useCadenceEnrollments({ cadenceId: cadence.id });
   
   const activeEnrollments = enrollments?.filter((e) => e.status === "active").length || 0;
@@ -216,6 +226,10 @@ function CadenceCard({ cadence, onEdit, onToggleActive, onDelete, canManage }: C
         {/* Actions */}
         {canManage && (
           <div className="flex gap-2 pt-2 border-t">
+            <Button onClick={onEnroll} variant="default" size="sm" className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              Inscrever Contatos
+            </Button>
             <Button onClick={() => onEdit(cadence)} variant="outline" size="sm">
               Editar Passos
             </Button>
