@@ -48,6 +48,8 @@ async function executeAction(automation: Automation, triggerData: any) {
 async function executeAssignToUser(automation: Automation, triggerData: any) {
   const { strategy, user_id, department } = automation.action_config;
 
+  console.log('[executeAssignToUser] Starting assignment', { strategy, user_id, department, dealId: triggerData.deal_id });
+
   if (strategy === 'specific_user' && user_id) {
     const { error } = await supabase
       .from('deals')
@@ -59,16 +61,72 @@ async function executeAssignToUser(automation: Automation, triggerData: any) {
   }
 
   if (strategy === 'round_robin') {
-    // Buscar todos os vendedores do departamento
-    const { data: salesReps, error: repsError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('department', department || 'comercial');
+    // Primeiro, resolver o UUID do departamento se recebeu string
+    let departmentId = department;
+    
+    // Se department parece ser um nome (não UUID), buscar o UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (department && !uuidRegex.test(department)) {
+      console.log('[executeAssignToUser] Department is a name, looking up UUID:', department);
+      const { data: dept, error: deptError } = await supabase
+        .from('departments')
+        .select('id')
+        .ilike('name', department)
+        .single();
+      
+      if (deptError) {
+        console.log('[executeAssignToUser] Department lookup error:', deptError);
+      }
+      
+      if (dept) {
+        departmentId = dept.id;
+        console.log('[executeAssignToUser] Found department UUID:', departmentId);
+      }
+    }
 
-    if (repsError) throw repsError;
+    // Buscar vendedores com role sales_rep, ativos e não bloqueados
+    // Primeiro buscar os user_ids com role sales_rep
+    const { data: salesRepRoles, error: rolesError } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('role', 'sales_rep');
+
+    if (rolesError) {
+      console.error('[executeAssignToUser] Error fetching sales rep roles:', rolesError);
+      throw rolesError;
+    }
+
+    if (!salesRepRoles || salesRepRoles.length === 0) {
+      console.log('[executeAssignToUser] No users with sales_rep role found');
+      return { success: false, message: 'No sales reps with correct role found' };
+    }
+
+    const salesRepUserIds = salesRepRoles.map(r => r.user_id);
+    console.log('[executeAssignToUser] Found sales_rep user_ids:', salesRepUserIds);
+
+    // Agora buscar profiles desses usuários que estão ativos
+    let query = supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', salesRepUserIds)
+      .eq('is_blocked', false);
+
+    // Filtrar por departamento se especificado
+    if (departmentId) {
+      query = query.eq('department', departmentId);
+    }
+
+    const { data: salesReps, error: repsError } = await query;
+
+    if (repsError) {
+      console.error('[executeAssignToUser] Error fetching sales reps:', repsError);
+      throw repsError;
+    }
+
+    console.log('[executeAssignToUser] Found active sales reps:', salesReps?.map(r => ({ id: r.id, name: r.full_name })));
 
     if (!salesReps || salesReps.length === 0) {
-      return { success: false, message: 'No sales reps available' };
+      return { success: false, message: 'No active sales reps available in department' };
     }
 
     // Buscar o último vendedor que recebeu um lead
@@ -80,14 +138,19 @@ async function executeAssignToUser(automation: Automation, triggerData: any) {
       .limit(1)
       .single();
 
+    console.log('[executeAssignToUser] Last assigned rep:', lastAssigned?.assigned_to);
+
     // Determinar próximo vendedor no round robin
     let nextRepIndex = 0;
     if (lastAssigned?.assigned_to) {
       const lastIndex = salesReps.findIndex(rep => rep.id === lastAssigned.assigned_to);
-      nextRepIndex = (lastIndex + 1) % salesReps.length;
+      if (lastIndex >= 0) {
+        nextRepIndex = (lastIndex + 1) % salesReps.length;
+      }
     }
 
     const nextRep = salesReps[nextRepIndex];
+    console.log('[executeAssignToUser] Assigning to:', { repId: nextRep.id, repName: nextRep.full_name });
 
     const { error } = await supabase
       .from('deals')
@@ -95,7 +158,7 @@ async function executeAssignToUser(automation: Automation, triggerData: any) {
       .eq('id', triggerData.deal_id);
 
     if (error) throw error;
-    return { success: true, assigned_to: nextRep.id, strategy: 'round_robin' };
+    return { success: true, assigned_to: nextRep.id, assigned_name: nextRep.full_name, strategy: 'round_robin' };
   }
 
   return { success: false, message: 'Invalid strategy' };
