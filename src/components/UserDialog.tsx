@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +15,11 @@ import { useUpdateAgentChannels } from "@/hooks/useUpdateAgentChannels";
 import AvatarUploader from "@/components/AvatarUploader";
 import SkillsMultiSelect from "@/components/SkillsMultiSelect";
 import { SupportChannelsMultiSelect } from "@/components/SupportChannelsMultiSelect";
+import { PremiumInput } from "@/components/ui/premium-input";
+import { PasswordStrength, usePasswordStrength } from "@/components/ui/password-strength";
 import { z } from "zod";
+import { User, Mail, Lock, Briefcase, ShieldCheck, Loader2, Building2, Crown, Users, Headphones, DollarSign } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const userSchema = z.object({
   email: z.string().email({ message: "Email inválido" }),
@@ -50,6 +53,20 @@ interface UserDialogProps {
   editUser?: UserWithRole | null;
 }
 
+// Validation helpers
+const validateEmail = (email: string): string | null => {
+  if (!email) return null;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) return "Formato de email inválido";
+  return null;
+};
+
+const validateName = (name: string): string | null => {
+  if (!name) return null;
+  if (name.length < 2) return "Nome muito curto";
+  return null;
+};
+
 export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: UserDialogProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -61,6 +78,8 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  
   const { toast } = useToast();
   const { data: departments } = useDepartments();
   const updateUserMutation = useUpdateUser();
@@ -69,8 +88,22 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
   const updateProfileSkills = useUpdateProfileSkills();
   const { data: agentChannels } = useAgentSupportChannels(editUser?.id);
   const updateAgentChannels = useUpdateAgentChannels();
+  const { strength: passwordStrength } = usePasswordStrength(password);
 
   const isEditMode = !!editUser;
+
+  // Real-time validation errors
+  const errors = {
+    fullName: touched.fullName ? validateName(fullName) : null,
+    email: touched.email ? validateEmail(email) : null,
+    password: touched.password && password && password.length < 8 ? "Mínimo 8 caracteres" : null,
+  };
+
+  const isValid = {
+    fullName: fullName.length >= 2,
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+    password: password.length >= 8,
+  };
 
   // Populate form when editing
   useEffect(() => {
@@ -92,6 +125,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
       setDepartment("");
       setSelectedSkills([]);
       setSelectedChannels([]);
+      setTouched({});
     }
   }, [editUser, open, profileSkills, agentChannels]);
 
@@ -142,6 +176,11 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
             channelIds: selectedChannels,
           });
         }
+
+        toast({
+          title: "Usuário atualizado!",
+          description: "As alterações foram salvas com sucesso.",
+        });
 
         onOpenChange(false);
         onSuccess();
@@ -210,6 +249,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
         setJobTitle("");
         setDepartment("");
         setAvatarFile(null);
+        setTouched({});
         onOpenChange(false);
         onSuccess();
       }
@@ -234,11 +274,23 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
     }
   };
 
+  const roleOptions = [
+    { value: "admin", label: "Administrador (Super Admin)", description: "Acesso total + Infraestrutura", icon: Crown },
+    { value: "general_manager", label: "Gerente Geral", description: "Operação completa (sem infra)", icon: Crown },
+    { value: "manager", label: "Gerente de Vendas", description: "Vê todo o time", icon: Users },
+    { value: "sales_rep", label: "Vendedor", description: "Apenas seus leads", icon: Users },
+    { value: "consultant", label: "Consultor / Account Manager", description: "Carteira pós-venda", icon: Briefcase },
+    { value: "support_agent", label: "Atendente / Solver", description: "Suporte e tickets", icon: Headphones },
+    { value: "support_manager", label: "Gerente de Suporte", description: "Visão total + Gestão de equipe", icon: Headphones },
+    { value: "financial_manager", label: "Gestor Financeiro", description: "Aprovação de reembolsos", icon: DollarSign },
+    { value: "cs_manager", label: "Gerente de CS", description: "Head of Success", icon: Users },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-lg font-semibold">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-background via-background to-muted/20 border-0 shadow-2xl rounded-2xl">
+        <DialogHeader className="pb-2">
+          <DialogTitle className="text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
             {isEditMode ? "Editar Usuário" : "Criar Novo Usuário"}
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
@@ -248,39 +300,43 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
             }
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            {/* Nome e Email */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="full_name">Nome Completo</Label>
-                <Input
-                  id="full_name"
-                  type="text"
-                  placeholder="João Silva"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                />
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="usuario@exemplo.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isEditMode}
-                  required={!isEditMode}
-                />
-              </div>
-            </div>
-            
-            {/* Avatar Upload */}
-            <div className="space-y-2">
-              <Label>Foto do Perfil</Label>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Nome e Email - Premium Inputs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <PremiumInput
+              label="Nome Completo"
+              icon={User}
+              value={fullName}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                setTouched(t => ({ ...t, fullName: true }));
+              }}
+              error={errors.fullName || undefined}
+              success={isValid.fullName}
+              required
+            />
+
+            <PremiumInput
+              label="Email"
+              icon={Mail}
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setTouched(t => ({ ...t, email: true }));
+              }}
+              error={errors.email || undefined}
+              success={isValid.email}
+              disabled={isEditMode}
+              required={!isEditMode}
+            />
+          </div>
+
+          {/* Avatar Upload - Premium Style */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Foto do Perfil</Label>
+            <div className="p-4 rounded-xl border-2 border-dashed border-border hover:border-primary/40 transition-colors bg-muted/30">
               <AvatarUploader
                 currentAvatarUrl={editUser?.avatar_url}
                 userName={fullName || "Usuário"}
@@ -288,160 +344,162 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
                 uploading={uploadingAvatar}
               />
             </div>
+          </div>
 
-            {/* Cargo e Senha/Perfil */}
-            <div className="grid grid-cols-2 gap-4">
+          {/* Cargo e Senha */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <PremiumInput
+              label="Cargo (opcional)"
+              icon={Briefcase}
+              value={jobTitle}
+              onChange={(e) => setJobTitle(e.target.value)}
+              hint="Ex: Diretor Comercial"
+            />
+
+            {!isEditMode && (
               <div className="space-y-2">
-                <Label htmlFor="job_title">Cargo (opcional)</Label>
-                <Input
-                  id="job_title"
-                  type="text"
-                  placeholder="Vendedor"
-                  value={jobTitle}
-                  onChange={(e) => setJobTitle(e.target.value)}
+                <PremiumInput
+                  label="Senha Temporária"
+                  icon={Lock}
+                  type="password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setTouched(t => ({ ...t, password: true }));
+                  }}
+                  error={errors.password || undefined}
+                  success={passwordStrength.level >= 3}
+                  required
                 />
-              </div>
-
-              {!isEditMode && (
-                <div className="space-y-2">
-                  <Label htmlFor="password">Senha Temporária</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Mínimo 8 caracteres"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Perfil de Acesso */}
-            <div className="space-y-2">
-              <Label htmlFor="role">Perfil de Acesso *</Label>
-              <Select value={role} onValueChange={(value: any) => setRole(value)} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o perfil..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">
-                    <div className="flex flex-col">
-                      <span className="font-medium">👑 Administrador (Super Admin)</span>
-                      <span className="text-xs text-muted-foreground">Acesso total + Infraestrutura</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="general_manager">
-                    <div className="flex flex-col">
-                      <span className="font-medium">🎖️ Gerente Geral</span>
-                      <span className="text-xs text-muted-foreground">Operação completa (sem infra)</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="manager">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Gerente de Vendas</span>
-                      <span className="text-xs text-muted-foreground">Vê todo o time</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="sales_rep">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Vendedor</span>
-                      <span className="text-xs text-muted-foreground">Apenas seus leads</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="consultant">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Consultor / Account Manager</span>
-                      <span className="text-xs text-muted-foreground">Carteira pós-venda</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="support_agent">
-                    <div className="flex flex-col">
-                      <span className="font-medium">🛡️ Atendente / Solver</span>
-                      <span className="text-xs text-muted-foreground">Suporte e tickets</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="support_manager">
-                    <div className="flex flex-col">
-                      <span className="font-medium">🛡️👔 Gerente de Suporte</span>
-                      <span className="text-xs text-muted-foreground">Visão total + Gestão de equipe</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="financial_manager">
-                    <div className="flex flex-col">
-                      <span className="font-medium">💰 Gestor Financeiro</span>
-                      <span className="text-xs text-muted-foreground">Aprovação de reembolsos</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="cs_manager">
-                    <div className="flex flex-col">
-                      <span className="font-medium">👔 Gerente de CS</span>
-                      <span className="text-xs text-muted-foreground">Head of Success</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Departamento */}
-            <div className="space-y-2">
-              <Label htmlFor="department">Departamento *</Label>
-              <Select value={department || undefined} onValueChange={setDepartment} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o departamento..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments?.filter(d => d.is_active).map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: dept.color }}
-                        />
-                        {dept.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {/* Habilidades - Apenas no modo edição */}
-            {isEditMode && editUser && (
-              <div className="space-y-2">
-                <Label>🎯 Habilidades do Agente</Label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Selecione as habilidades para roteamento inteligente de conversas
-                </p>
-                <SkillsMultiSelect
-                  selectedSkillIds={selectedSkills}
-                  onSelectionChange={setSelectedSkills}
-                />
-              </div>
-            )}
-
-            {/* Canais de Atendimento - Apenas para support_agent no modo edição */}
-            {isEditMode && editUser && role === 'support_agent' && (
-              <div className="space-y-2">
-                <Label>📡 Canais de Atendimento</Label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Selecione os canais que este agente pode atender. Se nenhum canal for selecionado, o agente atenderá todos os canais.
-                </p>
-                <SupportChannelsMultiSelect
-                  selectedChannelIds={selectedChannels}
-                  onSelectionChange={setSelectedChannels}
-                />
+                <PasswordStrength password={password} />
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading || uploadingAvatar}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading || uploadingAvatar}>
-              {loading || uploadingAvatar ? (isEditMode ? "Salvando..." : "Criando...") : (isEditMode ? "Salvar Alterações" : "Criar Usuário")}
-            </Button>
-          </DialogFooter>
+
+          {/* Perfil de Acesso - Premium Select */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              Perfil de Acesso
+            </Label>
+            <Select value={role} onValueChange={(value: any) => setRole(value)} required>
+              <SelectTrigger className="h-14 rounded-xl border-2 hover:border-primary/40 transition-all">
+                <SelectValue placeholder="Selecione o perfil..." />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {roleOptions.map((option) => {
+                  const IconComponent = option.icon;
+                  return (
+                    <SelectItem key={option.value} value={option.value} className="py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 rounded-lg bg-primary/10">
+                          <IconComponent className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{option.label}</span>
+                          <span className="text-xs text-muted-foreground">{option.description}</span>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Departamento - Premium Select */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-primary" />
+              Departamento
+            </Label>
+            <Select value={department || undefined} onValueChange={setDepartment} required>
+              <SelectTrigger className="h-14 rounded-xl border-2 hover:border-primary/40 transition-all">
+                <SelectValue placeholder="Selecione o departamento..." />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {departments?.filter(d => d.is_active).map((dept) => (
+                  <SelectItem key={dept.id} value={dept.id} className="py-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-4 h-4 rounded-full ring-2 ring-offset-2 ring-offset-background"
+                        style={{ backgroundColor: dept.color, boxShadow: `0 0 8px ${dept.color}40` }}
+                      />
+                      <span className="font-medium">{dept.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Habilidades - Apenas no modo edição */}
+          {isEditMode && editUser && (
+            <div className="space-y-2 p-4 rounded-xl bg-muted/30 border border-border">
+              <Label className="text-sm font-medium">Habilidades do Agente</Label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Selecione as habilidades para roteamento inteligente de conversas
+              </p>
+              <SkillsMultiSelect
+                selectedSkillIds={selectedSkills}
+                onSelectionChange={setSelectedSkills}
+              />
+            </div>
+          )}
+
+          {/* Canais de Atendimento - Apenas para support_agent no modo edição */}
+          {isEditMode && editUser && role === 'support_agent' && (
+            <div className="space-y-2 p-4 rounded-xl bg-muted/30 border border-border">
+              <Label className="text-sm font-medium">Canais de Atendimento</Label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Selecione os canais que este agente pode atender. Se nenhum canal for selecionado, o agente atenderá todos os canais.
+              </p>
+              <SupportChannelsMultiSelect
+                selectedChannelIds={selectedChannels}
+                onSelectionChange={setSelectedChannels}
+              />
+            </div>
+          )}
+
+          {/* Footer with Premium Button */}
+          <div className="pt-4 space-y-4">
+            <div className="flex gap-3">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => onOpenChange(false)} 
+                disabled={loading || uploadingAvatar}
+                className="flex-1 h-12 rounded-xl border-2"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={loading || uploadingAvatar}
+                className={cn(
+                  "flex-1 h-12 rounded-xl font-semibold text-base",
+                  "bg-gradient-to-r from-primary to-success hover:from-primary/90 hover:to-success/90",
+                  "shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30",
+                  "transition-all duration-300"
+                )}
+              >
+                {loading || uploadingAvatar ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    {isEditMode ? "Salvando..." : "Criando..."}
+                  </>
+                ) : (
+                  isEditMode ? "Salvar Alterações" : "Criar Usuário"
+                )}
+              </Button>
+            </div>
+
+            {/* LGPD Trust Seal */}
+            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+              <Lock className="h-3.5 w-3.5" />
+              <span>Seus dados estão protegidos (LGPD)</span>
+            </div>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
