@@ -477,7 +477,7 @@ function FormFieldInput({ field, value, onChange, settings, inputStyles }: FormF
           value={value || ""}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
-          className="w-full min-h-[120px] p-4 text-lg rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full min-h-[120px] p-4 text-lg rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-primary break-all"
           style={inputStyles}
           autoFocus
         />

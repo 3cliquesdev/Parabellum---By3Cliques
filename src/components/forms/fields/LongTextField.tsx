@@ -16,7 +16,7 @@ export function LongTextField({ value, onChange, placeholder, maxLength = 500 }:
         placeholder={placeholder || "Escreva sua resposta..."}
         rows={5}
         maxLength={maxLength}
-        className="resize-none text-lg bg-white/5 border-white/20 focus:border-primary"
+        className="resize-none text-lg bg-white/5 border-white/20 focus:border-primary break-all"
       />
       <div className="flex justify-end">
         <span className="text-xs text-muted-foreground">
