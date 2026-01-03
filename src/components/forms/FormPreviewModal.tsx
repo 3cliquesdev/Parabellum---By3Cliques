@@ -12,9 +12,11 @@ interface FormPreviewModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   schema: FormSchema;
+  name?: string;
+  description?: string;
 }
 
-export function FormPreviewModal({ open, onOpenChange, schema }: FormPreviewModalProps) {
+export function FormPreviewModal({ open, onOpenChange, schema, name, description }: FormPreviewModalProps) {
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
 
   return (
@@ -48,7 +50,7 @@ export function FormPreviewModal({ open, onOpenChange, schema }: FormPreviewModa
             `}
           >
             <div className="h-full overflow-auto">
-              <PublicFormV2 schema={schema} isPreview />
+              <PublicFormV2 schema={schema} isPreview formName={name} formDescription={description} />
             </div>
           </div>
         </div>

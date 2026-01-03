@@ -253,6 +253,8 @@ export default function FormBuilderPage() {
         open={showPreview}
         onOpenChange={setShowPreview}
         schema={schema}
+        name={name}
+        description={description}
       />
     </div>
   );
