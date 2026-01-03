@@ -189,7 +189,7 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
           )}
           {title && (
             <h1 
-              className="text-2xl sm:text-3xl font-bold mt-4"
+              className="text-2xl sm:text-3xl font-bold mt-4 break-words whitespace-pre-wrap"
               style={{ color: settings.text_color }}
             >
               {title}
@@ -197,7 +197,7 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
           )}
           {description && (
             <p 
-              className="text-base mt-2"
+              className="text-base mt-2 break-words whitespace-pre-wrap"
               style={{ color: settings.text_color, opacity: 0.7 }}
             >
               {description}
