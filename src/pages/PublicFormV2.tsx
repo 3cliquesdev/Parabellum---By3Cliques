@@ -215,7 +215,15 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
 
   // Single Page Mode - render all fields at once
   if (displayMode === "single_page" && schema) {
-    return <SinglePageFormView schema={schema} formId={formId} isPreview={isPreview} />;
+    return (
+      <SinglePageFormView 
+        schema={schema} 
+        formId={formId} 
+        isPreview={isPreview}
+        title={formData?.name}
+        description={formData?.description}
+      />
+    );
   }
 
   // Success screen (for conversational mode)
@@ -276,7 +284,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
         backgroundPosition: "center",
       }}
     >
-      {/* Header with Logo and Progress */}
+      {/* Header with Logo, Title, Description and Progress */}
       <header className="p-4 sm:p-6">
         <div className="max-w-2xl mx-auto">
           {settings.logo_url && (
@@ -285,6 +293,22 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
               alt="Logo" 
               className="h-8 sm:h-10 mb-4"
             />
+          )}
+          {formData?.name && (
+            <h1 
+              className="text-xl sm:text-2xl font-bold mb-2"
+              style={{ color: settings.text_color }}
+            >
+              {formData.name}
+            </h1>
+          )}
+          {formData?.description && (
+            <p 
+              className="text-sm mb-4"
+              style={{ color: settings.text_color, opacity: 0.7 }}
+            >
+              {formData.description}
+            </p>
           )}
           {settings.show_progress_bar !== false && fields.length > 0 && (
             <div className="space-y-2">

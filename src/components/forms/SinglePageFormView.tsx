@@ -20,9 +20,11 @@ interface SinglePageFormViewProps {
   schema: FormSchema;
   formId?: string;
   isPreview?: boolean;
+  title?: string;
+  description?: string;
 }
 
-export function SinglePageFormView({ schema, formId, isPreview = false }: SinglePageFormViewProps) {
+export function SinglePageFormView({ schema, formId, isPreview = false, title, description }: SinglePageFormViewProps) {
   const { toast } = useToast();
   const settings = { ...DEFAULT_FORM_SETTINGS, ...schema?.settings };
   const fields = schema?.fields || [];
@@ -175,7 +177,7 @@ export function SinglePageFormView({ schema, formId, isPreview = false }: Single
         backgroundPosition: "center",
       }}
     >
-      {/* Header with Logo */}
+      {/* Header with Logo, Title, and Description */}
       <header className="p-4 sm:p-6">
         <div className="max-w-2xl mx-auto">
           {settings.logo_url && (
@@ -184,6 +186,22 @@ export function SinglePageFormView({ schema, formId, isPreview = false }: Single
               alt="Logo" 
               className="h-8 sm:h-10"
             />
+          )}
+          {title && (
+            <h1 
+              className="text-2xl sm:text-3xl font-bold mt-4"
+              style={{ color: settings.text_color }}
+            >
+              {title}
+            </h1>
+          )}
+          {description && (
+            <p 
+              className="text-base mt-2"
+              style={{ color: settings.text_color, opacity: 0.7 }}
+            >
+              {description}
+            </p>
           )}
         </div>
       </header>
