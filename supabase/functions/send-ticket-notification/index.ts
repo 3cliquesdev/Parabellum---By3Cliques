@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,8 +15,6 @@ interface TicketNotificationRequest {
   description: string;
   priority: "low" | "medium" | "high" | "urgent";
 }
-
-// SLA removido conforme solicitação do cliente - apenas prioridade será exibida
 
 const priorityColors: Record<string, string> = {
   urgent: "#EF4444",
@@ -36,7 +35,8 @@ function generateTicketEmailHTML(
   customer_name: string,
   subject: string,
   description: string,
-  priority: string
+  priority: string,
+  brandName: string
 ): string {
   const priorityColor = priorityColors[priority] || "#6B7280";
   const priorityLabel = priorityLabels[priority] || priority;
@@ -57,7 +57,7 @@ function generateTicketEmailHTML(
           <!-- Logo Header -->
           <tr>
             <td style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">Seu Armazém Drop</h1>
+              <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">${brandName}</h1>
             </td>
           </tr>
           
@@ -145,7 +145,7 @@ function generateTicketEmailHTML(
           <tr>
             <td style="background: #1e3a5f; padding: 25px; text-align: center;">
               <p style="color: #ffffff; margin: 0 0 10px 0; font-size: 24px; font-weight: bold;">
-                Seu Armazém Drop
+                ${brandName}
               </p>
               <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
                 Equipe de Suporte
@@ -162,6 +162,15 @@ function generateTicketEmailHTML(
 </body>
 </html>
   `;
+}
+
+// Função para sanitizar nome removendo caracteres não-ASCII
+function sanitizeName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x00-\x7F]/g, '')
+    .trim();
 }
 
 serve(async (req) => {
@@ -194,13 +203,46 @@ serve(async (req) => {
       throw new Error("Missing required fields");
     }
 
+    // Inicializar Supabase para buscar configurações
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Buscar sender configurado do banco de dados
+    let senderEmail = 'contato@seuarmazemdrop.parabellum.work';
+    let senderName = 'Seu Armazem Drop';
+
+    const { data: senderConfig } = await supabase
+      .from('system_configurations')
+      .select('value')
+      .eq('key', 'email_sender_customer')
+      .single();
+    
+    if (senderConfig?.value) {
+      senderEmail = senderConfig.value;
+      console.log('[send-ticket-notification] Using configured sender:', senderEmail);
+    }
+
+    // Buscar nome da marca do email_branding ou usar default
+    const { data: brandingData } = await supabase
+      .from('email_branding')
+      .select('name')
+      .eq('is_default_customer', true)
+      .single();
+
+    const brandName = brandingData?.name || 'Seu Armazém Drop';
+    senderName = sanitizeName(brandName);
+
+    console.log('[send-ticket-notification] Email config:', { senderEmail, senderName, brandName });
+
     // Gerar HTML do email
     const html = generateTicketEmailHTML(
       ticket_number,
       customer_name,
       subject,
       description,
-      priority
+      priority,
+      brandName
     );
 
     // Enviar email via Resend API
@@ -218,7 +260,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Lovable <onboarding@resend.dev>",
+        from: `${senderName} <${senderEmail}>`,
         to: [customer_email],
         subject: `🎫 Ticket #${ticket_number} criado com sucesso`,
         html,
