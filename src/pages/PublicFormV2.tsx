@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { RatingField, YesNoField, LongTextField, DateField, SelectField } from "@/components/forms/fields";
 import { SinglePageFormView } from "@/components/forms/SinglePageFormView";
+import { FormFileUpload, UploadedFile } from "@/components/forms/FormFileUpload";
 import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 
 // Helper to convert hex to rgba
@@ -539,6 +540,19 @@ function FormFieldInput({ field, value, onChange, settings, inputStyles }: FormF
           className="h-14 text-lg"
           style={inputStyles}
           autoFocus
+        />
+      );
+
+    case "file":
+      return (
+        <FormFileUpload
+          value={value || []}
+          onChange={onChange}
+          accept={field.accept || "image/*,.pdf"}
+          maxSizeMb={field.max_size_mb || 10}
+          maxFiles={field.max_files || 5}
+          inputStyles={inputStyles}
+          settings={settings}
         />
       );
 

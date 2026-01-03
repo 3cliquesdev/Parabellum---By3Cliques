@@ -37,6 +37,7 @@ export interface FormField {
   // File field specific
   accept?: string;            // Tipos de arquivo aceitos (ex: "image/*,.pdf")
   max_size_mb?: number;       // Tamanho máximo em MB
+  max_files?: number;         // Número máximo de arquivos
   // Ticket mapping
   ticket_field?: "subject" | "description" | "priority"; // Mapear para campo do ticket
 }

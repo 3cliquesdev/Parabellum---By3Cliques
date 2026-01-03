@@ -570,10 +570,32 @@ serve(async (req) => {
         const descriptionLines = fields.map((f: any) => {
           const val = sanitizedAnswers[f.id];
           if (!val || val === '') return null;
+          // Skip file fields from description text (they'll be attachments)
+          if (f.type === 'file') return null;
           return `**${f.label}:** ${val}`;
         }).filter(Boolean);
         ticketDescription = descriptionLines.join('\n\n');
       }
+      
+      // Collect file attachments from file fields
+      const fileAttachments: Array<{ name: string; url: string; type: string }> = [];
+      for (const field of fields) {
+        if (field.type === 'file' && sanitizedAnswers[field.id]) {
+          const fileValues = sanitizedAnswers[field.id];
+          if (Array.isArray(fileValues)) {
+            for (const file of fileValues) {
+              if (file && file.url) {
+                fileAttachments.push({
+                  name: file.name || 'arquivo',
+                  url: file.url,
+                  type: file.type || 'application/octet-stream',
+                });
+              }
+            }
+          }
+        }
+      }
+      console.log(`[form-submit-v3] Found ${fileAttachments.length} file attachments`);
       
       const { data: newTicket, error: ticketError } = await supabase
         .from('tickets')
@@ -587,6 +609,7 @@ serve(async (req) => {
           assigned_to: assignedTo, // ROUTING: use the assignee from get_assignee_for_form
           status: 'open',
           channel: 'form',
+          attachments: fileAttachments.length > 0 ? fileAttachments : null,
         })
         .select('*, ticket_number')
         .single();
