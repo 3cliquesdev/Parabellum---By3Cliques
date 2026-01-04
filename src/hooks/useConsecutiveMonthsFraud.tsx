@@ -90,14 +90,19 @@ export function useConsecutiveMonthsFraud(filters: ConsecutiveFraudFilters = {})
 
       if (error) throw error;
 
-      // Agrupar compras por customer + offer
-      const customerOfferMap = new Map<string, {
+      // Agrupar TODAS as compras por customer (para detectar upgrades)
+      const customerPurchasesMap = new Map<string, {
         customer_email: string;
         customer_name: string;
         customer_cpf: string;
-        offer_id: string;
-        offer_name: string;
-        purchases: { month: string; date: string; value: number; order_id: string }[];
+        purchases: { 
+          month: string; 
+          date: string; 
+          value: number; 
+          order_id: string;
+          offer_id: string;
+          offer_name: string;
+        }[];
       }>();
 
       for (const event of events || []) {
@@ -118,18 +123,14 @@ export function useConsecutiveMonthsFraud(filters: ConsecutiveFraudFilters = {})
 
         if (!customerEmail || !currentOfferId) continue;
 
-        // Filtro por valor máximo (para pegar ofertas de prospecção)
-        if (maxValue && grossValue > maxValue) continue;
-
-        // Filtro por offer específica
+        // Filtro por offer específica (se fornecido)
         if (offerId && currentOfferId !== offerId) continue;
-
-        const key = `${customerEmail}|${currentOfferId}`;
-        const existing = customerOfferMap.get(key);
 
         const eventDate = new Date(event.created_at);
         const purchaseMonth = format(eventDate, 'yyyy-MM');
         const purchaseDate = format(eventDate, 'dd/MM/yyyy');
+
+        const existing = customerPurchasesMap.get(customerEmail);
 
         if (existing) {
           // Verificar se já existe essa order_id (deduplicar)
@@ -138,68 +139,106 @@ export function useConsecutiveMonthsFraud(filters: ConsecutiveFraudFilters = {})
               month: purchaseMonth,
               date: purchaseDate,
               value: grossValue,
-              order_id: orderId
+              order_id: orderId,
+              offer_id: currentOfferId,
+              offer_name: currentOfferName
             });
           }
         } else {
-          customerOfferMap.set(key, {
+          customerPurchasesMap.set(customerEmail, {
             customer_email: customerEmail,
             customer_name: customerName,
             customer_cpf: customerCpf,
-            offer_id: currentOfferId,
-            offer_name: currentOfferName,
             purchases: [{
               month: purchaseMonth,
               date: purchaseDate,
               value: grossValue,
-              order_id: orderId
+              order_id: orderId,
+              offer_id: currentOfferId,
+              offer_name: currentOfferName
             }]
           });
         }
       }
 
-      // Filtrar clientes com meses consecutivos
+      // Filtrar clientes com meses consecutivos de BAIXO VALOR (sem upgrade)
       const fraudulentCustomers: ConsecutiveFraudCustomer[] = [];
       let totalConsecutiveMonths = 0;
       let estimatedLostValue = 0;
 
-      for (const [_, data] of customerOfferMap) {
-        // Extrair meses únicos
-        const months = data.purchases.map(p => p.month);
-        const consecutiveSequences = detectConsecutiveMonths(months);
+      for (const [_, data] of customerPurchasesMap) {
+        // Separar compras de baixo valor e alto valor
+        const lowValuePurchases = data.purchases.filter(p => p.value <= maxValue);
+        const highValuePurchases = data.purchases.filter(p => p.value > maxValue);
 
-        // Pegar a maior sequência consecutiva
-        const longestSequence = consecutiveSequences.reduce(
-          (longest, current) => current.length > longest.length ? current : longest,
-          [] as string[]
-        );
+        // Se não tem compras de baixo valor suficientes, pular
+        if (lowValuePurchases.length < minConsecutiveMonths) continue;
 
-        if (longestSequence.length >= minConsecutiveMonths) {
-          // Filtrar purchases que estão na sequência consecutiva
-          const relevantPurchases = data.purchases.filter(p => 
-            longestSequence.includes(p.month)
+        // Verificar se cliente fez UPGRADE (compra de alto valor)
+        if (highValuePurchases.length > 0) {
+          // Encontrar a primeira compra de baixo valor
+          const sortedLowValue = lowValuePurchases.sort((a, b) => a.month.localeCompare(b.month));
+          const firstLowValueMonth = sortedLowValue[0].month;
+
+          // Verificar se há upgrade APÓS a primeira compra de baixo valor
+          const hasUpgradeAfter = highValuePurchases.some(p => p.month >= firstLowValueMonth);
+
+          if (hasUpgradeAfter) {
+            // Cliente fez upgrade legítimo, não é fraude
+            continue;
+          }
+        }
+
+        // Agrupar compras de baixo valor por offer_id
+        const offerGroups = new Map<string, typeof lowValuePurchases>();
+        for (const purchase of lowValuePurchases) {
+          const existing = offerGroups.get(purchase.offer_id) || [];
+          existing.push(purchase);
+          offerGroups.set(purchase.offer_id, existing);
+        }
+
+        // Verificar cada oferta separadamente
+        for (const [currentOfferId, purchases] of offerGroups) {
+          const months = purchases.map(p => p.month);
+          const consecutiveSequences = detectConsecutiveMonths(months);
+
+          // Pegar a maior sequência consecutiva
+          const longestSequence = consecutiveSequences.reduce(
+            (longest, current) => current.length > longest.length ? current : longest,
+            [] as string[]
           );
 
-          // Valor perdido = valor das compras após a primeira (que seria legítima)
-          const sortedPurchases = relevantPurchases.sort((a, b) => 
-            a.month.localeCompare(b.month)
-          );
-          const lostValue = sortedPurchases.slice(1).reduce((sum, p) => sum + p.value, 0);
+          if (longestSequence.length >= minConsecutiveMonths) {
+            // Filtrar purchases que estão na sequência consecutiva
+            const relevantPurchases = purchases.filter(p => 
+              longestSequence.includes(p.month)
+            );
 
-          totalConsecutiveMonths += longestSequence.length;
-          estimatedLostValue += lostValue;
+            // Valor perdido = valor das compras após a primeira (que seria legítima)
+            const sortedPurchases = relevantPurchases.sort((a, b) => 
+              a.month.localeCompare(b.month)
+            );
+            const lostValue = sortedPurchases.slice(1).reduce((sum, p) => sum + p.value, 0);
 
-          fraudulentCustomers.push({
-            customer_email: data.customer_email,
-            customer_name: data.customer_name,
-            customer_cpf: data.customer_cpf,
-            offer_id: data.offer_id,
-            offer_name: data.offer_name,
-            consecutive_months: longestSequence,
-            total_consecutive: longestSequence.length,
-            total_value: relevantPurchases.reduce((sum, p) => sum + p.value, 0),
-            purchase_details: sortedPurchases
-          });
+            totalConsecutiveMonths += longestSequence.length;
+            estimatedLostValue += lostValue;
+
+            fraudulentCustomers.push({
+              customer_email: data.customer_email,
+              customer_name: data.customer_name,
+              customer_cpf: data.customer_cpf,
+              offer_id: currentOfferId,
+              offer_name: purchases[0].offer_name,
+              consecutive_months: longestSequence,
+              total_consecutive: longestSequence.length,
+              total_value: relevantPurchases.reduce((sum, p) => sum + p.value, 0),
+              purchase_details: sortedPurchases.map(p => ({
+                month: p.month,
+                date: p.date,
+                value: p.value
+              }))
+            });
+          }
         }
       }
 
