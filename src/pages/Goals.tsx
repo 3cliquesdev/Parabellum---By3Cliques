@@ -67,8 +67,17 @@ export default function Goals() {
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
   ];
 
-  // Calculate number of tabs for grid
+  // Calculate number of tabs for grid - use static classes for Tailwind
   const tabCount = 2 + (canManageSales ? 1 : 0) + (canManageCS ? 1 : 0);
+  
+  const getGridCols = (count: number): string => {
+    switch (count) {
+      case 2: return 'grid-cols-2';
+      case 3: return 'grid-cols-3';
+      case 4: return 'grid-cols-4';
+      default: return 'grid-cols-4';
+    }
+  };
 
   return (
     <div className="container mx-auto p-6 max-h-screen overflow-auto">
@@ -137,7 +146,7 @@ export default function Goals() {
 
         {/* Tabs */}
         <Tabs defaultValue="goals" className="w-full">
-          <TabsList className={`grid w-full max-w-3xl grid-cols-${tabCount}`}>
+          <TabsList className={`grid w-full max-w-3xl ${getGridCols(tabCount)}`}>
             <TabsTrigger value="goals">Minhas Metas</TabsTrigger>
             {canManageSales && <TabsTrigger value="sales-goals">Metas de Vendas</TabsTrigger>}
             {canManageCS && <TabsTrigger value="cs-goals">Metas de CS</TabsTrigger>}
