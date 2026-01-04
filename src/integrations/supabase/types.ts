@@ -885,12 +885,17 @@ export type Database = {
       cadence_steps: {
         Row: {
           cadence_id: string
+          condition_else_step_id: string | null
+          condition_next_step_id: string | null
+          condition_type: string | null
           created_at: string
           day_offset: number
           id: string
           is_automated: boolean
           message_template: string | null
           position: number
+          position_x: number | null
+          position_y: number | null
           step_type: string
           task_description: string | null
           task_title: string | null
@@ -898,12 +903,17 @@ export type Database = {
         }
         Insert: {
           cadence_id: string
+          condition_else_step_id?: string | null
+          condition_next_step_id?: string | null
+          condition_type?: string | null
           created_at?: string
           day_offset?: number
           id?: string
           is_automated?: boolean
           message_template?: string | null
           position?: number
+          position_x?: number | null
+          position_y?: number | null
           step_type: string
           task_description?: string | null
           task_title?: string | null
@@ -911,12 +921,17 @@ export type Database = {
         }
         Update: {
           cadence_id?: string
+          condition_else_step_id?: string | null
+          condition_next_step_id?: string | null
+          condition_type?: string | null
           created_at?: string
           day_offset?: number
           id?: string
           is_automated?: boolean
           message_template?: string | null
           position?: number
+          position_x?: number | null
+          position_y?: number | null
           step_type?: string
           task_description?: string | null
           task_title?: string | null
@@ -928,6 +943,20 @@ export type Database = {
             columns: ["cadence_id"]
             isOneToOne: false
             referencedRelation: "cadences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_steps_condition_else_step_id_fkey"
+            columns: ["condition_else_step_id"]
+            isOneToOne: false
+            referencedRelation: "cadence_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_steps_condition_next_step_id_fkey"
+            columns: ["condition_next_step_id"]
+            isOneToOne: false
+            referencedRelation: "cadence_steps"
             referencedColumns: ["id"]
           },
           {
@@ -1016,6 +1045,39 @@ export type Database = {
           },
         ]
       }
+      cadence_templates: {
+        Row: {
+          category: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          steps: Json
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          steps?: Json
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          steps?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       cadences: {
         Row: {
           created_at: string
@@ -1023,7 +1085,9 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          meetings_booked: number | null
           name: string
+          total_responses: number | null
           updated_at: string
         }
         Insert: {
@@ -1032,7 +1096,9 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          meetings_booked?: number | null
           name: string
+          total_responses?: number | null
           updated_at?: string
         }
         Update: {
@@ -1041,7 +1107,9 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          meetings_booked?: number | null
           name?: string
+          total_responses?: number | null
           updated_at?: string
         }
         Relationships: [
