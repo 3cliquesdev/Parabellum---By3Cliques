@@ -37,7 +37,11 @@ interface CSGoalFormData {
   bonus_amount?: string;
 }
 
-export function GoalDialog() {
+interface GoalDialogProps {
+  preSelectedUserId?: string;
+}
+
+export function GoalDialog({ preSelectedUserId }: GoalDialogProps = {}) {
   const [open, setOpen] = useState(false);
   const [selectedUserRole, setSelectedUserRole] = useState<string | null>(null);
   
@@ -67,6 +71,18 @@ export function GoalDialog() {
     const user = eligibleUsers?.find(u => u.id === userId);
     setSelectedUserRole(user?.role || null);
     setValue("assigned_to", userId);
+  };
+
+  // Pre-select user when dialog opens with preSelectedUserId
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (isOpen && preSelectedUserId && eligibleUsers) {
+      handleUserSelect(preSelectedUserId);
+    }
+    if (!isOpen) {
+      reset();
+      setSelectedUserRole(null);
+    }
   };
 
   const onSubmit = async (data: SalesGoalFormData | CSGoalFormData) => {
@@ -110,11 +126,11 @@ export function GoalDialog() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button>
+        <Button size={preSelectedUserId ? "sm" : "default"}>
           <Plus className="h-4 w-4 mr-2" />
-          Nova Meta
+          {preSelectedUserId ? "Definir Meta" : "Nova Meta"}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
@@ -127,7 +143,12 @@ export function GoalDialog() {
           {/* Seleção de Colaborador */}
           <div>
             <Label htmlFor="assigned_to">Colaborador *</Label>
-            <Select onValueChange={handleUserSelect} required disabled={isLoadingUsers}>
+            <Select 
+              onValueChange={handleUserSelect} 
+              required 
+              disabled={isLoadingUsers || !!preSelectedUserId}
+              value={preSelectedUserId || undefined}
+            >
               <SelectTrigger>
                 <SelectValue placeholder={isLoadingUsers ? "Carregando..." : "Selecione o colaborador"} />
               </SelectTrigger>
