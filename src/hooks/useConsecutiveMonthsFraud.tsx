@@ -167,39 +167,36 @@ export function useConsecutiveMonthsFraud(filters: ConsecutiveFraudFilters = {})
       let estimatedLostValue = 0;
 
       for (const [_, data] of customerPurchasesMap) {
-        // Separar compras de baixo valor e alto valor
-        const lowValuePurchases = data.purchases.filter(p => p.value <= maxValue);
-        const highValuePurchases = data.purchases.filter(p => p.value > maxValue);
-
-        // Se não tem compras de baixo valor suficientes, pular
-        if (lowValuePurchases.length < minConsecutiveMonths) continue;
-
-        // Verificar se cliente fez UPGRADE (compra de alto valor)
-        if (highValuePurchases.length > 0) {
-          // Encontrar a primeira compra de baixo valor
-          const sortedLowValue = lowValuePurchases.sort((a, b) => a.month.localeCompare(b.month));
-          const firstLowValueMonth = sortedLowValue[0].month;
-
-          // Verificar se há upgrade APÓS a primeira compra de baixo valor
-          const hasUpgradeAfter = highValuePurchases.some(p => p.month >= firstLowValueMonth);
-
-          if (hasUpgradeAfter) {
-            // Cliente fez upgrade legítimo, não é fraude
-            continue;
-          }
-        }
-
-        // Agrupar compras de baixo valor por offer_id
-        const offerGroups = new Map<string, typeof lowValuePurchases>();
-        for (const purchase of lowValuePurchases) {
+        // Agrupar TODAS as compras por offer_id primeiro
+        const offerGroups = new Map<string, typeof data.purchases>();
+        for (const purchase of data.purchases) {
           const existing = offerGroups.get(purchase.offer_id) || [];
           existing.push(purchase);
           offerGroups.set(purchase.offer_id, existing);
         }
 
         // Verificar cada oferta separadamente
-        for (const [currentOfferId, purchases] of offerGroups) {
-          const months = purchases.map(p => p.month);
+        for (const [currentOfferId, purchasesForOffer] of offerGroups) {
+          // Separar compras de baixo valor e alto valor DENTRO da mesma oferta
+          const lowValuePurchases = purchasesForOffer.filter(p => p.value <= maxValue);
+          const highValuePurchases = purchasesForOffer.filter(p => p.value > maxValue);
+
+          // Se não tem compras de baixo valor suficientes, pular esta oferta
+          if (lowValuePurchases.length < minConsecutiveMonths) continue;
+
+          // Verificar se cliente fez UPGRADE na MESMA oferta
+          if (highValuePurchases.length > 0) {
+            const sortedLowValue = [...lowValuePurchases].sort((a, b) => a.month.localeCompare(b.month));
+            const firstLowValueMonth = sortedLowValue[0].month;
+            const hasUpgradeAfter = highValuePurchases.some(p => p.month >= firstLowValueMonth);
+
+            if (hasUpgradeAfter) {
+              // Cliente fez upgrade legítimo nesta oferta, não é fraude
+              continue;
+            }
+          }
+
+          const months = lowValuePurchases.map(p => p.month);
           const consecutiveSequences = detectConsecutiveMonths(months);
 
           // Pegar a maior sequência consecutiva
@@ -210,7 +207,7 @@ export function useConsecutiveMonthsFraud(filters: ConsecutiveFraudFilters = {})
 
           if (longestSequence.length >= minConsecutiveMonths) {
             // Filtrar purchases que estão na sequência consecutiva
-            const relevantPurchases = purchases.filter(p => 
+            const relevantPurchases = lowValuePurchases.filter(p => 
               longestSequence.includes(p.month)
             );
 
@@ -228,7 +225,7 @@ export function useConsecutiveMonthsFraud(filters: ConsecutiveFraudFilters = {})
               customer_name: data.customer_name,
               customer_cpf: data.customer_cpf,
               offer_id: currentOfferId,
-              offer_name: purchases[0].offer_name,
+              offer_name: lowValuePurchases[0].offer_name,
               consecutive_months: longestSequence,
               total_consecutive: longestSequence.length,
               total_value: relevantPurchases.reduce((sum, p) => sum + p.value, 0),
