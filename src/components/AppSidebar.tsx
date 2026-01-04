@@ -1,5 +1,6 @@
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { clearAllCaches } from "@/utils/cacheUtils";
 import {
   LayoutDashboard, 
   Inbox,
@@ -32,6 +33,7 @@ import {
   AlertTriangle,
   Crown,
   ClipboardList,
+  Trash2,
   LucideIcon
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -403,6 +405,15 @@ export function AppSidebar() {
               <Button
                 variant="ghost"
                 size="icon"
+                onClick={clearAllCaches}
+                title="Limpar Cache e Atualizar"
+                className="h-9 w-9"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={handleSignOut}
                 title="Sair"
                 className="h-9 w-9"
@@ -443,6 +454,15 @@ export function AppSidebar() {
                 </Button>
               } />
               <ModeToggle />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={clearAllCaches}
+                className="h-9 w-9 mx-auto"
+                title="Limpar Cache"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
