@@ -8,17 +8,18 @@ export const useServiceWorkerUpdate = () => {
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(swUrl, r) {
-      // Check for updates every 30 seconds
+      // Check immediately on registration
+      r && r.update();
+      
+      // Check for updates every 10 seconds (more aggressive)
       r && setInterval(() => {
         r.update();
-      }, 30 * 1000);
+      }, 10 * 1000);
     },
     onNeedRefresh() {
-      // Auto-update immediately when new version is available
+      // Auto-update immediately when new version is available (no delay)
       toast.info('Nova versão disponível, atualizando...', { duration: 2000 });
-      setTimeout(() => {
-        updateServiceWorker(true);
-      }, 1000);
+      updateServiceWorker(true);
     },
     onOfflineReady() {
       console.log('App ready for offline use');
@@ -31,6 +32,15 @@ export const useServiceWorkerUpdate = () => {
       updateServiceWorker(true);
     }
   }, [needRefresh, updateServiceWorker]);
+
+  // Force SW update check on app mount
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        reg?.update();
+      });
+    }
+  }, []);
 
   const update = () => {
     updateServiceWorker(true);

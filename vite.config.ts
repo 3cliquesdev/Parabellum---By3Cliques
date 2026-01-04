@@ -57,9 +57,9 @@ export default defineConfig(({ mode }) => ({
             urlPattern: /\.(js|css)$/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'static-assets-v3',
-              networkTimeoutSeconds: 3,
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 }
+              cacheName: 'static-assets-v4',
+              networkTimeoutSeconds: 1,
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 5 }
             }
           },
           {
