@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { toast } from 'sonner';
 
 export const useServiceWorkerUpdate = () => {
   const {
@@ -6,18 +8,29 @@ export const useServiceWorkerUpdate = () => {
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(swUrl, r) {
-      // Check for updates every 60 seconds
+      // Check for updates every 30 seconds
       r && setInterval(() => {
         r.update();
-      }, 60 * 1000);
+      }, 30 * 1000);
     },
     onNeedRefresh() {
-      console.log('New version available!');
+      // Auto-update immediately when new version is available
+      toast.info('Nova versão disponível, atualizando...', { duration: 2000 });
+      setTimeout(() => {
+        updateServiceWorker(true);
+      }, 1000);
     },
     onOfflineReady() {
       console.log('App ready for offline use');
     },
   });
+
+  // Force update if needRefresh is true on mount
+  useEffect(() => {
+    if (needRefresh) {
+      updateServiceWorker(true);
+    }
+  }, [needRefresh, updateServiceWorker]);
 
   const update = () => {
     updateServiceWorker(true);
