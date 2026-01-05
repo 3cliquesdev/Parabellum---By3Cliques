@@ -195,9 +195,17 @@ Deno.serve(async (req) => {
     if (!emailContent && email_id) {
       console.log("[inbound-email] Conteúdo vazio no webhook, buscando via API...");
       const fetchedContent = await fetchEmailContent(email_id);
-      emailContent = fetchedContent.text || fetchedContent.html || "Email sem conteúdo";
+      if (fetchedContent.text || fetchedContent.html) {
+        emailContent = fetchedContent.text || fetchedContent.html!;
+      } else {
+        // Fallback informativo se API falhar (401/erro)
+        const senderInfo = from || "remetente desconhecido";
+        emailContent = `📧 Resposta recebida de ${senderInfo}\n\nAssunto: ${subject || "(sem assunto)"}\n\n[Conteúdo não disponível - verifique RESEND_API_KEY tem permissão Full Access]`;
+        console.warn("[inbound-email] ⚠️ Usando fallback de conteúdo - API não retornou dados");
+      }
     } else if (!emailContent) {
-      emailContent = "Email sem conteúdo";
+      const senderInfo = from || "remetente desconhecido";
+      emailContent = `📧 Email recebido de ${senderInfo}\n\nAssunto: ${subject || "(sem assunto)"}\n\n[Conteúdo não disponível no webhook]`;
     }
 
     console.log("[inbound-email] Email data:", { from, subject, hasText: !!text, hasHtml: !!html, hasEmailId: !!email_id, contentLength: emailContent?.length });
@@ -261,8 +269,9 @@ Deno.serve(async (req) => {
           const { error: commentError } = await supabase.from("ticket_comments").insert({
             ticket_id: existingTicket.id,
             content: emailContent,
-            user_id: null, // Comentário do cliente (não de agente)
+            created_by: null, // Comentário do cliente (não de agente)
             is_internal: false,
+            source: "email_reply",
           });
 
           if (commentError) {
@@ -356,8 +365,9 @@ Deno.serve(async (req) => {
           const { error: commentError } = await supabase.from("ticket_comments").insert({
             ticket_id: ticketBySubject.id,
             content: emailContent,
-            user_id: null,
+            created_by: null, // Comentário do cliente
             is_internal: false,
+            source: "email_reply",
           });
 
           if (commentError) {
