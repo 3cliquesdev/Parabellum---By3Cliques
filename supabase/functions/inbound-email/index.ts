@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,12 +32,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Extrair headers Svix
-    const svixId = req.headers.get('svix-id');
-    const svixTimestamp = req.headers.get('svix-timestamp');
-    const svixSignature = req.headers.get('svix-signature');
+    // Logs para debug do secret
+    console.log('[inbound-email] Secret debug:', {
+      hasPrefix: webhookSecret.startsWith('whsec_'),
+      secretLength: webhookSecret.length,
+    });
 
-    if (!svixId || !svixTimestamp || !svixSignature) {
+    // Ler body como texto para validação
+    const body = await req.text();
+    
+    // Extrair headers para a biblioteca
+    const svixHeaders = {
+      "svix-id": req.headers.get("svix-id") || "",
+      "svix-timestamp": req.headers.get("svix-timestamp") || "",
+      "svix-signature": req.headers.get("svix-signature") || "",
+    };
+
+    console.log('[inbound-email] Svix headers:', {
+      hasId: !!svixHeaders["svix-id"],
+      hasTimestamp: !!svixHeaders["svix-timestamp"],
+      hasSignature: !!svixHeaders["svix-signature"],
+    });
+
+    if (!svixHeaders["svix-id"] || !svixHeaders["svix-timestamp"] || !svixHeaders["svix-signature"]) {
       console.error('[inbound-email] Missing Svix headers');
       return new Response(
         JSON.stringify({ error: 'Missing webhook signature headers' }),
@@ -44,101 +62,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Ler body como texto para validação
-    const body = await req.text();
-    const signedContent = `${svixId}.${svixTimestamp}.${body}`;
-
-    // Logs para debug do secret
-    console.log('[inbound-email] Secret debug:', {
-      hasPrefix: webhookSecret.startsWith('whsec_'),
-      secretLength: webhookSecret.length,
-      secretPreview: webhookSecret.slice(0, 10) + '...',
-    });
-
-    // Extrair e sanitizar parte Base64
-    let base64Part = webhookSecret.startsWith('whsec_') 
-      ? webhookSecret.split('whsec_')[1] 
-      : webhookSecret;
-
-    // Remover espaços em branco e quebras de linha
-    base64Part = base64Part.trim().replace(/\s/g, '');
-
-    console.log('[inbound-email] Base64 part debug:', {
-      length: base64Part.length,
-      preview: base64Part.slice(0, 10) + '...',
-      isValidBase64: /^[A-Za-z0-9+/=]+$/.test(base64Part),
-    });
-
-    // Decodificar Base64 para bytes (Svix/Resend usa Base64)
-    let keyData: Uint8Array<ArrayBuffer>;
+    // Usar biblioteca oficial standardwebhooks para verificar assinatura
+    // O secret deve ser passado COM o prefixo whsec_ para a biblioteca
     try {
-      const decoded = atob(base64Part);
-      const buffer = new ArrayBuffer(decoded.length);
-      const view = new Uint8Array(buffer);
-      for (let i = 0; i < decoded.length; i++) {
-        view[i] = decoded.charCodeAt(i);
-      }
-      keyData = view;
-      console.log('[inbound-email] ✅ Base64 decoded, key length:', keyData.length);
-    } catch (decodeError: any) {
-      console.error('[inbound-email] ❌ Base64 decode failed:', decodeError.message);
-      throw new Error('Invalid webhook secret format - Base64 decode failed');
-    }
-
-    // Calcular assinatura esperada
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw', keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false, ['sign']
-    );
-
-    const signatureData = await crypto.subtle.sign('HMAC', key, encoder.encode(signedContent));
-    const expectedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureData)));
-
-    // DEBUG: Log detalhado do HMAC calculado
-    console.log('[inbound-email] HMAC Debug:', {
-      signedContentLength: signedContent.length,
-      signedContentPreview: signedContent.slice(0, 100) + '...',
-      keyDataLength: keyData.length,
-      keyDataFirstBytes: Array.from(keyData.slice(0, 5)).map(b => b.toString(16).padStart(2, '0')).join(':'),
-      expectedSignatureLength: expectedSignature.length,
-      expectedSignaturePreview: expectedSignature.slice(0, 20) + '...',
-    });
-
-    // Verificar assinatura
-    const signatures = svixSignature.split(' ');
-    const versionedSignatures = signatures.filter(sig => sig.startsWith('v1,'));
-
-    if (versionedSignatures.length === 0) {
-      console.error('[inbound-email] No v1 signature found');
+      const wh = new Webhook(webhookSecret);
+      wh.verify(body, svixHeaders);
+      console.log('[inbound-email] ✅ Signature verified successfully (standardwebhooks)');
+    } catch (verifyError: any) {
+      console.error('[inbound-email] ❌ Webhook verification failed:', verifyError.message);
       return new Response(
-        JSON.stringify({ error: 'Invalid signature version' }),
+        JSON.stringify({ error: 'Invalid webhook signature', details: verifyError.message }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const providedSignature = versionedSignatures[0].replace('v1,', '');
-
-    // DEBUG: Log detalhado da assinatura recebida
-    console.log('[inbound-email] Signature Comparison:', {
-      rawHeader: svixSignature,
-      providedSignatureLength: providedSignature.length,
-      providedSignaturePreview: providedSignature.slice(0, 20) + '...',
-      expectedSignaturePreview: expectedSignature.slice(0, 20) + '...',
-      lengthsMatch: providedSignature.length === expectedSignature.length,
-      signaturesMatch: providedSignature === expectedSignature,
-    });
-
-    if (providedSignature !== expectedSignature) {
-      console.error('[inbound-email] ❌ Signature verification failed - signatures do not match');
-      return new Response(
-        JSON.stringify({ error: 'Invalid webhook signature' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log('[inbound-email] ✅ Signature verified successfully');
 
     // Função para buscar conteúdo completo do email via API Resend
     async function fetchEmailContent(emailId: string): Promise<{ text?: string; html?: string }> {
