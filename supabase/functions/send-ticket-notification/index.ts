@@ -280,6 +280,20 @@ serve(async (req) => {
     const resendData = await resendResponse.json();
     console.log("[send-ticket-notification] Email sent successfully:", resendData);
 
+    // Salvar message_id no ticket para threading de respostas por email
+    if (ticket_id && resendData.id) {
+      const { error: updateError } = await supabase
+        .from("tickets")
+        .update({ last_email_message_id: resendData.id })
+        .eq("id", ticket_id);
+      
+      if (updateError) {
+        console.error("[send-ticket-notification] Erro ao salvar message_id:", updateError);
+      } else {
+        console.log("[send-ticket-notification] ✅ Message ID salvo no ticket:", resendData.id);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
