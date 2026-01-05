@@ -80,16 +80,26 @@ export default function ImportClients() {
   };
 
   const handleMappingChange = (field: string, csvColumn: string) => {
-    setMapping((prev) => ({
-      ...prev,
-      [field]: csvColumn === '__none__' ? '' : csvColumn,
-    }));
+    setMapping((prev) => {
+      const newMapping = { ...prev };
+      if (csvColumn === '__none__' || csvColumn === '') {
+        delete newMapping[field];
+      } else {
+        newMapping[field] = csvColumn;
+      }
+      return newMapping;
+    });
   };
 
   // Calcular contagem de contatos válidos (com email)
   const validContactsCount = mapping.email 
     ? csvData.filter(row => row[mapping.email] && row[mapping.email].toString().trim() !== '').length
     : 0;
+
+  // Debug: samples de email para diagnóstico
+  const emailSamples = mapping.email 
+    ? csvData.slice(0, 3).map(row => row[mapping.email]).filter(Boolean)
+    : [];
 
   const handleImport = async () => {
     if (!mapping.email) {
@@ -223,6 +233,19 @@ exemplo@email.com;João;Silva;(11) 99999-9999;Empresa Exemplo;123.456.789-00;987
                 </div>
               </RadioGroup>
             </div>
+
+            {csvData.length > 0 && (
+              <div className="text-sm border rounded-md p-3 bg-muted/30 space-y-1">
+                <p><strong>Coluna Email mapeada:</strong> {mapping.email || '⚠️ NÃO SELECIONADA'}</p>
+                <p><strong>Total de linhas no CSV:</strong> {csvData.length}</p>
+                <p><strong>Contatos com email válido:</strong> {validContactsCount}</p>
+                {emailSamples.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Exemplos: {emailSamples.join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
 
             {mapping.email && csvData.length > 0 && validContactsCount < csvData.length && (
               <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
