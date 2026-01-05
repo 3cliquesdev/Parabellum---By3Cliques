@@ -1,14 +1,13 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Layers } from "lucide-react";
+import { Layers, ShoppingCart } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Download, FileSpreadsheet, AlertTriangle, CheckCircle2, Search, Filter } from "lucide-react";
@@ -17,7 +16,14 @@ import { DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
 import { startOfMonth, endOfMonth } from "date-fns";
 
-interface FiscalContact {
+interface CustomerPurchase {
+  email: string;
+  totalValue: number;
+  products: string[];
+  purchaseDate: string;
+}
+
+interface ContactData {
   id: string;
   first_name: string;
   last_name: string;
@@ -33,65 +39,54 @@ interface FiscalContact {
   city: string | null;
   state: string | null;
   state_registration: string | null;
-  status: string | null;
-  created_at: string;
 }
 
-function isDataComplete(contact: FiscalContact): boolean {
+interface FiscalCustomer {
+  email: string;
+  totalValue: number;
+  products: string[];
+  purchaseDate: string;
+  contact: ContactData | null;
+}
+
+function isDataComplete(customer: FiscalCustomer): boolean {
   return !!(
-    contact.document &&
-    contact.zip_code &&
-    contact.address &&
-    contact.address_number &&
-    contact.city &&
-    contact.state
+    customer.contact?.document &&
+    customer.contact?.zip_code &&
+    customer.contact?.address &&
+    customer.contact?.address_number &&
+    customer.contact?.city &&
+    customer.contact?.state
   );
-}
-
-function formatAddress(contact: FiscalContact): string {
-  const parts = [
-    contact.address,
-    contact.address_number,
-    contact.address_complement,
-    contact.neighborhood,
-    contact.city,
-    contact.state,
-    contact.zip_code ? formatCEP(contact.zip_code) : null,
-  ].filter(Boolean);
-  return parts.join(", ");
 }
 
 export default function FiscalExport() {
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [onlyComplete, setOnlyComplete] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
   });
 
-  // Query para buscar contatos com paginação
-  const { data: contacts, isLoading } = useQuery({
-    queryKey: ["fiscal-contacts", statusFilter, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+  // Query principal: buscar eventos pagos no período
+  const { data: paidEvents, isLoading: loadingEvents } = useQuery({
+    queryKey: ["fiscal-paid-events", dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async () => {
-      const allContacts: FiscalContact[] = [];
+      const allEvents: any[] = [];
       let page = 0;
       const pageSize = 1000;
       let hasMore = true;
 
       while (hasMore) {
         let query = supabase
-          .from("contacts")
-          .select("id, first_name, last_name, email, phone, document, customer_type, zip_code, address, address_number, address_complement, neighborhood, city, state, state_registration, status, created_at")
+          .from("kiwify_events")
+          .select("customer_email, payload, created_at, event_type")
+          .in("event_type", ["paid", "order_approved"])
           .order("created_at", { ascending: false })
-          .range(page * pageSize, (page + 1) * pageSize - 1) as any;
+          .range(page * pageSize, (page + 1) * pageSize - 1);
 
-        if (statusFilter !== "all") {
-          query = query.eq("status", statusFilter);
-        }
-
-        // Filtro de período
+        // Filtrar por período
         if (dateRange?.from) {
           query = query.gte("created_at", dateRange.from.toISOString());
         }
@@ -104,34 +99,6 @@ export default function FiscalExport() {
         const { data, error } = await query;
         if (error) throw error;
 
-        allContacts.push(...(data || []));
-        hasMore = (data?.length || 0) === pageSize;
-        page++;
-      }
-
-      return allContacts;
-    },
-  });
-
-  // Query para buscar último valor pago do Kiwify por email com paginação
-  const { data: kiwifyValues } = useQuery({
-    queryKey: ["kiwify-last-values"],
-    queryFn: async () => {
-      const allEvents: any[] = [];
-      let page = 0;
-      const pageSize = 1000;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from("kiwify_events")
-          .select("customer_email, payload, created_at")
-          .in("event_type", ["paid", "order_approved"])
-          .order("created_at", { ascending: false })
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-
-        if (error) throw error;
-
         allEvents.push(...(data || []));
         hasMore = (data?.length || 0) === pageSize;
         page++;
@@ -141,12 +108,15 @@ export default function FiscalExport() {
     },
   });
 
-  // Criar mapa de email -> { totalValue, products[] } - consolidado para somar upsells e order bumps
-  const productMap = new Map<string, { totalValue: number; products: string[] }>();
-  if (kiwifyValues) {
-    for (const event of kiwifyValues) {
-      const emailKey = event.customer_email?.toLowerCase();
-      if (!emailKey) continue;
+  // Consolidar compras por email
+  const customerPurchases = useMemo(() => {
+    const purchaseMap = new Map<string, CustomerPurchase>();
+
+    if (!paidEvents) return purchaseMap;
+
+    for (const event of paidEvents) {
+      const email = event.customer_email?.toLowerCase();
+      if (!email) continue;
 
       const payload = event.payload as any;
       const chargeAmount = payload?.Commissions?.charge_amount;
@@ -155,59 +125,114 @@ export default function FiscalExport() {
       if (chargeAmount) {
         const value = Number(chargeAmount) / 100;
 
-        if (productMap.has(emailKey)) {
-          const existing = productMap.get(emailKey)!;
-          // Somar valor
+        if (purchaseMap.has(email)) {
+          const existing = purchaseMap.get(email)!;
           existing.totalValue += value;
-          // Adicionar produto se não existir na lista
           if (!existing.products.includes(productName)) {
             existing.products.push(productName);
           }
         } else {
-          productMap.set(emailKey, {
+          purchaseMap.set(email, {
+            email,
             totalValue: value,
             products: [productName],
+            purchaseDate: event.created_at,
           });
         }
       }
     }
-  }
 
-  const filteredContacts = (contacts || []).filter((contact) => {
-    // Filtro de busca
-    const searchLower = search.toLowerCase();
-    const matchesSearch =
-      !search ||
-      `${contact.first_name} ${contact.last_name}`.toLowerCase().includes(searchLower) ||
-      contact.email?.toLowerCase().includes(searchLower) ||
-      contact.document?.includes(search);
+    return purchaseMap;
+  }, [paidEvents]);
 
-    // Filtro de dados completos
-    const matchesComplete = !onlyComplete || isDataComplete(contact);
+  // Buscar dados fiscais dos emails que compraram
+  const customerEmails = useMemo(() => Array.from(customerPurchases.keys()), [customerPurchases]);
 
-    return matchesSearch && matchesComplete;
+  const { data: contactsData, isLoading: loadingContacts } = useQuery({
+    queryKey: ["fiscal-contacts-by-email", customerEmails],
+    queryFn: async () => {
+      if (customerEmails.length === 0) return [];
+
+      const allContacts: ContactData[] = [];
+      const batchSize = 100;
+
+      for (let i = 0; i < customerEmails.length; i += batchSize) {
+        const batch = customerEmails.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from("contacts")
+          .select("id, first_name, last_name, email, phone, document, customer_type, zip_code, address, address_number, address_complement, neighborhood, city, state, state_registration")
+          .in("email", batch);
+
+        if (error) throw error;
+        allContacts.push(...(data || []));
+      }
+
+      return allContacts;
+    },
+    enabled: customerEmails.length > 0,
   });
 
-  const completeCount = filteredContacts.filter(isDataComplete).length;
-  const incompleteCount = filteredContacts.length - completeCount;
+  // Criar mapa de contatos
+  const contactsMap = useMemo(() => {
+    const map = new Map<string, ContactData>();
+    if (contactsData) {
+      for (const contact of contactsData) {
+        if (contact.email) {
+          map.set(contact.email.toLowerCase(), contact);
+        }
+      }
+    }
+    return map;
+  }, [contactsData]);
+
+  // Combinar compras + dados fiscais
+  const fiscalCustomers = useMemo<FiscalCustomer[]>(() => {
+    return Array.from(customerPurchases.values()).map((purchase) => ({
+      ...purchase,
+      contact: contactsMap.get(purchase.email) || null,
+    }));
+  }, [customerPurchases, contactsMap]);
+
+  // Filtrar
+  const filteredCustomers = useMemo(() => {
+    return fiscalCustomers.filter((customer) => {
+      const searchLower = search.toLowerCase();
+      const name = customer.contact
+        ? `${customer.contact.first_name} ${customer.contact.last_name}`
+        : "";
+      const matchesSearch =
+        !search ||
+        name.toLowerCase().includes(searchLower) ||
+        customer.email.toLowerCase().includes(searchLower) ||
+        customer.contact?.document?.includes(search);
+
+      const matchesComplete = !onlyComplete || isDataComplete(customer);
+
+      return matchesSearch && matchesComplete;
+    });
+  }, [fiscalCustomers, search, onlyComplete]);
+
+  const isLoading = loadingEvents || loadingContacts;
+  const completeCount = filteredCustomers.filter(isDataComplete).length;
+  const incompleteCount = filteredCustomers.length - completeCount;
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const allIds = filteredContacts.map((c) => c.id);
-      setSelectedIds(new Set(allIds));
+      const allEmails = filteredCustomers.map((c) => c.email);
+      setSelectedEmails(new Set(allEmails));
     } else {
-      setSelectedIds(new Set());
+      setSelectedEmails(new Set());
     }
   };
 
-  const handleSelectOne = (id: string, checked: boolean) => {
-    const newSet = new Set(selectedIds);
+  const handleSelectOne = (email: string, checked: boolean) => {
+    const newSet = new Set(selectedEmails);
     if (checked) {
-      newSet.add(id);
+      newSet.add(email);
     } else {
-      newSet.delete(id);
+      newSet.delete(email);
     }
-    setSelectedIds(newSet);
+    setSelectedEmails(newSet);
   };
 
   // Download empty template
@@ -247,11 +272,10 @@ export default function FiscalExport() {
   };
 
   const handleExport = () => {
-    const contactsToExport = filteredContacts.filter(
-      (c) => selectedIds.size === 0 || selectedIds.has(c.id)
+    const customersToExport = filteredCustomers.filter(
+      (c) => selectedEmails.size === 0 || selectedEmails.has(c.email)
     );
 
-    // CSV no formato exato do modelo NF-e
     const headers = [
       "Valor do Serviço",
       "CPF/CNPJ",
@@ -274,29 +298,30 @@ export default function FiscalExport() {
       "CSLL",
     ];
 
-    const rows = contactsToExport.map((c) => {
-      const productData = c.email ? productMap.get(c.email.toLowerCase()) : undefined;
-      const productsDisplay = productData?.products?.join(" + ") || "Venda curso";
+    const rows = customersToExport.map((c) => {
+      const contact = c.contact;
+      const name = contact ? `${contact.first_name} ${contact.last_name}`.trim() : c.email;
+      const productsDisplay = c.products.join(" + ");
       return [
-        productData?.totalValue ? productData.totalValue.toFixed(2).replace('.', ',') : "",
-        c.document ? formatDocument(c.document) : "",
-        `${c.first_name} ${c.last_name}`.trim(),
-        c.address || "",
-        c.address_number || "",
-        c.address_complement || "",
-        c.neighborhood || "",
-        c.city || "",
-        c.state || "",
-        c.zip_code ? formatCEP(c.zip_code) : "",
-        c.email || "",
-        productsDisplay, // Nome(s) do(s) produto(s) consolidado(s)
-        "Não", // Calcular valor líquido
-        "", // Código do Serviço
-        "Não", // Tem retenção
-        "", // IRRF
-        "", // PIS/PASEP
-        "", // COFINS
-        "", // CSLL
+        c.totalValue.toFixed(2).replace('.', ','),
+        contact?.document ? formatDocument(contact.document) : "",
+        name,
+        contact?.address || "",
+        contact?.address_number || "",
+        contact?.address_complement || "",
+        contact?.neighborhood || "",
+        contact?.city || "",
+        contact?.state || "",
+        contact?.zip_code ? formatCEP(contact.zip_code) : "",
+        c.email,
+        productsDisplay,
+        "Não",
+        "",
+        "Não",
+        "",
+        "",
+        "",
+        "",
       ];
     });
 
@@ -305,7 +330,6 @@ export default function FiscalExport() {
       ...rows.map((row) => row.map((cell) => `"${cell}"`).join(";")),
     ].join("\n");
 
-    // Download
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -322,7 +346,7 @@ export default function FiscalExport() {
       <div>
         <h1 className="text-3xl font-bold">Exportar para Nota Fiscal</h1>
         <p className="text-muted-foreground">
-          Exporte contatos com dados fiscais completos para emissão de NF
+          Apenas clientes com compras reais no Kiwify no período selecionado
         </p>
       </div>
 
@@ -332,11 +356,11 @@ export default function FiscalExport() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-primary/10 rounded-full">
-                <FileSpreadsheet className="h-6 w-6 text-primary" />
+                <ShoppingCart className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{filteredContacts.length}</p>
-                <p className="text-sm text-muted-foreground">Total Filtrado</p>
+                <p className="text-2xl font-bold">{filteredCustomers.length}</p>
+                <p className="text-sm text-muted-foreground">Clientes com Compras</p>
               </div>
             </div>
           </CardContent>
@@ -394,23 +418,8 @@ export default function FiscalExport() {
               </div>
             </div>
 
-            <div className="w-[180px]">
-              <Label>Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="customer">Clientes</SelectItem>
-                  <SelectItem value="lead">Leads</SelectItem>
-                  <SelectItem value="churned">Churned</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="min-w-[220px]">
-              <Label>Período de Cadastro</Label>
+              <Label>Período de Compra</Label>
               <DateRangePicker value={dateRange} onChange={setDateRange} />
             </div>
 
@@ -432,9 +441,9 @@ export default function FiscalExport() {
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
                 Baixar Modelo
               </Button>
-              <Button onClick={handleExport} disabled={filteredContacts.length === 0}>
+              <Button onClick={handleExport} disabled={filteredCustomers.length === 0}>
                 <Download className="mr-2 h-4 w-4" />
-                Exportar {selectedIds.size > 0 ? `(${selectedIds.size})` : `(${filteredContacts.length})`}
+                Exportar {selectedEmails.size > 0 ? `(${selectedEmails.size})` : `(${filteredCustomers.length})`}
               </Button>
             </div>
           </div>
@@ -449,7 +458,7 @@ export default function FiscalExport() {
               <TableRow>
                 <TableHead className="w-[50px]">
                   <Checkbox
-                    checked={selectedIds.size === filteredContacts.length && filteredContacts.length > 0}
+                    checked={selectedEmails.size === filteredCustomers.length && filteredCustomers.length > 0}
                     onCheckedChange={handleSelectAll}
                   />
                 </TableHead>
@@ -465,82 +474,73 @@ export default function FiscalExport() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Carregando...
                   </TableCell>
                 </TableRow>
-              ) : filteredContacts.length === 0 ? (
+              ) : filteredCustomers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                    Nenhum contato encontrado
+                    Nenhuma compra encontrada no período
                   </TableCell>
                 </TableRow>
               ) : (
-              filteredContacts.map((contact) => {
-                  const complete = isDataComplete(contact);
-                  const productData = contact.email ? productMap.get(contact.email.toLowerCase()) : undefined;
+                filteredCustomers.map((customer) => {
+                  const complete = isDataComplete(customer);
+                  const contact = customer.contact;
+                  const name = contact
+                    ? `${contact.first_name} ${contact.last_name}`
+                    : customer.email;
                   return (
-                    <TableRow key={contact.id}>
+                    <TableRow key={customer.email}>
                       <TableCell>
                         <Checkbox
-                          checked={selectedIds.has(contact.id)}
-                          onCheckedChange={(checked) => handleSelectOne(contact.id, !!checked)}
+                          checked={selectedEmails.has(customer.email)}
+                          onCheckedChange={(checked) => handleSelectOne(customer.email, !!checked)}
                         />
                       </TableCell>
                       <TableCell>
                         <div>
-                          <span className="font-medium">
-                            {contact.first_name} {contact.last_name}
-                          </span>
-                          {contact.email && (
-                            <p className="text-sm text-muted-foreground">{contact.email}</p>
-                          )}
+                          <span className="font-medium">{name}</span>
+                          <p className="text-sm text-muted-foreground">{customer.email}</p>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        {productData?.totalValue ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <span className="font-mono text-sm font-medium text-green-600">
-                              R$ {productData.totalValue.toFixed(2).replace('.', ',')}
-                            </span>
-                            {productData.products.length > 1 && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                                      <Layers className="h-3 w-3 mr-0.5" />
-                                      {productData.products.length}
-                                    </Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p className="font-medium mb-1">Compra consolidada:</p>
-                                    <ul className="text-xs space-y-0.5">
-                                      {productData.products.map((p, i) => (
-                                        <li key={i}>• {p}</li>
-                                      ))}
-                                    </ul>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="font-mono text-sm font-medium text-green-600">
+                            R$ {customer.totalValue.toFixed(2).replace('.', ',')}
+                          </span>
+                          {customer.products.length > 1 && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                                    <Layers className="h-3 w-3 mr-0.5" />
+                                    {customer.products.length}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="font-medium mb-1">Compra consolidada:</p>
+                                  <ul className="text-xs space-y-0.5">
+                                    {customer.products.map((p, i) => (
+                                      <li key={i}>• {p}</li>
+                                    ))}
+                                  </ul>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-[180px]">
-                        {productData?.products ? (
-                          <span className="text-sm truncate block" title={productData.products.join(" + ")}>
-                            {productData.products.length > 1
-                              ? `${productData.products[0]} + ${productData.products.length - 1} outro(s)`
-                              : productData.products[0]}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
+                        <span className="text-sm truncate block" title={customer.products.join(" + ")}>
+                          {customer.products.length > 1
+                            ? `${customer.products[0]} + ${customer.products.length - 1} outro(s)`
+                            : customer.products[0]}
+                        </span>
                       </TableCell>
                       <TableCell>
-                        {contact.document ? (
+                        {contact?.document ? (
                           <span className="font-mono text-sm">
                             {formatDocument(contact.document)}
                           </span>
@@ -549,7 +549,7 @@ export default function FiscalExport() {
                         )}
                       </TableCell>
                       <TableCell className="max-w-[200px]">
-                        {contact.address ? (
+                        {contact?.address ? (
                           <span className="text-sm truncate block">
                             {contact.address}, {contact.address_number}
                           </span>
@@ -558,7 +558,7 @@ export default function FiscalExport() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {contact.city && contact.state ? (
+                        {contact?.city && contact?.state ? (
                           <span className="text-sm">
                             {contact.city}/{contact.state}
                           </span>
