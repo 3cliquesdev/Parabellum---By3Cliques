@@ -296,23 +296,49 @@ Deno.serve(async (req) => {
     console.log("[inbound-email] 🔍 Subject para análise:", subject);
     
     if (subject && typeof subject === 'string') {
-      const ticketIdMatch = subject.match(/#([a-f0-9]{8})/i);
-      console.log("[inbound-email] 🔍 Regex match result:", ticketIdMatch);
+      // Tentar match com formato TK-YYYY-NNNNN (ticket_number) primeiro
+      const ticketNumberMatch = subject.match(/#(TK-\d{4}-\d{5})/i);
+      // Fallback para formato UUID parcial (8 caracteres hex)
+      const ticketUuidMatch = subject.match(/#([a-f0-9]{8})/i);
+      const ticketIdMatch = ticketNumberMatch || ticketUuidMatch;
+      
+      console.log("[inbound-email] 🔍 Regex match results:", {
+        ticketNumberMatch: ticketNumberMatch?.[1] || null,
+        ticketUuidMatch: ticketUuidMatch?.[1] || null,
+        finalMatch: ticketIdMatch?.[1] || null
+      });
       
       if (ticketIdMatch) {
-        const partialId = ticketIdMatch[1];
-        console.log("[inbound-email] Buscando ticket por ID parcial no subject:", partialId);
+        const matchedId = ticketIdMatch[1];
+        const isTicketNumber = matchedId.toUpperCase().startsWith('TK-');
+        console.log("[inbound-email] Buscando ticket por:", { matchedId, isTicketNumber });
         
-        // Usar função SQL para buscar por ID parcial (UUID não suporta ILIKE diretamente)
-        const { data: ticketBySubjectArray, error: subjectError } = await supabase
-          .rpc("find_ticket_by_partial_id", { partial_id: partialId });
+        let ticketBySubject: any = null;
+        let subjectError: any = null;
         
-        // RPC retorna array, pegar primeiro resultado
-        const ticketBySubject = ticketBySubjectArray?.[0] || null;
+        if (isTicketNumber) {
+          // Buscar por ticket_number (formato TK-YYYY-NNNNN)
+          const { data, error } = await supabase
+            .from("tickets")
+            .select("id, subject, channel, customer_id, assigned_to, status, last_email_message_id")
+            .eq("ticket_number", matchedId.toUpperCase())
+            .maybeSingle();
+          
+          ticketBySubject = data;
+          subjectError = error;
+        } else {
+          // Buscar por UUID parcial (compatibilidade com formato antigo)
+          const { data: ticketBySubjectArray, error } = await supabase
+            .rpc("find_ticket_by_partial_id", { partial_id: matchedId });
+          
+          ticketBySubject = ticketBySubjectArray?.[0] || null;
+          subjectError = error;
+        }
         
         // 🔍 LOG DO RESULTADO DA BUSCA POR SUBJECT
         console.log("[inbound-email] 🔍 Resultado busca por subject:", {
-          partialId,
+          matchedId,
+          isTicketNumber,
           encontrado: !!ticketBySubject,
           ticketId: ticketBySubject?.id || null,
           erro: subjectError?.message || null
