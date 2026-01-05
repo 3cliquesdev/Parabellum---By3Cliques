@@ -69,6 +69,7 @@ export default function FiscalExport() {
     to: endOfMonth(new Date()),
   });
 
+  // Query para buscar contatos
   const { data: contacts, isLoading } = useQuery({
     queryKey: ["fiscal-contacts", statusFilter, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async () => {
@@ -96,6 +97,35 @@ export default function FiscalExport() {
       return data as FiscalContact[];
     },
   });
+
+  // Query para buscar último valor pago do Kiwify por email
+  const { data: kiwifyValues } = useQuery({
+    queryKey: ["kiwify-last-values"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("kiwify_events")
+        .select("customer_email, payload, created_at")
+        .in("event_type", ["paid", "order_approved"])
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Criar mapa de email -> último valor pago (em R$)
+  const valueMap = new Map<string, number>();
+  if (kiwifyValues) {
+    for (const event of kiwifyValues) {
+      if (event.customer_email && !valueMap.has(event.customer_email)) {
+        const payload = event.payload as any;
+        const chargeAmount = payload?.Commissions?.charge_amount;
+        if (chargeAmount) {
+          valueMap.set(event.customer_email, Number(chargeAmount) / 100);
+        }
+      }
+    }
+  }
 
   const filteredContacts = (contacts || []).filter((contact) => {
     // Filtro de busca
@@ -199,7 +229,9 @@ export default function FiscalExport() {
     ];
 
     const rows = contactsToExport.map((c) => [
-      "", // Valor do Serviço - a ser preenchido pelo financeiro
+      c.email && valueMap.get(c.email) 
+        ? valueMap.get(c.email)!.toFixed(2).replace('.', ',') 
+        : "",
       c.document ? formatDocument(c.document) : "",
       `${c.first_name} ${c.last_name}`.trim(),
       c.address || "",
@@ -374,6 +406,7 @@ export default function FiscalExport() {
                   />
                 </TableHead>
                 <TableHead>Nome</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
                 <TableHead>CPF/CNPJ</TableHead>
                 <TableHead>Endereço</TableHead>
                 <TableHead>Cidade/UF</TableHead>
@@ -383,19 +416,20 @@ export default function FiscalExport() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Carregando...
                   </TableCell>
                 </TableRow>
               ) : filteredContacts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Nenhum contato encontrado
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredContacts.map((contact) => {
+              filteredContacts.map((contact) => {
                   const complete = isDataComplete(contact);
+                  const serviceValue = contact.email ? valueMap.get(contact.email) : undefined;
                   return (
                     <TableRow key={contact.id}>
                       <TableCell>
@@ -413,6 +447,15 @@ export default function FiscalExport() {
                             <p className="text-sm text-muted-foreground">{contact.email}</p>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {serviceValue ? (
+                          <span className="font-mono text-sm font-medium text-green-600">
+                            R$ {serviceValue.toFixed(2).replace('.', ',')}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {contact.document ? (
