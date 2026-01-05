@@ -5706,6 +5706,18 @@ export type Database = {
           title: string
         }[]
       }
+      find_ticket_by_partial_id: {
+        Args: { partial_id: string }
+        Returns: {
+          assigned_to: string
+          channel: string
+          customer_id: string
+          id: string
+          last_email_message_id: string
+          status: string
+          subject: string
+        }[]
+      }
       generate_session_token: { Args: never; Returns: string }
       get_ai_usage_metrics: {
         Args: { p_end_date: string; p_start_date: string; p_user_id?: string }

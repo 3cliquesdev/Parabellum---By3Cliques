@@ -334,11 +334,12 @@ Deno.serve(async (req) => {
         const partialId = ticketIdMatch[1];
         console.log("[inbound-email] Buscando ticket por ID parcial no subject:", partialId);
         
-        const { data: ticketBySubject, error: subjectError } = await supabase
-          .from("tickets")
-          .select("id, subject, channel, customer_id, assigned_to, status")
-          .ilike("id", `${partialId}%`)
-          .single();
+        // Usar função SQL para buscar por ID parcial (UUID não suporta ILIKE diretamente)
+        const { data: ticketBySubjectArray, error: subjectError } = await supabase
+          .rpc("find_ticket_by_partial_id", { partial_id: partialId });
+        
+        // RPC retorna array, pegar primeiro resultado
+        const ticketBySubject = ticketBySubjectArray?.[0] || null;
         
         // 🔍 LOG DO RESULTADO DA BUSCA POR SUBJECT
         console.log("[inbound-email] 🔍 Resultado busca por subject:", {
