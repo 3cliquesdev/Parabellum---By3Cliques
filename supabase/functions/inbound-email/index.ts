@@ -90,16 +90,62 @@ serve(async (req) => {
 
     console.log('[inbound-email] ✅ Signature verified successfully');
 
+    // Função para buscar conteúdo completo do email via API Resend
+    async function fetchEmailContent(emailId: string): Promise<{ text?: string; html?: string }> {
+      const resendApiKey = Deno.env.get("RESEND_API_KEY");
+      if (!resendApiKey) {
+        console.warn("[inbound-email] RESEND_API_KEY não configurada, não é possível buscar conteúdo");
+        return {};
+      }
+
+      try {
+        console.log(`[inbound-email] Buscando conteúdo do email ${emailId} via API Resend...`);
+        
+        const response = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
+          headers: {
+            "Authorization": `Bearer ${resendApiKey}`,
+            "Content-Type": "application/json"
+          }
+        });
+
+        if (!response.ok) {
+          console.error(`[inbound-email] Erro ao buscar email: ${response.status} ${response.statusText}`);
+          return {};
+        }
+
+        const fetchedEmailData = await response.json();
+        console.log("[inbound-email] ✅ Conteúdo do email recuperado:", {
+          hasText: !!fetchedEmailData.text,
+          hasHtml: !!fetchedEmailData.html,
+          textLength: fetchedEmailData.text?.length || 0
+        });
+
+        return { text: fetchedEmailData.text, html: fetchedEmailData.html };
+      } catch (error) {
+        console.error("[inbound-email] Erro ao buscar conteúdo do email:", error);
+        return {};
+      }
+    }
+
     // Agora parsear o JSON
     const payload = JSON.parse(body);
     console.log("[inbound-email] Payload received:", JSON.stringify(payload, null, 2));
 
     // Resend webhook: dados do email vêm dentro de payload.data
     const emailData = payload.data || payload;
-    const { from, to, subject, text, html, attachments } = emailData;
-    const emailContent = text || html || "Email sem conteúdo";
+    const { from, to, subject, text, html, attachments, email_id } = emailData;
+    
+    // Se não veio conteúdo no webhook, buscar via API Resend
+    let emailContent = text || html;
+    if (!emailContent && email_id) {
+      console.log("[inbound-email] Conteúdo vazio no webhook, buscando via API...");
+      const fetchedContent = await fetchEmailContent(email_id);
+      emailContent = fetchedContent.text || fetchedContent.html || "Email sem conteúdo";
+    } else if (!emailContent) {
+      emailContent = "Email sem conteúdo";
+    }
 
-    console.log("[inbound-email] Email data:", { from, subject, hasText: !!text, hasHtml: !!html });
+    console.log("[inbound-email] Email data:", { from, subject, hasText: !!text, hasHtml: !!html, hasEmailId: !!email_id, contentLength: emailContent?.length });
 
     // Extrair headers de threading - Resend pode fornecer de formas diferentes
     const headers = emailData.headers || {};
