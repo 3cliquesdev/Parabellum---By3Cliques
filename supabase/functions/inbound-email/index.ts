@@ -48,11 +48,45 @@ Deno.serve(async (req) => {
     const body = await req.text();
     const signedContent = `${svixId}.${svixTimestamp}.${body}`;
 
-    // Decodificar secret do Resend (formato whsec_XXXXX onde XXXXX é Base64)
-    const base64Part = webhookSecret.startsWith('whsec_') 
+    // Logs para debug do secret
+    console.log('[inbound-email] Secret debug:', {
+      hasPrefix: webhookSecret.startsWith('whsec_'),
+      secretLength: webhookSecret.length,
+      secretPreview: webhookSecret.slice(0, 10) + '...',
+    });
+
+    // Extrair e sanitizar parte Base64
+    let base64Part = webhookSecret.startsWith('whsec_') 
       ? webhookSecret.split('whsec_')[1] 
       : webhookSecret;
-    const keyData = Uint8Array.from(atob(base64Part), c => c.charCodeAt(0));
+
+    // Remover espaços em branco e quebras de linha
+    base64Part = base64Part.trim().replace(/\s/g, '');
+
+    console.log('[inbound-email] Base64 part debug:', {
+      length: base64Part.length,
+      preview: base64Part.slice(0, 10) + '...',
+      isValidBase64: /^[A-Za-z0-9+/=]+$/.test(base64Part),
+    });
+
+    // Tentar decodificar com tratamento de erro específico
+    let keyData: Uint8Array<ArrayBuffer>;
+    try {
+      const decoded = atob(base64Part);
+      const buffer = new ArrayBuffer(decoded.length);
+      const view = new Uint8Array(buffer);
+      for (let i = 0; i < decoded.length; i++) {
+        view[i] = decoded.charCodeAt(i);
+      }
+      keyData = view;
+    } catch (decodeError: any) {
+      console.error('[inbound-email] ❌ Base64 decode failed:', {
+        error: decodeError.message,
+        base64PartFirstChars: base64Part.slice(0, 20),
+        base64PartLastChars: base64Part.slice(-20),
+      });
+      throw new Error('Invalid webhook secret format - Base64 decode failed');
+    }
 
     // Calcular assinatura esperada
     const encoder = new TextEncoder();
