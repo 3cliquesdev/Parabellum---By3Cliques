@@ -44,7 +44,9 @@ export default function WebhooksConfigCard() {
       case "whatsapp_webhook_url":
         return { name: "WhatsApp - Evolution API", icon: "💬", color: "text-green-600" };
       case "email_webhook_url":
-        return { name: "Email - Resend", icon: "📧", color: "text-blue-600" };
+        return { name: "Email - Tracking (Resend)", icon: "📧", color: "text-blue-600" };
+      case "email_inbound_webhook_url":
+        return { name: "Email - Respostas (Resend)", icon: "📩", color: "text-indigo-600" };
       default:
         return { name: key, icon: "🔗", color: "text-gray-600" };
     }

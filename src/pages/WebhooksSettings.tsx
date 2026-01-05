@@ -44,15 +44,29 @@ const WebhooksSettings = () => {
       ]
     },
     {
-      name: "Email - Resend",
-      description: "Recebe eventos de emails enviados (entregues, abertos, clicados)",
+      name: "Email - Tracking (Resend)",
+      description: "Rastreia eventos de emails enviados (entregues, abertos, clicados)",
       url: "https://zaeozfdjhrmblfaxsyuu.supabase.co/functions/v1/email-webhook",
-      events: ["email.sent", "email.delivered", "email.opened", "email.clicked"],
+      events: ["email.sent", "email.delivered", "email.opened", "email.clicked", "email.bounced"],
       instructions: [
         "Acesse o painel do Resend",
         "Vá em Webhooks → Create Webhook",
         "Cole a URL acima",
-        "Selecione os eventos de email",
+        "Selecione os eventos: sent, delivered, opened, clicked, bounced",
+        "Salve a configuração"
+      ]
+    },
+    {
+      name: "Email - Respostas (Resend)",
+      description: "Recebe respostas de clientes para tickets de suporte via email",
+      url: "https://zaeozfdjhrmblfaxsyuu.supabase.co/functions/v1/inbound-email",
+      events: ["email.received"],
+      instructions: [
+        "Acesse o painel do Resend",
+        "Vá em Webhooks → Create Webhook",
+        "Cole a URL acima",
+        "Selecione APENAS o evento: email.received",
+        "Configure o Signing Secret como RESEND_WEBHOOK_SECRET",
         "Salve a configuração"
       ]
     }
