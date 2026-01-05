@@ -113,15 +113,16 @@ export default function FiscalExport() {
     },
   });
 
-  // Criar mapa de email -> último valor pago (em R$)
+  // Criar mapa de email -> último valor pago (em R$) - normalizado para lowercase
   const valueMap = new Map<string, number>();
   if (kiwifyValues) {
     for (const event of kiwifyValues) {
-      if (event.customer_email && !valueMap.has(event.customer_email)) {
+      const emailKey = event.customer_email?.toLowerCase();
+      if (emailKey && !valueMap.has(emailKey)) {
         const payload = event.payload as any;
         const chargeAmount = payload?.Commissions?.charge_amount;
         if (chargeAmount) {
-          valueMap.set(event.customer_email, Number(chargeAmount) / 100);
+          valueMap.set(emailKey, Number(chargeAmount) / 100);
         }
       }
     }
@@ -229,8 +230,8 @@ export default function FiscalExport() {
     ];
 
     const rows = contactsToExport.map((c) => [
-      c.email && valueMap.get(c.email) 
-        ? valueMap.get(c.email)!.toFixed(2).replace('.', ',') 
+      c.email && valueMap.get(c.email.toLowerCase()) 
+        ? valueMap.get(c.email.toLowerCase())!.toFixed(2).replace('.', ',') 
         : "",
       c.document ? formatDocument(c.document) : "",
       `${c.first_name} ${c.last_name}`.trim(),
@@ -429,7 +430,7 @@ export default function FiscalExport() {
               ) : (
               filteredContacts.map((contact) => {
                   const complete = isDataComplete(contact);
-                  const serviceValue = contact.email ? valueMap.get(contact.email) : undefined;
+                  const serviceValue = contact.email ? valueMap.get(contact.email.toLowerCase()) : undefined;
                   return (
                     <TableRow key={contact.id}>
                       <TableCell>
