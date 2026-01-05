@@ -96,6 +96,16 @@ Deno.serve(async (req) => {
     const signatureData = await crypto.subtle.sign('HMAC', key, encoder.encode(signedContent));
     const expectedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureData)));
 
+    // DEBUG: Log detalhado do HMAC calculado
+    console.log('[inbound-email] HMAC Debug:', {
+      signedContentLength: signedContent.length,
+      signedContentPreview: signedContent.slice(0, 100) + '...',
+      keyDataLength: keyData.length,
+      keyDataFirstBytes: Array.from(keyData.slice(0, 5)).map(b => b.toString(16).padStart(2, '0')).join(':'),
+      expectedSignatureLength: expectedSignature.length,
+      expectedSignaturePreview: expectedSignature.slice(0, 20) + '...',
+    });
+
     // Verificar assinatura
     const signatures = svixSignature.split(' ');
     const versionedSignatures = signatures.filter(sig => sig.startsWith('v1,'));
@@ -110,8 +120,18 @@ Deno.serve(async (req) => {
 
     const providedSignature = versionedSignatures[0].replace('v1,', '');
 
+    // DEBUG: Log detalhado da assinatura recebida
+    console.log('[inbound-email] Signature Comparison:', {
+      rawHeader: svixSignature,
+      providedSignatureLength: providedSignature.length,
+      providedSignaturePreview: providedSignature.slice(0, 20) + '...',
+      expectedSignaturePreview: expectedSignature.slice(0, 20) + '...',
+      lengthsMatch: providedSignature.length === expectedSignature.length,
+      signaturesMatch: providedSignature === expectedSignature,
+    });
+
     if (providedSignature !== expectedSignature) {
-      console.error('[inbound-email] Signature verification failed');
+      console.error('[inbound-email] ❌ Signature verification failed - signatures do not match');
       return new Response(
         JSON.stringify({ error: 'Invalid webhook signature' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
