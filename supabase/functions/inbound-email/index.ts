@@ -10,6 +10,10 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 serve(async (req) => {
+  console.log("[inbound-email] ========= NOVA REQUISIÇÃO =========");
+  console.log("[inbound-email] Method:", req.method);
+  console.log("[inbound-email] URL:", req.url);
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -184,7 +188,83 @@ serve(async (req) => {
         }
       }
 
-      console.log("[inbound-email] Nenhum ticket encontrado para as referências, continuando fluxo normal...");
+      console.log("[inbound-email] Nenhum ticket encontrado por message_id, tentando por subject...");
+      
+      // Fallback: buscar por ticket ID no subject (ex: "Re: ... #abc12345")
+      if (subject) {
+        const ticketIdMatch = subject.match(/#([a-f0-9]{8})/i);
+        if (ticketIdMatch) {
+          const partialId = ticketIdMatch[1];
+          console.log("[inbound-email] Buscando ticket por ID parcial no subject:", partialId);
+          
+          const { data: ticketBySubject } = await supabase
+            .from("tickets")
+            .select("id, subject, channel, customer_id, assigned_to, status")
+            .ilike("id", `${partialId}%`)
+            .single();
+          
+          if (ticketBySubject) {
+            console.log("[inbound-email] ✅ Ticket encontrado por subject:", ticketBySubject.id);
+            
+            // Adicionar como comentário no ticket
+            const { error: commentError } = await supabase.from("ticket_comments").insert({
+              ticket_id: ticketBySubject.id,
+              content: emailContent,
+              user_id: null,
+              is_internal: false,
+            });
+
+            if (commentError) {
+              console.error("[inbound-email] Erro ao inserir comentário:", commentError);
+            } else {
+              console.log("[inbound-email] ✅ Comentário adicionado ao ticket via subject match");
+            }
+
+            // Atualizar ticket
+            const updateData: Record<string, any> = {
+              updated_at: new Date().toISOString(),
+            };
+            
+            if (messageId) {
+              updateData.last_email_message_id = messageId.replace(/^<|>$/g, '');
+            }
+
+            if (ticketBySubject.status === 'pending' || ticketBySubject.status === 'awaiting_customer') {
+              updateData.status = 'open';
+            }
+
+            await supabase
+              .from("tickets")
+              .update(updateData)
+              .eq("id", ticketBySubject.id);
+
+            // Notificar agente
+            if (ticketBySubject.assigned_to) {
+              await supabase.from("notifications").insert({
+                user_id: ticketBySubject.assigned_to,
+                title: "Nova resposta do cliente",
+                message: `Cliente respondeu ao ticket #${ticketBySubject.id.slice(0, 8)}`,
+                type: "ticket_reply",
+                read: false,
+              });
+            }
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                action: "ticket_comment_added_via_subject",
+                ticket_id: ticketBySubject.id,
+              }),
+              {
+                status: 200,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              }
+            );
+          }
+        }
+      }
+      
+      console.log("[inbound-email] Nenhum ticket encontrado, continuando fluxo normal...");
     }
 
     // ========== FLUXO NORMAL: NOVO EMAIL (não é resposta a ticket) ==========

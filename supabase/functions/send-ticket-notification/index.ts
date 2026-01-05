@@ -262,7 +262,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: `${senderName} <${senderEmail}>`,
         to: [customer_email],
-        subject: `🎫 Ticket #${ticket_number} criado com sucesso`,
+        subject: `🎫 Ticket #${ticket_number} - ${subject} #${ticket_id.slice(0, 8)}`,
         html,
         tags: [
           { name: "ticket_id", value: ticket_id },
