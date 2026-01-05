@@ -30,16 +30,26 @@ const priorityLabels: Record<string, string> = {
   low: "Baixa",
 };
 
+// Converte markdown simples para HTML (negrito e quebras de linha)
+function markdownToHtml(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+}
+
 function generateTicketEmailHTML(
   ticket_number: string,
   customer_name: string,
   subject: string,
   description: string,
   priority: string,
-  brandName: string
+  brandName: string,
+  logoUrl: string
 ): string {
   const priorityColor = priorityColors[priority] || "#6B7280";
   const priorityLabel = priorityLabels[priority] || priority;
+  const formattedDescription = markdownToHtml(description) || "Sem descrição adicional";
 
   return `
 <!DOCTYPE html>
@@ -57,7 +67,7 @@ function generateTicketEmailHTML(
           <!-- Logo Header -->
           <tr>
             <td style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">${brandName}</h1>
+              <img src="${logoUrl}" alt="${brandName}" style="max-width: 220px; height: auto;" />
             </td>
           </tr>
           
@@ -70,12 +80,12 @@ function generateTicketEmailHTML(
           
           <!-- Content -->
           <tr>
-            <td style="padding: 0 48px;">
-              <p style="margin: 16px 0; font-size: 16px; line-height: 26px; color: #333;">
+            <td style="padding: 32px 48px;">
+              <p style="margin: 0 0 16px; font-size: 16px; line-height: 26px; color: #333;">
                 Olá <strong>${customer_name}</strong>,
               </p>
               
-              <p style="margin: 16px 0; font-size: 16px; line-height: 26px; color: #333;">
+              <p style="margin: 0 0 16px; font-size: 16px; line-height: 26px; color: #333;">
                 Recebemos sua solicitação e criamos o ticket <strong>#${ticket_number}</strong> para você.
                 Nossa equipe já foi notificada e responderá em breve.
               </p>
@@ -84,44 +94,46 @@ function generateTicketEmailHTML(
 
           <!-- Ticket Details Box -->
           <tr>
-            <td style="padding: 32px 48px;">
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px;">
+            <td style="padding: 0 48px 32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
                 <tr>
-                  <td>
-                    <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">
-                      Assunto:
+                  <td style="padding: 24px;">
+                    <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
+                      Assunto
                     </p>
-                    <p style="margin: 0; font-size: 14px; line-height: 20px; color: #111827;">
+                    <p style="margin: 0 0 20px; font-size: 15px; line-height: 22px; color: #111827; font-weight: 500;">
                       ${subject}
                     </p>
-                  </td>
-                </tr>
-                
-                <tr>
-                  <td style="padding-top: 16px;">
-                    <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">
-                      Descrição:
+                    
+                    <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
+                      Descrição
                     </p>
-                    <p style="margin: 0; font-size: 14px; line-height: 20px; color: #111827;">
-                      ${description || "Sem descrição adicional"}
-                    </p>
-                  </td>
-                </tr>
+                    <div style="margin: 0 0 20px; font-size: 14px; line-height: 22px; color: #374151;">
+                      ${formattedDescription}
+                    </div>
 
-                <tr>
-                  <td style="padding-top: 20px;">
-                    <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 0;">
-                  </td>
-                </tr>
+                    <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 0 0 20px;">
 
-                <tr>
-                  <td style="padding-top: 20px;">
-                    <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">
-                      Prioridade:
-                    </p>
-                    <span style="display: inline-block; padding: 4px 12px; border-radius: 9999px; background-color: ${priorityColor}; color: #ffffff; font-size: 12px; font-weight: 600; margin-top: 4px;">
-                      ${priorityLabel}
-                    </span>
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td>
+                          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Prioridade
+                          </p>
+                          <span style="display: inline-block; padding: 6px 14px; border-radius: 9999px; background-color: ${priorityColor}; color: #ffffff; font-size: 12px; font-weight: 600;">
+                            ${priorityLabel}
+                          </span>
+                        </td>
+                        <td style="padding-left: 32px;">
+                          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Número do Ticket
+                          </p>
+                          <span style="display: inline-block; padding: 6px 14px; border-radius: 9999px; background-color: #1e3a5f; color: #ffffff; font-size: 12px; font-weight: 600;">
+                            #${ticket_number}
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
@@ -130,12 +142,12 @@ function generateTicketEmailHTML(
 
           <!-- Additional Info -->
           <tr>
-            <td style="padding: 0 48px;">
-              <p style="margin: 16px 0; font-size: 16px; line-height: 26px; color: #333;">
+            <td style="padding: 0 48px 32px;">
+              <p style="margin: 0 0 12px; font-size: 15px; line-height: 24px; color: #4b5563;">
                 Você receberá atualizações por email sempre que houver novidades sobre seu ticket.
               </p>
               
-              <p style="margin: 16px 0; font-size: 16px; line-height: 26px; color: #333;">
+              <p style="margin: 0; font-size: 15px; line-height: 24px; color: #4b5563;">
                 Se tiver alguma dúvida adicional, não hesite em nos contatar.
               </p>
             </td>
@@ -143,15 +155,13 @@ function generateTicketEmailHTML(
 
           <!-- Footer -->
           <tr>
-            <td style="background: #1e3a5f; padding: 25px; text-align: center;">
-              <p style="color: #ffffff; margin: 0 0 10px 0; font-size: 24px; font-weight: bold;">
-                ${brandName}
-              </p>
-              <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
+            <td style="background: #1e3a5f; padding: 30px; text-align: center;">
+              <img src="${logoUrl}" alt="${brandName}" style="max-width: 140px; height: auto; margin-bottom: 12px; opacity: 0.9;" />
+              <p style="color: #94a3b8; margin: 0 0 4px 0; font-size: 13px;">
                 Equipe de Suporte
               </p>
               <p style="color: #64748b; margin: 0; font-size: 11px;">
-                Ambiente Seguro
+                © ${new Date().getFullYear()} ${brandName}. Todos os direitos reservados.
               </p>
             </td>
           </tr>
@@ -223,17 +233,18 @@ serve(async (req) => {
       console.log('[send-ticket-notification] Using configured sender:', senderEmail);
     }
 
-    // Buscar nome da marca do email_branding ou usar default
+    // Buscar nome da marca e logo do email_branding ou usar default
     const { data: brandingData } = await supabase
       .from('email_branding')
-      .select('name')
+      .select('name, logo_url')
       .eq('is_default_customer', true)
       .single();
 
     const brandName = brandingData?.name || 'Seu Armazém Drop';
+    const logoUrl = brandingData?.logo_url || 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-seuarmazemdrop.png';
     senderName = sanitizeName(brandName);
 
-    console.log('[send-ticket-notification] Email config:', { senderEmail, senderName, brandName });
+    console.log('[send-ticket-notification] Email config:', { senderEmail, senderName, brandName, logoUrl });
 
     // Gerar HTML do email
     const html = generateTicketEmailHTML(
@@ -242,7 +253,8 @@ serve(async (req) => {
       subject,
       description,
       priority,
-      brandName
+      brandName,
+      logoUrl
     );
 
     // Enviar email via Resend API
