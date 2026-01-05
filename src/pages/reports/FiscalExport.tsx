@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Layers, ShoppingCart } from "lucide-react";
+import { Layers, ShoppingCart, XCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -69,6 +69,27 @@ export default function FiscalExport() {
     to: endOfMonth(new Date()),
   });
 
+  // Query para buscar order_ids reembolsados/chargebacks
+  const { data: cancelledOrderIds } = useQuery({
+    queryKey: ["cancelled-order-ids"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("kiwify_events")
+        .select("payload")
+        .in("event_type", ["refunded", "chargedback"]);
+
+      if (error) throw error;
+
+      const orderIds = new Set<string>();
+      for (const event of data || []) {
+        const orderId = (event.payload as any)?.order_id;
+        if (orderId) orderIds.add(orderId);
+      }
+      return orderIds;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Query principal: buscar eventos pagos no período
   const { data: paidEvents, isLoading: loadingEvents } = useQuery({
     queryKey: ["fiscal-paid-events", dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
@@ -108,17 +129,27 @@ export default function FiscalExport() {
     },
   });
 
-  // Consolidar compras por email
+  // Consolidar compras por email (excluindo reembolsos/chargebacks)
   const customerPurchases = useMemo(() => {
     const purchaseMap = new Map<string, CustomerPurchase>();
 
-    if (!paidEvents) return purchaseMap;
+    if (!paidEvents || !cancelledOrderIds) return purchaseMap;
+
+    let excludedCount = 0;
 
     for (const event of paidEvents) {
+      const payload = event.payload as any;
+      const orderId = payload?.order_id;
+
+      // Pular se este pedido foi reembolsado ou chargeback
+      if (orderId && cancelledOrderIds.has(orderId)) {
+        excludedCount++;
+        continue;
+      }
+
       const email = event.customer_email?.toLowerCase();
       if (!email) continue;
 
-      const payload = event.payload as any;
       const chargeAmount = payload?.Commissions?.charge_amount;
       const productName = payload?.Product?.product_name || "Venda curso";
 
@@ -142,8 +173,11 @@ export default function FiscalExport() {
       }
     }
 
+    // Armazenar contagem de excluídos para exibição
+    (purchaseMap as any)._excludedCount = excludedCount;
+
     return purchaseMap;
-  }, [paidEvents]);
+  }, [paidEvents, cancelledOrderIds]);
 
   // Buscar dados fiscais dos emails que compraram
   const customerEmails = useMemo(() => Array.from(customerPurchases.keys()), [customerPurchases]);
@@ -215,6 +249,7 @@ export default function FiscalExport() {
   const isLoading = loadingEvents || loadingContacts;
   const completeCount = filteredCustomers.filter(isDataComplete).length;
   const incompleteCount = filteredCustomers.length - completeCount;
+  const excludedCount = (customerPurchases as any)._excludedCount || 0;
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -351,7 +386,7 @@ export default function FiscalExport() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
@@ -389,6 +424,20 @@ export default function FiscalExport() {
               <div>
                 <p className="text-2xl font-bold">{incompleteCount}</p>
                 <p className="text-sm text-muted-foreground">Dados Incompletos</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
+                <XCircle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{excludedCount}</p>
+                <p className="text-sm text-muted-foreground">Reembolsos/Chargebacks</p>
               </div>
             </div>
           </CardContent>
