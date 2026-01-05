@@ -13,9 +13,9 @@ serve(async (req) => {
   }
 
   try {
-    const webhookSecret = Deno.env.get('RESEND_WEBHOOK_SECRET');
+    const webhookSecret = Deno.env.get('RESEND_WEBHOOK_SECRET_TRACKING') || Deno.env.get('RESEND_WEBHOOK_SECRET');
     if (!webhookSecret) {
-      console.error('[email-webhook] RESEND_WEBHOOK_SECRET not configured');
+      console.error('[email-webhook] RESEND_WEBHOOK_SECRET_TRACKING not configured');
       throw new Error('Webhook secret not configured');
     }
 

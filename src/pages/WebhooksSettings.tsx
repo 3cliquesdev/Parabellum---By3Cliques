@@ -47,27 +47,28 @@ const WebhooksSettings = () => {
       name: "Email - Tracking (Resend)",
       description: "Rastreia eventos de emails enviados (entregues, abertos, clicados)",
       url: "https://zaeozfdjhrmblfaxsyuu.supabase.co/functions/v1/email-webhook",
+      secretName: "RESEND_WEBHOOK_SECRET_TRACKING",
       events: ["email.sent", "email.delivered", "email.opened", "email.clicked", "email.bounced"],
       instructions: [
-        "Acesse o painel do Resend",
-        "Vá em Webhooks → Create Webhook",
-        "Cole a URL acima",
+        "Acesse resend.com/webhooks → Create Webhook",
+        "Cole a URL acima no campo Endpoint",
         "Selecione os eventos: sent, delivered, opened, clicked, bounced",
-        "Salve a configuração"
+        "Após salvar, copie o Signing Secret gerado",
+        "Salve como RESEND_WEBHOOK_SECRET_TRACKING no Cloud Secrets"
       ]
     },
     {
-      name: "Email - Respostas (Resend)",
-      description: "Recebe respostas de clientes para tickets de suporte via email",
+      name: "Email - Respostas de Clientes (Resend)",
+      description: "Recebe respostas de clientes para tickets de suporte via email (inbound)",
       url: "https://zaeozfdjhrmblfaxsyuu.supabase.co/functions/v1/inbound-email",
+      secretName: "RESEND_WEBHOOK_SECRET_RESPOSTAS",
       events: ["email.received"],
       instructions: [
-        "Acesse o painel do Resend",
-        "Vá em Webhooks → Create Webhook",
-        "Cole a URL acima",
-        "Selecione APENAS o evento: email.received",
-        "Configure o Signing Secret como RESEND_WEBHOOK_SECRET",
-        "Salve a configuração"
+        "Acesse resend.com/webhooks → Create Webhook (SEGUNDO webhook)",
+        "Cole a URL acima no campo Endpoint",
+        "Selecione APENAS o evento: email.received (inbound)",
+        "Após salvar, copie o Signing Secret gerado",
+        "Salve como RESEND_WEBHOOK_SECRET_RESPOSTAS no Cloud Secrets"
       ]
     }
   ];
