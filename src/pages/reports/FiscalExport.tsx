@@ -69,47 +69,73 @@ export default function FiscalExport() {
     to: endOfMonth(new Date()),
   });
 
-  // Query para buscar contatos
+  // Query para buscar contatos com paginação
   const { data: contacts, isLoading } = useQuery({
     queryKey: ["fiscal-contacts", statusFilter, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async () => {
-      let query = supabase
-        .from("contacts")
-        .select("id, first_name, last_name, email, phone, document, customer_type, zip_code, address, address_number, address_complement, neighborhood, city, state, state_registration, status, created_at")
-        .order("created_at", { ascending: false }) as any;
+      const allContacts: FiscalContact[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
+      while (hasMore) {
+        let query = supabase
+          .from("contacts")
+          .select("id, first_name, last_name, email, phone, document, customer_type, zip_code, address, address_number, address_complement, neighborhood, city, state, state_registration, status, created_at")
+          .order("created_at", { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1) as any;
+
+        if (statusFilter !== "all") {
+          query = query.eq("status", statusFilter);
+        }
+
+        // Filtro de período
+        if (dateRange?.from) {
+          query = query.gte("created_at", dateRange.from.toISOString());
+        }
+        if (dateRange?.to) {
+          const endOfDay = new Date(dateRange.to);
+          endOfDay.setHours(23, 59, 59, 999);
+          query = query.lte("created_at", endOfDay.toISOString());
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        allContacts.push(...(data || []));
+        hasMore = (data?.length || 0) === pageSize;
+        page++;
       }
 
-      // Filtro de período
-      if (dateRange?.from) {
-        query = query.gte("created_at", dateRange.from.toISOString());
-      }
-      if (dateRange?.to) {
-        const endOfDay = new Date(dateRange.to);
-        endOfDay.setHours(23, 59, 59, 999);
-        query = query.lte("created_at", endOfDay.toISOString());
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as FiscalContact[];
+      return allContacts;
     },
   });
 
-  // Query para buscar último valor pago do Kiwify por email
+  // Query para buscar último valor pago do Kiwify por email com paginação
   const { data: kiwifyValues } = useQuery({
     queryKey: ["kiwify-last-values"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("kiwify_events")
-        .select("customer_email, payload, created_at")
-        .in("event_type", ["paid", "order_approved"])
-        .order("created_at", { ascending: false });
+      const allEvents: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (error) throw error;
-      return data;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("kiwify_events")
+          .select("customer_email, payload, created_at")
+          .in("event_type", ["paid", "order_approved"])
+          .order("created_at", { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+
+        allEvents.push(...(data || []));
+        hasMore = (data?.length || 0) === pageSize;
+        page++;
+      }
+
+      return allEvents;
     },
   });
 
