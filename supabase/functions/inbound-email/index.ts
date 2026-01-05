@@ -49,9 +49,14 @@ serve(async (req) => {
     const body = await req.text();
     const signedContent = `${svixId}.${svixTimestamp}.${body}`;
 
+    // Decodificar secret do Resend (formato whsec_XXXXX onde XXXXX é Base64)
+    const base64Part = webhookSecret.startsWith('whsec_') 
+      ? webhookSecret.split('whsec_')[1] 
+      : webhookSecret;
+    const keyData = Uint8Array.from(atob(base64Part), c => c.charCodeAt(0));
+
     // Calcular assinatura esperada
     const encoder = new TextEncoder();
-    const keyData = encoder.encode(webhookSecret);
     const key = await crypto.subtle.importKey(
       'raw', keyData,
       { name: 'HMAC', hash: 'SHA-256' },
