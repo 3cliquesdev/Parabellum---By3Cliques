@@ -113,16 +113,20 @@ export default function FiscalExport() {
     },
   });
 
-  // Criar mapa de email -> último valor pago (em R$) - normalizado para lowercase
-  const valueMap = new Map<string, number>();
+  // Criar mapa de email -> { value, productName } - normalizado para lowercase
+  const productMap = new Map<string, { value: number; productName: string }>();
   if (kiwifyValues) {
     for (const event of kiwifyValues) {
       const emailKey = event.customer_email?.toLowerCase();
-      if (emailKey && !valueMap.has(emailKey)) {
+      if (emailKey && !productMap.has(emailKey)) {
         const payload = event.payload as any;
         const chargeAmount = payload?.Commissions?.charge_amount;
+        const productName = payload?.Product?.product_name || "Venda curso";
         if (chargeAmount) {
-          valueMap.set(emailKey, Number(chargeAmount) / 100);
+          productMap.set(emailKey, {
+            value: Number(chargeAmount) / 100,
+            productName,
+          });
         }
       }
     }
@@ -229,29 +233,30 @@ export default function FiscalExport() {
       "CSLL",
     ];
 
-    const rows = contactsToExport.map((c) => [
-      c.email && valueMap.get(c.email.toLowerCase()) 
-        ? valueMap.get(c.email.toLowerCase())!.toFixed(2).replace('.', ',') 
-        : "",
-      c.document ? formatDocument(c.document) : "",
-      `${c.first_name} ${c.last_name}`.trim(),
-      c.address || "",
-      c.address_number || "",
-      c.address_complement || "",
-      c.neighborhood || "",
-      c.city || "",
-      c.state || "",
-      c.zip_code ? formatCEP(c.zip_code) : "",
-      c.email || "",
-      "Venda curso", // Nome do produto fixo
-      "Não", // Calcular valor líquido
-      "", // Código do Serviço
-      "Não", // Tem retenção
-      "", // IRRF
-      "", // PIS/PASEP
-      "", // COFINS
-      "", // CSLL
-    ]);
+    const rows = contactsToExport.map((c) => {
+      const productData = c.email ? productMap.get(c.email.toLowerCase()) : undefined;
+      return [
+        productData?.value ? productData.value.toFixed(2).replace('.', ',') : "",
+        c.document ? formatDocument(c.document) : "",
+        `${c.first_name} ${c.last_name}`.trim(),
+        c.address || "",
+        c.address_number || "",
+        c.address_complement || "",
+        c.neighborhood || "",
+        c.city || "",
+        c.state || "",
+        c.zip_code ? formatCEP(c.zip_code) : "",
+        c.email || "",
+        productData?.productName || "Venda curso", // Nome real do produto
+        "Não", // Calcular valor líquido
+        "", // Código do Serviço
+        "Não", // Tem retenção
+        "", // IRRF
+        "", // PIS/PASEP
+        "", // COFINS
+        "", // CSLL
+      ];
+    });
 
     const csvContent = [
       headers.join(";"),
@@ -408,6 +413,7 @@ export default function FiscalExport() {
                 </TableHead>
                 <TableHead>Nome</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
+                <TableHead>Produto</TableHead>
                 <TableHead>CPF/CNPJ</TableHead>
                 <TableHead>Endereço</TableHead>
                 <TableHead>Cidade/UF</TableHead>
@@ -417,20 +423,20 @@ export default function FiscalExport() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Carregando...
                   </TableCell>
                 </TableRow>
               ) : filteredContacts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Nenhum contato encontrado
                   </TableCell>
                 </TableRow>
               ) : (
               filteredContacts.map((contact) => {
                   const complete = isDataComplete(contact);
-                  const serviceValue = contact.email ? valueMap.get(contact.email.toLowerCase()) : undefined;
+                  const productData = contact.email ? productMap.get(contact.email.toLowerCase()) : undefined;
                   return (
                     <TableRow key={contact.id}>
                       <TableCell>
@@ -450,9 +456,18 @@ export default function FiscalExport() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        {serviceValue ? (
+                        {productData?.value ? (
                           <span className="font-mono text-sm font-medium text-green-600">
-                            R$ {serviceValue.toFixed(2).replace('.', ',')}
+                            R$ {productData.value.toFixed(2).replace('.', ',')}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-[180px]">
+                        {productData?.productName ? (
+                          <span className="text-sm truncate block" title={productData.productName}>
+                            {productData.productName}
                           </span>
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
