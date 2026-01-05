@@ -61,14 +61,14 @@ const WebhooksSettings = () => {
       name: "Email - Respostas de Clientes (Resend)",
       description: "Recebe respostas de clientes para tickets de suporte via email (inbound)",
       url: "https://zaeozfdjhrmblfaxsyuu.supabase.co/functions/v1/inbound-email",
-      secretName: "RESEND_WEBHOOK_SECRET_RESPOSTAS",
+      secretName: "RESEND_WEBHOOK_SECRET_INBOUND",
       events: ["email.received"],
       instructions: [
         "Acesse resend.com/webhooks → Create Webhook (SEGUNDO webhook)",
         "Cole a URL acima no campo Endpoint",
         "Selecione APENAS o evento: email.received (inbound)",
         "Após salvar, copie o Signing Secret gerado",
-        "Salve como RESEND_WEBHOOK_SECRET_RESPOSTAS no Cloud Secrets"
+        "Salve como RESEND_WEBHOOK_SECRET_INBOUND no Cloud Secrets"
       ]
     }
   ];

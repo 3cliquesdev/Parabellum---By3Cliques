@@ -22,10 +22,10 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    // Verificar secret configurado - usa RESEND_WEBHOOK_SECRET_RESPOSTAS ou fallback
-    const webhookSecret = Deno.env.get('RESEND_WEBHOOK_SECRET_RESPOSTAS') || Deno.env.get('RESEND_WEBHOOK_SECRET');
+    // Verificar secret configurado - usa RESEND_WEBHOOK_SECRET_INBOUND ou fallback
+    const webhookSecret = Deno.env.get('RESEND_WEBHOOK_SECRET_INBOUND') || Deno.env.get('RESEND_WEBHOOK_SECRET');
     if (!webhookSecret) {
-      console.error('[inbound-email] RESEND_WEBHOOK_SECRET_RESPOSTAS not configured');
+      console.error('[inbound-email] RESEND_WEBHOOK_SECRET_INBOUND not configured');
       return new Response(
         JSON.stringify({ error: 'Webhook secret not configured' }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
