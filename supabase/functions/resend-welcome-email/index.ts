@@ -219,7 +219,7 @@ serve(async (req) => {
     `;
 
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: 'PARABELLUM Security <sistema@parabellum.work>',
+      from: 'PARABELLUM Security <contato@seuarmazemdrop.parabellum.work>',
       to: [email!],
       subject: 'Acesso Concedido - Termo de Responsabilidade',
       html: emailHtml,
