@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { contacts, mode = 'replace' } = await req.json() as { contacts: ContactRow[]; mode?: 'replace' | 'merge' };
+    const { contacts, mode = 'replace' } = await req.json() as { contacts: ContactRow[]; mode?: 'replace' | 'merge' | 'update_mapped' };
 
     if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
       return new Response(
@@ -164,11 +164,24 @@ Deno.serve(async (req) => {
         }
       }
       
-      // Atualizar contatos existentes em paralelo (máximo 10 por vez)
+      // Atualizar contatos existentes em paralelo
       const updatePromises = toUpdate.map(async ({ id, data, originalIndex }) => {
-        // No modo merge, buscar dados existentes e só preencher campos vazios
         let updateData = data;
-        if (mode === 'merge') {
+        
+        if (mode === 'update_mapped') {
+          // Atualiza apenas os campos que vieram no CSV (não toca nos outros)
+          // Remove campos que vieram vazios/null do CSV para não sobrescrever dados existentes
+          updateData = {} as any;
+          for (const [key, value] of Object.entries(data)) {
+            if (value !== null && value !== '' && value !== 0) {
+              (updateData as any)[key] = value;
+            }
+          }
+          // Sempre atualiza last_contact_date
+          (updateData as any).last_contact_date = new Date().toISOString();
+          console.log(`[Bulk Import] update_mapped fields for ${data.email}:`, Object.keys(updateData));
+        } else if (mode === 'merge') {
+          // Só preenche campos que estão NULL ou vazios no banco
           const { data: existing } = await supabase
             .from('contacts')
             .select('*')
@@ -176,7 +189,6 @@ Deno.serve(async (req) => {
             .single();
           
           if (existing) {
-            // Só atualiza campos que estão NULL ou vazios no banco
             updateData = {} as any;
             for (const [key, value] of Object.entries(data)) {
               if (value !== null && value !== '' && value !== 0) {
@@ -190,6 +202,7 @@ Deno.serve(async (req) => {
             (updateData as any).last_contact_date = new Date().toISOString();
           }
         }
+        // mode === 'replace': usa data diretamente (já é o padrão)
         
         const { error: updateError } = await supabase
           .from('contacts')
