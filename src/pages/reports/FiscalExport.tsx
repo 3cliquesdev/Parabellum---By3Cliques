@@ -60,9 +60,21 @@ function isDataComplete(customer: FiscalCustomer): boolean {
   );
 }
 
+function getMissingFields(customer: FiscalCustomer): string[] {
+  const missing: string[] = [];
+  if (!customer.contact?.document) missing.push("Doc");
+  if (!customer.contact?.zip_code) missing.push("CEP");
+  if (!customer.contact?.address) missing.push("End");
+  if (!customer.contact?.address_number) missing.push("Nº");
+  if (!customer.contact?.city) missing.push("Cidade");
+  if (!customer.contact?.state) missing.push("UF");
+  return missing;
+}
+
 export default function FiscalExport() {
   const [search, setSearch] = useState("");
   const [onlyComplete, setOnlyComplete] = useState(false);
+  const [onlyIncomplete, setOnlyIncomplete] = useState(false);
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
@@ -252,11 +264,12 @@ export default function FiscalExport() {
         customer.email.toLowerCase().includes(searchLower) ||
         customer.contact?.document?.includes(search);
 
-      const matchesComplete = !onlyComplete || isDataComplete(customer);
+      const complete = isDataComplete(customer);
+      const matchesComplete = onlyIncomplete ? !complete : (!onlyComplete || complete);
 
       return matchesSearch && matchesComplete;
     });
-  }, [fiscalCustomers, search, onlyComplete]);
+  }, [fiscalCustomers, search, onlyComplete, onlyIncomplete]);
 
   const isLoading = loadingEvents || loadingContacts;
   const completeCount = filteredCustomers.filter(isDataComplete).length;
@@ -389,6 +402,54 @@ export default function FiscalExport() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportIncomplete = () => {
+    const incompleteCustomers = fiscalCustomers.filter(c => !isDataComplete(c));
+
+    const headers = [
+      "Nome",
+      "E-mail",
+      "Telefone",
+      "Valor Total",
+      "Produtos",
+      "Campos Faltantes",
+    ];
+
+    const rows = incompleteCustomers.map((c) => {
+      const contact = c.contact;
+      const name = contact ? `${contact.first_name} ${contact.last_name}`.trim() : c.email;
+      const productsDisplay = c.products.join(" | ");
+      const missingFields = getMissingFields(c).join(", ");
+      return [
+        name,
+        c.email,
+        contact?.phone || "",
+        `R$ ${c.totalValue.toFixed(2).replace('.', ',')}`,
+        productsDisplay,
+        missingFields,
+      ];
+    });
+
+    const csvContent = [
+      headers.join(";"),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(";")),
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `clientes_incompletos_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleIncompleteCardClick = () => {
+    setOnlyIncomplete(true);
+    setOnlyComplete(false);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -442,7 +503,10 @@ export default function FiscalExport() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card 
+          className={`cursor-pointer transition-all hover:ring-2 hover:ring-amber-500 ${onlyIncomplete ? 'ring-2 ring-amber-500' : ''}`}
+          onClick={handleIncompleteCardClick}
+        >
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-full">
@@ -451,6 +515,7 @@ export default function FiscalExport() {
               <div>
                 <p className="text-2xl font-bold">{incompleteCount}</p>
                 <p className="text-sm text-muted-foreground">Dados Incompletos</p>
+                <p className="text-xs text-amber-600 mt-1">Clique para filtrar</p>
               </div>
             </div>
           </CardContent>
@@ -499,15 +564,31 @@ export default function FiscalExport() {
               <DateRangePicker value={dateRange} onChange={setDateRange} />
             </div>
 
-            <div className="flex items-end">
+            <div className="flex items-end gap-4">
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="only-complete"
                   checked={onlyComplete}
-                  onCheckedChange={(checked) => setOnlyComplete(!!checked)}
+                  onCheckedChange={(checked) => {
+                    setOnlyComplete(!!checked);
+                    if (checked) setOnlyIncomplete(false);
+                  }}
                 />
                 <Label htmlFor="only-complete" className="cursor-pointer">
-                  Apenas dados completos
+                  Apenas completos
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="only-incomplete"
+                  checked={onlyIncomplete}
+                  onCheckedChange={(checked) => {
+                    setOnlyIncomplete(!!checked);
+                    if (checked) setOnlyComplete(false);
+                  }}
+                />
+                <Label htmlFor="only-incomplete" className="cursor-pointer text-amber-600">
+                  Apenas incompletos
                 </Label>
               </div>
             </div>
@@ -516,6 +597,14 @@ export default function FiscalExport() {
               <Button variant="outline" onClick={handleDownloadTemplate}>
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
                 Baixar Modelo
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExportIncomplete}
+                className="border-amber-500 text-amber-600 hover:bg-amber-50"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Exportar Incompletos ({incompleteCount})
               </Button>
               <Button onClick={handleExport} disabled={filteredCustomers.length === 0}>
                 <Download className="mr-2 h-4 w-4" />
@@ -545,18 +634,19 @@ export default function FiscalExport() {
                 <TableHead>Endereço</TableHead>
                 <TableHead>Cidade/UF</TableHead>
                 <TableHead className="text-center">Status</TableHead>
+                {onlyIncomplete && <TableHead>Pendências</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={onlyIncomplete ? 9 : 8} className="text-center py-8 text-muted-foreground">
                     Carregando...
                   </TableCell>
                 </TableRow>
               ) : filteredCustomers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={onlyIncomplete ? 9 : 8} className="text-center py-8 text-muted-foreground">
                     Nenhuma compra encontrada no período
                   </TableCell>
                 </TableRow>
@@ -655,6 +745,21 @@ export default function FiscalExport() {
                           </Badge>
                         )}
                       </TableCell>
+                      {onlyIncomplete && (
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {getMissingFields(customer).map((field) => (
+                              <Badge 
+                                key={field} 
+                                variant="destructive" 
+                                className="text-xs px-1.5 py-0.5"
+                              >
+                                {field}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })
