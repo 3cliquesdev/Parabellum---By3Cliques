@@ -197,14 +197,14 @@ exemplo@email.com;João;Silva;(11) 99999-9999;Empresa Exemplo;123.456.789-00;987
               <Label className="text-sm font-medium">Modo de Importação</Label>
               <RadioGroup 
                 value={importMutation.importMode} 
-                onValueChange={(value) => importMutation.setImportMode(value as 'replace' | 'merge')}
-                className="flex flex-col sm:flex-row gap-4"
+                onValueChange={(value) => importMutation.setImportMode(value as 'replace' | 'merge' | 'update_mapped')}
+                className="flex flex-col gap-3"
               >
                 <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="replace" id="replace" className="mt-0.5" />
-                  <Label htmlFor="replace" className="cursor-pointer">
-                    <span className="font-medium">Substituir Tudo</span>
-                    <p className="text-xs text-muted-foreground">Sobrescreve todos os dados existentes</p>
+                  <RadioGroupItem value="update_mapped" id="update_mapped" className="mt-0.5" />
+                  <Label htmlFor="update_mapped" className="cursor-pointer">
+                    <span className="font-medium">Atualizar Campos do CSV</span>
+                    <p className="text-xs text-muted-foreground">Atualiza apenas os campos mapeados (ideal para adicionar endereços aos clientes Kiwify)</p>
                   </Label>
                 </div>
                 <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-muted/50 cursor-pointer">
@@ -212,6 +212,13 @@ exemplo@email.com;João;Silva;(11) 99999-9999;Empresa Exemplo;123.456.789-00;987
                   <Label htmlFor="merge" className="cursor-pointer">
                     <span className="font-medium">Preencher Vazios</span>
                     <p className="text-xs text-muted-foreground">Só atualiza campos que estão vazios no banco</p>
+                  </Label>
+                </div>
+                <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-muted/50 cursor-pointer">
+                  <RadioGroupItem value="replace" id="replace" className="mt-0.5" />
+                  <Label htmlFor="replace" className="cursor-pointer">
+                    <span className="font-medium">Substituir Tudo</span>
+                    <p className="text-xs text-muted-foreground">Sobrescreve todos os dados existentes (cuidado!)</p>
                   </Label>
                 </div>
               </RadioGroup>

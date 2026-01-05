@@ -38,7 +38,9 @@ interface ImportResult {
 
 const CHUNK_SIZE = 100; // Processar 100 contatos por vez
 
-async function processChunk(contacts: ContactRow[], mode: 'replace' | 'merge' = 'replace'): Promise<ImportResult> {
+type ImportMode = 'replace' | 'merge' | 'update_mapped';
+
+async function processChunk(contacts: ContactRow[], mode: ImportMode = 'replace'): Promise<ImportResult> {
   const { data, error } = await supabase.functions.invoke('bulk-import-contacts', {
     body: { contacts, mode },
   });
@@ -51,10 +53,10 @@ export function useImportContacts() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [importMode, setImportMode] = useState<'replace' | 'merge'>('replace');
+  const [importMode, setImportMode] = useState<ImportMode>('update_mapped');
 
   const mutation = useMutation({
-    mutationFn: async ({ contacts, mode }: { contacts: ContactRow[]; mode: 'replace' | 'merge' }): Promise<ImportResult> => {
+    mutationFn: async ({ contacts, mode }: { contacts: ContactRow[]; mode: ImportMode }): Promise<ImportResult> => {
       const totalContacts = contacts.length;
       setProgress({ current: 0, total: totalContacts });
       
