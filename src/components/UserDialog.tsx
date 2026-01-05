@@ -24,13 +24,13 @@ import { cn } from "@/lib/utils";
 const userSchema = z.object({
   email: z.string().email({ message: "Email inválido" }),
   password: z.string().min(8, { message: "Senha deve ter no mínimo 8 caracteres" }),
-  role: z.enum(["admin", "general_manager", "manager", "sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "cs_manager"], { message: "Role inválida" }),
+  role: z.enum(["admin", "general_manager", "manager", "sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "financial_agent", "cs_manager"], { message: "Role inválida" }),
   full_name: z.string().min(1, { message: "Nome completo é obrigatório" }),
   department: z.string().uuid({ message: "Departamento inválido" }),
 });
 
 const editUserSchema = z.object({
-  role: z.enum(["admin", "general_manager", "manager", "sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "cs_manager"], { message: "Role inválida" }),
+  role: z.enum(["admin", "general_manager", "manager", "sales_rep", "consultant", "support_agent", "support_manager", "financial_manager", "financial_agent", "cs_manager"], { message: "Role inválida" }),
   full_name: z.string().min(1, { message: "Nome completo é obrigatório" }),
   department: z.string().uuid({ message: "Departamento inválido" }),
 });
@@ -39,7 +39,7 @@ interface UserWithRole {
   id: string;
   email: string;
   created_at: string;
-  role: "admin" | "general_manager" | "manager" | "sales_rep" | "consultant" | "support_agent" | "support_manager" | "financial_manager" | "cs_manager";
+  role: "admin" | "general_manager" | "manager" | "sales_rep" | "consultant" | "support_agent" | "support_manager" | "financial_manager" | "financial_agent" | "cs_manager";
   full_name?: string;
   job_title?: string;
   avatar_url?: string;
@@ -70,7 +70,7 @@ const validateName = (name: string): string | null => {
 export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: UserDialogProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"admin" | "general_manager" | "manager" | "sales_rep" | "consultant" | "support_agent" | "support_manager" | "financial_manager" | "cs_manager">("sales_rep");
+  const [role, setRole] = useState<"admin" | "general_manager" | "manager" | "sales_rep" | "consultant" | "support_agent" | "support_manager" | "financial_manager" | "financial_agent" | "cs_manager">("sales_rep");
   const [fullName, setFullName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [department, setDepartment] = useState<string>("");
