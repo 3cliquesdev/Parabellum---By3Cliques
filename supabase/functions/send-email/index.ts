@@ -172,6 +172,17 @@ serve(async (req) => {
         .trim();
     };
 
+    // Função para sanitizar valores de tags do Resend (só aceita ASCII letters, numbers, underscores, dashes)
+    const sanitizeTagValue = (value: string): string => {
+      return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/[^a-zA-Z0-9_-]/g, '_') // Substitui caracteres inválidos por _
+        .replace(/_+/g, '_')             // Remove underscores duplicados
+        .replace(/^_|_$/g, '')           // Remove _ no início/fim
+        .slice(0, 50);                   // Limita tamanho
+    };
+
     // Buscar sender configurado
     let senderEmail = 'contato@parabellum.work';
     let senderName = sanitizeName(brandName); // Sanitizar nome do sender
@@ -199,7 +210,7 @@ serve(async (req) => {
         html: emailHtml,
         tags: [
           { name: 'customer_id', value: customer_id },
-          { name: 'branding', value: brandName },
+          { name: 'branding', value: sanitizeTagValue(brandName) },
           ...(playbook_execution_id ? [{ name: 'playbook_execution_id', value: playbook_execution_id }] : [])
         ]
       }),
