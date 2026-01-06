@@ -23,7 +23,11 @@ const TRIGGER_TYPES = [
   { value: "deal_lost", label: "Negócio Perdido" },
   { value: "contact_created", label: "Contato Criado" },
   { value: "ticket_created", label: "Ticket Criado" },
-  { value: "ticket_resolved", label: "Ticket Resolvido" },
+  { value: "ticket_in_progress", label: "Ticket - Em Andamento" },
+  { value: "ticket_waiting_customer", label: "Ticket - Aguardando Cliente" },
+  { value: "ticket_resolved", label: "Ticket - Resolvido" },
+  { value: "ticket_closed", label: "Ticket - Fechado" },
+  { value: "ticket_assigned", label: "Ticket - Atribuído" },
   { value: "playbook_step", label: "Etapa de Playbook" },
 ];
 

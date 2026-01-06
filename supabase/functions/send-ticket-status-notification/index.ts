@@ -3,7 +3,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -11,18 +10,46 @@ const corsHeaders = {
 
 interface StatusNotificationRequest {
   ticket_id: string;
-  new_status: 'waiting_customer' | 'resolved' | 'closed';
+  new_status: 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed' | 'assigned';
   note?: string;
 }
 
-const statusConfig = {
-  waiting_customer: {
+// Status configuration with colors and messages
+const statusConfig: Record<string, {
+  emoji: string;
+  subjectPrefix: string;
+  badgeColor: string;
+  badgeLabel: string;
+  mainMessage: string;
+  ctaText: string;
+  triggerType: string;
+}> = {
+  open: {
     emoji: '📋',
+    subjectPrefix: 'Ticket recebido',
+    badgeColor: '#2563eb',
+    badgeLabel: 'Aberto',
+    mainMessage: 'Recebemos seu chamado e ele será analisado em breve.',
+    ctaText: '📋 Ver Meu Ticket',
+    triggerType: 'ticket_created',
+  },
+  in_progress: {
+    emoji: '🔄',
+    subjectPrefix: 'Seu ticket está sendo atendido',
+    badgeColor: '#2563eb',
+    badgeLabel: 'Em Andamento',
+    mainMessage: 'Nosso time está trabalhando no seu chamado. Você será notificado quando houver atualizações.',
+    ctaText: '📋 Ver Status',
+    triggerType: 'ticket_in_progress',
+  },
+  waiting_customer: {
+    emoji: '⏳',
     subjectPrefix: 'Precisamos da sua resposta',
     badgeColor: '#f59e0b',
     badgeLabel: 'Aguardando Resposta',
     mainMessage: 'Analisamos seu chamado e precisamos de mais informações para continuar o atendimento.',
     ctaText: '💬 Responder ao Ticket',
+    triggerType: 'ticket_waiting_customer',
   },
   resolved: {
     emoji: '✅',
@@ -31,6 +58,7 @@ const statusConfig = {
     badgeLabel: 'Resolvido',
     mainMessage: 'Temos o prazer de informar que seu chamado foi resolvido com sucesso!',
     ctaText: '📋 Ver Meus Tickets',
+    triggerType: 'ticket_resolved',
   },
   closed: {
     emoji: '🔒',
@@ -39,6 +67,16 @@ const statusConfig = {
     badgeLabel: 'Encerrado',
     mainMessage: 'Seu ticket foi encerrado. Se precisar de ajuda adicional sobre o mesmo assunto, você pode abrir um novo chamado.',
     ctaText: '➕ Abrir Novo Ticket',
+    triggerType: 'ticket_closed',
+  },
+  assigned: {
+    emoji: '👤',
+    subjectPrefix: 'Seu ticket foi atribuído',
+    badgeColor: '#7c3aed',
+    badgeLabel: 'Atribuído',
+    mainMessage: 'Um especialista foi designado para cuidar do seu chamado.',
+    ctaText: '📋 Ver Ticket',
+    triggerType: 'ticket_assigned',
   },
 };
 
@@ -46,17 +84,27 @@ function sanitizeName(name: string): string {
   return name.replace(/[^\x00-\x7F]/g, '').trim() || 'Suporte';
 }
 
-function generateStatusEmailHTML(
+// Replace variables in template
+function replaceVariables(text: string, variables: Record<string, string>): string {
+  let result = text;
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replace(new RegExp(`{{${key}}}`, 'g'), value || '');
+    result = result.replace(new RegExp(`{${key}}`, 'g'), value || '');
+  }
+  return result;
+}
+
+function generateDefaultEmailHTML(
   customerName: string,
   ticketNumber: string,
   subject: string,
-  status: 'waiting_customer' | 'resolved' | 'closed',
+  status: string,
   note: string | undefined,
   brandName: string,
   logoUrl: string,
   portalUrl: string
 ): string {
-  const config = statusConfig[status];
+  const config = statusConfig[status] || statusConfig.open;
   
   return `
 <!DOCTYPE html>
@@ -186,8 +234,9 @@ serve(async (req) => {
       throw new Error("ticket_id and new_status are required");
     }
 
-    if (!['waiting_customer', 'resolved', 'closed'].includes(new_status)) {
-      throw new Error("Invalid status. Must be waiting_customer, resolved, or closed");
+    const validStatuses = ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed', 'assigned'];
+    if (!validStatuses.includes(new_status)) {
+      throw new Error(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
     }
 
     console.log(`[send-ticket-status-notification] Processing status change: ${new_status} for ticket ${ticket_id}`);
@@ -266,23 +315,56 @@ serve(async (req) => {
       portalUrl = portalConfig.value;
     }
 
+    // Check for custom template
+    const config = statusConfig[new_status] || statusConfig.open;
+    let html: string;
+    let emailSubject: string;
+
+    // Try to fetch custom template from database
+    const { data: customTemplate } = await supabase
+      .from("email_templates")
+      .select("id, subject, html_body")
+      .eq("trigger_type", config.triggerType)
+      .eq("is_active", true)
+      .single();
+
+    if (customTemplate?.html_body) {
+      console.log(`[send-ticket-status-notification] Using custom template for ${config.triggerType}`);
+      
+      // Variables for template
+      const variables: Record<string, string> = {
+        customer_name: customerName,
+        ticket_number: ticketNumber,
+        ticket_subject: ticket.subject,
+        status_badge: config.badgeLabel,
+        agent_note: note || '',
+        portal_url: portalUrl,
+        portal_link: `<a href="${portalUrl}/my-tickets" style="color: #2563eb;">${portalUrl}/my-tickets</a>`,
+        company_name: brandName,
+        cta_url: `${portalUrl}/my-tickets`,
+        cta_text: config.ctaText,
+      };
+
+      html = replaceVariables(customTemplate.html_body, variables);
+      emailSubject = replaceVariables(customTemplate.subject, variables);
+    } else {
+      console.log(`[send-ticket-status-notification] Using default template for ${new_status}`);
+      emailSubject = `${config.emoji} ${config.subjectPrefix} - ${ticketNumber}`;
+      html = generateDefaultEmailHTML(
+        customerName,
+        ticketNumber,
+        ticket.subject,
+        new_status,
+        note,
+        brandName,
+        logoUrl,
+        portalUrl
+      );
+    }
+
     console.log(`[send-ticket-status-notification] Sending to ${customerEmail}`);
 
-    // Generate email HTML
-    const config = statusConfig[new_status];
-    const emailSubject = `${config.emoji} ${config.subjectPrefix} - ${ticketNumber}`;
-    const html = generateStatusEmailHTML(
-      customerName,
-      ticketNumber,
-      ticket.subject,
-      new_status,
-      note,
-      brandName,
-      logoUrl,
-      portalUrl
-    );
-
-    // Send email via Resend API directly (using fetch)
+    // Send email via Resend API
     const resendResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -316,6 +398,7 @@ serve(async (req) => {
         ticket_id: ticket.id,
         status_change: new_status,
         email_id: emailResponse?.id,
+        template_used: customTemplate ? 'custom' : 'default',
       },
     });
 

@@ -224,3 +224,9 @@ verify_jwt = false
 
 [functions.inbound-email]
 verify_jwt = false
+
+[functions.send-ticket-status-notification]
+verify_jwt = true
+
+[functions.notify-internal-comment]
+verify_jwt = true
