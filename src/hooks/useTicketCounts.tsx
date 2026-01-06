@@ -2,40 +2,31 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useActiveTicketStatuses } from "@/hooks/useTicketStatuses";
 
 export interface TicketCounts {
-  open: number;
-  in_progress: number;
-  waiting_customer: number;
-  resolved: number;
-  closed: number;
-  my_open: number;
-  unassigned: number;
-  sla_expired: number;
-  total: number;
-  archived: number;
+  [key: string]: number;
 }
 
 export function useTicketCounts() {
   const { user } = useAuth();
   const { role } = useUserRole();
+  const { data: statuses } = useActiveTicketStatuses();
 
   const canSeeAllTickets = ['admin', 'manager', 'support_manager', 'cs_manager', 'general_manager', 'financial_manager'].includes(role || '');
 
+  // Get archived status names for filtering
+  const archivedStatusNames = statuses?.filter(s => s.is_archived_status).map(s => s.name) || ['resolved', 'closed'];
+
   return useQuery({
-    queryKey: ["ticket-counts", user?.id, role],
+    queryKey: ["ticket-counts", user?.id, role, statuses?.map(s => s.name).join(',')],
     queryFn: async (): Promise<TicketCounts> => {
       if (!user) {
         return {
-          open: 0,
-          in_progress: 0,
-          waiting_customer: 0,
-          resolved: 0,
-          closed: 0,
+          total: 0,
           my_open: 0,
           unassigned: 0,
           sla_expired: 0,
-          total: 0,
           archived: 0,
         };
       }
@@ -60,34 +51,37 @@ export function useTicketCounts() {
 
       const now = new Date();
       const counts: TicketCounts = {
-        open: 0,
-        in_progress: 0,
-        waiting_customer: 0,
-        resolved: 0,
-        closed: 0,
+        total: 0,
         my_open: 0,
         unassigned: 0,
         sla_expired: 0,
-        total: 0,
         archived: 0,
       };
 
+      // Initialize counts for all statuses
+      if (statuses) {
+        statuses.forEach(status => {
+          counts[status.name] = 0;
+        });
+      }
+
       tickets?.forEach(ticket => {
-        const isArchived = ['resolved', 'closed'].includes(ticket.status);
+        const isArchived = archivedStatusNames.includes(ticket.status);
         
-        // Status counts
-        if (ticket.status === 'open') counts.open++;
-        if (ticket.status === 'in_progress') counts.in_progress++;
-        if (ticket.status === 'waiting_customer') counts.waiting_customer++;
-        if (ticket.status === 'resolved') counts.resolved++;
-        if (ticket.status === 'closed') counts.closed++;
+        // Status counts (increment dynamically based on status name)
+        if (counts[ticket.status] !== undefined) {
+          counts[ticket.status]++;
+        } else {
+          // Handle unknown statuses
+          counts[ticket.status] = (counts[ticket.status] || 0) + 1;
+        }
 
         // Total = apenas ativos (não arquivados)
         if (!isArchived) {
           counts.total++;
         }
 
-        // Archived = resolved + closed
+        // Archived = all archived statuses
         if (isArchived) {
           counts.archived++;
         }
@@ -114,7 +108,7 @@ export function useTicketCounts() {
 
       return counts;
     },
-    enabled: !!user,
+    enabled: !!user && !!statuses,
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 }

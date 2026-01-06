@@ -5334,6 +5334,57 @@ export type Database = {
           },
         ]
       }
+      ticket_statuses: {
+        Row: {
+          color: string
+          created_at: string | null
+          description: string | null
+          display_order: number
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          is_archived_status: boolean | null
+          is_final_status: boolean | null
+          label: string
+          name: string
+          send_email_notification: boolean | null
+          send_whatsapp_notification: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string
+          created_at?: string | null
+          description?: string | null
+          display_order?: number
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_archived_status?: boolean | null
+          is_final_status?: boolean | null
+          label: string
+          name: string
+          send_email_notification?: boolean | null
+          send_whatsapp_notification?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string
+          created_at?: string | null
+          description?: string | null
+          display_order?: number
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_archived_status?: boolean | null
+          is_final_status?: boolean | null
+          label?: string
+          name?: string
+          send_email_notification?: boolean | null
+          send_whatsapp_notification?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       ticket_tags: {
         Row: {
           created_at: string | null

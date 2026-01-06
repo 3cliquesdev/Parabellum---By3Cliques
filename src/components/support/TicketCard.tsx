@@ -3,6 +3,8 @@ import { ChevronRight, Clock, User } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
+import { useActiveTicketStatuses } from "@/hooks/useTicketStatuses";
+import { getStatusIcon } from "@/lib/ticketStatusIcons";
 
 type Ticket = Tables<"tickets"> & {
   contacts?: Tables<"contacts"> | null;
@@ -25,21 +27,28 @@ const priorityConfig = {
   urgent: { label: "Urgente", variant: "destructive" as const },
 };
 
-const statusConfig = {
-  open: { label: "Aberto", className: "bg-blue-500" },
-  in_progress: { label: "Em Andamento", className: "bg-orange-500" },
-  waiting_customer: { label: "Aguardando Cliente", className: "bg-yellow-500" },
-  resolved: { label: "Resolvido", className: "bg-green-500" },
-  closed: { label: "Fechado", className: "bg-gray-500" },
+// Fallback status config for when dynamic statuses are loading
+const fallbackStatusConfig: Record<string, { label: string; color: string }> = {
+  open: { label: "Aberto", color: "#3B82F6" },
+  in_progress: { label: "Em Andamento", color: "#F97316" },
+  waiting_customer: { label: "Aguardando Cliente", color: "#EAB308" },
+  resolved: { label: "Resolvido", color: "#22C55E" },
+  closed: { label: "Fechado", color: "#6B7280" },
 };
 
 export function TicketCard({ ticket, onClick, isSelected }: TicketCardProps) {
+  const { data: statuses } = useActiveTicketStatuses();
   const priority = priorityConfig[ticket.priority as keyof typeof priorityConfig];
-  const status = statusConfig[ticket.status as keyof typeof statusConfig];
+  
+  // Find dynamic status or use fallback
+  const dynamicStatus = statuses?.find(s => s.name === ticket.status);
+  const statusLabel = dynamicStatus?.label || fallbackStatusConfig[ticket.status]?.label || ticket.status;
+  const statusColor = dynamicStatus?.color || fallbackStatusConfig[ticket.status]?.color || "#6B7280";
+  const StatusIcon = dynamicStatus ? getStatusIcon(dynamicStatus.icon) : null;
 
   return (
     <div
-      className={`flex flex-col gap-2 p-4 hover:bg-muted/50 transition-colors ${
+      className={`flex flex-col gap-2 p-4 hover:bg-muted/50 transition-colors cursor-pointer ${
         isSelected ? "bg-primary/5 border-l-2 border-l-primary" : ""
       }`}
       onClick={onClick}
@@ -49,7 +58,13 @@ export function TicketCard({ ticket, onClick, isSelected }: TicketCardProps) {
         <span className="font-mono text-sm text-muted-foreground">
           #{ticket.ticket_number || ticket.id.slice(0, 8)}
         </span>
-        <Badge className={status?.className}>{status?.label}</Badge>
+        <Badge 
+          className="text-white flex items-center gap-1"
+          style={{ backgroundColor: statusColor }}
+        >
+          {StatusIcon && <StatusIcon className="h-3 w-3" />}
+          {statusLabel}
+        </Badge>
       </div>
 
       {/* Subject */}

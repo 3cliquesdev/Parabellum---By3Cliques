@@ -2,19 +2,19 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useTags } from "@/hooks/useTags";
+import { useActiveTicketStatuses } from "@/hooks/useTicketStatuses";
+import { getStatusIcon } from "@/lib/ticketStatusIcons";
 import { 
   Search, 
   Filter, 
   X, 
   AlertTriangle, 
   Clock,
-  Paperclip,
   CalendarIcon,
   Tag
 } from "lucide-react";
@@ -37,14 +37,6 @@ interface TicketFilterPopoverProps {
   filters: TicketFilters;
   onFiltersChange: (filters: TicketFilters) => void;
 }
-
-const STATUS_OPTIONS = [
-  { value: 'open', label: 'Aberto', color: 'bg-blue-500' },
-  { value: 'in_progress', label: 'Em Andamento', color: 'bg-yellow-500' },
-  { value: 'waiting_customer', label: 'Aguardando Cliente', color: 'bg-purple-500' },
-  { value: 'resolved', label: 'Resolvido', color: 'bg-green-500' },
-  { value: 'closed', label: 'Fechado', color: 'bg-gray-500' },
-];
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: 'Baixa', color: 'text-green-600' },

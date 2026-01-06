@@ -1,28 +1,16 @@
 import { cn } from "@/lib/utils";
 import { useTicketCounts } from "@/hooks/useTicketCounts";
+import { useActiveTicketStatuses } from "@/hooks/useTicketStatuses";
+import { getStatusIcon } from "@/lib/ticketStatusIcons";
 import { 
   Inbox, 
-  Clock, 
-  AlertCircle, 
   User, 
-  CheckCircle, 
   AlertTriangle,
   FolderOpen,
   Archive,
-  XCircle
 } from "lucide-react";
 
-export type SidebarFilter = 
-  | 'all' 
-  | 'open' 
-  | 'in_progress' 
-  | 'waiting_customer' 
-  | 'resolved' 
-  | 'closed'
-  | 'my_open' 
-  | 'unassigned' 
-  | 'sla_expired'
-  | 'archived';
+export type SidebarFilter = string;
 
 interface TicketsSidebarProps {
   selectedFilter: SidebarFilter;
@@ -30,12 +18,13 @@ interface TicketsSidebarProps {
 }
 
 interface FilterItem {
-  key: SidebarFilter;
+  key: string;
   label: string;
   icon: React.ReactNode;
   countKey: string;
   variant?: 'danger' | 'warning' | 'success' | 'default';
   indent?: boolean;
+  color?: string;
 }
 
 const mainFilters: FilterItem[] = [
@@ -45,20 +34,13 @@ const mainFilters: FilterItem[] = [
   { key: 'sla_expired', label: 'SLA vencido', icon: <AlertTriangle className="w-4 h-4" />, countKey: 'sla_expired', variant: 'danger' },
 ];
 
-const activeStatusFilters: FilterItem[] = [
-  { key: 'open', label: 'Novos', icon: <Clock className="w-4 h-4" />, countKey: 'open' },
-  { key: 'in_progress', label: 'Em análise', icon: <Clock className="w-4 h-4" />, countKey: 'in_progress' },
-  { key: 'waiting_customer', label: 'Aguardando cliente', icon: <AlertCircle className="w-4 h-4" />, countKey: 'waiting_customer', variant: 'warning' },
-];
-
-const archivedFilters: FilterItem[] = [
-  { key: 'archived', label: 'Todos arquivados', icon: <Archive className="w-4 h-4" />, countKey: 'archived' },
-  { key: 'resolved', label: 'Resolvidos', icon: <CheckCircle className="w-4 h-4" />, countKey: 'resolved', variant: 'success', indent: true },
-  { key: 'closed', label: 'Fechados', icon: <XCircle className="w-4 h-4" />, countKey: 'closed', indent: true },
-];
-
 export function TicketsSidebar({ selectedFilter, onFilterChange }: TicketsSidebarProps) {
   const { data: counts } = useTicketCounts();
+  const { data: statuses } = useActiveTicketStatuses();
+
+  // Separate active from archived statuses
+  const activeStatuses = statuses?.filter(s => !s.is_archived_status) || [];
+  const archivedStatuses = statuses?.filter(s => s.is_archived_status) || [];
 
   const getCount = (key: string): number => {
     if (!counts) return 0;
@@ -103,6 +85,44 @@ export function TicketsSidebar({ selectedFilter, onFilterChange }: TicketsSideba
     );
   };
 
+  const renderStatusItem = (status: typeof activeStatuses[0], indent = false) => {
+    const count = getCount(status.name);
+    const isSelected = selectedFilter === status.name;
+    const IconComponent = getStatusIcon(status.icon);
+
+    return (
+      <button
+        key={status.name}
+        onClick={() => onFilterChange(status.name)}
+        className={cn(
+          "w-full flex items-center justify-between px-3 py-2 text-sm rounded-md transition-colors text-left",
+          indent && "pl-7",
+          isSelected 
+            ? "bg-primary/10 text-primary font-medium" 
+            : "text-muted-foreground hover:bg-accent hover:text-foreground"
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <IconComponent className="w-4 h-4" style={{ color: status.color }} />
+          <span>{status.label}</span>
+        </div>
+        <span
+          className={cn(
+            "text-xs font-medium px-2 py-0.5 rounded-full min-w-[24px] text-center",
+            status.is_archived_status
+              ? "bg-green-500/10 text-green-600 dark:text-green-400"
+              : "bg-muted text-muted-foreground"
+          )}
+        >
+          {count}
+        </span>
+      </button>
+    );
+  };
+
+  // Calculate archived total
+  const archivedTotal = archivedStatuses.reduce((sum, s) => sum + getCount(s.name), 0);
+
   return (
     <div className="h-full flex flex-col bg-card border-r border-border">
       {/* Main Filters */}
@@ -115,13 +135,13 @@ export function TicketsSidebar({ selectedFilter, onFilterChange }: TicketsSideba
         <div className="border-t border-border" />
       </div>
 
-      {/* Active Status Filters */}
+      {/* Active Status Filters (dynamic) */}
       <div className="px-3 pb-3">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-3">
           Por Status
         </p>
         <div className="space-y-1">
-          {activeStatusFilters.map(renderFilterItem)}
+          {activeStatuses.map(status => renderStatusItem(status))}
         </div>
       </div>
 
@@ -130,13 +150,31 @@ export function TicketsSidebar({ selectedFilter, onFilterChange }: TicketsSideba
         <div className="border-t border-border" />
       </div>
 
-      {/* Archived Section */}
+      {/* Archived Section (dynamic) */}
       <div className="px-3 pb-3">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-3">
           Arquivados
         </p>
         <div className="space-y-1">
-          {archivedFilters.map(renderFilterItem)}
+          {/* All archived button */}
+          <button
+            onClick={() => onFilterChange('archived')}
+            className={cn(
+              "w-full flex items-center justify-between px-3 py-2 text-sm rounded-md transition-colors text-left",
+              selectedFilter === 'archived'
+                ? "bg-primary/10 text-primary font-medium" 
+                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <Archive className="w-4 h-4" />
+              <span>Todos arquivados</span>
+            </div>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full min-w-[24px] text-center bg-muted text-muted-foreground">
+              {archivedTotal}
+            </span>
+          </button>
+          {archivedStatuses.map(status => renderStatusItem(status, true))}
         </div>
       </div>
     </div>
