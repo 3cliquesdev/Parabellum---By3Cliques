@@ -1456,15 +1456,26 @@ async function handleRecoveryOrder(
     };
   }
 
-  // 4. Buscar stage "Recuperação"
+  // 4. Buscar stage "Oportunidade" no Pipeline de Vendas Nacional (padrão)
+  const { data: targetPipeline } = await supabase
+    .from('pipelines')
+    .select('id')
+    .eq('is_default', true)
+    .single();
+
+  if (!targetPipeline) {
+    throw new Error('Pipeline padrão não encontrado no sistema');
+  }
+
   const { data: recoveryStage } = await supabase
     .from('stages')
     .select('id, pipeline_id')
-    .eq('name', 'Recuperação')
+    .eq('name', 'Oportunidade')
+    .eq('pipeline_id', targetPipeline.id)
     .single();
 
   if (!recoveryStage) {
-    throw new Error('Stage "Recuperação" não encontrada no sistema');
+    throw new Error('Stage "Oportunidade" não encontrada no pipeline padrão');
   }
 
   // 5. Distribuir para sales_rep online (Round Robin)
@@ -1567,19 +1578,35 @@ async function handleOverduePayment(
     };
   }
 
-  // 2. Find "Cobrança Ativa" stage
+  // 2. Buscar stage "Oportunidade" no Pipeline de Vendas Nacional (padrão)
+  const { data: targetPipeline } = await supabase
+    .from('pipelines')
+    .select('id')
+    .eq('is_default', true)
+    .single();
+
+  if (!targetPipeline) {
+    console.error('[kiwify-webhook] Pipeline padrão não encontrado');
+    return {
+      success: false,
+      error: 'Pipeline not found',
+      message: 'Pipeline padrão não encontrado'
+    };
+  }
+
   const { data: cobrancaStage } = await supabase
     .from('stages')
     .select('id, pipeline_id')
-    .eq('name', 'Cobrança Ativa')
+    .eq('name', 'Oportunidade')
+    .eq('pipeline_id', targetPipeline.id)
     .single();
 
   if (!cobrancaStage) {
-    console.error('[kiwify-webhook] Cobrança Ativa stage not found');
+    console.error('[kiwify-webhook] Stage Oportunidade não encontrada no pipeline padrão');
     return {
       success: false,
       error: 'Stage not found',
-      message: 'Stage "Cobrança Ativa" não encontrada'
+      message: 'Stage "Oportunidade" não encontrada no pipeline padrão'
     };
   }
 
@@ -1775,11 +1802,19 @@ async function handleChurnOrder(
     deal_id = existingWinbackDeal.id;
     console.log('[kiwify-webhook] ⚠️ Winback deal already exists, skipping creation:', deal_id);
   } else {
-    const { data: winbackStage } = await supabase
+    // Buscar stage "Oportunidade" no Pipeline de Vendas Nacional (padrão)
+    const { data: targetPipeline } = await supabase
+      .from('pipelines')
+      .select('id')
+      .eq('is_default', true)
+      .single();
+
+    const { data: winbackStage } = targetPipeline ? await supabase
       .from('stages')
       .select('id, pipeline_id')
-      .eq('name', 'Análise de Perda / Winback')
-      .single();
+      .eq('name', 'Oportunidade')
+      .eq('pipeline_id', targetPipeline.id)
+      .single() : { data: null };
 
     if (winbackStage) {
       // 🆕 ROUND-ROBIN: Distribuir para vendedor com menos deals
