@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MessageSquare, Ticket, DollarSign, Mail } from "lucide-react";
+import { MessageSquare, Ticket, DollarSign, Mail, RefreshCw } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import type { Tables } from "@/integrations/supabase/types";
@@ -303,6 +303,36 @@ export default function RealtimeNotifications() {
     queryClient.invalidateQueries({ queryKey: ["deals"] });
   }, [navigate, play, showBrowserNotification, queryClient]);
 
+  // Handler for subscription renewal notifications
+  const handleRenewalNotification = useCallback(async (payload: any) => {
+    console.log("[RealtimeNotifications] Renewal notification received:", payload);
+    
+    const notification = payload.new;
+    
+    // Only process if it's for the current user and is a renewal
+    if (notification.user_id !== user?.id || notification.type !== 'subscription_renewal') return;
+
+    play();
+
+    const metadata = notification.metadata as { contact_id?: string; contact_name?: string } | null;
+
+    toast(notification.title, {
+      description: notification.message,
+      icon: <RefreshCw className="h-4 w-4" />,
+      action: metadata?.contact_id ? {
+        label: "Ver Cliente",
+        onClick: () => navigate(`/customers/${metadata.contact_id}`),
+      } : undefined,
+      duration: 10000,
+    });
+
+    if (document.hidden) {
+      showBrowserNotification(notification.title, notification.message);
+    }
+
+    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+  }, [user, navigate, play, showBrowserNotification, queryClient]);
+
   // CONSOLIDATED: Single channel for all notifications - reduces websocket connections
   useEffect(() => {
     if (!user) {
@@ -346,6 +376,11 @@ export default function RealtimeNotifications() {
           { event: "INSERT", schema: "public", table: "deals", filter: `assigned_to=eq.${user.id}` },
           handleNewDeal
         )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+          handleRenewalNotification
+        )
         .subscribe((status) => {
           console.log("RealtimeNotifications consolidated subscription status:", status);
         });
@@ -364,7 +399,8 @@ export default function RealtimeNotifications() {
     handleSLAAlert,
     handleTicketComment,
     handleDealAssignment,
-    handleNewDeal
+    handleNewDeal,
+    handleRenewalNotification
   ]);
 
   return null;

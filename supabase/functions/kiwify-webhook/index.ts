@@ -1286,10 +1286,10 @@ async function handleSubscriptionRenewal(
 ) {
   console.log('[kiwify-webhook] 🔄 RENOVAÇÃO:', Customer.email);
 
-  // 1. Find existing customer
+  // 1. Find existing customer with consultant info
   const { data: contact } = await supabase
     .from('contacts')
-    .select('id, total_ltv')
+    .select('id, total_ltv, consultant_id, first_name, last_name')
     .eq('email', Customer.email)
     .single();
 
@@ -1328,6 +1328,40 @@ async function handleSubscriptionRenewal(
     });
 
   console.log('[kiwify-webhook] ✅ LTV updated:', newLtv);
+
+  // 4. Notify consultant about renewal
+  if (contact.consultant_id) {
+    const renewalValueFormatted = new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(renewalValue);
+    
+    const newLtvFormatted = new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(newLtv);
+
+    const { error: notifError } = await supabase.from('notifications').insert({
+      user_id: contact.consultant_id,
+      type: 'subscription_renewal',
+      title: '🔄 Cliente Renovou!',
+      message: `${contact.first_name} ${contact.last_name} renovou ${Product.product_name} (${renewalValueFormatted}). Novo LTV: ${newLtvFormatted}`,
+      metadata: {
+        contact_id: contact.id,
+        contact_name: `${contact.first_name} ${contact.last_name}`,
+        product_name: Product.product_name,
+        renewal_value: renewalValue,
+        new_ltv: newLtv
+      },
+      read: false
+    });
+
+    if (notifError) {
+      console.error('[kiwify-webhook] ❌ Failed to notify consultant:', notifError);
+    } else {
+      console.log('[kiwify-webhook] 🔔 Consultant notified:', contact.consultant_id);
+    }
+  }
 
   return {
     success: true,
