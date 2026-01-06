@@ -3,6 +3,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Download, Smartphone, Zap, Wifi } from 'lucide-react';
 
+const DISMISS_EXPIRY_DAYS = 7;
+
 export function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -12,13 +14,25 @@ export function PWAInstallPrompt() {
       e.preventDefault();
       setDeferredPrompt(e);
       
-      // Mostrar após 5 segundos de uso ou 2a visita
-      const visits = parseInt(localStorage.getItem('pwa_visits') || '0') + 1;
-      localStorage.setItem('pwa_visits', visits.toString());
-      
-      if (visits >= 2 && !localStorage.getItem('pwa_dismissed') && !localStorage.getItem('pwa_installed')) {
-        setTimeout(() => setShowPrompt(true), 5000);
+      // Check if already installed
+      if (localStorage.getItem('pwa_installed')) {
+        return;
       }
+
+      // Check dismiss with expiry (7 days)
+      const dismissedAt = localStorage.getItem('pwa_dismissed_at');
+      if (dismissedAt) {
+        const dismissedTime = parseInt(dismissedAt, 10);
+        const expiryMs = DISMISS_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+        if (Date.now() - dismissedTime < expiryMs) {
+          return; // Still within dismiss period
+        }
+        // Clear expired dismiss
+        localStorage.removeItem('pwa_dismissed_at');
+      }
+
+      // Show after 2 seconds (reduced from 5s)
+      setTimeout(() => setShowPrompt(true), 2000);
     };
 
     window.addEventListener('beforeinstallprompt', handler);
@@ -40,7 +54,7 @@ export function PWAInstallPrompt() {
   };
 
   const handleDismiss = () => {
-    localStorage.setItem('pwa_dismissed', 'true');
+    localStorage.setItem('pwa_dismissed_at', Date.now().toString());
     setShowPrompt(false);
   };
 
