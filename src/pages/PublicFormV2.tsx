@@ -334,7 +334,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
   }
 
   // Conversational Mode (default) - one field at a time
-  const containerClass = isEmbedded ? "h-fit pb-6" : "min-h-screen flex flex-col";
+  const containerClass = isEmbedded ? "" : "min-h-screen flex flex-col";
 
   return (
     <div 
@@ -388,7 +388,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
       </header>
 
       {/* Main Content */}
-      <main className={`flex-1 flex ${isEmbedded ? 'items-start' : 'items-center'} justify-center p-4 sm:p-6`}>
+      <main className={`${isEmbedded ? '' : 'flex-1'} flex ${isEmbedded ? 'items-start' : 'items-center'} justify-center p-4 sm:p-6`}>
         <div className="w-full max-w-2xl">
           <AnimatePresence mode="wait" custom={direction}>
             {currentField && (
