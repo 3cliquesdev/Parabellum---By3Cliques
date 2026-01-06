@@ -83,7 +83,7 @@ export function RoutingRuleDialog({ trigger, rule, onOpenChange }: RoutingRuleDi
       onOpenChange?.(isOpen);
     }}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{rule ? "Editar Regra de Roteamento" : "Nova Regra de Roteamento"}</DialogTitle>
         </DialogHeader>

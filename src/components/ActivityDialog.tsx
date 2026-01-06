@@ -109,7 +109,7 @@ export default function ActivityDialog({ trigger, contactId, dealId, activity, o
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
             {activity ? "Editar Atividade" : "Nova Atividade"}
