@@ -88,18 +88,21 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
                     formDescription={description}
                   />
                 </div>
-              ) : (
-                <div className="w-full max-w-4xl rounded-lg shadow-lg bg-background">
-                  <PublicFormV2 
-                    schema={schema} 
-                    isPreview 
-                    formName={name} 
-                    formTitle={title} 
-                    formDescription={description}
-                    isEmbedded
-                  />
-                </div>
-              )}
+            ) : (
+              <div 
+                className="w-full max-w-4xl rounded-lg shadow-lg bg-background overflow-y-auto"
+                style={{ maxHeight: 'calc(90vh - 120px)' }}
+              >
+                <PublicFormV2 
+                  schema={schema} 
+                  isPreview 
+                  formName={name} 
+                  formTitle={title} 
+                  formDescription={description}
+                  isEmbedded
+                />
+              </div>
+            )}
             </div>
           </div>
         </DialogPrimitive.Content>
