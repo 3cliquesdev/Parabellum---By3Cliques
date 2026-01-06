@@ -513,24 +513,24 @@ export default function SLASettings() {
                             />
                           </TableCell>
                           <TableCell>
-                            <Input
+                            <input
                               type="time"
                               value={formatTime(config.start_time)}
                               onChange={(e) => 
                                 updateBusinessHours.mutate({ id: config.id, start_time: e.target.value })
                               }
-                              className="w-32"
+                              className="flex h-10 w-32 rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                               disabled={!config.is_working_day}
                             />
                           </TableCell>
                           <TableCell>
-                            <Input
+                            <input
                               type="time"
                               value={formatTime(config.end_time)}
                               onChange={(e) => 
                                 updateBusinessHours.mutate({ id: config.id, end_time: e.target.value })
                               }
-                              className="w-32"
+                              className="flex h-10 w-32 rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                               disabled={!config.is_working_day}
                             />
                           </TableCell>
