@@ -187,6 +187,18 @@ export default function Deals() {
     setIsSelectionMode(false);
   };
 
+  // Atalho ESC para sair do modo de seleção
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isSelectionMode) {
+        clearSelection();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isSelectionMode]);
+
   const toggleSelectionMode = () => {
     if (isSelectionMode) {
       clearSelection();
