@@ -25,9 +25,9 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] h-[90vh] p-0 overflow-hidden">
+      <DialogContent className="max-w-[95vw] h-[90vh] p-0 flex flex-col overflow-hidden">
         {/* Device Toggle */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
+        <div className="flex-shrink-0 flex justify-center py-4 border-b bg-background z-10">
           <Tabs value={device} onValueChange={(v) => setDevice(v as any)}>
             <TabsList>
               <TabsTrigger value="desktop" className="gap-2">
@@ -43,7 +43,7 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
         </div>
 
         {/* Preview Container */}
-        <div className="absolute inset-0 top-16 flex items-center justify-center bg-muted/50 p-8">
+        <div className="flex-1 min-h-0 flex items-center justify-center bg-muted/50 p-8 overflow-hidden">
           {device === "mobile" ? (
             <div 
               className="bg-background rounded-[40px] border-[8px] border-foreground/20 shadow-2xl overflow-y-auto"
