@@ -166,12 +166,18 @@ serve(async (req) => {
       ],
     };
 
-    // Adicionar header In-Reply-To para threading
+    // Adicionar header In-Reply-To para threading (formato RFC 2822)
     if (ticket.last_email_message_id) {
+      // Formatar Message-ID no padrão RFC 2822: <id@domain>
+      const messageId = ticket.last_email_message_id.includes('@') 
+        ? ticket.last_email_message_id 
+        : `<${ticket.last_email_message_id}@resend.dev>`;
+      
       resendPayload.headers = {
-        "In-Reply-To": ticket.last_email_message_id,
-        "References": ticket.last_email_message_id,
+        "In-Reply-To": messageId,
+        "References": messageId,
       };
+      console.log("[send-ticket-email-reply] Threading headers set:", messageId);
     }
 
     const resendResponse = await fetch("https://api.resend.com/emails", {
@@ -192,11 +198,13 @@ serve(async (req) => {
     const resendData = await resendResponse.json();
     console.log("[send-ticket-email-reply] Email sent:", resendData);
 
-    // Atualizar last_email_message_id do ticket
+    // Atualizar last_email_message_id do ticket com formato RFC 2822
+    const formattedMessageId = `<${resendData.id}@resend.dev>`;
     await supabase
       .from("tickets")
-      .update({ last_email_message_id: resendData.id })
+      .update({ last_email_message_id: formattedMessageId })
       .eq("id", ticket_id);
+    console.log("[send-ticket-email-reply] Message ID salvo:", formattedMessageId);
 
     return new Response(
       JSON.stringify({
