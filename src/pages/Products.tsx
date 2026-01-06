@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Loader2, Plus, Edit, Trash2, Package, ExternalLink, Activity } from "lucide-react";
+import { Shield, Loader2, Edit, Trash2, Package, ExternalLink, Activity } from "lucide-react";
 import { useProducts, useDeleteProduct } from "@/hooks/useProducts";
 import { ProductDialog } from "@/components/ProductDialog";
 import { ProductMappingDiagnostic } from "@/components/products/ProductMappingDiagnostic";
@@ -102,25 +102,14 @@ export default function Products() {
     }
   };
 
-  const handleNewProduct = () => {
-    setSelectedProduct(null);
-    setInitialProductData(null);
-    setDialogOpen(true);
-  };
 
   return (
     <div className="min-h-screen p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Gestão de Produtos</h1>
-          <p className="text-muted-foreground mt-2">
-            Configure produtos e regras de distribuição de carteira
-          </p>
-        </div>
-        <Button onClick={handleNewProduct}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Produto
-        </Button>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-foreground">Gestão de Produtos</h1>
+        <p className="text-muted-foreground mt-2">
+          Configure playbooks e regras de distribuição para produtos da Kiwify
+        </p>
       </div>
 
       <Tabs defaultValue="products" className="space-y-6">
@@ -135,22 +124,17 @@ export default function Products() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="products" className="space-y-4">{/* ... keep existing code */}
-
+        <TabsContent value="products" className="space-y-4">
           {!products || products.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Package className="h-16 w-16 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold text-foreground mb-2">
-                  Nenhum produto cadastrado
+                  Nenhum produto importado
                 </h3>
-                <p className="text-muted-foreground text-center mb-4">
-                  Comece criando seu primeiro produto para configurar as regras de distribuição
+                <p className="text-muted-foreground text-center">
+                  Os produtos serão criados automaticamente quando receberem vendas da Kiwify
                 </p>
-                <Button onClick={handleNewProduct}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Criar Primeiro Produto
-                </Button>
               </CardContent>
             </Card>
           ) : (
