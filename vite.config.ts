@@ -55,11 +55,10 @@ export default defineConfig(({ mode }) => ({
         runtimeCaching: [
           {
             urlPattern: /\.(js|css)$/,
-            handler: 'NetworkFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'static-assets-v4',
-              networkTimeoutSeconds: 1,
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 5 }
+              cacheName: 'static-assets-v6',
+              expiration: { maxEntries: 100, maxAgeSeconds: 30 }
             }
           },
           {
