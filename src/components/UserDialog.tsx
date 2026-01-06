@@ -105,28 +105,39 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
     password: password.length >= 8,
   };
 
-  // Populate form when editing
+  // Populate form when editing - fetch fresh data from database
   useEffect(() => {
-    if (editUser) {
-      setEmail(editUser.email);
-      setRole(editUser.role);
-      setFullName(editUser.full_name || "");
-      setJobTitle(editUser.job_title || "");
-      setDepartment(editUser.department || "");
-      setSelectedSkills(profileSkills?.map(ps => ps.skill_id) || []);
-      setSelectedChannels(agentChannels?.map(ac => ac.channel_id) || []);
-    } else {
-      // Reset form for creation mode
-      setEmail("");
-      setPassword("");
-      setRole("sales_rep");
-      setFullName("");
-      setJobTitle("");
-      setDepartment("");
-      setSelectedSkills([]);
-      setSelectedChannels([]);
-      setTouched({});
-    }
+    const populateForm = async () => {
+      if (editUser && open) {
+        // Buscar dados atualizados diretamente do banco
+        const { data: freshProfile } = await supabase
+          .from('profiles')
+          .select('full_name, job_title, department, avatar_url')
+          .eq('id', editUser.id)
+          .single();
+        
+        setEmail(editUser.email);
+        setRole(editUser.role);
+        setFullName(freshProfile?.full_name || editUser.full_name || "");
+        setJobTitle(freshProfile?.job_title || editUser.job_title || "");
+        setDepartment(freshProfile?.department || editUser.department || "");
+        setSelectedSkills(profileSkills?.map(ps => ps.skill_id) || []);
+        setSelectedChannels(agentChannels?.map(ac => ac.channel_id) || []);
+      } else if (!open) {
+        // Reset form when dialog closes
+        setEmail("");
+        setPassword("");
+        setRole("sales_rep");
+        setFullName("");
+        setJobTitle("");
+        setDepartment("");
+        setSelectedSkills([]);
+        setSelectedChannels([]);
+        setTouched({});
+      }
+    };
+    
+    populateForm();
   }, [editUser, open, profileSkills, agentChannels]);
 
   const handleSubmit = async (e: React.FormEvent) => {

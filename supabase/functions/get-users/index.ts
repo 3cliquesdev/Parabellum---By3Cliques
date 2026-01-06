@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
         'support_agent',
         'support_manager',
         'financial_manager',
+        'financial_agent',
         'cs_manager'
       ]);
 
