@@ -127,7 +127,7 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
   };
 
   // Success screen
-  const containerClass = isEmbedded ? "min-h-full pb-6" : "min-h-screen flex flex-col";
+  const containerClass = isEmbedded ? "pb-6" : "min-h-screen flex flex-col";
   
   if (isSubmitted) {
     return (
