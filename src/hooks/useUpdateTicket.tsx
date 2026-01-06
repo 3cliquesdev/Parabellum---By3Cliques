@@ -17,7 +17,7 @@ export function useUpdateTicket() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: UpdateTicketData }) => {
+    mutationFn: async ({ id, updates, statusNote }: { id: string; updates: UpdateTicketData; statusNote?: string }) => {
       const updateData: any = { ...updates };
       
       // Se status mudou para resolved ou closed, adicionar resolved_at
@@ -33,6 +33,25 @@ export function useUpdateTicket() {
         .single();
 
       if (error) throw error;
+
+      // Enviar notificação de status para o cliente
+      const notifiableStatuses = ['waiting_customer', 'resolved', 'closed'];
+      if (updates.status && notifiableStatuses.includes(updates.status)) {
+        try {
+          await supabase.functions.invoke('send-ticket-status-notification', {
+            body: {
+              ticket_id: id,
+              new_status: updates.status,
+              note: statusNote,
+            },
+          });
+          console.log(`[useUpdateTicket] Status notification sent for ${updates.status}`);
+        } catch (notifError) {
+          console.error('[useUpdateTicket] Failed to send status notification:', notifError);
+          // Não falhar a operação principal se a notificação falhar
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
