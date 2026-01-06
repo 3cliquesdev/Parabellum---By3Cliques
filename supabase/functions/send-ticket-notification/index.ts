@@ -45,7 +45,8 @@ function generateTicketEmailHTML(
   description: string,
   priority: string,
   brandName: string,
-  logoUrl: string
+  logoUrl: string,
+  portalUrl: string
 ): string {
   const priorityColor = priorityColors[priority] || "#6B7280";
   const priorityLabel = priorityLabels[priority] || priority;
@@ -140,15 +141,31 @@ function generateTicketEmailHTML(
             </td>
           </tr>
 
-          <!-- Additional Info -->
+          <!-- Additional Info + Portal Link -->
           <tr>
             <td style="padding: 0 48px 32px;">
               <p style="margin: 0 0 12px; font-size: 15px; line-height: 24px; color: #4b5563;">
                 Você receberá atualizações por email sempre que houver novidades sobre seu ticket.
               </p>
               
-              <p style="margin: 0; font-size: 15px; line-height: 24px; color: #4b5563;">
-                Se tiver alguma dúvida adicional, não hesite em nos contatar.
+              <p style="margin: 0 0 20px; font-size: 15px; line-height: 24px; color: #4b5563;">
+                Você também pode acompanhar o status do seu ticket a qualquer momento no nosso portal:
+              </p>
+              
+              <!-- CTA Button -->
+              <table cellpadding="0" cellspacing="0" style="width: 100%;">
+                <tr>
+                  <td style="text-align: center;">
+                    <a href="${portalUrl}/my-tickets" 
+                       style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #2563eb 0%, #1e3a5f 100%); color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 600; border-radius: 8px;">
+                      📋 Acompanhar Meus Tickets
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 20px 0 0; font-size: 13px; line-height: 20px; color: #6b7280; text-align: center;">
+                No portal, você pode ver todos os seus tickets, respostas da equipe e adicionar comentários.
               </p>
             </td>
           </tr>
@@ -244,7 +261,20 @@ serve(async (req) => {
     const logoUrl = brandingData?.logo_url || 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-seuarmazemdrop.png';
     senderName = sanitizeName(brandName);
 
-    console.log('[send-ticket-notification] Email config:', { senderEmail, senderName, brandName, logoUrl });
+    // Buscar URL do portal de tickets
+    let portalUrl = 'https://seuarmazemdrop.parabellum.work'; // fallback
+    
+    const { data: portalConfig } = await supabase
+      .from('system_configurations')
+      .select('value')
+      .eq('key', 'public_portal_url')
+      .single();
+    
+    if (portalConfig?.value) {
+      portalUrl = portalConfig.value;
+    }
+
+    console.log('[send-ticket-notification] Email config:', { senderEmail, senderName, brandName, logoUrl, portalUrl });
 
     // Gerar HTML do email
     const html = generateTicketEmailHTML(
@@ -254,7 +284,8 @@ serve(async (req) => {
       description,
       priority,
       brandName,
-      logoUrl
+      logoUrl,
+      portalUrl
     );
 
     // Enviar email via Resend API
