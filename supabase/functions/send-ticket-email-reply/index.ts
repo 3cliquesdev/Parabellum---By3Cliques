@@ -58,10 +58,8 @@ serve(async (req) => {
 
     if (ticketError) throw ticketError;
 
-    // Verificar se é ticket de email
-    if (ticket.channel !== "email") {
-      throw new Error("This ticket is not from email channel");
-    }
+    // Log do canal para debug
+    console.log("[send-ticket-email-reply] Ticket channel:", ticket.channel);
 
     // Buscar dados do cliente
     const { data: customer, error: customerError } = await supabase
