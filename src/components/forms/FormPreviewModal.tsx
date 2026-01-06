@@ -17,6 +17,9 @@ interface FormPreviewModalProps {
   description?: string;
 }
 
+const MOBILE_WIDTH = 375;
+const MOBILE_HEIGHT = 667;
+
 export function FormPreviewModal({ open, onOpenChange, schema, name, title, description }: FormPreviewModalProps) {
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
 
@@ -40,17 +43,27 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
         </div>
 
         {/* Preview Container */}
-        <div className="h-full w-full flex items-center justify-center bg-muted/50 p-8 pt-16">
+        <div className="h-full w-full flex items-center justify-center bg-muted/50 p-8 pt-16 overflow-hidden">
           <div
             className={`
-              bg-background transition-all duration-300 overflow-y-auto
+              bg-background transition-all duration-300
               ${device === "mobile" 
-                ? "w-[375px] h-[667px] rounded-[40px] border-[8px] border-foreground/20 shadow-2xl" 
-                : "w-full h-full rounded-lg shadow-lg"
+                ? `w-[${MOBILE_WIDTH}px] h-[${MOBILE_HEIGHT}px] rounded-[40px] border-[8px] border-foreground/20 shadow-2xl overflow-y-auto` 
+                : "w-full h-full rounded-lg shadow-lg overflow-hidden"
               }
             `}
+            style={device === "mobile" ? { width: MOBILE_WIDTH, height: MOBILE_HEIGHT } : undefined}
           >
-            <PublicFormV2 schema={schema} isPreview formName={name} formTitle={title} formDescription={description} />
+            <div className={device === "desktop" ? "h-full overflow-y-auto" : "h-full"}>
+              <PublicFormV2 
+                schema={schema} 
+                isPreview 
+                formName={name} 
+                formTitle={title} 
+                formDescription={description}
+                isEmbedded={device === "desktop"}
+              />
+            </div>
           </div>
         </div>
       </DialogContent>

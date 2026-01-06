@@ -26,9 +26,10 @@ interface PublicFormV2Props {
   formName?: string;
   formTitle?: string;
   formDescription?: string;
+  isEmbedded?: boolean;
 }
 
-export default function PublicFormV2({ formId: propFormId, schema: propSchema, isPreview = false, formName, formTitle, formDescription }: PublicFormV2Props) {
+export default function PublicFormV2({ formId: propFormId, schema: propSchema, isPreview = false, formName, formTitle, formDescription, isEmbedded = false }: PublicFormV2Props) {
   const { formId: paramFormId } = useParams<{ formId: string }>();
   const formId = propFormId || paramFormId;
   
@@ -285,6 +286,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
         isPreview={isPreview}
         title={formData?.title || formTitle || formData?.name || formName}
         description={formData?.description || formDescription}
+        isEmbedded={isEmbedded}
       />
     );
   }
@@ -332,10 +334,11 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
   }
 
   // Conversational Mode (default) - one field at a time
+  const containerClass = isEmbedded ? "h-full flex flex-col" : "min-h-screen flex flex-col";
 
   return (
     <div 
-      className="min-h-screen flex flex-col"
+      className={containerClass}
       style={{ 
         backgroundColor: settings.background_color,
         backgroundImage: currentField?.image_url 

@@ -22,9 +22,10 @@ interface SinglePageFormViewProps {
   isPreview?: boolean;
   title?: string;
   description?: string;
+  isEmbedded?: boolean;
 }
 
-export function SinglePageFormView({ schema, formId, isPreview = false, title, description }: SinglePageFormViewProps) {
+export function SinglePageFormView({ schema, formId, isPreview = false, title, description, isEmbedded = false }: SinglePageFormViewProps) {
   const { toast } = useToast();
   const settings = { ...DEFAULT_FORM_SETTINGS, ...schema?.settings };
   const fields = schema?.fields || [];
@@ -126,11 +127,13 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
   };
 
   // Success screen
+  const containerClass = isEmbedded ? "h-full flex flex-col" : "min-h-screen flex flex-col";
+  
   if (isSubmitted) {
     return (
       <div 
-        className="min-h-screen flex items-center justify-center p-6"
-        style={{ 
+        className={isEmbedded ? "h-full flex items-center justify-center p-6" : "min-h-screen flex items-center justify-center p-6"}
+        style={{
           backgroundColor: settings.background_color,
           backgroundImage: settings.background_image ? `url(${settings.background_image})` : undefined,
           backgroundSize: "cover",
@@ -169,7 +172,7 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
 
   return (
     <div 
-      className="min-h-screen flex flex-col"
+      className={containerClass}
       style={{ 
         backgroundColor: settings.background_color,
         backgroundImage: settings.background_image ? `url(${settings.background_image})` : undefined,
