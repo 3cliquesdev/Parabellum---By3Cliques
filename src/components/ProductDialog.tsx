@@ -183,11 +183,8 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
 
           {(!offers || offers.length === 0) && (
             <div className="pt-3 border-t">
-              <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                ⚠️ Nenhuma oferta Kiwify vinculada a este produto
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Vincule ofertas para poder configurar este produto
+              <p className="text-xs text-muted-foreground">
+                ℹ️ Nenhuma oferta adicional vinculada
               </p>
             </div>
           )}
@@ -278,7 +275,7 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={updateProduct.isPending || !offers || offers.length === 0}>
+              <Button type="submit" disabled={updateProduct.isPending || !product?.external_id}>
                 {updateProduct.isPending ? "Salvando..." : "Salvar"}
               </Button>
             </div>
