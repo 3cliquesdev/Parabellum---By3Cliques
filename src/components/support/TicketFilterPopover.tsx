@@ -77,6 +77,7 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
   const [isOpen, setIsOpen] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const { data: ticketTags = [] } = useTags("ticket");
+  const { data: ticketStatuses = [] } = useActiveTicketStatuses();
 
   // Count active filters
   const activeFilterCount = [
@@ -234,18 +235,28 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Status</Label>
               <div className="flex flex-wrap gap-2">
-                {STATUS_OPTIONS.map(option => (
-                  <Button
-                    key={option.value}
-                    variant={filters.status.includes(option.value) ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleToggleArrayFilter('status', option.value)}
-                    className="h-7 text-xs"
-                  >
-                    <span className={cn("w-2 h-2 rounded-full mr-1.5", option.color)} />
-                    {option.label}
-                  </Button>
-                ))}
+                {ticketStatuses.map(status => {
+                  const StatusIcon = getStatusIcon(status.icon);
+                  return (
+                    <Button
+                      key={status.name}
+                      variant={filters.status.includes(status.name) ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleToggleArrayFilter('status', status.name)}
+                      className="h-7 text-xs gap-1"
+                      style={filters.status.includes(status.name) ? {
+                        backgroundColor: status.color || undefined,
+                        borderColor: status.color || undefined,
+                      } : {
+                        borderColor: status.color || undefined,
+                        color: status.color || undefined,
+                      }}
+                    >
+                      <StatusIcon className="h-3 w-3" />
+                      {status.label}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
 
