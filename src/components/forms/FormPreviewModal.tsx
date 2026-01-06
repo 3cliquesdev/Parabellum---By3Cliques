@@ -43,28 +43,32 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
         </div>
 
         {/* Preview Container */}
-        <div className="h-full w-full flex items-center justify-center bg-muted/50 p-8 pt-16 overflow-hidden">
-          <div
-            className={`
-              bg-background transition-all duration-300
-              ${device === "mobile" 
-                ? `w-[${MOBILE_WIDTH}px] h-[${MOBILE_HEIGHT}px] rounded-[40px] border-[8px] border-foreground/20 shadow-2xl overflow-y-auto` 
-                : "w-full h-full rounded-lg shadow-lg overflow-hidden"
-              }
-            `}
-            style={device === "mobile" ? { width: MOBILE_WIDTH, height: MOBILE_HEIGHT } : undefined}
-          >
-            <div className={device === "desktop" ? "h-full overflow-y-auto" : "h-full"}>
+        <div className="absolute inset-0 top-16 flex items-center justify-center bg-muted/50 p-8">
+          {device === "mobile" ? (
+            <div 
+              className="bg-background rounded-[40px] border-[8px] border-foreground/20 shadow-2xl overflow-y-auto"
+              style={{ width: MOBILE_WIDTH, height: MOBILE_HEIGHT }}
+            >
               <PublicFormV2 
                 schema={schema} 
                 isPreview 
                 formName={name} 
                 formTitle={title} 
                 formDescription={description}
-                isEmbedded={device === "desktop"}
               />
             </div>
-          </div>
+          ) : (
+            <div className="w-full h-full rounded-lg shadow-lg bg-background overflow-y-auto">
+              <PublicFormV2 
+                schema={schema} 
+                isPreview 
+                formName={name} 
+                formTitle={title} 
+                formDescription={description}
+                isEmbedded
+              />
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
