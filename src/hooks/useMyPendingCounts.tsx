@@ -6,6 +6,7 @@ import { useEffect } from "react";
 interface MyPendingCounts {
   inbox: number;
   tickets: number;
+  deals: number;
 }
 
 export function useMyPendingCounts() {
@@ -15,7 +16,7 @@ export function useMyPendingCounts() {
     queryKey: ["my-pending-counts", user?.id],
     queryFn: async (): Promise<MyPendingCounts> => {
       if (!user?.id) {
-        return { inbox: 0, tickets: 0 };
+        return { inbox: 0, tickets: 0, deals: 0 };
       }
 
       // Buscar contagem de inbox (conversas não lidas atribuídas ao usuário)
@@ -40,9 +41,21 @@ export function useMyPendingCounts() {
         console.error("Erro ao buscar contagem de tickets:", ticketsError);
       }
 
+      // Buscar contagem de deals ativos atribuídos ao usuário
+      const { count: dealsCount, error: dealsError } = await supabase
+        .from("deals")
+        .select("*", { count: "exact", head: true })
+        .eq("assigned_to", user.id)
+        .not("status", "in", '("won","lost")');
+
+      if (dealsError) {
+        console.error("Erro ao buscar contagem de deals:", dealsError);
+      }
+
       return {
         inbox: inboxCount || 0,
         tickets: ticketsCount || 0,
+        deals: dealsCount || 0,
       };
     },
     enabled: !!user?.id,
@@ -86,9 +99,26 @@ export function useMyPendingCounts() {
       )
       .subscribe();
 
+    const dealsChannel = supabase
+      .channel("deals-badge-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "deals",
+          filter: `assigned_to=eq.${user.id}`,
+        },
+        () => {
+          query.refetch();
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(inboxChannel);
       supabase.removeChannel(ticketsChannel);
+      supabase.removeChannel(dealsChannel);
     };
   }, [user?.id, query.refetch]);
 

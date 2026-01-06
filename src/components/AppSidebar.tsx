@@ -256,9 +256,13 @@ export function AppSidebar() {
     const ticketsBadge = item.href === "/support" && (myPendingCounts?.tickets || 0) > 0;
     const ticketsCount = myPendingCounts?.tickets || 0;
     
+    // Badge de pendências pessoais - Deals
+    const dealsBadge = item.href === "/deals" && (myPendingCounts?.deals || 0) > 0;
+    const dealsCount = myPendingCounts?.deals || 0;
+    
     // Determinar qual badge mostrar (prioridade: SLA > pendências pessoais)
-    const showPersonalBadge = !showSLABadge && (inboxBadge || ticketsBadge);
-    const personalCount = inboxBadge ? inboxCount : ticketsCount;
+    const showPersonalBadge = !showSLABadge && (inboxBadge || ticketsBadge || dealsBadge);
+    const personalCount = inboxBadge ? inboxCount : ticketsBadge ? ticketsCount : dealsCount;
 
     return (
       <SidebarMenuItem key={item.href}>
