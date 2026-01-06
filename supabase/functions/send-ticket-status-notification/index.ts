@@ -254,8 +254,8 @@ serve(async (req) => {
         id,
         ticket_number,
         subject,
-        contact_id,
-        contacts!tickets_contact_id_fkey (
+        customer_id,
+        customer:contacts!tickets_customer_id_fkey (
           id,
           first_name,
           last_name,
@@ -269,7 +269,7 @@ serve(async (req) => {
       throw new Error(`Ticket not found: ${ticketError?.message}`);
     }
 
-    const contact = ticket.contacts as any;
+    const contact = ticket.customer as any;
     if (!contact?.email) {
       console.log("[send-ticket-status-notification] No customer email found, skipping notification");
       return new Response(
