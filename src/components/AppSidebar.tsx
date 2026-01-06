@@ -151,8 +151,8 @@ const universalMenuGroups: MenuGroup[] = [
       { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
       { title: "Distribuição CS", href: "/reports/consultant-distribution", icon: BarChart3, permission: "reports.distribution" },
       { title: "Distribuição Vendas", href: "/reports/sales-distribution", icon: BarChart3, permission: "reports.lead_distribution" },
-      { title: "Detecção de Fraude", href: "/reports/fraud-detection", icon: AlertTriangle, permission: "analytics.view" },
-      { title: "Exportar para NF", href: "/reports/fiscal-export", icon: Receipt, permission: "reports.access" },
+      { title: "Detecção de Fraude", href: "/reports/fraud-detection", icon: AlertTriangle, permission: "reports.fraud_detection" },
+      { title: "Exportar para NF", href: "/reports/fiscal-export", icon: Receipt, permission: "reports.fiscal_export" },
     ]
   },
   {

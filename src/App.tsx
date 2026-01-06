@@ -158,8 +158,8 @@ const App = () => {
             <Route path="/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Analytics /></Layout></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute requiredPermission="reports.access"><Layout><Reports /></Layout></ProtectedRoute>} />
             <Route path="/reports/consultant-distribution" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ConsultantDistribution /></Layout></ProtectedRoute>} />
-            <Route path="/reports/fiscal-export" element={<ProtectedRoute requiredPermission="reports.access"><Layout><FiscalExport /></Layout></ProtectedRoute>} />
-            <Route path="/reports/fraud-detection" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><FraudDetection /></Layout></ProtectedRoute>} />
+            <Route path="/reports/fiscal-export" element={<ProtectedRoute requiredPermission="reports.fiscal_export"><Layout><FiscalExport /></Layout></ProtectedRoute>} />
+            <Route path="/reports/fraud-detection" element={<ProtectedRoute requiredPermission="reports.fraud_detection"><Layout><FraudDetection /></Layout></ProtectedRoute>} />
             <Route path="/reports/sales-distribution" element={<ProtectedRoute requiredPermission="reports.lead_distribution"><Layout><SalesRepDistribution /></Layout></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute requiredPermission="goals.view_own"><Layout><Goals /></Layout></ProtectedRoute>} />
             <Route path="/goals-management" element={<ProtectedRoute requiredPermission="goals.set"><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
