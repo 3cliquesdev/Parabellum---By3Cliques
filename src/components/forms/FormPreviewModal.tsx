@@ -74,7 +74,7 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
               minHeight: 0,
             }}
           >
-            <div className="p-8 flex items-start justify-center" style={{ minHeight: '100%' }}>
+            <div className="p-8 flex items-start justify-center">
               {device === "mobile" ? (
                 <div 
                   className="shrink-0 bg-background rounded-[40px] border-[8px] border-foreground/20 shadow-2xl overflow-y-auto"
