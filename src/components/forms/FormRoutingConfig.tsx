@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { useDepartments } from "@/hooks/useDepartments";
 import { usePipelines } from "@/hooks/usePipelines";
-import { useSalesReps } from "@/hooks/useSalesReps";
+import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { Briefcase, Ticket, FileText, Users, Target, Bell } from "lucide-react";
 
 export type FormTargetType = "deal" | "ticket" | "internal_request";
@@ -46,7 +46,9 @@ const DISTRIBUTION_OPTIONS = [
 export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps) {
   const { data: departments } = useDepartments();
   const { data: pipelines } = usePipelines();
-  const { data: salesReps } = useSalesReps();
+  const { data: departmentUsers, isLoading: isLoadingUsers } = useUsersByDepartment(
+    settings.target_department_id
+  );
 
   const updateSetting = <K extends keyof FormRoutingSettings>(
     key: K,
@@ -54,6 +56,18 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
   ) => {
     onChange({ ...settings, [key]: value });
   };
+
+  // Clear selected user if department changes and user no longer belongs
+  useEffect(() => {
+    if (settings.target_user_id && departmentUsers) {
+      const userBelongsToDept = departmentUsers.some(
+        u => u.id === settings.target_user_id
+      );
+      if (!userBelongsToDept) {
+        updateSetting("target_user_id", undefined);
+      }
+    }
+  }, [settings.target_department_id, departmentUsers]);
 
   const selectedTargetType = TARGET_TYPE_OPTIONS.find(t => t.value === settings.target_type);
   const isTicketMode = settings.target_type === "ticket";
@@ -194,21 +208,45 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
         {settings.distribution_rule === "specific_user" && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">Responsável fixo</Label>
-            <Select
-              value={settings.target_user_id || ""}
-              onValueChange={(v) => updateSetting("target_user_id", v || undefined)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o responsável..." />
-              </SelectTrigger>
-              <SelectContent>
-                {salesReps?.map((rep) => (
-                  <SelectItem key={rep.id} value={rep.id}>
-                    {rep.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!settings.target_department_id ? (
+              <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-md">
+                Selecione primeiro o departamento acima
+              </p>
+            ) : (
+              <Select
+                value={settings.target_user_id || ""}
+                onValueChange={(v) => updateSetting("target_user_id", v || undefined)}
+                disabled={isLoadingUsers}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    isLoadingUsers 
+                      ? "Carregando..." 
+                      : "Selecione o responsável..."
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {departmentUsers?.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground text-center">
+                      Nenhum usuário neste departamento
+                    </div>
+                  ) : (
+                    departmentUsers?.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{user.full_name}</span>
+                          {user.job_title && (
+                            <span className="text-xs text-muted-foreground">
+                              ({user.job_title})
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         )}
 
