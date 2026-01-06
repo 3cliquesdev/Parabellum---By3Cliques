@@ -183,7 +183,7 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
             {product ? "Configurar Produto" : "Mapear Produto"}

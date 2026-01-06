@@ -64,7 +64,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{department ? "Editar Departamento" : "Novo Departamento"}</DialogTitle>
           <DialogDescription>

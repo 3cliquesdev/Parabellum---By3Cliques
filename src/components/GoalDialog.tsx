@@ -133,7 +133,7 @@ export function GoalDialog({ preSelectedUserId }: GoalDialogProps = {}) {
           {preSelectedUserId ? "Definir Meta" : "Nova Meta"}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
             {selectedUserRole === "consultant" ? "Definir Metas de CS" : "Definir Metas de Vendas"}
