@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useTags } from "@/hooks/useTags";
 import { 
   Search, 
   Filter, 
@@ -14,7 +15,8 @@ import {
   AlertTriangle, 
   Clock,
   Paperclip,
-  CalendarIcon
+  CalendarIcon,
+  Tag
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -26,6 +28,7 @@ export interface TicketFilters {
   priority: string[];
   category: string[];
   channel: string[];
+  tags: string[];
   dateRange?: DateRange;
   slaExpired: boolean;
 }
@@ -73,6 +76,7 @@ export const defaultTicketFilters: TicketFilters = {
   priority: [],
   category: [],
   channel: [],
+  tags: [],
   dateRange: undefined,
   slaExpired: false,
 };
@@ -80,6 +84,7 @@ export const defaultTicketFilters: TicketFilters = {
 export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPopoverProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const { data: ticketTags = [] } = useTags("ticket");
 
   // Count active filters
   const activeFilterCount = [
@@ -87,6 +92,7 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
     filters.priority.length > 0,
     filters.category.length > 0,
     filters.channel.length > 0,
+    filters.tags.length > 0,
     filters.dateRange?.from !== undefined,
     filters.slaExpired,
   ].filter(Boolean).length;
@@ -95,7 +101,7 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
     onFiltersChange({ ...filters, search: value });
   };
 
-  const handleToggleArrayFilter = (key: 'status' | 'priority' | 'category' | 'channel', value: string) => {
+  const handleToggleArrayFilter = (key: 'status' | 'priority' | 'category' | 'channel' | 'tags', value: string) => {
     const current = filters[key];
     const updated = current.includes(value)
       ? current.filter(v => v !== value)
@@ -304,6 +310,36 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
                 ))}
               </div>
             </div>
+
+            {/* Tags */}
+            {ticketTags.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Tag className="h-3 w-3" />
+                  Tags
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {ticketTags.map((tag: any) => (
+                    <Button
+                      key={tag.id}
+                      variant={filters.tags.includes(tag.id) ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleToggleArrayFilter('tags', tag.id)}
+                      className="h-7 text-xs"
+                      style={filters.tags.includes(tag.id) ? {
+                        backgroundColor: tag.color || undefined,
+                        borderColor: tag.color || undefined,
+                      } : {
+                        borderColor: tag.color || undefined,
+                        color: tag.color || undefined,
+                      }}
+                    >
+                      {tag.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </PopoverContent>
       </Popover>

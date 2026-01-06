@@ -138,10 +138,24 @@ export function useTickets(
       const { data, error } = await query;
 
       if (error) throw error;
-      
-      // Client-side search filter
+
       let filteredData = data || [];
       
+      // Tag filter (client-side since we need to filter by ticket_tags relation)
+      if (advancedFilters?.tags && advancedFilters.tags.length > 0) {
+        // Fetch ticket IDs that have the selected tags
+        const { data: ticketTagsData } = await supabase
+          .from("ticket_tags")
+          .select("ticket_id")
+          .in("tag_id", advancedFilters.tags);
+
+        if (ticketTagsData) {
+          const ticketIdsWithTags = new Set(ticketTagsData.map(tt => tt.ticket_id));
+          filteredData = filteredData.filter(ticket => ticketIdsWithTags.has(ticket.id));
+        }
+      }
+
+      // Client-side search filter
       if (advancedFilters?.search) {
         const searchLower = advancedFilters.search.toLowerCase();
         filteredData = filteredData.filter(ticket => {

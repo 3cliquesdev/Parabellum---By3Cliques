@@ -15,6 +15,7 @@ import { TransferToFinancialDialog } from "@/components/TransferToFinancialDialo
 import { MergeTicketDialog } from "@/components/MergeTicketDialog";
 import { ChannelBadge } from "@/components/ChannelBadge";
 import { TicketTimeline } from "@/components/TicketTimeline";
+import { TicketTagsCard } from "@/components/TicketTagsCard";
 import { useTicketPresence } from "@/hooks/useTicketPresence";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -344,6 +345,12 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
             </CardContent>
           </Card>
         )}
+
+        {/* Tags do Ticket */}
+        <TicketTagsCard 
+          ticketId={ticket.id} 
+          readonly={ticket.status === 'resolved' || ticket.status === 'closed'}
+        />
 
         {/* Financial Approval Bar (só para financial_manager) */}
         {isFinancialManager && isFinancialTicket && (
