@@ -91,7 +91,7 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
             ) : (
               <div 
                 className="w-full max-w-4xl rounded-lg shadow-lg bg-background overflow-y-auto"
-                style={{ maxHeight: 'calc(90vh - 140px)' }}
+                style={{ height: 'calc(90vh - 140px)' }}
               >
                 <PublicFormV2 
                   schema={schema} 
@@ -99,7 +99,6 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
                   formName={name} 
                   formTitle={title} 
                   formDescription={description}
-                  isEmbedded
                 />
               </div>
             )}
