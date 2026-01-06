@@ -35,6 +35,7 @@ import { SortBySelect, SortByOption } from "@/components/deals/filters/SortBySel
 import { ActiveFilterChips, generateDealFilterChips } from "@/components/ui/active-filter-chips";
 import BulkMoveDealsDialog from "@/components/deals/BulkMoveDealsDialog";
 import BulkActionsBar from "@/components/deals/BulkActionsBar";
+import { TransferDealsDialog } from "@/components/deals/TransferDealsDialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -551,6 +552,10 @@ export default function Deals() {
             <CheckSquare className="h-4 w-4" />
             {isSelectionMode ? "Sair Seleção" : "Selecionar Deals"}
           </Button>
+
+          {/* Transfer Portfolio Button - Only for managers/admins */}
+          {canManagePipelines && <TransferDealsDialog />}
+
           {/* Advanced Filters */}
           <AdvancedDealFiltersModal
             filters={dealFilters}
