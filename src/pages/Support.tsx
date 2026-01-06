@@ -32,7 +32,10 @@ export default function Support() {
   const getHookParams = () => {
     switch (sidebarFilter) {
       case 'my_open':
-        return { assignedFilter: 'mine' as const };
+        return { 
+          assignedFilter: 'mine' as const,
+          advancedFilters: { search: '', status: ['open', 'in_progress', 'waiting_customer'], priority: [], category: [], channel: [], dateRange: undefined, slaExpired: false }
+        };
       case 'unassigned':
         return { assignedFilter: 'unassigned' as const };
       case 'sla_expired':
