@@ -25,9 +25,9 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] h-[90vh] p-0 flex flex-col overflow-hidden">
+      <DialogContent className="max-w-[95vw] w-full h-[90vh] p-0 !flex !flex-col gap-0">
         {/* Device Toggle */}
-        <div className="flex-shrink-0 flex justify-center py-4 border-b bg-background z-10">
+        <div className="shrink-0 flex justify-center py-4 border-b bg-background z-10">
           <Tabs value={device} onValueChange={(v) => setDevice(v as any)}>
             <TabsList>
               <TabsTrigger value="desktop" className="gap-2">
@@ -42,33 +42,35 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
           </Tabs>
         </div>
 
-        {/* Preview Container */}
-        <div className="flex-1 min-h-0 flex items-start justify-center bg-muted/50 p-8 overflow-y-auto">
-          {device === "mobile" ? (
-            <div 
-              className="flex-shrink-0 bg-background rounded-[40px] border-[8px] border-foreground/20 shadow-2xl overflow-y-auto"
-              style={{ width: MOBILE_WIDTH, height: MOBILE_HEIGHT }}
-            >
-              <PublicFormV2 
-                schema={schema} 
-                isPreview 
-                formName={name} 
-                formTitle={title} 
-                formDescription={description}
-              />
-            </div>
-          ) : (
-            <div className="w-full max-w-4xl rounded-lg shadow-lg bg-background">
-              <PublicFormV2 
-                schema={schema} 
-                isPreview 
-                formName={name} 
-                formTitle={title} 
-                formDescription={description}
-                isEmbedded
-              />
-            </div>
-          )}
+        {/* Preview Container - scrollable area */}
+        <div className="flex-1 overflow-y-auto bg-muted/50">
+          <div className="min-h-full p-8 flex items-start justify-center">
+            {device === "mobile" ? (
+              <div 
+                className="shrink-0 bg-background rounded-[40px] border-[8px] border-foreground/20 shadow-2xl overflow-y-auto"
+                style={{ width: MOBILE_WIDTH, height: MOBILE_HEIGHT }}
+              >
+                <PublicFormV2 
+                  schema={schema} 
+                  isPreview 
+                  formName={name} 
+                  formTitle={title} 
+                  formDescription={description}
+                />
+              </div>
+            ) : (
+              <div className="w-full max-w-4xl rounded-lg shadow-lg bg-background">
+                <PublicFormV2 
+                  schema={schema} 
+                  isPreview 
+                  formName={name} 
+                  formTitle={title} 
+                  formDescription={description}
+                  isEmbedded
+                />
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
