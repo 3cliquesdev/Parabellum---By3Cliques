@@ -89,7 +89,7 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
                   />
                 </div>
             ) : (
-              <div className="w-full max-w-4xl rounded-lg shadow-lg bg-background overflow-y-auto" style={{ maxHeight: 'calc(90vh - 100px)' }}>
+              <div className="w-full max-w-4xl rounded-lg shadow-lg bg-background">
                 <PublicFormV2 
                   schema={schema} 
                   isPreview 
