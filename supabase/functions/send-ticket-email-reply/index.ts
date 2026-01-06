@@ -50,8 +50,7 @@ serve(async (req) => {
         subject,
         channel,
         last_email_message_id,
-        customer_id,
-        department
+        customer_id
       `)
       .eq("id", ticket_id)
       .single();
@@ -95,32 +94,16 @@ serve(async (req) => {
         footerText = branding.footer_text || footerText;
       }
 
-      // Try to get sender for support department
-      if (ticket.department) {
-        const { data: sender } = await supabase
-          .from("email_senders")
-          .select("*")
-          .eq("department_id", ticket.department)
-          .single();
-        
-        if (sender) {
-          fromName = sender.from_name;
-          fromEmail = sender.from_email;
-        }
-      }
-
-      // Fallback to default sender
-      if (fromEmail === "suporte@parabellum.work") {
-        const { data: defaultSender } = await supabase
-          .from("email_senders")
-          .select("*")
-          .eq("is_default", true)
-          .single();
-        
-        if (defaultSender) {
-          fromName = defaultSender.from_name;
-          fromEmail = defaultSender.from_email;
-        }
+      // Use default sender
+      const { data: defaultSender } = await supabase
+        .from("email_senders")
+        .select("*")
+        .eq("is_default", true)
+        .single();
+      
+      if (defaultSender) {
+        fromName = defaultSender.from_name;
+        fromEmail = defaultSender.from_email;
       }
     } catch (configError) {
       console.log("[send-ticket-email-reply] Using default branding:", configError);
