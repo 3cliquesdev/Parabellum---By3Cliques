@@ -334,7 +334,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
   }
 
   // Conversational Mode (default) - one field at a time
-  const containerClass = isEmbedded ? "h-full flex flex-col" : "min-h-screen flex flex-col";
+  const containerClass = isEmbedded ? "min-h-full pb-6" : "min-h-screen flex flex-col";
 
   return (
     <div 
