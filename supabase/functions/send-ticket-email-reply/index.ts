@@ -49,6 +49,7 @@ serve(async (req) => {
         id,
         subject,
         channel,
+        ticket_number,
         last_email_message_id,
         customer_id
       `)
@@ -126,7 +127,7 @@ serve(async (req) => {
       <p style="margin: 0 0 20px 0;">Olá <strong>${customer.first_name}</strong>,</p>
       
       <p style="margin: 0 0 20px 0;">
-        Recebemos sua mensagem sobre o ticket <strong>#${ticket_id.slice(0, 8)}</strong>.
+        Recebemos sua mensagem sobre o ticket <strong>#${ticket.ticket_number || ticket_id.slice(0, 8)}</strong>.
       </p>
       
       <div style="background: #f9fafb; padding: 20px; border-left: 4px solid #2563eb; margin: 20px 0;">
@@ -158,7 +159,7 @@ serve(async (req) => {
     const resendPayload: any = {
       from: `${fromName} <${fromEmail}>`,
       to: [customer.email],
-      subject: `Re: ${ticket.subject} [Ticket #${ticket_id.slice(0, 8)}]`,
+      subject: `Re: ${ticket.subject} [Ticket #${ticket.ticket_number || ticket_id.slice(0, 8)}]`,
       html: emailHtml,
       tags: [
         { name: "ticket_id", value: ticket_id },
