@@ -49,6 +49,7 @@ const ImportClients = lazy(() => import("./pages/ImportClients"));
 const Support = lazy(() => import("./pages/Support"));
 const Knowledge = lazy(() => import("./pages/Knowledge"));
 const PublicTicketForm = lazy(() => import("./pages/PublicTicketForm"));
+const MyTickets = lazy(() => import("./pages/MyTickets"));
 const AIStudio = lazy(() => import("./pages/AIStudio"));
 const MyPortfolio = lazy(() => import("./pages/MyPortfolio"));
 const FraudDetection = lazy(() => import("./pages/reports/FraudDetection"));
@@ -120,6 +121,7 @@ const App = () => {
               <Route path="/public-chat" element={<PublicChat />} />
               <Route path="/public-chat/:conversationId" element={<PublicChatWindow />} />
               <Route path="/open-ticket" element={<PublicTicketForm />} />
+              <Route path="/my-tickets" element={<MyTickets />} />
               <Route path="/tv" element={<TVMode />} />
               <Route path="/public-quote/:token" element={<PublicQuote />} />
               <Route path="/f/:formId" element={<PublicFormV2 />} />

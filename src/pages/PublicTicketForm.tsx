@@ -10,9 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUpsertContact } from "@/hooks/useUpsertContact";
 import { useCreateTicket } from "@/hooks/useCreateTicket";
-import { CheckCircle, Loader2, TicketIcon, AlertCircle } from "lucide-react";
+import { CheckCircle, Loader2, TicketIcon, AlertCircle, ListTodo } from "lucide-react";
 import { usePublicTicketPortalConfig } from "@/hooks/usePublicTicketPortal";
 import { supabase } from "@/integrations/supabase/client";
+import { Link } from "react-router-dom";
 
 const ticketSchema = z.object({
   first_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -136,20 +137,27 @@ export default function PublicTicketForm() {
               Seu ticket #{ticketId} foi registrado e nossa equipe entrará em contato em breve.
             </CardDescription>
           </CardHeader>
-          <CardContent className="text-center">
-            <p className="text-sm text-muted-foreground mb-4">
+          <CardContent className="text-center space-y-4">
+            <p className="text-sm text-muted-foreground">
               Enviamos uma confirmação para o email cadastrado.
             </p>
-            <Button
-              onClick={() => {
-                setSubmitted(false);
-                form.reset();
-              }}
-              variant="outline"
-              className="w-full"
-            >
-              Abrir Novo Ticket
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button asChild>
+                <Link to="/my-tickets">
+                  <ListTodo className="w-4 h-4 mr-2" />
+                  Ver Meus Tickets
+                </Link>
+              </Button>
+              <Button
+                onClick={() => {
+                  setSubmitted(false);
+                  form.reset();
+                }}
+                variant="outline"
+              >
+                Abrir Novo Ticket
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
