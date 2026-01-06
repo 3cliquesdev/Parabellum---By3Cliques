@@ -334,7 +334,8 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
   }
 
   // Conversational Mode (default) - one field at a time
-  const containerClass = isEmbedded ? "" : "min-h-screen flex flex-col";
+  // In preview mode, don't use min-h-screen as it breaks the modal scroll
+  const containerClass = isPreview ? "flex flex-col" : (isEmbedded ? "" : "min-h-screen flex flex-col");
 
   return (
     <div 
