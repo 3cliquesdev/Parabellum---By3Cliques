@@ -54,10 +54,10 @@ export function useUserRole() {
       return data?.role as AppRole;
     },
     enabled: !!user,
-    staleTime: 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes - role rarely changes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnWindowFocus: false, // Disable aggressive refetch
+    refetchOnMount: false, // Use cached value
   });
 
   // Loading é true se auth ainda está carregando OU se role está carregando
