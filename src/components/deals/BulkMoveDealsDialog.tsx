@@ -40,7 +40,7 @@ export default function BulkMoveDealsDialog({
 }: BulkMoveDealsDialogProps) {
   const [targetPipelineId, setTargetPipelineId] = useState<string>("");
   const [targetStageId, setTargetStageId] = useState<string>("");
-  const [assignedTo, setAssignedTo] = useState<string>("");
+  const [assignedTo, setAssignedTo] = useState<string>("__keep_current__");
   const [keepHistory, setKeepHistory] = useState(true);
 
   const { data: pipelines } = usePipelines();
@@ -62,7 +62,7 @@ export default function BulkMoveDealsDialog({
     if (open) {
       setTargetPipelineId("");
       setTargetStageId("");
-      setAssignedTo("");
+      setAssignedTo("__keep_current__");
       setKeepHistory(true);
     }
   }, [open]);
@@ -79,7 +79,7 @@ export default function BulkMoveDealsDialog({
       targetStageId,
       targetPipelineName: selectedPipeline?.name || "Novo pipeline",
       targetStageName: selectedStage?.name || "Nova etapa",
-      assignedTo: assignedTo || undefined,
+      assignedTo: assignedTo === "__keep_current__" ? undefined : assignedTo,
       keepHistory,
     });
 
@@ -157,7 +157,7 @@ export default function BulkMoveDealsDialog({
                 <SelectValue placeholder="Manter vendedor atual" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Manter vendedor atual</SelectItem>
+                <SelectItem value="__keep_current__">Manter vendedor atual</SelectItem>
                 {salesReps?.map((rep) => (
                   <SelectItem key={rep.id} value={rep.id}>
                     <div className="flex items-center gap-2">
