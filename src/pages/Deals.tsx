@@ -4,7 +4,8 @@ import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings, Users, Search, Trophy, TrendingDown, CheckSquare } from "lucide-react";
+import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings, Users, Search, Trophy, TrendingDown, CheckSquare, BarChart3 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useDeals, useUpdateDeal, useUpdateDealStage, DealFilters } from "@/hooks/useDeals";
 import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
@@ -86,6 +87,7 @@ export default function Deals() {
   const canViewAllDeals = hasPermission('deals.view_all');
   const canManagePipelines = hasPermission('deals.manage_pipelines');
   const canViewPendingQueue = hasPermission('deals.view_pending_queue');
+  const canViewSalesDistribution = hasPermission('reports.lead_distribution');
 
   // Selecionar pipeline default ao carregar
   useEffect(() => {
@@ -409,6 +411,14 @@ export default function Deals() {
             </p>
           </div>
           <div className="flex gap-2">
+            {canViewSalesDistribution && (
+              <Button variant="outline" asChild className="gap-2">
+                <Link to="/reports/sales-distribution">
+                  <BarChart3 className="h-4 w-4" />
+                  Distribuição
+                </Link>
+              </Button>
+            )}
             {canManagePipelines && <PipelineDialog />}
             <DealDialog
               trigger={
