@@ -1,12 +1,12 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMessagesOffline, usePendingMessages } from "@/hooks/useMessagesOffline";
 import { useSendMessageOffline } from "@/hooks/useSendMessageOffline";
 import { useToast } from "@/hooks/use-toast";
-import { Send, ArrowLeft, MessageSquare, Bot, Clock, Check, WifiOff } from "lucide-react";
+import { Send, ArrowLeft, MessageSquare, Bot, Clock, Check, WifiOff, Settings, Bell, Download } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAutopilotTrigger } from "@/hooks/useAutopilotTrigger";
@@ -15,6 +15,15 @@ import { SafeHTML } from "@/components/SafeHTML";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { createPublicChatClient, clearSessionToken } from "@/lib/publicSupabaseClient";
 import { RatingWidget } from "@/components/public/RatingWidget";
+import { PublicChatOnboarding } from "@/components/public/PublicChatOnboarding";
+import { usePWAInstall } from "@/hooks/usePWAInstall";
+import { useNotificationSound } from "@/hooks/useNotificationSound";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function PublicChatWindow() {
   const { conversationId } = useParams();
@@ -25,6 +34,13 @@ export default function PublicChatWindow() {
   const [isAITyping, setIsAITyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMessageCountRef = useRef(0);
+  const hasRequestedPermissionRef = useRef(false);
+
+  // PWA & Notifications
+  const { canInstall, install } = usePWAInstall();
+  const { requestPermission, showBrowserNotification, isSupported } = useNotificationSound();
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
 
   // SECURITY: Use custom Supabase client with session token
   const supabase = createPublicChatClient();
@@ -34,6 +50,37 @@ export default function PublicChatWindow() {
   const sendMessageMutation = useSendMessageOffline();
   
   useAutopilotTrigger(conversationId || null);
+
+  // Count messages for onboarding
+  const messagesSent = useMemo(() => 
+    messages.filter(m => m.sender_type === 'contact').length, 
+    [messages]
+  );
+  const messagesReceived = useMemo(() => 
+    messages.filter(m => m.sender_type !== 'contact' && m.sender_type !== 'system').length, 
+    [messages]
+  );
+
+  // Track notification permission
+  useEffect(() => {
+    if (isSupported && 'Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, [isSupported]);
+
+  // Show browser notification when new message arrives and tab is hidden
+  useEffect(() => {
+    if (messages.length > lastMessageCountRef.current) {
+      const latestMessage = messages[messages.length - 1];
+      
+      // Only notify for agent/AI messages when tab is hidden
+      if (latestMessage.sender_type !== 'contact' && latestMessage.sender_type !== 'system' && document.hidden) {
+        const content = latestMessage.content.replace(/<[^>]*>/g, '').slice(0, 100);
+        showBrowserNotification("Nova mensagem", content);
+      }
+    }
+    lastMessageCountRef.current = messages.length;
+  }, [messages, showBrowserNotification]);
 
   useEffect(() => {
     if (conversationId) {
@@ -155,6 +202,15 @@ export default function PublicChatWindow() {
     }
   };
 
+  const handleEnableNotifications = async () => {
+    await requestPermission();
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  };
+
+  const showSettingsMenu = canInstall || (isSupported && notificationPermission !== 'granted');
+
   if (!conversation) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -169,7 +225,7 @@ export default function PublicChatWindow() {
         <Button variant="ghost" size="icon" onClick={() => navigate('/public-chat')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="font-semibold text-lg text-slate-900 dark:text-slate-100">{conversation.department_data?.name || 'Chat'}</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
             {isOffline ? (
@@ -182,6 +238,31 @@ export default function PublicChatWindow() {
             )}
           </p>
         </div>
+        
+        {/* Settings Menu */}
+        {showSettingsMenu && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Settings className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {canInstall && (
+                <DropdownMenuItem onClick={install}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Instalar App
+                </DropdownMenuItem>
+              )}
+              {isSupported && notificationPermission !== 'granted' && (
+                <DropdownMenuItem onClick={handleEnableNotifications}>
+                  <Bell className="mr-2 h-4 w-4" />
+                  Ativar Notificações
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <ScrollArea className="flex-1">
@@ -326,6 +407,7 @@ export default function PublicChatWindow() {
       </div>
       
       <PWAInstallPrompt />
+      <PublicChatOnboarding messagesSent={messagesSent} messagesReceived={messagesReceived} />
     </div>
   );
 }
