@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MessageSquare, Ticket, DollarSign } from "lucide-react";
+import { MessageSquare, Ticket, DollarSign, Mail } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import type { Tables } from "@/integrations/supabase/types";
@@ -347,28 +347,39 @@ export default function RealtimeNotifications() {
               }
             }
 
-            // Notify if current user is assigned and the creator commented
-            if (ticket.assigned_to === user.id && ticket.created_by === comment.created_by) {
-              play();
+            // Notify if current user is assigned and (creator commented OR email reply from customer)
+            if (ticket.assigned_to === user.id) {
+              // Email reply from customer (created_by is null, source is email_reply)
+              const isEmailReply = comment.source === 'email_reply' && comment.created_by === null;
+              // Reply from ticket creator via system
+              const isCreatorReply = ticket.created_by === comment.created_by && comment.created_by !== null;
+              
+              if (isEmailReply || isCreatorReply) {
+                play();
 
-              toast(
-                "Criador respondeu no ticket",
-                {
-                  description: `#${ticket.ticket_number}: ${ticket.subject}`,
-                  icon: <Ticket className="h-4 w-4" />,
-                  action: {
-                    label: "Ver",
-                    onClick: () => navigate(`/support?ticket=${ticket.id}`),
-                  },
-                  duration: 10000,
-                }
-              );
+                const notificationTitle = isEmailReply 
+                  ? "📧 Cliente respondeu por email" 
+                  : "Criador respondeu no ticket";
 
-              if (document.hidden) {
-                showBrowserNotification(
-                  "Criador respondeu no ticket",
-                  `#${ticket.ticket_number}: ${ticket.subject}`
+                toast(
+                  notificationTitle,
+                  {
+                    description: `#${ticket.ticket_number}: ${ticket.subject}`,
+                    icon: isEmailReply ? <Mail className="h-4 w-4" /> : <Ticket className="h-4 w-4" />,
+                    action: {
+                      label: "Ver",
+                      onClick: () => navigate(`/support?ticket=${ticket.id}`),
+                    },
+                    duration: 10000,
+                  }
                 );
+
+                if (document.hidden) {
+                  showBrowserNotification(
+                    notificationTitle,
+                    `#${ticket.ticket_number}: ${ticket.subject}`
+                  );
+                }
               }
             }
 
