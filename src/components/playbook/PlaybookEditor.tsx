@@ -835,9 +835,15 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                       <SelectTrigger className="bg-background text-foreground border">
                         <SelectValue placeholder="Selecione o formulário..." />
                       </SelectTrigger>
-                      <SelectContent className="z-[9999] bg-popover" position="popper" sideOffset={5}>
+                      <SelectContent 
+                        className="z-[9999] bg-popover max-h-[300px] overflow-y-auto"
+                        position="popper" 
+                        side="bottom"
+                        align="start"
+                        sideOffset={5}
+                      >
                         {forms.filter(f => f.is_active).map((form) => (
-                          <SelectItem key={form.id} value={form.id}>
+                          <SelectItem key={form.id} value={form.id} className="cursor-pointer">
                             {form.name}
                           </SelectItem>
                         ))}
