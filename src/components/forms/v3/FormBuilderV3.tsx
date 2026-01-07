@@ -135,6 +135,7 @@ export default function FormBuilderV3({
             <FormScoringPanel 
               schema={schema}
               onSchemaChange={onSchemaChange}
+              formId={formId}
             />
           </TabsContent>
           
