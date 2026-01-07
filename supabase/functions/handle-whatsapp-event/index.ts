@@ -894,15 +894,65 @@ async function handleConnectionUpdate(supabase: any, payload: EvolutionWebhook, 
 
   console.log('[handle-whatsapp-event] Instance status updated to:', newStatus);
 
-  // 🚨 ALERTA: Se desconectou, enviar notificação para admins
+  // 🚨 ALERTA: Se desconectou, tentar reconectar automaticamente
   if (newStatus === 'disconnected') {
-    console.log(`[handle-whatsapp-event] 🚨 Instância ${instance.name} desconectada - enviando alerta`);
+    console.log(`[handle-whatsapp-event] 🚨 Instância ${instance.name} desconectada - tentando reconexão automática`);
+    
+    // Incrementar contador de falhas consecutivas
+    const consecutiveFailures = (instance.consecutive_failures || 0) + 1;
+    await supabase
+      .from('whatsapp_instances')
+      .update({ consecutive_failures: consecutiveFailures })
+      .eq('id', instance.id);
+    
+    // Tentar reconexão automática se menos de 5 falhas consecutivas
+    if (consecutiveFailures <= 5) {
+      console.log(`[handle-whatsapp-event] 🔄 Tentativa de reconexão ${consecutiveFailures}/5`);
+      
+      // Aguardar 3 segundos antes de tentar reconectar (exponential backoff)
+      const backoffMs = Math.min(3000 * consecutiveFailures, 15000);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+      
+      try {
+        // Chamar reconexão via Evolution API
+        const baseUrl = instance.api_url.replace(/\/manager$/, '').replace(/\/$/, '');
+        const reconnectResponse = await fetch(`${baseUrl}/instance/connect/${instance.instance_name}`, {
+          method: 'GET',
+          headers: {
+            'apikey': instance.api_token,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (reconnectResponse.ok) {
+          console.log(`[handle-whatsapp-event] ✅ Reconexão iniciada para ${instance.name}`);
+          
+          // Atualizar status para 'reconnecting' temporariamente
+          await supabase
+            .from('whatsapp_instances')
+            .update({ 
+              status: 'qr_pending',
+              last_reconnect_attempt: new Date().toISOString(),
+            })
+            .eq('id', instance.id);
+          
+          return; // Não enviar alerta se reconexão foi iniciada
+        } else {
+          console.error(`[handle-whatsapp-event] ❌ Falha na reconexão: HTTP ${reconnectResponse.status}`);
+        }
+      } catch (reconnectError) {
+        console.error(`[handle-whatsapp-event] ❌ Erro ao tentar reconectar:`, reconnectError);
+      }
+    }
+    
+    // Só envia alerta se esgotou tentativas de reconexão
+    console.log(`[handle-whatsapp-event] 🚨 Esgotou tentativas - enviando alerta`);
     
     const { error: alertError } = await supabase.functions.invoke('send-admin-alert', {
       body: {
         type: 'whatsapp_disconnected',
-        message: `🚨 WhatsApp "${instance.name}" desconectou`,
-        error: `A instância ${instance.instance_name} perdeu conexão com o servidor WhatsApp.`,
+        message: `🚨 WhatsApp "${instance.name}" desconectou após ${consecutiveFailures} tentativas`,
+        error: `A instância ${instance.instance_name} perdeu conexão e não conseguiu reconectar automaticamente.`,
       },
     });
 
