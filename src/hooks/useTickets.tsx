@@ -17,6 +17,12 @@ export function useTickets(
 
   // Roles that can see all tickets
   const canSeeAllTickets = ['admin', 'manager', 'support_manager', 'cs_manager', 'general_manager', 'financial_manager'].includes(role || '');
+  
+  // Roles with specific access patterns
+  const isConsultant = role === 'consultant';
+  const isFinancialAgent = role === 'financial_agent';
+  const isSupportAgent = role === 'support_agent';
+  const isUser = role === 'user';
 
   return useQuery({
     queryKey: ["tickets", statusFilter, assignedFilter, agentFilter, advancedFilters, user?.id, role],
@@ -38,7 +44,8 @@ export function useTickets(
             city,
             state,
             zip_code,
-            avatar_url
+            avatar_url,
+            consultant_id
           ),
           assigned_user:profiles!tickets_assigned_to_fkey(
             id,
@@ -63,21 +70,9 @@ export function useTickets(
         query = query.eq("status", statusFilter);
       }
 
-      // CRITICAL: Support agents can only see their assigned tickets or unassigned tickets
-      // Managers/admins can see all tickets
-      if (!canSeeAllTickets) {
-        // Support agent filters
-        if (assignedFilter === 'mine') {
-          query = query.eq("assigned_to", user.id);
-        } else if (assignedFilter === 'unassigned') {
-          query = query.is("assigned_to", null);
-        } else if (assignedFilter === 'created_by_me') {
-          query = query.eq("created_by", user.id);
-        } else {
-          // "all" for support_agent means: assigned to self, unassigned, OR created by self
-          query = query.or(`assigned_to.eq.${user.id},assigned_to.is.null,created_by.eq.${user.id}`);
-        }
-      } else {
+      // CRITICAL: Access control based on role
+      // RLS policies handle the actual security, this is for query optimization
+      if (canSeeAllTickets) {
         // Manager/admin logic: can see all
         if (assignedFilter === 'mine') {
           query = query.eq("assigned_to", user.id);
@@ -87,6 +82,31 @@ export function useTickets(
           query = query.eq("created_by", user.id);
         }
         // "all" for managers = no filter (see everything)
+      } else if (isUser) {
+        // Users can only see tickets they created
+        query = query.eq("created_by", user.id);
+      } else if (isConsultant) {
+        // Consultants see tickets from contacts they consult + tickets they created
+        // RLS handles this, but we optimize the query
+        if (assignedFilter === 'created_by_me') {
+          query = query.eq("created_by", user.id);
+        }
+        // For other filters, let RLS handle it (consultant policy filters by consultant_id)
+      } else if (isFinancialAgent || isSupportAgent) {
+        // Support/Financial agents: assigned to self, unassigned, or created by self
+        if (assignedFilter === 'mine') {
+          query = query.eq("assigned_to", user.id);
+        } else if (assignedFilter === 'unassigned') {
+          query = query.is("assigned_to", null);
+        } else if (assignedFilter === 'created_by_me') {
+          query = query.eq("created_by", user.id);
+        } else {
+          // "all" for support_agent/financial_agent means: assigned to self, unassigned, OR created by self
+          query = query.or(`assigned_to.eq.${user.id},assigned_to.is.null,created_by.eq.${user.id}`);
+        }
+      } else {
+        // Default fallback: only see own tickets (safest default)
+        query = query.eq("created_by", user.id);
       }
 
       // Filtro por agente específico (para support_manager auditar)
