@@ -3820,6 +3820,63 @@ export type Database = {
           },
         ]
       }
+      onboarding_submissions: {
+        Row: {
+          created_at: string | null
+          dropshipping_experience: string | null
+          email: string
+          formalization: string | null
+          has_online_store: boolean | null
+          id: string
+          investment_budget: string | null
+          knowledge_internet: number | null
+          knowledge_it: number | null
+          main_device: string | null
+          metadata: Json | null
+          name: string
+          platform_used: string | null
+          social_networks: string[] | null
+          updated_at: string | null
+          whatsapp: string
+        }
+        Insert: {
+          created_at?: string | null
+          dropshipping_experience?: string | null
+          email: string
+          formalization?: string | null
+          has_online_store?: boolean | null
+          id?: string
+          investment_budget?: string | null
+          knowledge_internet?: number | null
+          knowledge_it?: number | null
+          main_device?: string | null
+          metadata?: Json | null
+          name: string
+          platform_used?: string | null
+          social_networks?: string[] | null
+          updated_at?: string | null
+          whatsapp: string
+        }
+        Update: {
+          created_at?: string | null
+          dropshipping_experience?: string | null
+          email?: string
+          formalization?: string | null
+          has_online_store?: boolean | null
+          id?: string
+          investment_budget?: string | null
+          knowledge_internet?: number | null
+          knowledge_it?: number | null
+          main_device?: string | null
+          metadata?: Json | null
+          name?: string
+          platform_used?: string | null
+          social_networks?: string[] | null
+          updated_at?: string | null
+          whatsapp?: string
+        }
+        Relationships: []
+      }
       organizations: {
         Row: {
           created_at: string

@@ -86,6 +86,7 @@ const DebugRoutes = lazy(() => import("./pages/DebugRoutes"));
 const AIMessagesSettings = lazy(() => import("./pages/AIMessagesSettings"));
 const TicketNotificationRulesSettings = lazy(() => import("./pages/TicketNotificationRulesSettings"));
 const PublicOnboarding = lazy(() => import("./pages/PublicOnboarding"));
+const PublicOnboardingForm = lazy(() => import("./pages/PublicOnboardingForm"));
 const SLASettings = lazy(() => import("./pages/SLASettings"));
 const TicketStatusSettings = lazy(() => import("./pages/TicketStatusSettings"));
 const CustomerFiscalData = lazy(() => import("./pages/CustomerFiscalData"));
@@ -130,6 +131,7 @@ const App = () => {
               <Route path="/public-onboarding/:executionId" element={<PublicOnboarding />} />
               <Route path="/public-onboarding/playbook/:playbookId" element={<PublicOnboarding />} />
               <Route path="/meu-cadastro" element={<CustomerFiscalData />} />
+              <Route path="/onboarding-form" element={<PublicOnboardingForm />} />
 
               {/* Debug routes - dev only */}
               <Route path="/debug/routes" element={<DebugRoutes />} />
