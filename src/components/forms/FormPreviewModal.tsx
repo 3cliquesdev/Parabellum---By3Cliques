@@ -29,19 +29,16 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
         <DialogOverlay />
-        <DialogPrimitive.Content
-          className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] border bg-background shadow-lg rounded-lg"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            width: '95vw',
-            maxWidth: '95vw',
-            height: '90vh',
-            maxHeight: '90vh',
-            padding: 0,
-            overflow: 'hidden',
-          }}
-        >
+      <DialogPrimitive.Content
+        className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] border bg-background shadow-lg rounded-lg flex flex-col"
+        style={{
+          width: '95vw',
+          maxWidth: '95vw',
+          height: '90vh',
+          maxHeight: '90vh',
+          padding: 0,
+        }}
+      >
           {/* Close Button */}
           <DialogPrimitive.Close className="absolute right-4 top-4 z-20 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
             <X className="h-4 w-4" />
@@ -83,11 +80,8 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
               </div>
             </div>
           ) : (
-            <div className="flex-1 min-h-0 bg-muted/50 p-8 flex items-start justify-center">
-              <div 
-                className="w-full max-w-4xl bg-background rounded-lg shadow-lg overflow-y-auto"
-                style={{ maxHeight: 'calc(90vh - 140px)' }}
-              >
+            <div className="flex-1 min-h-0 overflow-y-auto bg-muted/50 p-8 flex items-start justify-center scrollbar-thin">
+              <div className="w-full max-w-4xl bg-background rounded-lg shadow-lg">
                 <PublicFormV2 
                   schema={schema} 
                   isPreview 

@@ -277,6 +277,70 @@
   background: hsl(221.2 83.2% 53.3% / 0.6);
 }
 
+/* Premium scroll container class */
+.scroll-container-premium {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary) / 0.3) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-container-premium::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scroll-container-premium::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-container-premium::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.3);
+  border-radius: 3px;
+}
+
+.scroll-container-premium::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.5);
+}
+
+/* Scroll Container Global - Use em qualquer container que precisa scroll */
+.scroll-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 80vh;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary) / 0.3) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 768px) {
+  .scroll-container {
+    max-height: 90vh;
+  }
+}
+
+/* Variante para modais - altura fixa */
+.scroll-modal-body {
+  overflow-y: auto;
+  max-height: 70vh;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Variante para cards/listas longas */
+.scroll-list {
+  overflow-y: auto;
+  max-height: 24rem;
+  scrollbar-width: thin;
+}
+
+/* Variante para tabelas */
+.scroll-table {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+  scrollbar-width: thin;
+}
+
 /* Kanban Scrollbar - Sempre visível */
 .kanban-scrollbar::-webkit-scrollbar {
   height: 14px;

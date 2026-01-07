@@ -100,7 +100,7 @@ export default function ContactSheet({ contact, open, onOpenChange }: ContactShe
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-2xl overflow-hidden flex flex-col">
+      <SheetContent className="sm:max-w-2xl flex flex-col">
         <SheetHeader>
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">

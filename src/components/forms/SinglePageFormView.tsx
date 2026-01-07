@@ -129,7 +129,7 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
   // Success screen
   // In preview mode, content flows naturally - scroll is controlled by parent wrapper
   const containerClass = isPreview 
-    ? "flex flex-col" 
+    ? "flex flex-col h-full" 
     : (isEmbedded ? "" : "min-h-screen flex flex-col");
   
   if (isSubmitted) {

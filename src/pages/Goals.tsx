@@ -80,7 +80,7 @@ export default function Goals() {
   };
 
   return (
-    <div className="container mx-auto p-6 max-h-screen overflow-auto">
+    <div className="container mx-auto p-6 pb-20">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

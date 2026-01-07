@@ -85,7 +85,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="p-6 pb-20">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-foreground">Configurações do Sistema</h1>
         <p className="text-muted-foreground mt-2">Gerencie configurações globais da plataforma</p>
