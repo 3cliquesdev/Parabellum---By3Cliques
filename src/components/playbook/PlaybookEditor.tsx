@@ -277,10 +277,10 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                       }
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background text-foreground">
                       <SelectValue placeholder="Selecione um template..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
                       {emailTemplates?.filter(t => t.is_active).map((template) => (
                         <SelectItem key={template.id} value={template.id}>
                           {template.name}
@@ -470,10 +470,10 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                       }
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background text-foreground">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
                       <SelectItem value="lead_classification">🎯 Classificação de Lead</SelectItem>
                       <SelectItem value="form_score">📊 Score do Formulário</SelectItem>
                       <SelectItem value="email_opened">Email Aberto</SelectItem>
@@ -643,10 +643,10 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                           value={selectedNode.data.score_operator || "gte"}
                           onValueChange={(value) => updateNodeData("score_operator", value)}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="bg-background text-foreground">
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
                             <SelectItem value="gt">&gt; Maior que</SelectItem>
                             <SelectItem value="gte">≥ Maior ou igual</SelectItem>
                             <SelectItem value="lt">&lt; Menor que</SelectItem>
@@ -689,10 +689,10 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                     value={selectedNode.data.approver_role || "consultant"}
                     onValueChange={(value) => updateNodeData("approver_role", value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background text-foreground">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
                       <SelectItem value="consultant">Consultor</SelectItem>
                       <SelectItem value="manager">Gerente</SelectItem>
                       <SelectItem value="admin">Administrador</SelectItem>
@@ -721,10 +721,10 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                       updateNodeData("form_name", form?.name || "");
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background text-foreground">
                       <SelectValue placeholder="Selecione o formulário..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
                       {forms?.filter(f => f.is_active).map((form) => (
                         <SelectItem key={form.id} value={form.id}>
                           {form.name}
