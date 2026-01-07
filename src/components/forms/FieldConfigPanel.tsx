@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Plus, X, GitBranch } from "lucide-react";
 import { useState } from "react";
 import { ImageUploader } from "@/components/ImageUploader";
+import { FieldScoringConfig } from "./FieldScoringConfig";
 
 interface FieldConfigPanelProps {
   field: FormField;
@@ -242,6 +243,14 @@ export function FieldConfigPanel({ field, allFields, onChange }: FieldConfigPane
           </p>
         )}
       </div>
+
+      <Separator />
+
+      {/* Scoring de Lead */}
+      <FieldScoringConfig 
+        field={field}
+        onUpdate={onChange}
+      />
 
       <Separator />
 
