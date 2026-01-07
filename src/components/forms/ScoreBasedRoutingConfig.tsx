@@ -159,10 +159,10 @@ export function ScoreBasedRoutingConfig({ formId, hasScoringFields }: ScoreBased
                       value={rule.pipeline_id || "none"}
                       onValueChange={(v) => handleRuleChange(rule.classification, "pipeline_id", v === "none" ? null : v)}
                     >
-                      <SelectTrigger className="bg-white">
+                      <SelectTrigger className="bg-background text-foreground">
                         <SelectValue placeholder="Selecionar pipeline" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[9999] bg-popover"  sideOffset={5}>
                         <SelectItem value="none">Usar padrão do formulário</SelectItem>
                         {pipelines.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
@@ -180,10 +180,10 @@ export function ScoreBasedRoutingConfig({ formId, hasScoringFields }: ScoreBased
                       value={rule.playbook_id || "none"}
                       onValueChange={(v) => handleRuleChange(rule.classification, "playbook_id", v === "none" ? null : v)}
                     >
-                      <SelectTrigger className="bg-white">
+                      <SelectTrigger className="bg-background text-foreground">
                         <SelectValue placeholder="Selecionar playbook" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
                         <SelectItem value="none">Nenhum</SelectItem>
                         {playbooks.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
@@ -207,10 +207,10 @@ export function ScoreBasedRoutingConfig({ formId, hasScoringFields }: ScoreBased
                       }
                       disabled={!rule.playbook_id}
                     >
-                      <SelectTrigger className="bg-white">
+                      <SelectTrigger className="bg-background text-foreground">
                         <SelectValue placeholder="Primeiro nó" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
                         <SelectItem value="first">Primeiro nó</SelectItem>
                         {playbookNodes.map((node) => (
                           <SelectItem key={node.id} value={node.id}>

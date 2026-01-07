@@ -498,10 +498,10 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                           updateNodeData("score_form_name", form?.name || "");
                         }}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-background text-foreground">
                           <SelectValue placeholder="Selecione o formulário..." />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
                           {forms?.filter(f => f.is_active).map((form) => (
                             <SelectItem key={form.id} value={form.id}>
                               {form.name}
@@ -591,10 +591,10 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                           updateNodeData("score_form_name", form?.name || "");
                         }}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-background text-foreground">
                           <SelectValue placeholder="Selecione o formulário..." />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
                           {forms?.filter(f => f.is_active).map((form) => (
                             <SelectItem key={form.id} value={form.id}>
                               {form.name}
