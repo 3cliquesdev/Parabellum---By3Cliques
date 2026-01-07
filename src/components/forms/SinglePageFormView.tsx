@@ -128,9 +128,10 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
 
   // Success screen
   // In preview mode, we need overflow-y-auto to enable scrolling within the fixed-height container
+  // In public mode (not preview, not embedded), use h-screen + overflow-y-auto to bypass global body overflow:hidden
   const containerClass = isPreview 
     ? "flex flex-col overflow-y-auto" 
-    : (isEmbedded ? "" : "min-h-screen flex flex-col");
+    : (isEmbedded ? "" : "h-screen flex flex-col overflow-y-auto");
   
   if (isSubmitted) {
     return (
