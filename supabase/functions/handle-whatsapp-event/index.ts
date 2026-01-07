@@ -853,27 +853,43 @@ async function sendWhatsAppMessage(
 async function handleConnectionUpdate(supabase: any, payload: EvolutionWebhook, instance: any) {
   console.log('[handle-whatsapp-event] Connection update:', payload.data);
   
-  // Atualizar status da instância no banco
-  // A Evolution API envia estados como: open, close, connecting
-  // Mapear para nossos estados: connected, disconnected, qr_pending
-  
   const { data } = payload;
-  let newStatus = 'disconnected';
+  const stateInfo = data as any;
+  const state = stateInfo?.state || stateInfo?.connection;
   
-  // Verificar se há informação de estado na payload
-  // (A estrutura pode variar dependendo da versão da Evolution API)
-  if (data && typeof data === 'object') {
-    const stateInfo = data as any;
-    if (stateInfo.state === 'open' || stateInfo.connection === 'open') {
+  // Mapear estados da Evolution API para nossos estados
+  let newStatus: string | null = null;
+  
+  switch (state) {
+    case 'open':
       newStatus = 'connected';
-    } else if (stateInfo.state === 'close' || stateInfo.connection === 'close') {
+      break;
+    case 'connecting':
+      // NÃO atualizar durante connecting - aguardar estado final
+      console.log('[handle-whatsapp-event] Instance is connecting, skipping status update');
+      return;
+    case 'close':
       newStatus = 'disconnected';
-    }
+      break;
+    default:
+      console.log('[handle-whatsapp-event] Unknown state:', state, '- skipping update');
+      return;
+  }
+
+  // Preparar dados de atualização
+  const updateData: any = { 
+    status: newStatus,
+    last_health_check: new Date().toISOString(),
+  };
+  
+  // Reset failures quando conectar
+  if (newStatus === 'connected') {
+    updateData.consecutive_failures = 0;
   }
 
   await supabase
     .from('whatsapp_instances')
-    .update({ status: newStatus })
+    .update(updateData)
     .eq('id', instance.id);
 
   console.log('[handle-whatsapp-event] Instance status updated to:', newStatus);
