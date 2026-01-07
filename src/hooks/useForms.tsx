@@ -16,6 +16,18 @@ export type FormFieldType =
   | "number"      // Número
   | "file";       // Upload de arquivos
 
+// ==================== SCORING TYPES ====================
+
+export interface FieldScoringOption {
+  value: string;      // Valor da opção (ex: "Sim", "5", "Opção A")
+  points: number;     // Pontos atribuídos
+}
+
+export interface FieldScoring {
+  enabled: boolean;
+  options: FieldScoringOption[];
+}
+
 export interface FieldLogic {
   condition: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
   value: string;
@@ -40,6 +52,8 @@ export interface FormField {
   max_files?: number;         // Número máximo de arquivos
   // Ticket mapping
   ticket_field?: "subject" | "description" | "priority"; // Mapear para campo do ticket
+  // Scoring configuration
+  scoring?: FieldScoring;     // Pontuação por opção para qualificação de leads
 }
 
 export type FormDisplayMode = "single_page" | "conversational";

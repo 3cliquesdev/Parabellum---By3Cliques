@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +12,8 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Trash2, Plus } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { FormField, FormSchema } from "@/hooks/useForms";
+import { FieldScoringConfig } from "@/components/forms/FieldScoringConfig";
+import type { FormField, FormSchema, FormFieldType } from "@/hooks/useForms";
 
 interface FormBuilderProps {
   schema: FormSchema;
@@ -21,6 +22,11 @@ interface FormBuilderProps {
 
 export default function FormBuilder({ schema, onChange }: FormBuilderProps) {
   const [fields, setFields] = useState<FormField[]>(schema.fields);
+
+  // Sync fields when schema changes externally
+  useEffect(() => {
+    setFields(schema.fields);
+  }, [schema.fields]);
 
   const addField = () => {
     const newField: FormField = {
@@ -31,19 +37,35 @@ export default function FormBuilder({ schema, onChange }: FormBuilderProps) {
     };
     const updated = [...fields, newField];
     setFields(updated);
-    onChange({ fields: updated });
+    onChange({ ...schema, fields: updated });
   };
 
   const updateField = (id: string, updates: Partial<FormField>) => {
-    const updated = fields.map((f) => (f.id === id ? { ...f, ...updates } : f));
+    const updated = fields.map((f) => {
+      if (f.id !== id) return f;
+      
+      const updatedField = { ...f, ...updates };
+      
+      // Clear scoring when changing to non-scoreable type
+      if (updates.type && !["select", "yes_no", "rating"].includes(updates.type)) {
+        delete updatedField.scoring;
+      }
+      
+      // Clear options when changing from select to other type
+      if (updates.type && updates.type !== "select" && f.type === "select") {
+        delete updatedField.options;
+      }
+      
+      return updatedField;
+    });
     setFields(updated);
-    onChange({ fields: updated });
+    onChange({ ...schema, fields: updated });
   };
 
   const removeField = (id: string) => {
     const updated = fields.filter((f) => f.id !== id);
     setFields(updated);
-    onChange({ fields: updated });
+    onChange({ ...schema, fields: updated });
   };
 
   return (
@@ -74,7 +96,7 @@ export default function FormBuilder({ schema, onChange }: FormBuilderProps) {
                     <Label>Tipo de Campo</Label>
                     <Select
                       value={field.type}
-                      onValueChange={(value: any) => updateField(field.id, { type: value })}
+                      onValueChange={(value: FormFieldType) => updateField(field.id, { type: value })}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -84,6 +106,12 @@ export default function FormBuilder({ schema, onChange }: FormBuilderProps) {
                         <SelectItem value="email">E-mail</SelectItem>
                         <SelectItem value="phone">Telefone</SelectItem>
                         <SelectItem value="select">Seleção</SelectItem>
+                        <SelectItem value="yes_no">Sim/Não</SelectItem>
+                        <SelectItem value="rating">Avaliação (0-10)</SelectItem>
+                        <SelectItem value="number">Número</SelectItem>
+                        <SelectItem value="long_text">Texto Longo</SelectItem>
+                        <SelectItem value="date">Data</SelectItem>
+                        <SelectItem value="file">Arquivo</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -138,13 +166,42 @@ export default function FormBuilder({ schema, onChange }: FormBuilderProps) {
                         value={field.options?.join(", ") || ""}
                         onChange={(e) =>
                           updateField(field.id, {
-                            options: e.target.value.split(",").map((o) => o.trim()),
+                            options: e.target.value.split(",").map((o) => o.trim()).filter(Boolean),
                           })
                         }
                         placeholder="Ex: Opção 1, Opção 2, Opção 3"
                       />
                     </div>
                   )}
+
+                  {field.type === "rating" && (
+                    <div className="md:col-span-2 flex gap-4">
+                      <div className="flex-1">
+                        <Label>Valor Mínimo</Label>
+                        <Input
+                          type="number"
+                          value={field.min ?? 0}
+                          onChange={(e) => updateField(field.id, { min: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <Label>Valor Máximo</Label>
+                        <Input
+                          type="number"
+                          value={field.max ?? 10}
+                          onChange={(e) => updateField(field.id, { max: parseInt(e.target.value) || 10 })}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scoring Configuration */}
+                  <div className="md:col-span-2">
+                    <FieldScoringConfig 
+                      field={field} 
+                      onUpdate={(updates) => updateField(field.id, updates)} 
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>

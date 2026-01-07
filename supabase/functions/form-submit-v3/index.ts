@@ -504,6 +504,69 @@ serve(async (req) => {
       }
     }
 
+    // ============================================
+    // STEP 2.5: DYNAMIC LEAD SCORING FROM SCHEMA
+    // Calculate score based on field scoring configuration
+    // ============================================
+    let leadScoringTotal = 0;
+    const leadScoringBreakdown: Record<string, number> = {};
+    let hasLeadScoring = false;
+
+    for (const field of fields) {
+      if (field.scoring?.enabled && field.scoring?.options?.length > 0) {
+        hasLeadScoring = true;
+        const answer = sanitizedAnswers[field.id];
+        
+        if (answer !== undefined && answer !== null && answer !== '') {
+          // Normalize answer to string for comparison
+          const answerStr = String(answer);
+          
+          // Find matching scoring option
+          const scoringOption = field.scoring.options.find(
+            (opt: any) => String(opt.value) === answerStr
+          );
+          
+          if (scoringOption && typeof scoringOption.points === 'number') {
+            leadScoringBreakdown[field.id] = scoringOption.points;
+            leadScoringTotal += scoringOption.points;
+            console.log(`[form-submit-v3] Lead scoring: field "${field.label}" = ${scoringOption.points} pts (answer: ${answerStr})`);
+          } else {
+            leadScoringBreakdown[field.id] = 0;
+            console.log(`[form-submit-v3] Lead scoring: field "${field.label}" = 0 pts (no match for: ${answerStr})`);
+          }
+        }
+      }
+    }
+
+    // Determine classification based on scoring_ranges table
+    let leadClassification = 'frio';
+    if (hasLeadScoring) {
+      const { data: ranges } = await supabase
+        .from('scoring_ranges')
+        .select('classification, min_score, max_score')
+        .order('min_score', { ascending: false });
+      
+      if (ranges) {
+        for (const range of ranges) {
+          const minOk = leadScoringTotal >= range.min_score;
+          const maxOk = range.max_score === null || leadScoringTotal <= range.max_score;
+          if (minOk && maxOk) {
+            leadClassification = range.classification;
+            break;
+          }
+        }
+      }
+      
+      console.log(`[form-submit-v3] Lead score total: ${leadScoringTotal}, classification: ${leadClassification}`);
+      
+      // Add to calculated_scores
+      calculatedScores.lead_score = {
+        total: leadScoringTotal,
+        breakdown: leadScoringBreakdown,
+        classification: leadClassification,
+      };
+    }
+
     // Step 3: Create or update contact
     // Smart email detection: by type, by label, or by content validation
     let contactId: string | null = null;
@@ -545,6 +608,18 @@ serve(async (req) => {
 
       if (existingContact) {
         contactId = existingContact.id;
+        
+        // Update contact with lead score if we have scoring
+        if (hasLeadScoring) {
+          await supabase
+            .from('contacts')
+            .update({
+              lead_score: leadScoringTotal,
+              lead_classification: leadClassification,
+            })
+            .eq('id', contactId);
+          console.log(`[form-submit-v3] Updated contact ${contactId} with lead score: ${leadScoringTotal}`);
+        }
       } else {
         const nameField = fields.find((f: any) => f.type === 'text' && f.label?.toLowerCase().includes('nome'));
         const phoneField = fields.find((f: any) => f.type === 'phone');
@@ -558,12 +633,18 @@ serve(async (req) => {
             phone: phoneField ? sanitizedAnswers[phoneField.id] : null,
             source: 'form',
             status: 'lead',
+            // Add lead score if we have scoring
+            ...(hasLeadScoring ? {
+              lead_score: leadScoringTotal,
+              lead_classification: leadClassification,
+            } : {}),
           })
           .select()
           .single();
 
         if (newContact) {
           contactId = newContact.id;
+          console.log(`[form-submit-v3] Created contact ${contactId} with lead score: ${leadScoringTotal}`);
         }
       }
     }
