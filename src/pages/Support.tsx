@@ -12,6 +12,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
 import { PageContainer } from "@/components/ui/page-container";
 import { CreateTicketDialog } from "@/components/support/CreateTicketDialog";
+import { useTicketsPresence } from "@/hooks/useTicketsPresence";
 
 type MobileView = 'list' | 'details';
 
@@ -29,6 +30,16 @@ export default function Support() {
   
   const { isSupportManager } = useUserRole();
   const isMobile = useIsMobileBreakpoint();
+  const { getViewersForTicket, setViewingTicket } = useTicketsPresence();
+
+  // Atualizar presença quando selecionar ticket (mobile)
+  useEffect(() => {
+    if (isMobile && mobileView === 'details' && selectedTicketId) {
+      setViewingTicket(selectedTicketId);
+    } else if (isMobile) {
+      setViewingTicket(null);
+    }
+  }, [isMobile, mobileView, selectedTicketId, setViewingTicket]);
 
   // Convert sidebar filter to hook parameters
   const getHookParams = () => {
@@ -188,6 +199,7 @@ export default function Support() {
                   ticket={ticket}
                   onClick={() => handleSelectTicket(ticket.id)}
                   isSelected={ticket.id === selectedTicketId}
+                  viewers={getViewersForTicket(ticket.id)}
                 />
               ))}
             </div>
@@ -277,6 +289,7 @@ export default function Support() {
             selectedTicketIds={selectedTicketIds}
             onToggleSelect={handleToggleSelect}
             onToggleSelectAll={handleToggleSelectAll}
+            getViewersForTicket={getViewersForTicket}
           />
         </div>
       </div>

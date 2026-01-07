@@ -2,9 +2,17 @@ import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { Clock, AlertCircle, CheckCircle, UserPen, AlertTriangle } from "lucide-react";
+import { Clock, AlertCircle, CheckCircle, UserPen, AlertTriangle, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+
+interface ViewingInfo {
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
+}
 
 interface Ticket {
   id: string;
@@ -52,6 +60,7 @@ interface TicketsTableProps {
   selectedTicketIds?: string[];
   onToggleSelect?: (ticketId: string) => void;
   onToggleSelectAll?: () => void;
+  getViewersForTicket?: (ticketId: string) => ViewingInfo[];
 }
 
 const statusConfig = {
@@ -100,6 +109,7 @@ export function TicketsTable({
   selectedTicketIds = [],
   onToggleSelect,
   onToggleSelectAll,
+  getViewersForTicket,
 }: TicketsTableProps) {
   const { user } = useAuth();
 
@@ -118,7 +128,7 @@ export function TicketsTable({
     <div className="h-full flex flex-col bg-card">
       {/* Table Header */}
       <div className="flex-none border-b border-border bg-muted/50">
-        <div className="grid grid-cols-[40px_90px_minmax(120px,1.5fr)_minmax(140px,1fr)_minmax(130px,1fr)_minmax(100px,0.8fr)_80px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="grid grid-cols-[40px_90px_minmax(120px,1.5fr)_minmax(140px,1fr)_minmax(130px,1fr)_minmax(100px,0.8fr)_50px_80px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {onToggleSelectAll && (
             <div className="flex items-center justify-center">
               <Checkbox 
@@ -134,6 +144,9 @@ export function TicketsTable({
           <div>Solicitante</div>
           <div>Responsável</div>
           <div>Departamento</div>
+          <div className="flex items-center justify-center">
+            <Eye className="w-3 h-3" />
+          </div>
           <div className="text-right">Data</div>
         </div>
       </div>
@@ -149,16 +162,18 @@ export function TicketsTable({
             const isCreatedByMe = ticket.created_by === user?.id;
             const isAssignedToOther = ticket.assigned_to && ticket.assigned_to !== user?.id;
             const showCreatedByMeBadge = isCreatedByMe && isAssignedToOther;
+            const viewers = getViewersForTicket?.(ticket.id) || [];
 
             return (
               <div
                 key={ticket.id}
                 onClick={() => onSelectTicket(ticket.id)}
                 className={cn(
-                  "grid grid-cols-[40px_90px_minmax(120px,1.5fr)_minmax(140px,1fr)_minmax(130px,1fr)_minmax(100px,0.8fr)_80px] gap-2 px-3 py-3 cursor-pointer transition-colors items-center",
+                  "grid grid-cols-[40px_90px_minmax(120px,1.5fr)_minmax(140px,1fr)_minmax(130px,1fr)_minmax(100px,0.8fr)_50px_80px] gap-2 px-3 py-3 cursor-pointer transition-colors items-center",
                   isSelected 
                     ? "bg-primary/5 border-l-2 border-primary" 
-                    : "hover:bg-accent/50 border-l-2 border-transparent"
+                    : "hover:bg-accent/50 border-l-2 border-transparent",
+                  viewers.length > 0 && "bg-primary/5"
                 )}
               >
                 {/* Checkbox */}
@@ -224,6 +239,43 @@ export function TicketsTable({
                     </span>
                   ) : (
                     <span className="text-muted-foreground/50">—</span>
+                  )}
+                </div>
+
+                {/* Viewers */}
+                <div className="flex items-center justify-center">
+                  {viewers.length > 0 && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-1">
+                            <div className="flex -space-x-1.5">
+                              {viewers.slice(0, 2).map((viewer) => (
+                                <Avatar key={viewer.user_id} className="w-5 h-5 border border-background">
+                                  {viewer.avatar_url ? (
+                                    <AvatarImage src={viewer.avatar_url} alt={viewer.full_name} />
+                                  ) : null}
+                                  <AvatarFallback className="bg-primary text-primary-foreground text-[8px]">
+                                    {viewer.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                  </AvatarFallback>
+                                </Avatar>
+                              ))}
+                            </div>
+                            {viewers.length > 2 && (
+                              <span className="text-[10px] text-muted-foreground">
+                                +{viewers.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="left">
+                          <p className="text-xs font-medium mb-1">Visualizando agora:</p>
+                          {viewers.map((v) => (
+                            <p key={v.user_id} className="text-xs">{v.full_name}</p>
+                          ))}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
                 </div>
 

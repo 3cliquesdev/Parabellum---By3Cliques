@@ -1,10 +1,18 @@
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, Clock, User } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ChevronRight, Clock, User, Eye } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 import { useActiveTicketStatuses } from "@/hooks/useTicketStatuses";
 import { getStatusIcon } from "@/lib/ticketStatusIcons";
+
+interface ViewingInfo {
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
+}
 
 type Ticket = Tables<"tickets"> & {
   contacts?: Tables<"contacts"> | null;
@@ -18,6 +26,7 @@ interface TicketCardProps {
   ticket: Ticket;
   onClick?: () => void;
   isSelected?: boolean;
+  viewers?: ViewingInfo[];
 }
 
 const priorityConfig = {
@@ -36,7 +45,7 @@ const fallbackStatusConfig: Record<string, { label: string; color: string }> = {
   closed: { label: "Fechado", color: "#6B7280" },
 };
 
-export function TicketCard({ ticket, onClick, isSelected }: TicketCardProps) {
+export function TicketCard({ ticket, onClick, isSelected, viewers = [] }: TicketCardProps) {
   const { data: statuses } = useActiveTicketStatuses();
   const priority = priorityConfig[ticket.priority as keyof typeof priorityConfig];
   
@@ -50,14 +59,35 @@ export function TicketCard({ ticket, onClick, isSelected }: TicketCardProps) {
     <div
       className={`flex flex-col gap-2 p-4 hover:bg-muted/50 transition-colors cursor-pointer ${
         isSelected ? "bg-primary/5 border-l-2 border-l-primary" : ""
-      }`}
+      } ${viewers.length > 0 ? "bg-primary/5" : ""}`}
       onClick={onClick}
     >
-      {/* Header: Protocolo + Status */}
+      {/* Header: Protocolo + Status + Viewers */}
       <div className="flex items-center justify-between">
-        <span className="font-mono text-sm text-muted-foreground">
-          #{ticket.ticket_number || ticket.id.slice(0, 8)}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-sm text-muted-foreground">
+            #{ticket.ticket_number || ticket.id.slice(0, 8)}
+          </span>
+          {/* Viewers Badge */}
+          {viewers.length > 0 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/10">
+                    <Eye className="w-3 h-3 text-primary" />
+                    <span className="text-[10px] font-medium text-primary">{viewers.length}</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs font-medium mb-1">Visualizando:</p>
+                  {viewers.map((v) => (
+                    <p key={v.user_id} className="text-xs">{v.full_name}</p>
+                  ))}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
         <Badge 
           className="text-white flex items-center gap-1"
           style={{ backgroundColor: statusColor }}

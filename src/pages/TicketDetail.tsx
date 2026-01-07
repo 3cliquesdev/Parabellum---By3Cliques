@@ -1,14 +1,28 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { useTicketById } from "@/hooks/useTicketById";
 import { TicketDetails } from "@/components/TicketDetails";
 import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { useTicketsPresence } from "@/hooks/useTicketsPresence";
 
 export default function TicketDetail() {
   const { ticketId } = useParams<{ ticketId: string }>();
   const navigate = useNavigate();
   const { data: ticket, isLoading, error } = useTicketById(ticketId);
+  const { setViewingTicket } = useTicketsPresence();
+
+  // Publicar presença global quando entrar no ticket
+  useEffect(() => {
+    if (ticketId) {
+      setViewingTicket(ticketId);
+    }
+    
+    return () => {
+      setViewingTicket(null);
+    };
+  }, [ticketId, setViewingTicket]);
 
   if (isLoading) {
     return (
