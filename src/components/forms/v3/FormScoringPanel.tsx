@@ -15,13 +15,15 @@ import { cn } from "@/lib/utils";
 import type { FormField, FormSchema } from "@/hooks/useForms";
 import { ScoringRangesConfig } from "@/components/scoring/ScoringRangesConfig";
 import { useScoringRanges } from "@/hooks/useScoringConfig";
+import { ScoreBasedRoutingConfig } from "@/components/forms/ScoreBasedRoutingConfig";
 
 interface FormScoringPanelProps {
   schema: FormSchema;
   onSchemaChange: (schema: FormSchema) => void;
+  formId?: string;
 }
 
-export default function FormScoringPanel({ schema, onSchemaChange }: FormScoringPanelProps) {
+export default function FormScoringPanel({ schema, onSchemaChange, formId }: FormScoringPanelProps) {
   const fields = schema.fields || [];
   const { data: ranges = [] } = useScoringRanges();
   
@@ -196,6 +198,12 @@ export default function FormScoringPanel({ schema, onSchemaChange }: FormScoring
       
       {/* Scoring Ranges Configuration */}
       <ScoringRangesConfig />
+      
+      {/* Score-Based Routing Configuration */}
+      <ScoreBasedRoutingConfig 
+        formId={formId} 
+        hasScoringFields={scoringFields.length > 0} 
+      />
     </div>
   );
 }

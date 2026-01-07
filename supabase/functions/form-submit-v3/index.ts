@@ -813,7 +813,32 @@ serve(async (req) => {
     if (form.target_type === 'deal' && contactId) {
       console.log(`[form-submit-v3] Creating DEAL with routing`);
       
-      const pipelineId = form.target_pipeline_id;
+      // Apply score-based routing if enabled
+      let pipelineId = form.target_pipeline_id;
+      let playbookConfig: { playbook_id: string; start_node_id: string | null } | null = null;
+      
+      if (hasLeadScoring && form.score_routing_rules?.enabled && form.score_routing_rules?.rules?.length > 0) {
+        const rules = form.score_routing_rules.rules;
+        for (const rule of rules) {
+          const inRange = leadScoringTotal >= rule.min_score && 
+                         (rule.max_score === null || leadScoringTotal <= rule.max_score);
+          if (inRange) {
+            if (rule.pipeline_id) {
+              pipelineId = rule.pipeline_id;
+              console.log(`[form-submit-v3] Score routing: ${leadScoringTotal}pts -> pipeline ${pipelineId} (${rule.classification})`);
+            }
+            if (rule.playbook_id) {
+              playbookConfig = {
+                playbook_id: rule.playbook_id,
+                start_node_id: rule.playbook_start_node_id || null
+              };
+              console.log(`[form-submit-v3] Score routing: ${leadScoringTotal}pts -> playbook ${rule.playbook_id}, start node: ${rule.playbook_start_node_id || 'first'}`);
+            }
+            break;
+          }
+        }
+      }
+      
       if (pipelineId) {
         // Get first stage of the pipeline
         const { data: firstStage } = await supabase
@@ -844,6 +869,47 @@ serve(async (req) => {
           console.error('[form-submit-v3] Error creating deal:', dealError);
         } else if (newDeal) {
           console.log(`[form-submit-v3] Deal created: ${newDeal.id}, assigned_to: ${assignedTo}`);
+        }
+        
+        // Trigger playbook based on score routing (if configured)
+        if (playbookConfig && contactId) {
+          try {
+            const { data: execution, error: execError } = await supabase
+              .from('playbook_executions')
+              .insert({
+                playbook_id: playbookConfig.playbook_id,
+                contact_id: contactId,
+                status: 'pending',
+                current_node_id: playbookConfig.start_node_id || null,
+                triggered_by: 'score_routing',
+                execution_context: {
+                  lead_score: leadScoringTotal,
+                  lead_classification: leadClassification,
+                  form_id: form_id,
+                  start_node_override: playbookConfig.start_node_id
+                }
+              })
+              .select()
+              .single();
+
+            if (execError) {
+              console.error('[form-submit-v3] Error creating playbook execution:', execError);
+            } else if (execution) {
+              console.log(`[form-submit-v3] Playbook execution created: ${execution.id} for playbook ${playbookConfig.playbook_id}`);
+              
+              // If we have a specific start node, queue it
+              if (playbookConfig.start_node_id) {
+                await supabase.from('playbook_execution_queue').insert({
+                  execution_id: execution.id,
+                  node_id: playbookConfig.start_node_id,
+                  status: 'pending',
+                  scheduled_for: new Date().toISOString()
+                });
+              }
+            }
+          } catch (playbookError) {
+            console.error('[form-submit-v3] Error triggering playbook:', playbookError);
+          }
         }
       } else {
         console.warn('[form-submit-v3] target_type=deal but no target_pipeline_id configured');

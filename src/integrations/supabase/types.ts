@@ -2947,6 +2947,7 @@ export type Database = {
           name: string
           notify_manager: boolean | null
           schema: Json
+          score_routing_rules: Json | null
           target_department_id: string | null
           target_pipeline_id: string | null
           target_type: Database["public"]["Enums"]["form_target_type"] | null
@@ -2966,6 +2967,7 @@ export type Database = {
           name: string
           notify_manager?: boolean | null
           schema?: Json
+          score_routing_rules?: Json | null
           target_department_id?: string | null
           target_pipeline_id?: string | null
           target_type?: Database["public"]["Enums"]["form_target_type"] | null
@@ -2985,6 +2987,7 @@ export type Database = {
           name?: string
           notify_manager?: boolean | null
           schema?: Json
+          score_routing_rules?: Json | null
           target_department_id?: string | null
           target_pipeline_id?: string | null
           target_type?: Database["public"]["Enums"]["form_target_type"] | null
