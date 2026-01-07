@@ -60,10 +60,96 @@ serve(async (req) => {
       );
     }
 
-    if (instance.status !== 'connected') {
-      console.error('[send-whatsapp-message] Instance not connected:', instance.status);
+    // 🔄 Verificar conexão real antes de enviar
+    async function checkAndReconnect(): Promise<boolean> {
+      // Verificar status atual na Evolution API
+      const baseUrl = instance.api_url.replace(/\/manager$/, '').replace(/\/$/, '');
+      
+      try {
+        const statusResponse = await fetch(`${baseUrl}/instance/connectionState/${instance.instance_name}`, {
+          method: 'GET',
+          headers: { 'apikey': instance.api_token },
+        });
+        
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          console.log('[send-whatsapp-message] 🔍 Connection state:', statusData);
+          
+          const isConnected = statusData?.instance?.state === 'open' || 
+                              statusData?.state === 'open' ||
+                              statusData?.status === 'connected';
+          
+          if (isConnected) {
+            // Atualizar status no banco se estava marcado como desconectado
+            if (instance.status !== 'connected') {
+              await supabase
+                .from('whatsapp_instances')
+                .update({ status: 'connected', consecutive_failures: 0 })
+                .eq('id', instance.id);
+            }
+            return true;
+          }
+        }
+        
+        // Se não conectado, tentar reconectar
+        console.log('[send-whatsapp-message] 🔄 Tentando reconectar instância...');
+        
+        const reconnectResponse = await fetch(`${baseUrl}/instance/connect/${instance.instance_name}`, {
+          method: 'GET',
+          headers: { 'apikey': instance.api_token },
+        });
+        
+        if (reconnectResponse.ok) {
+          // Aguardar 2s para conexão se estabelecer
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Verificar novamente
+          const recheckResponse = await fetch(`${baseUrl}/instance/connectionState/${instance.instance_name}`, {
+            method: 'GET',
+            headers: { 'apikey': instance.api_token },
+          });
+          
+          if (recheckResponse.ok) {
+            const recheckData = await recheckResponse.json();
+            const isNowConnected = recheckData?.instance?.state === 'open' || 
+                                   recheckData?.state === 'open';
+            
+            if (isNowConnected) {
+              await supabase
+                .from('whatsapp_instances')
+                .update({ status: 'connected', consecutive_failures: 0 })
+                .eq('id', instance.id);
+              console.log('[send-whatsapp-message] ✅ Reconexão bem-sucedida!');
+              return true;
+            }
+          }
+        }
+        
+        return false;
+      } catch (error) {
+        console.error('[send-whatsapp-message] ❌ Erro ao verificar/reconectar:', error);
+        return false;
+      }
+    }
+
+    // Verificar conexão real (não confiar apenas no status do banco)
+    const isReallyConnected = await checkAndReconnect();
+    
+    if (!isReallyConnected) {
+      console.error('[send-whatsapp-message] Instance not connected after reconnect attempt');
+      
+      // Atualizar status para desconectado no banco
+      await supabase
+        .from('whatsapp_instances')
+        .update({ status: 'disconnected' })
+        .eq('id', instance.id);
+      
       return new Response(
-        JSON.stringify({ error: 'Instance not connected', status: instance.status }),
+        JSON.stringify({ 
+          error: 'Instance not connected - reconnection failed', 
+          status: 'disconnected',
+          hint: 'Por favor, reconecte manualmente escaneando o QR code'
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
