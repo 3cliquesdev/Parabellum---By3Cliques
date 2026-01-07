@@ -14,6 +14,12 @@ export function useTicketCounts() {
   const { data: statuses } = useActiveTicketStatuses();
 
   const canSeeAllTickets = ['admin', 'manager', 'support_manager', 'cs_manager', 'general_manager', 'financial_manager'].includes(role || '');
+  
+  // Roles with specific access patterns
+  const isConsultant = role === 'consultant';
+  const isFinancialAgent = role === 'financial_agent';
+  const isSupportAgent = role === 'support_agent';
+  const isUser = role === 'user';
 
   // Get archived status names for filtering
   const archivedStatusNames = statuses?.filter(s => s.is_archived_status).map(s => s.name) || ['resolved', 'closed'];
@@ -31,18 +37,21 @@ export function useTicketCounts() {
         };
       }
 
-      // Build base query depending on role
-      let baseFilter = canSeeAllTickets 
-        ? '' 
-        : `assigned_to.eq.${user.id},assigned_to.is.null,created_by.eq.${user.id}`;
-
-      // Fetch all tickets that user can see (without status filter)
+      // Fetch all tickets that user can see (RLS will filter based on role)
       let query = supabase
         .from("tickets")
-        .select("id, status, assigned_to, due_date, created_by");
+        .select("id, status, assigned_to, due_date, created_by, customer_id");
 
+      // Optimize query based on role (RLS handles security, this is for performance)
       if (!canSeeAllTickets) {
-        query = query.or(baseFilter);
+        if (isUser) {
+          // Users can only see tickets they created
+          query = query.eq("created_by", user.id);
+        } else if (isFinancialAgent || isSupportAgent) {
+          // Support/Financial agents: assigned to self, unassigned, or created by self
+          query = query.or(`assigned_to.eq.${user.id},assigned_to.is.null,created_by.eq.${user.id}`);
+        }
+        // For consultants, let RLS handle the filtering (consultant_id is in contacts table)
       }
 
       const { data: tickets, error } = await query;
