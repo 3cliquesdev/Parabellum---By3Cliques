@@ -32,7 +32,7 @@ serve(async (req) => {
     // Define branding based on type
     const branding = type === 'customer' ? {
       name: 'Seu Armazém Drop',
-      from: 'Seu Armazém Drop <contato@parabellum.work>',
+      from: 'Seu Armazém Drop <contato@seuarmazemdrop.parabellum.work>',
       subject: '🔐 Código de Verificação - Seu Armazém Drop',
       logo: 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-seuarmazemdrop.png',
       greeting: 'Olá!',
@@ -43,7 +43,7 @@ serve(async (req) => {
       footer: 'Equipe Seu Armazém Drop'
     } : {
       name: 'Parabellum Security',
-      from: 'Parabellum Security <sistema@parabellum.work>',
+      from: 'Parabellum Security <sistema@seuarmazemdrop.parabellum.work>',
       subject: '🔐 CÓDIGO DE VERIFICAÇÃO: Acesso ao Sistema Parabellum',
       logo: 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2',
       greeting: 'Prezado(a) Colaborador(a),',
