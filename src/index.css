@@ -363,3 +363,28 @@
 .no-scroll {
   overflow: hidden !important;
 }
+
+/* Premium Scroll Container - reusable for modals and long content */
+.scroll-container-premium {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary) / 0.3) transparent;
+}
+
+.scroll-container-premium::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scroll-container-premium::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-container-premium::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.3);
+  border-radius: 3px;
+}
+
+.scroll-container-premium::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.5);
+}

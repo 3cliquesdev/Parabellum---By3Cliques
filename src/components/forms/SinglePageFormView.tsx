@@ -127,8 +127,8 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
   };
 
   // Success screen
-  // In preview mode, don't use min-h-screen as it breaks the modal scroll
-  const containerClass = isPreview ? "flex flex-col" : (isEmbedded ? "" : "min-h-screen flex flex-col");
+  // In preview mode, use h-full to fit within parent container with scroll
+  const containerClass = isPreview ? "flex flex-col h-full" : (isEmbedded ? "" : "min-h-screen flex flex-col");
   
   if (isSubmitted) {
     return (

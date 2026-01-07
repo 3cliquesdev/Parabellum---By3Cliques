@@ -90,16 +90,18 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
                 </div>
             ) : (
               <div 
-                className="w-full max-w-4xl rounded-lg shadow-lg bg-background overflow-y-auto"
+                className="w-full max-w-4xl rounded-lg shadow-lg bg-background flex flex-col"
                 style={{ height: 'calc(90vh - 140px)' }}
               >
-                <PublicFormV2 
-                  schema={schema} 
-                  isPreview 
-                  formName={name} 
-                  formTitle={title} 
-                  formDescription={description}
-                />
+                <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+                  <PublicFormV2 
+                    schema={schema} 
+                    isPreview 
+                    formName={name} 
+                    formTitle={title} 
+                    formDescription={description}
+                  />
+                </div>
               </div>
             )}
             </div>
