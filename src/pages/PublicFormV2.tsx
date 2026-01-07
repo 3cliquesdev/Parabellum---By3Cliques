@@ -334,9 +334,9 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
   }
 
   // Conversational Mode (default) - one field at a time
-  // In preview mode, use h-full with min-h-0 and overflow to enable internal scroll
+  // In preview mode, content flows naturally - scroll is controlled by parent wrapper
   const containerClass = isPreview 
-    ? "flex flex-col h-full min-h-0 overflow-y-auto scrollbar-thin" 
+    ? "flex flex-col" 
     : (isEmbedded ? "" : "min-h-screen flex flex-col");
 
   return (
@@ -391,7 +391,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
       </header>
 
       {/* Main Content */}
-      <main className={`${isEmbedded || isPreview ? '' : 'flex-1'} flex ${isEmbedded || isPreview ? 'items-start' : 'items-center'} justify-center p-4 sm:p-6`}>
+      <main className={`${isEmbedded ? '' : 'flex-1'} flex ${isEmbedded ? 'items-start' : 'items-center'} justify-center p-4 sm:p-6`}>
         <div className="w-full max-w-2xl">
           <AnimatePresence mode="wait" custom={direction}>
             {currentField && (
