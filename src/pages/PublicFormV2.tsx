@@ -336,7 +336,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
   // Conversational Mode (default) - one field at a time
   // In preview mode, content flows naturally - scroll is controlled by parent wrapper
   const containerClass = isPreview 
-    ? "flex flex-col h-full" 
+    ? "flex flex-col" 
     : (isEmbedded ? "" : "min-h-screen flex flex-col");
 
   return (
