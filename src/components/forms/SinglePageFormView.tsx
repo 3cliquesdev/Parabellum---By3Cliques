@@ -127,7 +127,8 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
   };
 
   // Success screen
-  const containerClass = isEmbedded ? "" : "min-h-screen flex flex-col";
+  // In preview mode, don't use min-h-screen as it breaks the modal scroll
+  const containerClass = isPreview ? "flex flex-col" : (isEmbedded ? "" : "min-h-screen flex flex-col");
   
   if (isSubmitted) {
     return (
