@@ -1,4 +1,4 @@
-import { createClient } from "https://deno.land/x/supabase@1.4.4/mod.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
