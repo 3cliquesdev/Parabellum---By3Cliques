@@ -127,8 +127,10 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
   };
 
   // Success screen
-  // In preview mode, use h-full to fit within parent container with scroll
-  const containerClass = isPreview ? "flex flex-col h-full" : (isEmbedded ? "" : "min-h-screen flex flex-col");
+  // In preview mode, use h-full with min-h-0 and overflow to enable internal scroll
+  const containerClass = isPreview 
+    ? "flex flex-col h-full min-h-0 overflow-y-auto scrollbar-thin" 
+    : (isEmbedded ? "" : "min-h-screen flex flex-col");
   
   if (isSubmitted) {
     return (
@@ -211,7 +213,7 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
       </header>
 
       {/* Main Content */}
-      <main className={`${isEmbedded ? '' : 'flex-1'} flex items-start justify-center p-4 sm:p-6 pt-8`}>
+      <main className={`${isEmbedded || isPreview ? '' : 'flex-1'} flex items-start justify-center p-4 sm:p-6 pt-8`}>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
