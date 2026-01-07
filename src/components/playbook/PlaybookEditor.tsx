@@ -819,27 +819,34 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
 
                 <div>
                   <Label>Formulário de origem (para classificação)</Label>
-                  <Select
-                    value={selectedNode.data.form_id || ""}
-                    onValueChange={(value) => {
-                      const form = forms?.find(f => f.id === value);
-                      updateNodeData("form_id", value);
-                      updateNodeData("form_name", form?.name || "");
-                    }}
-                  >
-                    <SelectTrigger className="bg-background text-foreground">
-                      <SelectValue placeholder="Selecione o formulário..." />
-                    </SelectTrigger>
-                    <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
-                      {forms?.filter(f => f.is_active).map((form) => (
-                        <SelectItem key={form.id} value={form.id}>
-                          {form.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {!forms ? (
+                    <p className="text-xs text-muted-foreground py-2">Carregando formulários...</p>
+                  ) : forms.filter(f => f.is_active).length === 0 ? (
+                    <p className="text-xs text-amber-600 py-2">Nenhum formulário ativo encontrado</p>
+                  ) : (
+                    <Select
+                      value={selectedNode.data.form_id || ""}
+                      onValueChange={(value) => {
+                        const form = forms.find(f => f.id === value);
+                        updateNodeData("form_id", value);
+                        updateNodeData("form_name", form?.name || "");
+                      }}
+                    >
+                      <SelectTrigger className="bg-background text-foreground border">
+                        <SelectValue placeholder="Selecione o formulário..." />
+                      </SelectTrigger>
+                      <SelectContent className="z-[9999] bg-popover" position="popper" sideOffset={5}>
+                        {forms.filter(f => f.is_active).map((form) => (
+                          <SelectItem key={form.id} value={form.id}>
+                            {form.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">
                     O switch usará a classificação gerada pelo formulário
+                    {forms && ` (${forms.filter(f => f.is_active).length} disponíveis)`}
                   </p>
                 </div>
               </>

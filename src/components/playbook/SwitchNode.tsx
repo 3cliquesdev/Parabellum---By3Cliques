@@ -110,9 +110,9 @@ export const SwitchNode = memo(({ data, selected }: NodeProps<SwitchNodeData>) =
       </div>
       
       {data.form_name && (
-        <p className="text-xs text-muted-foreground italic mt-2">
-          📋 {data.form_name}
-        </p>
+        <div className="flex items-center gap-2 mt-2 p-2 bg-blue-500/10 rounded text-xs">
+          <span className="text-blue-600 font-medium">📋 {data.form_name}</span>
+        </div>
       )}
     </WorkflowNodeWrapper>
   );
