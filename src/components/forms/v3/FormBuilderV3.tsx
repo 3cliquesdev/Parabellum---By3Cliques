@@ -10,7 +10,8 @@ import {
   Zap, 
   MessageSquare,
   Eye,
-  Settings
+  Settings,
+  Target
 } from "lucide-react";
 import type { FormField, FormSchema } from "@/hooks/useForms";
 import { FormBuilderV2 } from "@/components/forms/FormBuilderV2";
@@ -18,6 +19,7 @@ import AdvancedConditionsBuilder from "./AdvancedConditionsBuilder";
 import CalculationsPanel from "./CalculationsPanel";
 import FormAutomationsPanel from "./FormAutomationsPanel";
 import ConversationalModeSettings from "./ConversationalModeSettings";
+import FormScoringPanel from "./FormScoringPanel";
 import { useFormConditions } from "@/hooks/useFormConditions";
 import { useFormAutomations } from "@/hooks/useFormAutomations";
 import { useFormCalculations } from "@/hooks/useFormCalculations";
@@ -46,6 +48,7 @@ export default function FormBuilderV3({
   const { data: calculations = [] } = useFormCalculations(formId);
   
   const fields = schema.fields || [];
+  const scoringFieldsCount = fields.filter(f => f.scoring?.enabled).length;
   
   return (
     <div className="h-full flex flex-col">
@@ -78,6 +81,13 @@ export default function FormBuilderV3({
                 <span className="hidden sm:inline">Automações</span>
                 {automations.length > 0 && (
                   <Badge variant="secondary" className="ml-1">{automations.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="scoring" className="gap-2">
+                <Target className="h-4 w-4" />
+                <span className="hidden sm:inline">Scoring</span>
+                {scoringFieldsCount > 0 && (
+                  <Badge variant="secondary" className="ml-1">{scoringFieldsCount}</Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger value="settings" className="gap-2">
@@ -120,6 +130,14 @@ export default function FormBuilderV3({
             <FormAutomationsPanel formId={formId} fields={fields} />
           </TabsContent>
           
+          {/* Scoring Tab */}
+          <TabsContent value="scoring" className="m-0 p-4">
+            <FormScoringPanel 
+              schema={schema}
+              onSchemaChange={onSchemaChange}
+            />
+          </TabsContent>
+          
           {/* Conversational Mode Settings Tab */}
           <TabsContent value="settings" className="m-0 p-4">
             <ConversationalModeSettings 
@@ -136,7 +154,8 @@ export default function FormBuilderV3({
           <span>{fields.length} campos</span>
           <span>{conditions.length} condições</span>
           <span>{calculations.length} cálculos</span>
-          <span>{automations.filter(a => a.is_active).length}/{automations.length} automações ativas</span>
+          <span>{automations.filter(a => a.is_active).length}/{automations.length} automações</span>
+          <span>{scoringFieldsCount} scoring</span>
         </div>
         <div className="flex items-center gap-2">
           {settings.conversational_enabled && (
