@@ -6005,14 +6005,24 @@ export type Database = {
           usage_count: number
         }[]
       }
-      get_assignee_for_form: {
-        Args: {
-          p_department_id: string
-          p_distribution_rule: string
-          p_target_user_id: string
-        }
-        Returns: string
-      }
+      get_assignee_for_form:
+        | {
+            Args: {
+              p_department_id?: string
+              p_distribution_rule: string
+              p_pipeline_id?: string
+              p_target_user_id?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_department_id: string
+              p_distribution_rule: string
+              p_target_user_id: string
+            }
+            Returns: string
+          }
       get_avg_first_response_time: {
         Args: { p_end: string; p_start: string }
         Returns: number
