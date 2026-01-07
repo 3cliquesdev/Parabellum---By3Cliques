@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { WizardProgress } from "./WizardProgress";
 import { OnboardingStepCard } from "./OnboardingStepCard";
+import { FormStepCard } from "./FormStepCard";
 import { CelebrationView } from "./CelebrationView";
 import { ChevronLeft, ChevronRight, PartyPopper } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +17,8 @@ interface Step {
   position: number;
   completed: boolean;
   is_critical: boolean;
+  step_type?: string; // 'task' | 'form'
+  form_id?: string;
   video_url?: string;
   rich_content?: string;
   quiz_enabled?: boolean;
@@ -33,6 +36,9 @@ interface WizardViewProps {
   supportPhone: string;
   onRefresh: () => void;
 }
+
+// Type guard
+const isFormStep = (step: Step): boolean => step.step_type === 'form' && !!step.form_id;
 
 export function WizardView({ steps, customerName, contactId, supportPhone, onRefresh }: WizardViewProps) {
   const { toast } = useToast();
@@ -74,6 +80,26 @@ export function WizardView({ steps, customerName, contactId, supportPhone, onRef
         setIsCompleted(true);
       }
     }
+  };
+
+  const handleFormSubmit = async () => {
+    // After form submission, refresh steps (new steps may be added by Switch node)
+    onRefresh();
+    
+    // Update local state immediately for better UX
+    setLocalSteps(prev => 
+      prev.map(s => s.id === currentStep?.id ? { ...s, completed: true } : s)
+    );
+
+    toast({
+      title: "Formulário enviado! 🎉",
+      description: "Processando suas respostas...",
+    });
+
+    // Wait briefly for backend to process and add new steps
+    setTimeout(() => {
+      onRefresh();
+    }, 2000);
   };
 
   const handleStepComplete = async (stepId: string, completed: boolean) => {
@@ -228,16 +254,29 @@ export function WizardView({ steps, customerName, contactId, supportPhone, onRef
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <OnboardingStepCard
-                step={currentStep}
-                stepNumber={currentStepIndex + 1}
-                totalSteps={totalSteps}
-                onComplete={(completed) => handleStepComplete(currentStep.id, completed)}
-                onQuizPass={() => handleQuizPass(currentStep.id)}
-                supportPhone={supportPhone}
-                customerName={customerName}
-                saving={saving}
-              />
+              {isFormStep(currentStep) ? (
+                <FormStepCard
+                  step={currentStep}
+                  stepNumber={currentStepIndex + 1}
+                  totalSteps={totalSteps}
+                  contactId={contactId}
+                  customerName={customerName}
+                  supportPhone={supportPhone}
+                  saving={saving}
+                  onFormSubmit={handleFormSubmit}
+                />
+              ) : (
+                <OnboardingStepCard
+                  step={currentStep}
+                  stepNumber={currentStepIndex + 1}
+                  totalSteps={totalSteps}
+                  onComplete={(completed) => handleStepComplete(currentStep.id, completed)}
+                  onQuizPass={() => handleQuizPass(currentStep.id)}
+                  supportPhone={supportPhone}
+                  customerName={customerName}
+                  saving={saving}
+                />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

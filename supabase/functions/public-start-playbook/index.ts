@@ -190,40 +190,64 @@ Deno.serve(async (req) => {
       console.log(`[public-start-playbook] Journey steps reset for contact ${contact.id}`);
     }
 
-    // Create customer_journey_steps from playbook task nodes
-    const taskNodes = nodes.filter(n => n.type === 'task');
-    console.log(`[public-start-playbook] Creating ${taskNodes.length} journey steps from task nodes`);
+    // Create customer_journey_steps from playbook task AND form nodes
+    // Filter nodes up to the first switch node (the rest will be added after form submission)
+    const visualNodes: PlaybookNode[] = [];
+    for (const node of nodes) {
+      if (node.type === 'switch' || node.type === 'condition') {
+        // Stop at branching nodes - the rest will be added dynamically after form submit
+        break;
+      }
+      if (node.type === 'task' || node.type === 'form') {
+        visualNodes.push(node);
+      }
+    }
+    
+    console.log(`[public-start-playbook] Creating ${visualNodes.length} journey steps (tasks + forms)`);
 
-    for (let i = 0; i < taskNodes.length; i++) {
-      const node = taskNodes[i];
+    for (let i = 0; i < visualNodes.length; i++) {
+      const node = visualNodes[i];
       const nodeData = node.data || {};
+
+      const stepData: Record<string, any> = {
+        contact_id: contact.id,
+        step_name: nodeData.label || `Etapa ${i + 1}`,
+        position: i + 1,
+        step_type: node.type, // 'task' or 'form'
+        completed: false,
+      };
+
+      // Add task-specific fields
+      if (node.type === 'task') {
+        stepData.is_critical = nodeData.quiz_enabled || false;
+        stepData.video_url = nodeData.video_url || null;
+        stepData.rich_content = nodeData.rich_content || null;
+        stepData.attachments = nodeData.attachments || null;
+        stepData.quiz_enabled = nodeData.quiz_enabled || false;
+        stepData.quiz_question = nodeData.quiz_question || null;
+        stepData.quiz_options = nodeData.quiz_options || null;
+        stepData.quiz_correct_option = nodeData.quiz_correct_option || null;
+        stepData.quiz_passed = false;
+      }
+
+      // Add form-specific fields
+      if (node.type === 'form') {
+        stepData.form_id = nodeData.form_id || null;
+        stepData.is_critical = true; // Forms are always critical to progress
+      }
 
       const { error: stepError } = await supabaseClient
         .from('customer_journey_steps')
-        .insert({
-          contact_id: contact.id,
-          step_name: nodeData.label || `Etapa ${i + 1}`,
-          position: i + 1,
-          is_critical: nodeData.quiz_enabled || false,
-          video_url: nodeData.video_url || null,
-          rich_content: nodeData.rich_content || null,
-          attachments: nodeData.attachments || null,
-          quiz_enabled: nodeData.quiz_enabled || false,
-          quiz_question: nodeData.quiz_question || null,
-          quiz_options: nodeData.quiz_options || null,
-          quiz_correct_option: nodeData.quiz_correct_option || null,
-          completed: false,
-          quiz_passed: false,
-        });
+        .insert(stepData);
 
       if (stepError) {
         console.error(`Failed to create journey step ${i + 1}:`, stepError);
       } else {
-        console.log(`[public-start-playbook] Created journey step: ${nodeData.label}`);
+        console.log(`[public-start-playbook] Created journey step: ${nodeData.label} (type: ${node.type})`);
       }
     }
 
-    console.log(`[public-start-playbook] All journey steps created for contact ${contact.id}`);
+    console.log(`[public-start-playbook] All initial journey steps created for contact ${contact.id}`);
 
     // Queue first node for processing
     const firstNode = nodes[0];

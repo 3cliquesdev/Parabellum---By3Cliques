@@ -798,6 +798,73 @@ async function executeSwitchNode(supabase: any, item: QueueItem, flow: PlaybookF
     return { success: true, selected_case: selectedCase };
   }
 
+  // ============ ADD JOURNEY STEPS FOR THE SELECTED PATH ============
+  // Collect all task nodes reachable from this path
+  const pathNodes: Array<{ id: string; type: string; data: any }> = [];
+  let currentNodeId: string | null = nextNodeId;
+  
+  while (currentNodeId) {
+    const node = flow.nodes.find(n => n.id === currentNodeId);
+    if (!node) break;
+    
+    // Only add task nodes to journey (visual steps)
+    if (node.type === 'task') {
+      pathNodes.push(node);
+    }
+    
+    // Stop if we hit another branching node or form
+    if (node.type === 'switch' || node.type === 'condition' || node.type === 'form') {
+      break;
+    }
+    
+    // Find next node in sequence
+    currentNodeId = findNextNode(currentNodeId, flow);
+  }
+
+  console.log(`Adding ${pathNodes.length} journey steps for path "${selectedCase}"`);
+
+  // Get current max position for this contact's journey
+  const { data: existingSteps } = await supabase
+    .from('customer_journey_steps')
+    .select('position')
+    .eq('contact_id', execution.contact_id)
+    .order('position', { ascending: false })
+    .limit(1);
+
+  let nextPosition = (existingSteps?.[0]?.position || 0) + 1;
+
+  // Add journey steps for the path
+  for (const node of pathNodes) {
+    const nodeData = node.data || {};
+    
+    const { error: stepError } = await supabase
+      .from('customer_journey_steps')
+      .insert({
+        contact_id: execution.contact_id,
+        step_name: nodeData.label || `Etapa ${nextPosition}`,
+        position: nextPosition,
+        step_type: 'task',
+        is_critical: nodeData.quiz_enabled || false,
+        video_url: nodeData.video_url || null,
+        rich_content: nodeData.rich_content || null,
+        attachments: nodeData.attachments || null,
+        quiz_enabled: nodeData.quiz_enabled || false,
+        quiz_question: nodeData.quiz_question || null,
+        quiz_options: nodeData.quiz_options || null,
+        quiz_correct_option: nodeData.quiz_correct_option || null,
+        completed: false,
+        quiz_passed: false,
+      });
+
+    if (stepError) {
+      console.error(`Failed to add journey step for path:`, stepError);
+    } else {
+      console.log(`Added journey step: ${nodeData.label} at position ${nextPosition}`);
+    }
+    
+    nextPosition++;
+  }
+
   // Queue next node based on selected case
   await supabase
     .from('playbook_execution_queue')
@@ -813,7 +880,7 @@ async function executeSwitchNode(supabase: any, item: QueueItem, flow: PlaybookF
     });
 
   console.log(`Queued next node ${nextNode.id} for case ${selectedCase}`);
-  return { success: true, selected_case: selectedCase };
+  return { success: true, selected_case: selectedCase, steps_added: pathNodes.length };
 }
 async function queueNextNode(supabase: any, currentItem: QueueItem, flow: PlaybookFlow, execution: PlaybookExecution) {
   const nextNodeId = findNextNode(currentItem.node_id, flow);

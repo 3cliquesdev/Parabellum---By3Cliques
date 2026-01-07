@@ -1628,6 +1628,7 @@ export type Database = {
           completed_by: string | null
           contact_id: string
           created_at: string
+          form_id: string | null
           id: string
           is_critical: boolean
           notes: string | null
@@ -1641,6 +1642,7 @@ export type Database = {
           quiz_question: string | null
           rich_content: string | null
           step_name: string
+          step_type: string | null
           updated_at: string
           video_completed: boolean | null
           video_completed_at: string | null
@@ -1653,6 +1655,7 @@ export type Database = {
           completed_by?: string | null
           contact_id: string
           created_at?: string
+          form_id?: string | null
           id?: string
           is_critical?: boolean
           notes?: string | null
@@ -1666,6 +1669,7 @@ export type Database = {
           quiz_question?: string | null
           rich_content?: string | null
           step_name: string
+          step_type?: string | null
           updated_at?: string
           video_completed?: boolean | null
           video_completed_at?: string | null
@@ -1678,6 +1682,7 @@ export type Database = {
           completed_by?: string | null
           contact_id?: string
           created_at?: string
+          form_id?: string | null
           id?: string
           is_critical?: boolean
           notes?: string | null
@@ -1691,6 +1696,7 @@ export type Database = {
           quiz_question?: string | null
           rich_content?: string | null
           step_name?: string
+          step_type?: string | null
           updated_at?: string
           video_completed?: boolean | null
           video_completed_at?: string | null
@@ -1709,6 +1715,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_journey_steps_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
             referencedColumns: ["id"]
           },
         ]
