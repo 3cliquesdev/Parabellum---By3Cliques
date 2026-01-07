@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 export interface WhatsAppInstance {
   id: string;
@@ -17,9 +18,37 @@ export interface WhatsAppInstance {
   inbox_enabled: boolean;
   created_at: string;
   updated_at: string;
+  consecutive_failures?: number;
+  last_reconnect_attempt?: string;
 }
 
 export function useWhatsAppInstances() {
+  const queryClient = useQueryClient();
+
+  // Realtime subscription para atualizações instantâneas de status
+  useEffect(() => {
+    const channel = supabase
+      .channel('whatsapp-instances-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'whatsapp_instances',
+        },
+        (payload) => {
+          console.log('[WhatsApp Realtime] Status update:', payload);
+          // Invalidar cache para forçar refetch
+          queryClient.invalidateQueries({ queryKey: ["whatsapp-instances"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ["whatsapp-instances"],
     queryFn: async () => {
@@ -35,6 +64,8 @@ export function useWhatsAppInstances() {
       if (error) throw error;
       return data;
     },
+    refetchInterval: 5000, // Reduzido para 5s para maior responsividade
+    staleTime: 2000, // Considerar dados stale após 2s
   });
 }
 
