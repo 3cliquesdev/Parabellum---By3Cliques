@@ -4,7 +4,7 @@ import {
   MessageCircle, MessageCircleReply,
   Calendar, FileText, Plus,
   CheckCircle, XCircle, StickyNote, TrendingUp,
-  ArrowRightLeft
+  ArrowRightLeft, UserCheck
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
@@ -33,6 +33,13 @@ const INTERACTION_ICONS: Record<string, IconConfig> = {
   note: { icon: StickyNote, color: "text-yellow-500", bg: "bg-yellow-500/10" },
   status_change: { icon: TrendingUp, color: "text-orange-500", bg: "bg-orange-500/10" },
   conversation_transferred: { icon: ArrowRightLeft, color: "text-blue-500", bg: "bg-blue-500/10" },
+  // Ticket events
+  ticket_created: { icon: Plus, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+  ticket_assigned: { icon: UserCheck, color: "text-blue-500", bg: "bg-blue-500/10" },
+  ticket_status_changed: { icon: TrendingUp, color: "text-purple-500", bg: "bg-purple-500/10" },
+  ticket_transferred: { icon: ArrowRightLeft, color: "text-indigo-500", bg: "bg-indigo-500/10" },
+  ticket_resolved: { icon: CheckCircle, color: "text-green-500", bg: "bg-green-500/10" },
+  ticket_closed: { icon: FileText, color: "text-gray-500", bg: "bg-gray-500/10" },
 };
 
 interface TimelineItemProps {

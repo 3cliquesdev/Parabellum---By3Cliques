@@ -16,6 +16,15 @@ export function useTicketTransfer() {
 
   return useMutation({
     mutationFn: async ({ ticket_id, department_id, internal_note }: TransferData) => {
+      // Buscar departamento anterior
+      const { data: currentTicket } = await supabase
+        .from("tickets")
+        .select("department_id, departments(name)")
+        .eq("id", ticket_id)
+        .single();
+      
+      const previousDepartment = (currentTicket?.departments as any)?.name || "Desconhecido";
+
       const { data, error } = await supabase
         .from("tickets")
         .update({
@@ -41,6 +50,27 @@ export function useTicketTransfer() {
           is_internal: true,
           created_by: user?.id,
         });
+
+      // Notificar stakeholders via edge function
+      try {
+        await supabase.functions.invoke('notify-ticket-event', {
+          body: {
+            ticket_id,
+            event_type: 'transferred',
+            actor_id: user?.id,
+            old_value: previousDepartment,
+            new_value: department_id,
+            metadata: {
+              from_department: previousDepartment,
+              to_department: data.department?.name,
+              internal_note,
+            },
+          },
+        });
+        console.log('[useTicketTransfer] Stakeholders notified');
+      } catch (notifyError) {
+        console.error('[useTicketTransfer] Failed to notify stakeholders:', notifyError);
+      }
 
       return data;
     },

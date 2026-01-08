@@ -373,6 +373,20 @@ export default function RealtimeNotifications() {
         });
         break;
 
+      case 'ticket_status':
+      case 'ticket_transfer':
+        play();
+        toast(notification.title, {
+          description: notification.message,
+          icon: <Ticket className="h-4 w-4" />,
+          action: notification.reference_id ? {
+            label: "Ver Ticket",
+            onClick: () => navigate(`/support?ticket=${notification.reference_id}`),
+          } : undefined,
+          duration: 10000,
+        });
+        break;
+
       default:
         // Generic notification
         play();
