@@ -253,6 +253,21 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
         </div>
 
         <div className="space-y-2">
+          <Label>Espessura da Borda: {settings.selection_border_width ?? 3}px</Label>
+          <Slider
+            value={[settings.selection_border_width ?? 3]}
+            onValueChange={([val]) => onChange({ selection_border_width: val })}
+            min={1}
+            max={8}
+            step={1}
+            className="w-full"
+          />
+          <p className="text-xs text-muted-foreground">
+            Define a espessura da borda quando uma opção está selecionada
+          </p>
+        </div>
+
+        <div className="space-y-2">
           <Label>Cor de Fundo (Selecionado)</Label>
           <div className="flex gap-2">
             <Input

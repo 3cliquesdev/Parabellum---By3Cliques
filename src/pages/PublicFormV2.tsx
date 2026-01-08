@@ -573,7 +573,7 @@ function FormFieldInput({ field, value, onChange, settings, inputStyles }: FormF
                   borderColor: isSelected 
                     ? (settings.selection_highlight_color || settings.button_color)
                     : inputStyles.borderColor,
-                  borderWidth: isSelected ? '3px' : '1px',
+                  borderWidth: isSelected ? `${settings.selection_border_width ?? 3}px` : '1px',
                   borderStyle: 'solid',
                 }}
               >
