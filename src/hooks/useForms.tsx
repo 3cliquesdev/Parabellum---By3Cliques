@@ -64,6 +64,7 @@ export type TransitionType = "slide" | "fade" | "zoom" | "scale";
 export type EntryAnimation = "none" | "fade-up" | "fade-down" | "fade-left" | "fade-right" | "zoom-in" | "bounce" | "flip";
 export type FontFamily = "inter" | "poppins" | "roboto" | "montserrat" | "playfair" | "lato" | "raleway" | "oswald";
 export type FontWeight = "light" | "normal" | "medium" | "semibold" | "bold";
+export type ValidationStyle = "subtle" | "prominent" | "minimal";
 
 export type GradientDirection = "to-b" | "to-r" | "to-br" | "to-bl" | "radial";
 
@@ -118,6 +119,13 @@ export interface FormSettings {
   // Espaçamento avançado
   container_padding?: number;       // Padding interno do container (16-64px)
   field_gap?: number;               // Espaçamento entre campos (8-48px)
+  // Validação Visual
+  validation_style?: ValidationStyle;      // Estilo de validação (subtle/prominent/minimal)
+  validation_error_color?: string;         // Cor de erro
+  validation_success_color?: string;       // Cor de sucesso
+  show_required_asterisk?: boolean;        // Mostrar asterisco em obrigatórios
+  show_field_validation?: boolean;         // Mostrar validação em tempo real
+  shake_on_error?: boolean;                // Animação shake no erro
   // Success
   thank_you_title?: string;
   thank_you_message?: string;
@@ -212,6 +220,13 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   // Espaçamento
   container_padding: 32,
   field_gap: 24,
+  // Validação Visual
+  validation_style: "prominent",
+  validation_error_color: "#ef4444",
+  validation_success_color: "#22c55e",
+  show_required_asterisk: true,
+  show_field_validation: true,
+  shake_on_error: true,
   // Success
   thank_you_title: "Obrigado!",
   thank_you_message: "Suas respostas foram enviadas com sucesso.",

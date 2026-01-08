@@ -1,4 +1,4 @@
-import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection } from "@/hooks/useForms";
+import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection, ValidationStyle } from "@/hooks/useForms";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ImageUploader } from "@/components/ImageUploader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlignLeft, AlignCenter, AlignRight, Zap, Palette, Sparkles, Moon, Sun, Flame, Leaf, Waves, Gem } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Zap, Palette, Sparkles, Moon, Sun, Flame, Leaf, Waves, Gem, AlertCircle, CheckCircle2 } from "lucide-react";
 
 // Temas pré-definidos
 const PREDEFINED_THEMES: Record<string, { name: string; icon: React.ReactNode; settings: Partial<FormSettings> }> = {
@@ -816,6 +816,101 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
           <p className="text-xs text-muted-foreground">
             Distância entre os campos do formulário
           </p>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Validação Visual */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 text-primary" />
+          <h4 className="font-medium text-sm">Validação Visual</h4>
+        </div>
+        
+        <div className="space-y-2">
+          <Label>Estilo de Validação</Label>
+          <Select
+            value={settings.validation_style || "prominent"}
+            onValueChange={(value: ValidationStyle) => onChange({ validation_style: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="subtle">Sutil (apenas cor)</SelectItem>
+              <SelectItem value="prominent">Proeminente (cor + ícone + texto)</SelectItem>
+              <SelectItem value="minimal">Mínimo (apenas ícone)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Cor de Erro</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.validation_error_color || "#ef4444"}
+                onChange={(e) => onChange({ validation_error_color: e.target.value })}
+                className="w-10 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.validation_error_color || "#ef4444"}
+                onChange={(e) => onChange({ validation_error_color: e.target.value })}
+                className="flex-1 text-xs"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Cor de Sucesso</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.validation_success_color || "#22c55e"}
+                onChange={(e) => onChange({ validation_success_color: e.target.value })}
+                className="w-10 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.validation_success_color || "#22c55e"}
+                onChange={(e) => onChange({ validation_success_color: e.target.value })}
+                className="flex-1 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Asterisco em Obrigatórios</Label>
+            <p className="text-xs text-muted-foreground">Mostrar * nos campos obrigatórios</p>
+          </div>
+          <Switch
+            checked={settings.show_required_asterisk !== false}
+            onCheckedChange={(checked) => onChange({ show_required_asterisk: checked })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Validação em Tempo Real</Label>
+            <p className="text-xs text-muted-foreground">Feedback ao preencher campos</p>
+          </div>
+          <Switch
+            checked={settings.show_field_validation !== false}
+            onCheckedChange={(checked) => onChange({ show_field_validation: checked })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Animação Shake no Erro</Label>
+            <p className="text-xs text-muted-foreground">Tremer campo inválido ao tentar enviar</p>
+          </div>
+          <Switch
+            checked={settings.shake_on_error !== false}
+            onCheckedChange={(checked) => onChange({ shake_on_error: checked })}
+          />
         </div>
       </div>
 
