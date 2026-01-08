@@ -119,7 +119,7 @@ export default function SalesManagement() {
             change={metrics?.salesCycleChange}
             changeLabel="dias vs anterior"
             icon={Clock}
-            iconColor="text-amber-600"
+            iconColor="text-info"
             isLoading={metricsLoading}
             tooltip="Média de dias desde criação até fechamento do deal"
           />
@@ -179,7 +179,7 @@ export default function SalesManagement() {
         {/* ROW 5: Negócios Estagnados */}
         <Card className="p-5">
           <div className="flex items-center gap-2 mb-3">
-            <Clock className="w-4 h-4 text-amber-600" />
+            <Clock className="w-4 h-4 text-warning" />
             <h3 className="text-base font-semibold text-foreground">Negócios Estagnados</h3>
             <Badge variant="warning" className="text-xs">{rottenDeals?.length || 0}</Badge>
           </div>

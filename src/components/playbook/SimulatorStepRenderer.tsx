@@ -116,9 +116,9 @@ export function SimulatorStepRenderer({
     const days = node.data.duration_days || 1;
 
     return (
-      <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-6">
+      <Card className="border-info bg-info-muted dark:bg-info/10 p-6">
         <div className="flex items-center gap-3 mb-4">
-          <Clock className="h-8 w-8 text-amber-600" />
+          <Clock className="h-8 w-8 text-info" />
           <div>
             <h3 className="font-semibold text-lg">⏳ Aguardando {days} {days === 1 ? "dia" : "dias"}...</h3>
             <p className="text-sm text-muted-foreground">
@@ -127,7 +127,7 @@ export function SimulatorStepRenderer({
           </div>
         </div>
 
-        <Button onClick={() => onComplete()} className="gap-2 bg-amber-600 hover:bg-amber-700">
+        <Button onClick={() => onComplete()} className="gap-2 bg-info hover:bg-info/90">
           <FastForward className="h-4 w-4" />
           ⏩ Avançar Tempo (Pular)
         </Button>

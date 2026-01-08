@@ -252,11 +252,11 @@ export default function SalesRepDetail() {
       )}
 
       {!existingGoal && (
-        <Card className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
+        <Card className="bg-warning-muted dark:bg-warning/10 border-warning/30 dark:border-warning/20">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-600" />
-              <p className="text-amber-800 dark:text-amber-200 text-sm">
+              <AlertCircle className="h-5 w-5 text-warning" />
+              <p className="text-warning-foreground dark:text-warning text-sm">
                 Nenhuma meta definida para este vendedor neste mês. Clique em "Definir Meta" para configurar.
               </p>
             </div>

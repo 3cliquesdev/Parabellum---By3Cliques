@@ -21,9 +21,9 @@ const formatCurrency = (value: number) => {
 
 const getMedalColor = (position: number) => {
   switch (position) {
-    case 0: return "text-amber-500"; // Gold
+    case 0: return "text-primary"; // Gold -> Blue
     case 1: return "text-slate-400"; // Silver
-    case 2: return "text-amber-700"; // Bronze
+    case 2: return "text-slate-500"; // Bronze -> Slate
     default: return "text-muted-foreground";
   }
 };
@@ -46,7 +46,7 @@ export function TopPerformersWidget({ dateRange }: TopPerformersWidgetProps) {
     <Card className="h-full">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
-          <Trophy className="h-4 w-4 text-amber-500" />
+          <Trophy className="h-4 w-4 text-primary" />
           <CardTitle className="text-sm font-medium">Top Vendedores</CardTitle>
         </div>
       </CardHeader>

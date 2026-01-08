@@ -227,7 +227,7 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
           <div className="space-y-2">
             <Label className="text-sm font-medium">Responsável fixo</Label>
             {!settings.target_department_id ? (
-              <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-md">
+              <p className="text-sm text-warning bg-warning-muted dark:bg-warning/10 p-2 rounded-md">
                 Selecione primeiro o departamento acima
               </p>
             ) : (

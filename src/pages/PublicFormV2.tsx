@@ -364,7 +364,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: "spring" }}
-            className="h-20 w-20 rounded-full bg-amber-500 flex items-center justify-center mx-auto mb-6"
+            className="h-20 w-20 rounded-full bg-warning flex items-center justify-center mx-auto mb-6"
           >
             <AlertCircle className="h-10 w-10 text-white" />
           </motion.div>

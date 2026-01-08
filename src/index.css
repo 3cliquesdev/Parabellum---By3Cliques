@@ -9,20 +9,20 @@
   }
   
   :root {
-    /* === PREMIUM MASCULINE PALETTE - LIGHT MODE === */
-    --background: 210 20% 98%;           /* #F9FAFB */
+    /* === ENTERPRISE BLUE PALETTE - LIGHT MODE === */
+    --background: 210 40% 98%;           /* #F8FAFC */
     --foreground: 217 33% 17%;           /* #1E293B */
     
     /* === TEXT SEMANTIC TOKENS (Light Mode) === */
     --color-text-primary: 217 33% 17%;
-    --color-text-secondary: 215 16% 47%;
+    --color-text-secondary: 215 16% 47%; /* #64748B */
     --color-text-muted: 215 14% 55%;
     --color-text-inverse: 0 0% 100%;
     
-    /* === GOLD ACCENT - PRIMARY === */
-    --primary: 38 92% 50%;               /* #F59E0B - dourado metálico */
-    --primary-hover: 33 90% 43%;         /* #D97706 */
-    --primary-muted: 38 92% 95%;
+    /* === BLUE ENTERPRISE - PRIMARY === */
+    --primary: 217 91% 60%;              /* #2563EB */
+    --primary-hover: 224 76% 48%;        /* #1D4ED8 */
+    --primary-muted: 217 91% 95%;
     --primary-foreground: 0 0% 100%;
     
     /* === SEMANTIC === */
@@ -30,7 +30,7 @@
     --success-muted: 160 84% 93%;
     --success-foreground: 0 0% 100%;
     
-    --warning: 38 92% 50%;
+    --warning: 38 92% 50%;               /* #F59E0B - manter para alertas */
     --warning-muted: 38 92% 95%;
     --warning-foreground: 217 33% 17%;
     
@@ -46,38 +46,38 @@
     --channel-whatsapp: 160 84% 39%;
     --channel-instagram: 340 75% 50%;
     --channel-email: 217 19% 35%;
-    --channel-chat: 38 92% 50%;
+    --channel-chat: 217 91% 60%;         /* azul */
     
     /* === SURFACES === */
     --card: 0 0% 100%;                   /* #FFFFFF */
     --card-foreground: 217 33% 17%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 215 20% 45%;     /* #9CA3AF */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;     /* #64748B */
     
-    --secondary: 220 14% 96%;
+    --secondary: 210 40% 96%;
     --secondary-foreground: 217 33% 17%;
     
-    --accent: 38 92% 95%;
-    --accent-foreground: 33 90% 35%;
+    --accent: 217 91% 95%;
+    --accent-foreground: 217 91% 40%;
     
     --popover: 0 0% 100%;
     --popover-foreground: 217 33% 17%;
     
     /* === BORDERS === */
-    --border: 220 13% 91%;               /* #E5E7EB */
-    --border-muted: 220 13% 94%;
-    --input: 220 13% 91%;
-    --ring: 38 92% 50%;                  /* dourado */
+    --border: 214 32% 91%;               /* #E2E8F0 */
+    --border-muted: 214 32% 94%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;                 /* azul */
     
     /* === SIDEBAR === */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 217 33% 17%;
-    --sidebar-primary: 38 92% 50%;
+    --sidebar-background: 217 33% 17%;   /* #1E293B - navy escuro */
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 38 92% 95%;
-    --sidebar-accent-foreground: 33 90% 35%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 38 92% 50%;
+    --sidebar-accent: 217 91% 95%;
+    --sidebar-accent-foreground: 217 91% 40%;
+    --sidebar-border: 217 19% 27%;
+    --sidebar-ring: 217 91% 60%;
     
     /* === RADIUS === */
     --radius: 0.75rem;
@@ -100,9 +100,9 @@
   }
 
   .dark {
-    /* === PREMIUM MASCULINE PALETTE - DARK MODE === */
-    --background: 222 47% 7%;            /* #111827 - preto profundo */
-    --foreground: 210 40% 96%;           /* #F3F4F6 - branco claro */
+    /* === ENTERPRISE BLUE PALETTE - DARK MODE === */
+    --background: 222 47% 7%;            /* #111827 */
+    --foreground: 210 40% 96%;           /* #F3F4F6 */
     
     /* === TEXT SEMANTIC TOKENS (Dark Mode) === */
     --color-text-primary: 210 40% 96%;
@@ -110,10 +110,10 @@
     --color-text-muted: 215 16% 55%;
     --color-text-inverse: 0 0% 100%;
     
-    /* === GOLD ACCENT - PRIMARY === */
-    --primary: 38 92% 50%;               /* #F59E0B - dourado metálico */
-    --primary-hover: 33 90% 43%;         /* #D97706 */
-    --primary-muted: 38 92% 15%;
+    /* === BLUE ENTERPRISE - PRIMARY === */
+    --primary: 217 91% 60%;              /* #2563EB */
+    --primary-hover: 224 76% 48%;        /* #1D4ED8 */
+    --primary-muted: 217 91% 15%;
     --primary-foreground: 0 0% 100%;
     
     /* === SEMANTIC === */
@@ -121,7 +121,7 @@
     --success-muted: 160 84% 15%;
     --success-foreground: 0 0% 100%;
     
-    --warning: 38 92% 50%;
+    --warning: 38 92% 50%;               /* manter para alertas */
     --warning-muted: 38 92% 15%;
     --warning-foreground: 0 0% 100%;
     
@@ -137,10 +137,10 @@
     --channel-whatsapp: 160 84% 39%;
     --channel-instagram: 340 75% 50%;
     --channel-email: 215 20% 55%;
-    --channel-chat: 38 92% 50%;
+    --channel-chat: 217 91% 60%;         /* azul */
     
     /* === SURFACES === */
-    --card: 217 33% 12%;                 /* #1E293B - cinza escuro */
+    --card: 217 33% 12%;                 /* #1E293B */
     --card-foreground: 210 40% 96%;
     --muted: 217 33% 12%;
     --muted-foreground: 215 20% 65%;     /* #9CA3AF */
@@ -148,8 +148,8 @@
     --secondary: 217 33% 15%;
     --secondary-foreground: 210 40% 96%;
     
-    --accent: 38 92% 15%;
-    --accent-foreground: 38 92% 70%;
+    --accent: 217 91% 15%;
+    --accent-foreground: 217 91% 70%;
     
     --popover: 217 33% 12%;
     --popover-foreground: 210 40% 96%;
@@ -158,17 +158,17 @@
     --border: 217 19% 27%;               /* #374151 */
     --border-muted: 217 19% 20%;
     --input: 217 19% 27%;
-    --ring: 38 92% 50%;                  /* dourado */
+    --ring: 217 91% 60%;                 /* azul */
     
     /* === SIDEBAR === */
     --sidebar-background: 217 33% 12%;   /* #1E293B */
     --sidebar-foreground: 210 40% 96%;
-    --sidebar-primary: 38 92% 50%;
+    --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 38 92% 15%;
-    --sidebar-accent-foreground: 38 92% 70%;
+    --sidebar-accent: 217 91% 15%;
+    --sidebar-accent-foreground: 217 91% 70%;
     --sidebar-border: 217 19% 27%;
-    --sidebar-ring: 38 92% 50%;
+    --sidebar-ring: 217 91% 60%;
   }
 
   * {
@@ -252,10 +252,10 @@
   background: hsl(var(--primary) / 0.5);
 }
 
-/* Global scrollbar styling - PREMIUM GOLD */
+/* Global scrollbar styling - ENTERPRISE NEUTRAL */
 * {
   scrollbar-width: thin;
-  scrollbar-color: hsl(38 92% 50% / 0.4) hsl(var(--muted) / 0.2);
+  scrollbar-color: hsl(215 20% 65% / 0.4) hsl(var(--muted) / 0.2);
 }
 
 *::-webkit-scrollbar {
@@ -269,14 +269,14 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background: hsl(38 92% 50% / 0.4);
+  background: hsl(215 20% 65% / 0.4);
   border-radius: 4px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: hsl(38 92% 50% / 0.6);
+  background: hsl(215 20% 65% / 0.6);
 }
 
 /* Premium scroll container class */

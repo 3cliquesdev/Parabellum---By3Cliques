@@ -24,7 +24,7 @@ export function ThankYouView({ customerName, productName, supportPhone, onStart 
         particleCount: 100,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ["#2563EB", "#10B981", "#F59E0B", "#EC4899"],
+        colors: ["#2563EB", "#10B981", "#3B82F6", "#06B6D4"],
       });
     }, 500);
 
@@ -87,8 +87,8 @@ export function ThankYouView({ customerName, productName, supportPhone, onStart 
             >
               {[
                 { icon: Sparkles, label: "Passo a passo", color: "text-primary" },
-                { icon: Star, label: "Dicas exclusivas", color: "text-amber-500" },
-                { icon: MessageCircle, label: "Suporte 24h", color: "text-emerald-500" },
+                { icon: Star, label: "Dicas exclusivas", color: "text-info" },
+                { icon: MessageCircle, label: "Suporte 24h", color: "text-success" },
               ].map((item, i) => (
                 <div key={i} className="text-center p-3 rounded-xl bg-muted/50">
                   <item.icon className={`w-6 h-6 mx-auto mb-2 ${item.color}`} />
