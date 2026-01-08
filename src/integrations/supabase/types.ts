@@ -1470,6 +1470,7 @@ export type Database = {
           ai_mode: Database["public"]["Enums"]["ai_mode"]
           assigned_to: string | null
           auto_closed: boolean | null
+          awaiting_rating: boolean | null
           channel: Database["public"]["Enums"]["conversation_channel"]
           closed_at: string | null
           closed_by: string | null
@@ -1481,6 +1482,7 @@ export type Database = {
           id: string
           last_message_at: string
           previous_agent_id: string | null
+          rating_sent_at: string | null
           related_ticket_id: string | null
           session_token: string | null
           status: Database["public"]["Enums"]["conversation_status"]
@@ -1491,6 +1493,7 @@ export type Database = {
           ai_mode?: Database["public"]["Enums"]["ai_mode"]
           assigned_to?: string | null
           auto_closed?: boolean | null
+          awaiting_rating?: boolean | null
           channel: Database["public"]["Enums"]["conversation_channel"]
           closed_at?: string | null
           closed_by?: string | null
@@ -1502,6 +1505,7 @@ export type Database = {
           id?: string
           last_message_at?: string
           previous_agent_id?: string | null
+          rating_sent_at?: string | null
           related_ticket_id?: string | null
           session_token?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
@@ -1512,6 +1516,7 @@ export type Database = {
           ai_mode?: Database["public"]["Enums"]["ai_mode"]
           assigned_to?: string | null
           auto_closed?: boolean | null
+          awaiting_rating?: boolean | null
           channel?: Database["public"]["Enums"]["conversation_channel"]
           closed_at?: string | null
           closed_by?: string | null
@@ -1523,6 +1528,7 @@ export type Database = {
           id?: string
           last_message_at?: string
           previous_agent_id?: string | null
+          rating_sent_at?: string | null
           related_ticket_id?: string | null
           session_token?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
@@ -4352,6 +4358,7 @@ export type Database = {
           job_title: string | null
           last_status_change: string | null
           manager_id: string | null
+          manual_offline: boolean | null
           onboarding_completed: boolean | null
           onboarding_completed_at: string | null
           onboarding_progress: number | null
@@ -4374,6 +4381,7 @@ export type Database = {
           job_title?: string | null
           last_status_change?: string | null
           manager_id?: string | null
+          manual_offline?: boolean | null
           onboarding_completed?: boolean | null
           onboarding_completed_at?: string | null
           onboarding_progress?: number | null
@@ -4396,6 +4404,7 @@ export type Database = {
           job_title?: string | null
           last_status_change?: string | null
           manager_id?: string | null
+          manual_offline?: boolean | null
           onboarding_completed?: boolean | null
           onboarding_completed_at?: string | null
           onboarding_progress?: number | null

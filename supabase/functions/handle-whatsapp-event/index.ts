@@ -374,14 +374,74 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   const conversationId = conversationData[0].conversation_id;
   console.log('[handle-whatsapp-event] Conversation ID:', conversationId);
 
-  // 3. Buscar conversa para checar metadata (estado OTP)
+  // 3. Buscar conversa para checar metadata e flags
   const { data: conversation } = await supabase
     .from('conversations')
-    .select('customer_metadata')
+    .select('customer_metadata, awaiting_rating, status')
     .eq('id', conversationId)
     .single();
 
   const metadata = conversation?.customer_metadata || {};
+
+  // 📊 FLUXO DE AVALIAÇÃO CSAT - Detectar resposta de rating (1-5)
+  if (conversation?.awaiting_rating) {
+    const rating = extractRating(messageText);
+    
+    if (rating !== null) {
+      console.log(`[handle-whatsapp-event] ⭐ Rating detected: ${rating}`);
+      
+      // Salvar rating na tabela conversation_ratings
+      const { error: ratingError } = await supabase
+        .from('conversation_ratings')
+        .insert({
+          conversation_id: conversationId,
+          rating: rating,
+          channel: 'whatsapp',
+          feedback_text: messageText,
+        });
+      
+      if (ratingError) {
+        console.error('[handle-whatsapp-event] Error saving rating:', ratingError);
+      } else {
+        console.log('[handle-whatsapp-event] ✅ Rating saved successfully');
+        
+        // Limpar flag awaiting_rating
+        await supabase
+          .from('conversations')
+          .update({ awaiting_rating: false })
+          .eq('id', conversationId);
+        
+        // Enviar agradecimento
+        let thankYouMessage = '';
+        if (rating >= 4) {
+          thankYouMessage = `🎉 Obrigado pela avaliação de ${rating} estrela${rating > 1 ? 's' : ''}!\n\nFicamos muito felizes em ter ajudado. Conte sempre conosco! 💚`;
+        } else if (rating === 3) {
+          thankYouMessage = `👍 Obrigado pela sua avaliação!\n\nEstamos sempre buscando melhorar. Se tiver sugestões, fique à vontade para compartilhar!`;
+        } else {
+          thankYouMessage = `🙏 Agradecemos seu feedback.\n\nLamentamos que sua experiência não tenha sido ideal. Vamos trabalhar para melhorar!`;
+        }
+        
+        await sendWhatsAppMessage(
+          supabase,
+          instance,
+          phoneForDatabase,
+          jidForSending,
+          thankYouMessage
+        );
+        
+        // Inserir mensagem do cliente (a avaliação)
+        await supabase.from('messages').insert({
+          conversation_id: conversationId,
+          content: `⭐ Avaliação: ${rating}/5`,
+          sender_type: 'contact',
+          sender_id: null,
+          channel: 'whatsapp',
+        });
+      }
+      
+      return; // Não processar mais nada após avaliação
+    }
+  }
 
   // 🔐 FLUXO DE VERIFICAÇÃO OTP
   if (metadata.awaiting_otp) {
@@ -826,6 +886,34 @@ async function handleOTPValidation(
       sender_id: null,
     });
   }
+}
+
+// 📊 Função auxiliar: Extrair rating (1-5) da mensagem
+function extractRating(message: string): number | null {
+  const normalized = message.toLowerCase().trim();
+  
+  // Detectar número direto: "5", "4", etc.
+  const numMatch = normalized.match(/^[1-5]$/);
+  if (numMatch) return parseInt(numMatch[0]);
+  
+  // Detectar estrelas emoji: "⭐⭐⭐⭐⭐"
+  const starCount = (message.match(/⭐/g) || []).length;
+  if (starCount >= 1 && starCount <= 5) return starCount;
+  
+  // Detectar texto: "excelente" (5), "ruim" (1), etc.
+  const textRatings: Record<string, number> = {
+    'excelente': 5, 'otimo': 5, 'ótimo': 5, 'perfeito': 5, 'incrivel': 5, 'incrível': 5, 'maravilhoso': 5, 'show': 5,
+    'bom': 4, 'legal': 4, 'bacana': 4, 'massa': 4,
+    'regular': 3, 'ok': 3, 'medio': 3, 'médio': 3, 'razoavel': 3, 'razoável': 3,
+    'ruim': 2, 'fraco': 2, 'poderia ser melhor': 2,
+    'pessimo': 1, 'péssimo': 1, 'horrivel': 1, 'horrível': 1, 'terrivel': 1, 'terrível': 1
+  };
+  
+  for (const [text, rating] of Object.entries(textRatings)) {
+    if (normalized.includes(text)) return rating;
+  }
+  
+  return null;
 }
 
 // 📤 Função auxiliar: Enviar mensagem WhatsApp

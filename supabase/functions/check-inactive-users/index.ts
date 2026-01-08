@@ -31,6 +31,7 @@ serve(async (req) => {
     console.log(`[check-inactive-users] Cutoff time: ${cutoffTimestamp}`);
 
     // Buscar usuários online/busy que não atualizaram há mais de 5 minutos
+    // IMPORTANTE: Não redistribui conversas - apenas marca offline por inatividade
     const { data: inactiveUsers, error: selectError } = await supabaseAdmin
       .from("profiles")
       .select("id, full_name, availability_status, last_status_change")
@@ -44,8 +45,6 @@ serve(async (req) => {
 
     console.log(`[check-inactive-users] Found ${inactiveUsers?.length || 0} inactive users`);
 
-    let redistributedConversations = 0;
-
     if (inactiveUsers && inactiveUsers.length > 0) {
       const userIds = inactiveUsers.map(u => u.id);
       
@@ -54,12 +53,14 @@ serve(async (req) => {
         lastSeen: u.last_status_change,
       })));
 
-      // Marcar todos como offline
+      // Marcar todos como offline (mas NÃO como manual_offline)
+      // Conversas permanecem atribuídas ao agente!
       const { error: updateError } = await supabaseAdmin
         .from("profiles")
         .update({ 
           availability_status: "offline",
           last_status_change: new Date().toISOString(),
+          manual_offline: false, // Indica que foi por inatividade, não manual
         })
         .in("id", userIds);
 
@@ -68,114 +69,15 @@ serve(async (req) => {
         throw updateError;
       }
 
-      console.log(`[check-inactive-users] Marked ${userIds.length} users as offline`);
-
-      // 🆕 REDISTRIBUIÇÃO: Buscar conversas abertas dos agentes que ficaram offline
-      for (const offlineUser of inactiveUsers) {
-        const { data: orphanedConversations, error: convError } = await supabaseAdmin
-          .from("conversations")
-          .select("id, contact_id, ai_mode")
-          .eq("assigned_to", offlineUser.id)
-          .in("status", ["open", "pending"]);
-
-        if (convError) {
-          console.error(`[check-inactive-users] Error fetching conversations for ${offlineUser.id}:`, convError);
-          continue;
-        }
-
-        if (!orphanedConversations || orphanedConversations.length === 0) {
-          continue;
-        }
-
-        console.log(`[check-inactive-users] ${offlineUser.full_name} tinha ${orphanedConversations.length} conversas ativas`);
-
-        // Buscar agentes online disponíveis (exceto o que ficou offline)
-        const { data: onlineAgents } = await supabaseAdmin
-          .from("profiles")
-          .select("id, full_name")
-          .eq("availability_status", "online")
-          .in("role", ["admin", "agent", "consultant"])
-          .neq("id", offlineUser.id);
-
-        if (onlineAgents && onlineAgents.length > 0) {
-          // Distribuir para agentes online (round-robin simples)
-          let agentIndex = 0;
-          
-          for (const conv of orphanedConversations) {
-            const targetAgent = onlineAgents[agentIndex % onlineAgents.length];
-            
-            const { error: reassignError } = await supabaseAdmin
-              .from("conversations")
-              .update({ 
-                assigned_to: targetAgent.id,
-                previous_agent_id: offlineUser.id,
-                ai_mode: "waiting_human"
-              })
-              .eq("id", conv.id);
-
-            if (reassignError) {
-              console.error(`[check-inactive-users] Error reassigning conversation ${conv.id}:`, reassignError);
-              continue;
-            }
-
-            // Mensagem de sistema
-            await supabaseAdmin.from("messages").insert({
-              conversation_id: conv.id,
-              content: `🔄 ${offlineUser.full_name} ficou offline. ${targetAgent.full_name} assumiu a conversa.`,
-              sender_type: "system",
-              channel: "web_chat"
-            });
-
-            agentIndex++;
-            redistributedConversations++;
-            console.log(`[check-inactive-users] Conversa ${conv.id} transferida para ${targetAgent.full_name}`);
-          }
-        } else {
-          // Nenhum agente online: mover para pool geral com IA
-          console.log("[check-inactive-users] Nenhum agente online - conversas voltam para IA");
-          
-          for (const conv of orphanedConversations) {
-            const { error: poolError } = await supabaseAdmin
-              .from("conversations")
-              .update({ 
-                assigned_to: null,
-                previous_agent_id: offlineUser.id,
-                ai_mode: "autopilot"
-              })
-              .eq("id", conv.id);
-
-            if (poolError) {
-              console.error(`[check-inactive-users] Error moving conversation ${conv.id} to pool:`, poolError);
-              continue;
-            }
-
-            // Adicionar à fila de espera
-            await supabaseAdmin.from("conversation_queue").upsert({
-              conversation_id: conv.id,
-              priority: 1, // Prioridade alta pois estava em atendimento
-              queued_at: new Date().toISOString()
-            }, { onConflict: "conversation_id" });
-
-            // Mensagem de sistema
-            await supabaseAdmin.from("messages").insert({
-              conversation_id: conv.id,
-              content: "🤖 Nenhum atendente disponível no momento. A IA está aqui para ajudar enquanto aguardamos um especialista.",
-              sender_type: "system",
-              channel: "web_chat"
-            });
-
-            redistributedConversations++;
-            console.log(`[check-inactive-users] Conversa ${conv.id} movida para pool geral`);
-          }
-        }
-      }
+      console.log(`[check-inactive-users] Marked ${userIds.length} users as offline (conversations NOT redistributed)`);
+      console.log("[check-inactive-users] ℹ️ Conversations stay with agents - redistribution only happens on manual offline click");
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         usersMarkedOffline: inactiveUsers?.length || 0,
-        conversationsRedistributed: redistributedConversations,
+        note: "Conversations NOT redistributed - only manual offline triggers redistribution",
         cutoffTime: cutoffTimestamp,
       }),
       { 
