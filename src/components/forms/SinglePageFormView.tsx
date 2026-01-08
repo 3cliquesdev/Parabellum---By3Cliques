@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { FormField, FormSchema, FormSettings, DEFAULT_FORM_SETTINGS } from "@/hooks/useForms";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2, AlertCircle, CheckCircle2, ArrowRight, Send, Rocket, Star } from "lucide-react";
+import { Check, Loader2, AlertCircle, CheckCircle2, ArrowRight, Send, Rocket, Star, Heart, ThumbsUp, PartyPopper } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FormFileUpload } from "@/components/forms/FormFileUpload";
+import confetti from "canvas-confetti";
 
 // Helper to convert hex to rgba
 function hexToRgba(hex: string, opacity: number = 1): string {
@@ -277,42 +278,11 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
   
   if (isSubmitted) {
     return (
-      <div 
-        className={isEmbedded ? "h-full flex items-center justify-center p-6" : "min-h-screen flex items-center justify-center p-6"}
-        style={{
-          backgroundColor: settings.background_color,
-          backgroundImage: settings.background_image ? `url(${settings.background_image})` : undefined,
-          backgroundSize: "cover",
-        }}
-      >
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="text-center max-w-md p-8"
-          style={cardStyles}
-        >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring" }}
-            className="h-20 w-20 rounded-full bg-green-500 flex items-center justify-center mx-auto mb-6"
-          >
-            <Check className="h-10 w-10 text-white" />
-          </motion.div>
-          <h1 
-            className="text-3xl font-bold mb-3"
-            style={{ color: settings.text_color }}
-          >
-            {settings.thank_you_title || "Obrigado!"}
-          </h1>
-          <p 
-            className="text-lg"
-            style={{ color: settings.text_color, opacity: 0.7 }}
-          >
-            {settings.thank_you_message || "Suas respostas foram enviadas com sucesso."}
-          </p>
-        </motion.div>
-      </div>
+      <SuccessScreen 
+        settings={settings} 
+        cardStyles={cardStyles} 
+        isEmbedded={isEmbedded} 
+      />
     );
   }
 
@@ -781,5 +751,203 @@ function SubmitButton({ settings, isSubmitting }: SubmitButtonProps) {
         {icon && isRight && icon}
       </Button>
     </motion.div>
+  );
+}
+
+// Success Screen Component
+interface SuccessScreenProps {
+  settings: FormSettings;
+  cardStyles: React.CSSProperties;
+  isEmbedded: boolean;
+}
+
+function SuccessScreen({ settings, cardStyles, isEmbedded }: SuccessScreenProps) {
+  const [showRedirectMessage, setShowRedirectMessage] = useState(false);
+
+  // Trigger confetti effect
+  useEffect(() => {
+    if (settings.success_show_confetti !== false) {
+      const duration = 2000;
+      const end = Date.now() + duration;
+
+      const colors = [settings.success_icon_background || "#22c55e", settings.button_color || "#2563EB", "#fbbf24", "#ec4899"];
+
+      (function frame() {
+        confetti({
+          particleCount: 4,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0 },
+          colors,
+        });
+        confetti({
+          particleCount: 4,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1 },
+          colors,
+        });
+
+        if (Date.now() < end) {
+          requestAnimationFrame(frame);
+        }
+      })();
+    }
+  }, [settings.success_show_confetti, settings.success_icon_background, settings.button_color]);
+
+  // Handle redirect
+  useEffect(() => {
+    if (settings.redirect_url) {
+      const delay = (settings.redirect_delay ?? 3) * 1000;
+      
+      if (delay > 0) {
+        const timer = setTimeout(() => {
+          setShowRedirectMessage(true);
+        }, delay - 1000);
+
+        const redirectTimer = setTimeout(() => {
+          window.location.href = settings.redirect_url!;
+        }, delay);
+
+        return () => {
+          clearTimeout(timer);
+          clearTimeout(redirectTimer);
+        };
+      } else {
+        window.location.href = settings.redirect_url;
+      }
+    }
+  }, [settings.redirect_url, settings.redirect_delay]);
+
+  const getSuccessIcon = () => {
+    const iconClass = "h-10 w-10";
+    switch (settings.success_icon) {
+      case "heart": return <Heart className={iconClass} />;
+      case "star": return <Star className={iconClass} />;
+      case "rocket": return <Rocket className={iconClass} />;
+      case "party": return <PartyPopper className={iconClass} />;
+      case "thumbs-up": return <ThumbsUp className={iconClass} />;
+      default: return <Check className={iconClass} />;
+    }
+  };
+
+  const getAnimation = () => {
+    switch (settings.success_animation) {
+      case "bounce":
+        return {
+          initial: { scale: 0, y: -50 },
+          animate: { scale: 1, y: 0 },
+          transition: { type: "spring" as const, stiffness: 300, damping: 10 },
+        };
+      case "fade":
+        return {
+          initial: { opacity: 0 },
+          animate: { opacity: 1 },
+          transition: { duration: 0.6 },
+        };
+      case "slide-up":
+        return {
+          initial: { opacity: 0, y: 50 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.5, ease: "easeOut" as const },
+        };
+      case "confetti":
+      case "scale":
+      default:
+        return {
+          initial: { scale: 0.8, opacity: 0 },
+          animate: { scale: 1, opacity: 1 },
+          transition: { duration: 0.4 },
+        };
+    }
+  };
+
+  const animation = getAnimation();
+
+  return (
+    <div 
+      className={isEmbedded ? "h-full flex items-center justify-center p-6" : "min-h-screen flex items-center justify-center p-6"}
+      style={{
+        backgroundColor: settings.background_color,
+        backgroundImage: settings.background_image ? `url(${settings.background_image})` : undefined,
+        backgroundSize: "cover",
+      }}
+    >
+      <motion.div
+        initial={animation.initial}
+        animate={animation.animate}
+        transition={animation.transition}
+        className="text-center max-w-md p-8"
+        style={cardStyles}
+      >
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+          className="h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6"
+          style={{ 
+            backgroundColor: settings.success_icon_background || "#22c55e",
+            color: settings.success_icon_color || "#ffffff",
+          }}
+        >
+          {getSuccessIcon()}
+        </motion.div>
+        
+        <motion.h1 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="text-3xl font-bold mb-3"
+          style={{ color: settings.text_color }}
+        >
+          {settings.thank_you_title || "Obrigado!"}
+        </motion.h1>
+        
+        <motion.p 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="text-lg mb-6"
+          style={{ color: settings.text_color, opacity: 0.7 }}
+        >
+          {settings.thank_you_message || "Suas respostas foram enviadas com sucesso."}
+        </motion.p>
+
+        {settings.success_button_text && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <Button
+              onClick={() => {
+                if (settings.success_button_url) {
+                  window.location.href = settings.success_button_url;
+                }
+              }}
+              className="px-8 py-3"
+              style={{
+                backgroundColor: settings.button_color,
+                color: settings.button_text_color,
+                borderRadius: `${settings.button_border_radius ?? 12}px`,
+              }}
+            >
+              {settings.success_button_text}
+            </Button>
+          </motion.div>
+        )}
+
+        {showRedirectMessage && settings.redirect_url && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-sm mt-4"
+            style={{ color: settings.text_color, opacity: 0.5 }}
+          >
+            Redirecionando...
+          </motion.p>
+        )}
+      </motion.div>
+    </div>
   );
 }

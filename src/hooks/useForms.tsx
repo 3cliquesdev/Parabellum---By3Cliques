@@ -70,6 +70,8 @@ export type ProgressPosition = "top" | "bottom" | "header";
 export type ButtonStyle = "solid" | "outline" | "gradient" | "glass";
 export type ButtonSize = "small" | "medium" | "large";
 export type ButtonIcon = "none" | "check" | "arrow" | "send" | "rocket" | "star";
+export type SuccessIcon = "check" | "heart" | "star" | "rocket" | "party" | "thumbs-up";
+export type SuccessAnimation = "scale" | "confetti" | "bounce" | "fade" | "slide-up";
 
 export type GradientDirection = "to-b" | "to-r" | "to-br" | "to-bl" | "radial";
 
@@ -144,10 +146,18 @@ export interface FormSettings {
   show_required_asterisk?: boolean;        // Mostrar asterisco em obrigatórios
   show_field_validation?: boolean;         // Mostrar validação em tempo real
   shake_on_error?: boolean;                // Animação shake no erro
-  // Success
+  // Success Page
   thank_you_title?: string;
   thank_you_message?: string;
   redirect_url?: string;
+  redirect_delay?: number;              // Delay antes de redirecionar (segundos)
+  success_icon?: SuccessIcon;           // Ícone da página de sucesso
+  success_icon_color?: string;          // Cor do ícone
+  success_icon_background?: string;     // Fundo do ícone
+  success_animation?: SuccessAnimation; // Animação de entrada
+  success_show_confetti?: boolean;      // Mostrar confetti
+  success_button_text?: string;         // Texto do botão (se houver)
+  success_button_url?: string;          // URL do botão
   // Progress Indicator
   show_progress_bar?: boolean;
   progress_style?: ProgressStyle;           // Estilo do indicador (bar/steps/dots/fraction)
@@ -265,9 +275,15 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   show_required_asterisk: true,
   show_field_validation: true,
   shake_on_error: true,
-  // Success
+  // Success Page
   thank_you_title: "Obrigado!",
   thank_you_message: "Suas respostas foram enviadas com sucesso.",
+  success_icon: "check",
+  success_icon_color: "#ffffff",
+  success_icon_background: "#22c55e",
+  success_animation: "scale",
+  success_show_confetti: true,
+  redirect_delay: 3,
   // Progress Indicator
   show_progress_bar: true,
   progress_style: "bar",
