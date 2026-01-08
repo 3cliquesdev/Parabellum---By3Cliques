@@ -62,6 +62,8 @@ serve(async (req) => {
         channel,
         support_channel_id,
         whatsapp_instance_id,
+        ai_mode,
+        assigned_to,
         contacts (
           id,
           first_name,
