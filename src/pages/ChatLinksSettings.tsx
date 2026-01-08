@@ -10,7 +10,7 @@ export default function ChatLinksSettings() {
 
   const baseUrl = window.location.origin;
 
-  // Buscar instância WhatsApp conectada
+  // Buscar todas as instâncias WhatsApp conectadas
   const { data: whatsappInstances } = useQuery({
     queryKey: ['whatsapp-instances-public'],
     queryFn: async () => {
@@ -18,22 +18,20 @@ export default function ChatLinksSettings() {
         .from('whatsapp_instances')
         .select('phone_number, name')
         .eq('status', 'connected')
-        .limit(1);
+        .order('name');
       return data;
     }
   });
-
-  const whatsappInstance = whatsappInstances?.[0];
-  // phone_number vem no formato "5511999999999@s.whatsapp.net" - extrair só o número
-  const whatsappNumber = whatsappInstance?.phone_number?.replace('@s.whatsapp.net', '');
 
   const chatLink = `${baseUrl}/public-chat?dept=comercial`;
   const whatsappMessage = encodeURIComponent(
     "Olá, vim pelo site e gostaria de atendimento"
   );
-  const whatsappLink = whatsappNumber
-    ? `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`
-    : null;
+
+  const formatPhoneNumber = (phone: string) => {
+    const cleaned = phone.replace('@s.whatsapp.net', '');
+    return cleaned.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, '+$1 ($2) $3-$4');
+  };
 
   const copyLink = (link: string) => {
     navigator.clipboard.writeText(link);
@@ -56,76 +54,85 @@ export default function ChatLinksSettings() {
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Card Chat */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-blue-600" />
-              Chat ao Vivo
-            </CardTitle>
-            <CardDescription>Link direto para o chat online</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 p-3 bg-muted rounded text-sm break-all">
-                {chatLink}
-              </code>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => copyLink(chatLink)}
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => openPortal(chatLink)}
-              >
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Card Chat */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-blue-600" />
+            Chat ao Vivo
+          </CardTitle>
+          <CardDescription>Link direto para o chat online</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 p-3 bg-muted rounded text-sm break-all">
+              {chatLink}
+            </code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => copyLink(chatLink)}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => openPortal(chatLink)}
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Card WhatsApp */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Phone className="h-5 w-5 text-green-600" />
-              WhatsApp
-            </CardTitle>
-            <CardDescription>Link direto para WhatsApp</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {whatsappLink ? (
-              <div className="flex items-center gap-2">
-                <code className="flex-1 p-3 bg-muted rounded text-sm break-all">
-                  {whatsappLink}
-                </code>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => copyLink(whatsappLink)}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openPortal(whatsappLink)}
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
+      {/* Seção WhatsApp - Múltiplas instâncias */}
+      <div>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <Phone className="h-5 w-5 text-green-600" />
+          WhatsApp
+        </h2>
+        
+        {whatsappInstances && whatsappInstances.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {whatsappInstances.map((instance) => {
+              const number = instance.phone_number?.replace('@s.whatsapp.net', '') || '';
+              const link = `https://wa.me/${number}?text=${whatsappMessage}`;
+              
+              return (
+                <Card key={instance.name}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">{instance.name}</CardTitle>
+                    <CardDescription>
+                      {instance.phone_number ? formatPhoneNumber(instance.phone_number) : 'Sem número'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 p-2 bg-muted rounded text-xs break-all">
+                        {link}
+                      </code>
+                      <Button size="sm" variant="outline" onClick={() => copyLink(link)}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openPortal(link)}>
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground">
                 Nenhuma instância WhatsApp conectada. Configure em Configurações → WhatsApp.
               </p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
