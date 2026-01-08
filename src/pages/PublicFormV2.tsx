@@ -6,10 +6,10 @@ import { FormField, FormSchema, FieldLogic, DEFAULT_FORM_SETTINGS, FormSettings 
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { RatingField, YesNoField, LongTextField, DateField, SelectField } from "@/components/forms/fields";
 import { SinglePageFormView } from "@/components/forms/SinglePageFormView";
 import { FormFileUpload, UploadedFile } from "@/components/forms/FormFileUpload";
+import { FormProgressIndicator } from "@/components/forms/FormProgressIndicator";
 import { ChevronLeft, ChevronRight, Check, Loader2, AlertCircle } from "lucide-react";
 
 // Helper to convert hex to rgba
@@ -495,12 +495,13 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
               {formData?.description || formDescription}
             </p>
           )}
-          {settings.show_progress_bar !== false && fields.length > 0 && (
-            <div className="space-y-2">
-              <Progress value={progress} className="h-1" />
-              <p className="text-xs" style={{ color: settings.text_color, opacity: 0.5 }}>
-                {currentIndex + 1} de {fields.length}
-              </p>
+          {settings.show_progress_bar !== false && fields.length > 0 && settings.progress_position !== "bottom" && (
+            <div className="mt-4">
+              <FormProgressIndicator
+                currentStep={currentIndex}
+                totalSteps={fields.length}
+                settings={settings}
+              />
             </div>
           )}
         </div>
@@ -643,6 +644,17 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
             )}
           </p>
         </div>
+
+        {/* Bottom Progress Indicator */}
+        {settings.show_progress_bar !== false && fields.length > 0 && settings.progress_position === "bottom" && (
+          <div className="max-w-2xl mx-auto mt-6">
+            <FormProgressIndicator
+              currentStep={currentIndex}
+              totalSteps={fields.length}
+              settings={settings}
+            />
+          </div>
+        )}
       </footer>
     </div>
   );

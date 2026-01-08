@@ -65,6 +65,8 @@ export type EntryAnimation = "none" | "fade-up" | "fade-down" | "fade-left" | "f
 export type FontFamily = "inter" | "poppins" | "roboto" | "montserrat" | "playfair" | "lato" | "raleway" | "oswald";
 export type FontWeight = "light" | "normal" | "medium" | "semibold" | "bold";
 export type ValidationStyle = "subtle" | "prominent" | "minimal";
+export type ProgressStyle = "bar" | "steps" | "dots" | "fraction";
+export type ProgressPosition = "top" | "bottom" | "header";
 
 export type GradientDirection = "to-b" | "to-r" | "to-br" | "to-bl" | "radial";
 
@@ -130,7 +132,15 @@ export interface FormSettings {
   thank_you_title?: string;
   thank_you_message?: string;
   redirect_url?: string;
+  // Progress Indicator
   show_progress_bar?: boolean;
+  progress_style?: ProgressStyle;           // Estilo do indicador (bar/steps/dots/fraction)
+  progress_position?: ProgressPosition;     // Posição (top/bottom/header)
+  progress_color?: string;                  // Cor do progresso
+  progress_background_color?: string;       // Cor de fundo do progresso
+  progress_height?: number;                 // Altura da barra (2-12px)
+  progress_show_percentage?: boolean;       // Mostrar porcentagem
+  progress_animate?: boolean;               // Animar transições
   allow_back_navigation?: boolean;
   display_mode?: FormDisplayMode;   // Página única ou conversacional
 }
@@ -230,7 +240,15 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   // Success
   thank_you_title: "Obrigado!",
   thank_you_message: "Suas respostas foram enviadas com sucesso.",
+  // Progress Indicator
   show_progress_bar: true,
+  progress_style: "bar",
+  progress_position: "top",
+  progress_color: "#2563EB",
+  progress_background_color: "#374151",
+  progress_height: 4,
+  progress_show_percentage: false,
+  progress_animate: true,
   allow_back_navigation: true,
   display_mode: "conversational",
 };

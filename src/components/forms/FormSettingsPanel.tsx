@@ -1,4 +1,4 @@
-import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection, ValidationStyle } from "@/hooks/useForms";
+import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection, ValidationStyle, ProgressStyle, ProgressPosition } from "@/hooks/useForms";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ImageUploader } from "@/components/ImageUploader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlignLeft, AlignCenter, AlignRight, Zap, Palette, Sparkles, Moon, Sun, Flame, Leaf, Waves, Gem, AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Zap, Palette, Sparkles, Moon, Sun, Flame, Leaf, Waves, Gem, AlertCircle, CheckCircle2, BarChart3 } from "lucide-react";
 
 // Temas pré-definidos
 const PREDEFINED_THEMES: Record<string, { name: string; icon: React.ReactNode; settings: Partial<FormSettings> }> = {
@@ -1102,17 +1102,135 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
 
       <Separator />
 
-      {/* Navegação */}
+      {/* Navegação e Progresso */}
       <div className="space-y-4">
-        <h4 className="font-medium text-sm">Navegação</h4>
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-4 w-4 text-primary" />
+          <h4 className="font-medium text-sm">Indicador de Progresso</h4>
+        </div>
         
         <div className="flex items-center justify-between">
-          <Label>Barra de Progresso</Label>
+          <div>
+            <Label>Mostrar Progresso</Label>
+            <p className="text-xs text-muted-foreground">Indicador visual do avanço</p>
+          </div>
           <Switch
             checked={settings.show_progress_bar !== false}
             onCheckedChange={(checked) => onChange({ show_progress_bar: checked })}
           />
         </div>
+
+        {settings.show_progress_bar !== false && (
+          <>
+            <div className="space-y-2">
+              <Label>Estilo do Indicador</Label>
+              <Select
+                value={settings.progress_style || "bar"}
+                onValueChange={(value: ProgressStyle) => onChange({ progress_style: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bar">Barra de Progresso</SelectItem>
+                  <SelectItem value="steps">Passos (1/5)</SelectItem>
+                  <SelectItem value="dots">Pontos</SelectItem>
+                  <SelectItem value="fraction">Fração (20%)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Posição</Label>
+              <Select
+                value={settings.progress_position || "top"}
+                onValueChange={(value: ProgressPosition) => onChange({ progress_position: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="top">Topo da página</SelectItem>
+                  <SelectItem value="header">Abaixo do cabeçalho</SelectItem>
+                  <SelectItem value="bottom">Rodapé fixo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Cor do Progresso</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={settings.progress_color || settings.button_color || "#2563EB"}
+                    onChange={(e) => onChange({ progress_color: e.target.value })}
+                    className="w-10 h-9 p-1 cursor-pointer"
+                  />
+                  <Input
+                    value={settings.progress_color || settings.button_color || "#2563EB"}
+                    onChange={(e) => onChange({ progress_color: e.target.value })}
+                    className="flex-1 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Cor de Fundo</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={settings.progress_background_color || "#374151"}
+                    onChange={(e) => onChange({ progress_background_color: e.target.value })}
+                    className="w-10 h-9 p-1 cursor-pointer"
+                  />
+                  <Input
+                    value={settings.progress_background_color || "#374151"}
+                    onChange={(e) => onChange({ progress_background_color: e.target.value })}
+                    className="flex-1 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {(settings.progress_style === "bar" || !settings.progress_style) && (
+              <div className="space-y-2">
+                <Label>Altura da Barra: {settings.progress_height ?? 4}px</Label>
+                <Slider
+                  value={[settings.progress_height ?? 4]}
+                  onValueChange={([val]) => onChange({ progress_height: val })}
+                  min={2}
+                  max={12}
+                  step={1}
+                  className="w-full"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Mostrar Porcentagem</Label>
+                <p className="text-xs text-muted-foreground">Exibir valor numérico</p>
+              </div>
+              <Switch
+                checked={settings.progress_show_percentage === true}
+                onCheckedChange={(checked) => onChange({ progress_show_percentage: checked })}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Animar Transições</Label>
+                <p className="text-xs text-muted-foreground">Suavizar mudanças de progresso</p>
+              </div>
+              <Switch
+                checked={settings.progress_animate !== false}
+                onCheckedChange={(checked) => onChange({ progress_animate: checked })}
+              />
+            </div>
+          </>
+        )}
+
+        <Separator className="my-2" />
 
         <div className="flex items-center justify-between">
           <Label>Permitir Voltar</Label>
