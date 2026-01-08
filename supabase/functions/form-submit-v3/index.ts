@@ -962,6 +962,157 @@ serve(async (req) => {
       }
     }
 
+    // ============================================
+    // STEP 4.7: KANBAN BOARD INTEGRATION
+    // Creates a card automatically when form is submitted
+    // ============================================
+    if (contactId) {
+      const { data: boardIntegration } = await supabase
+        .from('form_board_integrations')
+        .select('*')
+        .eq('form_id', form_id)
+        .eq('is_active', true)
+        .single();
+
+      if (boardIntegration) {
+        console.log(`[form-submit-v3] Found board integration for board: ${boardIntegration.board_id}`);
+        
+        // Determine target column (first column if not specified)
+        let targetColumnId = boardIntegration.target_column_id;
+        if (!targetColumnId) {
+          const { data: firstColumn } = await supabase
+            .from('project_columns')
+            .select('id')
+            .eq('board_id', boardIntegration.board_id)
+            .order('position', { ascending: true })
+            .limit(1)
+            .single();
+          targetColumnId = firstColumn?.id;
+        }
+
+        if (targetColumnId) {
+          // Build card title from form fields
+          const titleField = fields.find((f: any) => 
+            f.label?.toLowerCase().includes('título') || 
+            f.label?.toLowerCase().includes('assunto') ||
+            f.label?.toLowerCase().includes('nome')
+          );
+          const cardTitle = titleField && sanitizedAnswers[titleField.id] 
+            ? sanitizedAnswers[titleField.id] 
+            : `Nova Solicitação via ${form.name}`;
+
+          // Build card description from all answers
+          const descriptionLines = fields.map((f: any) => {
+            const val = sanitizedAnswers[f.id];
+            if (!val || val === '') return null;
+            if (f.type === 'file') return null;
+            return `**${f.label}:** ${val}`;
+          }).filter(Boolean);
+          const cardDescription = descriptionLines.join('\n\n');
+
+          // Get max position in column
+          const { data: existingCards } = await supabase
+            .from('project_cards')
+            .select('position')
+            .eq('column_id', targetColumnId)
+            .order('position', { ascending: false })
+            .limit(1);
+          const nextPosition = (existingCards?.[0]?.position ?? -1) + 1;
+
+          // Create the card
+          const { data: newCard, error: cardError } = await supabase
+            .from('project_cards')
+            .insert({
+              board_id: boardIntegration.board_id,
+              column_id: targetColumnId,
+              title: cardTitle,
+              description: cardDescription,
+              priority: 'medium',
+              position: nextPosition,
+            })
+            .select()
+            .single();
+
+          if (cardError) {
+            console.error('[form-submit-v3] Error creating kanban card:', cardError);
+          } else if (newCard) {
+            console.log(`[form-submit-v3] Kanban card created: ${newCard.id}`);
+
+            // Update submission with card_id
+            if (submission?.id) {
+              await supabase
+                .from('form_submissions')
+                .update({ card_id: newCard.id })
+                .eq('id', submission.id);
+            }
+
+            // Assign user if configured
+            if (boardIntegration.auto_assign_user_id) {
+              await supabase.from('project_card_assignees').insert({
+                card_id: newCard.id,
+                user_id: boardIntegration.auto_assign_user_id,
+              });
+              console.log(`[form-submit-v3] Card assigned to user: ${boardIntegration.auto_assign_user_id}`);
+            }
+
+            // Link contact to board for notifications
+            await supabase
+              .from('project_boards')
+              .update({ contact_id: contactId })
+              .eq('id', boardIntegration.board_id);
+            console.log(`[form-submit-v3] Contact ${contactId} linked to board`);
+
+            // Send confirmation email if enabled
+            if (boardIntegration.send_confirmation_email && email) {
+              try {
+                const { data: contact } = await supabase
+                  .from('contacts')
+                  .select('first_name, last_name')
+                  .eq('id', contactId)
+                  .single();
+
+                let emailHtml = `<p>Olá ${contact?.first_name || 'Cliente'},</p><p>Recebemos sua solicitação e já estamos trabalhando nela.</p><p>Você receberá atualizações sobre o progresso por email.</p><p>Obrigado!</p>`;
+                let emailSubject = 'Recebemos sua solicitação';
+
+                // Use custom template if configured
+                if (boardIntegration.confirmation_email_template_id) {
+                  const { data: template } = await supabase
+                    .from('email_templates')
+                    .select('subject, html_body')
+                    .eq('id', boardIntegration.confirmation_email_template_id)
+                    .single();
+                  
+                  if (template) {
+                    emailSubject = template.subject
+                      .replace(/\{\{card_title\}\}/g, cardTitle)
+                      .replace(/\{\{client_name\}\}/g, `${contact?.first_name || ''} ${contact?.last_name || ''}`.trim());
+                    emailHtml = template.html_body
+                      .replace(/\{\{card_title\}\}/g, cardTitle)
+                      .replace(/\{\{client_name\}\}/g, `${contact?.first_name || ''} ${contact?.last_name || ''}`.trim());
+                  }
+                }
+
+                // Send email
+                await supabase.functions.invoke('send-email', {
+                  body: {
+                    to: email,
+                    to_name: `${contact?.first_name || ''} ${contact?.last_name || ''}`.trim() || 'Cliente',
+                    subject: emailSubject,
+                    html: emailHtml,
+                    customer_id: contactId,
+                    is_customer_email: true,
+                  },
+                });
+                console.log('[form-submit-v3] Confirmation email sent for kanban card');
+              } catch (emailError) {
+                console.error('[form-submit-v3] Failed to send confirmation email:', emailError);
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Step 5: Execute form automations
     const { data: automations } = await supabase
       .from('form_automations')

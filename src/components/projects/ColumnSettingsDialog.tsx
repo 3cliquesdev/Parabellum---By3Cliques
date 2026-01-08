@@ -13,7 +13,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ProjectColumn, useUpdateProjectColumn } from "@/hooks/useProjectColumns";
+import { useEmailTemplates } from "@/hooks/useEmailTemplates";
 import { useToast } from "@/hooks/use-toast";
 
 const columnColors = [
@@ -25,6 +33,7 @@ const schema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   is_final: z.boolean(),
   notify_client_on_enter: z.boolean(),
+  email_template_id: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -39,6 +48,7 @@ interface ColumnSettingsDialogProps {
 export function ColumnSettingsDialog({ open, onOpenChange, column, boardId }: ColumnSettingsDialogProps) {
   const [selectedColor, setSelectedColor] = useState(column.color);
   const updateColumn = useUpdateProjectColumn();
+  const { data: emailTemplates } = useEmailTemplates();
   const { toast } = useToast();
 
   const form = useForm<FormData>({
@@ -47,6 +57,7 @@ export function ColumnSettingsDialog({ open, onOpenChange, column, boardId }: Co
       name: column.name,
       is_final: column.is_final,
       notify_client_on_enter: column.notify_client_on_enter,
+      email_template_id: column.email_template_id || "",
     },
   });
 
@@ -56,10 +67,13 @@ export function ColumnSettingsDialog({ open, onOpenChange, column, boardId }: Co
         name: column.name,
         is_final: column.is_final,
         notify_client_on_enter: column.notify_client_on_enter,
+        email_template_id: column.email_template_id || "",
       });
       setSelectedColor(column.color);
     }
   }, [open, column, form]);
+
+  const notifyEnabled = form.watch("notify_client_on_enter");
 
   const onSubmit = (data: FormData) => {
     updateColumn.mutate(
@@ -70,6 +84,7 @@ export function ColumnSettingsDialog({ open, onOpenChange, column, boardId }: Co
         color: selectedColor,
         is_final: data.is_final,
         notify_client_on_enter: data.notify_client_on_enter,
+        email_template_id: data.notify_client_on_enter ? (data.email_template_id || null) : null,
       },
       {
         onSuccess: () => {
@@ -131,10 +146,35 @@ export function ColumnSettingsDialog({ open, onOpenChange, column, boardId }: Co
             </div>
             <Switch
               id="notify"
-              checked={form.watch("notify_client_on_enter")}
+              checked={notifyEnabled}
               onCheckedChange={(checked) => form.setValue("notify_client_on_enter", checked)}
             />
           </div>
+
+          {notifyEnabled && (
+            <div className="space-y-2">
+              <Label>Template de Email</Label>
+              <Select
+                value={form.watch("email_template_id")}
+                onValueChange={(value) => form.setValue("email_template_id", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Template padrão do sistema" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Template padrão</SelectItem>
+                  {emailTemplates?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Variáveis: {"{{card_title}}"}, {"{{column_name}}"}, {"{{client_name}}"}, {"{{board_name}}"}
+              </p>
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

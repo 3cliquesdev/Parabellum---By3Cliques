@@ -2814,6 +2814,81 @@ export type Database = {
           },
         ]
       }
+      form_board_integrations: {
+        Row: {
+          auto_assign_user_id: string | null
+          board_id: string | null
+          confirmation_email_template_id: string | null
+          created_at: string | null
+          form_id: string | null
+          id: string
+          is_active: boolean | null
+          send_confirmation_email: boolean | null
+          target_column_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          auto_assign_user_id?: string | null
+          board_id?: string | null
+          confirmation_email_template_id?: string | null
+          created_at?: string | null
+          form_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          send_confirmation_email?: boolean | null
+          target_column_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          auto_assign_user_id?: string | null
+          board_id?: string | null
+          confirmation_email_template_id?: string | null
+          created_at?: string | null
+          form_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          send_confirmation_email?: boolean | null
+          target_column_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_board_integrations_auto_assign_user_id_fkey"
+            columns: ["auto_assign_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_board_integrations_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "project_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_board_integrations_confirmation_email_template_id_fkey"
+            columns: ["confirmation_email_template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_board_integrations_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: true
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_board_integrations_target_column_id_fkey"
+            columns: ["target_column_id"]
+            isOneToOne: false
+            referencedRelation: "project_columns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       form_calculations: {
         Row: {
           created_at: string | null
@@ -2917,6 +2992,7 @@ export type Database = {
           answers: Json
           automations_triggered: Json | null
           calculated_scores: Json | null
+          card_id: string | null
           completed_at: string | null
           contact_id: string | null
           created_at: string | null
@@ -2928,6 +3004,7 @@ export type Database = {
           answers: Json
           automations_triggered?: Json | null
           calculated_scores?: Json | null
+          card_id?: string | null
           completed_at?: string | null
           contact_id?: string | null
           created_at?: string | null
@@ -2939,6 +3016,7 @@ export type Database = {
           answers?: Json
           automations_triggered?: Json | null
           calculated_scores?: Json | null
+          card_id?: string | null
           completed_at?: string | null
           contact_id?: string | null
           created_at?: string | null
@@ -2947,6 +3025,13 @@ export type Database = {
           session_metadata?: Json | null
         }
         Relationships: [
+          {
+            foreignKeyName: "form_submissions_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "project_cards"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "form_submissions_contact_id_fkey"
             columns: ["contact_id"]
