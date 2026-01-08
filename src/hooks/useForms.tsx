@@ -77,6 +77,7 @@ export interface FormSettings {
   selection_highlight_color?: string;    // Cor do destaque/borda de seleção
   selection_background_color?: string;   // Fundo da opção selecionada
   selection_text_color?: string;         // Texto da opção selecionada
+  selection_border_width?: number;       // Espessura da borda de seleção (1-8px)
   thank_you_title?: string;
   thank_you_message?: string;
   redirect_url?: string;
@@ -139,6 +140,7 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   selection_highlight_color: "",
   selection_background_color: "",
   selection_text_color: "",
+  selection_border_width: 3,
   thank_you_title: "Obrigado!",
   thank_you_message: "Suas respostas foram enviadas com sucesso.",
   show_progress_bar: true,
