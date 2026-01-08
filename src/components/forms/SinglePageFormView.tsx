@@ -312,12 +312,41 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
           }}
         >
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: `${settings.field_gap ?? 24}px` }}>
-            {fields.map((field, index) => (
+            {fields.map((field, index) => {
+              const stagger = (settings.entry_stagger ?? 50) / 1000;
+              const getEntryAnimation = () => {
+                switch (settings.entry_animation) {
+                  case "none":
+                    return { initial: { opacity: 1 }, y: 0, x: 0, scale: 1, rotateX: 0 };
+                  case "fade-down":
+                    return { initial: { opacity: 0, y: -20 }, y: 0 };
+                  case "fade-left":
+                    return { initial: { opacity: 0, x: -30 }, x: 0 };
+                  case "fade-right":
+                    return { initial: { opacity: 0, x: 30 }, x: 0 };
+                  case "zoom-in":
+                    return { initial: { opacity: 0, scale: 0.8 }, scale: 1 };
+                  case "bounce":
+                    return { initial: { opacity: 0, y: -30 }, y: 0 };
+                  case "flip":
+                    return { initial: { opacity: 0, rotateX: -90 }, rotateX: 0 };
+                  case "fade-up":
+                  default:
+                    return { initial: { opacity: 0, y: 20 }, y: 0 };
+                }
+              };
+              const anim = getEntryAnimation();
+              const isBounce = settings.entry_animation === "bounce";
+              
+              return (
               <motion.div
                 key={field.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
+                initial={anim.initial}
+                animate={{ opacity: 1, y: anim.y ?? 0, x: anim.x ?? 0, scale: anim.scale ?? 1, rotateX: anim.rotateX ?? 0 }}
+                transition={isBounce 
+                  ? { delay: index * stagger, type: "spring" as const, stiffness: 300, damping: 15 }
+                  : { delay: index * stagger, duration: 0.4, ease: "easeOut" }
+                }
                 className="space-y-2"
               >
                 <Label 
@@ -350,7 +379,8 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
                   inputStyles={inputStyles}
                 />
               </motion.div>
-            ))}
+              );
+            })}
 
             <motion.div
               whileHover={settings.hover_effect_enabled !== false ? { 

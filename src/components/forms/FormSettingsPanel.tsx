@@ -1,4 +1,4 @@
-import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, GradientDirection } from "@/hooks/useForms";
+import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection } from "@/hooks/useForms";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -692,6 +692,49 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
             step={1}
             className="w-full"
           />
+        </div>
+
+        <Separator className="my-2" />
+
+        {/* Animação de Entrada */}
+        <div className="space-y-2">
+          <Label>Animação de Entrada</Label>
+          <Select
+            value={settings.entry_animation || "fade-up"}
+            onValueChange={(value: EntryAnimation) => onChange({ entry_animation: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Nenhuma</SelectItem>
+              <SelectItem value="fade-up">Fade Up ↑</SelectItem>
+              <SelectItem value="fade-down">Fade Down ↓</SelectItem>
+              <SelectItem value="fade-left">Fade Left ←</SelectItem>
+              <SelectItem value="fade-right">Fade Right →</SelectItem>
+              <SelectItem value="zoom-in">Zoom In</SelectItem>
+              <SelectItem value="bounce">Bounce</SelectItem>
+              <SelectItem value="flip">Flip</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Efeito quando os elementos aparecem na tela
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Delay entre Elementos: {settings.entry_stagger ?? 50}ms</Label>
+          <Slider
+            value={[settings.entry_stagger ?? 50]}
+            onValueChange={([val]) => onChange({ entry_stagger: val })}
+            min={0}
+            max={200}
+            step={10}
+            className="w-full"
+          />
+          <p className="text-xs text-muted-foreground">
+            Intervalo entre animações de cada campo
+          </p>
         </div>
 
         <Separator className="my-2" />

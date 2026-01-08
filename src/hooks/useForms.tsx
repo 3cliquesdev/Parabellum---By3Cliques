@@ -61,6 +61,7 @@ export type FormDisplayMode = "single_page" | "conversational";
 export type LogoPosition = "left" | "center" | "right";
 export type LogoSize = "small" | "medium" | "large";
 export type TransitionType = "slide" | "fade" | "zoom" | "scale";
+export type EntryAnimation = "none" | "fade-up" | "fade-down" | "fade-left" | "fade-right" | "zoom-in" | "bounce" | "flip";
 export type FontFamily = "inter" | "poppins" | "roboto" | "montserrat" | "playfair" | "lato" | "raleway" | "oswald";
 export type FontWeight = "light" | "normal" | "medium" | "semibold" | "bold";
 
@@ -108,6 +109,8 @@ export interface FormSettings {
   // Animações
   transition_type?: TransitionType; // Tipo de transição entre campos
   transition_duration?: number;     // Duração da transição (0.2-0.8s)
+  entry_animation?: EntryAnimation; // Animação de entrada dos elementos
+  entry_stagger?: number;           // Delay entre elementos (0-200ms)
   // Efeitos de hover
   hover_effect_enabled?: boolean;   // Habilitar efeitos de hover
   hover_scale?: number;             // Escala no hover (1.00-1.10)
@@ -200,6 +203,8 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   // Animações
   transition_type: "slide",
   transition_duration: 0.3,
+  entry_animation: "fade-up",
+  entry_stagger: 50,
   // Hover
   hover_effect_enabled: true,
   hover_scale: 1.02,
