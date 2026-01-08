@@ -199,6 +199,26 @@ export function CardModal({ cardId, boardId, open, onOpenChange }: CardModalProp
 
   return (
     <>
+      {/* AlertDialog MUST be outside the main Dialog to avoid portal conflicts */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir card?</AlertDialogTitle>
+            <AlertDialogDescription>Esta ação não pode ser desfeita. O card e todos os seus dados serão removidos permanentemente.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteCard.isPending}
+            >
+              {deleteCard.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
           {isLoading ? (
@@ -271,14 +291,8 @@ export function CardModal({ cardId, boardId, open, onOpenChange }: CardModalProp
                     </div>
                     <div className="pt-4 border-t">
                       <Button 
-                        type="button"
                         variant="destructive" 
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          console.log("Delete button clicked, opening dialog");
-                          setDeleteDialogOpen(true);
-                        }}
+                        onClick={() => setDeleteDialogOpen(true)}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />Excluir Card
                       </Button>
@@ -349,30 +363,6 @@ export function CardModal({ cardId, boardId, open, onOpenChange }: CardModalProp
           ) : <div className="text-center py-8 text-muted-foreground">Card não encontrado</div>}
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir card?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel type="button">Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                console.log("Confirming delete for card:", card?.id);
-                handleDelete();
-              }} 
-              className="bg-destructive text-destructive-foreground"
-              disabled={deleteCard.isPending}
-            >
-              {deleteCard.isPending ? "Excluindo..." : "Excluir"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
