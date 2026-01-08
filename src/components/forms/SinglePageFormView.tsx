@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Check, Loader2, AlertCircle, CheckCircle2, ArrowRight, Send, Rocket, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FormFileUpload } from "@/components/forms/FormFileUpload";
 
@@ -493,34 +493,7 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
               );
             })}
 
-            <motion.div
-              whileHover={settings.hover_effect_enabled !== false ? { 
-                scale: settings.hover_scale ?? 1.02,
-                boxShadow: settings.hover_glow !== false ? `0 0 20px ${settings.button_color}50` : undefined,
-              } : undefined}
-              whileTap={settings.hover_effect_enabled !== false ? { scale: 0.98 } : undefined}
-              transition={{ duration: 0.2 }}
-              className="mt-8"
-              style={{ borderRadius: `${Math.min(settings.border_radius ?? 16, 12)}px` }}
-            >
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-6 text-lg font-semibold transition-all duration-200"
-                style={{ 
-                  backgroundColor: settings.button_color,
-                  color: settings.button_text_color,
-                  borderRadius: `${Math.min(settings.border_radius ?? 16, 12)}px`,
-                }}
-              >
-                {isSubmitting ? (
-                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                ) : (
-                  <Check className="h-5 w-5 mr-2" />
-                )}
-                Enviar
-              </Button>
-            </motion.div>
+            <SubmitButton settings={settings} isSubmitting={isSubmitting} />
           </form>
         </motion.div>
       </main>
@@ -705,4 +678,108 @@ function FormFieldInput({ field, value, onChange, onBlur, settings, inputStyles,
         />
       );
   }
+}
+
+// Submit Button Component
+interface SubmitButtonProps {
+  settings: FormSettings;
+  isSubmitting: boolean;
+}
+
+function SubmitButton({ settings, isSubmitting }: SubmitButtonProps) {
+  const getButtonIcon = () => {
+    if (isSubmitting) return <Loader2 className="h-5 w-5 animate-spin" />;
+    switch (settings.button_icon) {
+      case "check": return <Check className="h-5 w-5" />;
+      case "arrow": return <ArrowRight className="h-5 w-5" />;
+      case "send": return <Send className="h-5 w-5" />;
+      case "rocket": return <Rocket className="h-5 w-5" />;
+      case "star": return <Star className="h-5 w-5" />;
+      default: return null;
+    }
+  };
+
+  const sizeClasses = {
+    small: "py-2 text-sm",
+    medium: "py-4 text-base",
+    large: "py-6 text-lg font-semibold",
+  };
+
+  const getButtonStyles = (): React.CSSProperties => {
+    const baseStyles: React.CSSProperties = {
+      borderRadius: `${settings.button_border_radius ?? 12}px`,
+      color: settings.button_text_color || "#ffffff",
+    };
+
+    switch (settings.button_style) {
+      case "outline":
+        return {
+          ...baseStyles,
+          backgroundColor: "transparent",
+          border: `${settings.button_border_width ?? 2}px solid ${settings.button_border_color || settings.button_color || "#2563EB"}`,
+          color: settings.button_border_color || settings.button_color || "#2563EB",
+        };
+      case "gradient":
+        return {
+          ...baseStyles,
+          background: `linear-gradient(135deg, ${settings.button_color || "#2563EB"}, ${settings.button_gradient_to || "#7c3aed"})`,
+        };
+      case "glass":
+        return {
+          ...baseStyles,
+          backgroundColor: `${settings.button_color || "#2563EB"}30`,
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          border: `1px solid ${settings.button_color || "#2563EB"}50`,
+        };
+      default:
+        return {
+          ...baseStyles,
+          backgroundColor: settings.button_color || "#2563EB",
+        };
+    }
+  };
+
+  const buttonStyles = getButtonStyles();
+  
+  if (settings.button_shadow !== false) {
+    buttonStyles.boxShadow = `0 4px 14px ${settings.button_shadow_color || settings.button_color || "#2563EB"}40`;
+  }
+
+  const getHoverProps = () => {
+    switch (settings.button_hover_effect) {
+      case "scale":
+        return { scale: 1.03 };
+      case "glow":
+        return { boxShadow: `0 0 25px ${settings.button_color || "#2563EB"}60` };
+      case "lift":
+        return { y: -3, boxShadow: `0 8px 20px ${settings.button_shadow_color || settings.button_color || "#2563EB"}50` };
+      default:
+        return {};
+    }
+  };
+
+  const icon = getButtonIcon();
+  const isRight = settings.button_icon_position === "right";
+
+  return (
+    <motion.div
+      whileHover={settings.button_hover_effect !== "none" ? getHoverProps() : undefined}
+      whileTap={settings.button_hover_effect !== "none" ? { scale: 0.98 } : undefined}
+      transition={{ duration: 0.2 }}
+      className="mt-8"
+      style={{ borderRadius: `${settings.button_border_radius ?? 12}px` }}
+    >
+      <Button
+        type="submit"
+        disabled={isSubmitting}
+        className={`${settings.button_full_width !== false ? "w-full" : "px-8"} ${sizeClasses[settings.button_size || "large"]} flex items-center justify-center gap-2 transition-all duration-200`}
+        style={buttonStyles}
+      >
+        {icon && !isRight && icon}
+        <span>{settings.button_text || "Enviar"}</span>
+        {icon && isRight && icon}
+      </Button>
+    </motion.div>
+  );
 }

@@ -1,4 +1,4 @@
-import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection, ValidationStyle, ProgressStyle, ProgressPosition } from "@/hooks/useForms";
+import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection, ValidationStyle, ProgressStyle, ProgressPosition, ButtonStyle, ButtonSize, ButtonIcon } from "@/hooks/useForms";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ImageUploader } from "@/components/ImageUploader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlignLeft, AlignCenter, AlignRight, Zap, Palette, Sparkles, Moon, Sun, Flame, Leaf, Waves, Gem, AlertCircle, CheckCircle2, BarChart3 } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Zap, Palette, Sparkles, Moon, Sun, Flame, Leaf, Waves, Gem, AlertCircle, CheckCircle2, BarChart3, Check, ArrowRight, Send, Rocket, Star, Square, Circle } from "lucide-react";
 
 // Temas pré-definidos
 const PREDEFINED_THEMES: Record<string, { name: string; icon: React.ReactNode; settings: Partial<FormSettings> }> = {
@@ -1051,32 +1051,73 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
 
       <Separator />
 
-      {/* Botão */}
+      {/* Botão de Ação */}
       <div className="space-y-4">
-        <h4 className="font-medium text-sm">Botão de Ação</h4>
+        <div className="flex items-center gap-2">
+          <Square className="h-4 w-4 text-primary" />
+          <h4 className="font-medium text-sm">Botão de Ação</h4>
+        </div>
 
         <div className="space-y-2">
           <Label>Texto do Botão</Label>
           <Input
-            value={settings.button_text || "Continuar"}
+            value={settings.button_text || "Enviar"}
             onChange={(e) => onChange({ button_text: e.target.value })}
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Estilo do Botão</Label>
+          <Select
+            value={settings.button_style || "solid"}
+            onValueChange={(value: ButtonStyle) => onChange({ button_style: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="solid">Sólido</SelectItem>
+              <SelectItem value="outline">Contorno</SelectItem>
+              <SelectItem value="gradient">Gradiente</SelectItem>
+              <SelectItem value="glass">Glass (Transparente)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tamanho</Label>
+          <Select
+            value={settings.button_size || "large"}
+            onValueChange={(value: ButtonSize) => onChange({ button_size: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="small">Pequeno</SelectItem>
+              <SelectItem value="medium">Médio</SelectItem>
+              <SelectItem value="large">Grande</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator className="my-2" />
+
+        {/* Cores do Botão */}
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label>Cor do Botão</Label>
+            <Label>Cor Principal</Label>
             <div className="flex gap-2">
               <Input
                 type="color"
                 value={settings.button_color || "#2563EB"}
                 onChange={(e) => onChange({ button_color: e.target.value })}
-                className="w-12 h-9 p-1 cursor-pointer"
+                className="w-10 h-9 p-1 cursor-pointer"
               />
               <Input
                 value={settings.button_color || "#2563EB"}
                 onChange={(e) => onChange({ button_color: e.target.value })}
-                className="flex-1"
+                className="flex-1 text-xs"
               />
             </div>
           </div>
@@ -1088,14 +1129,195 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
                 type="color"
                 value={settings.button_text_color || "#ffffff"}
                 onChange={(e) => onChange({ button_text_color: e.target.value })}
-                className="w-12 h-9 p-1 cursor-pointer"
+                className="w-10 h-9 p-1 cursor-pointer"
               />
               <Input
                 value={settings.button_text_color || "#ffffff"}
                 onChange={(e) => onChange({ button_text_color: e.target.value })}
-                className="flex-1"
+                className="flex-1 text-xs"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Gradiente */}
+        {settings.button_style === "gradient" && (
+          <div className="space-y-2">
+            <Label>Segunda Cor (Gradiente)</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.button_gradient_to || "#7c3aed"}
+                onChange={(e) => onChange({ button_gradient_to: e.target.value })}
+                className="w-10 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.button_gradient_to || "#7c3aed"}
+                onChange={(e) => onChange({ button_gradient_to: e.target.value })}
+                className="flex-1 text-xs"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Borda */}
+        {settings.button_style === "outline" && (
+          <>
+            <div className="space-y-2">
+              <Label>Cor da Borda</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="color"
+                  value={settings.button_border_color || settings.button_color || "#2563EB"}
+                  onChange={(e) => onChange({ button_border_color: e.target.value })}
+                  className="w-10 h-9 p-1 cursor-pointer"
+                />
+                <Input
+                  value={settings.button_border_color || settings.button_color || "#2563EB"}
+                  onChange={(e) => onChange({ button_border_color: e.target.value })}
+                  className="flex-1 text-xs"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Espessura da Borda: {settings.button_border_width ?? 2}px</Label>
+              <Slider
+                value={[settings.button_border_width ?? 2]}
+                onValueChange={([val]) => onChange({ button_border_width: val })}
+                min={1}
+                max={5}
+                step={1}
+                className="w-full"
+              />
+            </div>
+          </>
+        )}
+
+        <Separator className="my-2" />
+
+        {/* Ícone */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Ícone</Label>
+            <Select
+              value={settings.button_icon || "check"}
+              onValueChange={(value: ButtonIcon) => onChange({ button_icon: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhum</SelectItem>
+                <SelectItem value="check">✓ Check</SelectItem>
+                <SelectItem value="arrow">→ Seta</SelectItem>
+                <SelectItem value="send">✉ Enviar</SelectItem>
+                <SelectItem value="rocket">🚀 Foguete</SelectItem>
+                <SelectItem value="star">⭐ Estrela</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {settings.button_icon !== "none" && (
+            <div className="space-y-2">
+              <Label>Posição do Ícone</Label>
+              <Select
+                value={settings.button_icon_position || "left"}
+                onValueChange={(value: "left" | "right") => onChange({ button_icon_position: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="left">Esquerda</SelectItem>
+                  <SelectItem value="right">Direita</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
+        <Separator className="my-2" />
+
+        {/* Arredondamento e Tamanho */}
+        <div className="space-y-2">
+          <Label>Arredondamento: {settings.button_border_radius ?? 12}px</Label>
+          <Slider
+            value={[settings.button_border_radius ?? 12]}
+            onValueChange={([val]) => onChange({ button_border_radius: val })}
+            min={0}
+            max={30}
+            step={2}
+            className="w-full"
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Largura Total</Label>
+            <p className="text-xs text-muted-foreground">Ocupa toda a largura disponível</p>
+          </div>
+          <Switch
+            checked={settings.button_full_width !== false}
+            onCheckedChange={(checked) => onChange({ button_full_width: checked })}
+          />
+        </div>
+
+        <Separator className="my-2" />
+
+        {/* Efeitos */}
+        <div className="space-y-2">
+          <Label>Efeito Hover</Label>
+          <Select
+            value={settings.button_hover_effect || "scale"}
+            onValueChange={(value: "scale" | "glow" | "lift" | "none") => onChange({ button_hover_effect: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Nenhum</SelectItem>
+              <SelectItem value="scale">Escala (Aumenta)</SelectItem>
+              <SelectItem value="glow">Brilho (Glow)</SelectItem>
+              <SelectItem value="lift">Elevação (Sombra)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Sombra no Botão</Label>
+            <p className="text-xs text-muted-foreground">Adiciona profundidade</p>
+          </div>
+          <Switch
+            checked={settings.button_shadow !== false}
+            onCheckedChange={(checked) => onChange({ button_shadow: checked })}
+          />
+        </div>
+
+        {settings.button_shadow !== false && (
+          <div className="space-y-2">
+            <Label>Cor da Sombra</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.button_shadow_color || settings.button_color || "#2563EB"}
+                onChange={(e) => onChange({ button_shadow_color: e.target.value })}
+                className="w-10 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.button_shadow_color || settings.button_color || "#2563EB"}
+                onChange={(e) => onChange({ button_shadow_color: e.target.value })}
+                className="flex-1 text-xs"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Preview do Botão */}
+        <div className="pt-3 border-t border-border">
+          <Label className="text-xs text-muted-foreground mb-2 block">Preview</Label>
+          <div className="flex justify-center p-4 bg-muted/30 rounded-lg">
+            <ButtonPreview settings={settings} />
           </div>
         </div>
       </div>
@@ -1274,5 +1496,80 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
         </div>
       </div>
     </div>
+  );
+}
+
+// Button Preview Component
+function ButtonPreview({ settings }: { settings: FormSettings }) {
+  const getButtonIcon = () => {
+    switch (settings.button_icon) {
+      case "check": return <Check className="h-4 w-4" />;
+      case "arrow": return <ArrowRight className="h-4 w-4" />;
+      case "send": return <Send className="h-4 w-4" />;
+      case "rocket": return <Rocket className="h-4 w-4" />;
+      case "star": return <Star className="h-4 w-4" />;
+      default: return null;
+    }
+  };
+
+  const sizeClasses = {
+    small: "px-4 py-2 text-sm",
+    medium: "px-6 py-3 text-base",
+    large: "px-8 py-4 text-lg font-semibold",
+  };
+
+  const getButtonStyles = (): React.CSSProperties => {
+    const baseStyles: React.CSSProperties = {
+      borderRadius: `${settings.button_border_radius ?? 12}px`,
+      color: settings.button_text_color || "#ffffff",
+    };
+
+    switch (settings.button_style) {
+      case "outline":
+        return {
+          ...baseStyles,
+          backgroundColor: "transparent",
+          border: `${settings.button_border_width ?? 2}px solid ${settings.button_border_color || settings.button_color || "#2563EB"}`,
+          color: settings.button_border_color || settings.button_color || "#2563EB",
+        };
+      case "gradient":
+        return {
+          ...baseStyles,
+          background: `linear-gradient(135deg, ${settings.button_color || "#2563EB"}, ${settings.button_gradient_to || "#7c3aed"})`,
+        };
+      case "glass":
+        return {
+          ...baseStyles,
+          backgroundColor: `${settings.button_color || "#2563EB"}30`,
+          backdropFilter: "blur(10px)",
+          border: `1px solid ${settings.button_color || "#2563EB"}50`,
+        };
+      default:
+        return {
+          ...baseStyles,
+          backgroundColor: settings.button_color || "#2563EB",
+        };
+    }
+  };
+
+  const buttonStyles = getButtonStyles();
+  
+  if (settings.button_shadow !== false) {
+    buttonStyles.boxShadow = `0 4px 14px ${settings.button_shadow_color || settings.button_color || "#2563EB"}40`;
+  }
+
+  const icon = getButtonIcon();
+  const isRight = settings.button_icon_position === "right";
+
+  return (
+    <button
+      type="button"
+      className={`${sizeClasses[settings.button_size || "large"]} ${settings.button_full_width !== false ? "w-full" : ""} flex items-center justify-center gap-2 transition-all`}
+      style={buttonStyles}
+    >
+      {icon && !isRight && icon}
+      <span>{settings.button_text || "Enviar"}</span>
+      {icon && isRight && icon}
+    </button>
   );
 }

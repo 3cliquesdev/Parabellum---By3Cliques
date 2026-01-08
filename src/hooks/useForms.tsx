@@ -67,6 +67,9 @@ export type FontWeight = "light" | "normal" | "medium" | "semibold" | "bold";
 export type ValidationStyle = "subtle" | "prominent" | "minimal";
 export type ProgressStyle = "bar" | "steps" | "dots" | "fraction";
 export type ProgressPosition = "top" | "bottom" | "header";
+export type ButtonStyle = "solid" | "outline" | "gradient" | "glass";
+export type ButtonSize = "small" | "medium" | "large";
+export type ButtonIcon = "none" | "check" | "arrow" | "send" | "rocket" | "star";
 
 export type GradientDirection = "to-b" | "to-r" | "to-br" | "to-bl" | "radial";
 
@@ -84,6 +87,19 @@ export interface FormSettings {
   button_text?: string;
   button_color?: string;
   button_text_color?: string;       // Cor do texto do botão
+  // Estilização avançada de botões
+  button_style?: ButtonStyle;       // Estilo do botão (solid/outline/gradient/glass)
+  button_size?: ButtonSize;         // Tamanho do botão (small/medium/large)
+  button_icon?: ButtonIcon;         // Ícone do botão
+  button_icon_position?: "left" | "right"; // Posição do ícone
+  button_border_radius?: number;    // Arredondamento do botão (0-30px)
+  button_gradient_to?: string;      // Segunda cor para gradiente
+  button_border_color?: string;     // Cor da borda (para outline)
+  button_border_width?: number;     // Espessura da borda
+  button_shadow?: boolean;          // Sombra no botão
+  button_shadow_color?: string;     // Cor da sombra
+  button_full_width?: boolean;      // Botão largura total
+  button_hover_effect?: "scale" | "glow" | "lift" | "none"; // Efeito hover específico
   card_background_color?: string;   // Cor do container/cartão
   card_opacity?: number;            // Opacidade (0-100) para glassmorphism
   card_shadow?: boolean;            // Habilitar sombra no container
@@ -191,6 +207,18 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   button_text: "Continuar",
   button_color: "#2563EB",
   button_text_color: "#ffffff",
+  button_style: "solid",
+  button_size: "large",
+  button_icon: "check",
+  button_icon_position: "left",
+  button_border_radius: 12,
+  button_gradient_to: "#7c3aed",
+  button_border_color: "#2563EB",
+  button_border_width: 2,
+  button_shadow: true,
+  button_shadow_color: "#2563EB",
+  button_full_width: true,
+  button_hover_effect: "scale",
   card_background_color: "#1a1a2e",
   card_opacity: 90,
   card_shadow: true,
