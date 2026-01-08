@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FormFileUpload } from "@/components/forms/FormFileUpload";
 
@@ -31,6 +31,9 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
   const fields = schema?.fields || [];
 
   const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [shakeFields, setShakeFields] = useState<Record<string, boolean>>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -125,23 +128,87 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
     borderColor: settings.input_border_color || "#e5e7eb",
   };
 
+  // Validation helpers
+  const validateField = (field: FormField, value: any): string | null => {
+    if (field.required && !value) {
+      return "Este campo é obrigatório";
+    }
+    if (field.type === "email" && value) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        return "Email inválido";
+      }
+    }
+    if (field.type === "phone" && value) {
+      const phoneRegex = /^[\d\s\-\(\)]+$/;
+      if (value.length < 8 || !phoneRegex.test(value)) {
+        return "Telefone inválido";
+      }
+    }
+    return null;
+  };
+
+  const getFieldValidationStatus = (fieldId: string): "valid" | "invalid" | "neutral" => {
+    const field = fields.find(f => f.id === fieldId);
+    if (!field || !settings.show_field_validation) return "neutral";
+    if (!touched[fieldId]) return "neutral";
+    
+    const error = validateField(field, answers[fieldId]);
+    if (error) return "invalid";
+    if (answers[fieldId]) return "valid";
+    return "neutral";
+  };
+
   const updateAnswer = (fieldId: string, value: any) => {
     setAnswers(prev => ({ ...prev, [fieldId]: value }));
+    setTouched(prev => ({ ...prev, [fieldId]: true }));
+    
+    // Clear validation error when user types
+    const field = fields.find(f => f.id === fieldId);
+    if (field) {
+      const error = validateField(field, value);
+      setValidationErrors(prev => ({ ...prev, [fieldId]: error || "" }));
+    }
+  };
+
+  const markFieldTouched = (fieldId: string) => {
+    setTouched(prev => ({ ...prev, [fieldId]: true }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate required fields
+    // Validate all fields
+    let hasErrors = false;
+    const newErrors: Record<string, string> = {};
+    const newShakes: Record<string, boolean> = {};
+
     for (const field of fields) {
-      if (field.required && !answers[field.id]) {
-        toast({
-          title: "Campo obrigatório",
-          description: `O campo "${field.label}" é obrigatório.`,
-          variant: "destructive",
-        });
-        return;
+      const error = validateField(field, answers[field.id]);
+      if (error) {
+        hasErrors = true;
+        newErrors[field.id] = error;
+        if (settings.shake_on_error !== false) {
+          newShakes[field.id] = true;
+        }
       }
+    }
+
+    setValidationErrors(newErrors);
+    setTouched(Object.fromEntries(fields.map(f => [f.id, true])));
+    
+    if (hasErrors) {
+      setShakeFields(newShakes);
+      // Reset shake after animation
+      setTimeout(() => setShakeFields({}), 500);
+      
+      const firstErrorField = fields.find(f => newErrors[f.id]);
+      toast({
+        title: "Campo inválido",
+        description: firstErrorField ? newErrors[firstErrorField.id] : "Corrija os erros antes de enviar.",
+        variant: "destructive",
+      });
+      return;
     }
 
     if (isPreview) {
@@ -338,31 +405,60 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
               const anim = getEntryAnimation();
               const isBounce = settings.entry_animation === "bounce";
               
+              const validationStatus = getFieldValidationStatus(field.id);
+              const errorColor = settings.validation_error_color || "#ef4444";
+              const successColor = settings.validation_success_color || "#22c55e";
+              const isShaking = shakeFields[field.id];
+              const fieldError = validationErrors[field.id];
+              
               return (
               <motion.div
                 key={field.id}
                 initial={anim.initial}
-                animate={{ opacity: 1, y: anim.y ?? 0, x: anim.x ?? 0, scale: anim.scale ?? 1, rotateX: anim.rotateX ?? 0 }}
-                transition={isBounce 
-                  ? { delay: index * stagger, type: "spring" as const, stiffness: 300, damping: 15 }
-                  : { delay: index * stagger, duration: 0.4, ease: "easeOut" }
+                animate={{ 
+                  opacity: 1, 
+                  y: anim.y ?? 0, 
+                  x: isShaking ? [0, -10, 10, -10, 10, 0] : (anim.x ?? 0), 
+                  scale: anim.scale ?? 1, 
+                  rotateX: anim.rotateX ?? 0 
+                }}
+                transition={isShaking 
+                  ? { duration: 0.4, ease: "easeInOut" }
+                  : isBounce 
+                    ? { delay: index * stagger, type: "spring" as const, stiffness: 300, damping: 15 }
+                    : { delay: index * stagger, duration: 0.4, ease: "easeOut" }
                 }
                 className="space-y-2"
               >
-                <Label 
-                  className="text-base"
-                  style={{ 
-                    color: settings.text_color,
-                    fontWeight: labelWeight,
-                    letterSpacing,
-                    lineHeight,
-                  }}
-                >
-                  {field.label}
-                  {field.required && (
-                    <span className="text-red-400 ml-1">*</span>
+                <div className="flex items-center gap-2">
+                  <Label 
+                    className="text-base flex-1"
+                    style={{ 
+                      color: validationStatus === "invalid" ? errorColor : settings.text_color,
+                      fontWeight: labelWeight,
+                      letterSpacing,
+                      lineHeight,
+                    }}
+                  >
+                    {field.label}
+                    {field.required && settings.show_required_asterisk !== false && (
+                      <span style={{ color: errorColor }} className="ml-1">*</span>
+                    )}
+                  </Label>
+                  {settings.show_field_validation !== false && validationStatus !== "neutral" && (
+                    <motion.span
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                    >
+                      {validationStatus === "valid" ? (
+                        <CheckCircle2 className="h-4 w-4" style={{ color: successColor }} />
+                      ) : (
+                        <AlertCircle className="h-4 w-4" style={{ color: errorColor }} />
+                      )}
+                    </motion.span>
                   )}
-                </Label>
+                </div>
                 {field.description && (
                   <p 
                     className="text-sm"
@@ -375,9 +471,24 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
                   field={field}
                   value={answers[field.id]}
                   onChange={(value) => updateAnswer(field.id, value)}
+                  onBlur={() => markFieldTouched(field.id)}
                   settings={settings}
                   inputStyles={inputStyles}
+                  validationStatus={validationStatus}
+                  errorColor={errorColor}
+                  successColor={successColor}
                 />
+                {/* Validation Message */}
+                {settings.validation_style === "prominent" && validationStatus === "invalid" && fieldError && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-sm flex items-center gap-1"
+                    style={{ color: errorColor }}
+                  >
+                    {fieldError}
+                  </motion.p>
+                )}
               </motion.div>
               );
             })}
@@ -422,11 +533,27 @@ interface FormFieldInputProps {
   field: FormField;
   value: any;
   onChange: (value: any) => void;
+  onBlur?: () => void;
   settings: FormSettings;
   inputStyles: React.CSSProperties;
+  validationStatus?: "valid" | "invalid" | "neutral";
+  errorColor?: string;
+  successColor?: string;
 }
 
-function FormFieldInput({ field, value, onChange, settings, inputStyles }: FormFieldInputProps) {
+function FormFieldInput({ field, value, onChange, onBlur, settings, inputStyles, validationStatus, errorColor, successColor }: FormFieldInputProps) {
+  const getValidationBorderColor = () => {
+    if (!validationStatus || validationStatus === "neutral") return inputStyles.borderColor;
+    return validationStatus === "valid" ? successColor : errorColor;
+  };
+
+  const validatedInputStyles: React.CSSProperties = {
+    ...inputStyles,
+    borderColor: getValidationBorderColor(),
+    borderWidth: validationStatus && validationStatus !== "neutral" ? "2px" : "1px",
+    transition: "border-color 0.2s, border-width 0.2s",
+  };
+
   switch (field.type) {
     case "text":
     case "email":
@@ -437,9 +564,10 @@ function FormFieldInput({ field, value, onChange, settings, inputStyles }: FormF
           type={field.type === "email" ? "email" : field.type === "phone" ? "tel" : field.type === "number" ? "number" : "text"}
           value={value || ""}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
           placeholder={field.placeholder}
           className="h-12"
-          style={inputStyles}
+          style={validatedInputStyles}
           required={field.required}
         />
       );
@@ -449,9 +577,10 @@ function FormFieldInput({ field, value, onChange, settings, inputStyles }: FormF
         <textarea
           value={value || ""}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
           placeholder={field.placeholder}
           className="w-full min-h-[100px] p-3 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-primary break-all"
-          style={inputStyles}
+          style={validatedInputStyles}
           required={field.required}
         />
       );
