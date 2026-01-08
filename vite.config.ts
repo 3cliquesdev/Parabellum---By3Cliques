@@ -55,17 +55,18 @@ export default defineConfig(({ mode }) => ({
         runtimeCaching: [
           {
             urlPattern: /\.(js|css)$/,
-            handler: 'StaleWhileRevalidate',
+            handler: 'NetworkFirst',
             options: {
-              cacheName: 'static-assets-v6',
-              expiration: { maxEntries: 100, maxAgeSeconds: 30 }
+              cacheName: 'static-assets-v7',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 }
             }
           },
           {
             urlPattern: /\.(png|jpg|jpeg|svg|ico|woff2?)$/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'image-assets-v3',
+              cacheName: 'image-assets-v4',
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 }
             }
           },
@@ -73,7 +74,7 @@ export default defineConfig(({ mode }) => ({
             urlPattern: /supabase\.co/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'api-cache-v3',
+              cacheName: 'api-cache-v4',
               networkTimeoutSeconds: 5,
               expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 }
             }
