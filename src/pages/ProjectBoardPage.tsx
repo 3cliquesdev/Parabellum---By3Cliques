@@ -28,6 +28,7 @@ import { KanbanColumn } from "@/components/projects/KanbanColumn";
 import { KanbanCard } from "@/components/projects/KanbanCard";
 import { CreateColumnDialog } from "@/components/projects/CreateColumnDialog";
 import { CardModal } from "@/components/projects/CardModal";
+import { ProjectMembersDialog } from "@/components/projects/ProjectMembersDialog";
 import { Badge } from "@/components/ui/badge";
 
 export default function ProjectBoardPage() {
@@ -37,6 +38,7 @@ export default function ProjectBoardPage() {
   const [activeCard, setActiveCard] = useState<ProjectCard | null>(null);
   const [createColumnOpen, setCreateColumnOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [membersDialogOpen, setMembersDialogOpen] = useState(false);
 
   // Queries
   const { data: board, isLoading: boardLoading } = useProjectBoard(boardId);
@@ -191,7 +193,7 @@ export default function ProjectBoardPage() {
               <Filter className="h-4 w-4 mr-2" />
               Filtros
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => setMembersDialogOpen(true)}>
               <Users className="h-4 w-4 mr-2" />
               Membros
             </Button>
@@ -260,6 +262,12 @@ export default function ProjectBoardPage() {
         boardId={boardId!}
         open={!!selectedCardId}
         onOpenChange={(open) => !open && setSelectedCardId(null)}
+      />
+
+      <ProjectMembersDialog
+        open={membersDialogOpen}
+        onOpenChange={setMembersDialogOpen}
+        boardId={boardId!}
       />
     </div>
   );

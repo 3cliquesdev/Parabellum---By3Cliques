@@ -45,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { useProjectCard, useUpdateProjectCard, useDeleteProjectCard } from "@/hooks/useProjectCards";
 import { useProjectChecklists, useCreateProjectChecklist, useCreateChecklistItem, useUpdateChecklistItem } from "@/hooks/useProjectChecklists";
 import { useProjectComments, useCreateProjectComment } from "@/hooks/useProjectComments";
+import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -140,11 +141,23 @@ export function CardModal({ cardId, boardId, open, onOpenChange }: CardModalProp
     }
   };
 
+  const { toast } = useToast();
+
   const handleDelete = () => {
     if (card) {
-      deleteCard.mutate({ id: card.id, board_id: boardId });
-      setDeleteDialogOpen(false);
-      onOpenChange(false);
+      deleteCard.mutate(
+        { id: card.id, board_id: boardId },
+        {
+          onSuccess: () => {
+            toast({ title: "Card excluído com sucesso!" });
+            setDeleteDialogOpen(false);
+            onOpenChange(false);
+          },
+          onError: (error) => {
+            toast({ variant: "destructive", title: "Erro ao excluir card", description: error.message });
+          },
+        }
+      );
     }
   };
 
