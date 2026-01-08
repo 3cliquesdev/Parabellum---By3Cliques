@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Database, Mail, Webhook, Loader2, FileText, MessageCircle, Brain, Smartphone, Package, Key, Zap, Settings as SettingsIcon, Clock, Target } from "lucide-react";
+import { Shield, Database, Mail, Webhook, Loader2, FileText, MessageCircle, Brain, Smartphone, Package, Key, Zap, Settings as SettingsIcon, Clock, Target, CircleDot } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -298,6 +298,21 @@ export default function Settings() {
           <CardContent>
             <Button variant="outline" onClick={() => navigate('/settings/macros')}>
               Gerenciar Macros
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-2 border-purple-500/20 bg-purple-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CircleDot className="h-5 w-5 text-purple-500" />
+              Status de Tickets
+            </CardTitle>
+            <CardDescription>Gerencie status personalizados para o fluxo de tickets</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => navigate('/settings/ticket-statuses')}>
+              Gerenciar Status
             </Button>
           </CardContent>
         </Card>
