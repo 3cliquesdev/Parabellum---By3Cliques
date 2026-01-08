@@ -1527,12 +1527,31 @@ Por favor, **digite o código** que você recebeu para continuar.`;
           
           // Enviar via WhatsApp se necessário
           if (responseChannel === 'whatsapp' && contact?.phone) {
-            const { data: whatsappInstance } = await supabaseClient
-              .from('whatsapp_instances')
-              .select('*')
-              .eq('status', 'connected')
-              .limit(1)
-              .maybeSingle();
+            // CORRIGIDO: Priorizar instância vinculada à conversa
+            let whatsappInstance = null;
+            
+            // 1. Tentar instância vinculada à conversa
+            if (conversation.whatsapp_instance_id) {
+              const { data } = await supabaseClient
+                .from('whatsapp_instances')
+                .select('*')
+                .eq('id', conversation.whatsapp_instance_id)
+                .single();
+              whatsappInstance = data;
+              console.log('[ai-autopilot-chat] 🔗 OTP: Usando instância vinculada:', whatsappInstance?.instance_name);
+            }
+            
+            // 2. Fallback: qualquer instância conectada
+            if (!whatsappInstance) {
+              const { data } = await supabaseClient
+                .from('whatsapp_instances')
+                .select('*')
+                .eq('status', 'connected')
+                .limit(1)
+                .maybeSingle();
+              whatsappInstance = data;
+              console.log('[ai-autopilot-chat] 🔄 OTP: Fallback para instância:', whatsappInstance?.instance_name);
+            }
             
             if (whatsappInstance) {
               await supabaseClient.functions.invoke('send-whatsapp-message', {
