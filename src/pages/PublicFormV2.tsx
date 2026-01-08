@@ -366,7 +366,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
           {(formData?.title || formTitle || formData?.name || formName) && (
             <h1 
               className="text-xl sm:text-2xl font-bold mb-2 break-words whitespace-pre-wrap"
-              style={{ color: settings.text_color }}
+              style={{ color: settings.title_color || settings.text_color }}
             >
               {formData?.title || formTitle || formData?.name || formName}
             </h1>
@@ -374,7 +374,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
           {(formData?.description || formDescription) && (
             <p 
               className="text-sm mb-4 break-words whitespace-pre-wrap"
-              style={{ color: settings.text_color, opacity: 0.7 }}
+              style={{ color: settings.description_color || settings.text_color, opacity: 0.7 }}
             >
               {formData?.description || formDescription}
             </p>

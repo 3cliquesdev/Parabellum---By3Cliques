@@ -118,7 +118,41 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
         <h4 className="font-medium text-sm">Textos</h4>
         
         <div className="space-y-2">
-          <Label>Cor dos Textos/Labels</Label>
+          <Label>Cor do Título</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={settings.title_color || settings.text_color || "#ffffff"}
+              onChange={(e) => onChange({ title_color: e.target.value })}
+              className="w-12 h-9 p-1 cursor-pointer"
+            />
+            <Input
+              value={settings.title_color || settings.text_color || "#ffffff"}
+              onChange={(e) => onChange({ title_color: e.target.value })}
+              className="flex-1"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Cor da Descrição</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={settings.description_color || settings.text_color || "#ffffff"}
+              onChange={(e) => onChange({ description_color: e.target.value })}
+              className="w-12 h-9 p-1 cursor-pointer"
+            />
+            <Input
+              value={settings.description_color || settings.text_color || "#ffffff"}
+              onChange={(e) => onChange({ description_color: e.target.value })}
+              className="flex-1"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Cor dos Labels/Textos</Label>
           <div className="flex gap-2">
             <Input
               type="color"
