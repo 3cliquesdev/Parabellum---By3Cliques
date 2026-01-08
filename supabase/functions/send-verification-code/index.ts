@@ -51,8 +51,8 @@ serve(async (req) => {
     const branding = type === 'customer' ? {
       name: 'Seu Armazém Drop',
       from: 'Seu Armazém Drop <contato@seuarmazemdrop.parabellum.work>',
-      subject: '🔐 Código de Verificação - Seu Armazém Drop',
-      logo: 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-seuarmazemdrop.png',
+      subject: 'Código de Verificação - Seu Armazém Drop',
+      logo: 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo_seu_armazem-drop.png',
       greeting: 'Olá!',
       systemName: 'Seu Armazém Drop',
       primaryColor: '#f97316',
@@ -62,7 +62,7 @@ serve(async (req) => {
     } : {
       name: 'Parabellum Security',
       from: 'Parabellum Security <sistema@seuarmazemdrop.parabellum.work>',
-      subject: '🔐 CÓDIGO DE VERIFICAÇÃO: Acesso ao Sistema Parabellum',
+      subject: 'Código de Verificação - Acesso ao Sistema Parabellum',
       logo: 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2',
       greeting: 'Prezado(a) Colaborador(a),',
       systemName: 'Parabellum / 3 Cliques',
@@ -151,14 +151,14 @@ serve(async (req) => {
                 ${code.split('').join(' ')}
               </h1>
               <p style="color: #dc2626; font-size: 13px; margin: 15px 0 0 0; font-weight: 500;">
-                ⏱️ Código válido por 10 minutos
+                Código válido por 10 minutos
               </p>
             </div>
             
             <!-- ALERTA DE SEGURANÇA -->
             <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0; border-radius: 0 8px 8px 0;">
               <h3 style="color: #92400e; font-size: 14px; margin: 0 0 12px 0;">
-                ⚠️ ALERTA DE SEGURANÇA
+                ALERTA DE SEGURANÇA
               </h3>
               <p style="color: #78350f; font-size: 13px; line-height: 1.6; margin: 0 0 10px 0;">
                 <strong>Nunca compartilhe:</strong> A equipe ${branding.systemName} <u>jamais</u> solicitará este código por telefone, WhatsApp ou SMS.
@@ -171,7 +171,7 @@ serve(async (req) => {
             <!-- DETALHES DA SOLICITAÇÃO -->
             <div style="background: #f9fafb; border-radius: 8px; padding: 20px; margin: 30px 0; border: 1px solid #e5e7eb;">
               <h4 style="color: #374151; font-size: 13px; margin: 0 0 15px 0; text-transform: uppercase; letter-spacing: 1px;">
-                📋 Detalhes da Solicitação
+                Detalhes da Solicitação
               </h4>
               <table style="width: 100%; font-size: 13px; color: #4b5563;">
                 <tr>
