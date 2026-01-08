@@ -123,10 +123,25 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
   const lineHeight = settings.line_height ?? 1.5;
 
   // Input styles
+  const borderStyleMap: Record<string, string> = {
+    solid: "solid",
+    dashed: "dashed",
+    dotted: "dotted",
+    none: "none",
+  };
+
   const inputStyles: React.CSSProperties = {
     backgroundColor: settings.input_background_color || "#ffffff",
     color: settings.input_text_color || "#000000",
     borderColor: settings.input_border_color || "#e5e7eb",
+    borderStyle: borderStyleMap[settings.field_border_style || "solid"],
+    borderWidth: settings.field_border_style === "none" ? 0 : `${settings.field_border_width ?? 1}px`,
+    borderRadius: `${settings.field_border_radius ?? 8}px`,
+    padding: `${settings.field_padding_y ?? 12}px ${settings.field_padding_x ?? 16}px`,
+    transition: `all ${settings.field_transition_duration ?? 0.2}s ease`,
+    boxShadow: settings.field_shadow 
+      ? `0 2px 8px ${settings.field_shadow_color || "#00000020"}` 
+      : "none",
   };
 
   // Validation helpers
@@ -400,54 +415,158 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
                 }
                 className="space-y-2"
               >
-                <div className="flex items-center gap-2">
-                  <Label 
-                    className="text-base flex-1"
-                    style={{ 
-                      color: validationStatus === "invalid" ? errorColor : settings.text_color,
-                      fontWeight: labelWeight,
-                      letterSpacing,
-                      lineHeight,
-                    }}
-                  >
-                    {field.label}
-                    {field.required && settings.show_required_asterisk !== false && (
-                      <span style={{ color: errorColor }} className="ml-1">*</span>
-                    )}
-                  </Label>
-                  {settings.show_field_validation !== false && validationStatus !== "neutral" && (
-                    <motion.span
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                {/* Floating Label Container */}
+                {settings.field_label_position === "floating" ? (
+                  <div className="relative">
+                    <FormFieldInput
+                      field={field}
+                      value={answers[field.id]}
+                      onChange={(value) => updateAnswer(field.id, value)}
+                      onBlur={() => markFieldTouched(field.id)}
+                      settings={settings}
+                      inputStyles={inputStyles}
+                      validationStatus={validationStatus}
+                      errorColor={errorColor}
+                      successColor={successColor}
+                    />
+                    <label
+                      className="absolute text-xs pointer-events-none"
+                      style={{
+                        top: "-8px",
+                        left: "12px",
+                        backgroundColor: settings.input_background_color || "#ffffff",
+                        padding: "0 4px",
+                        color: validationStatus === "invalid" ? errorColor : settings.text_color,
+                        fontWeight: labelWeight,
+                      }}
                     >
-                      {validationStatus === "valid" ? (
-                        <CheckCircle2 className="h-4 w-4" style={{ color: successColor }} />
-                      ) : (
-                        <AlertCircle className="h-4 w-4" style={{ color: errorColor }} />
+                      {field.label}
+                      {field.required && settings.show_required_asterisk !== false && (
+                        <span style={{ color: errorColor }} className="ml-1">*</span>
                       )}
-                    </motion.span>
-                  )}
-                </div>
-                {field.description && (
-                  <p 
-                    className="text-sm"
-                    style={{ color: settings.text_color, opacity: 0.6 }}
-                  >
-                    {field.description}
-                  </p>
+                    </label>
+                    {settings.show_field_validation !== false && validationStatus !== "neutral" && (
+                      <motion.span
+                        className="absolute right-3 top-1/2 -translate-y-1/2"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                      >
+                        {validationStatus === "valid" ? (
+                          <CheckCircle2 className="h-4 w-4" style={{ color: successColor }} />
+                        ) : (
+                          <AlertCircle className="h-4 w-4" style={{ color: errorColor }} />
+                        )}
+                      </motion.span>
+                    )}
+                  </div>
+                ) : settings.field_label_position === "left" ? (
+                  /* Horizontal Label Layout */
+                  <div className="flex items-start gap-4">
+                    <div className="flex items-center gap-2 min-w-[120px] pt-3">
+                      <Label 
+                        className="text-base"
+                        style={{ 
+                          color: validationStatus === "invalid" ? errorColor : settings.text_color,
+                          fontWeight: labelWeight,
+                          letterSpacing,
+                          lineHeight,
+                        }}
+                      >
+                        {field.label}
+                        {field.required && settings.show_required_asterisk !== false && (
+                          <span style={{ color: errorColor }} className="ml-1">*</span>
+                        )}
+                      </Label>
+                      {settings.show_field_validation !== false && validationStatus !== "neutral" && (
+                        <motion.span
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                        >
+                          {validationStatus === "valid" ? (
+                            <CheckCircle2 className="h-4 w-4" style={{ color: successColor }} />
+                          ) : (
+                            <AlertCircle className="h-4 w-4" style={{ color: errorColor }} />
+                          )}
+                        </motion.span>
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      {field.description && (
+                        <p 
+                          className="text-sm mb-1"
+                          style={{ color: settings.text_color, opacity: 0.6 }}
+                        >
+                          {field.description}
+                        </p>
+                      )}
+                      <FormFieldInput
+                        field={field}
+                        value={answers[field.id]}
+                        onChange={(value) => updateAnswer(field.id, value)}
+                        onBlur={() => markFieldTouched(field.id)}
+                        settings={settings}
+                        inputStyles={inputStyles}
+                        validationStatus={validationStatus}
+                        errorColor={errorColor}
+                        successColor={successColor}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* Default Top Label Layout */
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Label 
+                        className="text-base flex-1"
+                        style={{ 
+                          color: validationStatus === "invalid" ? errorColor : settings.text_color,
+                          fontWeight: labelWeight,
+                          letterSpacing,
+                          lineHeight,
+                        }}
+                      >
+                        {field.label}
+                        {field.required && settings.show_required_asterisk !== false && (
+                          <span style={{ color: errorColor }} className="ml-1">*</span>
+                        )}
+                      </Label>
+                      {settings.show_field_validation !== false && validationStatus !== "neutral" && (
+                        <motion.span
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                        >
+                          {validationStatus === "valid" ? (
+                            <CheckCircle2 className="h-4 w-4" style={{ color: successColor }} />
+                          ) : (
+                            <AlertCircle className="h-4 w-4" style={{ color: errorColor }} />
+                          )}
+                        </motion.span>
+                      )}
+                    </div>
+                    {field.description && (
+                      <p 
+                        className="text-sm"
+                        style={{ color: settings.text_color, opacity: 0.6 }}
+                      >
+                        {field.description}
+                      </p>
+                    )}
+                    <FormFieldInput
+                      field={field}
+                      value={answers[field.id]}
+                      onChange={(value) => updateAnswer(field.id, value)}
+                      onBlur={() => markFieldTouched(field.id)}
+                      settings={settings}
+                      inputStyles={inputStyles}
+                      validationStatus={validationStatus}
+                      errorColor={errorColor}
+                      successColor={successColor}
+                    />
+                  </>
                 )}
-                <FormFieldInput
-                  field={field}
-                  value={answers[field.id]}
-                  onChange={(value) => updateAnswer(field.id, value)}
-                  onBlur={() => markFieldTouched(field.id)}
-                  settings={settings}
-                  inputStyles={inputStyles}
-                  validationStatus={validationStatus}
-                  errorColor={errorColor}
-                  successColor={successColor}
-                />
                 {/* Validation Message */}
                 {settings.validation_style === "prominent" && validationStatus === "invalid" && fieldError && (
                   <motion.p
@@ -485,17 +604,65 @@ interface FormFieldInputProps {
 }
 
 function FormFieldInput({ field, value, onChange, onBlur, settings, inputStyles, validationStatus, errorColor, successColor }: FormFieldInputProps) {
+  const [isFocused, setIsFocused] = useState(false);
+
   const getValidationBorderColor = () => {
     if (!validationStatus || validationStatus === "neutral") return inputStyles.borderColor;
     return validationStatus === "valid" ? successColor : errorColor;
   };
 
+  const getFocusStyles = (): React.CSSProperties => {
+    if (!isFocused) return {};
+    
+    const focusColor = settings.field_focus_color || settings.button_color || "#2563EB";
+    
+    switch (settings.field_focus_effect) {
+      case "glow":
+        return {
+          boxShadow: `0 0 0 3px ${focusColor}40, 0 0 20px ${focusColor}30`,
+          borderColor: focusColor,
+        };
+      case "underline":
+        return {
+          borderBottomColor: focusColor,
+          borderBottomWidth: "3px",
+          borderTopColor: "transparent",
+          borderLeftColor: "transparent",
+          borderRightColor: "transparent",
+        };
+      case "scale":
+        return {
+          transform: "scale(1.02)",
+          borderColor: focusColor,
+        };
+      case "border":
+      default:
+        return {
+          borderColor: focusColor,
+          borderWidth: "2px",
+        };
+    }
+  };
+
   const validatedInputStyles: React.CSSProperties = {
     ...inputStyles,
     borderColor: getValidationBorderColor(),
-    borderWidth: validationStatus && validationStatus !== "neutral" ? "2px" : "1px",
-    transition: "border-color 0.2s, border-width 0.2s",
+    borderWidth: validationStatus && validationStatus !== "neutral" 
+      ? "2px" 
+      : inputStyles.borderWidth,
+    ...getFocusStyles(),
   };
+
+  const handleFocus = () => setIsFocused(true);
+  const handleBlur = () => {
+    setIsFocused(false);
+    onBlur?.();
+  };
+
+  // Placeholder color style
+  const placeholderColorStyle = settings.field_placeholder_color 
+    ? { '--placeholder-color': settings.field_placeholder_color } as React.CSSProperties 
+    : {};
 
   switch (field.type) {
     case "text":
@@ -507,10 +674,11 @@ function FormFieldInput({ field, value, onChange, onBlur, settings, inputStyles,
           type={field.type === "email" ? "email" : field.type === "phone" ? "tel" : field.type === "number" ? "number" : "text"}
           value={value || ""}
           onChange={(e) => onChange(e.target.value)}
-          onBlur={onBlur}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           placeholder={field.placeholder}
-          className="h-12"
-          style={validatedInputStyles}
+          className="h-auto focus:outline-none focus:ring-0"
+          style={{...validatedInputStyles, ...placeholderColorStyle}}
           required={field.required}
         />
       );
@@ -520,9 +688,10 @@ function FormFieldInput({ field, value, onChange, onBlur, settings, inputStyles,
         <textarea
           value={value || ""}
           onChange={(e) => onChange(e.target.value)}
-          onBlur={onBlur}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           placeholder={field.placeholder}
-          className="w-full min-h-[100px] p-3 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-primary break-all"
+          className="w-full min-h-[100px] resize-none focus:outline-none break-all"
           style={validatedInputStyles}
           required={field.required}
         />

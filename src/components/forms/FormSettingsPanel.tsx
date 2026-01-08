@@ -1,4 +1,4 @@
-import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection, ValidationStyle, ProgressStyle, ProgressPosition, ButtonStyle, ButtonSize, ButtonIcon, SuccessIcon, SuccessAnimation } from "@/hooks/useForms";
+import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection, ValidationStyle, ProgressStyle, ProgressPosition, ButtonStyle, ButtonSize, ButtonIcon, SuccessIcon, SuccessAnimation, FieldBorderStyle, FieldLabelPosition, FieldFocusEffect } from "@/hooks/useForms";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ImageUploader } from "@/components/ImageUploader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlignLeft, AlignCenter, AlignRight, Zap, Palette, Sparkles, Moon, Sun, Flame, Leaf, Waves, Gem, AlertCircle, CheckCircle2, BarChart3, Check, ArrowRight, Send, Rocket, Star, Square, Circle, Heart, ThumbsUp, PartyPopper } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Zap, Palette, Sparkles, Moon, Sun, Flame, Leaf, Waves, Gem, AlertCircle, CheckCircle2, BarChart3, Check, ArrowRight, Send, Rocket, Star, Square, Circle, Heart, ThumbsUp, PartyPopper, FormInput, Focus } from "lucide-react";
 
 // Temas pré-definidos
 const PREDEFINED_THEMES: Record<string, { name: string; icon: React.ReactNode; settings: Partial<FormSettings> }> = {
@@ -1051,6 +1051,231 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
 
       <Separator />
 
+      {/* Estilização de Campos */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <FormInput className="h-4 w-4 text-primary" />
+          <h4 className="font-medium text-sm">Estilização de Campos</h4>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Estilo da Borda</Label>
+          <Select
+            value={settings.field_border_style || "solid"}
+            onValueChange={(value: FieldBorderStyle) => onChange({ field_border_style: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="solid">Sólida</SelectItem>
+              <SelectItem value="dashed">Tracejada</SelectItem>
+              <SelectItem value="dotted">Pontilhada</SelectItem>
+              <SelectItem value="none">Sem borda</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Arredondamento: {settings.field_border_radius ?? 8}px</Label>
+            <Slider
+              value={[settings.field_border_radius ?? 8]}
+              onValueChange={([val]) => onChange({ field_border_radius: val })}
+              min={0}
+              max={24}
+              step={2}
+              className="w-full"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Espessura: {settings.field_border_width ?? 1}px</Label>
+            <Slider
+              value={[settings.field_border_width ?? 1]}
+              onValueChange={([val]) => onChange({ field_border_width: val })}
+              min={0}
+              max={4}
+              step={1}
+              className="w-full"
+            />
+          </div>
+        </div>
+
+        <Separator className="my-2" />
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Padding X: {settings.field_padding_x ?? 16}px</Label>
+            <Slider
+              value={[settings.field_padding_x ?? 16]}
+              onValueChange={([val]) => onChange({ field_padding_x: val })}
+              min={8}
+              max={32}
+              step={2}
+              className="w-full"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Padding Y: {settings.field_padding_y ?? 12}px</Label>
+            <Slider
+              value={[settings.field_padding_y ?? 12]}
+              onValueChange={([val]) => onChange({ field_padding_y: val })}
+              min={8}
+              max={24}
+              step={2}
+              className="w-full"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Posição do Label</Label>
+          <Select
+            value={settings.field_label_position || "top"}
+            onValueChange={(value: FieldLabelPosition) => onChange({ field_label_position: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="top">Acima do campo</SelectItem>
+              <SelectItem value="left">À esquerda</SelectItem>
+              <SelectItem value="floating">Flutuante (dentro)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator className="my-2" />
+
+        <div className="flex items-center gap-2">
+          <Focus className="h-4 w-4 text-muted-foreground" />
+          <h5 className="font-medium text-xs text-muted-foreground">Efeitos de Foco</h5>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Efeito ao Focar</Label>
+          <Select
+            value={settings.field_focus_effect || "border"}
+            onValueChange={(value: FieldFocusEffect) => onChange({ field_focus_effect: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="border">Borda colorida</SelectItem>
+              <SelectItem value="glow">Brilho (Glow)</SelectItem>
+              <SelectItem value="underline">Sublinhado</SelectItem>
+              <SelectItem value="scale">Aumentar (Scale)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Cor do Foco</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={settings.field_focus_color || settings.button_color || "#2563EB"}
+              onChange={(e) => onChange({ field_focus_color: e.target.value })}
+              className="w-12 h-9 p-1 cursor-pointer"
+            />
+            <Input
+              value={settings.field_focus_color || settings.button_color || "#2563EB"}
+              onChange={(e) => onChange({ field_focus_color: e.target.value })}
+              className="flex-1"
+              placeholder="Usa cor do botão se vazio"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Duração Transição: {((settings.field_transition_duration ?? 0.2) * 1000).toFixed(0)}ms</Label>
+          <Slider
+            value={[(settings.field_transition_duration ?? 0.2) * 10]}
+            onValueChange={([val]) => onChange({ field_transition_duration: val / 10 })}
+            min={1}
+            max={5}
+            step={1}
+            className="w-full"
+          />
+        </div>
+
+        <Separator className="my-2" />
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Cor Placeholder</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.field_placeholder_color || "#9ca3af"}
+                onChange={(e) => onChange({ field_placeholder_color: e.target.value })}
+                className="w-10 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.field_placeholder_color || "#9ca3af"}
+                onChange={(e) => onChange({ field_placeholder_color: e.target.value })}
+                className="flex-1 text-xs"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Cor Ícones</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.field_icon_color || "#6b7280"}
+                onChange={(e) => onChange({ field_icon_color: e.target.value })}
+                className="w-10 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.field_icon_color || "#6b7280"}
+                onChange={(e) => onChange({ field_icon_color: e.target.value })}
+                className="flex-1 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Sombra nos Campos</Label>
+            <p className="text-xs text-muted-foreground">Adiciona profundidade aos campos</p>
+          </div>
+          <Switch
+            checked={settings.field_shadow === true}
+            onCheckedChange={(checked) => onChange({ field_shadow: checked })}
+          />
+        </div>
+
+        {settings.field_shadow && (
+          <div className="space-y-2">
+            <Label>Cor da Sombra</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.field_shadow_color || "#00000020"}
+                onChange={(e) => onChange({ field_shadow_color: e.target.value })}
+                className="w-12 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.field_shadow_color || "#00000020"}
+                onChange={(e) => onChange({ field_shadow_color: e.target.value })}
+                className="flex-1"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Preview do Campo */}
+        <div className="mt-4 p-4 bg-muted/30 rounded-lg">
+          <p className="text-xs text-muted-foreground mb-3">Preview do Campo:</p>
+          <FieldPreview settings={settings} />
+        </div>
+      </div>
+
+      <Separator />
+
       {/* Botão de Ação */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
@@ -1708,5 +1933,74 @@ function ButtonPreview({ settings }: { settings: FormSettings }) {
       <span>{settings.button_text || "Enviar"}</span>
       {icon && isRight && icon}
     </button>
+  );
+}
+
+// Preview do Campo
+function FieldPreview({ settings }: { settings: FormSettings }) {
+  const borderStyles: Record<string, string> = {
+    solid: "solid",
+    dashed: "dashed",
+    dotted: "dotted",
+    none: "none",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: settings.input_background_color || "#ffffff",
+    color: settings.input_text_color || "#000000",
+    borderColor: settings.input_border_color || "#e5e7eb",
+    borderStyle: borderStyles[settings.field_border_style || "solid"],
+    borderWidth: settings.field_border_style === "none" ? 0 : `${settings.field_border_width ?? 1}px`,
+    borderRadius: `${settings.field_border_radius ?? 8}px`,
+    padding: `${settings.field_padding_y ?? 12}px ${settings.field_padding_x ?? 16}px`,
+    transition: `all ${settings.field_transition_duration ?? 0.2}s ease`,
+    boxShadow: settings.field_shadow 
+      ? `0 2px 8px ${settings.field_shadow_color || "#00000020"}` 
+      : "none",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    color: settings.text_color || "#ffffff",
+    fontWeight: settings.label_weight || "bold",
+    marginBottom: settings.field_label_position === "top" ? "8px" : "0",
+    marginRight: settings.field_label_position === "left" ? "12px" : "0",
+  };
+
+  const containerClass = settings.field_label_position === "left" 
+    ? "flex items-center gap-3" 
+    : "flex flex-col";
+
+  return (
+    <div className={containerClass}>
+      {settings.field_label_position !== "floating" && (
+        <label className="text-sm" style={labelStyle}>
+          Nome <span className="text-red-500">*</span>
+        </label>
+      )}
+      <div className="relative flex-1">
+        <input
+          type="text"
+          placeholder={settings.field_label_position === "floating" ? "" : "Digite seu nome..."}
+          className="w-full outline-none"
+          style={inputStyle}
+          readOnly
+        />
+        {settings.field_label_position === "floating" && (
+          <label 
+            className="absolute text-xs"
+            style={{
+              ...labelStyle,
+              top: "-8px",
+              left: "12px",
+              backgroundColor: settings.input_background_color || "#ffffff",
+              padding: "0 4px",
+              fontSize: "11px",
+            }}
+          >
+            Nome <span className="text-red-500">*</span>
+          </label>
+        )}
+      </div>
+    </div>
   );
 }

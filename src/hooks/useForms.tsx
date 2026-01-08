@@ -73,6 +73,11 @@ export type ButtonIcon = "none" | "check" | "arrow" | "send" | "rocket" | "star"
 export type SuccessIcon = "check" | "heart" | "star" | "rocket" | "party" | "thumbs-up";
 export type SuccessAnimation = "scale" | "confetti" | "bounce" | "fade" | "slide-up";
 
+// Field Styling Types
+export type FieldBorderStyle = "solid" | "dashed" | "dotted" | "none";
+export type FieldLabelPosition = "top" | "left" | "floating";
+export type FieldFocusEffect = "border" | "glow" | "underline" | "scale";
+
 export type GradientDirection = "to-b" | "to-r" | "to-br" | "to-bl" | "radial";
 
 export interface FormSettings {
@@ -169,6 +174,20 @@ export interface FormSettings {
   progress_animate?: boolean;               // Animar transições
   allow_back_navigation?: boolean;
   display_mode?: FormDisplayMode;   // Página única ou conversacional
+  // Field Styling
+  field_border_style?: FieldBorderStyle;    // Estilo da borda do campo
+  field_border_radius?: number;             // Arredondamento do campo (0-24px)
+  field_border_width?: number;              // Espessura da borda (0-4px)
+  field_padding_x?: number;                 // Padding horizontal (8-32px)
+  field_padding_y?: number;                 // Padding vertical (8-24px)
+  field_label_position?: FieldLabelPosition; // Posição do label
+  field_focus_effect?: FieldFocusEffect;    // Efeito ao focar
+  field_focus_color?: string;               // Cor do foco
+  field_placeholder_color?: string;         // Cor do placeholder
+  field_icon_color?: string;                // Cor dos ícones
+  field_shadow?: boolean;                   // Sombra nos campos
+  field_shadow_color?: string;              // Cor da sombra
+  field_transition_duration?: number;       // Duração transição (0.1-0.5s)
 }
 
 export interface TicketSettings {
@@ -295,6 +314,20 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   progress_animate: true,
   allow_back_navigation: true,
   display_mode: "conversational",
+  // Field Styling
+  field_border_style: "solid",
+  field_border_radius: 8,
+  field_border_width: 1,
+  field_padding_x: 16,
+  field_padding_y: 12,
+  field_label_position: "top",
+  field_focus_effect: "border",
+  field_focus_color: "#2563EB",
+  field_placeholder_color: "#9ca3af",
+  field_icon_color: "#6b7280",
+  field_shadow: false,
+  field_shadow_color: "#00000020",
+  field_transition_duration: 0.2,
 };
 
 export const DEFAULT_TICKET_SETTINGS: TicketSettings = {
