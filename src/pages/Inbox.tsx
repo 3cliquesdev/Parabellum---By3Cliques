@@ -294,9 +294,9 @@ export default function Inbox() {
         </div>
         
         {hasHiddenConversations && (
-          <div className="flex-none px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800">
-            <p className="text-xs text-yellow-800 dark:text-yellow-200">
-              ⚠️ Nenhuma conversa neste filtro
+          <div className="flex-none px-3 py-2 bg-primary/5 dark:bg-primary/10 border-b border-primary/20">
+            <p className="text-xs text-muted-foreground">
+              ℹ️ Nenhuma conversa neste filtro
             </p>
           </div>
         )}

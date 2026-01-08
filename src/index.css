@@ -30,9 +30,9 @@
     --success-muted: 160 84% 93%;
     --success-foreground: 0 0% 100%;
     
-    --warning: 38 92% 50%;               /* #F59E0B - para alertas */
-    --warning-muted: 38 92% 95%;
-    --warning-foreground: 217 33% 17%;
+    --warning: 217 91% 60%;              /* Azul informativo (sem amarelo) */
+    --warning-muted: 217 91% 95%;
+    --warning-foreground: 0 0% 100%;
     
     --destructive: 0 84% 60%;            /* #EF4444 */
     --destructive-muted: 0 84% 95%;
@@ -121,8 +121,8 @@
     --success-muted: 160 84% 15%;
     --success-foreground: 0 0% 100%;
     
-    --warning: 38 92% 50%;               /* manter para alertas */
-    --warning-muted: 38 92% 15%;
+    --warning: 217 91% 70%;              /* Azul informativo (sem amarelo) */
+    --warning-muted: 217 91% 15%;
     --warning-foreground: 0 0% 100%;
     
     --destructive: 0 84% 60%;            /* #EF4444 */

@@ -209,17 +209,17 @@ export function SuperComposer({
   const canSend = (message.trim() || (hasAttachments && allUploaded)) && !isUploading;
 
   return (
-    <div className="flex-none bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-t border-slate-200 dark:border-zinc-800">
+    <div className="flex-none bg-card/95 backdrop-blur border-t border-border">
       {/* Tabs */}
       <div className="px-4 pt-3 flex items-center justify-between gap-3">
         <Tabs
           value={messageMode}
           onValueChange={(v) => setMessageMode(v as MessageMode)}
         >
-          <TabsList className="h-8 p-0.5 bg-slate-100 dark:bg-zinc-800">
+          <TabsList className="h-8 p-0.5 bg-muted">
             <TabsTrigger
               value="public"
-              className="h-7 px-3 gap-1.5 text-xs data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700"
+              className="h-7 px-3 gap-1.5 text-xs data-[state=active]:bg-card"
             >
               <MessageCircle className="h-3.5 w-3.5" />
               Mensagem
@@ -228,8 +228,8 @@ export function SuperComposer({
               value="internal"
               className={cn(
                 "h-7 px-3 gap-1.5 text-xs",
-                "data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-800",
-                "dark:data-[state=active]:bg-yellow-900/50 dark:data-[state=active]:text-yellow-200"
+                "data-[state=active]:bg-info/10 data-[state=active]:text-info",
+                "dark:data-[state=active]:bg-info/20 dark:data-[state=active]:text-info"
               )}
             >
               <StickyNote className="h-3.5 w-3.5" />
@@ -241,7 +241,7 @@ export function SuperComposer({
 
       {/* Internal Note Warning */}
       {isInternal && (
-        <div className="mx-4 mt-2 flex items-center gap-2 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/30 px-3 py-1.5 rounded-md">
+        <div className="mx-4 mt-2 flex items-center gap-2 text-xs text-info bg-info/10 dark:bg-info/20 px-3 py-1.5 rounded-md border border-info/30">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           <span>Esta mensagem é visível apenas para a equipe interna</span>
         </div>
@@ -353,8 +353,8 @@ export function SuperComposer({
                   className={cn(
                     "flex-1 min-h-[44px] max-h-32 resize-none py-3 px-4 rounded-2xl transition-colors",
                     isInternal
-                      ? "bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 focus-visible:ring-yellow-500"
-                      : "bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
+                      ? "bg-info/5 dark:bg-info/10 border-info/30 dark:border-info/40 focus-visible:ring-info"
+                      : "bg-muted/50 dark:bg-muted border-border"
                   )}
                 />
               </SlashCommandMenu>
@@ -366,7 +366,7 @@ export function SuperComposer({
                 size="icon"
                 className={cn(
                   "rounded-full h-11 w-11 shrink-0 shadow-md transition-colors",
-                  isInternal && "bg-yellow-500 hover:bg-yellow-600"
+                  isInternal && "bg-info hover:bg-info/90"
                 )}
               >
                 {isInternal ? (
