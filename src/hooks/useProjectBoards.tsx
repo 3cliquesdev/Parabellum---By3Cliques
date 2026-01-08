@@ -222,9 +222,10 @@ export function useUpdateProjectBoard() {
     }: {
       id: string;
       name?: string;
-      description?: string;
+      description?: string | null;
       status?: "active" | "archived" | "completed";
       due_date?: string | null;
+      contact_id?: string | null;
     }) => {
       const { data: board, error } = await supabase
         .from("project_boards")

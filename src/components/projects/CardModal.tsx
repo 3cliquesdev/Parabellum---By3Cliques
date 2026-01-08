@@ -270,7 +270,16 @@ export function CardModal({ cardId, boardId, open, onOpenChange }: CardModalProp
                       <Textarea placeholder="Adicione uma descrição..." value={description} onChange={(e) => setDescription(e.target.value)} onBlur={handleSaveDescription} rows={4} />
                     </div>
                     <div className="pt-4 border-t">
-                      <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+                      <Button 
+                        type="button"
+                        variant="destructive" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log("Delete button clicked, opening dialog");
+                          setDeleteDialogOpen(true);
+                        }}
+                      >
                         <Trash2 className="h-4 w-4 mr-2" />Excluir Card
                       </Button>
                     </div>
@@ -348,8 +357,19 @@ export function CardModal({ cardId, boardId, open, onOpenChange }: CardModalProp
             <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Excluir</AlertDialogAction>
+            <AlertDialogCancel type="button">Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                console.log("Confirming delete for card:", card?.id);
+                handleDelete();
+              }} 
+              className="bg-destructive text-destructive-foreground"
+              disabled={deleteCard.isPending}
+            >
+              {deleteCard.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -29,6 +29,7 @@ import { KanbanCard } from "@/components/projects/KanbanCard";
 import { CreateColumnDialog } from "@/components/projects/CreateColumnDialog";
 import { CardModal } from "@/components/projects/CardModal";
 import { ProjectMembersDialog } from "@/components/projects/ProjectMembersDialog";
+import { BoardSettingsDialog } from "@/components/projects/BoardSettingsDialog";
 import { Badge } from "@/components/ui/badge";
 
 export default function ProjectBoardPage() {
@@ -39,6 +40,7 @@ export default function ProjectBoardPage() {
   const [createColumnOpen, setCreateColumnOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
   // Queries
   const { data: board, isLoading: boardLoading } = useProjectBoard(boardId);
@@ -197,7 +199,7 @@ export default function ProjectBoardPage() {
               <Users className="h-4 w-4 mr-2" />
               Membros
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => setSettingsDialogOpen(true)}>
               <Settings2 className="h-4 w-4" />
             </Button>
           </div>
@@ -269,6 +271,14 @@ export default function ProjectBoardPage() {
         onOpenChange={setMembersDialogOpen}
         boardId={boardId!}
       />
+
+      {board && (
+        <BoardSettingsDialog
+          open={settingsDialogOpen}
+          onOpenChange={setSettingsDialogOpen}
+          board={board}
+        />
+      )}
     </div>
   );
 }
