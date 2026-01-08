@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Plus, MoreHorizontal, GripVertical, Pencil, Trash2, Mail, MessageSquare } from "lucide-react";
+import { ArrowLeft, Plus, MoreHorizontal, GripVertical, Pencil, Trash2, Mail, MessageSquare, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   DndContext,
@@ -130,6 +130,11 @@ function SortableStatusItem({
             onCheckedChange={(checked) => onToggleEmail(status.id, checked)}
             className="data-[state=checked]:bg-primary"
           />
+          {status.send_email_notification && status.email_template_id && (
+            <span title="Template de e-mail configurado">
+              <FileText className="h-3.5 w-3.5 text-blue-500" />
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 opacity-50" title="Notificação por WhatsApp (em breve)">
           <MessageSquare className="h-4 w-4 text-muted-foreground" />

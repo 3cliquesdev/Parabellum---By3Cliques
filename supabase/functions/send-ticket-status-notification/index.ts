@@ -240,13 +240,14 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Fetch ticket with customer info
+    // Fetch ticket with customer info and current status
     const { data: ticket, error: ticketError } = await supabase
       .from("tickets")
       .select(`
         id,
         ticket_number,
         subject,
+        status,
         customer_id,
         customer:contacts!tickets_customer_id_fkey (
           id,
@@ -308,21 +309,51 @@ serve(async (req) => {
       portalUrl = portalConfig.value;
     }
 
-    // Check for custom template
+    // Check for custom template - first check if status has a specific template configured
     const config = statusConfig[new_status] || statusConfig.open;
     let html: string;
     let emailSubject: string;
 
-    // Try to fetch custom template from database
-    const { data: customTemplate } = await supabase
-      .from("email_templates")
-      .select("id, subject, html_body")
-      .eq("trigger_type", config.triggerType)
-      .eq("is_active", true)
+    // Fetch the ticket status configuration to check for email_template_id
+    const { data: ticketStatusConfig } = await supabase
+      .from("ticket_statuses")
+      .select("email_template_id")
+      .eq("name", new_status)
       .single();
 
+    let customTemplate = null;
+
+    // First priority: template configured directly on the status
+    if (ticketStatusConfig?.email_template_id) {
+      console.log(`[send-ticket-status-notification] Status has custom template: ${ticketStatusConfig.email_template_id}`);
+      const { data: statusTemplate } = await supabase
+        .from("email_templates")
+        .select("id, subject, html_body")
+        .eq("id", ticketStatusConfig.email_template_id)
+        .eq("is_active", true)
+        .single();
+      
+      if (statusTemplate?.html_body) {
+        customTemplate = statusTemplate;
+      }
+    }
+
+    // Second priority: template by trigger_type
+    if (!customTemplate) {
+      const { data: triggerTemplate } = await supabase
+        .from("email_templates")
+        .select("id, subject, html_body")
+        .eq("trigger_type", config.triggerType)
+        .eq("is_active", true)
+        .single();
+      
+      if (triggerTemplate?.html_body) {
+        customTemplate = triggerTemplate;
+      }
+    }
+
     if (customTemplate?.html_body) {
-      console.log(`[send-ticket-status-notification] Using custom template for ${config.triggerType}`);
+      console.log(`[send-ticket-status-notification] Using custom template: ${customTemplate.id}`);
       
       // Variables for template
       const variables: Record<string, string> = {

@@ -25,6 +25,7 @@ import {
   type TicketStatus,
   type CreateTicketStatusData 
 } from "@/hooks/useTicketStatuses";
+import { useEmailTemplates } from "@/hooks/useEmailTemplates";
 import {
   Inbox,
   Clock,
@@ -102,6 +103,8 @@ export function StatusDialog({ open, onOpenChange, status }: StatusDialogProps) 
   const updateMutation = useUpdateTicketStatus();
   const isEditing = !!status;
 
+  const { data: emailTemplates } = useEmailTemplates();
+
   const [formData, setFormData] = useState<CreateTicketStatusData>({
     name: '',
     label: '',
@@ -113,6 +116,7 @@ export function StatusDialog({ open, onOpenChange, status }: StatusDialogProps) 
     is_final_status: false,
     send_email_notification: false,
     send_whatsapp_notification: false,
+    email_template_id: null,
   });
 
   useEffect(() => {
@@ -128,6 +132,7 @@ export function StatusDialog({ open, onOpenChange, status }: StatusDialogProps) 
         is_final_status: status.is_final_status,
         send_email_notification: status.send_email_notification,
         send_whatsapp_notification: status.send_whatsapp_notification,
+        email_template_id: status.email_template_id,
       });
     } else {
       setFormData({
@@ -141,6 +146,7 @@ export function StatusDialog({ open, onOpenChange, status }: StatusDialogProps) 
         is_final_status: false,
         send_email_notification: false,
         send_whatsapp_notification: false,
+        email_template_id: null,
       });
     }
   }, [status, open]);
@@ -357,6 +363,34 @@ export function StatusDialog({ open, onOpenChange, status }: StatusDialogProps) 
                   onCheckedChange={(checked) => setFormData(prev => ({ ...prev, send_email_notification: checked }))}
                 />
               </div>
+
+              {formData.send_email_notification && (
+                <div className="space-y-2 pt-2 border-t border-border/50">
+                  <Label htmlFor="email_template" className="text-sm font-normal">Template de E-mail</Label>
+                  <Select
+                    value={formData.email_template_id || "none"}
+                    onValueChange={(value) => setFormData(prev => ({ 
+                      ...prev, 
+                      email_template_id: value === "none" ? null : value 
+                    }))}
+                  >
+                    <SelectTrigger id="email_template">
+                      <SelectValue placeholder="Selecione um template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Usar template padrão do sistema</SelectItem>
+                      {emailTemplates?.filter(t => t.is_active).map(template => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Template específico para este status (opcional)
+                  </p>
+                </div>
+              )}
 
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">

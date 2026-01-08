@@ -15,6 +15,7 @@ export interface TicketStatus {
   display_order: number;
   send_email_notification: boolean;
   send_whatsapp_notification: boolean;
+  email_template_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +31,7 @@ export interface CreateTicketStatusData {
   is_final_status?: boolean;
   send_email_notification?: boolean;
   send_whatsapp_notification?: boolean;
+  email_template_id?: string | null;
 }
 
 export interface UpdateTicketStatusData extends Partial<CreateTicketStatusData> {

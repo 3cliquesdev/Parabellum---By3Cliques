@@ -5570,6 +5570,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           display_order: number
+          email_template_id: string | null
           icon: string | null
           id: string
           is_active: boolean | null
@@ -5586,6 +5587,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           display_order?: number
+          email_template_id?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean | null
@@ -5602,6 +5604,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           display_order?: number
+          email_template_id?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean | null
@@ -5613,7 +5616,15 @@ export type Database = {
           send_whatsapp_notification?: boolean | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ticket_statuses_email_template_id_fkey"
+            columns: ["email_template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ticket_tags: {
         Row: {
