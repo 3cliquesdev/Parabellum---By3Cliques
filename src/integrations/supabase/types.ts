@@ -5525,6 +5525,45 @@ export type Database = {
           },
         ]
       }
+      ticket_stakeholders: {
+        Row: {
+          added_at: string | null
+          id: string
+          role: string
+          ticket_id: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string | null
+          id?: string
+          role: string
+          ticket_id: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string | null
+          id?: string
+          role?: string
+          ticket_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_stakeholders_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_stakeholders_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_statuses: {
         Row: {
           color: string
@@ -6253,6 +6292,12 @@ export type Database = {
         | "meeting"
         | "form_submission"
         | "conversation_transferred"
+        | "ticket_created"
+        | "ticket_assigned"
+        | "ticket_status_changed"
+        | "ticket_transferred"
+        | "ticket_resolved"
+        | "ticket_closed"
       message_status: "sending" | "sent" | "delivered" | "failed"
       quote_status:
         | "draft"
@@ -6469,6 +6514,12 @@ export const Constants = {
         "meeting",
         "form_submission",
         "conversation_transferred",
+        "ticket_created",
+        "ticket_assigned",
+        "ticket_status_changed",
+        "ticket_transferred",
+        "ticket_resolved",
+        "ticket_closed",
       ],
       message_status: ["sending", "sent", "delivered", "failed"],
       quote_status: [

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UpdateTicketData {
   status?: 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed';
@@ -16,8 +17,18 @@ export function useUpdateTicket() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const { user } = useAuth();
+
   return useMutation({
     mutationFn: async ({ id, updates, statusNote }: { id: string; updates: UpdateTicketData; statusNote?: string }) => {
+      // Buscar status anterior para comparação
+      const { data: currentTicket } = await supabase
+        .from("tickets")
+        .select("status")
+        .eq("id", id)
+        .single();
+      
+      const previousStatus = currentTicket?.status;
       const updateData: any = { ...updates };
       
       // Se status mudou para resolved ou closed, adicionar resolved_at
@@ -34,7 +45,28 @@ export function useUpdateTicket() {
 
       if (error) throw error;
 
-      // Enviar notificação de status para o cliente
+      // Notificar stakeholders internamente via edge function
+      if (updates.status && previousStatus !== updates.status) {
+        const eventType = updates.status === 'resolved' ? 'resolved' :
+                          updates.status === 'closed' ? 'closed' : 'status_changed';
+        
+        try {
+          await supabase.functions.invoke('notify-ticket-event', {
+            body: {
+              ticket_id: id,
+              event_type: eventType,
+              actor_id: user?.id,
+              old_value: previousStatus,
+              new_value: updates.status,
+            },
+          });
+          console.log(`[useUpdateTicket] Internal notification sent for ${eventType}`);
+        } catch (notifyError) {
+          console.error('[useUpdateTicket] Failed to notify stakeholders:', notifyError);
+        }
+      }
+
+      // Enviar notificação de status para o cliente externo
       const notifiableStatuses = ['waiting_customer', 'resolved', 'closed'];
       if (updates.status && notifiableStatuses.includes(updates.status)) {
         try {
@@ -45,10 +77,9 @@ export function useUpdateTicket() {
               note: statusNote,
             },
           });
-          console.log(`[useUpdateTicket] Status notification sent for ${updates.status}`);
+          console.log(`[useUpdateTicket] Customer notification sent for ${updates.status}`);
         } catch (notifError) {
-          console.error('[useUpdateTicket] Failed to send status notification:', notifError);
-          // Não falhar a operação principal se a notificação falhar
+          console.error('[useUpdateTicket] Failed to send customer notification:', notifError);
         }
       }
 
