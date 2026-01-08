@@ -75,7 +75,7 @@ export default function RealtimeNotifications() {
 
     const { data: conversation, error } = await supabase
       .from("conversations")
-      .select(`id, contacts (first_name, last_name)`)
+      .select(`id, ai_mode, contacts (first_name, last_name)`)
       .eq("id", payload.new.id)
       .single();
 
@@ -92,18 +92,30 @@ export default function RealtimeNotifications() {
       const contactName = `${contact.first_name} ${contact.last_name}`;
       play();
 
-      toast("Nova conversa atribuída", {
-        description: `Cliente: ${contactName}`,
-        icon: <MessageSquare className="h-4 w-4" />,
+      // 🔔 Notificação mais urgente quando ai_mode = copilot (IA não responde mais)
+      const isCopilotMode = conversation.ai_mode === 'copilot';
+      
+      toast(isCopilotMode ? "🔔 Ação Necessária" : "Nova conversa atribuída", {
+        description: isCopilotMode 
+          ? `${contactName} aguarda SUA resposta. A IA não responderá mais.`
+          : `Cliente: ${contactName}`,
+        icon: isCopilotMode 
+          ? <AlertTriangle className="h-4 w-4 text-orange-500" />
+          : <MessageSquare className="h-4 w-4" />,
         action: {
-          label: "Ver agora",
-          onClick: () => navigate("/inbox"),
+          label: isCopilotMode ? "Responder agora" : "Ver agora",
+          onClick: () => navigate(`/inbox?conversation=${payload.new.id}`),
         },
-        duration: 10000,
+        duration: isCopilotMode ? 0 : 10000, // Não fecha automaticamente se copilot
       });
 
       if (document.hidden) {
-        showBrowserNotification("Nova conversa atribuída", `Cliente: ${contactName}`);
+        showBrowserNotification(
+          isCopilotMode ? "🚨 Ação Necessária" : "Nova conversa atribuída", 
+          isCopilotMode 
+            ? `${contactName} aguarda SUA resposta!`
+            : `Cliente: ${contactName}`
+        );
       }
     }
 

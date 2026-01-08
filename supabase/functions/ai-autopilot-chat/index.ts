@@ -453,6 +453,19 @@ serve(async (req) => {
       contact = conversation.contacts as any;
       department = conversation.department || null;
 
+      // 🛡️ VERIFICAÇÃO DEFENSIVA: Não processar se não está em autopilot
+      if (conversation.ai_mode !== 'autopilot') {
+        console.log('[ai-autopilot-chat] ⚠️ Conversa não está em autopilot. ai_mode:', conversation.ai_mode, '- IGNORANDO');
+        return new Response(
+          JSON.stringify({ 
+            skipped: true, 
+            reason: `Conversa em modo ${conversation.ai_mode}`,
+            ai_mode: conversation.ai_mode
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // FASE 4: Buscar canal da ÚLTIMA mensagem do cliente (não da conversa)
       const { data: lastCustomerMessage } = await supabaseClient
         .from('messages')

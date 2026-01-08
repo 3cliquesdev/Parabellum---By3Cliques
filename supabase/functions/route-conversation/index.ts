@@ -94,6 +94,20 @@ serve(async (req) => {
       consultant_id: contact?.consultant_id 
     });
 
+    // 🛡️ VERIFICAÇÃO ANTI-DUPLICATA: Se já está em copilot com agente, ignorar
+    if (conversation.ai_mode === 'copilot' && conversation.assigned_to) {
+      console.log('[route-conversation] ⚠️ Conversa já está em copilot com agente atribuído. Ignorando.');
+      return new Response(
+        JSON.stringify({
+          success: true,
+          assigned_to: conversation.assigned_to,
+          assignment_type: 'already_assigned',
+          message: 'Conversa já atribuída a um agente'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // 2. PRIORIDADE 1: STICKY AGENT (Consultor da Carteira)
     if (contact?.consultant_id) {
       console.log('[route-conversation] 🎯 STICKY AGENT detected - Checking consultant availability:', contact.consultant_id);
@@ -328,8 +342,8 @@ serve(async (req) => {
         required_skill: requiredSkillName || 'none'
       });
 
-      // Atribuir ao agente com menos carga
-      await supabase
+      // Atribuir ao agente com menos carga - COM VERIFICAÇÃO DE SUCESSO
+      const { error: updateError } = await supabase
         .from('conversations')
         .update({ 
           assigned_to: selectedAgent.id,
@@ -337,6 +351,13 @@ serve(async (req) => {
           last_message_at: new Date().toISOString()
         })
         .eq('id', conversationId);
+
+      if (updateError) {
+        console.error('[route-conversation] ❌ ERRO ao atualizar ai_mode:', updateError);
+        throw new Error(`Falha ao atribuir conversa: ${updateError.message}`);
+      }
+
+      console.log('[route-conversation] ✅ ai_mode mudado para copilot com sucesso');
 
       // Inserir mensagem de sistema
       await supabase
