@@ -218,11 +218,17 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
                   <SelectValue placeholder="Selecione o board..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {boards?.map((board) => (
-                    <SelectItem key={board.id} value={board.id}>
-                      {board.name}
-                    </SelectItem>
-                  ))}
+                  {boards && boards.length > 0 ? (
+                    boards.map((board) => (
+                      <SelectItem key={board.id} value={board.id}>
+                        {board.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-2 text-sm text-muted-foreground text-center">
+                      Nenhum board encontrado
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
