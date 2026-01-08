@@ -1053,10 +1053,24 @@ serve(async (req) => {
               break;
 
             case 'create_ticket':
-              const ticketSubject = actionConfig?.subject || `Formulário: ${form.name}`;
+              // Suporte a ticket_title_template com variáveis {{campo}}
+              let ticketSubject = actionConfig?.ticket_title_template || actionConfig?.subject || `Formulário: ${form.name}`;
+              
+              // Substituir variáveis do template usando mapeamento de campos
+              if (ticketSubject.includes('{{')) {
+                for (const field of form.fields || []) {
+                  if (field.mapping && answers[field.id] !== undefined) {
+                    const regex = new RegExp(`\\{\\{${field.mapping}\\}\\}`, 'g');
+                    ticketSubject = ticketSubject.replace(regex, String(answers[field.id]) || '');
+                  }
+                }
+                // Remover placeholders não substituídos
+                ticketSubject = ticketSubject.replace(/\{\{[^}]+\}\}/g, '').trim() || `Formulário: ${form.name}`;
+              }
+              
               const ticketDescription = JSON.stringify(answers, null, 2);
-              const ticketPriority = actionConfig?.priority || 'medium';
-              const ticketCategory = actionConfig?.category || 'general';
+              const ticketPriority = actionConfig?.ticket_priority || actionConfig?.priority || 'medium';
+              const ticketCategory = actionConfig?.ticket_category || actionConfig?.category || 'general';
               
               const { data: newTicket } = await supabase.from('tickets').insert({
                 customer_id: contactId,

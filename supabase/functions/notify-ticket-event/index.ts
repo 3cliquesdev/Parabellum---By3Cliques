@@ -129,9 +129,10 @@ serve(async (req) => {
       await supabase
         .from("interactions")
         .insert({
-          contact_id: ticket.customer_id,
+          customer_id: ticket.customer_id,
           type: interactionType,
-          description,
+          content: description,
+          channel: 'support',
           metadata: {
             ticket_id,
             ticket_number: ticket.ticket_number,
@@ -142,7 +143,7 @@ serve(async (req) => {
             new_value,
             ...metadata,
           },
-          performed_by: actor_id,
+          created_by: actor_id,
         });
       
       console.log(`[notify-ticket-event] Interaction logged for customer ${ticket.customer_id}`);
