@@ -69,6 +69,8 @@ export interface FormSettings {
   card_opacity?: number;            // Opacidade (0-100) para glassmorphism
   border_radius?: number;           // Arredondamento (0-30px)
   text_color?: string;              // Cor dos textos/labels
+  title_color?: string;             // Cor do título do formulário
+  description_color?: string;       // Cor da descrição do formulário
   input_background_color?: string;  // Fundo dos inputs
   input_text_color?: string;        // Texto dos inputs
   input_border_color?: string;      // Borda dos inputs
@@ -126,6 +128,8 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   card_opacity: 90,
   border_radius: 16,
   text_color: "#ffffff",
+  title_color: "#ffffff",
+  description_color: "#ffffff",
   input_background_color: "#ffffff",
   input_text_color: "#000000",
   input_border_color: "#e5e7eb",
