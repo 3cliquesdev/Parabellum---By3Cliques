@@ -266,12 +266,12 @@ export function AppSidebar() {
     }
   }, [queryClient]);
 
-  // Determine mode label and color - PREMIUM GOLD PALETTE
+  // Determine mode label and color - ENTERPRISE BLUE PALETTE
   const getModeInfo = () => {
     if (isSupportManager && !isAdmin && !isManager && !isGeneralManager) return { label: "Gerente de Suporte", color: "bg-primary" };
     if (isSupportAgent && !isSupportManager && !isAdmin && !isManager && !isGeneralManager) return { label: "Modo Suporte", color: "bg-primary/80" };
     if (isFinancialManager && !isAdmin && !isManager && !isGeneralManager) return { label: "Gerente Financeiro", color: "bg-success" };
-    if (isFinancialAgent && !isFinancialManager && !isAdmin && !isManager && !isGeneralManager) return { label: "Agente Financeiro", color: "bg-primary" };
+    if (isFinancialAgent && !isFinancialManager && !isAdmin && !isManager && !isGeneralManager) return { label: "Agente Financeiro", color: "bg-primary/70" };
     if (isCSManager && !isAdmin && !isManager && !isGeneralManager) return { label: "Gerente de CS", color: "bg-primary" };
     if (isConsultant && !isAdmin && !isManager && !isGeneralManager) return { label: "Modo Consultor", color: "bg-success" };
     if (isSalesRep && !isAdmin && !isManager && !isGeneralManager) return { label: "Modo Vendas", color: "bg-primary" };
@@ -284,7 +284,7 @@ export function AppSidebar() {
   const getStatusColor = (status: string | null) => {
     switch (status) {
       case 'online': return 'bg-success';
-      case 'busy': return 'bg-primary';
+      case 'busy': return 'bg-warning';
       case 'offline': return 'bg-destructive';
       default: return 'bg-muted-foreground';
     }

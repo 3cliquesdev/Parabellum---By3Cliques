@@ -40,8 +40,8 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 const COLORS = [
-  "#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444",
-  "#EC4899", "#06B6D4", "#84CC16", "#F97316", "#6366F1",
+  "#2563EB", "#3B82F6", "#10B981", "#06B6D4", "#6366F1",
+  "#8B5CF6", "#14B8A6", "#0EA5E9", "#0284C7", "#4F46E5",
 ];
 
 interface TeamDialogProps {

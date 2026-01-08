@@ -23,9 +23,9 @@ interface CadenceTemplatesDialogProps {
 const categoryLabels: Record<string, { label: string; icon: any; color: string }> = {
   cold_outreach: { label: "Prospecção Fria", icon: Users, color: "bg-blue-500" },
   follow_up: { label: "Follow-up", icon: ArrowRight, color: "bg-green-500" },
-  reengagement: { label: "Reengajamento", icon: Clock, color: "bg-amber-500" },
+  reengagement: { label: "Reengajamento", icon: Clock, color: "bg-cyan-500" },
   post_event: { label: "Pós-Evento", icon: Sparkles, color: "bg-purple-500" },
-  upsell: { label: "Upsell", icon: ArrowRight, color: "bg-pink-500" },
+  upsell: { label: "Upsell", icon: ArrowRight, color: "bg-indigo-500" },
 };
 
 const stepTypeIcons: Record<string, any> = {

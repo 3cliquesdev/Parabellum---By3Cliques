@@ -65,7 +65,7 @@ export function OnboardingStepCard({
         );
       case 'in_progress':
         return (
-          <Badge variant="secondary" className="bg-amber-500/20 text-amber-600 border-amber-500/30">
+          <Badge variant="secondary" className="bg-info/20 text-info border-info/30">
             <Clock className="h-3 w-3 mr-1" />
             Em andamento
           </Badge>

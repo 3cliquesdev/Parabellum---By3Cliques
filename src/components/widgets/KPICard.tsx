@@ -20,7 +20,7 @@ export function KPICard({
   icon: Icon, 
   description 
 }: KPICardProps) {
-  // Color mapping - PREMIUM GOLD PALETTE
+  // Color mapping - ENTERPRISE BLUE PALETTE
   const iconColorMap: Record<string, string> = {
     'DollarSign': 'bg-primary/10 text-primary',
     'Users': 'bg-muted text-foreground',
