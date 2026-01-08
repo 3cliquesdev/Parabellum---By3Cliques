@@ -249,47 +249,66 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
       
       {conversation ? (
         <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-slate-50/50 dark:bg-background">
-          <div className="flex-none border-b border-slate-200 dark:border-zinc-800 px-4 py-3 !bg-white dark:!bg-zinc-900/95 backdrop-blur flex items-center gap-3 justify-between">
-            <div className="flex items-center gap-3">
-              {/* Avatar com ícone de canal */}
-              <div className="relative shrink-0">
-                <Avatar className="w-10 h-10">
-                  {contact?.avatar_url ? (
-                    <AvatarImage src={contact.avatar_url} alt={`${contact.first_name} ${contact.last_name}`} />
-                  ) : null}
-                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-semibold">
-                    {contact?.first_name?.[0] || ''}{contact?.last_name?.[0] || ''}
-                  </AvatarFallback>
-                </Avatar>
-                {/* FASE 2: Ícone de canal colorido */}
-                <div className="absolute -bottom-0.5 -right-0.5">
-                  <ChannelIcon channel={conversation.channel} size="sm" />
+          {/* Header compacto em 2 linhas */}
+          <div className="flex-none border-b border-slate-200 dark:border-zinc-800 px-4 py-2 !bg-white dark:!bg-zinc-900/95 backdrop-blur">
+            {/* Linha 1: Avatar + Info + Badges */}
+            <div className="flex items-center gap-3 justify-between">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {/* Avatar com ícone de canal */}
+                <div className="relative shrink-0">
+                  <Avatar className="w-9 h-9">
+                    {contact?.avatar_url ? (
+                      <AvatarImage src={contact.avatar_url} alt={`${contact.first_name} ${contact.last_name}`} />
+                    ) : null}
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-semibold">
+                      {contact?.first_name?.[0] || ''}{contact?.last_name?.[0] || ''}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="absolute -bottom-0.5 -right-0.5">
+                    <ChannelIcon channel={conversation.channel} size="sm" />
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-slate-900 dark:text-zinc-100">
-                    {contact?.first_name} {contact?.last_name}
-                  </p>
-                  {/* FASE 6: Badge de Ticket vinculado */}
-                  {conversation.related_ticket_id && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 gap-1">
-                      <Ticket className="h-3 w-3" />
-                      #{conversation.related_ticket_id.slice(0, 8)}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-slate-500 dark:text-zinc-400">
-                  {contact?.email || contact?.phone}
-                </p>
-                {/* FASE 6: Tags do contato */}
-                {customerTags.length > 0 && (
-                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+
+                {/* Info principal - horizontal */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-slate-900 dark:text-zinc-100 truncate">
+                      {contact?.first_name} {contact?.last_name}
+                    </p>
+                    <span className="text-xs text-slate-500 dark:text-zinc-400 truncate hidden sm:inline">
+                      {contact?.email || contact?.phone}
+                    </span>
+                    {conversation.related_ticket_id && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 gap-1 shrink-0">
+                        <Ticket className="h-3 w-3" />
+                        #{conversation.related_ticket_id.slice(0, 8)}
+                      </Badge>
+                    )}
+                    {!aiModeLoading && (
+                      <Badge 
+                        variant={isAutopilot ? "default" : isCopilot ? "info" : "secondary"}
+                        className="text-[10px] px-1.5 py-0 h-5 shrink-0"
+                      >
+                        {isAutopilot && "🤖 Autopilot"}
+                        {isCopilot && "🧠 Copilot"}
+                        {isDisabled && "👤 Manual"}
+                      </Badge>
+                    )}
+                    {!((conversation.customer_metadata as any)?.session_verified ?? true) && (
+                      <Badge variant="warning" className="text-[10px] px-1.5 py-0 h-5 shrink-0">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        Não verificado
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {/* Tags em linha única */}
+                  <div className="flex items-center gap-1.5 mt-1 overflow-x-auto scrollbar-none">
                     {customerTags.slice(0, 3).map((ct: any) => (
                       <Badge 
                         key={ct.id} 
                         variant="outline" 
-                        className="text-[10px] px-1.5 py-0 h-4"
+                        className="text-[10px] px-1.5 py-0 h-4 shrink-0"
                         style={{
                           borderColor: ct.tags?.color || undefined,
                           color: ct.tags?.color || undefined,
@@ -300,130 +319,97 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                       </Badge>
                     ))}
                     {customerTags.length > 3 && (
-                      <span className="text-[10px] text-muted-foreground">+{customerTags.length - 3}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">+{customerTags.length - 3}</span>
                     )}
+                    <ConversationTagsSection conversationId={conversation.id} />
                   </div>
-                )}
-                {/* Tags de Conversa */}
-                <div className="mt-1">
-                  <ConversationTagsSection conversationId={conversation.id} />
                 </div>
-                <div className="flex items-center gap-2 mt-1">
-                  {conversation.assigned_user && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
-                      {conversation.assigned_user.full_name}
-                    </Badge>
-                  )}
-                  {!aiModeLoading && (
-                    <>
-                      <Badge 
-                        variant={isAutopilot ? "default" : isCopilot ? "info" : "secondary"}
-                        className="text-[10px] px-1.5 py-0 h-5"
-                      >
-                        {isAutopilot && "🤖 Autopilot"}
-                        {isCopilot && "🧠 Copilot"}
-                        {isDisabled && "👤 Manual"}
-                      </Badge>
-                      {activePersona && isAutopilot && (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
-                          {activePersona.name}
-                        </Badge>
-                  )}
-                </>
-              )}
-              {/* Badge de Sessão Não Verificada */}
-              {!((conversation.customer_metadata as any)?.session_verified ?? true) && (
-                <Badge variant="warning" className="text-[10px] px-1.5 py-0 h-5">
-                  <AlertCircle className="h-3 w-3 mr-1" />
-                  Não verificado
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-              {isAutopilot && (
+              </div>
+
+              {/* Botões de ação - lado direito */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {isAutopilot && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleTakeControl}
+                    disabled={takeControl.isPending}
+                    className="h-7 gap-1 px-2"
+                  >
+                    <Hand className="h-3.5 w-3.5" />
+                    <span className="text-xs hidden lg:inline">Assumir</span>
+                  </Button>
+                )}
+
+                {isCopilot && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReturnToAutopilot}
+                    disabled={returnToAutopilot.isPending}
+                    className="h-7 gap-1 px-2"
+                  >
+                    <Bot className="h-3.5 w-3.5" />
+                    <span className="text-xs hidden lg:inline">IA</span>
+                  </Button>
+                )}
+
+                {(isSalesRep || isAdmin || isManager) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCreateDealDialogOpen(true)}
+                    className="h-7 gap-1 px-2"
+                  >
+                    <DollarSign className="h-3.5 w-3.5" />
+                    <span className="text-xs hidden xl:inline">Negócio</span>
+                  </Button>
+                )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCreateTicketDialogOpen(true)}
+                  className="h-7 gap-1 px-2"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  <span className="text-xs hidden xl:inline">Ticket</span>
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTransferDialogOpen(true)}
+                  className="h-7 gap-1 px-2"
+                  disabled={conversation.status === "closed"}
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  <span className="text-xs hidden xl:inline">Transferir</span>
+                </Button>
+                
                 <Button
                   variant="default"
                   size="sm"
-                  onClick={handleTakeControl}
-                  disabled={takeControl.isPending}
-                  className="h-8 gap-1"
+                  onClick={() => setCloseDialogOpen(true)}
+                  className="h-7 gap-1 px-2 bg-green-600 hover:bg-green-700"
+                  disabled={conversation.status === "closed"}
                 >
-                  <Hand className="h-4 w-4" />
-                  <span className="text-xs">Assumir Controle</span>
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  <span className="text-xs hidden xl:inline">Encerrar</span>
                 </Button>
-              )}
-
-              {isCopilot && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleReturnToAutopilot}
-                  disabled={returnToAutopilot.isPending}
-                  className="h-8 gap-1"
-                >
-                  <Bot className="h-4 w-4" />
-                  <span className="text-xs">Devolver para IA</span>
-                </Button>
-              )}
-
-              {(isSalesRep || isAdmin || isManager) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCreateDealDialogOpen(true)}
-                  className="h-8 gap-1"
-                >
-                  <DollarSign className="h-4 w-4" />
-                  <span className="text-xs">Negócio</span>
-                </Button>
-              )}
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCreateTicketDialogOpen(true)}
-                className="h-8 gap-1"
-              >
-                <FileText className="h-4 w-4" />
-                <span className="text-xs">Ticket</span>
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setTransferDialogOpen(true)}
-                className="h-8 gap-1"
-                disabled={conversation.status === "closed"}
-              >
-                <ArrowRightLeft className="h-4 w-4" />
-                <span className="text-xs">Transferir</span>
-              </Button>
-              
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setCloseDialogOpen(true)}
-                className="h-8 gap-1 bg-green-600 hover:bg-green-700"
-                disabled={conversation.status === "closed"}
-              >
-                <CheckCircle className="h-4 w-4" />
-                <span className="text-xs">Encerrar</span>
-              </Button>
-              
-              {!isAutopilot && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsEmailMode(!isEmailMode)}
-                  title={isEmailMode ? "Chat" : "Email"}
-                  className="h-8 w-8"
-                >
-                  {isEmailMode ? <MessageCircle className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
-                </Button>
-              )}
+                
+                {!isAutopilot && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsEmailMode(!isEmailMode)}
+                    title={isEmailMode ? "Chat" : "Email"}
+                    className="h-7 w-7"
+                  >
+                    {isEmailMode ? <MessageCircle className="h-3.5 w-3.5" /> : <Mail className="h-3.5 w-3.5" />}
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 

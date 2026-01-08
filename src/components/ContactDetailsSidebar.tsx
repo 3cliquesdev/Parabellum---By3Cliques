@@ -57,7 +57,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   
   if (!conversation) {
     return (
-      <div className="w-96 border-l bg-slate-50 dark:bg-card border-slate-200 dark:border-border p-6">
+      <div className="h-full w-full border-l bg-slate-50 dark:bg-card border-slate-200 dark:border-border p-6 flex items-center justify-center">
         <p className="text-slate-500 dark:text-muted-foreground text-center">
           Selecione uma conversa
         </p>
@@ -70,7 +70,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   // Early return se não há contato
   if (!contact) {
     return (
-      <div className="w-96 border-l bg-slate-50 dark:bg-card flex items-center justify-center p-6">
+      <div className="h-full w-full border-l bg-slate-50 dark:bg-card flex items-center justify-center p-6">
         <p className="text-muted-foreground text-sm">Contato não encontrado</p>
       </div>
     );
@@ -105,7 +105,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
   };
 
   return (
-    <div className="w-96 flex-none border-l bg-slate-50 dark:bg-card border-slate-200 dark:border-border flex flex-col h-full overflow-hidden">
+    <div className="h-full w-full border-l bg-slate-50 dark:bg-card border-slate-200 dark:border-border flex flex-col overflow-hidden">
       <div className="flex-none p-6 border-b border-slate-200 dark:border-border">
           {/* Contact Info */}
           <div className="flex flex-col items-center mb-6">

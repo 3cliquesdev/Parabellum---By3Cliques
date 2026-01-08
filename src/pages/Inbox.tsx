@@ -317,7 +317,7 @@ export default function Inbox() {
       </div>
       
       {/* Contact Details - fixed width */}
-      <div className="w-80 flex-shrink-0">
+      <div className="w-96 flex-shrink-0">
         <ContactDetailsSidebar conversation={activeConversation} />
       </div>
     </div>
