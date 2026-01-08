@@ -1,4 +1,4 @@
-import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection, ValidationStyle, ProgressStyle, ProgressPosition, ButtonStyle, ButtonSize, ButtonIcon } from "@/hooks/useForms";
+import { FormSettings, LogoPosition, LogoSize, FontFamily, FontWeight, TransitionType, EntryAnimation, GradientDirection, ValidationStyle, ProgressStyle, ProgressPosition, ButtonStyle, ButtonSize, ButtonIcon, SuccessIcon, SuccessAnimation } from "@/hooks/useForms";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ImageUploader } from "@/components/ImageUploader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlignLeft, AlignCenter, AlignRight, Zap, Palette, Sparkles, Moon, Sun, Flame, Leaf, Waves, Gem, AlertCircle, CheckCircle2, BarChart3, Check, ArrowRight, Send, Rocket, Star, Square, Circle } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Zap, Palette, Sparkles, Moon, Sun, Flame, Leaf, Waves, Gem, AlertCircle, CheckCircle2, BarChart3, Check, ArrowRight, Send, Rocket, Star, Square, Circle, Heart, ThumbsUp, PartyPopper } from "lucide-react";
 
 // Temas pré-definidos
 const PREDEFINED_THEMES: Record<string, { name: string; icon: React.ReactNode; settings: Partial<FormSettings> }> = {
@@ -1465,9 +1465,12 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
 
       <Separator />
 
-      {/* Mensagem de Sucesso */}
+      {/* Tela de Sucesso */}
       <div className="space-y-4">
-        <h4 className="font-medium text-sm">Tela de Sucesso</h4>
+        <div className="flex items-center gap-2">
+          <PartyPopper className="h-4 w-4 text-primary" />
+          <h4 className="font-medium text-sm">Tela de Sucesso</h4>
+        </div>
 
         <div className="space-y-2">
           <Label>Título</Label>
@@ -1486,6 +1489,123 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
           />
         </div>
 
+        <Separator className="my-2" />
+
+        {/* Ícone */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Ícone</Label>
+            <Select
+              value={settings.success_icon || "check"}
+              onValueChange={(value: SuccessIcon) => onChange({ success_icon: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="check">✓ Check</SelectItem>
+                <SelectItem value="heart">❤ Coração</SelectItem>
+                <SelectItem value="star">⭐ Estrela</SelectItem>
+                <SelectItem value="rocket">🚀 Foguete</SelectItem>
+                <SelectItem value="party">🎉 Festa</SelectItem>
+                <SelectItem value="thumbs-up">👍 Like</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Animação</Label>
+            <Select
+              value={settings.success_animation || "scale"}
+              onValueChange={(value: SuccessAnimation) => onChange({ success_animation: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="scale">Escala</SelectItem>
+                <SelectItem value="bounce">Bounce</SelectItem>
+                <SelectItem value="fade">Fade</SelectItem>
+                <SelectItem value="slide-up">Slide Up</SelectItem>
+                <SelectItem value="confetti">Confetti</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Cor do Ícone</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.success_icon_color || "#ffffff"}
+                onChange={(e) => onChange({ success_icon_color: e.target.value })}
+                className="w-10 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.success_icon_color || "#ffffff"}
+                onChange={(e) => onChange({ success_icon_color: e.target.value })}
+                className="flex-1 text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Fundo do Ícone</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                value={settings.success_icon_background || "#22c55e"}
+                onChange={(e) => onChange({ success_icon_background: e.target.value })}
+                className="w-10 h-9 p-1 cursor-pointer"
+              />
+              <Input
+                value={settings.success_icon_background || "#22c55e"}
+                onChange={(e) => onChange({ success_icon_background: e.target.value })}
+                className="flex-1 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Efeito Confetti</Label>
+            <p className="text-xs text-muted-foreground">Chuva de confetes ao enviar</p>
+          </div>
+          <Switch
+            checked={settings.success_show_confetti !== false}
+            onCheckedChange={(checked) => onChange({ success_show_confetti: checked })}
+          />
+        </div>
+
+        <Separator className="my-2" />
+
+        {/* Botão de Ação */}
+        <div className="space-y-2">
+          <Label>Texto do Botão (opcional)</Label>
+          <Input
+            value={settings.success_button_text || ""}
+            onChange={(e) => onChange({ success_button_text: e.target.value })}
+            placeholder="Ex: Voltar ao início"
+          />
+        </div>
+
+        {settings.success_button_text && (
+          <div className="space-y-2">
+            <Label>URL do Botão</Label>
+            <Input
+              value={settings.success_button_url || ""}
+              onChange={(e) => onChange({ success_button_url: e.target.value })}
+              placeholder="https://..."
+            />
+          </div>
+        )}
+
+        <Separator className="my-2" />
+
+        {/* Redirecionamento */}
         <div className="space-y-2">
           <Label>URL de Redirecionamento (opcional)</Label>
           <Input
@@ -1494,6 +1614,23 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
             placeholder="https://..."
           />
         </div>
+
+        {settings.redirect_url && (
+          <div className="space-y-2">
+            <Label>Delay do Redirecionamento: {settings.redirect_delay ?? 3}s</Label>
+            <Slider
+              value={[settings.redirect_delay ?? 3]}
+              onValueChange={([val]) => onChange({ redirect_delay: val })}
+              min={0}
+              max={10}
+              step={1}
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground">
+              Tempo antes de redirecionar automaticamente
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
