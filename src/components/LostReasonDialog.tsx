@@ -26,13 +26,23 @@ interface LostReasonDialogProps {
 }
 
 const LOST_REASONS = [
-  { value: "price", label: "Preço" },
-  { value: "competition", label: "Concorrência" },
-  { value: "no_response", label: "Sem Resposta do Cliente" },
-  { value: "timing", label: "Timing Ruim" },
-  { value: "not_interested", label: "Perdeu o Interesse" },
-  { value: "budget", label: "Sem Orçamento" },
-  { value: "other", label: "Outros" },
+  { value: "nunca_respondeu", label: "Nunca respondeu" },
+  { value: "parou_interagir", label: "Parou de interagir" },
+  { value: "contato_invalido", label: "Contato inválido" },
+  { value: "compra_futura", label: "Compra futura" },
+  { value: "preco", label: "Preço" },
+  { value: "nicho_fora_catalogo", label: "Nicho de interesse fora do catálogo" },
+  { value: "prazo_importacao", label: "Prazo de importação" },
+  { value: "confianca_geral", label: "Confiança na marca - geral" },
+  { value: "confianca_entrega", label: "Confiança na marca - entrega" },
+  { value: "confianca_redes", label: "Confiança na marca - reputação redes sociais" },
+  { value: "investimento_hibrido", label: "Investimento para o híbrido" },
+  { value: "fora_momento", label: "Fora do momento de compra" },
+  { value: "desistiu_queda_vendas", label: "Desistiu da compra - queda de vendas" },
+  { value: "outro", label: "Outro" },
+  { value: "ja_comprou_duplicidade", label: "Já comprou/Duplicidade" },
+  { value: "sem_interesse_produto", label: "Não tinha interesse em nenhum produto" },
+  { value: "sem_interesse_dropshipping", label: "Não tinha interesse em fazer dropshipping" },
 ];
 
 export default function LostReasonDialog({
