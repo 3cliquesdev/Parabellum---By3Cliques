@@ -4463,6 +4463,610 @@ export type Database = {
           },
         ]
       }
+      project_activity_log: {
+        Row: {
+          action: string
+          board_id: string | null
+          card_id: string | null
+          created_at: string | null
+          id: string
+          new_value: Json | null
+          old_value: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          board_id?: string | null
+          card_id?: string | null
+          created_at?: string | null
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          board_id?: string | null
+          card_id?: string | null
+          created_at?: string | null
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_activity_log_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "project_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_activity_log_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "project_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_activity_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_board_templates: {
+        Row: {
+          columns: Json
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          columns?: Json
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          columns?: Json
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_board_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_boards: {
+        Row: {
+          contact_id: string | null
+          created_at: string | null
+          created_by: string | null
+          deal_id: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          metadata: Json | null
+          name: string
+          organization_id: string | null
+          status: string | null
+          template_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deal_id?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          metadata?: Json | null
+          name: string
+          organization_id?: string | null
+          status?: string | null
+          template_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deal_id?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          metadata?: Json | null
+          name?: string
+          organization_id?: string | null
+          status?: string | null
+          template_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_boards_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_boards_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_boards_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_boards_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_boards_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "project_board_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_card_assignees: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          card_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          card_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          card_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_card_assignees_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_card_assignees_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "project_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_card_assignees_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_card_attachments: {
+        Row: {
+          card_id: string
+          created_at: string | null
+          file_name: string
+          file_size: number | null
+          file_type: string | null
+          file_url: string
+          id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          card_id: string
+          created_at?: string | null
+          file_name: string
+          file_size?: number | null
+          file_type?: string | null
+          file_url: string
+          id?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          card_id?: string
+          created_at?: string | null
+          file_name?: string
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_card_attachments_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "project_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_card_attachments_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_card_comments: {
+        Row: {
+          card_id: string
+          content: string
+          created_at: string | null
+          id: string
+          mentions: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          mentions?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          mentions?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_card_comments_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "project_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_card_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_card_labels: {
+        Row: {
+          card_id: string
+          label_id: string
+        }
+        Insert: {
+          card_id: string
+          label_id: string
+        }
+        Update: {
+          card_id?: string
+          label_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_card_labels_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "project_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_card_labels_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "project_labels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_cards: {
+        Row: {
+          actual_hours: number | null
+          board_id: string
+          column_id: string
+          completed_at: string | null
+          completed_by: string | null
+          cover_image_url: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          estimated_hours: number | null
+          id: string
+          is_completed: boolean | null
+          position: number
+          priority: string | null
+          start_date: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          actual_hours?: number | null
+          board_id: string
+          column_id: string
+          completed_at?: string | null
+          completed_by?: string | null
+          cover_image_url?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          id?: string
+          is_completed?: boolean | null
+          position?: number
+          priority?: string | null
+          start_date?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          actual_hours?: number | null
+          board_id?: string
+          column_id?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          cover_image_url?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          id?: string
+          is_completed?: boolean | null
+          position?: number
+          priority?: string | null
+          start_date?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_cards_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "project_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_cards_column_id_fkey"
+            columns: ["column_id"]
+            isOneToOne: false
+            referencedRelation: "project_columns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_cards_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_cards_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_checklist_items: {
+        Row: {
+          checklist_id: string
+          completed_at: string | null
+          completed_by: string | null
+          due_date: string | null
+          id: string
+          is_completed: boolean | null
+          position: number | null
+          title: string
+        }
+        Insert: {
+          checklist_id: string
+          completed_at?: string | null
+          completed_by?: string | null
+          due_date?: string | null
+          id?: string
+          is_completed?: boolean | null
+          position?: number | null
+          title: string
+        }
+        Update: {
+          checklist_id?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          due_date?: string | null
+          id?: string
+          is_completed?: boolean | null
+          position?: number | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_checklist_items_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "project_checklists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_checklist_items_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_checklists: {
+        Row: {
+          card_id: string
+          created_at: string | null
+          id: string
+          position: number | null
+          title: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string | null
+          id?: string
+          position?: number | null
+          title: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string | null
+          id?: string
+          position?: number | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_checklists_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "project_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_columns: {
+        Row: {
+          board_id: string
+          color: string | null
+          created_at: string | null
+          email_template_id: string | null
+          id: string
+          is_final: boolean | null
+          name: string
+          notify_client_on_enter: boolean | null
+          position: number
+        }
+        Insert: {
+          board_id: string
+          color?: string | null
+          created_at?: string | null
+          email_template_id?: string | null
+          id?: string
+          is_final?: boolean | null
+          name: string
+          notify_client_on_enter?: boolean | null
+          position?: number
+        }
+        Update: {
+          board_id?: string
+          color?: string | null
+          created_at?: string | null
+          email_template_id?: string | null
+          id?: string
+          is_final?: boolean | null
+          name?: string
+          notify_client_on_enter?: boolean | null
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_columns_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "project_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_columns_email_template_id_fkey"
+            columns: ["email_template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_labels: {
+        Row: {
+          board_id: string
+          color: string
+          created_at: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          board_id: string
+          color?: string
+          created_at?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          board_id?: string
+          color?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_labels_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "project_boards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_ticket_portal_config: {
         Row: {
           created_at: string | null
