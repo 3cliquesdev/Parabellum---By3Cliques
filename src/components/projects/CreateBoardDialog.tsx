@@ -65,7 +65,7 @@ export function CreateBoardDialog({
     defaultValues: {
       name: defaultName || "",
       description: "",
-      template_id: "",
+      template_id: "none",
       due_date: "",
     },
   });
@@ -74,7 +74,7 @@ export function CreateBoardDialog({
     const board = await createBoard.mutateAsync({
       name: data.name,
       description: data.description,
-      template_id: data.template_id || undefined,
+      template_id: data.template_id === "none" ? undefined : data.template_id,
       due_date: data.due_date || undefined,
       deal_id: defaultDealId,
       contact_id: defaultContactId,
@@ -148,7 +148,7 @@ export function CreateBoardDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Sem template</SelectItem>
+                      <SelectItem value="none">Sem template</SelectItem>
                       {templates?.map((template) => (
                         <SelectItem key={template.id} value={template.id}>
                           {template.name}
