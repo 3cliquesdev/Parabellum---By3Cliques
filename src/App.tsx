@@ -165,8 +165,8 @@ const App = () => {
               <Route path="/onboarding-builder" element={<ProtectedRoute requiredPermission="playbooks.view"><Layout><OnboardingBuilder /></Layout></ProtectedRoute>} />
               <Route path="/playbook-executions" element={<ProtectedRoute requiredPermission="playbooks.view_executions"><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
               <Route path="/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Analytics /></Layout></ProtectedRoute>} />
-              <Route path="/reports" element={<ProtectedRoute requiredPermission="reports.access"><Layout><Reports /></Layout></ProtectedRoute>} />
-              <Route path="/reports/consultant-distribution" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ConsultantDistribution /></Layout></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute requiredPermission="analytics.export"><Layout><Reports /></Layout></ProtectedRoute>} />
+              <Route path="/reports/consultant-distribution" element={<ProtectedRoute requiredPermission="reports.distribution"><Layout><ConsultantDistribution /></Layout></ProtectedRoute>} />
               <Route path="/reports/fiscal-export" element={<ProtectedRoute requiredPermission="reports.fiscal_export"><Layout><FiscalExport /></Layout></ProtectedRoute>} />
               <Route path="/reports/fraud-detection" element={<ProtectedRoute requiredPermission="reports.fraud_detection"><Layout><FraudDetection /></Layout></ProtectedRoute>} />
               <Route path="/reports/sales-distribution" element={<ProtectedRoute requiredPermission="reports.lead_distribution"><Layout><SalesRepDistribution /></Layout></ProtectedRoute>} />
@@ -178,7 +178,7 @@ const App = () => {
               <Route path="/sales-tasks" element={<ProtectedRoute requiredPermission="sales.view_workzone"><Layout><SalesTasks /></Layout></ProtectedRoute>} />
               <Route path="/support" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><Support /></Layout></ProtectedRoute>} />
               <Route path="/support/:ticketId" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><TicketDetail /></Layout></ProtectedRoute>} />
-              <Route path="/knowledge" element={<ProtectedRoute requiredPermission="knowledge.manage_articles"><Layout><Knowledge /></Layout></ProtectedRoute>} />
+              <Route path="/knowledge" element={<ProtectedRoute requiredPermission="inbox.view_knowledge"><Layout><Knowledge /></Layout></ProtectedRoute>} />
               <Route path="/ai-studio/personas" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AIStudio /></Layout></ProtectedRoute>} />
               <Route path="/import-clients" element={<ProtectedRoute requiredPermission="contacts.import"><Layout><ImportClients /></Layout></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute requiredPermission="settings.view"><Layout><Settings /></Layout></ProtectedRoute>} />
