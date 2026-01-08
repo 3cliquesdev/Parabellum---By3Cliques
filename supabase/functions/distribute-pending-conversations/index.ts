@@ -107,7 +107,7 @@ Deno.serve(async (req: Request) => {
         created_at,
         conversation_queue!left(priority, queued_at)
       `)
-      .in('status', ['open', 'pending'])
+      .eq('status', 'open')
       .is('assigned_to', null)
       .order('created_at', { ascending: true }) // FIFO
       .limit(maxConversations * totalOnlineAgents); // Buscar conversas suficientes para todos
@@ -133,7 +133,7 @@ Deno.serve(async (req: Request) => {
     const { data: agentCounts } = await supabaseClient
       .from('conversations')
       .select('assigned_to')
-      .in('status', ['open', 'pending'])
+      .eq('status', 'open')
       .not('assigned_to', 'is', null);
 
     const conversationCountByAgent: Record<string, number> = {};
