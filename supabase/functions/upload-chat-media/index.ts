@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Allowed MIME types
+// Allowed MIME types (base types without parameters)
 const ALLOWED_MIME_TYPES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'application/pdf',
@@ -15,6 +15,13 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+// Helper to check if MIME type is allowed (handles types with codecs like "audio/webm;codecs=opus")
+function isAllowedMimeType(mimeType: string): boolean {
+  // Extract base MIME type (before any semicolon parameters)
+  const baseMimeType = mimeType.split(';')[0].trim().toLowerCase();
+  return ALLOWED_MIME_TYPES.includes(baseMimeType);
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -70,8 +77,8 @@ serve(async (req) => {
       );
     }
 
-    // Validate file type
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    // Validate file type (handles types with codecs like "audio/webm;codecs=opus")
+    if (!isAllowedMimeType(file.type)) {
       return new Response(
         JSON.stringify({ error: `File type ${file.type} not allowed` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
