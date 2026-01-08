@@ -1,4 +1,6 @@
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, 
@@ -44,7 +46,7 @@ import { useTheme } from "next-themes";
 import logoLight from "@/assets/logo-parabellum-light.png";
 import logoDark from "@/assets/logo-parabellum-dark.png";
 import { useAvailabilityStatus } from "@/hooks/useAvailabilityStatus";
-import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { useSLAAlerts } from "@/hooks/useSLAAlerts";
 import { useMyPendingCounts } from "@/hooks/useMyPendingCounts";
 import {
@@ -184,6 +186,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const queryClient = useQueryClient();
   const { role, isAdmin, isManager, isSalesRep, isConsultant, isSupportAgent, isSupportManager, isFinancialManager, isFinancialAgent, isCSManager, isGeneralManager, loading } = useUserRole();
   const { hasPermission, loading: permissionsLoading } = useRolePermissions();
   useRealtimePermissions(); // Sincronização em tempo real
@@ -194,6 +197,72 @@ export function AppSidebar() {
   const { data: slaAlerts = [] } = useSLAAlerts();
   const { data: myPendingCounts } = useMyPendingCounts();
   const { theme } = useTheme();
+
+  // ============= PREFETCH STRATEGY =============
+  // Prefetch data on hover for faster navigation
+  const handlePrefetch = useCallback((route: string) => {
+    switch(route) {
+      case '/inbox':
+        queryClient.prefetchQuery({
+          queryKey: ['inbox-view'],
+          queryFn: async () => {
+            const { data } = await supabase
+              .from('inbox_view')
+              .select('*')
+              .eq('status', 'open')
+              .order('last_message_at', { ascending: false })
+              .limit(50);
+            return data;
+          },
+          staleTime: 30 * 1000,
+        });
+        break;
+      case '/contacts':
+        queryClient.prefetchQuery({
+          queryKey: ['contacts'],
+          queryFn: async () => {
+            const { data } = await supabase
+              .from('contacts')
+              .select('id, first_name, last_name, email, phone, status')
+              .order('created_at', { ascending: false })
+              .limit(50);
+            return data;
+          },
+          staleTime: 60 * 1000,
+        });
+        break;
+      case '/deals':
+        queryClient.prefetchQuery({
+          queryKey: ['deals-prefetch'],
+          queryFn: async () => {
+            const { data } = await supabase
+              .from('deals')
+              .select('id, title, value, status, stage_id')
+              .eq('status', 'open')
+              .order('created_at', { ascending: false })
+              .limit(50);
+            return data;
+          },
+          staleTime: 60 * 1000,
+        });
+        break;
+      case '/support':
+        queryClient.prefetchQuery({
+          queryKey: ['tickets-prefetch'],
+          queryFn: async () => {
+            const { data } = await supabase
+              .from('tickets')
+              .select('id, title, status, priority')
+              .neq('status', 'closed')
+              .order('created_at', { ascending: false })
+              .limit(50);
+            return data;
+          },
+          staleTime: 30 * 1000,
+        });
+        break;
+    }
+  }, [queryClient]);
 
   // Determine mode label and color
   const getModeInfo = () => {
@@ -272,6 +341,8 @@ export function AppSidebar() {
             end={item.href === "/"}
             className="flex items-center gap-3 px-3 py-2 rounded-md text-slate-700 dark:text-slate-300 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors relative"
             activeClassName="bg-primary/10 text-primary font-medium border-l-2 border-primary hover:bg-primary/10 hover:text-primary"
+            onMouseEnter={() => handlePrefetch(item.href)}
+            onFocus={() => handlePrefetch(item.href)}
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
             {!collapsed && (

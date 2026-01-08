@@ -1,3 +1,4 @@
+import { memo, useEffect, useState, useRef, CSSProperties } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ChannelIcon } from "@/components/ChannelIcon";
@@ -8,7 +9,6 @@ import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 import { useSentimentAnalysis, type Sentiment } from "@/hooks/useSentimentAnalysis";
 import { useMessages } from "@/hooks/useMessages";
-import { useEffect, useState, useRef } from "react";
 
 type Contact = Tables<"contacts"> & {
   organizations: Tables<"organizations"> | null;
@@ -35,12 +35,12 @@ interface ConversationListItemProps {
   onClick: () => void;
   index: number;
   unreadCount?: number;
+  style?: CSSProperties;
 }
 
-// FASE 4: Calcular cor do indicador de SLA
+// Calcular cor do indicador de SLA
 function getSLAColor(lastMessageAt: Date): { color: string; urgency: "normal" | "warning" | "critical" } {
   const hours = differenceInHours(new Date(), lastMessageAt);
-  const minutes = differenceInMinutes(new Date(), lastMessageAt);
   
   if (hours >= 4) {
     return { color: "text-red-500 font-semibold", urgency: "critical" };
@@ -65,12 +65,13 @@ function formatWaitTime(date: Date): string {
   return formatDistanceToNow(date, { locale: ptBR, addSuffix: false });
 }
 
-export function ConversationListItem({ 
+function ConversationListItemComponent({ 
   conversation, 
   isActive, 
   onClick,
   index,
-  unreadCount = 0
+  unreadCount = 0,
+  style
 }: ConversationListItemProps) {
   const { data: messages } = useMessages(conversation.id);
   const sentimentAnalysis = useSentimentAnalysis();
@@ -116,9 +117,10 @@ export function ConversationListItem({
   return (
     <button
       onClick={onClick}
+      style={style}
       className={cn(
-        "w-full p-3 flex items-start gap-3 hover:bg-accent transition-colors text-left relative group",
-        isActive && "bg-accent dark:bg-white/[0.05] border-l-2 border-primary"
+        "w-full p-3 flex items-start gap-3 hover:bg-accent transition-colors text-left relative group border-b border-border",
+        isActive && "bg-accent dark:bg-white/[0.05] border-l-2 border-l-primary"
       )}
     >
       {/* Avatar com ícone de canal */}
@@ -132,7 +134,6 @@ export function ConversationListItem({
             {conversation.contacts?.last_name?.[0] || ''}
           </span>
         </Avatar>
-        {/* FASE 2: Ícone de canal colorido */}
         <div className="absolute -bottom-0.5 -right-0.5">
           <ChannelIcon channel={conversation.channel} size="sm" />
         </div>
@@ -146,13 +147,11 @@ export function ConversationListItem({
             {conversation.contacts?.last_name || ''}
           </p>
           <div className="flex items-center gap-1.5">
-            {/* FASE 4: Indicador de tempo com cor SLA */}
             <span className={cn("text-xs whitespace-nowrap", sla.color)}>
               {sla.urgency === "critical" && "🔴 "}
               {sla.urgency === "warning" && "🟠 "}
               {waitTime}
             </span>
-            {/* FASE 4: Badge de não lidas */}
             {unreadCount > 0 && (
               <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
                 {unreadCount > 99 ? "99+" : unreadCount}
@@ -172,7 +171,6 @@ export function ConversationListItem({
 
         {/* Linha 3: Badges */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Departamento */}
           {conversation.department_data && (
             <Badge 
               variant="outline" 
@@ -189,7 +187,6 @@ export function ConversationListItem({
             </Badge>
           )}
           
-          {/* AI Mode */}
           {conversation.ai_mode && (
             <Badge 
               variant={
@@ -205,17 +202,14 @@ export function ConversationListItem({
             </Badge>
           )}
 
-          {/* Sentimento */}
           {sentiment && <SentimentBadge sentiment={sentiment} className="text-[10px] px-1.5 py-0 h-5" />}
           
-          {/* Responsável */}
           {conversation.assigned_user && (
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 max-w-[80px] truncate">
               {conversation.assigned_user.full_name.split(' ')[0]}
             </Badge>
           )}
           
-          {/* Alerta sem email */}
           {conversation.channel === 'whatsapp' && !conversation.contacts?.email && (
             <Badge variant="warning" className="text-[10px] px-1.5 py-0 h-5">
               ⚠️
@@ -226,3 +220,16 @@ export function ConversationListItem({
     </button>
   );
 }
+
+// Memoized export for performance
+export const ConversationListItem = memo(ConversationListItemComponent, (prev, next) => {
+  return (
+    prev.conversation.id === next.conversation.id &&
+    prev.conversation.last_message_at === next.conversation.last_message_at &&
+    prev.conversation.status === next.conversation.status &&
+    prev.conversation.ai_mode === next.conversation.ai_mode &&
+    prev.conversation.assigned_to === next.conversation.assigned_to &&
+    prev.isActive === next.isActive &&
+    prev.unreadCount === next.unreadCount
+  );
+});
