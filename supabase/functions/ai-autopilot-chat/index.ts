@@ -1837,7 +1837,10 @@ ${canShowFinancialData
 - resend_otp: Use quando cliente disser "não recebi email" ou pedir reenvio. Reenvia código para email JÁ cadastrado. NÃO pede email novamente.
 - verify_otp_code: Valide códigos OTP de 6 dígitos
 - request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver. Use com reason: "dados_financeiros_incorretos", "solicitacao_cliente", ou "caso_complexo".
-- check_tracking: Consulta status de rastreio de pedidos. Use quando cliente perguntar sobre entrega, onde está o pedido, rastreio, status do envio, ou código de rastreamento. Aceita código de rastreio OU email do cliente para buscar pedidos.
+- check_tracking: Consulta rastreio de pedidos no sistema de romaneio. Use quando cliente perguntar sobre entrega, onde está o pedido, rastreio, ou status de envio. REGRAS IMPORTANTES:
+  1. Se ENCONTRAR código no sistema = pedido JÁ FOI EMBALADO e SAIU DO GALPÃO, está em transporte
+  2. Se NÃO ENCONTRAR = pedido ainda está sendo preparado (se pago até 13h, sai até fim do dia - peça para voltar mais tarde)
+  Aceita MÚLTIPLOS códigos de rastreio de uma vez. Extraia TODOS os códigos que o cliente enviar.
 
 ${knowledgeContext}${identityWallNote}
 
@@ -1984,18 +1987,19 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           }
         }
       },
-      // TOOL: Consultar rastreio de pedidos via MySQL externo
+      // TOOL: Consultar rastreio de pedidos via MySQL externo (suporta múltiplos códigos)
       {
         type: 'function',
         function: {
           name: 'check_tracking',
-          description: 'Consulta o status de rastreio de um pedido. Use quando cliente perguntar sobre entrega, rastreio, onde está o pedido, ou status de envio. Aceita código de rastreio direto OU email do cliente.',
+          description: 'Consulta status de rastreio de pedidos no sistema de romaneio. Use quando cliente perguntar sobre entrega, rastreio ou status. IMPORTANTE: Se cliente enviar múltiplos códigos, extraia TODOS em um array.',
           parameters: {
             type: 'object',
             properties: {
-              tracking_code: { 
-                type: 'string', 
-                description: 'Código de rastreio fornecido pelo cliente (ex: BR123456789BR, MS-12345).' 
+              tracking_codes: { 
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Lista de códigos de rastreio (ex: ["BR123456789BR", "MS-12345"]). Aceita um ou vários códigos.'
               },
               customer_email: { 
                 type: 'string', 
@@ -2624,20 +2628,26 @@ Sobre qual pedido você gostaria de saber mais?`;
             assistantMessage = 'Ocorreu um erro ao consultar seus pedidos. Poderia tentar novamente?';
           }
         }
-        // TOOL: check_tracking - Consultar rastreio via MySQL externo
+        // TOOL: check_tracking - Consultar rastreio via MySQL externo (suporta múltiplos códigos)
         else if (toolCall.function.name === 'check_tracking') {
           try {
             const args = JSON.parse(toolCall.function.arguments);
-            const trackingCode = args.tracking_code?.trim();
+            // Suporta tanto tracking_codes (array) quanto tracking_code (string legado)
+            let trackingCodes: string[] = [];
+            if (args.tracking_codes && Array.isArray(args.tracking_codes)) {
+              trackingCodes = args.tracking_codes.map((c: string) => c.trim()).filter(Boolean);
+            } else if (args.tracking_code) {
+              trackingCodes = [args.tracking_code.trim()];
+            }
             const customerEmail = args.customer_email?.toLowerCase().trim();
             
-            console.log('[ai-autopilot-chat] 📦 Consultando rastreio:', { trackingCode, customerEmail });
+            console.log('[ai-autopilot-chat] 📦 Consultando rastreio:', { trackingCodes, customerEmail });
 
             let codesToQuery: string[] = [];
 
-            // Se tem código de rastreio direto, usa ele
-            if (trackingCode) {
-              codesToQuery = [trackingCode];
+            // Se tem códigos de rastreio diretos, usa eles
+            if (trackingCodes.length > 0) {
+              codesToQuery = trackingCodes;
             }
             // Se tem email, busca deals do cliente com tracking_code
             else if (customerEmail) {
@@ -2660,7 +2670,7 @@ Sobre qual pedido você gostaria de saber mais?`;
                 .eq('contact_id', customerContact.id)
                 .not('tracking_code', 'is', null)
                 .order('created_at', { ascending: false })
-                .limit(5);
+                .limit(10);
 
               if (!dealsWithTracking || dealsWithTracking.length === 0) {
                 assistantMessage = `Olá ${customerContact.first_name}! Encontrei seu cadastro, mas não há pedidos com código de rastreio registrado. Você tem o código de rastreio em mãos para eu consultar?`;
@@ -2729,40 +2739,62 @@ Sobre qual pedido você gostaria de saber mais?`;
               }
             }
 
-            // Formatar resposta
-            if (trackingResults.length === 0) {
-              assistantMessage = `Não encontrei informações de rastreio para ${codesToQuery.length > 1 ? 'esses códigos' : 'o código ' + codesToQuery[0]}. Por favor, verifique se o código está correto.`;
-              continue;
+            // === NOVA LÓGICA DE RESPOSTA COM REGRAS DE NEGÓCIO ===
+            const codesFound = trackingResults.map(t => t.tracking_code);
+            const codesNotFound = codesToQuery.filter(c => !codesFound.includes(c));
+
+            let responseText = '';
+
+            // Códigos ENCONTRADOS = Pedido já saiu do galpão (tem romaneio)
+            if (codesFound.length > 0) {
+              const foundFormatted = trackingResults.map(t => {
+                const platform = t.platform || 'Transportadora';
+                const updated = t.external_updated_at 
+                  ? new Date(t.external_updated_at).toLocaleDateString('pt-BR', { 
+                      day: '2-digit', month: '2-digit', year: 'numeric', 
+                      hour: '2-digit', minute: '2-digit' 
+                    })
+                  : 'Recentemente';
+
+                return `📦 **${t.tracking_code}**
+✅ Status: Pedido embalado e enviado!
+🚛 Transportadora: ${platform}
+🕐 Saída do galpão: ${updated}`;
+              }).join('\n\n');
+
+              if (codesFound.length === 1) {
+                responseText += `Ótima notícia! Seu pedido já foi embalado e saiu do galpão. Está em transporte!\n\n${foundFormatted}`;
+              } else {
+                responseText += `Ótima notícia! Seus pedidos já foram embalados e saíram do galpão. Estão em transporte!\n\n${foundFormatted}`;
+              }
             }
 
-            // Status labels em português
-            const statusLabels: Record<string, string> = {
-              'pending': '⏳ Pendente',
-              'shipped': '📦 Enviado',
-              'in_transit': '🚚 Em Trânsito',
-              'out_for_delivery': '🛵 Saiu para Entrega',
-              'delivered': '✅ Entregue',
-              'returned': '↩️ Devolvido',
-              'failed': '❌ Falha na Entrega'
-            };
+            // Códigos NÃO ENCONTRADOS = Ainda em preparação
+            if (codesNotFound.length > 0) {
+              if (responseText) responseText += '\n\n---\n\n';
+              
+              const notFoundList = codesNotFound.map(c => `• ${c}`).join('\n');
+              
+              if (codesNotFound.length === 1) {
+                responseText += `⏳ O código **${codesNotFound[0]}** ainda não consta no sistema de romaneio.
 
-            const trackingFormatted = trackingResults.map(t => {
-              const statusLabel = statusLabels[t.status?.toLowerCase()] || t.status || 'Desconhecido';
-              const platform = t.platform || 'Transportadora';
-              const updated = t.external_updated_at 
-                ? new Date(t.external_updated_at).toLocaleDateString('pt-BR', { 
-                    day: '2-digit', month: '2-digit', year: 'numeric', 
-                    hour: '2-digit', minute: '2-digit' 
-                  })
-                : 'Não informado';
+📋 **O que isso significa?**
+Se o pedido foi pago **até 13h**, ele ainda está sendo preparado no galpão e será enviado até o fim do dia.
 
-              return `📦 **${t.tracking_code}**
-🚛 Transportadora: ${platform}
-📊 Status: ${statusLabel}
-🕐 Última atualização: ${updated}`;
-            }).join('\n\n');
+Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verificar se já foi despachado.`;
+              } else {
+                responseText += `⏳ Os seguintes códigos ainda não constam no sistema de romaneio:
 
-            assistantMessage = `Aqui está o status do seu rastreio:\n\n${trackingFormatted}\n\nPosso ajudar com mais alguma coisa?`;
+${notFoundList}
+
+📋 **O que isso significa?**
+Se os pedidos foram pagos **até 13h**, eles ainda estão sendo preparados no galpão e serão enviados até o fim do dia.
+
+Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verificar se já foram despachados.`;
+              }
+            }
+
+            assistantMessage = responseText + '\n\nPosso ajudar com mais alguma coisa?';
 
           } catch (error) {
             console.error('[ai-autopilot-chat] ❌ Erro ao consultar rastreio:', error);
