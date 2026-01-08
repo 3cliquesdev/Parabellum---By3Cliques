@@ -1,4 +1,4 @@
-import { FormSettings, LogoPosition, LogoSize } from "@/hooks/useForms";
+import { FormSettings, LogoPosition, LogoSize, FontFamily, TransitionType } from "@/hooks/useForms";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ImageUploader } from "@/components/ImageUploader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Zap } from "lucide-react";
 
 interface FormSettingsPanelProps {
   settings: FormSettings;
@@ -220,9 +220,62 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
 
       <Separator />
 
-      {/* Textos */}
+      {/* Tipografia */}
       <div className="space-y-4">
-        <h4 className="font-medium text-sm">Textos</h4>
+        <h4 className="font-medium text-sm">Tipografia</h4>
+        
+        <div className="space-y-2">
+          <Label>Fonte</Label>
+          <Select
+            value={settings.font_family || "inter"}
+            onValueChange={(value: FontFamily) => onChange({ font_family: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inter">Inter (Moderna)</SelectItem>
+              <SelectItem value="poppins">Poppins (Geométrica)</SelectItem>
+              <SelectItem value="roboto">Roboto (Clean)</SelectItem>
+              <SelectItem value="montserrat">Montserrat (Elegante)</SelectItem>
+              <SelectItem value="playfair">Playfair Display (Clássica)</SelectItem>
+              <SelectItem value="lato">Lato (Humanista)</SelectItem>
+              <SelectItem value="raleway">Raleway (Sofisticada)</SelectItem>
+              <SelectItem value="oswald">Oswald (Impactante)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tamanho do Título: {settings.title_size ?? 24}px</Label>
+          <Slider
+            value={[settings.title_size ?? 24]}
+            onValueChange={([val]) => onChange({ title_size: val })}
+            min={16}
+            max={48}
+            step={2}
+            className="w-full"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tamanho da Descrição: {settings.description_size ?? 14}px</Label>
+          <Slider
+            value={[settings.description_size ?? 14]}
+            onValueChange={([val]) => onChange({ description_size: val })}
+            min={12}
+            max={24}
+            step={1}
+            className="w-full"
+          />
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Cores de Texto */}
+      <div className="space-y-4">
+        <h4 className="font-medium text-sm">Cores de Texto</h4>
         
         <div className="space-y-2">
           <Label>Cor do Título</Label>
@@ -273,6 +326,49 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
               className="flex-1"
             />
           </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Animações */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-primary" />
+          <h4 className="font-medium text-sm">Animações</h4>
+        </div>
+        
+        <div className="space-y-2">
+          <Label>Tipo de Transição</Label>
+          <Select
+            value={settings.transition_type || "slide"}
+            onValueChange={(value: TransitionType) => onChange({ transition_type: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="slide">Deslizar (Slide)</SelectItem>
+              <SelectItem value="fade">Desvanecer (Fade)</SelectItem>
+              <SelectItem value="zoom">Zoom</SelectItem>
+              <SelectItem value="scale">Escala (Scale)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Efeito de transição entre campos (modo conversacional)
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Duração: {((settings.transition_duration ?? 0.3) * 1000).toFixed(0)}ms</Label>
+          <Slider
+            value={[(settings.transition_duration ?? 0.3) * 10]}
+            onValueChange={([val]) => onChange({ transition_duration: val / 10 })}
+            min={2}
+            max={8}
+            step={1}
+            className="w-full"
+          />
         </div>
       </div>
 

@@ -226,6 +226,52 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
     right: "justify-end",
   };
 
+  // Font family mapping
+  const fontFamilyMap: Record<string, string> = {
+    inter: "'Inter', sans-serif",
+    poppins: "'Poppins', sans-serif",
+    roboto: "'Roboto', sans-serif",
+    montserrat: "'Montserrat', sans-serif",
+    playfair: "'Playfair Display', serif",
+    lato: "'Lato', sans-serif",
+    raleway: "'Raleway', sans-serif",
+    oswald: "'Oswald', sans-serif",
+  };
+  const fontFamily = fontFamilyMap[settings.font_family || "inter"];
+
+  // Transition variants based on settings
+  const transitionDuration = settings.transition_duration ?? 0.3;
+  const getTransitionVariants = (type: string, dir: number) => {
+    switch (type) {
+      case "fade":
+        return {
+          initial: { opacity: 0 },
+          animate: { opacity: 1 },
+          exit: { opacity: 0 },
+        };
+      case "zoom":
+        return {
+          initial: { opacity: 0, scale: 0.8 },
+          animate: { opacity: 1, scale: 1 },
+          exit: { opacity: 0, scale: 1.2 },
+        };
+      case "scale":
+        return {
+          initial: { opacity: 0, scale: 0.9 },
+          animate: { opacity: 1, scale: 1 },
+          exit: { opacity: 0, scale: 0.9 },
+        };
+      case "slide":
+      default:
+        return {
+          initial: { opacity: 0, x: dir * 100 },
+          animate: { opacity: 1, x: 0 },
+          exit: { opacity: 0, x: dir * -100 },
+        };
+    }
+  };
+  const transitionVariants = getTransitionVariants(settings.transition_type || "slide", direction);
+
   // Input styles - FORCED HIGH CONTRAST
   const inputStyles: React.CSSProperties = {
     backgroundColor: settings.input_background_color || "#ffffff",
@@ -376,6 +422,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
             : undefined,
         backgroundSize: "cover",
         backgroundPosition: "center",
+        fontFamily,
       }}
     >
       {/* Header with Logo, Title, Description and Progress */}
@@ -392,16 +439,23 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
           )}
           {(formData?.title || formTitle || formData?.name || formName) && (
             <h1 
-              className="text-xl sm:text-2xl font-bold mb-2 break-words whitespace-pre-wrap"
-              style={{ color: settings.title_color || settings.text_color }}
+              className="font-bold mb-2 break-words whitespace-pre-wrap"
+              style={{ 
+                color: settings.title_color || settings.text_color,
+                fontSize: `${settings.title_size ?? 24}px`,
+              }}
             >
               {formData?.title || formTitle || formData?.name || formName}
             </h1>
           )}
           {(formData?.description || formDescription) && (
             <p 
-              className="text-sm mb-4 break-words whitespace-pre-wrap"
-              style={{ color: settings.description_color || settings.text_color, opacity: 0.7 }}
+              className="mb-4 break-words whitespace-pre-wrap"
+              style={{ 
+                color: settings.description_color || settings.text_color, 
+                opacity: 0.7,
+                fontSize: `${settings.description_size ?? 14}px`,
+              }}
             >
               {formData?.description || formDescription}
             </p>
@@ -425,14 +479,13 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
               <motion.div
                 key={currentField.id}
                 custom={direction}
-                initial={{ opacity: 0, x: direction * 100 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: direction * -100 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
+                initial={transitionVariants.initial}
+                animate={transitionVariants.animate}
+                exit={transitionVariants.exit}
+                transition={{ duration: transitionDuration, ease: "easeInOut" }}
                 className="p-6 sm:p-8"
                 style={cardStyles}
               >
-                {/* Question */}
                 <div className="space-y-2 mb-8">
                   <h1 
                     className="text-2xl sm:text-3xl lg:text-4xl font-bold"

@@ -68,6 +68,19 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
     right: "justify-end",
   };
 
+  // Font family mapping
+  const fontFamilyMap: Record<string, string> = {
+    inter: "'Inter', sans-serif",
+    poppins: "'Poppins', sans-serif",
+    roboto: "'Roboto', sans-serif",
+    montserrat: "'Montserrat', sans-serif",
+    playfair: "'Playfair Display', serif",
+    lato: "'Lato', sans-serif",
+    raleway: "'Raleway', sans-serif",
+    oswald: "'Oswald', sans-serif",
+  };
+  const fontFamily = fontFamilyMap[settings.font_family || "inter"];
+
   // Input styles
   const inputStyles: React.CSSProperties = {
     backgroundColor: settings.input_background_color || "#ffffff",
@@ -207,6 +220,7 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
         backgroundImage: settings.background_image ? `url(${settings.background_image})` : undefined,
         backgroundSize: "cover",
         backgroundPosition: "center",
+        fontFamily,
       }}
     >
       {/* Header with Logo, Title, and Description */}
@@ -223,16 +237,23 @@ export function SinglePageFormView({ schema, formId, isPreview = false, title, d
           )}
           {title && (
             <h1 
-              className="text-2xl sm:text-3xl font-bold mt-4 break-words whitespace-pre-wrap"
-              style={{ color: settings.title_color || settings.text_color }}
+              className="font-bold mt-4 break-words whitespace-pre-wrap"
+              style={{ 
+                color: settings.title_color || settings.text_color,
+                fontSize: `${settings.title_size ?? 24}px`,
+              }}
             >
               {title}
             </h1>
           )}
           {description && (
             <p 
-              className="text-base mt-2 break-words whitespace-pre-wrap"
-              style={{ color: settings.description_color || settings.text_color, opacity: 0.7 }}
+              className="mt-2 break-words whitespace-pre-wrap"
+              style={{ 
+                color: settings.description_color || settings.text_color, 
+                opacity: 0.7,
+                fontSize: `${settings.description_size ?? 14}px`,
+              }}
             >
               {description}
             </p>

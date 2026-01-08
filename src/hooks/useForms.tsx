@@ -60,6 +60,8 @@ export type FormDisplayMode = "single_page" | "conversational";
 
 export type LogoPosition = "left" | "center" | "right";
 export type LogoSize = "small" | "medium" | "large";
+export type TransitionType = "slide" | "fade" | "zoom" | "scale";
+export type FontFamily = "inter" | "poppins" | "roboto" | "montserrat" | "playfair" | "lato" | "raleway" | "oswald";
 
 export interface FormSettings {
   background_color?: string;
@@ -87,6 +89,14 @@ export interface FormSettings {
   selection_background_color?: string;   // Fundo da opção selecionada
   selection_text_color?: string;         // Texto da opção selecionada
   selection_border_width?: number;       // Espessura da borda de seleção (1-8px)
+  // Tipografia avançada
+  font_family?: FontFamily;         // Fonte do formulário
+  title_size?: number;              // Tamanho do título (16-48px)
+  description_size?: number;        // Tamanho da descrição (12-24px)
+  // Animações
+  transition_type?: TransitionType; // Tipo de transição entre campos
+  transition_duration?: number;     // Duração da transição (0.2-0.8s)
+  // Success
   thank_you_title?: string;
   thank_you_message?: string;
   redirect_url?: string;
@@ -156,6 +166,14 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   selection_background_color: "",
   selection_text_color: "",
   selection_border_width: 3,
+  // Tipografia
+  font_family: "inter",
+  title_size: 24,
+  description_size: 14,
+  // Animações
+  transition_type: "slide",
+  transition_duration: 0.3,
+  // Success
   thank_you_title: "Obrigado!",
   thank_you_message: "Suas respostas foram enviadas com sucesso.",
   show_progress_bar: true,
