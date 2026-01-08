@@ -1837,6 +1837,7 @@ ${canShowFinancialData
 - resend_otp: Use quando cliente disser "não recebi email" ou pedir reenvio. Reenvia código para email JÁ cadastrado. NÃO pede email novamente.
 - verify_otp_code: Valide códigos OTP de 6 dígitos
 - request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver. Use com reason: "dados_financeiros_incorretos", "solicitacao_cliente", ou "caso_complexo".
+- check_tracking: Consulta status de rastreio de pedidos. Use quando cliente perguntar sobre entrega, onde está o pedido, rastreio, status do envio, ou código de rastreamento. Aceita código de rastreio OU email do cliente para buscar pedidos.
 
 ${knowledgeContext}${identityWallNote}
 
@@ -1980,6 +1981,28 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
               }
             },
             required: ['reason']
+          }
+        }
+      },
+      // TOOL: Consultar rastreio de pedidos via MySQL externo
+      {
+        type: 'function',
+        function: {
+          name: 'check_tracking',
+          description: 'Consulta o status de rastreio de um pedido. Use quando cliente perguntar sobre entrega, rastreio, onde está o pedido, ou status de envio. Aceita código de rastreio direto OU email do cliente.',
+          parameters: {
+            type: 'object',
+            properties: {
+              tracking_code: { 
+                type: 'string', 
+                description: 'Código de rastreio fornecido pelo cliente (ex: BR123456789BR, MS-12345).' 
+              },
+              customer_email: { 
+                type: 'string', 
+                description: 'Email do cliente para buscar pedidos com rastreio cadastrado.' 
+              }
+            },
+            required: []
           }
         }
       },
