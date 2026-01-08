@@ -2,13 +2,18 @@ import { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTeams } from "@/hooks/useTeams";
 import { useTags } from "@/hooks/useTags";
+import { useAgentConversations } from "@/hooks/useAgentConversations";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { BulkRedistributeDialog } from "@/components/BulkRedistributeDialog";
 import { 
   MessageCircle, 
   User, 
@@ -22,7 +27,9 @@ import {
   Tag,
   Search,
   Building2,
-  AlertTriangle
+  AlertTriangle,
+  UserCog,
+  ArrowRightLeft
 } from "lucide-react";
 
 interface InboxSidebarCounts {
@@ -89,13 +96,19 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { role } = useUserRole();
   const { data: departments } = useDepartments();
   const { data: teams } = useTeams();
   const { data: tags } = useTags("conversation");
+  const { data: agentStats } = useAgentConversations();
 
   const [groupsOpen, setGroupsOpen] = useState(true);
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [agentsOpen, setAgentsOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
+  const [redistributeAgent, setRedistributeAgent] = useState<{ id: string; name: string } | null>(null);
+
+  const isManagerOrAdmin = role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager';
 
   const currentFilter = searchParams.get("filter") || "all";
   const currentDept = searchParams.get("dept");
@@ -317,8 +330,89 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
           </Collapsible>
         )}
 
+        {/* Agents Section - Only for managers/admins */}
+        {isManagerOrAdmin && agentStats && agentStats.length > 0 && (
+          <Collapsible open={agentsOpen} onOpenChange={setAgentsOpen} className="px-2 mt-4">
+            <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <UserCog className="h-3.5 w-3.5" />
+                Por Atendente
+              </div>
+              <ChevronDown className={cn("h-4 w-4 transition-transform", agentsOpen && "rotate-180")} />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1 mt-1">
+              {agentStats.map((agent) => {
+                const hasWarning = agent.slaWarningCount > 0;
+                const hasCritical = agent.slaCriticalCount > 0;
+                
+                return (
+                  <div
+                    key={agent.agentId}
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 group"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="relative">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={agent.avatarUrl || undefined} />
+                          <AvatarFallback className="text-[10px]">
+                            {agent.agentName?.[0] || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span 
+                          className={cn(
+                            "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background",
+                            agent.status === "online" && "bg-green-500",
+                            agent.status === "busy" && "bg-yellow-500",
+                            agent.status === "offline" && "bg-gray-400"
+                          )}
+                        />
+                      </div>
+                      <span className="text-sm truncate">{agent.agentName.split(' ')[0]}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-1.5">
+                      {hasCritical && (
+                        <Badge variant="destructive" className="h-5 min-w-5 px-1 text-[10px]">
+                          {agent.slaCriticalCount}
+                        </Badge>
+                      )}
+                      {hasWarning && !hasCritical && (
+                        <Badge className="h-5 min-w-5 px-1 text-[10px] bg-orange-500">
+                          {agent.slaWarningCount}
+                        </Badge>
+                      )}
+                      <Badge variant="secondary" className="h-5 min-w-5 px-1 text-[10px]">
+                        {agent.conversationCount}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => setRedistributeAgent({ id: agent.agentId, name: agent.agentName })}
+                        title="Redistribuir conversas"
+                      >
+                        <ArrowRightLeft className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
         <div className="h-4" />
       </ScrollArea>
+
+      {/* Bulk Redistribute Dialog */}
+      {redistributeAgent && (
+        <BulkRedistributeDialog
+          open={!!redistributeAgent}
+          onOpenChange={(open) => !open && setRedistributeAgent(null)}
+          agentId={redistributeAgent.id}
+          agentName={redistributeAgent.name}
+        />
+      )}
     </div>
   );
 }

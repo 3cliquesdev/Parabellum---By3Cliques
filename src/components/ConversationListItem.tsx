@@ -38,17 +38,68 @@ interface ConversationListItemProps {
   style?: CSSProperties;
 }
 
-// Calcular cor do indicador de SLA
-function getSLAColor(lastMessageAt: Date): { color: string; urgency: "normal" | "warning" | "critical" } {
-  const hours = differenceInHours(new Date(), lastMessageAt);
+// Calcular cor do indicador de SLA com níveis progressivos granulares
+function getSLAColor(lastMessageAt: Date): { 
+  color: string; 
+  bgColor: string;
+  urgency: "normal" | "attention" | "alert" | "urgent" | "critical";
+  emoji: string;
+} {
+  const minutes = differenceInMinutes(new Date(), lastMessageAt);
+  const hours = minutes / 60;
   
-  if (hours >= 4) {
-    return { color: "text-red-500 font-semibold", urgency: "critical" };
+  // 0-15 min: Verde claro - Normal
+  if (minutes < 15) {
+    return { 
+      color: "text-emerald-500", 
+      bgColor: "bg-emerald-500/10",
+      urgency: "normal",
+      emoji: ""
+    };
   }
-  if (hours >= 1) {
-    return { color: "text-orange-500 font-medium", urgency: "warning" };
+  // 15-30 min: Verde escuro - Normal+
+  if (minutes < 30) {
+    return { 
+      color: "text-green-600 dark:text-green-400", 
+      bgColor: "bg-green-500/10",
+      urgency: "normal",
+      emoji: ""
+    };
   }
-  return { color: "text-muted-foreground", urgency: "normal" };
+  // 30-60 min: Amarelo - Atenção
+  if (minutes < 60) {
+    return { 
+      color: "text-yellow-600 dark:text-yellow-400 font-medium", 
+      bgColor: "bg-yellow-500/10",
+      urgency: "attention",
+      emoji: "🟡"
+    };
+  }
+  // 1-2h: Laranja - Alerta
+  if (hours < 2) {
+    return { 
+      color: "text-orange-500 font-medium", 
+      bgColor: "bg-orange-500/10",
+      urgency: "alert",
+      emoji: "🟠"
+    };
+  }
+  // 2-4h: Laranja escuro - Urgente
+  if (hours < 4) {
+    return { 
+      color: "text-orange-600 dark:text-orange-400 font-semibold", 
+      bgColor: "bg-orange-500/15",
+      urgency: "urgent",
+      emoji: "🔶"
+    };
+  }
+  // 4h+: Vermelho - Crítico (pulsante)
+  return { 
+    color: "text-red-500 font-bold animate-pulse", 
+    bgColor: "bg-red-500/15",
+    urgency: "critical",
+    emoji: "🔴"
+  };
 }
 
 // Formatar tempo de espera de forma concisa
@@ -60,7 +111,8 @@ function formatWaitTime(date: Date): string {
     return `${minutes}min`;
   }
   if (hours < 24) {
-    return `${hours}h`;
+    const remainingMins = minutes % 60;
+    return remainingMins > 0 ? `${hours}h${remainingMins}m` : `${hours}h`;
   }
   return formatDistanceToNow(date, { locale: ptBR, addSuffix: false });
 }
@@ -147,9 +199,12 @@ function ConversationListItemComponent({
             {conversation.contacts?.last_name || ''}
           </p>
           <div className="flex items-center gap-1.5">
-            <span className={cn("text-xs whitespace-nowrap", sla.color)}>
-              {sla.urgency === "critical" && "🔴 "}
-              {sla.urgency === "warning" && "🟠 "}
+            <span className={cn(
+              "text-xs whitespace-nowrap px-1.5 py-0.5 rounded", 
+              sla.color,
+              sla.urgency !== "normal" && sla.bgColor
+            )}>
+              {sla.emoji && `${sla.emoji} `}
               {waitTime}
             </span>
             {unreadCount > 0 && (

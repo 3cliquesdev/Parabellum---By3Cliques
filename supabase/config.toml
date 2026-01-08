@@ -250,3 +250,6 @@ verify_jwt = false
 [functions.check-inactive-users.cron]
 schedule = "* * * * *"
 region = "us-east-1"
+
+[functions.bulk-redistribute]
+verify_jwt = true
