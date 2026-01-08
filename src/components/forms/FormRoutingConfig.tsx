@@ -210,8 +210,11 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
               <Select
                 value={settings.target_board_id || ""}
                 onValueChange={(v) => {
-                  updateSetting("target_board_id", v || undefined);
-                  updateSetting("target_column_id", undefined);
+                  onChange({
+                    ...settings,
+                    target_board_id: v || undefined,
+                    target_column_id: undefined,
+                  });
                 }}
               >
                 <SelectTrigger>
