@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,53 +13,58 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useCreateProjectColumn } from "@/hooks/useProjectColumns";
+import { ProjectColumn, useUpdateProjectColumn } from "@/hooks/useProjectColumns";
+import { useToast } from "@/hooks/use-toast";
 
 const columnColors = [
-  "#6366f1", // Indigo
-  "#8b5cf6", // Violet
-  "#ec4899", // Pink
-  "#ef4444", // Red
-  "#f97316", // Orange
-  "#eab308", // Yellow
-  "#22c55e", // Green
-  "#06b6d4", // Cyan
-  "#3b82f6", // Blue
-  "#64748b", // Slate
+  "#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316",
+  "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#64748b",
 ];
 
 const schema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
-  color: z.string(),
   is_final: z.boolean(),
   notify_client_on_enter: z.boolean(),
 });
 
 type FormData = z.infer<typeof schema>;
 
-interface CreateColumnDialogProps {
+interface ColumnSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  column: ProjectColumn;
   boardId: string;
 }
 
-export function CreateColumnDialog({ open, onOpenChange, boardId }: CreateColumnDialogProps) {
-  const [selectedColor, setSelectedColor] = useState(columnColors[0]);
-  const createColumn = useCreateProjectColumn();
+export function ColumnSettingsDialog({ open, onOpenChange, column, boardId }: ColumnSettingsDialogProps) {
+  const [selectedColor, setSelectedColor] = useState(column.color);
+  const updateColumn = useUpdateProjectColumn();
+  const { toast } = useToast();
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      name: "",
-      color: columnColors[0],
-      is_final: false,
-      notify_client_on_enter: false,
+      name: column.name,
+      is_final: column.is_final,
+      notify_client_on_enter: column.notify_client_on_enter,
     },
   });
 
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        name: column.name,
+        is_final: column.is_final,
+        notify_client_on_enter: column.notify_client_on_enter,
+      });
+      setSelectedColor(column.color);
+    }
+  }, [open, column, form]);
+
   const onSubmit = (data: FormData) => {
-    createColumn.mutate(
+    updateColumn.mutate(
       {
+        id: column.id,
         board_id: boardId,
         name: data.name,
         color: selectedColor,
@@ -68,7 +73,7 @@ export function CreateColumnDialog({ open, onOpenChange, boardId }: CreateColumn
       },
       {
         onSuccess: () => {
-          form.reset();
+          toast({ title: "Coluna atualizada!" });
           onOpenChange(false);
         },
       }
@@ -79,20 +84,14 @@ export function CreateColumnDialog({ open, onOpenChange, boardId }: CreateColumn
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nova Coluna</DialogTitle>
+          <DialogTitle>Configurações da Coluna</DialogTitle>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nome</Label>
-            <Input
-              id="name"
-              placeholder="Ex: Em Progresso"
-              {...form.register("name")}
-            />
+            <Input id="name" {...form.register("name")} />
             {form.formState.errors.name && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.name.message}
-              </p>
+              <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
             )}
           </div>
 
@@ -104,9 +103,7 @@ export function CreateColumnDialog({ open, onOpenChange, boardId }: CreateColumn
                   key={color}
                   type="button"
                   className={`h-8 w-8 rounded-full border-2 transition-all ${
-                    selectedColor === color
-                      ? "border-foreground scale-110"
-                      : "border-transparent"
+                    selectedColor === color ? "border-foreground scale-110" : "border-transparent"
                   }`}
                   style={{ backgroundColor: color }}
                   onClick={() => setSelectedColor(color)}
@@ -118,9 +115,7 @@ export function CreateColumnDialog({ open, onOpenChange, boardId }: CreateColumn
           <div className="flex items-center justify-between">
             <div>
               <Label htmlFor="is_final">Coluna final</Label>
-              <p className="text-xs text-muted-foreground">
-                Cards aqui são considerados concluídos
-              </p>
+              <p className="text-xs text-muted-foreground">Cards aqui são considerados concluídos</p>
             </div>
             <Switch
               id="is_final"
@@ -132,29 +127,21 @@ export function CreateColumnDialog({ open, onOpenChange, boardId }: CreateColumn
           <div className="flex items-center justify-between">
             <div>
               <Label htmlFor="notify">Notificar cliente</Label>
-              <p className="text-xs text-muted-foreground">
-                Envia email quando card entrar nesta coluna
-              </p>
+              <p className="text-xs text-muted-foreground">Envia email quando card entrar nesta coluna</p>
             </div>
             <Switch
               id="notify"
               checked={form.watch("notify_client_on_enter")}
-              onCheckedChange={(checked) =>
-                form.setValue("notify_client_on_enter", checked)
-              }
+              onCheckedChange={(checked) => form.setValue("notify_client_on_enter", checked)}
             />
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={createColumn.isPending}>
-              Criar Coluna
+            <Button type="submit" disabled={updateColumn.isPending}>
+              Salvar
             </Button>
           </DialogFooter>
         </form>

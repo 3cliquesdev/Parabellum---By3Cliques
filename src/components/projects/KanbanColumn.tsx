@@ -4,7 +4,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { MoreHorizontal, Plus, Trash2, Edit, Mail } from "lucide-react";
+import { MoreHorizontal, Plus, Trash2, Edit, Mail, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ import { ProjectColumn, useUpdateProjectColumn, useDeleteProjectColumn } from "@
 import { ProjectCard, useCreateProjectCard } from "@/hooks/useProjectCards";
 import { KanbanCard } from "./KanbanCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ColumnSettingsDialog } from "./ColumnSettingsDialog";
 
 interface KanbanColumnProps {
   column: ProjectColumn;
@@ -43,6 +44,7 @@ export function KanbanColumn({ column, cards, boardId, onCardClick }: KanbanColu
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
@@ -129,6 +131,10 @@ export function KanbanColumn({ column, cards, boardId, onCardClick }: KanbanColu
               <DropdownMenuItem onClick={() => setIsEditing(true)}>
                 <Edit className="h-4 w-4 mr-2" />
                 Renomear
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSettingsDialogOpen(true)}>
+                <Settings className="h-4 w-4 mr-2" />
+                Configurações
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -226,6 +232,13 @@ export function KanbanColumn({ column, cards, boardId, onCardClick }: KanbanColu
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ColumnSettingsDialog
+        open={settingsDialogOpen}
+        onOpenChange={setSettingsDialogOpen}
+        column={column}
+        boardId={boardId}
+      />
     </>
   );
 }

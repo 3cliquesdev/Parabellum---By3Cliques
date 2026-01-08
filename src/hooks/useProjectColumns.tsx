@@ -43,6 +43,8 @@ export function useCreateProjectColumn() {
       name: string;
       color?: string;
       position?: number;
+      is_final?: boolean;
+      notify_client_on_enter?: boolean;
     }) => {
       // Get max position
       const { data: columns } = await supabase
