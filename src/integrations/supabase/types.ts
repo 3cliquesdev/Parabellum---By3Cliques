@@ -3062,6 +3062,8 @@ export type Database = {
           notify_manager: boolean | null
           schema: Json
           score_routing_rules: Json | null
+          target_board_id: string | null
+          target_column_id: string | null
           target_department_id: string | null
           target_pipeline_id: string | null
           target_type: Database["public"]["Enums"]["form_target_type"] | null
@@ -3082,6 +3084,8 @@ export type Database = {
           notify_manager?: boolean | null
           schema?: Json
           score_routing_rules?: Json | null
+          target_board_id?: string | null
+          target_column_id?: string | null
           target_department_id?: string | null
           target_pipeline_id?: string | null
           target_type?: Database["public"]["Enums"]["form_target_type"] | null
@@ -3102,6 +3106,8 @@ export type Database = {
           notify_manager?: boolean | null
           schema?: Json
           score_routing_rules?: Json | null
+          target_board_id?: string | null
+          target_column_id?: string | null
           target_department_id?: string | null
           target_pipeline_id?: string | null
           target_type?: Database["public"]["Enums"]["form_target_type"] | null
@@ -3110,6 +3116,20 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "forms_target_board_id_fkey"
+            columns: ["target_board_id"]
+            isOneToOne: false
+            referencedRelation: "project_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forms_target_column_id_fkey"
+            columns: ["target_column_id"]
+            isOneToOne: false
+            referencedRelation: "project_columns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "forms_target_department_id_fkey"
             columns: ["target_department_id"]
@@ -6978,7 +6998,12 @@ export type Database = {
       deal_status: "open" | "won" | "lost"
       department_type: "comercial" | "suporte" | "marketing" | "operacional"
       form_distribution_rule: "round_robin" | "manager_only" | "specific_user"
-      form_target_type: "deal" | "ticket" | "internal_request" | "none"
+      form_target_type:
+        | "deal"
+        | "ticket"
+        | "internal_request"
+        | "none"
+        | "kanban_card"
       interaction_type:
         | "email_sent"
         | "email_open"
@@ -7200,7 +7225,13 @@ export const Constants = {
       deal_status: ["open", "won", "lost"],
       department_type: ["comercial", "suporte", "marketing", "operacional"],
       form_distribution_rule: ["round_robin", "manager_only", "specific_user"],
-      form_target_type: ["deal", "ticket", "internal_request", "none"],
+      form_target_type: [
+        "deal",
+        "ticket",
+        "internal_request",
+        "none",
+        "kanban_card",
+      ],
       interaction_type: [
         "email_sent",
         "email_open",

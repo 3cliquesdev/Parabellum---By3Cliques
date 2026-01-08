@@ -12,9 +12,11 @@ import {
 import { useDepartments } from "@/hooks/useDepartments";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
-import { Briefcase, Ticket, FileText, Users, Target, Bell, RefreshCcw, Database } from "lucide-react";
+import { useProjectBoards } from "@/hooks/useProjectBoards";
+import { useProjectColumns } from "@/hooks/useProjectColumns";
+import { Briefcase, Ticket, FileText, Users, Target, Bell, RefreshCcw, Database, Kanban } from "lucide-react";
 
-export type FormTargetType = "deal" | "ticket" | "internal_request" | "none";
+export type FormTargetType = "deal" | "ticket" | "internal_request" | "none" | "kanban_card";
 export type FormDistributionRule = "round_robin" | "manager_only" | "specific_user";
 
 export interface FormRoutingSettings {
@@ -22,6 +24,8 @@ export interface FormRoutingSettings {
   target_department_id?: string;
   target_pipeline_id?: string;
   target_user_id?: string;
+  target_board_id?: string;
+  target_column_id?: string;
   distribution_rule: FormDistributionRule;
   notify_manager: boolean;
   max_submissions_per_contact?: number | null;
@@ -37,6 +41,7 @@ const TARGET_TYPE_OPTIONS = [
   { value: "deal", label: "Lead/Negócio", icon: Briefcase, description: "Criar oportunidade no funil de vendas" },
   { value: "ticket", label: "Ticket de Suporte", icon: Ticket, description: "Criar chamado na fila de suporte" },
   { value: "internal_request", label: "Solicitação Interna", icon: FileText, description: "Criar tarefa interna (RH, Financeiro)" },
+  { value: "kanban_card", label: "Card no Kanban", icon: Kanban, description: "Criar card em um board de projetos" },
 ];
 
 const DISTRIBUTION_OPTIONS = [
@@ -48,6 +53,8 @@ const DISTRIBUTION_OPTIONS = [
 export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps) {
   const { data: departments } = useDepartments();
   const { data: pipelines } = usePipelines();
+  const { data: boards } = useProjectBoards();
+  const { data: columns } = useProjectColumns(settings.target_board_id);
   const { data: departmentUsers, isLoading: isLoadingUsers } = useUsersByDepartment(
     settings.target_department_id
   );
@@ -74,6 +81,7 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
   const selectedTargetType = TARGET_TYPE_OPTIONS.find(t => t.value === settings.target_type);
   const isTicketMode = settings.target_type === "ticket";
   const isNeutralMode = settings.target_type === "none";
+  const isKanbanMode = settings.target_type === "kanban_card";
 
   return (
     <Card className={isTicketMode ? "border-orange-500/30" : ""}>
@@ -143,8 +151,8 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
           </div>
         )}
 
-        {/* Department Selection - hidden for neutral mode */}
-        {!isNeutralMode && (
+        {/* Department Selection - hidden for neutral mode and kanban mode */}
+        {!isNeutralMode && !isKanbanMode && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">
               {isTicketMode ? "Departamento de Destino" : "Enviar para qual setor?"}
@@ -194,8 +202,66 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
           </div>
         )}
 
-        {/* Distribution Rule - hidden for neutral mode */}
-        {!isNeutralMode && (
+        {/* Kanban Board Selection (only for kanban_card) */}
+        {isKanbanMode && (
+          <>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Board de destino</Label>
+              <Select
+                value={settings.target_board_id || ""}
+                onValueChange={(v) => {
+                  updateSetting("target_board_id", v || undefined);
+                  updateSetting("target_column_id", undefined);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o board..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {boards?.map((board) => (
+                    <SelectItem key={board.id} value={board.id}>
+                      {board.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {settings.target_board_id && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Coluna inicial</Label>
+                <Select
+                  value={settings.target_column_id || ""}
+                  onValueChange={(v) => updateSetting("target_column_id", v || undefined)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a coluna..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {columns?.map((column) => (
+                      <SelectItem key={column.id} value={column.id}>
+                        {column.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Cards criados pelo formulário aparecerão nesta coluna
+                </p>
+              </div>
+            )}
+
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <p className="text-sm text-muted-foreground">
+                <Kanban className="h-4 w-4 inline mr-2 text-primary" />
+                Cada submissão criará um card no board selecionado. O contato será vinculado automaticamente.
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* Distribution Rule - hidden for neutral mode and kanban mode */}
+        {!isNeutralMode && !isKanbanMode && (
           <div className="space-y-3">
             <Label className="text-sm font-medium flex items-center gap-2">
               <Users className="h-4 w-4" />
@@ -222,8 +288,8 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
           </div>
         )}
 
-        {/* Specific User Selection - hidden for neutral mode */}
-        {!isNeutralMode && settings.distribution_rule === "specific_user" && (
+        {/* Specific User Selection - hidden for neutral mode and kanban mode */}
+        {!isNeutralMode && !isKanbanMode && settings.distribution_rule === "specific_user" && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">Responsável fixo</Label>
             {!settings.target_department_id ? (

@@ -203,7 +203,7 @@ export interface FormSchema {
   ticket_settings?: TicketSettings;
 }
 
-export type FormTargetType = "deal" | "ticket" | "internal_request" | "none";
+export type FormTargetType = "deal" | "ticket" | "internal_request" | "none" | "kanban_card";
 export type FormDistributionRule = "round_robin" | "manager_only" | "specific_user";
 
 export interface Form {
@@ -220,6 +220,8 @@ export interface Form {
   target_department_id: string | null;
   target_pipeline_id: string | null;
   target_user_id: string | null;
+  target_board_id: string | null;
+  target_column_id: string | null;
   distribution_rule: FormDistributionRule;
   notify_manager: boolean;
   max_submissions_per_contact: number | null;
@@ -450,6 +452,8 @@ export function useCreateForm() {
       target_department_id?: string;
       target_pipeline_id?: string;
       target_user_id?: string;
+      target_board_id?: string;
+      target_column_id?: string;
       distribution_rule?: FormDistributionRule;
       notify_manager?: boolean;
       max_submissions_per_contact?: number | null;
@@ -465,6 +469,8 @@ export function useCreateForm() {
           target_department_id: form.target_department_id || null,
           target_pipeline_id: form.target_pipeline_id || null,
           target_user_id: form.target_user_id || null,
+          target_board_id: form.target_board_id || null,
+          target_column_id: form.target_column_id || null,
           distribution_rule: form.distribution_rule || "round_robin",
           notify_manager: form.notify_manager ?? true,
           max_submissions_per_contact: form.max_submissions_per_contact ?? null,
@@ -512,6 +518,8 @@ export function useUpdateForm() {
         target_department_id?: string | null;
         target_pipeline_id?: string | null;
         target_user_id?: string | null;
+        target_board_id?: string | null;
+        target_column_id?: string | null;
         distribution_rule?: FormDistributionRule;
         notify_manager?: boolean;
         max_submissions_per_contact?: number | null;
