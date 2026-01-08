@@ -1,4 +1,4 @@
-import { FormSettings } from "@/hooks/useForms";
+import { FormSettings, LogoPosition, LogoSize } from "@/hooks/useForms";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,6 +6,8 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ImageUploader } from "@/components/ImageUploader";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 
 interface FormSettingsPanelProps {
   settings: FormSettings;
@@ -26,6 +28,50 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
         onChange={(url) => onChange({ logo_url: url || undefined })}
         folder="forms/logos"
       />
+
+      {/* Logo Position */}
+      <div className="space-y-2">
+        <Label>Posição do Logo</Label>
+        <div className="flex gap-2">
+          {[
+            { value: "left" as LogoPosition, icon: AlignLeft, label: "Esquerda" },
+            { value: "center" as LogoPosition, icon: AlignCenter, label: "Centro" },
+            { value: "right" as LogoPosition, icon: AlignRight, label: "Direita" },
+          ].map(({ value, icon: Icon, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onChange({ logo_position: value })}
+              className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-md border transition-colors ${
+                (settings.logo_position || "left") === value 
+                  ? "bg-primary text-primary-foreground border-primary" 
+                  : "bg-muted/50 hover:bg-muted border-border"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="text-xs">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Logo Size */}
+      <div className="space-y-2">
+        <Label>Tamanho do Logo</Label>
+        <Select
+          value={settings.logo_size || "medium"}
+          onValueChange={(value: LogoSize) => onChange({ logo_size: value })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="small">Pequeno (24px)</SelectItem>
+            <SelectItem value="medium">Médio (40px)</SelectItem>
+            <SelectItem value="large">Grande (64px)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <Separator />
 
@@ -106,6 +152,67 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
             min={0}
             max={30}
             step={2}
+            className="w-full"
+          />
+        </div>
+
+        <Separator className="my-2" />
+
+        {/* Container Shadow */}
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Sombra do Container</Label>
+            <p className="text-xs text-muted-foreground">Adiciona profundidade</p>
+          </div>
+          <Switch
+            checked={settings.card_shadow !== false}
+            onCheckedChange={(checked) => onChange({ card_shadow: checked })}
+          />
+        </div>
+
+        {settings.card_shadow !== false && (
+          <div className="space-y-2">
+            <Label>Intensidade da Sombra: {settings.card_shadow_intensity ?? 3}</Label>
+            <Slider
+              value={[settings.card_shadow_intensity ?? 3]}
+              onValueChange={([val]) => onChange({ card_shadow_intensity: val })}
+              min={1}
+              max={5}
+              step={1}
+              className="w-full"
+            />
+          </div>
+        )}
+
+        <Separator className="my-2" />
+
+        {/* Container Border */}
+        <div className="space-y-2">
+          <Label>Borda do Container</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={settings.card_border_color || "#333333"}
+              onChange={(e) => onChange({ card_border_color: e.target.value })}
+              className="w-12 h-9 p-1 cursor-pointer"
+            />
+            <Input
+              value={settings.card_border_color || ""}
+              onChange={(e) => onChange({ card_border_color: e.target.value })}
+              className="flex-1"
+              placeholder="Sem borda"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Espessura da Borda: {settings.card_border_width ?? 0}px</Label>
+          <Slider
+            value={[settings.card_border_width ?? 0]}
+            onValueChange={([val]) => onChange({ card_border_width: val })}
+            min={0}
+            max={5}
+            step={1}
             className="w-full"
           />
         </div>

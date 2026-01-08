@@ -194,11 +194,36 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
 
   // Card styles based on settings
   const cardOpacity = (settings.card_opacity ?? 90) / 100;
+  const shadowIntensity = settings.card_shadow_intensity ?? 3;
+  const shadowMap: Record<number, string> = {
+    1: "0 2px 8px rgba(0,0,0,0.1)",
+    2: "0 4px 16px rgba(0,0,0,0.15)",
+    3: "0 8px 24px rgba(0,0,0,0.2)",
+    4: "0 12px 32px rgba(0,0,0,0.25)",
+    5: "0 16px 48px rgba(0,0,0,0.3)",
+  };
+  
   const cardStyles: React.CSSProperties = {
     backgroundColor: hexToRgba(settings.card_background_color || "#1a1a2e", cardOpacity),
     borderRadius: `${settings.border_radius ?? 16}px`,
     backdropFilter: cardOpacity < 1 ? "blur(12px)" : undefined,
     WebkitBackdropFilter: cardOpacity < 1 ? "blur(12px)" : undefined,
+    boxShadow: settings.card_shadow !== false ? shadowMap[shadowIntensity] : undefined,
+    border: settings.card_border_width && settings.card_border_color 
+      ? `${settings.card_border_width}px solid ${settings.card_border_color}` 
+      : undefined,
+  };
+
+  // Logo styles based on settings
+  const logoSizeMap: Record<string, string> = {
+    small: "h-6",
+    medium: "h-10",
+    large: "h-16",
+  };
+  const logoPositionClass: Record<string, string> = {
+    left: "justify-start",
+    center: "justify-center",
+    right: "justify-end",
   };
 
   // Input styles - FORCED HIGH CONTRAST
@@ -357,11 +382,13 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
       <header className="p-4 sm:p-6">
         <div className="max-w-2xl mx-auto">
           {settings.logo_url && (
-            <img 
-              src={settings.logo_url} 
-              alt="Logo" 
-              className="h-8 sm:h-10 mb-4"
-            />
+            <div className={`flex ${logoPositionClass[settings.logo_position || "left"]} mb-4`}>
+              <img 
+                src={settings.logo_url} 
+                alt="Logo" 
+                className={`${logoSizeMap[settings.logo_size || "medium"]} object-contain`}
+              />
+            </div>
           )}
           {(formData?.title || formTitle || formData?.name || formName) && (
             <h1 

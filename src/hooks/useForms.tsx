@@ -58,15 +58,24 @@ export interface FormField {
 
 export type FormDisplayMode = "single_page" | "conversational";
 
+export type LogoPosition = "left" | "center" | "right";
+export type LogoSize = "small" | "medium" | "large";
+
 export interface FormSettings {
   background_color?: string;
   background_image?: string;
   logo_url?: string;
+  logo_position?: LogoPosition;      // Posição do logo (esquerda/centro/direita)
+  logo_size?: LogoSize;              // Tamanho do logo (pequeno/médio/grande)
   button_text?: string;
   button_color?: string;
   button_text_color?: string;       // Cor do texto do botão
   card_background_color?: string;   // Cor do container/cartão
   card_opacity?: number;            // Opacidade (0-100) para glassmorphism
+  card_shadow?: boolean;            // Habilitar sombra no container
+  card_shadow_intensity?: number;   // Intensidade da sombra (1-5)
+  card_border_color?: string;       // Cor da borda do container
+  card_border_width?: number;       // Espessura da borda do container (0-5px)
   border_radius?: number;           // Arredondamento (0-30px)
   text_color?: string;              // Cor dos textos/labels
   title_color?: string;             // Cor do título do formulário
@@ -130,10 +139,16 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   button_text_color: "#ffffff",
   card_background_color: "#1a1a2e",
   card_opacity: 90,
+  card_shadow: true,
+  card_shadow_intensity: 3,
+  card_border_color: "",
+  card_border_width: 0,
   border_radius: 16,
   text_color: "#ffffff",
   title_color: "#ffffff",
   description_color: "#ffffff",
+  logo_position: "left",
+  logo_size: "medium",
   input_background_color: "#ffffff",
   input_text_color: "#000000",
   input_border_color: "#e5e7eb",
