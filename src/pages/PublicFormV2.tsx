@@ -553,26 +553,34 @@ function FormFieldInput({ field, value, onChange, settings, inputStyles }: FormF
     case "select":
       return (
         <div className="space-y-2">
-          {field.options?.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => onChange(option)}
-              className={`w-full p-4 text-left rounded-lg border transition-all ${
-                value === option 
-                  ? "ring-2 ring-primary" 
-                  : "hover:border-primary/50"
-              }`}
-              style={{
-                ...inputStyles,
-                borderColor: value === option 
-                  ? settings.button_color 
-                  : inputStyles.borderColor,
-              }}
-            >
-              {option}
-            </button>
-          ))}
+          {field.options?.map((option) => {
+            const isSelected = value === option;
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onChange(option)}
+                className={`w-full p-4 text-left rounded-lg transition-all ${
+                  isSelected ? "" : "hover:opacity-80"
+                }`}
+                style={{
+                  backgroundColor: isSelected 
+                    ? (settings.selection_background_color || settings.button_color) 
+                    : inputStyles.backgroundColor,
+                  color: isSelected 
+                    ? (settings.selection_text_color || settings.button_text_color) 
+                    : inputStyles.color,
+                  borderColor: isSelected 
+                    ? (settings.selection_highlight_color || settings.button_color)
+                    : inputStyles.borderColor,
+                  borderWidth: isSelected ? '3px' : '1px',
+                  borderStyle: 'solid',
+                }}
+              >
+                {option}
+              </button>
+            );
+          })}
         </div>
       );
 

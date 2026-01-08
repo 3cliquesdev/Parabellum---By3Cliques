@@ -227,6 +227,66 @@ export function FormSettingsPanel({ settings, onChange }: FormSettingsPanelProps
             />
           </div>
         </div>
+
+        <Separator className="my-2" />
+
+        {/* Opções de Seleção */}
+        <h4 className="font-medium text-sm pt-2">Opções de Seleção</h4>
+        <p className="text-xs text-muted-foreground">Personalize como as opções selecionadas aparecem</p>
+
+        <div className="space-y-2">
+          <Label>Cor do Destaque (Borda)</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={settings.selection_highlight_color || settings.button_color || "#3b82f6"}
+              onChange={(e) => onChange({ selection_highlight_color: e.target.value })}
+              className="w-12 h-9 p-1 cursor-pointer"
+            />
+            <Input
+              value={settings.selection_highlight_color || settings.button_color || "#3b82f6"}
+              onChange={(e) => onChange({ selection_highlight_color: e.target.value })}
+              className="flex-1"
+              placeholder="Usa cor do botão se vazio"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Cor de Fundo (Selecionado)</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={settings.selection_background_color || settings.button_color || "#3b82f6"}
+              onChange={(e) => onChange({ selection_background_color: e.target.value })}
+              className="w-12 h-9 p-1 cursor-pointer"
+            />
+            <Input
+              value={settings.selection_background_color || settings.button_color || "#3b82f6"}
+              onChange={(e) => onChange({ selection_background_color: e.target.value })}
+              className="flex-1"
+              placeholder="Usa cor do botão se vazio"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Cor do Texto (Selecionado)</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={settings.selection_text_color || settings.button_text_color || "#ffffff"}
+              onChange={(e) => onChange({ selection_text_color: e.target.value })}
+              className="w-12 h-9 p-1 cursor-pointer"
+            />
+            <Input
+              value={settings.selection_text_color || settings.button_text_color || "#ffffff"}
+              onChange={(e) => onChange({ selection_text_color: e.target.value })}
+              className="flex-1"
+              placeholder="Usa cor do texto do botão se vazio"
+            />
+          </div>
+        </div>
       </div>
 
       <Separator />

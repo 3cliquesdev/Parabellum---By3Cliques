@@ -74,6 +74,9 @@ export interface FormSettings {
   input_background_color?: string;  // Fundo dos inputs
   input_text_color?: string;        // Texto dos inputs
   input_border_color?: string;      // Borda dos inputs
+  selection_highlight_color?: string;    // Cor do destaque/borda de seleção
+  selection_background_color?: string;   // Fundo da opção selecionada
+  selection_text_color?: string;         // Texto da opção selecionada
   thank_you_title?: string;
   thank_you_message?: string;
   redirect_url?: string;
@@ -133,6 +136,9 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   input_background_color: "#ffffff",
   input_text_color: "#000000",
   input_border_color: "#e5e7eb",
+  selection_highlight_color: "",
+  selection_background_color: "",
+  selection_text_color: "",
   thank_you_title: "Obrigado!",
   thank_you_message: "Suas respostas foram enviadas com sucesso.",
   show_progress_bar: true,
