@@ -90,6 +90,7 @@ export default function PipelineSalesRepsDialog({
                 <Checkbox
                   checked={selectedUserIds.includes(rep.id)}
                   onCheckedChange={() => handleToggle(rep.id)}
+                  onClick={(e) => e.stopPropagation()}
                 />
                 <Avatar className="h-8 w-8">
                   <AvatarImage
