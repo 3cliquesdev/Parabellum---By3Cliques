@@ -256,3 +256,6 @@ verify_jwt = true
 
 [functions.close-conversation]
 verify_jwt = false
+
+[functions.notify-project-card-moved]
+verify_jwt = false
