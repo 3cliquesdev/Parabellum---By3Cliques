@@ -163,6 +163,53 @@ serve(async (req) => {
         is_returning_customer: !isNewContact,
         previous_interactions_count: previousInteractionsCount,
       });
+
+      // Se é lead novo (não cliente), criar deal automaticamente para o time comercial
+      if (isNewContact) {
+        console.log('[create-public-conversation] Criando deal para novo lead...');
+        
+        // Buscar pipeline de vendas padrão
+        const { data: salesPipeline } = await supabase
+          .from('pipelines')
+          .select('id')
+          .eq('name', 'Pipeline de Vendas - Nacional')
+          .single();
+        
+        if (salesPipeline) {
+          // Buscar primeiro estágio do pipeline
+          const { data: firstStage } = await supabase
+            .from('stages')
+            .select('id')
+            .eq('pipeline_id', salesPipeline.id)
+            .order('position', { ascending: true })
+            .limit(1)
+            .single();
+          
+          // Criar deal (auto-assign via trigger round-robin existente)
+          const { data: newDeal, error: dealError } = await supabase
+            .from('deals')
+            .insert({
+              title: `Lead Chat - ${customer_data?.first_name || 'Novo'} ${customer_data?.last_name || ''}`.trim(),
+              contact_id: finalContactId,
+              pipeline_id: salesPipeline.id,
+              stage_id: firstStage?.id,
+              status: 'open',
+              lead_source: 'chat_widget',
+              lead_email: customer_data?.email,
+              lead_phone: customer_data?.phone,
+            })
+            .select('id, assigned_to')
+            .single();
+          
+          if (newDeal) {
+            console.log('[create-public-conversation] Deal criado:', newDeal.id, 'Atribuído a:', newDeal.assigned_to);
+          } else {
+            console.error('[create-public-conversation] Erro ao criar deal:', dealError);
+          }
+        } else {
+          console.warn('[create-public-conversation] Pipeline de Vendas não encontrado, deal não criado');
+        }
+      }
     } else if (!finalContactId && !customer_data?.email) {
       // BLOQUEIO: Não permitir conversas anônimas - Email é obrigatório
       console.error('[create-public-conversation] BLOCKED: No contact_id or email provided');

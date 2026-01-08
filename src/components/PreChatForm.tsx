@@ -25,8 +25,7 @@ const emailSchema = z.object({
 const newLeadSchema = z.object({
   email: z.string().email("Email inválido"),
   full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  phone: z.string().optional(),
-  otp: z.string().length(6, "Código deve ter 6 dígitos"),
+  phone: z.string().min(10, "Telefone deve ter pelo menos 10 dígitos"),
 });
 
 interface Contact {
@@ -61,7 +60,7 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
 
   const newLeadForm = useForm<z.infer<typeof newLeadSchema>>({
     resolver: zodResolver(newLeadSchema),
-    defaultValues: { email: "", full_name: "", phone: "", otp: "" },
+    defaultValues: { email: "", full_name: "", phone: "" },
   });
 
   const handleCheckEmail = async (values: z.infer<typeof emailSchema>) => {
@@ -105,33 +104,10 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
           });
         }
       } else {
-        // Lead novo - ir para formulário completo
+        // Lead novo - ir para formulário completo (sem OTP)
         setRecommendedDeptId(data.recommended_department_id);
         newLeadForm.setValue('email', values.email);
-
-        // Enviar código OTP para validar email
-        const { data: otpData, error: sendError } = await supabase.functions.invoke('send-verification-code', {
-          body: { email: values.email, type: 'customer' }
-        });
-
-        if (sendError) throw sendError;
-
         setFormState('new_lead_form');
-        
-        // Detectar modo desenvolvimento
-        if (otpData?.dev_mode && otpData?.code) {
-          toast({
-            title: "🔧 Modo Desenvolvimento",
-            description: `Código OTP para testes: ${otpData.code}`,
-            duration: 10000, // 10 segundos
-          });
-          newLeadForm.setValue('otp', otpData.code); // Pre-preencher o campo
-        } else {
-          toast({
-            title: "Código enviado! 📧",
-            description: `Enviamos um código para validar seu e-mail`,
-          });
-        }
       }
 
     } catch (error: any) {
@@ -198,30 +174,13 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
     try {
       setFormState('submitting');
 
-      // Verificar código OTP
-      const { data, error } = await supabase.functions.invoke('verify-code', {
-        body: { email: values.email, code: values.otp }
-      });
-
-      if (error) throw error;
-
-      if (!data.success) {
-        toast({
-          title: "Código inválido",
-          description: data.error || "Verifique o código e tente novamente",
-          variant: "destructive",
-        });
-        setFormState('new_lead_form');
-        return;
-      }
-
       // Separar nome completo em first_name e last_name
       const nameParts = values.full_name.trim().split(' ');
       const first_name = nameParts[0];
       const last_name = nameParts.slice(1).join(' ') || first_name;
 
       toast({
-        title: "Seja bem-vindo! 🎉",
+        title: "Seja bem-vindo!",
         description: "Nossa equipe comercial vai adorar conhecê-lo.",
       });
 
@@ -401,43 +360,9 @@ export function PreChatForm({ onExistingCustomerVerified, onNewLeadCreated, isLo
                       name="phone"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>WhatsApp (opcional)</FormLabel>
+                          <FormLabel>WhatsApp *</FormLabel>
                           <FormControl>
                             <Input placeholder="(11) 99999-9999" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <Separator className="my-4" />
-
-                    <Alert>
-                      <Mail className="h-4 w-4" />
-                      <AlertDescription>
-                        Enviamos um código para <strong>{email}</strong>
-                      </AlertDescription>
-                    </Alert>
-
-                    <FormField
-                      control={newLeadForm.control}
-                      name="otp"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Código de Verificação</FormLabel>
-                          <FormControl>
-                            <div className="flex justify-center">
-                              <InputOTP maxLength={6} {...field}>
-                                <InputOTPGroup>
-                                  <InputOTPSlot index={0} />
-                                  <InputOTPSlot index={1} />
-                                  <InputOTPSlot index={2} />
-                                  <InputOTPSlot index={3} />
-                                  <InputOTPSlot index={4} />
-                                  <InputOTPSlot index={5} />
-                                </InputOTPGroup>
-                              </InputOTP>
-                            </div>
                           </FormControl>
                           <FormMessage />
                         </FormItem>
