@@ -72,10 +72,10 @@ serve(async (req) => {
 </head>
 <body>
   <div class="container">
-    <h2>🚨 Alerta Crítico do Sistema</h2>
+    <h2>Alerta Critico do Sistema</h2>
     
     <div class="alert-box">
-      <div class="alert-title">🤖 IA parou de responder</div>
+      <div class="alert-title">IA parou de responder</div>
       <p><strong>Tipo:</strong> ${type}</p>
       <p><strong>Mensagem:</strong> ${message}</p>
       ${contactName ? `<p><strong>Cliente:</strong> ${contactName}</p>` : ''}
@@ -88,11 +88,11 @@ serve(async (req) => {
 
     ${conversationLink ? `
     <a href="${conversationLink}" class="button">
-      📬 Ver Conversa Completa
+      Ver Conversa Completa
     </a>
     ` : ''}
 
-    <p>⚠️ <strong>Ação Necessária:</strong> A conversa foi automaticamente transferida para atendimento humano, mas o problema técnico precisa ser investigado imediatamente.</p>
+    <p><strong>Acao Necessaria:</strong> A conversa foi automaticamente transferida para atendimento humano, mas o problema tecnico precisa ser investigado imediatamente.</p>
 
     <div class="footer">
       <p>Este é um email automático do Sistema de Monitoramento IA.<br>
@@ -107,7 +107,7 @@ serve(async (req) => {
         body: {
           to: adminEmail,
           to_name: adminName,
-          subject: `🚨 ALERTA: IA Falhou ao Responder Cliente ${contactName || ''}`,
+          subject: `ALERTA: IA Falhou ao Responder Cliente ${contactName || ''}`,
           html: htmlBody
         }
       });

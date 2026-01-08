@@ -93,7 +93,7 @@ serve(async (req) => {
           <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">Seu Armazém Drop</h1>
         </div>
         <div style="background: #2563EB; color: white; padding: 20px; text-align: center;">
-          <h1 style="margin: 0; font-size: 24px;">💼 Nova Proposta Comercial</h1>
+          <h1 style="margin: 0; font-size: 24px;">Nova Proposta Comercial</h1>
           <p style="margin: 10px 0 0 0; opacity: 0.9;">Proposta #${quote.quote_number}</p>
         </div>
 
@@ -145,13 +145,13 @@ serve(async (req) => {
 
           <div style="text-align: center; margin: 30px 0;">
             <a href="${publicLink}" style="display: inline-block; background: #2563EB; color: white; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: bold; font-size: 16px;">
-              📋 Visualizar Proposta Completa
+              Visualizar Proposta Completa
             </a>
           </div>
 
           ${quote.expiration_date ? `
             <p style="text-align: center; color: #dc2626; font-weight: bold; margin: 20px 0; padding: 15px; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
-              ⚠️ Proposta válida até: ${new Date(quote.expiration_date).toLocaleDateString('pt-BR')}
+              Proposta válida até: ${new Date(quote.expiration_date).toLocaleDateString('pt-BR')}
             </p>
           ` : ''}
 
@@ -201,7 +201,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: 'Seu Armazém Drop Comercial <comercial@parabellum.work>',
         to: [contact.email],
-        subject: `📄 Proposta Comercial #${quote.quote_number} - ${contact.company || contact.first_name}`,
+        subject: `Proposta Comercial #${quote.quote_number} - ${contact.company || contact.first_name}`,
         html: emailHtml,
         tags: [
           { name: 'type', value: 'quote' },

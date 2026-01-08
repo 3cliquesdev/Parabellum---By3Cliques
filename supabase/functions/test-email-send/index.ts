@@ -59,7 +59,7 @@ const handler = async (req: Request): Promise<Response> => {
     const emailPayload = {
       from: fromEmail,
       to: [to],
-      subject: "🧪 Email de Teste - Sistema CRM",
+      subject: "Email de Teste - Sistema CRM",
       html: `
         <!DOCTYPE html>
         <html>
@@ -77,10 +77,10 @@ const handler = async (req: Request): Promise<Response> => {
           <body>
             <div class="container">
               <div class="header">
-                <h1 style="margin: 0; font-size: 28px;">🧪 Email de Teste</h1>
+                <h1 style="margin: 0; font-size: 28px;">Email de Teste</h1>
               </div>
               <div class="content">
-                <p><span class="badge">✅ Sucesso!</span></p>
+                <p><span class="badge">Sucesso!</span></p>
                 <p>Este é um email de teste enviado pela <strong>Central de Integrações</strong> do seu CRM.</p>
                 <p><strong>Detalhes do teste:</strong></p>
                 <ul>
@@ -90,7 +90,7 @@ const handler = async (req: Request): Promise<Response> => {
                   <li><strong>Data/Hora:</strong> ${new Date().toLocaleString("pt-BR")}</li>
                 </ul>
                 <p style="background: #f3f4f6; padding: 15px; border-left: 4px solid #2563eb; border-radius: 4px; margin-top: 20px;">
-                  💡 <strong>Dica:</strong> Se você recebeu este email, sua configuração está funcionando perfeitamente!
+                  <strong>Dica:</strong> Se você recebeu este email, sua configuração está funcionando perfeitamente!
                 </p>
               </div>
               <div class="footer">

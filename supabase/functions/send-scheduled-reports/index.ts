@@ -109,7 +109,7 @@ serve(async (req) => {
           body: JSON.stringify({
             from: 'Seu Armazém Drop Relatórios <sistema@parabellum.work>',
             to: [report.email],
-            subject: `📊 ${report.report_name} - ${formatDate(now)}`,
+            subject: `${report.report_name} - ${formatDate(now)}`,
             html: `
               <!DOCTYPE html>
               <html>
@@ -122,7 +122,7 @@ serve(async (req) => {
                            style="max-width: 200px; height: auto;" />
                     </div>
                     <div style="padding: 30px; background: #f8fafc;">
-                      <h2 style="color: #2563EB; margin-bottom: 20px;">📊 Relatório Agendado</h2>
+                      <h2 style="color: #2563EB; margin-bottom: 20px;">Relatório Agendado</h2>
                       <p>Segue anexo o relatório <strong>${report.report_name}</strong> gerado automaticamente.</p>
                       <p style="color: #64748b; font-size: 14px; margin-top: 30px;">
                         Data de geração: ${formatDate(now)}<br>

@@ -16,7 +16,6 @@ interface StatusNotificationRequest {
 
 // Status configuration with colors and messages
 const statusConfig: Record<string, {
-  emoji: string;
   subjectPrefix: string;
   badgeColor: string;
   badgeLabel: string;
@@ -25,57 +24,51 @@ const statusConfig: Record<string, {
   triggerType: string;
 }> = {
   open: {
-    emoji: '📋',
     subjectPrefix: 'Ticket recebido',
     badgeColor: '#2563eb',
     badgeLabel: 'Aberto',
     mainMessage: 'Recebemos seu chamado e ele será analisado em breve.',
-    ctaText: '📋 Ver Meu Ticket',
+    ctaText: 'Ver Meu Ticket',
     triggerType: 'ticket_created',
   },
   in_progress: {
-    emoji: '🔄',
     subjectPrefix: 'Seu ticket está sendo atendido',
     badgeColor: '#2563eb',
     badgeLabel: 'Em Andamento',
     mainMessage: 'Nosso time está trabalhando no seu chamado. Você será notificado quando houver atualizações.',
-    ctaText: '📋 Ver Status',
+    ctaText: 'Ver Status',
     triggerType: 'ticket_in_progress',
   },
   waiting_customer: {
-    emoji: '⏳',
     subjectPrefix: 'Precisamos da sua resposta',
     badgeColor: '#f59e0b',
     badgeLabel: 'Aguardando Resposta',
     mainMessage: 'Analisamos seu chamado e precisamos de mais informações para continuar o atendimento.',
-    ctaText: '💬 Responder ao Ticket',
+    ctaText: 'Responder ao Ticket',
     triggerType: 'ticket_waiting_customer',
   },
   resolved: {
-    emoji: '✅',
     subjectPrefix: 'Seu ticket foi resolvido',
     badgeColor: '#10b981',
     badgeLabel: 'Resolvido',
     mainMessage: 'Temos o prazer de informar que seu chamado foi resolvido com sucesso!',
-    ctaText: '📋 Ver Meus Tickets',
+    ctaText: 'Ver Meus Tickets',
     triggerType: 'ticket_resolved',
   },
   closed: {
-    emoji: '🔒',
     subjectPrefix: 'Ticket encerrado',
     badgeColor: '#6b7280',
     badgeLabel: 'Encerrado',
     mainMessage: 'Seu ticket foi encerrado. Se precisar de ajuda adicional sobre o mesmo assunto, você pode abrir um novo chamado.',
-    ctaText: '➕ Abrir Novo Ticket',
+    ctaText: 'Abrir Novo Ticket',
     triggerType: 'ticket_closed',
   },
   assigned: {
-    emoji: '👤',
     subjectPrefix: 'Seu ticket foi atribuído',
     badgeColor: '#7c3aed',
     badgeLabel: 'Atribuído',
     mainMessage: 'Um especialista foi designado para cuidar do seu chamado.',
-    ctaText: '📋 Ver Ticket',
+    ctaText: 'Ver Ticket',
     triggerType: 'ticket_assigned',
   },
 };
@@ -131,7 +124,7 @@ function generateDefaultEmailHTML(
           <tr>
             <td style="padding: 32px 48px 16px; text-align: center;">
               <span style="display: inline-block; padding: 8px 20px; background-color: ${config.badgeColor}; color: #ffffff; font-size: 14px; font-weight: 600; border-radius: 20px;">
-                ${config.emoji} ${config.badgeLabel}
+                ${config.badgeLabel}
               </span>
             </td>
           </tr>
@@ -168,7 +161,7 @@ function generateDefaultEmailHTML(
               <!-- Agent Note -->
               <div style="background-color: #eff6ff; border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid #bfdbfe;">
                 <p style="margin: 0 0 8px; font-size: 12px; font-weight: 600; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.5px;">
-                  💬 Mensagem do Atendente
+                  Mensagem do Atendente
                 </p>
                 <p style="margin: 0; font-size: 15px; color: #1e40af; line-height: 24px;">
                   ${note}
@@ -349,7 +342,7 @@ serve(async (req) => {
       emailSubject = replaceVariables(customTemplate.subject, variables);
     } else {
       console.log(`[send-ticket-status-notification] Using default template for ${new_status}`);
-      emailSubject = `${config.emoji} ${config.subjectPrefix} - ${ticketNumber}`;
+      emailSubject = `${config.subjectPrefix} - ${ticketNumber}`;
       html = generateDefaultEmailHTML(
         customerName,
         ticketNumber,

@@ -75,7 +75,7 @@ function generateTicketEmailHTML(
           <!-- Ticket Header -->
           <tr>
             <td style="background: ${priorityColor}; padding: 20px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 24px;">🎫 Ticket Criado</h1>
+              <h1 style="color: white; margin: 0; font-size: 24px;">Ticket Criado</h1>
             </td>
           </tr>
           
@@ -158,7 +158,7 @@ function generateTicketEmailHTML(
                   <td style="text-align: center;">
                     <a href="${portalUrl}/my-tickets" 
                        style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #2563eb 0%, #1e3a5f 100%); color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 600; border-radius: 8px;">
-                      📋 Acompanhar Meus Tickets
+                      Acompanhar Meus Tickets
                     </a>
                   </td>
                 </tr>
@@ -305,7 +305,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: `${senderName} <${senderEmail}>`,
         to: [customer_email],
-        subject: `🎫 Ticket #${ticket_number} - ${subject} #${ticket_id.slice(0, 8)}`,
+        subject: `Ticket #${ticket_number} - ${subject} #${ticket_id.slice(0, 8)}`,
         html,
         tags: [
           { name: "ticket_id", value: ticket_id },
