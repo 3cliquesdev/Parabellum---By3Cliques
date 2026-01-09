@@ -54,12 +54,13 @@ serve(async (req) => {
 
     for (const deal of pendingDeals) {
       try {
-        // Mark deal as won/organic
+        // Mark deal as won/organic - remove seller attribution
         const { error: updateError } = await supabase
           .from("deals")
           .update({
             status: "won",
             is_organic_sale: true,
+            assigned_to: null, // Remove seller attribution for organic sales
             closed_at: new Date().toISOString(),
             pending_payment_at: null, // Clear the pending flag
           })
