@@ -71,6 +71,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Roles que podem receber distribuição automática de conversas
+    const DISTRIBUTION_ALLOWED_ROLES = [
+      'support_agent', 
+      'consultant', 
+      'sales_rep', 
+      'financial_agent'
+    ];
+
     // Buscar informações do agente
     const { data: agent, error: agentError } = await supabaseClient
       .from('profiles')
@@ -86,12 +94,37 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Buscar todos os agentes online para load balancing
+    // Verificar se o usuário tem role elegível para receber distribuição
+    const { data: agentRole } = await supabaseClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', agentId)
+      .single();
+
+    if (!agentRole || !DISTRIBUTION_ALLOWED_ROLES.includes(agentRole.role)) {
+      console.log(`[distribute-pending] Usuário ${agent.full_name} (${agentRole?.role || 'sem role'}) não recebe distribuição automática`);
+      return new Response(JSON.stringify({ 
+        status: 'ok', 
+        message: 'Usuário não elegível para distribuição automática',
+        distributed: 0,
+        reason: `Role '${agentRole?.role || 'undefined'}' não recebe conversas automaticamente`
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Buscar IDs de agentes com roles elegíveis
+    const { data: eligibleAgentIds } = await supabaseClient
+      .from('user_roles')
+      .select('user_id')
+      .in('role', DISTRIBUTION_ALLOWED_ROLES);
+
+    // Buscar agentes online que podem receber conversas
     const { data: onlineAgents } = await supabaseClient
       .from('profiles')
       .select('id, full_name')
       .eq('availability_status', 'online')
-      .in('role', ['admin', 'agent', 'consultant']);
+      .in('id', eligibleAgentIds?.map(a => a.user_id) || []);
 
     const totalOnlineAgents = onlineAgents?.length || 1;
     console.log(`[distribute-pending] ${totalOnlineAgents} agentes online`);

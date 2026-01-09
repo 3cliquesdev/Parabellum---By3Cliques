@@ -18,7 +18,7 @@ export function useAIMode(conversationId: string | null) {
         .single();
 
       if (error) throw error;
-      return data?.ai_mode as "autopilot" | "copilot" | "disabled" | null;
+      return data?.ai_mode as "autopilot" | "copilot" | "disabled" | "waiting_human" | null;
     },
     enabled: !!conversationId,
   });
