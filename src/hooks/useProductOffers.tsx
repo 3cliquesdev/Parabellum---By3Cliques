@@ -165,7 +165,9 @@ export const useMoveProductOffer = () => {
       return { merged: false };
     },
     onSuccess: (result) => {
+      // Invalida todas as queries relacionadas a ofertas e produtos
       queryClient.invalidateQueries({ queryKey: ["product-offers"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({
         title: result?.merged ? "Oferta mesclada" : "Oferta movida",
         description: result?.merged 
