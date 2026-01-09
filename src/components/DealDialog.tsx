@@ -88,6 +88,19 @@ const dealSchema = z.object({
 
 type DealFormData = z.infer<typeof dealSchema>;
 
+// Funções de formatação de moeda para valores grandes
+const formatCurrencyInput = (value: string | number | null | undefined): string => {
+  if (value === null || value === undefined || value === "") return "";
+  const numStr = String(value).replace(/\D/g, "");
+  if (!numStr) return "";
+  return new Intl.NumberFormat("pt-BR").format(parseInt(numStr));
+};
+
+const parseCurrencyInput = (value: string): string => {
+  const num = value.replace(/\D/g, "");
+  return num || "";
+};
+
 const LOST_REASONS = [
   { value: "nunca_respondeu", label: "Nunca respondeu" },
   { value: "parou_interagir", label: "Parou de interagir" },
@@ -355,7 +368,16 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
                   <FormItem>
                     <FormLabel>Valor (opcional)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                      <Input 
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={formatCurrencyInput(field.value)}
+                        onChange={(e) => {
+                          const parsed = parseCurrencyInput(e.target.value);
+                          field.onChange(parsed);
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
