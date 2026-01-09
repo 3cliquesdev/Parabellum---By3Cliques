@@ -18,6 +18,8 @@ interface UnmappedAlert {
 interface ProductGroup {
   kiwify_product_id: string;
   product_name: string;
+  offer_id?: string;
+  offer_name?: string;
   alerts: UnmappedAlert[];
   is_mapped: boolean;
 }
@@ -35,11 +37,16 @@ export function UnmappedProductsSection({ alerts, products }: UnmappedProductsSe
     const metadata = alert.metadata as any;
     const productId = metadata?.product_id || 'unknown';
     const productName = metadata?.product_name || 'Produto Desconhecido';
+    // Extrair offer_id do metadata se disponível (subscription_plan_id)
+    const offerId = metadata?.offer_id || metadata?.subscription_plan_id;
+    const offerName = metadata?.offer_name || metadata?.subscription_plan_name;
 
     if (!acc[productId]) {
       acc[productId] = {
         kiwify_product_id: productId,
         product_name: productName,
+        offer_id: offerId,
+        offer_name: offerName,
         alerts: [],
         is_mapped: false,
       };
@@ -128,7 +135,9 @@ export function UnmappedProductsSection({ alerts, products }: UnmappedProductsSe
                               const event = new CustomEvent('map-unmapped-product', {
                                 detail: {
                                   kiwify_product_id: group.kiwify_product_id,
-                                  product_name: group.product_name
+                                  product_name: group.product_name,
+                                  offer_id: group.offer_id,
+                                  offer_name: group.offer_name
                                 }
                               });
                               window.dispatchEvent(event);
