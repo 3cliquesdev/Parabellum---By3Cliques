@@ -34,10 +34,10 @@ serve(async (req) => {
       );
     }
 
-    // Fetch form
+    // Fetch form with specific public fields only
     const { data: form, error: formError } = await supabase
       .from('forms')
-      .select('*')
+      .select('id, name, title, description, schema, is_active')
       .eq('id', formId)
       .eq('is_active', true)
       .single();
@@ -49,27 +49,22 @@ serve(async (req) => {
       );
     }
 
-    // GET /schema - Public endpoint for form structure
+    // GET /schema - Public endpoint for form structure (updated for schema-based structure)
     if (action === 'schema' && req.method === 'GET') {
-      const fields = (form.fields as any[]).map(field => ({
-        id: field.id,
-        type: field.type,
-        label: field.label,
-        placeholder: field.placeholder,
-        required: field.required,
-        options: field.options,
-        validation_type: field.validation_type,
-        validation_message: field.validation_message,
-      }));
+      // The form now uses `schema` JSON field containing fields, settings, ticket_settings
+      const formSchema = form.schema as { 
+        fields?: any[]; 
+        settings?: any; 
+        ticket_settings?: any 
+      } | null;
 
       return new Response(
         JSON.stringify({
           id: form.id,
           name: form.name,
+          title: form.title,
           description: form.description,
-          fields,
-          settings: form.settings,
-          theme: form.theme,
+          schema: formSchema || { fields: [], settings: {} },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -118,7 +113,7 @@ serve(async (req) => {
           conditions: conditions || [],
           calculations: calculations || [],
           automations: automations || [],
-          conditional_logic: form.conditional_logic,
+          conditional_logic: (form.schema as any)?.conditional_logic || null,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

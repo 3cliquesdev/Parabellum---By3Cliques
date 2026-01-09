@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { useForm } from "@/hooks/useForms";
+import { usePublicFormSchema } from "@/hooks/usePublicFormSchema";
 import { FormField, FormSchema, FieldLogic, DEFAULT_FORM_SETTINGS, FormSettings } from "@/hooks/useForms";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -33,10 +33,11 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
   const { formId: paramFormId } = useParams<{ formId: string }>();
   const formId = propFormId || paramFormId;
   
-  const { data: formData, isLoading: isLoadingForm } = useForm(isPreview ? undefined : formId);
+  // Use public endpoint for non-preview mode (works without auth)
+  const { data: publicFormData, isLoading: isLoadingForm } = usePublicFormSchema(isPreview ? undefined : formId);
 
-  // Use prop schema for preview, or loaded form data
-  const schema = propSchema || formData?.schema;
+  // Use prop schema for preview, or loaded form data from public endpoint
+  const schema = propSchema || publicFormData?.schema;
   const settings = { ...DEFAULT_FORM_SETTINGS, ...schema?.settings };
   const fields = schema?.fields || [];
   const displayMode = settings.display_mode || "conversational";
@@ -348,7 +349,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
   }
 
   // No form found
-  if (!isPreview && !formData) {
+  if (!isPreview && !publicFormData) {
     return (
       <div 
         className="min-h-screen flex items-center justify-center"
@@ -411,8 +412,8 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
         schema={schema} 
         formId={formId} 
         isPreview={isPreview}
-        title={formData?.title || formTitle || formData?.name || formName}
-        description={formData?.description || formDescription}
+        title={publicFormData?.title || formTitle || publicFormData?.name || formName}
+        description={publicFormData?.description || formDescription}
         isEmbedded={isEmbedded}
       />
     );
@@ -486,7 +487,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
               />
             </div>
           )}
-          {(formData?.title || formTitle || formData?.name || formName) && (
+          {(publicFormData?.title || formTitle || publicFormData?.name || formName) && (
             <h1 
               className="mb-2 break-words whitespace-pre-wrap"
               style={{ 
@@ -497,10 +498,10 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
                 lineHeight,
               }}
             >
-              {formData?.title || formTitle || formData?.name || formName}
+              {publicFormData?.title || formTitle || publicFormData?.name || formName}
             </h1>
           )}
-          {(formData?.description || formDescription) && (
+          {(publicFormData?.description || formDescription) && (
             <p 
               className="mb-4 break-words whitespace-pre-wrap"
               style={{ 
@@ -511,7 +512,7 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
                 lineHeight,
               }}
             >
-              {formData?.description || formDescription}
+              {publicFormData?.description || formDescription}
             </p>
           )}
           {settings.show_progress_bar !== false && fields.length > 0 && settings.progress_position !== "bottom" && (
