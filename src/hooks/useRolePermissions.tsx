@@ -62,7 +62,8 @@ export function useAllRolePermissions() {
         .select("*")
         .order("role")
         .order("permission_category")
-        .order("permission_key");
+        .order("permission_key")
+        .limit(2000);
 
       if (error) throw error;
       return data as RolePermission[];

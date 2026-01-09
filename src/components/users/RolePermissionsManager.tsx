@@ -47,15 +47,18 @@ const CATEGORY_LABELS: Record<string, { label: string }> = {
   settings: { label: "Configurações" },
   audit: { label: "Auditoria" },
   cadastros: { label: "Cadastros" },
+  goals: { label: "Metas" },
+  projects: { label: "Projetos" },
+  Sistema: { label: "Sistema" },
 };
 
 // Define category display order
 const CATEGORY_ORDER = [
   'inbox', 'contacts', 'deals', 'tickets', 'quotes', 'forms',
   'playbooks', 'automations', 'email', 'ai', 
-  'cs', 'sales', 'analytics',
+  'cs', 'sales', 'analytics', 'goals', 'projects',
   'cadastros', 'knowledge', 'cadences', 'products', 'users',
-  'settings', 'audit', 'dashboard', 'reports'
+  'settings', 'audit', 'dashboard', 'reports', 'Sistema'
 ];
 
 export function RolePermissionsManager() {
