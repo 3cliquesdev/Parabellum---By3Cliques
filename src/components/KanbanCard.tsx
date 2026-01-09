@@ -8,7 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Pencil, AlertCircle, CheckCircle, AlertTriangle, Skull, MessageSquare, Phone, FileText, ArrowRightLeft } from "lucide-react";
+import { Pencil, AlertCircle, CheckCircle, AlertTriangle, Skull, MessageSquare, Phone, FileText, ArrowRightLeft, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useDeleteDeal } from "@/hooks/useDeals";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import DealDialog from "./DealDialog";
@@ -43,6 +55,7 @@ export default function KanbanCard({
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const deleteDeal = useDeleteDeal();
   
   // Formatar número WhatsApp com código do país
   const formatWhatsAppNumber = (phone: string) => {
@@ -414,6 +427,46 @@ export default function KanbanCard({
                     </TooltipProvider>
                   </>
                 )}
+
+                {/* Delete Deal Button */}
+                <AlertDialog>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <AlertDialogTrigger asChild>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                      </AlertDialogTrigger>
+                      <TooltipContent>Excluir Negociação</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir Negociação</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Tem certeza que deseja excluir "{deal.title}"? 
+                        Esta ação não pode ser desfeita.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteDeal.mutate(deal.id)}
+                        className="bg-destructive hover:bg-destructive/90"
+                      >
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
           </div>
