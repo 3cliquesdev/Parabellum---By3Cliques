@@ -261,8 +261,9 @@ serve(async (req) => {
     const logoUrl = brandingData?.logo_url || 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-seuarmazemdrop.png';
     senderName = sanitizeName(brandName);
 
-    // Buscar URL do portal de tickets
-    let portalUrl = 'https://seuarmazemdrop.parabellum.work'; // fallback
+    // Buscar URL do portal de tickets - fallback dinâmico
+    const projectId = supabaseUrl?.match(/https:\/\/([^.]+)/)?.[1];
+    let portalUrl = `https://${projectId}.lovable.app`;
     
     const { data: portalConfig } = await supabase
       .from('system_configurations')
