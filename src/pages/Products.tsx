@@ -10,6 +10,7 @@ import { ProductDialog } from "@/components/ProductDialog";
 import { ProductMappingDiagnostic } from "@/components/products/ProductMappingDiagnostic";
 import ProductBoardMappingsContent from "@/components/products/ProductBoardMappingsContent";
 import { MergeProductDialog } from "@/components/products/MergeProductDialog";
+import { LinkOfferToProductDialog } from "@/components/products/LinkOfferToProductDialog";
 
 import {
   AlertDialog,
@@ -34,6 +35,13 @@ export default function Products() {
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [productToMerge, setProductToMerge] = useState<{ id: string; name: string; external_id?: string | null } | null>(null);
+  const [linkOfferDialogOpen, setLinkOfferDialogOpen] = useState(false);
+  const [offerToLink, setOfferToLink] = useState<{
+    kiwify_product_id: string;
+    product_name: string;
+    offer_id?: string;
+    offer_name?: string;
+  } | null>(null);
 
   const handleMerge = (product: any) => {
     setProductToMerge({
@@ -50,13 +58,25 @@ export default function Products() {
     setDialogOpen(true);
   };
 
-  const handleMapUnmapped = (kiwifyProductId: string, productName: string) => {
-    setSelectedProduct(null);
-    setInitialProductData({
-      name: productName,
-      external_id: kiwifyProductId,
+  const handleMapUnmapped = (kiwifyProductId: string, productName: string, offerId?: string, offerName?: string) => {
+    setOfferToLink({
+      kiwify_product_id: kiwifyProductId,
+      product_name: productName,
+      offer_id: offerId,
+      offer_name: offerName,
     });
-    setDialogOpen(true);
+    setLinkOfferDialogOpen(true);
+  };
+
+  const handleCreateNewFromOffer = () => {
+    if (offerToLink) {
+      setSelectedProduct(null);
+      setInitialProductData({
+        name: offerToLink.product_name,
+        external_id: offerToLink.kiwify_product_id,
+      });
+      setDialogOpen(true);
+    }
   };
 
   // Listen for edit-product event from diagnostic
@@ -70,8 +90,8 @@ export default function Products() {
     };
 
     const handleMapUnmappedEvent = (event: CustomEvent) => {
-      const { kiwify_product_id, product_name } = event.detail;
-      handleMapUnmapped(kiwify_product_id, product_name);
+      const { kiwify_product_id, product_name, offer_id, offer_name } = event.detail;
+      handleMapUnmapped(kiwify_product_id, product_name, offer_id, offer_name);
     };
 
     window.addEventListener('edit-product', handleEditProductEvent as EventListener);
@@ -279,6 +299,13 @@ export default function Products() {
         open={mergeDialogOpen}
         onOpenChange={setMergeDialogOpen}
         sourceProduct={productToMerge}
+      />
+
+      <LinkOfferToProductDialog
+        open={linkOfferDialogOpen}
+        onOpenChange={setLinkOfferDialogOpen}
+        offerData={offerToLink}
+        onCreateNew={handleCreateNewFromOffer}
       />
     </div>
   );
