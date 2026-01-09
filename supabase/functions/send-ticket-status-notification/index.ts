@@ -297,8 +297,11 @@ serve(async (req) => {
     const logoUrl = brandingData?.logo_url || 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-seuarmazemdrop.png';
     senderName = sanitizeName(brandName);
 
-    // Fetch portal URL
-    let portalUrl = 'https://seuarmazemdrop.parabellum.work';
+    // Fetch portal URL - fallback dinâmico
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const projectId = supabaseUrl?.match(/https:\/\/([^.]+)/)?.[1];
+    let portalUrl = `https://${projectId}.lovable.app`;
+    
     const { data: portalConfig } = await supabase
       .from("system_configurations")
       .select("value")
