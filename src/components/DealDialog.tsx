@@ -88,17 +88,26 @@ const dealSchema = z.object({
 
 type DealFormData = z.infer<typeof dealSchema>;
 
-// Funções de formatação de moeda para valores grandes
+// Funções de formatação de moeda com suporte a centavos (padrão BR)
 const formatCurrencyInput = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined || value === "") return "";
-  const numStr = String(value).replace(/\D/g, "");
-  if (!numStr) return "";
-  return new Intl.NumberFormat("pt-BR").format(parseInt(numStr));
+  
+  const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+  if (isNaN(numValue)) return "";
+  
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numValue);
 };
 
-const parseCurrencyInput = (value: string): string => {
-  const num = value.replace(/\D/g, "");
-  return num || "";
+const parseCurrencyInput = (value: string): number | null => {
+  // Remove pontos (separador de milhar) e substitui vírgula por ponto
+  const cleaned = value.replace(/\./g, '').replace(',', '.');
+  if (!cleaned) return null;
+  
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? null : num;
 };
 
 const LOST_REASONS = [
@@ -370,12 +379,12 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
                     <FormControl>
                       <Input 
                         type="text"
-                        inputMode="numeric"
-                        placeholder="0"
+                        inputMode="decimal"
+                        placeholder="0,00"
                         value={formatCurrencyInput(field.value)}
                         onChange={(e) => {
                           const parsed = parseCurrencyInput(e.target.value);
-                          field.onChange(parsed);
+                          field.onChange(parsed !== null ? parsed.toString() : "");
                         }}
                       />
                     </FormControl>
