@@ -148,41 +148,41 @@ export default function TransferConversationDialog({
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
                 ) : (
-                  <ScrollArea className="max-h-[200px] pr-4">
-                    <div className="space-y-2">
+                  <ScrollArea className="h-[200px]">
+                    <div className="space-y-2 pr-4">
                       {availableUsers?.map((user) => (
-                  <button
-                    key={user.id}
-                    onClick={() => setSelectedUserId(user.id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all hover:bg-accent ${
-                      selectedUserId === user.id
-                        ? "border-primary bg-accent"
-                        : "border-border"
-                    }`}
-                  >
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage
-                        src={user.avatar_url || undefined}
-                        alt={user.full_name}
-                      />
-                      <AvatarFallback>
-                        {user.full_name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 text-left">
-                      <p className="font-medium">{user.full_name}</p>
-                      {user.job_title && (
-                        <p className="text-sm text-muted-foreground">
-                          {user.job_title}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                ))}
+                        <button
+                          key={user.id}
+                          onClick={() => setSelectedUserId(user.id)}
+                          className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all hover:bg-accent ${
+                            selectedUserId === user.id
+                              ? "border-primary bg-accent"
+                              : "border-border"
+                          }`}
+                        >
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage
+                              src={user.avatar_url || undefined}
+                              alt={user.full_name}
+                            />
+                            <AvatarFallback>
+                              {user.full_name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 text-left">
+                            <p className="font-medium">{user.full_name}</p>
+                            {user.job_title && (
+                              <p className="text-sm text-muted-foreground">
+                                {user.job_title}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      ))}
 
                       {(!availableUsers || availableUsers.length === 0) && (
                         <p className="text-center text-muted-foreground py-4">
