@@ -4344,6 +4344,101 @@ export type Database = {
           },
         ]
       }
+      product_board_mappings: {
+        Row: {
+          auto_assign_user_id: string | null
+          board_id: string
+          created_at: string
+          email_template_id: string | null
+          form_filled_column_id: string | null
+          form_id: string | null
+          id: string
+          initial_column_id: string
+          is_active: boolean | null
+          product_id: string
+          send_welcome_email: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          auto_assign_user_id?: string | null
+          board_id: string
+          created_at?: string
+          email_template_id?: string | null
+          form_filled_column_id?: string | null
+          form_id?: string | null
+          id?: string
+          initial_column_id: string
+          is_active?: boolean | null
+          product_id: string
+          send_welcome_email?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          auto_assign_user_id?: string | null
+          board_id?: string
+          created_at?: string
+          email_template_id?: string | null
+          form_filled_column_id?: string | null
+          form_id?: string | null
+          id?: string
+          initial_column_id?: string
+          is_active?: boolean | null
+          product_id?: string
+          send_welcome_email?: boolean | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_board_mappings_auto_assign_user_id_fkey"
+            columns: ["auto_assign_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_board_mappings_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "project_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_board_mappings_email_template_id_fkey"
+            columns: ["email_template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_board_mappings_form_filled_column_id_fkey"
+            columns: ["form_filled_column_id"]
+            isOneToOne: false
+            referencedRelation: "project_columns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_board_mappings_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_board_mappings_initial_column_id_fkey"
+            columns: ["initial_column_id"]
+            isOneToOne: false
+            referencedRelation: "project_columns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_board_mappings_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_offers: {
         Row: {
           created_at: string | null
@@ -4927,14 +5022,17 @@ export type Database = {
           column_id: string
           completed_at: string | null
           completed_by: string | null
+          contact_id: string | null
           cover_image_url: string | null
           created_at: string | null
           created_by: string | null
           description: string | null
           due_date: string | null
           estimated_hours: number | null
+          form_submission_id: string | null
           id: string
           is_completed: boolean | null
+          kiwify_order_id: string | null
           position: number
           priority: string | null
           start_date: string | null
@@ -4947,14 +5045,17 @@ export type Database = {
           column_id: string
           completed_at?: string | null
           completed_by?: string | null
+          contact_id?: string | null
           cover_image_url?: string | null
           created_at?: string | null
           created_by?: string | null
           description?: string | null
           due_date?: string | null
           estimated_hours?: number | null
+          form_submission_id?: string | null
           id?: string
           is_completed?: boolean | null
+          kiwify_order_id?: string | null
           position?: number
           priority?: string | null
           start_date?: string | null
@@ -4967,14 +5068,17 @@ export type Database = {
           column_id?: string
           completed_at?: string | null
           completed_by?: string | null
+          contact_id?: string | null
           cover_image_url?: string | null
           created_at?: string | null
           created_by?: string | null
           description?: string | null
           due_date?: string | null
           estimated_hours?: number | null
+          form_submission_id?: string | null
           id?: string
           is_completed?: boolean | null
+          kiwify_order_id?: string | null
           position?: number
           priority?: string | null
           start_date?: string | null
@@ -5004,10 +5108,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_cards_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_cards_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_cards_form_submission_id_fkey"
+            columns: ["form_submission_id"]
+            isOneToOne: false
+            referencedRelation: "form_submissions"
             referencedColumns: ["id"]
           },
         ]

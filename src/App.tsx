@@ -96,6 +96,7 @@ const InternalRequests = lazy(() => import("./pages/InternalRequests"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
 const ProjectBoardPage = lazy(() => import("./pages/ProjectBoardPage"));
 const FormBoardIntegrationsPage = lazy(() => import("./pages/FormBoardIntegrationsPage"));
+const ProductBoardMappingsPage = lazy(() => import("./pages/ProductBoardMappingsPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -215,6 +216,7 @@ const App = () => {
               <Route path="/projects" element={<ProtectedRoute requiredPermission="projects.view"><Layout><ProjectsPage /></Layout></ProtectedRoute>} />
               <Route path="/projects/:boardId" element={<ProtectedRoute requiredPermission="projects.view"><Layout><ProjectBoardPage /></Layout></ProtectedRoute>} />
               <Route path="/form-integrations" element={<ProtectedRoute requiredPermission="forms.view"><Layout><FormBoardIntegrationsPage /></Layout></ProtectedRoute>} />
+              <Route path="/product-board-mappings" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ProductBoardMappingsPage /></Layout></ProtectedRoute>} />
               
               {/* Catch-all route - must be last */}
               <Route path="*" element={<NotFound />} />

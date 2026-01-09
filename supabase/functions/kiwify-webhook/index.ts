@@ -1070,6 +1070,141 @@ async function handlePaidOrder(
     if (playbook) playbook_ids = [playbook.id];
   }
 
+  // ============================================
+  // 🆕 KANBAN CARD AUTO-CREATION
+  // Check if product has mapping to create card automatically
+  // ============================================
+  let createdCardId: string | null = null;
+  
+  if (product) {
+    const { data: boardMapping } = await supabase
+      .from('product_board_mappings')
+      .select(`
+        *,
+        board:project_boards(id, name),
+        initial_column:project_columns!product_board_mappings_initial_column_id_fkey(id, name),
+        form:forms(id, name, short_code)
+      `)
+      .eq('product_id', product.id)
+      .eq('is_active', true)
+      .single();
+
+    if (boardMapping) {
+      console.log(`[kiwify-webhook] 📋 Found board mapping for product ${product.name} -> board ${boardMapping.board?.name}`);
+      
+      // Calculate next position in initial column
+      const { data: existingCards } = await supabase
+        .from('project_cards')
+        .select('position')
+        .eq('column_id', boardMapping.initial_column_id)
+        .order('position', { ascending: false })
+        .limit(1);
+      const nextPosition = (existingCards?.[0]?.position ?? -1) + 1;
+
+      // Create card in Kanban
+      const cardDescription = `**Cliente:** ${Customer.full_name}
+**Email:** ${Customer.email}
+**Telefone:** ${Customer.mobile || Customer.mobile_phone || Customer.phone || 'Não informado'}
+**Produto:** ${Product.product_name}
+**Pedido Kiwify:** ${order_id}
+**Valor:** R$ ${grossValue.toFixed(2)}
+
+⏳ Aguardando preenchimento do formulário`;
+
+      const { data: newCard, error: cardError } = await supabase
+        .from('project_cards')
+        .insert({
+          board_id: boardMapping.board_id,
+          column_id: boardMapping.initial_column_id,
+          title: `${Customer.full_name} - ${Product.product_name}`,
+          description: cardDescription,
+          priority: 'high',
+          contact_id: contact.id,
+          kiwify_order_id: order_id,
+          position: nextPosition,
+        })
+        .select()
+        .single();
+
+      if (cardError) {
+        console.error('[kiwify-webhook] ❌ Error creating kanban card:', cardError);
+      } else if (newCard) {
+        createdCardId = newCard.id;
+        console.log(`[kiwify-webhook] ✅ Kanban card created: ${newCard.id}`);
+
+        // Assign user if configured
+        if (boardMapping.auto_assign_user_id) {
+          await supabase.from('project_card_assignees').insert({
+            card_id: newCard.id,
+            user_id: boardMapping.auto_assign_user_id,
+          });
+          console.log(`[kiwify-webhook] 👤 Card assigned to user: ${boardMapping.auto_assign_user_id}`);
+        }
+
+        // Send welcome email with form link if configured
+        if (boardMapping.send_welcome_email && boardMapping.form_id && boardMapping.form) {
+          const formShortCode = boardMapping.form.short_code || boardMapping.form_id;
+          const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+          // Extract project ref from URL (between https:// and .supabase.co)
+          const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase/)?.[1] || '';
+          const appBaseUrl = `https://${projectRef}.lovableproject.com`;
+          const formUrl = `${appBaseUrl}/f/${formShortCode}`;
+
+          try {
+            // Get email template if configured
+            let emailSubject = `Próximos passos: ${Product.product_name}`;
+            let emailHtml = `
+              <p>Olá ${Customer.full_name},</p>
+              <p>Obrigado pela sua compra de <strong>${Product.product_name}</strong>!</p>
+              <p>Para dar continuidade ao seu projeto, por favor preencha o formulário abaixo com as informações necessárias:</p>
+              <p style="margin: 24px 0;">
+                <a href="${formUrl}" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                  Preencher Formulário
+                </a>
+              </p>
+              <p>Se o botão não funcionar, copie e cole este link no navegador:</p>
+              <p>${formUrl}</p>
+              <p>Obrigado!</p>
+            `;
+
+            if (boardMapping.email_template_id) {
+              const { data: template } = await supabase
+                .from('email_templates')
+                .select('subject, html_body')
+                .eq('id', boardMapping.email_template_id)
+                .single();
+
+              if (template) {
+                emailSubject = template.subject
+                  .replace(/\{\{customer_name\}\}/g, Customer.full_name)
+                  .replace(/\{\{product_name\}\}/g, Product.product_name)
+                  .replace(/\{\{form_url\}\}/g, formUrl);
+                emailHtml = template.html_body
+                  .replace(/\{\{customer_name\}\}/g, Customer.full_name)
+                  .replace(/\{\{product_name\}\}/g, Product.product_name)
+                  .replace(/\{\{form_url\}\}/g, formUrl);
+              }
+            }
+
+            await supabase.functions.invoke('send-email', {
+              body: {
+                to: Customer.email,
+                to_name: Customer.full_name,
+                subject: emailSubject,
+                html: emailHtml,
+                customer_id: contact.id,
+                is_customer_email: true,
+              },
+            });
+            console.log(`[kiwify-webhook] 📧 Welcome email sent with form link: ${formUrl}`);
+          } catch (emailError) {
+            console.error('[kiwify-webhook] ❌ Failed to send welcome email:', emailError);
+          }
+        }
+      }
+    }
+  }
+
   // 4. 🎯 Iniciar TODOS os Playbooks (CORRIGIDO - com fila)
   const started_executions: string[] = [];
   for (const playbook_id of playbook_ids) {
@@ -1088,7 +1223,7 @@ async function handlePaidOrder(
       customer_id: contact.id,
       type: 'note',
       channel: 'other',
-      content: `✅ Venda aprovada via Kiwify: ${Product.product_name} (Novo Cliente)`,
+      content: `✅ Venda aprovada via Kiwify: ${Product.product_name} (Novo Cliente)${createdCardId ? ' - Card criado no Kanban' : ''}`,
       metadata: {
         product: Product.product_name,
         product_id: Product.product_id,
@@ -1097,7 +1232,8 @@ async function handlePaidOrder(
         value: Commissions.product_base_price,
         order_id,
         kiwify_customer_id: Customer.id,
-        new_customer: true
+        new_customer: true,
+        kanban_card_id: createdCardId
       }
     });
 
@@ -1109,7 +1245,8 @@ async function handlePaidOrder(
     sale_net_value: netValue,
     playbook_ids,
     playbooks_count: playbook_ids.length,
-    message: `Novo cliente criado (venda orgânica R$ ${netValue.toFixed(2)}), Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)`
+    kanban_card_id: createdCardId,
+    message: `Novo cliente criado (venda orgânica R$ ${netValue.toFixed(2)}), Auth configurado, ${playbook_ids.length} playbook(s) iniciado(s)${createdCardId ? ', card Kanban criado' : ''}`
   };
 }
 

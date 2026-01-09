@@ -963,6 +963,74 @@ serve(async (req) => {
     }
 
     // ============================================
+    // STEP 4.6: UPDATE EXISTING KIWIFY KANBAN CARD
+    // If contact has card from Kiwify sale, update and move it
+    // ============================================
+    if (contactId) {
+      const { data: existingKiwifyCard } = await supabase
+        .from('project_cards')
+        .select('id, board_id, column_id, description')
+        .eq('contact_id', contactId)
+        .not('kiwify_order_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existingKiwifyCard) {
+        console.log(`[form-submit-v3] Found existing Kiwify card: ${existingKiwifyCard.id}`);
+
+        // Build description from form answers
+        const formDescriptionLines = fields.map((f: any) => {
+          const val = sanitizedAnswers[f.id];
+          if (!val || val === '') return null;
+          if (f.type === 'file') return null;
+          return `**${f.label}:** ${val}`;
+        }).filter(Boolean);
+        const formDescription = formDescriptionLines.join('\n\n');
+
+        // Append form data to existing description
+        const updatedDescription = existingKiwifyCard.description + 
+          '\n\n---\n✅ **Formulário Preenchido:**\n\n' + formDescription;
+
+        const updateData: any = {
+          description: updatedDescription,
+          form_submission_id: submission?.id,
+          updated_at: new Date().toISOString(),
+        };
+
+        // Check if there's a product_board_mapping for this form to move card
+        const { data: boardMapping } = await supabase
+          .from('product_board_mappings')
+          .select('form_filled_column_id')
+          .eq('board_id', existingKiwifyCard.board_id)
+          .eq('form_id', form_id)
+          .eq('is_active', true)
+          .single();
+
+        if (boardMapping?.form_filled_column_id) {
+          // Calculate new position in target column
+          const { data: cardsInTarget } = await supabase
+            .from('project_cards')
+            .select('position')
+            .eq('column_id', boardMapping.form_filled_column_id)
+            .order('position', { ascending: false })
+            .limit(1);
+          
+          updateData.column_id = boardMapping.form_filled_column_id;
+          updateData.position = (cardsInTarget?.[0]?.position ?? -1) + 1;
+          console.log(`[form-submit-v3] Moving card to column: ${boardMapping.form_filled_column_id}`);
+        }
+
+        await supabase
+          .from('project_cards')
+          .update(updateData)
+          .eq('id', existingKiwifyCard.id);
+
+        console.log(`[form-submit-v3] Kiwify card updated${boardMapping?.form_filled_column_id ? ' and moved' : ''}`);
+      }
+    }
+
+    // ============================================
     // STEP 4.7: KANBAN BOARD INTEGRATION
     // Creates a card automatically when form is submitted
     // ============================================
