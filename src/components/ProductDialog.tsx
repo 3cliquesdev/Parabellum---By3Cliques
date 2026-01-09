@@ -196,8 +196,13 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
-            {product ? "Configurar Produto" : "Mapear Produto"}
+            {product ? "Configurar Produto" : "Cadastrar Produto Kiwify"}
           </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            {product 
+              ? "Configure grupo de entrega e opções do produto já cadastrado."
+              : "Cadastre este produto Kiwify no sistema para vincular deals e automações."}
+          </p>
         </DialogHeader>
 
         {/* Product Info - Read Only */}
@@ -346,7 +351,7 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
                 Cancelar
               </Button>
               <Button type="submit" disabled={updateProduct.isPending || isCreating || (!product?.external_id && !initialData?.external_id)}>
-                {(updateProduct.isPending || isCreating) ? "Salvando..." : (product ? "Salvar" : "Mapear")}
+                {(updateProduct.isPending || isCreating) ? "Salvando..." : (product ? "Salvar" : "Cadastrar")}
               </Button>
             </div>
           </form>
