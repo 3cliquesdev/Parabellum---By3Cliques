@@ -4,11 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Loader2, Edit, Trash2, Package, ExternalLink, Activity, Kanban } from "lucide-react";
+import { Shield, Loader2, Edit, Trash2, Package, ExternalLink, Activity, Kanban, GitMerge } from "lucide-react";
 import { useProducts, useDeleteProduct } from "@/hooks/useProducts";
 import { ProductDialog } from "@/components/ProductDialog";
 import { ProductMappingDiagnostic } from "@/components/products/ProductMappingDiagnostic";
 import ProductBoardMappingsContent from "@/components/products/ProductBoardMappingsContent";
+import { MergeProductDialog } from "@/components/products/MergeProductDialog";
 
 import {
   AlertDialog,
@@ -31,6 +32,17 @@ export default function Products() {
   const [initialProductData, setInitialProductData] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [productToMerge, setProductToMerge] = useState<{ id: string; name: string; external_id?: string | null } | null>(null);
+
+  const handleMerge = (product: any) => {
+    setProductToMerge({
+      id: product.id,
+      name: product.name,
+      external_id: product.external_id,
+    });
+    setMergeDialogOpen(true);
+  };
 
   const handleEdit = (product: any) => {
     setSelectedProduct(product);
@@ -209,6 +221,14 @@ export default function Products() {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => handleMerge(product)}
+                          title="Unificar com outro produto"
+                        >
+                          <GitMerge className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleDelete(product.id)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -254,6 +274,12 @@ export default function Products() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <MergeProductDialog
+        open={mergeDialogOpen}
+        onOpenChange={setMergeDialogOpen}
+        sourceProduct={productToMerge}
+      />
     </div>
   );
 }
