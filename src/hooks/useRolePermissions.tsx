@@ -55,21 +55,38 @@ export function useRolePermissions() {
 // Hook for managing all permissions (admin only)
 export function useAllRolePermissions() {
   return useQuery({
-    queryKey: ["all-role-permissions", "v2"], // Force new cache key
+    queryKey: ["all-role-permissions", "v3"], // Force new cache key
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("role_permissions")
-        .select("*")
-        .order("role")
-        .order("permission_category")
-        .order("permission_key")
-        .limit(2000);
+      const allPermissions: RolePermission[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (error) throw error;
-      console.log("Loaded permissions:", data?.length);
-      return data as RolePermission[];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("role_permissions")
+          .select("*")
+          .order("role")
+          .order("permission_category")
+          .order("permission_key")
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allPermissions.push(...(data as RolePermission[]));
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      console.log("Total permissions loaded:", allPermissions.length);
+      return allPermissions;
     },
-    staleTime: 0, // Force refetch
+    staleTime: 60 * 1000, // 1 minute
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 
