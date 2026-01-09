@@ -23,7 +23,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye, HelpCircle, Plus, Trash2, Play, FileText, Shuffle } from "lucide-react";
+import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye, HelpCircle, Plus, Trash2, Play, FileText, Shuffle, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -207,6 +208,21 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
   };
 
   const handleSave = () => {
+    // Validar nodes de email sem template
+    const emailNodesWithoutTemplate = nodes.filter(
+      (node) => node.type === "email" && !node.data.template_id
+    );
+
+    if (emailNodesWithoutTemplate.length > 0) {
+      toast.error(
+        `${emailNodesWithoutTemplate.length} node(s) de email sem template configurado`,
+        {
+          description: `Configure: ${emailNodesWithoutTemplate.map(n => n.data.label).join(", ")}`
+        }
+      );
+      return;
+    }
+
     onSave({ nodes, edges });
   };
 
@@ -275,8 +291,16 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
             </div>
             {selectedNode.type === "email" && (
               <>
+                {!selectedNode.data.template_id && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <span>Selecione um template de email para continuar</span>
+                  </div>
+                )}
                 <div>
-                  <Label>Template de Email</Label>
+                  <Label className={!selectedNode.data.template_id ? "text-destructive font-medium" : ""}>
+                    Template de Email {!selectedNode.data.template_id && "*"}
+                  </Label>
                   <Select
                     value={selectedNode.data.template_id || ""}
                     onValueChange={(value) => {
@@ -288,7 +312,7 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                       }
                     }}
                   >
-                    <SelectTrigger className="bg-background text-foreground">
+                    <SelectTrigger className={`bg-background text-foreground ${!selectedNode.data.template_id ? "border-destructive" : ""}`}>
                       <SelectValue placeholder="Selecione um template..." />
                     </SelectTrigger>
                     <SelectContent className="z-[9999] bg-popover" sideOffset={5}>

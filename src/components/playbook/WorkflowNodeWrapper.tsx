@@ -13,6 +13,7 @@ interface WorkflowNodeWrapperProps {
   showTargetHandle?: boolean;
   showSourceHandle?: boolean;
   customHandles?: ReactNode;
+  hasError?: boolean;
 }
 
 const typeColors: Record<string, { header: string; border: string }> = {
@@ -60,6 +61,7 @@ export function WorkflowNodeWrapper({
   showTargetHandle = true,
   showSourceHandle = true,
   customHandles,
+  hasError = false,
 }: WorkflowNodeWrapperProps) {
   const colors = typeColors[type];
 
@@ -69,7 +71,7 @@ export function WorkflowNodeWrapper({
         "rounded-lg overflow-hidden shadow-lg min-w-[240px] bg-card",
         "border-2 transition-all duration-200",
         selected ? "ring-2 ring-primary ring-offset-2 scale-105" : "",
-        colors.border
+        hasError ? "border-destructive" : colors.border
       )}
     >
       {/* Header Colorido */}
