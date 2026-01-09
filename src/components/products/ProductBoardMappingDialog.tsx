@@ -117,7 +117,7 @@ export function ProductBoardMappingDialog({ open, onOpenChange, mapping }: Props
           <div className="space-y-2">
             <Label>Produto Kiwify *</Label>
             <Select
-              value={watch("product_id")}
+              value={watch("product_id") || undefined}
               onValueChange={(v) => setValue("product_id", v)}
             >
               <SelectTrigger>
@@ -137,7 +137,7 @@ export function ProductBoardMappingDialog({ open, onOpenChange, mapping }: Props
           <div className="space-y-2">
             <Label>Board de Destino *</Label>
             <Select
-              value={watch("board_id")}
+              value={watch("board_id") || undefined}
               onValueChange={(v) => {
                 setValue("board_id", v);
                 setValue("initial_column_id", "");
@@ -162,7 +162,7 @@ export function ProductBoardMappingDialog({ open, onOpenChange, mapping }: Props
             <div className="space-y-2">
               <Label>Coluna Inicial (onde card é criado) *</Label>
               <Select
-                value={watch("initial_column_id")}
+                value={watch("initial_column_id") || undefined}
                 onValueChange={(v) => setValue("initial_column_id", v)}
               >
                 <SelectTrigger>
