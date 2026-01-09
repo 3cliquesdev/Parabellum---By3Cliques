@@ -10,6 +10,7 @@ import { RatingField, YesNoField, LongTextField, DateField, SelectField } from "
 import { SinglePageFormView } from "@/components/forms/SinglePageFormView";
 import { FormFileUpload, UploadedFile } from "@/components/forms/FormFileUpload";
 import { FormProgressIndicator } from "@/components/forms/FormProgressIndicator";
+import { CacheBuster } from "@/components/pwa/CacheBuster";
 import { ChevronLeft, ChevronRight, Check, Loader2, AlertCircle } from "lucide-react";
 
 // Helper to convert hex to rgba
@@ -352,12 +353,17 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
   if (!isPreview && !publicFormData) {
     return (
       <div 
-        className="min-h-screen flex items-center justify-center"
+        className="min-h-screen flex items-center justify-center p-6"
         style={{ backgroundColor: settings.background_color }}
       >
-        <div className="text-center" style={{ color: settings.text_color }}>
+        <div className="text-center max-w-md" style={{ color: settings.text_color }}>
+          <AlertCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
           <h1 className="text-2xl font-bold mb-2">Formulário não encontrado</h1>
-          <p style={{ opacity: 0.6 }}>Este formulário pode ter sido desativado.</p>
+          <p style={{ opacity: 0.6 }}>Este formulário pode ter sido desativado ou o link está incorreto.</p>
+          <CacheBuster 
+            textColor={settings.text_color} 
+            buttonColor={settings.button_color || "#3b82f6"} 
+          />
         </div>
       </div>
     );
