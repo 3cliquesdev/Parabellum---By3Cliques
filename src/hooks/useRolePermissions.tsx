@@ -55,7 +55,7 @@ export function useRolePermissions() {
 // Hook for managing all permissions (admin only)
 export function useAllRolePermissions() {
   return useQuery({
-    queryKey: ["all-role-permissions"],
+    queryKey: ["all-role-permissions", "v2"], // Force new cache key
     queryFn: async () => {
       const { data, error } = await supabase
         .from("role_permissions")
@@ -66,8 +66,10 @@ export function useAllRolePermissions() {
         .limit(2000);
 
       if (error) throw error;
+      console.log("Loaded permissions:", data?.length);
       return data as RolePermission[];
     },
+    staleTime: 0, // Force refetch
   });
 }
 
