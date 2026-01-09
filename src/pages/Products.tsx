@@ -4,10 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Loader2, Edit, Trash2, Package, ExternalLink, Activity } from "lucide-react";
+import { Shield, Loader2, Edit, Trash2, Package, ExternalLink, Activity, Kanban } from "lucide-react";
 import { useProducts, useDeleteProduct } from "@/hooks/useProducts";
 import { ProductDialog } from "@/components/ProductDialog";
 import { ProductMappingDiagnostic } from "@/components/products/ProductMappingDiagnostic";
+import ProductBoardMappingsContent from "@/components/products/ProductBoardMappingsContent";
 
 import {
   AlertDialog,
@@ -118,6 +119,10 @@ export default function Products() {
             <Package className="h-4 w-4" />
             Produtos
           </TabsTrigger>
+          <TabsTrigger value="automations" className="gap-2">
+            <Kanban className="h-4 w-4" />
+            Automação Kanban
+          </TabsTrigger>
           <TabsTrigger value="diagnostic" className="gap-2">
             <Activity className="h-4 w-4" />
             Diagnóstico de Mapeamento
@@ -215,6 +220,10 @@ export default function Products() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="automations">
+          <ProductBoardMappingsContent />
         </TabsContent>
 
         <TabsContent value="diagnostic">
