@@ -23,7 +23,8 @@ export function HtmlBlock({ block, isSelected, onUpdate, readOnly }: HtmlBlockPr
         isSelected && "ring-2 ring-primary ring-offset-2"
       )}
       style={{
-        backgroundColor: block.styles.backgroundColor,
+        backgroundColor: block.styles.backgroundColor || '#ffffff',
+        color: '#1e293b',
         padding: block.styles.padding || "16px",
       }}
     >
@@ -32,12 +33,12 @@ export function HtmlBlock({ block, isSelected, onUpdate, readOnly }: HtmlBlockPr
       ) : (
         <Tabs value={mode} onValueChange={(v) => setMode(v as "code" | "preview")}>
           <div className="flex items-center justify-between mb-2">
-            <TabsList className="h-8">
-              <TabsTrigger value="preview" className="text-xs gap-1">
+            <TabsList className="h-8 bg-slate-100">
+              <TabsTrigger value="preview" className="text-xs gap-1 text-slate-700 data-[state=active]:bg-white data-[state=active]:text-slate-900">
                 <Eye className="h-3 w-3" />
                 Preview
               </TabsTrigger>
-              <TabsTrigger value="code" className="text-xs gap-1">
+              <TabsTrigger value="code" className="text-xs gap-1 text-slate-700 data-[state=active]:bg-white data-[state=active]:text-slate-900">
                 <Code className="h-3 w-3" />
                 HTML
               </TabsTrigger>

@@ -212,9 +212,11 @@ export function EmailTemplateBuilderV2({
           <div className="flex-1 overflow-auto bg-muted/30 p-6">
             <div
               className={cn(
-                "mx-auto bg-white text-slate-900 shadow-lg rounded-lg overflow-hidden transition-all",
+                "mx-auto bg-white shadow-lg rounded-lg overflow-hidden transition-all",
+                "[&_*]:text-slate-900",
                 previewMode === "desktop" ? "max-w-2xl" : "max-w-sm"
               )}
+              style={{ colorScheme: 'light' }}
             >
               <DropZone isEmpty={blocks.length === 0}>
                 <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
