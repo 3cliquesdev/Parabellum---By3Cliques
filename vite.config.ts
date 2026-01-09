@@ -52,12 +52,22 @@ export default defineConfig(({ mode }) => ({
         clientsClaim: true,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/],
+        navigationPreload: true, // Melhora performance de navegação em mobile
         runtimeCaching: [
+          // Handler prioritário para rotas de navegação (SPA)
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'navigation-v1',
+              networkTimeoutSeconds: 3,
+            }
+          },
           {
             urlPattern: /\.(js|css)$/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'static-assets-v7',
+              cacheName: 'static-assets-v8',
               networkTimeoutSeconds: 3,
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 }
             }
@@ -66,7 +76,7 @@ export default defineConfig(({ mode }) => ({
             urlPattern: /\.(png|jpg|jpeg|svg|ico|woff2?)$/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'image-assets-v4',
+              cacheName: 'image-assets-v5',
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 }
             }
           },
@@ -74,7 +84,7 @@ export default defineConfig(({ mode }) => ({
             urlPattern: /supabase\.co/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'api-cache-v4',
+              cacheName: 'api-cache-v5',
               networkTimeoutSeconds: 5,
               expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 }
             }
