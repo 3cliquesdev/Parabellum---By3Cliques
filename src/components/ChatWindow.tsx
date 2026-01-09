@@ -341,7 +341,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   </Button>
                 )}
 
-                {isCopilot && (
+                {(isCopilot || aiMode === 'waiting_human') && (
                   <Button
                     variant="outline"
                     size="sm"
