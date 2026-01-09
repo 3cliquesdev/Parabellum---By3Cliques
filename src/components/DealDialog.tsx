@@ -131,13 +131,16 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
   };
   const createDeal = useCreateDeal();
   const updateDeal = useUpdateDeal();
-  const { data: contacts } = useContacts();
-  const { data: organizations } = useOrganizations();
-  const { data: pipelines } = usePipelines();
+  const { data: contacts, isLoading: contactsLoading } = useContacts();
+  const { data: organizations, isLoading: organizationsLoading } = useOrganizations();
+  const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();
   const { data: salesReps, isLoading: salesRepsLoading } = useSalesReps();
-  const { data: products } = useProducts();
+  const { data: products, isLoading: productsLoading } = useProducts();
   const { role, loading: roleLoading } = useUserRole();
   const { user } = useAuth();
+  
+  // Check if salesperson has no contacts assigned
+  const hasNoContacts = !contactsLoading && (!contacts || contacts.length === 0);
 
   console.log("[DealDialog] Sales reps data:", { salesReps, salesRepsLoading });
 
@@ -347,10 +350,10 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Pipeline</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={pipelinesLoading}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione um pipeline" />
+                        <SelectValue placeholder={pipelinesLoading ? "Carregando..." : "Selecione um pipeline"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -379,24 +382,31 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
                         field.onChange(value === "none" ? "" : value);
                       }} 
                       value={field.value || "none"}
+                      disabled={contactsLoading}
                     >
                       <FormControl>
                         <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Selecione um contato" />
+                          <SelectValue placeholder={contactsLoading ? "Carregando..." : "Selecione um contato"} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">Nenhum</SelectItem>
-                        {contacts?.map((contact) => (
-                          <SelectItem key={contact.id} value={contact.id}>
-                            {contact.first_name} {contact.last_name}
+                        {contacts && contacts.length > 0 ? (
+                          contacts.map((contact) => (
+                            <SelectItem key={contact.id} value={contact.id}>
+                              {contact.first_name} {contact.last_name}
+                            </SelectItem>
+                          ))
+                        ) : !contactsLoading ? (
+                          <SelectItem value="empty" disabled>
+                            Nenhum contato disponível
                           </SelectItem>
-                        ))}
+                        ) : null}
                       </SelectContent>
                     </Select>
                     <Button
                       type="button"
-                      variant={!field.value ? "default" : "outline"}
+                      variant={!field.value || hasNoContacts ? "default" : "outline"}
                       size="sm"
                       className="whitespace-nowrap"
                       onClick={() => field.onChange("")}
@@ -404,6 +414,11 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
                       ➕ Criar Lead
                     </Button>
                   </div>
+                  {hasNoContacts && isSalesRep && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      💡 Nenhum contato atribuído a você. Use "Criar Lead" para adicionar dados do cliente.
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -493,10 +508,11 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
                   <Select 
                     onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
                     value={field.value || "none"}
+                    disabled={organizationsLoading}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma organização" />
+                        <SelectValue placeholder={organizationsLoading ? "Carregando..." : "Selecione uma organização"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -522,7 +538,7 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma etapa" />
+                        <SelectValue placeholder={!stages ? "Carregando..." : "Selecione uma etapa"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
