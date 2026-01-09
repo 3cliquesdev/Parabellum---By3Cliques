@@ -371,6 +371,60 @@ export default function Deals() {
     );
   };
 
+  // Handler para fechamento manual (venda externa sem Kiwify)
+  const handleManualWonSuccess = async (data: { value: number; observation: string }) => {
+    if (!pendingWonDeal) return;
+
+    updateDeal.mutate(
+      {
+        id: pendingWonDeal.id,
+        updates: {
+          status: "won",
+          value: data.value,
+          closed_at: new Date().toISOString(),
+          assigned_to: pendingWonDeal.assigned_to || user?.id,
+          is_organic_sale: false, // Venda manual do vendedor, não orgânica
+        },
+      },
+      {
+        onSuccess: async () => {
+          // Trigger confetti
+          confetti({
+            particleCount: 150,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#FFD700', '#FFA500', '#FF6347', '#00FF00', '#1E90FF'],
+          });
+
+          toast({
+            title: "🎉 Negócio Ganho!",
+            description: `Venda externa: ${formatCurrency(data.value)}`,
+          });
+
+          // Log na timeline se houver contact_id
+          if (pendingWonDeal.contact_id) {
+            await supabase.from('interactions').insert({
+              customer_id: pendingWonDeal.contact_id,
+              type: 'note',
+              content: `✅ Negócio fechado (venda externa): ${formatCurrency(data.value)}\n📝 Observação: ${data.observation}`,
+              channel: 'other',
+              metadata: {
+                deal_id: pendingWonDeal.id,
+                manual_closure: true,
+                observation: data.observation,
+                validated_value: data.value,
+                validated_at: new Date().toISOString(),
+              },
+            });
+          }
+
+          setShowValidateWonDialog(false);
+          setPendingWonDeal(null);
+        },
+      }
+    );
+  };
+
   if (dealsLoading || stagesLoading || pipelinesLoading || roleLoading) {
     return (
       <div className="p-8">
@@ -673,6 +727,7 @@ export default function Deals() {
         onOpenChange={setShowValidateWonDialog}
         deal={pendingWonDeal}
         onValidationSuccess={handleValidationSuccess}
+        onManualSuccess={handleManualWonSuccess}
       />
 
       {/* Bulk Move Deals Dialog */}

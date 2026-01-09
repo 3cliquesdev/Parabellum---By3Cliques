@@ -3,10 +3,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, CheckCircle, AlertCircle, Trophy, HelpCircle } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, CheckCircle, AlertCircle, Trophy, HelpCircle, CreditCard, Banknote } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ValidateWonDealDialogProps {
   open: boolean;
@@ -15,6 +17,7 @@ interface ValidateWonDealDialogProps {
     id: string;
     title: string;
     contact_id?: string | null;
+    assigned_to?: string | null;
   } | null;
   onValidationSuccess: (validatedData: {
     value: number;
@@ -23,6 +26,10 @@ interface ValidateWonDealDialogProps {
     customer_name: string;
     product_name: string;
     order_ref: string;
+  }) => void;
+  onManualSuccess?: (data: {
+    value: number;
+    observation: string;
   }) => void;
 }
 
@@ -33,7 +40,9 @@ export default function ValidateWonDealDialog({
   onOpenChange,
   deal,
   onValidationSuccess,
+  onManualSuccess,
 }: ValidateWonDealDialogProps) {
+  const [closureMode, setClosureMode] = useState<"kiwify" | "manual">("kiwify");
   const [kiwifyOrderRef, setKiwifyOrderRef] = useState("");
   const [validationState, setValidationState] = useState<ValidationState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -45,6 +54,12 @@ export default function ValidateWonDealDialog({
     product_name: string;
     order_ref: string;
   } | null>(null);
+  
+  // Manual closure states
+  const [manualValue, setManualValue] = useState("");
+  const [manualObservation, setManualObservation] = useState("");
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+  
   const { toast } = useToast();
 
   const handleValidate = async () => {
@@ -88,11 +103,55 @@ export default function ValidateWonDealDialog({
     }
   };
 
+  const handleManualClose = async () => {
+    const value = parseFloat(manualValue.replace(/[^\d.,]/g, '').replace(',', '.'));
+    
+    if (isNaN(value) || value <= 0) {
+      toast({
+        title: "Valor inválido",
+        description: "Digite um valor válido para a venda.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (manualObservation.trim().length < 10) {
+      toast({
+        title: "Observação obrigatória",
+        description: "A observação deve ter no mínimo 10 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!onManualSuccess) {
+      toast({
+        title: "Erro",
+        description: "Função de fechamento manual não configurada.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmittingManual(true);
+    try {
+      await onManualSuccess({
+        value,
+        observation: manualObservation.trim(),
+      });
+    } finally {
+      setIsSubmittingManual(false);
+    }
+  };
+
   const handleClose = () => {
     setKiwifyOrderRef("");
     setValidationState("idle");
     setErrorMessage("");
     setValidatedData(null);
+    setManualValue("");
+    setManualObservation("");
+    setClosureMode("kiwify");
     onOpenChange(false);
   };
 
@@ -111,108 +170,179 @@ export default function ValidateWonDealDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-yellow-500" />
-            Confirmar Venda Kiwify
+            Confirmar Venda
           </DialogTitle>
           <DialogDescription>
-            Para marcar "{deal.title}" como ganho, informe o ID da transação Kiwify para validação.
+            Para marcar "{deal.title}" como ganho, escolha o método de validação.
           </DialogDescription>
         </DialogHeader>
 
-        {validationState === "idle" || validationState === "validating" || validationState === "error" ? (
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="kiwify-id">ID da Venda Kiwify</Label>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      <p>Este é o ID curto visível na interface da Kiwify (ex: VYyDiMg). Você encontra na página de detalhes da venda.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              <Input
-                id="kiwify-id"
-                placeholder="Ex: VYyDiMg"
-                value={kiwifyOrderRef}
-                onChange={(e) => setKiwifyOrderRef(e.target.value)}
-                disabled={validationState === "validating"}
-                className="font-mono"
-              />
-            </div>
+        <Tabs value={closureMode} onValueChange={(v) => setClosureMode(v as "kiwify" | "manual")}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="kiwify" className="gap-2">
+              <CreditCard className="h-4 w-4" />
+              Kiwify
+            </TabsTrigger>
+            <TabsTrigger value="manual" className="gap-2">
+              <Banknote className="h-4 w-4" />
+              Venda Externa
+            </TabsTrigger>
+          </TabsList>
 
-            {validationState === "error" && (
-              <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                <p className="text-sm text-destructive">{errorMessage}</p>
+          <TabsContent value="kiwify" className="mt-4">
+            {validationState === "idle" || validationState === "validating" || validationState === "error" ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="kiwify-id">ID da Venda Kiwify</Label>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p>Este é o ID curto visível na interface da Kiwify (ex: VYyDiMg). Você encontra na página de detalhes da venda.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <Input
+                    id="kiwify-id"
+                    placeholder="Ex: VYyDiMg"
+                    value={kiwifyOrderRef}
+                    onChange={(e) => setKiwifyOrderRef(e.target.value)}
+                    disabled={validationState === "validating"}
+                    className="font-mono"
+                  />
+                </div>
+
+                {validationState === "error" && (
+                  <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                    <p className="text-sm text-destructive">{errorMessage}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <CheckCircle className="h-8 w-8 text-green-600 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-green-700">Venda Validada!</p>
+                    <p className="text-sm text-muted-foreground">Transação encontrada e pronta para vincular.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Cliente:</span>
+                    <span className="text-sm font-medium">{validatedData?.customer_name || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Email:</span>
+                    <span className="text-sm font-medium">{validatedData?.customer_email || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Produto:</span>
+                    <span className="text-sm font-medium">{validatedData?.product_name || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Valor Líquido:</span>
+                    <span className="text-lg font-bold text-green-600">
+                      {formatCurrency(validatedData?.value || 0)}
+                    </span>
+                  </div>
+                  {validatedData?.gross_value && validatedData.gross_value !== validatedData.value && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Valor Bruto:</span>
+                      <span className="text-sm">{formatCurrency(validatedData.gross_value)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-        ) : (
-          <div className="space-y-4 py-4">
-            <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
-              <CheckCircle className="h-8 w-8 text-green-600 shrink-0" />
-              <div>
-                <p className="font-semibold text-green-700">Venda Validada!</p>
-                <p className="text-sm text-muted-foreground">Transação encontrada e pronta para vincular.</p>
-              </div>
-            </div>
+          </TabsContent>
 
-            <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Cliente:</span>
-                <span className="text-sm font-medium">{validatedData?.customer_name || "N/A"}</span>
+          <TabsContent value="manual" className="mt-4">
+            <div className="space-y-4">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <p className="text-sm text-amber-700">
+                  Use esta opção para vendas realizadas fora da Kiwify (PIX, boleto, cartão direto, etc.)
+                </p>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Email:</span>
-                <span className="text-sm font-medium">{validatedData?.customer_email || "N/A"}</span>
+
+              <div className="space-y-2">
+                <Label htmlFor="manual-value">Valor da Venda *</Label>
+                <Input
+                  id="manual-value"
+                  placeholder="Ex: 500,00"
+                  value={manualValue}
+                  onChange={(e) => setManualValue(e.target.value)}
+                  disabled={isSubmittingManual}
+                />
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Produto:</span>
-                <span className="text-sm font-medium">{validatedData?.product_name || "N/A"}</span>
+
+              <div className="space-y-2">
+                <Label htmlFor="manual-observation">Observação * (mín. 10 caracteres)</Label>
+                <Textarea
+                  id="manual-observation"
+                  placeholder="Ex: Cliente pagou via PIX direto, sem passar pela Kiwify..."
+                  value={manualObservation}
+                  onChange={(e) => setManualObservation(e.target.value)}
+                  disabled={isSubmittingManual}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {manualObservation.length}/10 caracteres mínimos
+                </p>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Valor Líquido:</span>
-                <span className="text-lg font-bold text-green-600">
-                  {formatCurrency(validatedData?.value || 0)}
-                </span>
-              </div>
-              {validatedData?.gross_value && validatedData.gross_value !== validatedData.value && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Valor Bruto:</span>
-                  <span className="text-sm">{formatCurrency(validatedData.gross_value)}</span>
-                </div>
-              )}
             </div>
-          </div>
-        )}
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={handleClose}>
             Cancelar
           </Button>
           
-          {validationState !== "success" ? (
-            <Button
-              onClick={handleValidate}
-              disabled={validationState === "validating" || !kiwifyOrderRef.trim()}
+          {closureMode === "kiwify" ? (
+            validationState !== "success" ? (
+              <Button
+                onClick={handleValidate}
+                disabled={validationState === "validating" || !kiwifyOrderRef.trim()}
+              >
+                {validationState === "validating" ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Validando...
+                  </>
+                ) : (
+                  "Validar"
+                )}
+              </Button>
+            ) : (
+              <Button onClick={handleConfirmClose} className="bg-green-600 hover:bg-green-700">
+                <Trophy className="h-4 w-4 mr-2" />
+                Fechar Negócio
+              </Button>
+            )
+          ) : (
+            <Button 
+              onClick={handleManualClose} 
+              disabled={isSubmittingManual || !manualValue || manualObservation.length < 10}
+              className="bg-green-600 hover:bg-green-700"
             >
-              {validationState === "validating" ? (
+              {isSubmittingManual ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Validando...
+                  Salvando...
                 </>
               ) : (
-                "Validar"
+                <>
+                  <Trophy className="h-4 w-4 mr-2" />
+                  Fechar Negócio
+                </>
               )}
-            </Button>
-          ) : (
-            <Button onClick={handleConfirmClose} className="bg-green-600 hover:bg-green-700">
-              <Trophy className="h-4 w-4 mr-2" />
-              Fechar Negócio
             </Button>
           )}
         </DialogFooter>
