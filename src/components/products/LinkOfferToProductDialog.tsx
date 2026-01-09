@@ -55,9 +55,17 @@ export function LinkOfferToProductDialog({
   const handleLink = async () => {
     if (!selectedProductId || !offerData) return;
 
+    // IMPORTANTE: Usar offer_id quando disponível (subscription_plan_id para assinaturas)
+    // Nunca usar kiwify_product_id como fallback pois é um ID diferente
+    const offerId = offerData.offer_id;
+    if (!offerId) {
+      console.error("offer_id não disponível para mapeamento");
+      return;
+    }
+
     await createOffer.mutateAsync({
       product_id: selectedProductId,
-      offer_id: offerData.offer_id || offerData.kiwify_product_id,
+      offer_id: offerId,
       offer_name: offerData.offer_name || offerData.product_name,
       price: 0,
       source: "kiwify",
