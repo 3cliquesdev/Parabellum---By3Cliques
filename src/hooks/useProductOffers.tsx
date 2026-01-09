@@ -143,22 +143,34 @@ export const useMoveProductOffer = () => {
         .maybeSingle();
 
       if (existingError) throw existingError;
+      
+      // Se destino já tem essa oferta, apenas remove do produto atual (mescla)
       if (existing?.id) {
-        throw new Error("Este produto de destino já tem essa oferta vinculada.");
+        const { error: deleteError } = await supabase
+          .from("product_offers")
+          .delete()
+          .eq("id", offerId);
+
+        if (deleteError) throw deleteError;
+        return { merged: true };
       }
 
+      // Caso contrário, move normalmente
       const { error } = await supabase
         .from("product_offers")
         .update({ product_id: newProductId })
         .eq("id", offerId);
 
       if (error) throw error;
+      return { merged: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["product-offers"] });
       toast({
-        title: "Oferta movida",
-        description: "A oferta foi movida para o novo produto com sucesso.",
+        title: result?.merged ? "Oferta mesclada" : "Oferta movida",
+        description: result?.merged 
+          ? "O produto destino já tinha esta oferta. Removemos do produto atual."
+          : "A oferta foi movida para o novo produto com sucesso.",
       });
     },
     onError: (error: any) => {
