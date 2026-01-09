@@ -88,26 +88,14 @@ const dealSchema = z.object({
 
 type DealFormData = z.infer<typeof dealSchema>;
 
-// Funções de formatação de moeda com suporte a centavos (padrão BR)
-const formatCurrencyInput = (value: string | number | null | undefined): string => {
+// Formata valor para exibição (quando não está focado)
+const formatCurrencyDisplay = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined || value === "") return "";
   
-  const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+  const numValue = typeof value === 'number' ? value : parseInt(String(value), 10);
   if (isNaN(numValue)) return "";
   
-  return new Intl.NumberFormat("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(numValue);
-};
-
-const parseCurrencyInput = (value: string): number | null => {
-  // Remove pontos (separador de milhar) e substitui vírgula por ponto
-  const cleaned = value.replace(/\./g, '').replace(',', '.');
-  if (!cleaned) return null;
-  
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? null : num;
+  return new Intl.NumberFormat("pt-BR").format(numValue);
 };
 
 const LOST_REASONS = [
@@ -373,24 +361,45 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
               <FormField
                 control={form.control}
                 name="value"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valor (opcional)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="0,00"
-                        value={formatCurrencyInput(field.value)}
-                        onChange={(e) => {
-                          const parsed = parseCurrencyInput(e.target.value);
-                          field.onChange(parsed !== null ? parsed.toString() : "");
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const [rawValue, setRawValue] = useState<string>("");
+                  const [isFocused, setIsFocused] = useState(false);
+                  
+                  return (
+                    <FormItem>
+                      <FormLabel>Valor (opcional)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={isFocused ? rawValue : formatCurrencyDisplay(field.value)}
+                          onFocus={() => {
+                            setIsFocused(true);
+                            // Mostra valor numérico limpo ao focar
+                            setRawValue(field.value ? String(field.value).replace(/\D/g, '') : "");
+                          }}
+                          onChange={(e) => {
+                            // Aceita apenas números
+                            const onlyNumbers = e.target.value.replace(/\D/g, '');
+                            setRawValue(onlyNumbers);
+                          }}
+                          onBlur={() => {
+                            setIsFocused(false);
+                            // Converte para número e salva
+                            if (rawValue) {
+                              const numValue = parseInt(rawValue, 10);
+                              field.onChange(numValue.toString());
+                            } else {
+                              field.onChange("");
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
               
               <FormField
