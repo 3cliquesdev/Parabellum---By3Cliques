@@ -471,13 +471,17 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Organização (opcional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || undefined}>
+                  <Select 
+                    onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
+                    value={field.value || "none"}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma organização" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="none">Nenhuma</SelectItem>
                       {organizations?.map((org) => (
                         <SelectItem key={org.id} value={org.id}>
                           {org.name}
