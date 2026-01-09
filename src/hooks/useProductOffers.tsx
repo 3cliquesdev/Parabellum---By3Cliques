@@ -60,6 +60,8 @@ export const useCreateProductOffer = () => {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["product-offers", variables.product_id] });
+      queryClient.invalidateQueries({ queryKey: ["kiwify-unmapped-offers"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({
         title: "Oferta adicionada",
         description: "A oferta foi vinculada ao produto com sucesso.",
