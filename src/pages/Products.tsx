@@ -41,6 +41,7 @@ export default function Products() {
     product_name: string;
     offer_id?: string;
     offer_name?: string;
+    alert_ids?: string[];
   } | null>(null);
 
   const handleMerge = (product: any) => {
@@ -58,12 +59,13 @@ export default function Products() {
     setDialogOpen(true);
   };
 
-  const handleMapUnmapped = (kiwifyProductId: string, productName: string, offerId?: string, offerName?: string) => {
+  const handleMapUnmapped = (kiwifyProductId: string, productName: string, offerId?: string, offerName?: string, alertIds?: string[]) => {
     setOfferToLink({
       kiwify_product_id: kiwifyProductId,
       product_name: productName,
       offer_id: offerId,
       offer_name: offerName,
+      alert_ids: alertIds,
     });
     setLinkOfferDialogOpen(true);
   };
@@ -90,8 +92,8 @@ export default function Products() {
     };
 
     const handleMapUnmappedEvent = (event: CustomEvent) => {
-      const { kiwify_product_id, product_name, offer_id, offer_name } = event.detail;
-      handleMapUnmapped(kiwify_product_id, product_name, offer_id, offer_name);
+      const { kiwify_product_id, product_name, offer_id, offer_name, alert_ids } = event.detail;
+      handleMapUnmapped(kiwify_product_id, product_name, offer_id, offer_name, alert_ids);
     };
 
     window.addEventListener('edit-product', handleEditProductEvent as EventListener);

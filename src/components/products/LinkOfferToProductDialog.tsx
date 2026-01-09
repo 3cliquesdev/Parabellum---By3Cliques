@@ -15,6 +15,8 @@ import { useProducts } from "@/hooks/useProducts";
 import { useCreateProductOffer } from "@/hooks/useProductOffers";
 import { Search, Package, Plus, ExternalLink, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface LinkOfferToProductDialogProps {
   open: boolean;
@@ -24,6 +26,7 @@ interface LinkOfferToProductDialogProps {
     product_name: string;
     offer_id?: string;
     offer_name?: string;
+    alert_ids?: string[];
   } | null;
   onCreateNew: () => void;
 }
@@ -39,6 +42,7 @@ export function LinkOfferToProductDialog({
   
   const { data: products, isLoading } = useProducts();
   const createOffer = useCreateProductOffer();
+  const queryClient = useQueryClient();
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
@@ -66,6 +70,17 @@ export function LinkOfferToProductDialog({
       price: 0,
       source: "kiwify",
     });
+
+    // Marcar os alerts como lidos após vincular com sucesso
+    if (offerData.alert_ids && offerData.alert_ids.length > 0) {
+      await supabase
+        .from('admin_alerts')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .in('id', offerData.alert_ids);
+      
+      // Invalidar a query de alerts para atualizar a UI
+      queryClient.invalidateQueries({ queryKey: ['unmapped-product-alerts'] });
+    }
 
     setSelectedProductId(null);
     setSearch("");
