@@ -113,6 +113,21 @@ Deno.serve(async (req) => {
           throw new Error(`Playbook not found: ${(execution as PlaybookExecution).playbook_id}`);
         }
 
+        // ✅ Verificar se playbook está ativo antes de processar
+        if (!playbook.is_active) {
+          console.log(`⏸️ Playbook pausado (${playbook.name}), cancelando item da fila: ${item.id}`);
+          
+          await supabaseAdmin
+            .from('playbook_execution_queue')
+            .update({ 
+              status: 'cancelled',
+              last_error: 'Playbook desativado'
+            })
+            .eq('id', item.id);
+          
+          continue; // Pular para o próximo item
+        }
+
         const flow = playbook.flow_definition as PlaybookFlow;
 
         // Execute node action based on type
