@@ -50,6 +50,36 @@ export function useCreateProduct() {
       is_active: boolean;
       price?: number;
     }) => {
+      // Verificar se já existe um produto com esse external_id
+      if (product.external_id) {
+        const { data: existing } = await supabase
+          .from("products")
+          .select("id")
+          .eq("external_id", product.external_id)
+          .maybeSingle();
+
+        if (existing) {
+          // Produto já existe, apenas atualizar
+          const { data, error } = await supabase
+            .from("products")
+            .update({
+              name: product.name,
+              description: product.description,
+              delivery_group_id: product.delivery_group_id,
+              support_channel_id: product.support_channel_id,
+              requires_account_manager: product.requires_account_manager,
+              is_active: product.is_active,
+              price: product.price,
+            })
+            .eq("id", existing.id)
+            .select()
+            .single();
+
+          if (error) throw error;
+          return { ...data, wasUpdated: true };
+        }
+      }
+
       const { data, error } = await supabase
         .from("products")
         .insert(product)
@@ -57,12 +87,15 @@ export function useCreateProduct() {
         .single();
 
       if (error) throw error;
-      return data;
+      return { ...data, wasUpdated: false };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({
-        title: "Produto criado com sucesso",
+        title: data.wasUpdated ? "Produto atualizado" : "Produto cadastrado",
+        description: data.wasUpdated 
+          ? "O produto já existia e foi atualizado."
+          : "Produto cadastrado com sucesso.",
       });
     },
     onError: (error: Error) => {
