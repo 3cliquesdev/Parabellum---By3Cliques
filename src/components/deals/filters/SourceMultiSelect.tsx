@@ -1,18 +1,29 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { 
+  MessageSquare, 
+  Smartphone, 
+  Edit, 
+  ShoppingCart, 
+  TrendingUp, 
+  Users, 
+  FileText,
+  type LucideIcon
+} from "lucide-react";
 
 interface SourceMultiSelectProps {
   selected: string[];
   onChange: (sources: string[]) => void;
 }
 
-const sourceOptions = [
-  { value: "whatsapp", label: "WhatsApp", icon: "📱" },
-  { value: "webchat", label: "Web Chat", icon: "💬" },
-  { value: "manual", label: "Manual", icon: "✍️" },
-  { value: "kiwify", label: "Kiwify", icon: "🛒" },
-  { value: "kiwify_upsell", label: "Kiwify Upsell", icon: "📈" },
-  { value: "indicacao", label: "Indicação", icon: "🤝" },
+const sourceOptions: { value: string; label: string; Icon: LucideIcon }[] = [
+  { value: "whatsapp", label: "WhatsApp", Icon: Smartphone },
+  { value: "webchat", label: "Web Chat", Icon: MessageSquare },
+  { value: "manual", label: "Manual", Icon: Edit },
+  { value: "kiwify", label: "Kiwify", Icon: ShoppingCart },
+  { value: "kiwify_upsell", label: "Kiwify Upsell", Icon: TrendingUp },
+  { value: "indicacao", label: "Indicação", Icon: Users },
+  { value: "formulario", label: "Formulário", Icon: FileText },
 ];
 
 export function SourceMultiSelect({ selected, onChange }: SourceMultiSelectProps) {
@@ -35,9 +46,10 @@ export function SourceMultiSelect({ selected, onChange }: SourceMultiSelectProps
           />
           <Label
             htmlFor={`source-${source.value}`}
-            className="text-sm font-normal cursor-pointer"
+            className="text-sm font-normal cursor-pointer flex items-center gap-1.5"
           >
-            {source.icon} {source.label}
+            <source.Icon className="h-3.5 w-3.5 text-muted-foreground" />
+            {source.label}
           </Label>
         </div>
       ))}
