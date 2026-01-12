@@ -1,8 +1,4 @@
 import { useRolePermissions } from "@/hooks/useRolePermissions";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { 
   Shield, 
   Database, 
@@ -30,20 +26,12 @@ import {
   Send
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { SettingsCategory } from "@/components/settings/SettingsCategory";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 
 export default function Settings() {
   const { hasPermission, loading } = useRolePermissions();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [changingPassword, setChangingPassword] = useState(false);
 
   if (loading) {
     return (
@@ -65,52 +53,6 @@ export default function Settings() {
     );
   }
 
-  const handleChangePassword = async () => {
-    if (!newPassword || newPassword.length < 6) {
-      toast({
-        title: "Senha inválida",
-        description: "A senha deve ter no mínimo 6 caracteres",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      toast({
-        title: "Senhas não conferem",
-        description: "A nova senha e a confirmação devem ser iguais",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setChangingPassword(true);
-
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Senha alterada!",
-        description: "Sua senha foi atualizada com sucesso",
-      });
-
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (error: any) {
-      toast({
-        title: "Erro ao alterar senha",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setChangingPassword(false);
-    }
-  };
-
   return (
     <div className="p-6 pb-20 space-y-8">
       {/* Header */}
@@ -118,49 +60,6 @@ export default function Settings() {
         <h1 className="text-3xl font-bold text-foreground">Configurações</h1>
         <p className="text-muted-foreground mt-1">Gerencie todas as configurações da plataforma</p>
       </div>
-
-      {/* Password Change - Compact Card */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Key className="h-5 w-5 text-amber-600" />
-            Alterar Minha Senha
-          </CardTitle>
-          <CardDescription>Defina uma nova senha para sua conta</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4 items-end">
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="new-password">Nova Senha</Label>
-              <Input
-                id="new-password"
-                type="password"
-                placeholder="Mínimo 6 caracteres"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-            </div>
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="confirm-password">Confirmar Senha</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                placeholder="Repita a senha"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-            <Button 
-              onClick={handleChangePassword} 
-              disabled={changingPassword}
-              className="shrink-0"
-            >
-              {changingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Alterar Senha
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Categories Grid */}
       <div className="space-y-8">
@@ -240,7 +139,7 @@ export default function Settings() {
             iconBgColor="bg-orange-500"
             title="Kiwify"
             description="Integração de pagamentos"
-            onClick={() => navigate('/settings/integrations')}
+            onClick={() => navigate('/settings/kiwify')}
           />
           <SettingsCard
             icon={Package}
@@ -348,7 +247,7 @@ export default function Settings() {
             iconBgColor="bg-cyan-500"
             title="Central"
             description="Todas integrações"
-            onClick={() => navigate('/settings/integrations')}
+            onClick={() => navigate('/settings/integrations-central')}
           />
           <SettingsCard
             icon={Webhook}
@@ -362,8 +261,7 @@ export default function Settings() {
             iconBgColor="bg-slate-500"
             title="Backend"
             description="Banco de dados"
-            onClick={() => {}}
-            disabled
+            onClick={() => navigate('/settings/database')}
           />
         </SettingsCategory>
 
@@ -374,19 +272,18 @@ export default function Settings() {
           iconColor="text-amber-500"
         >
           <SettingsCard
-            icon={Shield}
+            icon={Key}
             iconBgColor="bg-amber-500"
-            title="Logs Auditoria"
-            description="Histórico de mudanças"
-            onClick={() => navigate('/settings/audit-logs')}
+            title="Segurança"
+            description="Senhas e acessos"
+            onClick={() => navigate('/settings/security')}
           />
           <SettingsCard
             icon={Shield}
             iconBgColor="bg-slate-600"
-            title="Segurança"
-            description="Políticas de acesso"
-            onClick={() => {}}
-            disabled
+            title="Logs Auditoria"
+            description="Histórico de mudanças"
+            onClick={() => navigate('/settings/audit-logs')}
           />
         </SettingsCategory>
       </div>

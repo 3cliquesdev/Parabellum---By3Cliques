@@ -101,6 +101,10 @@ const FormBoardIntegrationsPage = lazy(() => import("./pages/FormBoardIntegratio
 const ProductBoardMappingsPage = lazy(() => import("./pages/ProductBoardMappingsPage"));
 const AISettingsPage = lazy(() => import("./pages/AISettingsPage"));
 const InstagramSettings = lazy(() => import("./pages/InstagramSettings"));
+const KiwifySettingsPage = lazy(() => import("./pages/KiwifySettingsPage"));
+const SecuritySettingsPage = lazy(() => import("./pages/SecuritySettingsPage"));
+const DatabaseSettingsPage = lazy(() => import("./pages/DatabaseSettingsPage"));
+const IntegrationsCentralPage = lazy(() => import("./pages/IntegrationsCentralPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -232,6 +236,10 @@ const App = () => {
               <Route path="/instagram" element={<ProtectedRoute requiredPermission="inbox.access"><Layout><InstagramDashboard /></Layout></ProtectedRoute>} />
               <Route path="/settings/instagram" element={<ProtectedRoute requiredPermission="settings.integrations"><Layout><InstagramSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/ai" element={<ProtectedRoute requiredPermission="settings.view"><Layout><AISettingsPage /></Layout></ProtectedRoute>} />
+              <Route path="/settings/kiwify" element={<ProtectedRoute requiredPermission="settings.integrations"><Layout><KiwifySettingsPage /></Layout></ProtectedRoute>} />
+              <Route path="/settings/security" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SecuritySettingsPage /></Layout></ProtectedRoute>} />
+              <Route path="/settings/database" element={<ProtectedRoute requiredPermission="settings.view"><Layout><DatabaseSettingsPage /></Layout></ProtectedRoute>} />
+              <Route path="/settings/integrations-central" element={<ProtectedRoute requiredPermission="settings.integrations"><Layout><IntegrationsCentralPage /></Layout></ProtectedRoute>} />
               
               {/* Catch-all route - must be last */}
               <Route path="*" element={<NotFound />} />
