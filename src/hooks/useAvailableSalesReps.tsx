@@ -17,18 +17,11 @@ export function useAvailableSalesReps(pipelineId?: string) {
       return allSalesReps || [];
     }
 
-    // Se há equipe configurada para o pipeline, usa diretamente os membros do pipeline
-    // Isso inclui TODAS as roles configuradas (consultant, manager, sales_rep, etc.)
+    // Se há equipe configurada para o pipeline, filtra APENAS sales_rep
+    // Cruza os membros do pipeline com allSalesReps (que só contém role sales_rep)
     if (pipelineReps && pipelineReps.length > 0) {
-      return pipelineReps
-        .filter(rep => rep.profiles)
-        .map(rep => ({
-          id: rep.user_id,
-          full_name: rep.profiles?.full_name || '',
-          job_title: rep.profiles?.job_title || null,
-          avatar_url: rep.profiles?.avatar_url || null,
-          availability_status: rep.profiles?.availability_status || null,
-        }));
+      const pipelineUserIds = new Set(pipelineReps.map(r => r.user_id));
+      return allSalesReps?.filter(rep => pipelineUserIds.has(rep.id)) || [];
     }
 
     // Fallback: retorna todos se não houver equipe configurada
