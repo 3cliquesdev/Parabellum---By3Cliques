@@ -58,6 +58,59 @@ function maskPhone(phone: string | null | undefined): string {
 }
 
 // ============================================================
+// 🔒 HELPER: Seleção de Instância WhatsApp
+// SEMPRE prioriza a instância vinculada à conversa
+// ============================================================
+async function getWhatsAppInstanceForConversation(
+  supabaseClient: any,
+  conversationId: string,
+  conversationWhatsappInstanceId: string | null
+): Promise<any | null> {
+  // 1. Se a conversa tem instância vinculada, usar ela
+  if (conversationWhatsappInstanceId) {
+    const { data: linkedInstance } = await supabaseClient
+      .from('whatsapp_instances')
+      .select('*')
+      .eq('id', conversationWhatsappInstanceId)
+      .single();
+    
+    if (linkedInstance) {
+      console.log('[getWhatsAppInstance] ✅ Usando instância VINCULADA:', {
+        instanceId: linkedInstance.id,
+        instanceName: linkedInstance.instance_name,
+        phoneNumber: linkedInstance.phone_number,
+        status: linkedInstance.status
+      });
+      return linkedInstance;
+    } else {
+      console.warn('[getWhatsAppInstance] ⚠️ Instância vinculada não encontrada:', conversationWhatsappInstanceId);
+    }
+  }
+  
+  // 2. Fallback: buscar instância conectada APENAS se não houver vinculada
+  console.warn('[getWhatsAppInstance] ⚠️ Conversa', conversationId, 'sem instância vinculada - usando fallback');
+  const { data: fallbackInstance } = await supabaseClient
+    .from('whatsapp_instances')
+    .select('*')
+    .eq('status', 'connected')
+    .order('created_at', { ascending: true }) // Ordenar para consistência
+    .limit(1)
+    .maybeSingle();
+  
+  if (fallbackInstance) {
+    console.log('[getWhatsAppInstance] 🔄 Usando instância FALLBACK:', {
+      instanceId: fallbackInstance.id,
+      instanceName: fallbackInstance.instance_name,
+      phoneNumber: fallbackInstance.phone_number
+    });
+  } else {
+    console.error('[getWhatsAppInstance] ❌ Nenhuma instância WhatsApp disponível');
+  }
+  
+  return fallbackInstance;
+}
+
+// ============================================================
 // 🔒 CONSTANTES GLOBAIS - Unificadas para prevenir inconsistências
 // ============================================================
 const FALLBACK_PHRASES = [
@@ -609,12 +662,11 @@ serve(async (req) => {
           
           // Se for WhatsApp, enviar via Evolution API
           if (responseChannel === 'whatsapp' && handoffMessageData) {
-            const { data: whatsappInstance } = await supabaseClient
-              .from('whatsapp_instances')
-              .select('*')
-              .eq('status', 'connected')
-              .limit(1)
-              .maybeSingle();
+            const whatsappInstance = await getWhatsAppInstanceForConversation(
+              supabaseClient, 
+              conversationId, 
+              conversation.whatsapp_instance_id
+            );
 
             if (whatsappInstance) {
               const { error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
@@ -672,12 +724,11 @@ serve(async (req) => {
 
         // Se for WhatsApp, enviar mensagem via Evolution API
         if (responseChannel === 'whatsapp') {
-          const { data: whatsappInstance } = await supabaseClient
-            .from('whatsapp_instances')
-            .select('*')
-            .eq('status', 'connected')
-            .limit(1)
-            .maybeSingle();
+          const whatsappInstance = await getWhatsAppInstanceForConversation(
+            supabaseClient, 
+            conversationId, 
+            conversation.whatsapp_instance_id
+          );
 
           if (whatsappInstance && aiMessageData) {
             console.log('[ai-autopilot-chat] 📤 Enviando resposta cached via WhatsApp');
@@ -1318,12 +1369,11 @@ Responda APENAS: skip ou search`
         
         // Enviar via WhatsApp se necessário
         if (responseChannel === 'whatsapp') {
-          const { data: whatsappInstance } = await supabaseClient
-            .from('whatsapp_instances')
-            .select('*')
-            .eq('status', 'connected')
-            .limit(1)
-            .maybeSingle();
+          const whatsappInstance = await getWhatsAppInstanceForConversation(
+            supabaseClient, 
+            conversationId, 
+            conversation.whatsapp_instance_id
+          );
           
           if (whatsappInstance) {
             await supabaseClient.functions.invoke('send-whatsapp-message', {
@@ -1371,12 +1421,11 @@ Responda APENAS: skip ou search`
           .single();
         
         // Enviar via WhatsApp
-        const { data: whatsappInstance } = await supabaseClient
-          .from('whatsapp_instances')
-          .select('*')
-          .eq('status', 'connected')
-          .limit(1)
-          .maybeSingle();
+        const whatsappInstance = await getWhatsAppInstanceForConversation(
+          supabaseClient, 
+          conversationId, 
+          conversation.whatsapp_instance_id
+        );
         
         if (whatsappInstance) {
           await supabaseClient.functions.invoke('send-whatsapp-message', {
@@ -1459,12 +1508,11 @@ Digite **"reenviar"** se precisar de um novo código.`;
         
         // Enviar via WhatsApp se necessário
         if (responseChannel === 'whatsapp' && contact?.phone) {
-          const { data: whatsappInstance } = await supabaseClient
-            .from('whatsapp_instances')
-            .select('*')
-            .eq('status', 'connected')
-            .limit(1)
-            .maybeSingle();
+          const whatsappInstance = await getWhatsAppInstanceForConversation(
+            supabaseClient, 
+            conversationId, 
+            conversation.whatsapp_instance_id
+          );
           
           if (whatsappInstance) {
             await supabaseClient.functions.invoke('send-whatsapp-message', {
@@ -1563,26 +1611,11 @@ Por favor, **digite o código** que você recebeu para continuar.`;
           
           // Enviar via WhatsApp se necessário
           if (responseChannel === 'whatsapp' && contact?.phone) {
-            let whatsappInstance = null;
-            
-            if (conversation.whatsapp_instance_id) {
-              const { data } = await supabaseClient
-                .from('whatsapp_instances')
-                .select('*')
-                .eq('id', conversation.whatsapp_instance_id)
-                .single();
-              whatsappInstance = data;
-            }
-            
-            if (!whatsappInstance) {
-              const { data } = await supabaseClient
-                .from('whatsapp_instances')
-                .select('*')
-                .eq('status', 'connected')
-                .limit(1)
-                .maybeSingle();
-              whatsappInstance = data;
-            }
+            const whatsappInstance = await getWhatsAppInstanceForConversation(
+              supabaseClient, 
+              conversationId, 
+              conversation.whatsapp_instance_id
+            );
             
             if (whatsappInstance) {
               await supabaseClient.functions.invoke('send-whatsapp-message', {
@@ -1661,26 +1694,11 @@ Por favor, **digite o código** que você recebeu para continuar.`;
           
           // Enviar via WhatsApp se necessário
           if (responseChannel === 'whatsapp' && contact?.phone) {
-            let whatsappInstance = null;
-            
-            if (conversation.whatsapp_instance_id) {
-              const { data } = await supabaseClient
-                .from('whatsapp_instances')
-                .select('*')
-                .eq('id', conversation.whatsapp_instance_id)
-                .single();
-              whatsappInstance = data;
-            }
-            
-            if (!whatsappInstance) {
-              const { data } = await supabaseClient
-                .from('whatsapp_instances')
-                .select('*')
-                .eq('status', 'connected')
-                .limit(1)
-                .maybeSingle();
-              whatsappInstance = data;
-            }
+            const whatsappInstance = await getWhatsAppInstanceForConversation(
+              supabaseClient, 
+              conversationId, 
+              conversation.whatsapp_instance_id
+            );
             
             if (whatsappInstance) {
               await supabaseClient.functions.invoke('send-whatsapp-message', {
@@ -3243,50 +3261,14 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
       });
 
       try {
-        // FASE 1: Priorizar instância vinculada à conversa
-        let whatsappInstance = null;
+        // 🔒 USAR HELPER UNIFICADO
+        const whatsappInstance = await getWhatsAppInstanceForConversation(
+          supabaseClient, 
+          conversationId, 
+          conversation.whatsapp_instance_id
+        );
         
-        // 1. Primeiro: tentar usar instância vinculada à conversa
-        if (conversation.whatsapp_instance_id) {
-          console.log('[ai-autopilot-chat] 🔗 Tentando instância vinculada:', conversation.whatsapp_instance_id);
-          const { data } = await supabaseClient
-            .from('whatsapp_instances')
-            .select('*')
-            .eq('id', conversation.whatsapp_instance_id)
-            .single();
-          
-          whatsappInstance = data;
-          
-          if (whatsappInstance) {
-            console.log('[ai-autopilot-chat] ✅ Usando instância vinculada:', {
-              instanceId: whatsappInstance.id,
-              instanceName: whatsappInstance.instance_name,
-              status: whatsappInstance.status
-            });
-          }
-        }
-        
-        // 2. Fallback: buscar qualquer instância conectada
-        if (!whatsappInstance) {
-          console.log('[ai-autopilot-chat] 🔄 Fallback: buscando instância conectada...');
-          const { data } = await supabaseClient
-            .from('whatsapp_instances')
-            .select('*')
-            .eq('status', 'connected')
-            .limit(1)
-            .single();
-          
-          whatsappInstance = data;
-          
-          if (whatsappInstance) {
-            console.log('[ai-autopilot-chat] ✅ Instância conectada encontrada:', {
-              instanceId: whatsappInstance.id,
-              instanceName: whatsappInstance.instance_name
-            });
-          }
-        }
-        
-        // FASE 2: Validar status da instância
+        // Validar se instância foi encontrada
         if (!whatsappInstance) {
           console.error('[ai-autopilot-chat] ⚠️ NENHUMA instância WhatsApp disponível');
           
