@@ -479,7 +479,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       try {
         console.log('[handle-whatsapp-event] 📤 Invocando send-verification-code...');
         const { data: otpResponse, error: otpError } = await supabase.functions.invoke('send-verification-code', {
-          body: { email: claimedEmail },
+          body: { email: claimedEmail, type: 'customer' },
         });
         
         console.log('[handle-whatsapp-event] 📥 Resposta:', JSON.stringify(otpResponse));

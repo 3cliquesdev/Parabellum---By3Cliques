@@ -2386,9 +2386,9 @@ Assim que retornarmos, um consultor vai te ajudar!`;
                 .eq('id', conversationId);
             }
 
-            // Enviar OTP para o email encontrado
+            // Enviar OTP para o email encontrado - SEMPRE com branding de CLIENTE
             const { data: otpData, error: otpError } = await supabaseClient.functions.invoke('send-verification-code', {
-              body: { email: emailInformado }
+              body: { email: emailInformado, type: 'customer' }
             });
 
             if (otpError || !otpData?.success) {
