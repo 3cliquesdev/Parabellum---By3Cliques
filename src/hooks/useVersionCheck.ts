@@ -43,17 +43,23 @@ export function useVersionCheck() {
         hasNotifiedRef.current = true;
         console.log('[VersionCheck] Nova versão detectada:', currentVersion.version);
         
-        toast.info('Nova versão disponível!', {
-          description: 'Clique para atualizar o sistema',
-          duration: Infinity, // Não fecha automaticamente
+        toast('🚀 Nova versão disponível!', {
+          description: 'Atualize agora para ter as últimas melhorias e correções',
+          duration: Infinity,
+          position: 'bottom-center',
           action: {
-            label: 'Atualizar agora',
-            onClick: () => {
+            label: '🔄 Atualizar',
+            onClick: async () => {
+              // Limpa cache do service worker e caches
+              if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+              }
+              // Força reload sem cache
               window.location.reload();
             }
           },
           onDismiss: () => {
-            // Se o usuário fechar, permite notificar novamente após um tempo
             setTimeout(() => {
               hasNotifiedRef.current = false;
             }, CHECK_INTERVAL);
