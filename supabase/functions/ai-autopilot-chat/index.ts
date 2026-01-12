@@ -1069,8 +1069,24 @@ Responda APENAS: skip ou search`
             );
 
             if (!expansionError && expansionData?.expanded_queries) {
-              expandedQueries = [customerMessage, ...expansionData.expanded_queries];
-              console.log(`[ai-autopilot-chat] ✅ Query expandida em ${expandedQueries.length} variações`);
+              // 🛡️ FASE A+B: Sanitizar queries expandidas - remover tokens sujos
+              const rawQueries = expansionData.expanded_queries as string[];
+              const sanitizedQueries = rawQueries
+                .filter((q: string) => {
+                  if (!q || typeof q !== 'string') return false;
+                  const trimmed = q.trim();
+                  // Remover tokens inválidos: code fences, brackets, strings muito curtas
+                  if (trimmed.length < 5) return false;
+                  if (/^[\[\]{}"`']+$/.test(trimmed)) return false;
+                  if (trimmed.startsWith('```')) return false;
+                  if (trimmed === 'json' || trimmed === 'JSON') return false;
+                  return true;
+                })
+                .map((q: string) => q.trim())
+                .slice(0, 5); // Limitar a 5 queries expandidas
+              
+              expandedQueries = [customerMessage, ...sanitizedQueries];
+              console.log(`[ai-autopilot-chat] ✅ Query expandida em ${expandedQueries.length} variações (sanitizadas)`);
             } else {
               console.log('[ai-autopilot-chat] ⚠️ Usando apenas query original (expansion falhou)');
             }
@@ -1080,57 +1096,138 @@ Responda APENAS: skip ou search`
 
           // Step 2: Buscar embeddings para todas as queries expandidas
           const articleMap: Map<string, any> = new Map();
+          let embeddingAttempted = false;
+          let embeddingSucceeded = false;
           
-          for (const query of expandedQueries) {
-            if (!OPENAI_API_KEY) continue;
+          // 🛡️ FASE A: Só tentar embeddings se OPENAI_API_KEY existir
+          if (OPENAI_API_KEY) {
+            embeddingAttempted = true;
             
-            try {
-              console.log(`[ai-autopilot-chat] 🔍 Gerando embedding para: "${query.substring(0, 50)}..."`);
-              
-              const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  model: 'text-embedding-3-small',
-                  input: query,
-                }),
-              });
-
-              if (embeddingResponse.ok) {
-                const embeddingData = await embeddingResponse.json();
-                const queryEmbedding = embeddingData.data[0].embedding;
+            for (const query of expandedQueries) {
+              try {
+                console.log(`[ai-autopilot-chat] 🔍 Gerando embedding para: "${query.substring(0, 50)}..."`);
                 
-                // Buscar artigos similares
-                const { data: semanticResults, error: semanticError } = await supabaseClient.rpc(
-                  'match_knowledge_articles',
-                  {
-                    query_embedding: queryEmbedding,
-                    match_threshold: 0.50,
-                    match_count: 5,
-                  }
-                );
+                const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    model: 'text-embedding-3-small',
+                    input: query,
+                  }),
+                });
 
-                if (!semanticError && semanticResults) {
-                  // Adicionar ao mapa para deduplicar (mantém melhor similaridade)
-                  semanticResults.forEach((article: any) => {
-                    const existing = articleMap.get(article.id);
-                    if (!existing || article.similarity > existing.similarity) {
-                      articleMap.set(article.id, article);
+                if (embeddingResponse.ok) {
+                  embeddingSucceeded = true;
+                  const embeddingData = await embeddingResponse.json();
+                  const queryEmbedding = embeddingData.data[0].embedding;
+                  
+                  // Buscar artigos similares
+                  const { data: semanticResults, error: semanticError } = await supabaseClient.rpc(
+                    'match_knowledge_articles',
+                    {
+                      query_embedding: queryEmbedding,
+                      match_threshold: 0.50,
+                      match_count: 5,
                     }
-                  });
+                  );
+
+                  if (!semanticError && semanticResults) {
+                    // Adicionar ao mapa para deduplicar (mantém melhor similaridade)
+                    semanticResults.forEach((article: any) => {
+                      const existing = articleMap.get(article.id);
+                      if (!existing || article.similarity > existing.similarity) {
+                        articleMap.set(article.id, article);
+                      }
+                    });
+                  }
+                } else {
+                  console.warn(`[ai-autopilot-chat] ⚠️ Embedding falhou com status: ${embeddingResponse.status}`);
                 }
+              } catch (error) {
+                console.error(`[ai-autopilot-chat] ❌ Erro no embedding para query: "${query}"`, error);
               }
-            } catch (error) {
-              console.error(`[ai-autopilot-chat] ❌ Erro no embedding para query: "${query}"`, error);
             }
+          } else {
+            console.log('[ai-autopilot-chat] ⚠️ OPENAI_API_KEY não configurada - pulando embeddings');
           }
 
           // Step 3: Converter mapa para array e aplicar filtros
           let allArticles = Array.from(articleMap.values());
           console.log(`[ai-autopilot-chat] 📊 Total de artigos únicos encontrados: ${allArticles.length}`);
+          
+          // 🛡️ FASE A: FALLBACK ROBUSTO - Executar busca por palavras-chave se:
+          // 1. Embeddings não foram tentados (sem OPENAI_API_KEY)
+          // 2. Embeddings falharam completamente
+          // 3. Embeddings retornaram 0 resultados
+          const needsKeywordFallback = !embeddingAttempted || !embeddingSucceeded || allArticles.length === 0;
+          
+          if (needsKeywordFallback) {
+            console.log('[ai-autopilot-chat] 🔄 FALLBACK ATIVO: Buscando por palavras-chave...', {
+              reason: !embeddingAttempted ? 'no_openai_key' : !embeddingSucceeded ? 'embedding_failed' : 'no_results',
+              original_query: customerMessage.substring(0, 50)
+            });
+            
+            // Extrair palavras-chave relevantes (remover stopwords comuns)
+            const stopwords = ['a', 'o', 'e', 'é', 'de', 'da', 'do', 'que', 'para', 'com', 'em', 'um', 'uma', 'os', 'as', 'no', 'na', 'por', 'mais', 'como', 'mas', 'foi', 'ao', 'ele', 'das', 'tem', 'à', 'seu', 'sua', 'ou', 'ser', 'quando', 'muito', 'há', 'nos', 'já', 'está', 'eu', 'também', 'só', 'pelo', 'pela', 'até', 'isso', 'ela', 'entre', 'era', 'depois', 'sem', 'mesmo', 'aos', 'ter', 'seus', 'quem', 'nas', 'me', 'esse', 'eles', 'estão', 'você', 'tinha', 'foram', 'essa', 'num', 'nem', 'suas', 'meu', 'às', 'minha', 'têm', 'numa', 'pelos', 'elas', 'havia', 'seja', 'qual', 'será', 'nós', 'tenho', 'lhe', 'deles', 'essas', 'esses', 'pelas', 'este', 'fosse', 'dele', 'tu', 'te', 'vocês', 'vos', 'lhes', 'meus', 'minhas', 'teu', 'tua', 'teus', 'tuas', 'nosso', 'nossa', 'nossos', 'nossas', 'dela', 'delas', 'esta', 'estes', 'estas', 'aquele', 'aquela', 'aqueles', 'aquelas', 'isto', 'aquilo', 'estou', 'está', 'estamos', 'estão', 'estive', 'esteve', 'estivemos', 'estiveram', 'estava', 'estávamos', 'estavam', 'estivera', 'estivéramos', 'esteja', 'estejamos', 'estejam', 'estivesse', 'estivéssemos', 'estivessem', 'estiver', 'estivermos', 'estiverem', 'hei', 'há', 'havemos', 'hão', 'houve', 'houvemos', 'houveram', 'houvera', 'houvéramos', 'haja', 'hajamos', 'hajam', 'houvesse', 'houvéssemos', 'houvessem', 'houver', 'houvermos', 'houverem', 'houverei', 'houverá', 'houveremos', 'houverão', 'houveria', 'houveríamos', 'houveriam', 'sou', 'somos', 'são', 'era', 'éramos', 'eram', 'fui', 'foi', 'fomos', 'foram', 'fora', 'fôramos', 'seja', 'sejamos', 'sejam', 'fosse', 'fôssemos', 'fossem', 'for', 'formos', 'forem', 'serei', 'será', 'seremos', 'serão', 'seria', 'seríamos', 'seriam', 'tenho', 'tem', 'temos', 'tém', 'tinha', 'tínhamos', 'tinham', 'tive', 'teve', 'tivemos', 'tiveram', 'tivera', 'tivéramos', 'tenha', 'tenhamos', 'tenham', 'tivesse', 'tivéssemos', 'tivessem', 'tiver', 'tivermos', 'tiverem', 'terei', 'terá', 'teremos', 'terão', 'teria', 'teríamos', 'teriam', 'quero', 'preciso', 'gostaria', 'oi', 'olá', 'bom', 'dia', 'tarde', 'noite', 'obrigado', 'obrigada', 'ok', 'sim', 'não'];
+            
+            const keywords = customerMessage
+              .toLowerCase()
+              .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+              .split(/\s+/)
+              .filter(word => word.length > 2 && !stopwords.includes(word));
+            
+            // Termos específicos para busca direta (alta prioridade)
+            const directTerms = ['shopeecreation', 'shopee', 'creation', 'loja', 'produtos', 'cadastro', 'nivelamento', 'formulario'];
+            const messageLower = customerMessage.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const matchedDirectTerms = directTerms.filter(term => messageLower.includes(term));
+            
+            console.log('[ai-autopilot-chat] 🔑 Keywords extraídas:', keywords.slice(0, 10));
+            console.log('[ai-autopilot-chat] 🎯 Termos diretos encontrados:', matchedDirectTerms);
+            
+            // Buscar por título ou conteúdo contendo as palavras-chave
+            if (keywords.length > 0 || matchedDirectTerms.length > 0) {
+              const searchTerms = [...new Set([...matchedDirectTerms, ...keywords])].slice(0, 8);
+              
+              for (const term of searchTerms) {
+                let query = supabaseClient
+                  .from('knowledge_articles')
+                  .select('id, title, content, category, updated_at')
+                  .eq('status', 'published')
+                  .or(`title.ilike.%${term}%,content.ilike.%${term}%`);
+                
+                if (hasPersonaCategories) {
+                  query = query.in('category', personaCategories);
+                }
+                
+                const { data: keywordResults } = await query.limit(3);
+                
+                if (keywordResults && keywordResults.length > 0) {
+                  keywordResults.forEach((article: any) => {
+                    // Calcular uma similaridade aproximada baseada em quantos termos casam
+                    const titleLower = article.title?.toLowerCase() || '';
+                    const contentLower = article.content?.toLowerCase() || '';
+                    const matchCount = searchTerms.filter(t => 
+                      titleLower.includes(t) || contentLower.includes(t)
+                    ).length;
+                    
+                    const approxSimilarity = Math.min(0.5 + (matchCount * 0.1), 0.85);
+                    
+                    const existing = articleMap.get(article.id);
+                    if (!existing || approxSimilarity > (existing.similarity || 0)) {
+                      articleMap.set(article.id, { ...article, similarity: approxSimilarity });
+                    }
+                  });
+                }
+              }
+              
+              // Atualizar allArticles com resultados do fallback
+              allArticles = Array.from(articleMap.values());
+              console.log(`[ai-autopilot-chat] 📊 Artigos após fallback: ${allArticles.length}`);
+            }
+          }
 
           // Filtrar por categoria se persona tiver configurado
           if (hasPersonaCategories) {
@@ -1158,60 +1255,10 @@ Responda APENAS: skip ou search`
           } else {
             console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo relevante após filtros');
           }
-        } else {
-          throw new Error('Nenhuma API key disponível para embeddings');
         }
-      } catch (embeddingError) {
-        // FALLBACK: Busca por palavras-chave (método antigo)
-        console.log('[ai-autopilot-chat] ⚠️ Fallback para busca por palavras-chave');
-        
-        const removeAccents = (str: string) => 
-          str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        
-        try {
-          const keywordData = await callAIWithFallback({
-            messages: [
-              { 
-                role: 'system', 
-                content: 'Extraia palavras-chave (substantivos e verbos) da mensagem. Responda apenas as palavras separadas por espaço.'
-              },
-              { role: 'user', content: customerMessage }
-            ],
-            temperature: 0.3,
-            max_tokens: 50
-          });
-
-          const extractedKeywords = keywordData.choices?.[0]?.message?.content?.trim() || '';
-          const words = extractedKeywords.toLowerCase().split(/\s+/).filter((w: string) => w.length > 1);
-          
-          if (words.length > 0) {
-            const searchTerms = words.flatMap((word: string) => [word, removeAccents(word)])
-              .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
-            
-            const orConditions = searchTerms.map((term: string) =>
-              `title.ilike.%${term}%,content.ilike.%${term}%`
-            ).join(',');
-            
-            let query = supabaseClient
-              .from('knowledge_articles')
-              .select('id, title, content, category')
-              .eq('is_published', true)
-              .or(orConditions);
-            
-            if (hasPersonaCategories) {
-              query = query.in('category', personaCategories);
-            }
-            
-            const { data: relevantArticles } = await query.limit(5);
-
-            if (relevantArticles && relevantArticles.length > 0) {
-              knowledgeArticles = relevantArticles;
-              console.log(`[ai-autopilot-chat] ✅ Busca por Palavras-Chave: ${relevantArticles.length} artigos encontrados`);
-            }
-          }
-        } catch (keywordError) {
-          console.error('[ai-autopilot-chat] Erro na busca por palavras-chave:', keywordError);
-        }
+      } catch (searchError) {
+        console.error('[ai-autopilot-chat] ❌ Erro geral na busca de conhecimento:', searchError);
+        // knowledgeArticles permanece vazio, mas não quebra o fluxo
       }
       } // Fechamento do else de canAccessKnowledgeBase
     }
