@@ -1507,14 +1507,46 @@ Responda APENAS: skip ou search`
     const usePriorityInstructions = persona.use_priority_instructions === true;
     
     // ============================================================
-    // 🔐 DETECÇÃO AUTOMÁTICA DE CÓDIGO OTP (6 dígitos)
+    // 🔐 DETECÇÃO AUTOMÁTICA DE CÓDIGO OTP (6 dígitos) - CONTEXTUAL
+    // ============================================================
+    // CORREÇÃO: Só valida OTP automaticamente se:
+    // 1. É um código de 6 dígitos
+    // 2. Cliente tem email cadastrado
+    // 3. Existe OTP pendente (awaiting_otp = true) OU OTP foi enviado recentemente
+    // 
+    // Isso evita tratar códigos de devolução/rastreio como OTP
     // ============================================================
     const isOTPCode = /^\d{6}$/.test(customerMessage.trim());
+    const conversationMetadata = conversation.customer_metadata || {};
     
-    if (isOTPCode && contactHasEmail) {
+    // Verificar se há OTP pendente (flag explícita)
+    const hasAwaitingOTP = conversationMetadata.awaiting_otp === true;
+    
+    // Verificar se OTP foi enviado recentemente (últimos 15 minutos)
+    const otpExpiresAt = conversationMetadata.otp_expires_at;
+    const hasRecentOTPPending = otpExpiresAt && new Date(otpExpiresAt) > new Date();
+    
+    // Verificar se primeiro contato enviou OTP (via IDENTITY WALL)
+    const hasFirstContactOTPPending = !hasEverVerifiedOTP && contactHasEmail;
+    
+    // Só validar OTP se houver contexto de OTP pendente
+    const shouldValidateOTP = isOTPCode && contactHasEmail && 
+      (hasAwaitingOTP || hasRecentOTPPending || hasFirstContactOTPPending);
+    
+    console.log('[ai-autopilot-chat] 🔐 OTP Detection Check:', {
+      is_6_digit_code: isOTPCode,
+      has_awaiting_otp_flag: hasAwaitingOTP,
+      has_recent_otp_pending: hasRecentOTPPending,
+      has_first_contact_otp: hasFirstContactOTPPending,
+      will_validate: shouldValidateOTP,
+      code_preview: customerMessage.trim().substring(0, 3) + '***'
+    });
+    
+    if (shouldValidateOTP) {
       console.log('[ai-autopilot-chat] 🔐 DECISION POINT: AUTO_OTP_VALIDATION', {
         detected_otp_code: true,
         contact_has_email: contactHasEmail,
+        otp_context: hasAwaitingOTP ? 'awaiting_otp_flag' : hasRecentOTPPending ? 'recent_otp_sent' : 'first_contact',
         will_bypass_ai: true
       });
       
@@ -1528,17 +1560,38 @@ Responda APENAS: skip ou search`
         
         if (otpError) throw otpError;
         
+        // CORREÇÃO: Usar otpData.error ao invés de otpData.message
+        // A função verify-code retorna { success: false, error: "mensagem" }
+        const errorMessage = otpData?.error || 'O código não é válido. Verifique e tente novamente.';
+        
         const directOTPSuccessResponse = otpData?.success 
           ? `**Código validado com sucesso!**
 
 Olá ${contactName}! Sua identidade foi confirmada. 
 
 Agora posso te ajudar com questões financeiras. Como posso te ajudar?`
-          : `**Código inválido ou expirado**
+          : `**Código inválido**
 
-${otpData?.message || 'O código não é válido. Verifique e tente novamente.'}
+${errorMessage}
 
 Digite **"reenviar"** se precisar de um novo código.`;
+        
+        // Se OTP foi validado com sucesso, limpar flags de OTP pendente
+        if (otpData?.success) {
+          await supabaseClient
+            .from('conversations')
+            .update({ 
+              customer_metadata: {
+                ...conversationMetadata,
+                awaiting_otp: false,
+                otp_expires_at: null,
+                last_otp_verified_at: new Date().toISOString()
+              }
+            })
+            .eq('id', conversationId);
+          
+          console.log('[ai-autopilot-chat] ✅ OTP validado - flags limpas');
+        }
         
         // Salvar mensagem no banco
         const { data: savedMsg } = await supabaseClient
@@ -1575,6 +1628,7 @@ Digite **"reenviar"** se precisar de um novo código.`;
         
         console.log('[ai-autopilot-chat] ✅ OTP AUTO-VALIDATION COMPLETE:', {
           otp_success: otpData?.success,
+          error_reason: otpData?.success ? null : errorMessage,
           response_sent: true
         });
         
@@ -1586,6 +1640,7 @@ Digite **"reenviar"** se precisar de um novo código.`;
           debug: { 
             reason: 'auto_otp_validation_bypass',
             otp_success: otpData?.success,
+            error_detail: otpData?.success ? null : errorMessage,
             bypassed_ai: true
           }
         }), {
@@ -1596,6 +1651,9 @@ Digite **"reenviar"** se precisar de um novo código.`;
         console.error('[ai-autopilot-chat] ❌ Erro ao validar OTP automaticamente:', error);
         // Se falhar, continua para IA tentar lidar
       }
+    } else if (isOTPCode && contactHasEmail) {
+      // Cliente enviou 6 dígitos mas não há OTP pendente - perguntar se é OTP ou outro código
+      console.log('[ai-autopilot-chat] ⚠️ 6-digit code received but NO OTP pending - will let AI handle naturally');
     }
     
     // ============================================================
@@ -1633,6 +1691,22 @@ Digite **"reenviar"** se precisar de um novo código.`;
           await supabaseClient.functions.invoke('send-verification-code', {
             body: { email: contactEmail, type: 'customer' }
           });
+          
+          // 🔐 MARCAR OTP PENDENTE NA METADATA (para validação contextual)
+          const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
+          await supabaseClient
+            .from('conversations')
+            .update({ 
+              customer_metadata: {
+                ...conversationMetadata,
+                awaiting_otp: true,
+                otp_expires_at: otpExpiresAt,
+                claimant_email: contactEmail
+              }
+            })
+            .eq('id', conversationId);
+          
+          console.log('[ai-autopilot-chat] 🔐 OTP pendente marcado na metadata (first contact)');
           
           // BYPASS DIRETO - NÃO CHAMAR A IA
           const directOTPResponse = `Olá ${contactName}! Bem-vindo(a)!
@@ -1714,6 +1788,22 @@ Por favor, **digite o código** que você recebeu para continuar.`;
           await supabaseClient.functions.invoke('send-verification-code', {
             body: { email: contactEmail, type: 'customer' }
           });
+          
+          // 🔐 MARCAR OTP PENDENTE NA METADATA (para validação contextual)
+          const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
+          await supabaseClient
+            .from('conversations')
+            .update({ 
+              customer_metadata: {
+                ...conversationMetadata,
+                awaiting_otp: true,
+                otp_expires_at: otpExpiresAt,
+                claimant_email: contactEmail
+              }
+            })
+            .eq('id', conversationId);
+          
+          console.log('[ai-autopilot-chat] 🔐 OTP pendente marcado na metadata (financial barrier)');
           
           // BYPASS DIRETO - NÃO CHAMAR A IA
           const directOTPResponse = `**Verificação de Segurança**
@@ -2346,6 +2436,23 @@ Se estiver correto, vou te transferir para nosso time comercial. Se digitou erra
 
             console.log('[ai-autopilot-chat] ✅ OTP enviado para cliente verificado');
             
+            // 🔐 MARCAR OTP PENDENTE NA METADATA (para validação contextual)
+            const currentMetadata = conversation.customer_metadata || {};
+            const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
+            await supabaseClient
+              .from('conversations')
+              .update({ 
+                customer_metadata: {
+                  ...currentMetadata,
+                  awaiting_otp: true,
+                  otp_expires_at: otpExpiresAt,
+                  claimant_email: emailInformado
+                }
+              })
+              .eq('id', conversationId);
+            
+            console.log('[ai-autopilot-chat] 🔐 OTP pendente marcado na metadata (verify_customer_email tool)');
+            
             // Build response message (NEVER show code to client)
             const safeEmail = maskEmail(emailInformado);
             assistantMessage = `Encontrei seu cadastro, ${existingCustomer.first_name}!
@@ -2392,6 +2499,23 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
               assistantMessage = 'Não consegui reenviar o código. Por favor, tente novamente em alguns instantes.';
               continue;
             }
+
+            // 🔐 ATUALIZAR OTP PENDENTE NA METADATA (novo código, novo timer)
+            const currentMetadata = conversation.customer_metadata || {};
+            const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
+            await supabaseClient
+              .from('conversations')
+              .update({ 
+                customer_metadata: {
+                  ...currentMetadata,
+                  awaiting_otp: true,
+                  otp_expires_at: otpExpiresAt,
+                  claimant_email: contactEmail
+                }
+              })
+              .eq('id', conversationId);
+            
+            console.log('[ai-autopilot-chat] 🔐 OTP pendente atualizado na metadata (resend_otp tool)');
 
             // Build response message (NEVER show code to client)
             const safeEmail = maskEmail(contactEmail);
