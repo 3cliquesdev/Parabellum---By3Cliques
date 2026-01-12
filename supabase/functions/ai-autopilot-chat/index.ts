@@ -818,6 +818,122 @@ serve(async (req) => {
       });
     }
     
+    // ============================================================
+    // 🔍 DETECÇÃO AUTOMÁTICA DE EMAIL NA MENSAGEM
+    // Se cliente SEM email envia uma mensagem contendo email válido,
+    // processamos automaticamente como identificação
+    // ============================================================
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+    const emailInMessage = customerMessage.match(emailRegex)?.[0];
+    
+    if (emailInMessage && !contact.email) {
+      console.log('[ai-autopilot-chat] 📧 EMAIL DETECTADO NA MENSAGEM (Lead sem email):', emailInMessage);
+      
+      try {
+        // Chamar verify_customer_email automaticamente
+        const { data: verifyResult, error: verifyError } = await supabaseClient.functions.invoke('verify-customer-email', {
+          body: { 
+            email: emailInMessage.toLowerCase().trim(),
+            conversationId: conversationId,
+            contactId: contact.id
+          }
+        });
+        
+        if (!verifyError && verifyResult) {
+          console.log('[ai-autopilot-chat] ✅ Email processado automaticamente:', {
+            email: emailInMessage,
+            result: verifyResult.found ? 'found_in_db' : 'new_lead',
+            otp_sent: verifyResult.otp_sent || false
+          });
+          
+          // Montar resposta baseada no resultado
+          const maskedEmailResponse = maskEmail(emailInMessage);
+          let autoResponse = '';
+          
+          if (verifyResult.found && verifyResult.otp_sent) {
+            autoResponse = `Encontrei seu cadastro! 🎉
+
+Enviei um código de **6 dígitos** para **${maskedEmailResponse}**.
+
+Por favor, **digite o código** que você recebeu para continuar.`;
+          } else if (!verifyResult.found) {
+            autoResponse = `Não encontrei o email **${maskedEmailResponse}** na nossa base de clientes.
+
+Poderia confirmar se esse email está correto?
+- Se estiver correto, digite **"sim"** para prosseguir
+- Se digitou errado, por favor envie o email correto`;
+            
+            // Marcar na metadata que estamos aguardando confirmação de email não encontrado
+            await supabaseClient
+              .from('conversations')
+              .update({
+                customer_metadata: {
+                  ...(conversation.customer_metadata || {}),
+                  awaiting_email_confirmation: true,
+                  pending_email: emailInMessage.toLowerCase().trim()
+                }
+              })
+              .eq('id', conversationId);
+          } else {
+            // Fallback: email processado mas sem ação clara
+            autoResponse = `Obrigado! Estou verificando seu email **${maskedEmailResponse}**...`;
+          }
+          
+          // Salvar resposta
+          const { data: savedMsg } = await supabaseClient
+            .from('messages')
+            .insert({
+              conversation_id: conversationId,
+              content: autoResponse,
+              sender_type: 'user',
+              is_ai_generated: true,
+              channel: responseChannel
+            })
+            .select()
+            .single();
+          
+          // Enviar via WhatsApp se necessário
+          if (responseChannel === 'whatsapp' && contact?.phone) {
+            const whatsappInstance = await getWhatsAppInstanceForConversation(
+              supabaseClient, 
+              conversationId, 
+              conversation.whatsapp_instance_id
+            );
+            
+            if (whatsappInstance) {
+              await supabaseClient.functions.invoke('send-whatsapp-message', {
+                body: {
+                  instance_id: whatsappInstance.id,
+                  phone_number: contact.phone,
+                  whatsapp_id: contact.whatsapp_id,
+                  message: autoResponse
+                }
+              });
+            }
+          }
+          
+          // RETURN EARLY - Email processado, não chamar IA
+          return new Response(JSON.stringify({
+            response: autoResponse,
+            messageId: savedMsg?.id,
+            emailDetected: emailInMessage,
+            emailProcessed: true,
+            debug: {
+              reason: 'auto_email_detection_bypass',
+              email_found_in_db: verifyResult.found,
+              otp_sent: verifyResult.otp_sent || false,
+              bypassed_ai: true
+            }
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      } catch (error) {
+        console.error('[ai-autopilot-chat] ❌ Erro ao processar email detectado:', error);
+        // Se falhar, continua para IA tentar lidar
+      }
+    }
+    
     console.log(`[ai-autopilot-chat] Processando mensagem para conversa ${conversationId}...`);
 
     // 2. Buscar persona baseado em routing rules (canal + departamento)
@@ -1369,6 +1485,31 @@ Responda APENAS: skip ou search`
       is_first_contact: !hasEverVerifiedOTP && contactHasEmail
     });
     
+    // ============================================================
+    // 🎯 DECISION MATRIX - Log unificado para debugging de fluxo
+    // ============================================================
+    const willAskForEmail = !contactHasEmail;
+    const willSendOTP = contactHasEmail && !hasEverVerifiedOTP;
+    const willAskFinancialOTP = contactHasEmail && hasEverVerifiedOTP && isFinancialRequest && !hasRecentOTPVerification;
+    const willProcessNormally = contactHasEmail && hasEverVerifiedOTP && !isFinancialRequest;
+    
+    console.log('[ai-autopilot-chat] 🎯 DECISION MATRIX:', {
+      // Inputs
+      contactHasEmail,
+      hasEverVerifiedOTP,
+      hasRecentOTPVerification,
+      isFinancialRequest,
+      // Outputs (decisions)
+      willAskForEmail,
+      willSendOTP,
+      willAskFinancialOTP,
+      willProcessNormally,
+      // Context
+      customer_name: contactName,
+      customer_email: safeEmail,
+      message_preview: customerMessage.substring(0, 50)
+    });
+    
     console.log('[ai-autopilot-chat] 🔍 FINANCIAL SECURITY CHECK:', {
       is_financial_request: isFinancialRequest,
       has_recent_otp: hasRecentOTPVerification,
@@ -1657,14 +1798,33 @@ Digite **"reenviar"** se precisar de um novo código.`;
     }
     
     // ============================================================
+    // 🔐 GUARD CLAUSE: Cliente VERIFICADO (tem email + já fez OTP) → BYPASS Identity Wall
+    // Se cliente já tem email E já verificou OTP alguma vez E NÃO é pedido financeiro:
+    // → Atendimento NORMAL direto, SEM pedir OTP novamente
+    // ============================================================
+    if (contactHasEmail && hasEverVerifiedOTP && !isFinancialRequest) {
+      console.log('[ai-autopilot-chat] ✅ GUARD CLAUSE: Cliente verificado - BYPASS Identity Wall', {
+        contact_email: maskEmail(contactEmail),
+        contact_name: contactName,
+        has_ever_verified_otp: true,
+        is_financial_request: false,
+        action: 'skip_identity_wall_go_to_normal_service'
+      });
+      
+      // NÃO faz nada aqui - deixa o código continuar para atendimento normal pela IA
+      // Apenas loga e segue para o próximo bloco
+    }
+    
+    // ============================================================
     // 🚨 IDENTITY WALL - OTP AUTOMÁTICO 
     // Regras:
     // 1. PRIMEIRO CONTATO (tem email, nunca verificou) → OTP para identificar
     // 2. CONTEXTO FINANCEIRO (já identificado, sem OTP recente) → OTP para segurança
-    // 3. CLIENTE IDENTIFICADO (já verificou alguma vez) → Atendimento normal
+    // 3. CLIENTE IDENTIFICADO (já verificou alguma vez) → Atendimento normal (handled by guard clause above)
     // ============================================================
     // Funciona para TODOS os canais (não só WhatsApp)
-    if (contactHasEmail) {
+    // 🔐 CORREÇÃO: Só entra no Identity Wall se NÃO passou pelo Guard Clause
+    if (contactHasEmail && (!hasEverVerifiedOTP || isFinancialRequest)) {
       const maskedEmail = maskEmail(contactEmail);
       
       // Debug log comparando isFinancialRequest vs isFinancialContext
