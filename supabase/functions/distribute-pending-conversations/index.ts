@@ -72,10 +72,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // Roles que podem receber distribuição automática de conversas
-    // Nota: financial_agent removido - não devem receber conversas automaticamente
+    // Nota: financial_agent e consultant removidos - não devem receber conversas automaticamente
+    // support_agent: clientes com email verificado
+    // sales_rep: leads novos sem email verificado
     const DISTRIBUTION_ALLOWED_ROLES = [
       'support_agent', 
-      'consultant', 
       'sales_rep'
     ];
 
@@ -113,21 +114,31 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Buscar IDs de agentes com roles elegíveis
-    const { data: eligibleAgentIds } = await supabaseClient
+    // Buscar todos os agentes com roles elegíveis e suas roles
+    const { data: eligibleAgentsWithRoles } = await supabaseClient
       .from('user_roles')
-      .select('user_id')
+      .select('user_id, role')
       .in('role', DISTRIBUTION_ALLOWED_ROLES);
+
+    const agentRolesMap: Record<string, string> = {};
+    if (eligibleAgentsWithRoles) {
+      for (const ar of eligibleAgentsWithRoles) {
+        agentRolesMap[ar.user_id] = ar.role;
+      }
+    }
 
     // Buscar agentes online que podem receber conversas
     const { data: onlineAgents } = await supabaseClient
       .from('profiles')
       .select('id, full_name')
       .eq('availability_status', 'online')
-      .in('id', eligibleAgentIds?.map(a => a.user_id) || []);
+      .in('id', eligibleAgentsWithRoles?.map(a => a.user_id) || []);
 
-    const totalOnlineAgents = onlineAgents?.length || 1;
-    console.log(`[distribute-pending] ${totalOnlineAgents} agentes online`);
+    // Separar agentes por role
+    const supportAgents = onlineAgents?.filter(a => agentRolesMap[a.id] === 'support_agent') || [];
+    const salesAgents = onlineAgents?.filter(a => agentRolesMap[a.id] === 'sales_rep') || [];
+
+    console.log(`[distribute-pending] Agentes online - Support: ${supportAgents.length}, Sales: ${salesAgents.length}`);
 
     // Buscar conversas pendentes (sem agente atribuído)
     const { data: pendingConversations, error: pendingError } = await supabaseClient
@@ -143,7 +154,7 @@ Deno.serve(async (req: Request) => {
       .eq('status', 'open')
       .is('assigned_to', null)
       .order('created_at', { ascending: true }) // FIFO
-      .limit(maxConversations * totalOnlineAgents); // Buscar conversas suficientes para todos
+      .limit(maxConversations * Math.max(supportAgents.length + salesAgents.length, 1));
 
     if (pendingError) {
       console.error('[distribute-pending] Erro ao buscar conversas pendentes:', pendingError);
@@ -161,6 +172,32 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Buscar emails dos contatos das conversas pendentes
+    const contactIds = [...new Set(pendingConversations.map(c => c.contact_id))];
+    const { data: contacts } = await supabaseClient
+      .from('contacts')
+      .select('id, email')
+      .in('id', contactIds);
+
+    const contactEmailMap: Record<string, string | null> = {};
+    if (contacts) {
+      for (const c of contacts) {
+        contactEmailMap[c.id] = c.email;
+      }
+    }
+
+    // Buscar emails verificados
+    const emails = contacts?.map(c => c.email).filter(Boolean) || [];
+    const { data: verifiedEmails } = emails.length > 0 
+      ? await supabaseClient
+          .from('email_verifications')
+          .select('email')
+          .in('email', emails)
+          .eq('verified', true)
+      : { data: [] };
+
+    const verifiedEmailSet = new Set(verifiedEmails?.map(v => v.email) || []);
 
     // Contar conversas atuais por agente para load balancing
     const { data: agentCounts } = await supabaseClient
@@ -183,26 +220,46 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Distribuir conversas usando round-robin com load balancing
+    // Distribuir conversas usando round-robin com load balancing baseado na verificação de email
     let distributedCount = 0;
     const assignedToThisAgent: string[] = [];
+    const currentAgentRole = agentRolesMap[agentId];
 
     for (const conv of pendingConversations) {
-      // Encontrar agente com menos conversas
-      let targetAgentId = agentId;
-      let minConversations = conversationCountByAgent[agentId] || 0;
+      // Verificar se o email do contato foi verificado
+      const contactEmail = contactEmailMap[conv.contact_id];
+      const isEmailVerified = contactEmail ? verifiedEmailSet.has(contactEmail) : false;
 
-      if (onlineAgents) {
-        for (const a of onlineAgents) {
-          const count = conversationCountByAgent[a.id] || 0;
-          if (count < minConversations) {
-            minConversations = count;
-            targetAgentId = a.id;
-          }
+      // Determinar qual pool de agentes deve receber esta conversa
+      // Email verificado = cliente existente = support_agent
+      // Email não verificado = lead novo = sales_rep
+      const targetRole = isEmailVerified ? 'support_agent' : 'sales_rep';
+      const targetAgentPool = isEmailVerified ? supportAgents : salesAgents;
+
+      // Se o agente atual não tem a role correta para esta conversa, pular
+      if (currentAgentRole !== targetRole) {
+        continue;
+      }
+
+      // Se não há agentes online com a role correta, pular esta conversa
+      if (targetAgentPool.length === 0) {
+        console.log(`[distribute-pending] Nenhum agente ${targetRole} online para conversa ${conv.id}`);
+        continue;
+      }
+
+      // Encontrar agente com menos conversas dentro do pool correto
+      let targetAgentId = agentId;
+      let minConversations = conversationCountByAgent[agentId] ?? Infinity;
+
+      for (const a of targetAgentPool) {
+        const count = conversationCountByAgent[a.id] || 0;
+        if (count < minConversations) {
+          minConversations = count;
+          targetAgentId = a.id;
         }
       }
 
-      // Se não é para este agente, pular
+      // Se não é para este agente (outro agente tem menos conversas), pular
       if (targetAgentId !== agentId) {
         continue;
       }
