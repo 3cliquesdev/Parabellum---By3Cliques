@@ -18,7 +18,8 @@ export function usePipelineSalesReps(pipelineId?: string) {
             id,
             full_name,
             job_title,
-            avatar_url
+            avatar_url,
+            availability_status
           )
         `)
         .eq("pipeline_id", pipelineId);

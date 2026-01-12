@@ -12,15 +12,23 @@ export function useAvailableSalesReps(pipelineId?: string) {
   const { data: pipelineReps, isLoading: pipelineLoading } = usePipelineSalesReps(pipelineId);
 
   const availableReps = useMemo(() => {
-    // Se não há pipelineId, retorna todos
+    // Se não há pipelineId, retorna todos os sales reps
     if (!pipelineId) {
       return allSalesReps || [];
     }
 
-    // Se há equipe configurada para o pipeline, filtra
+    // Se há equipe configurada para o pipeline, usa diretamente os membros do pipeline
+    // Isso inclui TODAS as roles configuradas (consultant, manager, sales_rep, etc.)
     if (pipelineReps && pipelineReps.length > 0) {
-      const pipelineUserIds = new Set(pipelineReps.map(r => r.user_id));
-      return allSalesReps?.filter(rep => pipelineUserIds.has(rep.id)) || [];
+      return pipelineReps
+        .filter(rep => rep.profiles)
+        .map(rep => ({
+          id: rep.user_id,
+          full_name: rep.profiles?.full_name || '',
+          job_title: rep.profiles?.job_title || null,
+          avatar_url: rep.profiles?.avatar_url || null,
+          availability_status: rep.profiles?.availability_status || null,
+        }));
     }
 
     // Fallback: retorna todos se não houver equipe configurada
