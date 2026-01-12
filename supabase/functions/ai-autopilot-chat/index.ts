@@ -1397,6 +1397,96 @@ Responda APENAS: skip ou search`
       isKnownCustomer: contactHasEmail
     });
     
+    // ============================================================
+    // 🎯 SISTEMA ANTI-ALUCINAÇÃO - VERIFICAÇÃO DE CONFIANÇA
+    // ============================================================
+    const confidenceResult = calculateConfidenceScore(
+      customerMessage,
+      knowledgeArticles.map(a => ({
+        id: a.id,
+        title: a.title,
+        content: a.content,
+        category: a.category,
+        similarity: a.similarity || 0.5,
+        updated_at: undefined // Articles from query don't have updated_at
+      }))
+    );
+
+    console.log('[ai-autopilot-chat] 🎯 CONFIDENCE SCORE:', {
+      score: (confidenceResult.score * 100).toFixed(0) + '%',
+      action: confidenceResult.action,
+      reason: confidenceResult.reason,
+      department: confidenceResult.department,
+      components: confidenceResult.components,
+      articlesCount: knowledgeArticles.length
+    });
+
+    // 🚨 HANDOFF AUTOMÁTICO POR BAIXA CONFIANÇA
+    // Apenas se score muito baixo E não for saudação/small talk
+    const isSimpleGreeting = /^(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|ok|tá|ta|sim|não|nao)[\s!?.,]*$/i.test(customerMessage.trim());
+    
+    if (confidenceResult.action === 'handoff' && !isSimpleGreeting && knowledgeArticles.length === 0) {
+      console.log('[ai-autopilot-chat] 🚨 LOW CONFIDENCE HANDOFF - Score:', confidenceResult.score);
+      
+      // Atualizar ai_mode para waiting_human
+      await supabaseClient
+        .from('conversations')
+        .update({ 
+          ai_mode: 'waiting_human',
+          last_message_at: new Date().toISOString()
+        })
+        .eq('id', conversationId);
+      
+      // Rotear para agente
+      const { data: routeResult } = await supabaseClient.functions.invoke('route-conversation', {
+        body: { conversationId, department_id: confidenceResult.department }
+      });
+      
+      // Mensagem de transição
+      const handoffMessage = `Olá ${contactName}! Para te ajudar melhor com essa questão, vou te conectar com um de nossos especialistas. Um momento, por favor.`;
+      
+      // Salvar mensagem
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: handoffMessage,
+        sender_type: 'user',
+        is_ai_generated: true,
+        channel: responseChannel
+      });
+      
+      // Registrar nota interna
+      await supabaseClient.from('interactions').insert({
+        customer_id: contact.id,
+        type: 'internal_note',
+        content: `🎯 **Handoff Automático por Baixa Confiança**
+
+**Score:** ${(confidenceResult.score * 100).toFixed(0)}%
+**Motivo:** ${confidenceResult.reason}
+**Departamento Sugerido:** ${confidenceResult.department || 'Suporte N1'}
+**Pergunta do Cliente:** "${customerMessage}"
+
+**Ação:** IA não tinha informações suficientes na base de conhecimento para responder com segurança.`,
+        channel: responseChannel,
+        metadata: {
+          source: 'ai_confidence_handoff',
+          confidence_score: confidenceResult.score,
+          confidence_action: confidenceResult.action,
+          confidence_reason: confidenceResult.reason
+        }
+      });
+      
+      // Retornar resposta de handoff
+      return new Response(JSON.stringify({
+        status: 'handoff',
+        message: handoffMessage,
+        reason: confidenceResult.reason,
+        score: confidenceResult.score,
+        routed_to: routeResult?.assigned_to || null
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     let knowledgeContext = '';
     if (knowledgeArticles.length > 0) {
       knowledgeContext = `\n\n**📚 BASE DE CONHECIMENTO:**\n${knowledgeArticles.map(a => 
@@ -2139,7 +2229,32 @@ ${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira
     // 🐛 DEBUG: Confirmar que priorityInstruction está sendo gerada
     console.log('[ai-autopilot-chat] 📣 Priority Instruction:', priorityInstruction ? 'SET ✅' : 'EMPTY ❌');
     
-    const contextualizedSystemPrompt = `${priorityInstruction}
+    // 🎯 INSTRUÇÃO ANTI-ALUCINAÇÃO - Obrigar IA a admitir quando não sabe
+    const antiHallucinationInstruction = confidenceResult.action === 'cautious' 
+      ? `\n\n**⚠️ ATENÇÃO - CONFIANÇA MÉDIA (${(confidenceResult.score * 100).toFixed(0)}%):**
+Você encontrou POUCA informação na base de conhecimento sobre o assunto.
+- Responda com cautela e prefixe sua resposta indicando incerteza
+- Se não tiver certeza, ADMITA: "Não tenho informação completa sobre isso"
+- OFEREÇA transferir para um especialista se o cliente precisar de mais detalhes\n`
+      : '';
+
+    const contextualizedSystemPrompt = `${priorityInstruction}${antiHallucinationInstruction}
+
+**⚠️ REGRA CRÍTICA ANTI-ALUCINAÇÃO:**
+Se você NÃO encontrar informação na BASE DE CONHECIMENTO para responder a pergunta do cliente:
+1. NÃO INVENTE informações
+2. NÃO use conhecimento externo não validado pela empresa
+3. DIGA HONESTAMENTE: "Não encontrei essa informação na minha base de conhecimento. Posso te conectar com um especialista?"
+4. Use a ferramenta request_human_agent com reason: "info_nao_disponivel" se o cliente aceitar
+
+**EXEMPLOS DE COMO RESPONDER QUANDO NÃO SABE:**
+- "Boa pergunta! Essa é uma informação que preciso validar. Quer que eu te conecte com um especialista?"
+- "Não encontrei essa informação específica na nossa base. Posso transferir para alguém que possa confirmar?"
+- "Para te dar uma resposta precisa, seria melhor você falar com um de nossos especialistas. Posso transferir?"
+
+É MELHOR admitir que não sabe do que fornecer informação ERRADA.
+
+---
 
 **DIRETRIZ DE SEGURANÇA E PRIVACIDADE (LGPD - IMPORTANTE):**
 - NUNCA escreva o e-mail completo, telefone ou CPF do cliente na resposta
@@ -2513,6 +2628,15 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     const aiData = await callAIWithFallback(aiPayload);
     let assistantMessage = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui processar sua mensagem.';
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
+
+    // 🎯 PREFIXO DE RESPOSTA CAUTELOSA (confiança média)
+    if (confidenceResult.action === 'cautious' && !toolCalls.length) {
+      const cautiousPrefix = generateResponsePrefix('cautious');
+      if (cautiousPrefix && !assistantMessage.startsWith('**Baseado')) {
+        assistantMessage = cautiousPrefix + assistantMessage;
+        console.log('[ai-autopilot-chat] ⚠️ Prefixo cauteloso adicionado à resposta');
+      }
+    }
 
     // ============================================================
     // FASE 3: TOOL CALLING - Execute first to prevent duplicates
