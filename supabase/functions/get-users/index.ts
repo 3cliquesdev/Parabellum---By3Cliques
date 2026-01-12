@@ -75,10 +75,12 @@ Deno.serve(async (req) => {
 
     if (rolesError) throw rolesError;
 
-    // Buscar profiles
+    // Buscar apenas os profiles dos usuários com roles (evita limite de 1000 registros)
+    const userIds = rolesData.map(r => r.user_id);
     const { data: profilesData } = await supabaseAdmin
       .from('profiles')
-      .select('*');
+      .select('*')
+      .in('id', userIds);
 
     const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
 
