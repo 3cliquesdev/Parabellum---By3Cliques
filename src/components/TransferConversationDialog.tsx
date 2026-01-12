@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { useTransferConversation } from "@/hooks/useTransferConversation";
-import { ArrowRightLeft } from "lucide-react";
+import { ArrowRightLeft, Users } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -59,11 +59,14 @@ export default function TransferConversationDialog({
   const transferMutation = useTransferConversation();
 
   const handleTransfer = () => {
-    if (!selectedUserId || !selectedDepartmentId || !transferNote.trim()) return;
+    // Agente é opcional - se não selecionou, usa distribuição automática
+    if (!selectedDepartmentId || !transferNote.trim()) return;
 
-    const toUser = users?.find((u) => u.id === selectedUserId);
+    const isAutoDistribute = !selectedUserId || selectedUserId === "auto";
+    const toUser = isAutoDistribute ? null : users?.find((u) => u.id === selectedUserId);
     const toDepartment = departments?.find((d) => d.id === selectedDepartmentId);
-    if (!toUser || !toDepartment) return;
+    if (!toDepartment) return;
+    if (!isAutoDistribute && !toUser) return;
 
     const fromUser = conversation.assigned_user || {
       id: currentUserId,
@@ -74,13 +77,14 @@ export default function TransferConversationDialog({
       {
         conversationId: conversation.id,
         fromUserId: fromUser.id,
-        toUserId: selectedUserId,
+        toUserId: isAutoDistribute ? null : selectedUserId,
         fromUserName: fromUser.full_name,
-        toUserName: toUser.full_name,
+        toUserName: isAutoDistribute ? "Distribuição Automática" : toUser!.full_name,
         contactId: conversation.contact_id,
         departmentId: selectedDepartmentId,
         departmentName: toDepartment.name,
         transferNote: transferNote.trim(),
+        autoDistribute: isAutoDistribute,
       },
       {
         onSuccess: () => {
@@ -142,14 +146,34 @@ export default function TransferConversationDialog({
           {selectedDepartmentId && (
             <>
               <div className="space-y-2">
-                <Label>Agente de Destino *</Label>
+                <Label>Agente de Destino <span className="text-muted-foreground font-normal">(opcional)</span></Label>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
                 ) : (
-                  <ScrollArea className="h-[200px]">
+                  <ScrollArea className="h-[240px]">
                     <div className="space-y-2 pr-4">
+                      {/* Opção de distribuição automática */}
+                      <button
+                        onClick={() => setSelectedUserId("auto")}
+                        className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all hover:bg-accent ${
+                          selectedUserId === "auto" || !selectedUserId
+                            ? "border-primary bg-accent"
+                            : "border-border"
+                        }`}
+                      >
+                        <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+                          <Users className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="font-medium">Distribuir Automaticamente</p>
+                          <p className="text-sm text-muted-foreground">
+                            Distribui entre agentes online do departamento
+                          </p>
+                        </div>
+                      </button>
+
                       {availableUsers?.map((user) => (
                         <button
                           key={user.id}
@@ -241,7 +265,7 @@ export default function TransferConversationDialog({
           </Button>
           <Button
             onClick={handleTransfer}
-            disabled={!selectedUserId || !selectedDepartmentId || !transferNote.trim() || transferMutation.isPending}
+            disabled={!selectedDepartmentId || !transferNote.trim() || transferMutation.isPending}
           >
             {transferMutation.isPending ? "Transferindo..." : "Confirmar Transferência"}
           </Button>
