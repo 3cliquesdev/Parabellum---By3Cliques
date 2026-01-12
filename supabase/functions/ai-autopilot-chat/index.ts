@@ -1830,18 +1830,19 @@ Este cliente NÃO tem email cadastrado no sistema (é um LEAD, não um cliente e
    
 2. AGUARDE o cliente fornecer o email
 
-3. QUANDO cliente fornecer email: Use a ferramenta update_customer_email para registrar e enviar código de verificação
+3. QUANDO cliente fornecer email: Use a ferramenta verify_customer_email para registrar e buscar na base
 
-4. APÓS enviar código: Informe ao cliente:
-   "Perfeito! Enviamos um código de 6 dígitos para [email]. Por favor, digite o código que você recebeu."
+4. **SE EMAIL NÃO ENCONTRADO NA BASE:**
+   - Sistema vai perguntar automaticamente: "Não encontrei esse email na nossa base de clientes. Poderia confirmar se esse email está correto?"
+   - Se cliente responder "SIM", "correto", "está certo" → Use a ferramenta confirm_email_not_found com confirmed=true (vai transferir para comercial)
+   - Se cliente informar um email DIFERENTE → Use verify_customer_email com o novo email
+   - Se cliente responder "não", "errado", "digitei errado" → Use confirm_email_not_found com confirmed=false (vai pedir novo email)
 
-5. AGUARDE o cliente enviar o código de 6 dígitos
-
-6. QUANDO cliente enviar código: Use a ferramenta verify_otp_code para validar
-
-7. APÓS verificação bem-sucedida: Informe que ele será direcionado para o time comercial:
-   "Identidade verificada! Vou te conectar com nosso time de vendas para te ajudar da melhor forma. Um consultor vai entrar em contato em breve!"
-   E então faça handoff para copilot e chame route-conversation.
+5. **SE EMAIL ENCONTRADO NA BASE:**
+   - OTP será enviado automaticamente
+   - Informe: "Enviamos um código de 6 dígitos para [email]. Por favor, digite o código que você recebeu."
+   - AGUARDE o cliente enviar o código de 6 dígitos
+   - Use a ferramenta verify_otp_code para validar
 
 **IMPORTANTE:** NÃO atenda dúvidas técnicas, NÃO crie tickets, NÃO responda perguntas até o email estar verificado.
 Se o cliente insistir em pular a verificação, explique que é uma política de segurança obrigatória.`;
@@ -2186,6 +2187,24 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           }
         }
       },
+      // TOOL: Confirmar email não encontrado na base
+      {
+        type: 'function',
+        function: {
+          name: 'confirm_email_not_found',
+          description: 'Usar quando o email não foi encontrado na base e o cliente CONFIRMA que o email está correto (responde "sim", "correto", "está certo"). Se cliente disser que email está ERRADO ou enviar outro email, NÃO use esta tool - use verify_customer_email com o novo email.',
+          parameters: {
+            type: 'object',
+            properties: {
+              confirmed: { 
+                type: 'boolean', 
+                description: 'true se cliente confirmou que o email está correto, false se cliente disse que digitou errado' 
+              }
+            },
+            required: ['confirmed']
+          }
+        }
+      },
       // TOOL: Handoff manual para atendente humano
       {
         type: 'function',
@@ -2276,148 +2295,30 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
               .eq('email', emailInformado)
               .single();
 
-            // CENÁRIO A: EMAIL NÃO ENCONTRADO (Não é cliente - CRIAR APENAS DEAL)
+            // CENÁRIO A: EMAIL NÃO ENCONTRADO - PERGUNTAR SE ESTÁ CORRETO ANTES DE TRANSFERIR
             if (searchError || !existingCustomer) {
-              console.log('[ai-autopilot-chat] ❌ FASE 2: Email não encontrado - Criando APENAS Deal (sem contato)');
+              console.log('[ai-autopilot-chat] ❌ FASE 2: Email não encontrado - Perguntando confirmação');
               
-              // 🚫 NÃO CRIAR CONTATO! Tabela contacts é só para quem PAGOU via Kiwify
-              
-              // ✅ CRIAR DEAL COM DADOS DO LEAD (contact_id = NULL)
-              let dealId: string | null = null;
-              const PIPELINE_VENDAS_ID = '00000000-0000-0000-0000-000000000001';
-              const STAGE_LEAD_ID = '11111111-1111-1111-1111-111111111111';
-              
-              const { data: deal, error: dealError } = await supabaseClient
-                .from('deals')
-                .insert({
-                  title: `Lead via Chat - ${emailInformado}`,
-                  contact_id: null, // ⚠️ NULL - não é cliente pagante!
-                  lead_email: emailInformado,
-                  lead_phone: contact.phone,
-                  lead_whatsapp_id: contact.whatsapp_id,
-                  lead_source: responseChannel,
-                  stage_id: STAGE_LEAD_ID,
-                  pipeline_id: PIPELINE_VENDAS_ID,
-                  status: 'open',
-                  value: 0,
-                  currency: 'BRL'
-                  // assigned_to será definido pelo route-conversation
-                })
-                .select()
-                .single();
-              
-              if (!dealError && deal) {
-                dealId = deal.id;
-                console.log('[ai-autopilot-chat] 💰 Deal (Lead) criado:', dealId);
-              } else {
-                console.error('[ai-autopilot-chat] ❌ Erro ao criar deal:', dealError);
-              }
-
-              // Não criar interaction - lead não tem customer_id válido
-
-              // Buscar departamento COMERCIAL
-              const { data: comercialDept } = await supabaseClient
-                .from('departments')
-                .select('id, name')
-                .eq('name', 'Comercial')
-                .eq('is_active', true)
-                .single();
-
-              if (!comercialDept) {
-                console.error('[ai-autopilot-chat] ❌ Departamento Comercial não encontrado');
-              }
-
-              // Mudar para copilot ANTES de rotear
+              // Salvar email pendente para confirmação na metadata da conversa
+              const currentMetadata = conversation.customer_metadata || {};
               await supabaseClient
                 .from('conversations')
                 .update({ 
-                  ai_mode: 'copilot',
-                  department: comercialDept?.id
+                  customer_metadata: { 
+                    ...currentMetadata,
+                    pending_email_confirmation: emailInformado,
+                    pending_email_timestamp: new Date().toISOString()
+                  }
                 })
                 .eq('id', conversationId);
+              
+              console.log('[ai-autopilot-chat] 📧 Email salvo para confirmação:', emailInformado);
+              
+              assistantMessage = `Não encontrei o email **${emailInformado}** na nossa base de clientes.
 
-              // ROTEAR PARA COMERCIAL
-              const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
-                body: { 
-                  conversationId,
-                  department_id: comercialDept?.id
-                }
-              });
+Poderia confirmar se esse email está correto?
 
-              // 🆕 FASE 3: ATRIBUIR DEAL AO VENDEDOR E NOTIFICAR
-              if (routeResult?.assigned_to) {
-                // Atribuir deal ao vendedor designado
-                if (dealId) {
-                  await supabaseClient
-                    .from('deals')
-                    .update({ assigned_to: routeResult.assigned_to })
-                    .eq('id', dealId);
-                  
-                  console.log('[ai-autopilot-chat] 💼 Deal atribuído ao vendedor:', routeResult.assigned_to);
-                }
-                
-                // 🆕 NOTIFICAR VENDEDOR VIA REALTIME
-                await supabaseClient.from('notifications').insert({
-                  user_id: routeResult.assigned_to,
-                  type: 'new_lead',
-                  title: 'Nova oportunidade no chat!',
-                  message: `Lead ${emailInformado} está aguardando atendimento`,
-                  metadata: {
-                    conversation_id: conversationId,
-                    deal_id: dealId,
-                    email: emailInformado,
-                    source: responseChannel
-                  },
-                  read: false
-                });
-                
-                console.log('[ai-autopilot-chat] 🔔 Notificação enviada ao vendedor');
-                
-                // MENSAGEM COMERCIAL OTIMIZADA
-                assistantMessage = `Não localizei uma assinatura ativa com este e-mail.
-
-Vou chamar um **especialista comercial** para te apresentar nossos planos! Aguarde um momento.`;
-              } else {
-                // Nenhum vendedor online - broadcast para todos
-                const { data: onlineSalesReps } = await supabaseClient
-                  .from('profiles')
-                  .select('id')
-                  .eq('availability_status', 'online');
-                
-                // Filtrar apenas vendedores do departamento Comercial
-                const { data: comercialUsers } = await supabaseClient
-                  .from('profiles')
-                  .select('id')
-                  .eq('department', comercialDept?.id)
-                  .in('id', (onlineSalesReps || []).map(u => u.id));
-                
-                // Notificar todos vendedores online do Comercial
-                if (comercialUsers && comercialUsers.length > 0) {
-                  for (const rep of comercialUsers) {
-                    await supabaseClient.from('notifications').insert({
-                      user_id: rep.id,
-                      type: 'new_lead',
-                      title: 'Nova oportunidade no chat!',
-                      message: `Lead ${emailInformado} na fila do Comercial`,
-                      metadata: { 
-                        conversation_id: conversationId, 
-                        deal_id: dealId,
-                        email: emailInformado
-                      },
-                      read: false
-                    });
-                  }
-                  console.log('[ai-autopilot-chat] 🔔 Notificações broadcast enviadas');
-                }
-                
-                // Vendedores offline
-                assistantMessage = `Não localizei uma assinatura ativa com este e-mail.
-
-Nosso **time de vendas** está offline no momento.
-**Horário:** Segunda a Sexta, 09h às 18h.
-
-Assim que retornarmos, um consultor vai te ajudar!`;
-              }
+Se estiver correto, vou te transferir para nosso time comercial. Se digitou errado, me informe o email correto.`;
               continue;
             }
 
@@ -2517,6 +2418,181 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o código que você 
           } catch (error) {
             console.error('[ai-autopilot-chat] ❌ Erro ao reenviar OTP:', error);
             assistantMessage = 'Ocorreu um erro ao reenviar o código. Por favor, tente novamente.';
+          }
+        }
+        // TOOL: Confirmar email não encontrado - transferir para comercial ou pedir novo email
+        else if (toolCall.function.name === 'confirm_email_not_found') {
+          try {
+            const args = JSON.parse(toolCall.function.arguments);
+            const confirmed = args.confirmed;
+            const currentMetadata = conversation.customer_metadata || {};
+            const pendingEmail = currentMetadata.pending_email_confirmation;
+            
+            console.log('[ai-autopilot-chat] 📧 Confirmação de email não encontrado:', { confirmed, pendingEmail });
+            
+            if (!confirmed) {
+              // Cliente quer corrigir - limpar email pendente e pedir novo
+              await supabaseClient
+                .from('conversations')
+                .update({ 
+                  customer_metadata: { 
+                    ...currentMetadata,
+                    pending_email_confirmation: null,
+                    pending_email_timestamp: null
+                  }
+                })
+                .eq('id', conversationId);
+              
+              assistantMessage = 'Ok! Por favor, me informe o email correto para que eu possa verificar.';
+              continue;
+            }
+            
+            // Cliente CONFIRMOU que email está correto - TRANSFERIR PARA COMERCIAL
+            console.log('[ai-autopilot-chat] ✅ Email confirmado pelo cliente, transferindo para comercial');
+            
+            const emailInformado = pendingEmail || 'não informado';
+            
+            // ✅ CRIAR DEAL COM DADOS DO LEAD (contact_id = NULL)
+            let dealId: string | null = null;
+            const PIPELINE_VENDAS_ID = '00000000-0000-0000-0000-000000000001';
+            const STAGE_LEAD_ID = '11111111-1111-1111-1111-111111111111';
+            
+            const { data: deal, error: dealError } = await supabaseClient
+              .from('deals')
+              .insert({
+                title: `Lead via Chat - ${emailInformado}`,
+                contact_id: null,
+                lead_email: emailInformado,
+                lead_phone: contact.phone,
+                lead_whatsapp_id: contact.whatsapp_id,
+                lead_source: responseChannel,
+                stage_id: STAGE_LEAD_ID,
+                pipeline_id: PIPELINE_VENDAS_ID,
+                status: 'open',
+                value: 0,
+                currency: 'BRL'
+              })
+              .select()
+              .single();
+            
+            if (!dealError && deal) {
+              dealId = deal.id;
+              console.log('[ai-autopilot-chat] 💰 Deal (Lead) criado:', dealId);
+            } else {
+              console.error('[ai-autopilot-chat] ❌ Erro ao criar deal:', dealError);
+            }
+
+            // Limpar email pendente da metadata
+            await supabaseClient
+              .from('conversations')
+              .update({ 
+                customer_metadata: { 
+                  ...currentMetadata,
+                  pending_email_confirmation: null,
+                  pending_email_timestamp: null
+                }
+              })
+              .eq('id', conversationId);
+
+            // Buscar departamento COMERCIAL
+            const { data: comercialDept } = await supabaseClient
+              .from('departments')
+              .select('id, name')
+              .eq('name', 'Comercial')
+              .eq('is_active', true)
+              .single();
+
+            if (!comercialDept) {
+              console.error('[ai-autopilot-chat] ❌ Departamento Comercial não encontrado');
+            }
+
+            // Mudar para copilot ANTES de rotear
+            await supabaseClient
+              .from('conversations')
+              .update({ 
+                ai_mode: 'copilot',
+                department: comercialDept?.id
+              })
+              .eq('id', conversationId);
+
+            // ROTEAR PARA COMERCIAL
+            const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
+              body: { 
+                conversationId,
+                department_id: comercialDept?.id
+              }
+            });
+
+            // ATRIBUIR DEAL AO VENDEDOR E NOTIFICAR
+            if (routeResult?.assigned_to) {
+              if (dealId) {
+                await supabaseClient
+                  .from('deals')
+                  .update({ assigned_to: routeResult.assigned_to })
+                  .eq('id', dealId);
+                
+                console.log('[ai-autopilot-chat] 💼 Deal atribuído ao vendedor:', routeResult.assigned_to);
+              }
+              
+              // NOTIFICAR VENDEDOR VIA REALTIME
+              await supabaseClient.from('notifications').insert({
+                user_id: routeResult.assigned_to,
+                type: 'new_lead',
+                title: 'Nova oportunidade no chat!',
+                message: `Lead ${emailInformado} está aguardando atendimento`,
+                metadata: {
+                  conversation_id: conversationId,
+                  deal_id: dealId,
+                  email: emailInformado,
+                  source: responseChannel
+                },
+                read: false
+              });
+              
+              console.log('[ai-autopilot-chat] 🔔 Notificação enviada ao vendedor');
+              
+              assistantMessage = `Entendi! Como não localizei uma assinatura ativa com seu e-mail, vou te transferir para um **especialista comercial** que poderá te ajudar. Aguarde um momento!`;
+            } else {
+              // Nenhum vendedor online
+              const { data: onlineSalesReps } = await supabaseClient
+                .from('profiles')
+                .select('id')
+                .eq('availability_status', 'online');
+              
+              const { data: comercialUsers } = await supabaseClient
+                .from('profiles')
+                .select('id')
+                .eq('department', comercialDept?.id)
+                .in('id', (onlineSalesReps || []).map(u => u.id));
+              
+              if (comercialUsers && comercialUsers.length > 0) {
+                for (const rep of comercialUsers) {
+                  await supabaseClient.from('notifications').insert({
+                    user_id: rep.id,
+                    type: 'new_lead',
+                    title: 'Nova oportunidade no chat!',
+                    message: `Lead ${emailInformado} na fila do Comercial`,
+                    metadata: { 
+                      conversation_id: conversationId, 
+                      deal_id: dealId,
+                      email: emailInformado
+                    },
+                    read: false
+                  });
+                }
+                console.log('[ai-autopilot-chat] 🔔 Notificações broadcast enviadas');
+              }
+              
+              assistantMessage = `Entendi! Como não localizei uma assinatura ativa com seu e-mail, vou te transferir para nosso time comercial.
+
+Nosso **time de vendas** está offline no momento.
+**Horário:** Segunda a Sexta, 09h às 18h.
+
+Assim que retornarmos, um consultor vai te ajudar!`;
+            }
+          } catch (error) {
+            console.error('[ai-autopilot-chat] ❌ Erro ao processar confirmação de email:', error);
+            assistantMessage = 'Ocorreu um erro. Poderia me informar seu email novamente?';
           }
         }
         // FASE 2: Handle OTP verification
