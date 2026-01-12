@@ -1,5 +1,4 @@
 import { useState } from "react";
-import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -164,8 +163,7 @@ export default function WhatsAppSettings() {
 
 
   return (
-    <Layout>
-      <div className="space-y-6">
+    <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -489,6 +487,6 @@ export default function WhatsAppSettings() {
           instance={instances?.find((i: any) => i.id === selectedInstance.id) || selectedInstance}
         />
       )}
-    </Layout>
+    </div>
   );
 }
