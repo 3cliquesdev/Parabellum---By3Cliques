@@ -35,6 +35,7 @@ import {
   Crown,
   ClipboardList,
   Kanban,
+  Instagram,
   LucideIcon
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -101,6 +102,7 @@ const universalMenuGroups: MenuGroup[] = [
     label: "Inbox & Suporte",
     items: [
       { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
+      { title: "Instagram", href: "/instagram", icon: Instagram, permission: "inbox.access" },
       { title: "Fila de Tickets", href: "/support", icon: Ticket, permission: "tickets.view" },
       { title: "Base de Conhecimento", href: "/knowledge", icon: Book, permission: "inbox.view_knowledge" },
     ]
