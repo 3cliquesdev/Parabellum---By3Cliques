@@ -37,7 +37,7 @@ export function useUsersByDepartment(departmentId?: string) {
       // 2. Buscar profiles que são internos E pertencem ao departamento
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, job_title, avatar_url, department")
+        .select("id, full_name, job_title, avatar_url, department, availability_status")
         .eq("department", departmentId)
         .in("id", internalUserIds)
         .order("full_name");

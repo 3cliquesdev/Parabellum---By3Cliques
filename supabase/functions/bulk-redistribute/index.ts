@@ -20,12 +20,14 @@ serve(async (req) => {
       conversationIds,
       destinationType,
       targetAgentId,
+      targetDepartmentId,
       sendCsat,
       sourceAgentId,
     } = await req.json();
 
     console.log("[bulk-redistribute] Processing", conversationIds.length, "conversations");
     console.log("[bulk-redistribute] Destination type:", destinationType);
+    console.log("[bulk-redistribute] Target department:", targetDepartmentId);
     console.log("[bulk-redistribute] Send CSAT:", sendCsat);
 
     if (!conversationIds || conversationIds.length === 0) {
@@ -35,16 +37,19 @@ serve(async (req) => {
       );
     }
 
-    // Buscar agentes online para distribuição automática
+    // Buscar agentes online para distribuição automática ou por departamento
     let onlineAgents: string[] = [];
+    let departmentOnlineAgents: string[] = [];
+
+    // Buscar roles de agentes
+    const { data: agentRoles } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .in("role", ["support_agent", "sales_rep", "consultant", "cs_manager"]);
+
+    const agentIds = [...new Set(agentRoles?.map((r) => r.user_id) || [])];
+
     if (destinationType === "auto") {
-      const { data: agentRoles } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .in("role", ["support_agent", "sales_rep"]);
-
-      const agentIds = [...new Set(agentRoles?.map((r) => r.user_id) || [])];
-
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id")
@@ -54,6 +59,19 @@ serve(async (req) => {
 
       onlineAgents = profiles?.map((p) => p.id) || [];
       console.log("[bulk-redistribute] Online agents for auto distribution:", onlineAgents.length);
+    }
+
+    if (destinationType === "department" && targetDepartmentId) {
+      const { data: deptProfiles } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("department", targetDepartmentId)
+        .in("id", agentIds)
+        .eq("availability_status", "online")
+        .neq("id", sourceAgentId);
+
+      departmentOnlineAgents = deptProfiles?.map((p) => p.id) || [];
+      console.log("[bulk-redistribute] Online agents in department:", departmentOnlineAgents.length);
     }
 
     // Buscar dados das conversas
@@ -153,16 +171,33 @@ serve(async (req) => {
               newAiMode = "autopilot";
             }
             break;
+          case "department":
+            if (departmentOnlineAgents.length > 0) {
+              newAssignedTo = departmentOnlineAgents[agentIndex % departmentOnlineAgents.length];
+              agentIndex++;
+            } else {
+              // Se não há agentes online no departamento, vai para pool
+              newAssignedTo = null;
+              newAiMode = "autopilot";
+              console.log("[bulk-redistribute] No online agents in department, sending to pool");
+            }
+            break;
         }
 
-        // Atualizar conversa
+        // Atualizar conversa (incluindo department se for redistribuição por departamento)
+        const updateData: Record<string, unknown> = {
+          assigned_to: newAssignedTo,
+          ai_mode: newAiMode,
+          previous_agent_id: sourceAgentId,
+        };
+        
+        if (destinationType === "department" && targetDepartmentId) {
+          updateData.department = targetDepartmentId;
+        }
+
         const { error: updateError } = await supabase
           .from("conversations")
-          .update({
-            assigned_to: newAssignedTo,
-            ai_mode: newAiMode,
-            previous_agent_id: sourceAgentId,
-          })
+          .update(updateData)
           .eq("id", conv.id);
 
         if (updateError) throw updateError;

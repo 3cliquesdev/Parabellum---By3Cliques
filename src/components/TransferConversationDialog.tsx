@@ -174,7 +174,20 @@ export default function TransferConversationDialog({
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1 text-left">
-                            <p className="font-medium">{user.full_name}</p>
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${
+                                user.availability_status === "online" ? "bg-green-500" : 
+                                user.availability_status === "busy" ? "bg-yellow-500" : 
+                                "bg-gray-400"
+                              }`} />
+                              <p className="font-medium">{user.full_name}</p>
+                              {user.availability_status === "online" && (
+                                <span className="text-xs text-green-600 font-medium">Online</span>
+                              )}
+                              {user.availability_status === "busy" && (
+                                <span className="text-xs text-yellow-600 font-medium">Ocupado</span>
+                              )}
+                            </div>
                             {user.job_title && (
                               <p className="text-sm text-muted-foreground">
                                 {user.job_title}
