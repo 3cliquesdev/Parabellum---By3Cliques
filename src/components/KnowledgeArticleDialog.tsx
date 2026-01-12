@@ -5,10 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateKnowledgeArticle } from "@/hooks/useCreateKnowledgeArticle";
 import { useUpdateKnowledgeArticle } from "@/hooks/useUpdateKnowledgeArticle";
 import { useGenerateEmbedding } from "@/hooks/useGenerateEmbedding";
 import { useFindSimilarArticles } from "@/hooks/useFindSimilarArticles";
+import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 
@@ -33,10 +35,12 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
   const [category, setCategory] = useState("");
   const [tagsInput, setTagsInput] = useState("");
   const [isPublished, setIsPublished] = useState(false);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
 
   const createArticle = useCreateKnowledgeArticle();
   const updateArticle = useUpdateKnowledgeArticle();
   const generateEmbedding = useGenerateEmbedding();
+  const { data: existingCategories = [] } = useKnowledgeCategories();
   
   // Check for similar articles after editing
   const { data: similarArticles } = useFindSimilarArticles(
@@ -48,17 +52,25 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
     if (article) {
       setTitle(article.title);
       setContent(article.content);
-      setCategory(article.category || "");
+      const articleCategory = article.category || "";
+      setCategory(articleCategory);
       setTagsInput(article.tags.join(", "));
       setIsPublished(article.is_published);
+      // Check if category is custom (not in existing list)
+      if (articleCategory && existingCategories.length > 0 && !existingCategories.includes(articleCategory)) {
+        setIsCustomCategory(true);
+      } else {
+        setIsCustomCategory(false);
+      }
     } else {
       setTitle("");
       setContent("");
       setCategory("");
       setTagsInput("");
       setIsPublished(false);
+      setIsCustomCategory(false);
     }
-  }, [article, open]);
+  }, [article, open, existingCategories]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,12 +147,36 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
 
           <div>
             <Label htmlFor="category">Categoria</Label>
-            <Input
-              id="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="Técnico, Financeiro, Produto..."
-            />
+            <Select
+              value={isCustomCategory ? "__custom__" : category}
+              onValueChange={(val) => {
+                if (val === "__custom__") {
+                  setIsCustomCategory(true);
+                  setCategory("");
+                } else {
+                  setIsCustomCategory(false);
+                  setCategory(val);
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione uma categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                {existingCategories.map((cat) => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+                <SelectItem value="__custom__">➕ Outra categoria...</SelectItem>
+              </SelectContent>
+            </Select>
+            {isCustomCategory && (
+              <Input
+                className="mt-2"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="Digite a nova categoria"
+              />
+            )}
           </div>
 
           <div>
