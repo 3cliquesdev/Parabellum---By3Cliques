@@ -30,7 +30,7 @@ const InstagramSettings = () => {
   const [copied, setCopied] = useState(false);
   
   const { data: accounts, isLoading } = useInstagramAccounts();
-  const { startOAuth } = useConnectInstagram();
+  const { startOAuth, isLoading: isConnecting } = useConnectInstagram();
   const { mutate: disconnect, isPending: isDisconnecting } = useDisconnectInstagram();
   const { mutate: syncNow, isPending: isSyncing } = useSyncInstagram();
 
@@ -105,12 +105,13 @@ const InstagramSettings = () => {
           ) : (
             <div className="text-center py-8">
               <Instagram className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground mb-4">
-                Nenhuma conta conectada
+              <h3 className="font-medium mb-2">Conecte sua conta Instagram Business</h3>
+              <p className="text-muted-foreground mb-4 text-sm max-w-md mx-auto">
+                Clique no botão abaixo e faça login com sua conta do Facebook que está vinculada ao seu Instagram Business
               </p>
-              <Button onClick={startOAuth}>
+              <Button onClick={startOAuth} disabled={isConnecting}>
                 <Link2 className="h-4 w-4 mr-2" />
-                Conectar Instagram Business
+                {isConnecting ? "Conectando..." : "Conectar Instagram Business"}
               </Button>
             </div>
           )}
