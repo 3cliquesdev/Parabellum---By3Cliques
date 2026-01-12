@@ -1762,8 +1762,10 @@ async function handleRecoveryOrder(
     throw new Error('Stage "Oportunidade" não encontrada no pipeline padrão');
   }
 
-  // 5. Distribuir para sales_rep online (Round Robin)
-  const { data: salesRepId } = await supabase.rpc('get_least_loaded_sales_rep');
+  // 5. Distribuir para sales_rep online (Round Robin) - APENAS entre membros da equipe do pipeline
+  const { data: salesRepId } = await supabase.rpc('get_least_loaded_sales_rep_for_pipeline', { 
+    p_pipeline_id: targetPipeline.id 
+  });
 
   // 6. Criar Deal de Recuperação
   const grossValue = Commissions.product_base_price / 100;
@@ -2101,8 +2103,10 @@ async function handleChurnOrder(
       .single() : { data: null };
 
     if (winbackStage) {
-      // 🆕 ROUND-ROBIN: Distribuir para vendedor com menos deals
-      const { data: salesRepId } = await supabase.rpc('get_least_loaded_sales_rep');
+      // 🆕 ROUND-ROBIN: Distribuir para vendedor da EQUIPE DO PIPELINE apenas
+      const { data: salesRepId } = await supabase.rpc('get_least_loaded_sales_rep_for_pipeline', {
+        p_pipeline_id: targetPipeline.id
+      });
       console.log('[kiwify-webhook] 🔄 Winback assigned to sales rep:', salesRepId);
 
       const { data: deal } = await supabase
