@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { DealValueInput } from "./deals/DealValueInput";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Target, ArrowRightLeft, Package } from "lucide-react";
+import { Target, ArrowRightLeft, Package, ExternalLink } from "lucide-react";
 import { useCreateDeal, useUpdateDeal } from "@/hooks/useDeals";
 import { useContacts } from "@/hooks/useContacts";
 import { useOrganizations } from "@/hooks/useOrganizations";
@@ -133,6 +134,7 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
     }
     onOpenChange?.(newOpen);
   };
+  const navigate = useNavigate();
   const createDeal = useCreateDeal();
   const updateDeal = useUpdateDeal();
   const { data: contacts, isLoading: contactsLoading } = useContacts();
@@ -454,6 +456,24 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
                         ) : null}
                       </SelectContent>
                     </Select>
+                    
+                    {/* Botão de acesso rápido à timeline do contato */}
+                    {field.value && field.value !== "none" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0"
+                        onClick={() => {
+                          navigate(`/contacts/${field.value}`);
+                          handleOpenChange(false);
+                        }}
+                        title="Ver perfil 360° do contato"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    )}
+                    
                     <Button
                       type="button"
                       variant={!field.value || hasNoContacts ? "default" : "outline"}
@@ -461,7 +481,7 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
                       className="whitespace-nowrap"
                       onClick={() => field.onChange("")}
                     >
-                      ➕ Criar Lead
+                      + Criar Lead
                     </Button>
                   </div>
                   {hasNoContacts && isSalesRep && (
