@@ -3,18 +3,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface CreateDealFromInstagramParams {
-  type: "comment" | "message";
+  sourceType: "comment" | "message";
   sourceId: string; // comment_id or conversation_id
   contact: {
-    first_name: string;
-    last_name: string;
+    firstName: string;
+    lastName: string;
     email?: string;
     phone?: string;
+    instagramUsername?: string;
   };
   deal: {
     title: string;
-    pipeline_id: string;
-    stage_id?: string;
+    pipelineId: string;
+    stageId?: string;
     value?: number;
     notes?: string;
   };
@@ -25,14 +26,14 @@ export const useCreateDealFromInstagram = () => {
 
   return useMutation({
     mutationFn: async (params: CreateDealFromInstagramParams) => {
-      const { type, sourceId, contact, deal } = params;
+      const { sourceType, sourceId, contact, deal } = params;
 
       // 1. Create or find contact
       const { data: existingContact } = await supabase
         .from("contacts")
         .select("id")
-        .eq("first_name", contact.first_name)
-        .eq("last_name", contact.last_name)
+        .eq("first_name", contact.firstName)
+        .eq("last_name", contact.lastName)
         .maybeSingle();
 
       let contactId = existingContact?.id;
@@ -41,11 +42,11 @@ export const useCreateDealFromInstagram = () => {
         const { data: newContact, error: contactError } = await supabase
           .from("contacts")
           .insert({
-            first_name: contact.first_name,
-            last_name: contact.last_name,
+            first_name: contact.firstName,
+            last_name: contact.lastName,
             email: contact.email,
             phone: contact.phone,
-            source: "instagram",
+            source: contact.instagramUsername ? `instagram:@${contact.instagramUsername}` : "instagram",
           })
           .select()
           .single();
@@ -59,8 +60,8 @@ export const useCreateDealFromInstagram = () => {
         .from("deals")
         .insert({
           title: deal.title,
-          pipeline_id: deal.pipeline_id,
-          stage_id: deal.stage_id,
+          pipeline_id: deal.pipelineId,
+          stage_id: deal.stageId,
           value: deal.value,
           contact_id: contactId,
           lead_source: "instagram",
@@ -71,7 +72,7 @@ export const useCreateDealFromInstagram = () => {
       if (dealError) throw dealError;
 
       // 3. Link source (comment or message) to contact and deal
-      if (type === "comment") {
+      if (sourceType === "comment") {
         await supabase
           .from("instagram_comments")
           .update({

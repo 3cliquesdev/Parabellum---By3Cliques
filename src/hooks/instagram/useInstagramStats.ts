@@ -5,6 +5,7 @@ export interface InstagramStats {
   newComments: number;
   unreadMessages: number;
   convertedDeals: number;
+  convertedThisWeek: number;
   responseRate: number;
 }
 
@@ -53,6 +54,7 @@ export const useInstagramStats = () => {
         newComments: newCommentsCount || 0,
         unreadMessages: unreadMessagesCount || 0,
         convertedDeals: convertedDealsCount || 0,
+        convertedThisWeek: convertedDealsCount || 0,
         responseRate,
       } as InstagramStats;
     },

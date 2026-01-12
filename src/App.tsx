@@ -78,6 +78,7 @@ const Tags = lazy(() => import("./pages/Tags"));
 const AITrainer = lazy(() => import("./pages/AITrainer"));
 const SalesRecovery = lazy(() => import("./pages/SalesRecovery"));
 const AdminOnboarding = lazy(() => import("./pages/AdminOnboarding"));
+const InstagramDashboard = lazy(() => import("./pages/InstagramDashboard"));
 const ConsultantDetail = lazy(() => import("./pages/ConsultantDetail"));
 const Consultants = lazy(() => import("./pages/Consultants"));
 const ConsultantDistribution = lazy(() => import("./pages/reports/ConsultantDistribution"));
@@ -224,6 +225,9 @@ const App = () => {
               <Route path="/projects/:boardId" element={<ProtectedRoute requiredPermission="projects.view"><Layout><ProjectBoardPage /></Layout></ProtectedRoute>} />
               <Route path="/form-integrations" element={<ProtectedRoute requiredPermission="forms.view"><Layout><FormBoardIntegrationsPage /></Layout></ProtectedRoute>} />
               <Route path="/product-board-mappings" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ProductBoardMappingsPage /></Layout></ProtectedRoute>} />
+              
+              {/* Instagram Integration */}
+              <Route path="/instagram" element={<ProtectedRoute requiredPermission="inbox.access"><Layout><InstagramDashboard /></Layout></ProtectedRoute>} />
               
               {/* Catch-all route - must be last */}
               <Route path="*" element={<NotFound />} />
