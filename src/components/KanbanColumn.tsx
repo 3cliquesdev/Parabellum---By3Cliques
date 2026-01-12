@@ -23,6 +23,18 @@ interface KanbanColumnProps {
   onSelectAllInStage?: (dealIds: string[]) => void;
 }
 
+// Stage colors based on position/type - can be extended
+const STAGE_COLORS = [
+  "hsl(45, 93%, 47%)",   // Amber/Yellow
+  "hsl(199, 89%, 48%)",  // Blue
+  "hsl(262, 83%, 58%)",  // Purple
+  "hsl(142, 71%, 45%)",  // Green
+  "hsl(24, 95%, 53%)",   // Orange
+  "hsl(330, 81%, 60%)",  // Pink
+  "hsl(173, 80%, 40%)",  // Teal
+  "hsl(0, 84%, 60%)",    // Red
+];
+
 export default function KanbanColumn({ 
   stage, 
   deals, 
@@ -50,7 +62,6 @@ export default function KanbanColumn({
 
   // Calculate financial metrics
   const totalValue = deals.reduce((sum, deal) => sum + (deal.value || 0), 0);
-  const weightedValue = totalValue * ((stage.probability || 50) / 100);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -74,121 +85,130 @@ export default function KanbanColumn({
     }
   };
 
+  // Get color for this stage (based on position or use a default)
+  const stageColor = STAGE_COLORS[(stage.position || 0) % STAGE_COLORS.length];
+
   return (
-    <div className="flex-shrink-0" style={{ width: '220px', minWidth: '200px', maxWidth: '240px' }}>
-      <div className="bg-card/50 dark:bg-white/[0.02] rounded-lg p-2 border border-border/50 dark:border-white/5">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            {/* Bolinha de cor da etapa */}
-            <span 
-              className="w-2 h-2 rounded-full flex-shrink-0 bg-primary" 
-            />
-          {canManageStages ? (
-              <StageDialog
-                trigger={
-                  <button className="text-sm font-semibold text-foreground hover:text-primary hover:underline cursor-pointer transition-colors">
-                    {stage.name}
-                  </button>
-                }
-                pipelineId={stage.pipeline_id}
-                stage={stage}
-              />
-            ) : (
-              <h3 className="text-sm font-semibold text-foreground">{stage.name}</h3>
-            )}
-            {canManageStages && (
-              <StageDialog
-                trigger={
-                  <Button variant="ghost" size="icon" className="h-6 w-6">
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                }
-                pipelineId={stage.pipeline_id}
-              />
-            )}
+    <div className="flex-shrink-0" style={{ width: '300px', minWidth: '280px', maxWidth: '320px' }}>
+      <div className="bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden">
+        {/* Color bar at top - enterprise style */}
+        <div 
+          className="h-1.5 w-full" 
+          style={{ backgroundColor: stageColor }}
+        />
+        
+        <div className="p-3">
+          {/* Header - clean and minimal */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              {canManageStages ? (
+                <StageDialog
+                  trigger={
+                    <button className="text-sm font-semibold text-foreground hover:text-primary transition-colors truncate uppercase tracking-wide">
+                      {stage.name}
+                    </button>
+                  }
+                  pipelineId={stage.pipeline_id}
+                  stage={stage}
+                />
+              ) : (
+                <h3 className="text-sm font-semibold text-foreground truncate uppercase tracking-wide">
+                  {stage.name}
+                </h3>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {/* Select All button - only visible in selection mode */}
+              {isSelectionMode && dealIds.length > 0 && (
+                <Button
+                  variant={allSelected ? "default" : "ghost"}
+                  size="sm"
+                  className="h-6 px-2 text-xs gap-1"
+                  onClick={handleSelectAllClick}
+                >
+                  {allSelected ? (
+                    <CheckSquare className="h-3 w-3" />
+                  ) : (
+                    <Square className="h-3 w-3" />
+                  )}
+                </Button>
+              )}
+              
+              {/* Deal count */}
+              <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                {deals.length}
+              </span>
+              
+              {/* Add stage button */}
+              {canManageStages && (
+                <StageDialog
+                  trigger={
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground">
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  }
+                  pipelineId={stage.pipeline_id}
+                />
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            {/* Select All button - only visible in selection mode */}
-            {isSelectionMode && dealIds.length > 0 && (
-              <Button
-                variant={allSelected ? "default" : "outline"}
-                size="sm"
-                className="h-6 px-2 text-xs gap-1"
-                onClick={handleSelectAllClick}
+
+          {/* Subtle total value - inline, not a box */}
+          {totalValue > 0 && (
+            <div className="mb-3 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">{formatCurrency(totalValue)}</span>
+              <span className="mx-1">•</span>
+              <span>{stage.probability || 50}% prob.</span>
+            </div>
+          )}
+
+          {/* Droppable area */}
+          <div
+            ref={setNodeRef}
+            className={cn(
+              "min-h-[400px] transition-all rounded-lg space-y-2",
+              isOver && "bg-primary/5 ring-2 ring-primary/30 ring-inset"
+            )}
+          >
+            {visibleDeals.map((deal) => (
+              <KanbanCard 
+                key={deal.id} 
+                deal={deal}
+                isSelectionMode={isSelectionMode}
+                isSelected={selectedDeals.has(deal.id)}
+                onSelectionChange={onSelectionChange}
+              />
+            ))}
+            
+            {deals.length === 0 && (
+              <div className="flex items-center justify-center h-24 text-muted-foreground text-xs">
+                Nenhum negócio
+              </div>
+            )}
+
+            {/* Ver Mais / Ver Menos Button */}
+            {hasMore && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="w-full text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setShowAll(!showAll)}
               >
-                {allSelected ? (
-                  <CheckSquare className="h-3 w-3" />
+                {showAll ? (
+                  <>
+                    <ChevronUp className="h-3 w-3 mr-1" />
+                    Mostrar menos
+                  </>
                 ) : (
-                  <Square className="h-3 w-3" />
+                  <>
+                    <ChevronDown className="h-3 w-3 mr-1" />
+                    Ver mais ({remaining})
+                  </>
                 )}
-                Todos
               </Button>
             )}
-            <span className="text-sm text-muted-foreground bg-muted rounded-full px-2 py-1">
-              {deals.length}
-            </span>
           </div>
-        </div>
-
-        {/* Financial Intelligence */}
-        {totalValue > 0 && (
-          <div className="mb-2 p-2 bg-background/50 rounded-lg border border-border">
-            <div className="space-y-1">
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs text-muted-foreground">Total:</span>
-                <span className="text-sm font-bold text-foreground">{formatCurrency(totalValue)}</span>
-              </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs text-muted-foreground">Previsto ({stage.probability}%):</span>
-                <span className="text-sm font-semibold text-primary">{formatCurrency(weightedValue)}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div
-          ref={setNodeRef}
-          className={cn(
-            "min-h-[400px] transition-colors rounded-lg",
-            isOver && "bg-primary/5 ring-2 ring-primary"
-          )}
-        >
-          {visibleDeals.map((deal) => (
-            <KanbanCard 
-              key={deal.id} 
-              deal={deal}
-              isSelectionMode={isSelectionMode}
-              isSelected={selectedDeals.has(deal.id)}
-              onSelectionChange={onSelectionChange}
-            />
-          ))}
-          {deals.length === 0 && (
-            <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-              Nenhum negócio
-            </div>
-          )}
-
-          {/* Ver Mais / Ver Menos Button */}
-          {hasMore && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full mt-2 text-muted-foreground hover:text-foreground border-dashed"
-              onClick={() => setShowAll(!showAll)}
-            >
-              {showAll ? (
-                <>
-                  <ChevronUp className="h-4 w-4 mr-1" />
-                  Mostrar menos
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4 mr-1" />
-                  Ver mais ({remaining})
-                </>
-              )}
-            </Button>
-          )}
         </div>
       </div>
     </div>

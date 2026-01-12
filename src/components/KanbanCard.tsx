@@ -1,14 +1,14 @@
 import { useDraggable } from "@dnd-kit/core";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Pencil, AlertCircle, CheckCircle, AlertTriangle, Skull, MessageSquare, Phone, FileText, ArrowRightLeft, Trash2 } from "lucide-react";
+import { Pencil, MessageSquare, Phone, FileText, ArrowRightLeft, Trash2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,14 +21,11 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useDeleteDeal } from "@/hooks/useDeals";
-import { format, differenceInDays } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { differenceInDays } from "date-fns";
 import DealDialog from "./DealDialog";
 import ContactSheet from "./ContactSheet";
 import MoveToPipelineDialog from "./deals/MoveToPipelineDialog";
 import LeadInfoPopover from "./deals/LeadInfoPopover";
-import { useNextActivity } from "@/hooks/useNextActivity";
-import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -52,22 +49,20 @@ export default function KanbanCard({
   onSelectionChange 
 }: KanbanCardProps) {
   const [showContactSheet, setShowContactSheet] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const deleteDeal = useDeleteDeal();
   
-  // Formatar número WhatsApp com código do país
+  // Format WhatsApp number with country code
   const formatWhatsAppNumber = (phone: string) => {
     const cleanPhone = phone.replace(/\D/g, '');
-    // Se não começa com 55 e tem 10-11 dígitos, adiciona 55
     if (!cleanPhone.startsWith('55') && cleanPhone.length >= 10 && cleanPhone.length <= 11) {
       return `55${cleanPhone}`;
     }
     return cleanPhone;
   };
 
-  // Copiar telefone para clipboard
+  // Copy phone to clipboard
   const copyPhoneToClipboard = async (phone: string) => {
     try {
       await navigator.clipboard.writeText(phone);
@@ -85,11 +80,8 @@ export default function KanbanCard({
     data: {
       deal,
     },
-    disabled: isSelectionMode, // Disable drag when in selection mode
+    disabled: isSelectionMode,
   });
-
-  const { data: nextActivity } = useNextActivity(deal.id);
-  const { data: customerTags } = useCustomerTags(deal.contact_id);
   
   const style = transform
     ? {
@@ -98,197 +90,82 @@ export default function KanbanCard({
       }
     : undefined;
 
-  const getActivityStatus = () => {
-    if (!nextActivity) {
-      return {
-        icon: AlertTriangle,
-        color: "text-yellow-500",
-        tooltip: "Nenhuma atividade agendada",
-      };
-    }
-
-    const now = new Date();
-    const dueDate = new Date(nextActivity.due_date);
-    const isOverdue = dueDate < now;
-
-    if (isOverdue) {
-      return {
-        icon: AlertCircle,
-        color: "text-destructive",
-        tooltip: `Atividade atrasada: ${nextActivity.title} (${format(dueDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })})`,
-      };
-    }
-
-    return {
-      icon: CheckCircle,
-      color: "text-green-500",
-      tooltip: `Próxima atividade: ${nextActivity.title} (${format(dueDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })})`,
-    };
-  };
-
-  const activityStatus = getActivityStatus();
-  const ActivityIcon = activityStatus.icon;
-
-  // Verificar se é Rotten Deal
+  // Check if deal is rotten (stagnant)
   const isRottenDeal = () => {
     if (deal.status !== "open") return false;
-
     const daysSinceUpdate = differenceInDays(new Date(), new Date(deal.updated_at));
-    
-    if (!nextActivity) {
-      return daysSinceUpdate > 14;
-    }
-
-    const daysSinceActivity = differenceInDays(new Date(), new Date(nextActivity.due_date));
-    return daysSinceUpdate > 14 || daysSinceActivity > 7;
+    return daysSinceUpdate > 14;
   };
 
   const isRotten = isRottenDeal();
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: deal.currency || 'BRL',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
   return (
     <>
-      <Card
+      <div
         ref={setNodeRef}
         style={style}
         className={cn(
-          "mb-3 transition-all relative group",
+          "group relative bg-background rounded-xl p-4 transition-all duration-200",
+          "border border-border/50 hover:border-border",
+          "shadow-sm hover:shadow-md",
           isSelectionMode ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
-          "hover:border-primary/50 dark:hover:border-primary/30",
-          "dark:bg-white/[0.02] dark:border-white/5",
-          isRotten && "border-destructive/50 dark:border-destructive/30 border-2",
+          isRotten && "border-l-4 border-l-destructive",
           isSelected && "ring-2 ring-primary bg-primary/5"
         )}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
         onClick={() => {
           if (isSelectionMode) {
             onSelectionChange?.(deal.id, !isSelected);
           }
         }}
       >
-        <CardContent className="p-4">
-          {/* Selection Checkbox */}
-          {isSelectionMode && (
-            <div 
-              className="absolute top-2 left-2 z-20"
+        {/* Selection Checkbox */}
+        {isSelectionMode && (
+          <div 
+            className="absolute top-3 left-3 z-20"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={(checked) => onSelectionChange?.(deal.id, !!checked)}
+              className="h-4 w-4"
+            />
+          </div>
+        )}
+
+        {/* Edit button - appears on hover */}
+        <DealDialog
+          deal={deal}
+          trigger={
+            <Button
+              size="icon"
+              variant="ghost"
+              className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity z-10"
               onClick={(e) => e.stopPropagation()}
             >
-              <Checkbox
-                checked={isSelected}
-                onCheckedChange={(checked) => onSelectionChange?.(deal.id, !!checked)}
-                className="h-5 w-5"
-              />
-            </div>
-          )}
-          <DealDialog
-            deal={deal}
-            trigger={
-              <Button
-                size="icon"
-                variant="ghost"
-                className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-            }
-          />
-          
-          {/* Ícone de Status de Atividade - move right when in selection mode */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className={cn("absolute top-2", isSelectionMode ? "left-9" : "left-2")}>
-                  <ActivityIcon className={`h-5 w-5 ${activityStatus.color}`} />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-sm">{activityStatus.tooltip}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          }
+        />
 
-          {/* Indicador Rotten Deal - adjust position based on selection mode */}
-          {isRotten && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className={cn("absolute top-2", isSelectionMode ? "left-16" : "left-9")}>
-                    <Badge variant="destructive" className="gap-1 px-1.5 py-0.5">
-                      <Skull className="h-3 w-3" />
-                    </Badge>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="text-sm">⚠️ Negócio estagnado há {differenceInDays(new Date(), new Date(deal.updated_at))} dias sem atividade</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
+        {/* Main draggable area */}
+        <div {...listeners} {...attributes} className={cn("space-y-2", isSelectionMode && "pl-6")}>
+          {/* Line 1: Deal Title */}
+          <h4 className="font-medium text-sm text-foreground line-clamp-1 pr-8" title={deal.title}>
+            {deal.title}
+          </h4>
 
-          {/* Badge Lost Reason */}
-          {deal.status === "lost" && (deal as any).lost_reason && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="mb-2">
-                    <Badge variant="destructive" className="text-xs">
-                      Perdido
-                    </Badge>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <p className="text-sm font-semibold mb-1">Motivo da Perda:</p>
-                  <p className="text-sm">{(deal as any).lost_reason}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-
-          {/* Área draggable */}
-          <div {...listeners} {...attributes} className="space-y-2">
-            {/* Header: Title */}
-            <h4 className="font-semibold text-foreground pl-8 pr-8 line-clamp-2 leading-tight" title={deal.title}>
-              {deal.title}
-            </h4>
-
-            {/* Customer Tags - more compact */}
-            {customerTags && customerTags.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                {customerTags.slice(0, 3).map((ct: any) => (
-                  <Badge
-                    key={ct.tag_id}
-                    variant="outline"
-                    className="text-[10px] px-1.5 py-0"
-                    style={{ 
-                      borderColor: ct.tags.color,
-                      color: ct.tags.color,
-                      backgroundColor: `${ct.tags.color}10`
-                    }}
-                  >
-                    {ct.tags.name}
-                  </Badge>
-                ))}
-                {customerTags.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground">+{customerTags.length - 3}</span>
-                )}
-              </div>
-            )}
-            
-            {/* Value - Prominent green */}
-            {deal.value && (
-              <p className="text-base font-bold text-green-600 dark:text-green-500">
-                {new Intl.NumberFormat('pt-BR', {
-                  style: 'currency',
-                  currency: deal.currency || 'BRL',
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                }).format(deal.value)}
-              </p>
-            )}
-
-            {/* Contact/Lead Info - more readable */}
-            <div className="space-y-0.5">
+          {/* Line 2: Contact name (clickable) + Value */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex-1 min-w-0">
               {deal.contacts ? (
                 <button
                   type="button"
@@ -297,202 +174,238 @@ export default function KanbanCard({
                     setShowContactSheet(true);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="text-sm font-medium text-primary hover:underline text-left block truncate max-w-full"
+                  className="text-xs text-primary hover:underline text-left truncate block max-w-full"
                 >
                   {deal.contacts.first_name} {deal.contacts.last_name}
                 </button>
               ) : (deal as any).lead_email ? (
-                <p className="text-sm text-muted-foreground truncate">
+                <p className="text-xs text-muted-foreground truncate">
                   {(deal as any).lead_email}
                 </p>
-              ) : null}
-
-              {/* Organization - inline badge */}
-              {deal.organizations && (
-                <Badge variant="secondary" className="text-[10px] font-normal">
-                  {deal.organizations.name}
-                </Badge>
+              ) : (
+                <p className="text-xs text-muted-foreground">Sem contato</p>
               )}
             </div>
+            
+            {/* Value - neutral color, not green */}
+            {deal.value && (
+              <span className="text-xs font-semibold text-foreground tabular-nums flex-shrink-0">
+                {formatCurrency(deal.value)}
+              </span>
+            )}
           </div>
 
-          {/* Footer Section - Clear separation */}
-          <div className="pt-2 mt-2 border-t border-border/50 space-y-2">
-            {/* Sales Rep - More prominent */}
-            {deal.assigned_user && (
-              <div className="flex items-center gap-2">
-                <Avatar className="h-6 w-6 flex-shrink-0">
-                  <AvatarImage 
-                    src={deal.assigned_user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${deal.assigned_user.full_name}`} 
-                    alt={deal.assigned_user.full_name} 
-                  />
-                  <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
-                    {deal.assigned_user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-sm font-medium text-foreground truncate flex-1">
-                  {deal.assigned_user.full_name}
-                </span>
-              </div>
-            )}
+          {/* Line 3: Sales Rep (optional) */}
+          {deal.assigned_user && (
+            <div className="flex items-center gap-1.5 pt-1">
+              <Avatar className="h-5 w-5 flex-shrink-0">
+                <AvatarImage 
+                  src={deal.assigned_user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${deal.assigned_user.full_name}`} 
+                  alt={deal.assigned_user.full_name} 
+                />
+                <AvatarFallback className="text-[9px] bg-muted text-muted-foreground">
+                  {deal.assigned_user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-xs text-muted-foreground truncate">
+                {deal.assigned_user.full_name}
+              </span>
+            </div>
+          )}
+        </div>
 
-            {/* Quick Actions - Horizontal scroll, no wrap */}
-            <div 
-              className="flex items-center gap-0.5 overflow-x-auto scrollbar-hide" 
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-                {/* Lead/Contact Info - 360 Badge - ALWAYS visible */}
-                <LeadInfoPopover deal={deal} />
-                
-                {/* Move to Pipeline Button */}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div onPointerDown={(e) => e.stopPropagation()}>
-                        <MoveToPipelineDialog
-                          deal={deal}
-                          trigger={
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <ArrowRightLeft className="h-4 w-4" />
-                            </Button>
-                          }
-                        />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>Mover para outro Pipeline</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                {/* Create Quote Button */}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+        {/* Quick Actions - hidden by default, show on hover */}
+        <div 
+          className="flex items-center gap-0.5 pt-2 mt-2 border-t border-border/30 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {/* Lead Info 360 */}
+          <LeadInfoPopover deal={deal} />
+          
+          {/* Move to Pipeline */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div onPointerDown={(e) => e.stopPropagation()}>
+                  <MoveToPipelineDialog
+                    deal={deal}
+                    trigger={
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/quotes/new?deal_id=${deal.id}`);
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <FileText className="h-4 w-4" />
+                        <ArrowRightLeft className="h-3.5 w-3.5" />
                       </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Criar Proposta</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                    }
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>Mover para outro Pipeline</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
-                {deal.contacts?.phone && (
-                  <>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const formattedPhone = formatWhatsAppNumber(deal.contacts?.phone || '');
-                              window.open(`https://wa.me/${formattedPhone}`, '_blank');
-                            }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          >
-                            <MessageSquare className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>WhatsApp</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+          {/* Create Quote */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/quotes/new?deal_id=${deal.id}`);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Criar Proposta</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (window.innerWidth > 768) {
-                                copyPhoneToClipboard(deal.contacts?.phone || '');
-                              } else {
-                                window.open(`tel:${deal.contacts?.phone}`, '_blank');
-                              }
-                            }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          >
-                            <Phone className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {window.innerWidth > 768 ? 'Copiar Telefone' : 'Ligar'}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </>
-                )}
+          {deal.contacts?.phone && (
+            <>
+              {/* WhatsApp */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-green-600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const formattedPhone = formatWhatsAppNumber(deal.contacts?.phone || '');
+                        window.open(`https://wa.me/${formattedPhone}`, '_blank');
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>WhatsApp</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
 
-                {/* Delete Deal Button */}
-                <AlertDialog>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <AlertDialogTrigger asChild>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 flex-shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={(e) => e.stopPropagation()}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                      </AlertDialogTrigger>
-                      <TooltipContent>Excluir Negociação</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Excluir Negociação</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Tem certeza que deseja excluir "{deal.title}"? 
-                        Esta ação não pode ser desfeita.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => deleteDeal.mutate(deal.id)}
-                        className="bg-destructive hover:bg-destructive/90"
-                      >
-                        Excluir
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </div>
-        </CardContent>
-      </Card>
+              {/* Phone */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-blue-600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.innerWidth > 768) {
+                          copyPhoneToClipboard(deal.contacts?.phone || '');
+                        } else {
+                          window.open(`tel:${deal.contacts?.phone}`, '_blank');
+                        }
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <Phone className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {window.innerWidth > 768 ? 'Copiar Telefone' : 'Ligar'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </>
+          )}
+
+          {/* Delete Deal */}
+          <AlertDialog>
+            <TooltipProvider>
+              <Tooltip>
+                <AlertDialogTrigger asChild>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive ml-auto"
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                </AlertDialogTrigger>
+                <TooltipContent>Excluir Negócio</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir negócio?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tem certeza que deseja excluir "{deal.title}"? Esta ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => {
+                    deleteDeal.mutate(deal.id);
+                  }}
+                >
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </div>
 
       {/* Contact Sheet */}
-      {deal.contacts && (
-        <ContactSheet
-          contact={deal.contacts as any}
-          open={showContactSheet}
-          onOpenChange={setShowContactSheet}
-        />
-      )}
+      <ContactSheetWrapper
+        contactId={deal.contact_id}
+        open={showContactSheet}
+        onOpenChange={setShowContactSheet}
+      />
     </>
+  );
+}
+
+// Wrapper component to fetch contact data
+function ContactSheetWrapper({ 
+  contactId, 
+  open, 
+  onOpenChange 
+}: { 
+  contactId: string | null; 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void; 
+}) {
+  const { data: contact } = useQuery({
+    queryKey: ["contact", contactId],
+    queryFn: async () => {
+      if (!contactId) return null;
+      const { data, error } = await supabase
+        .from("contacts")
+        .select("*, organizations(name)")
+        .eq("id", contactId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!contactId && open,
+  });
+
+  if (!contactId || !open) return null;
+
+  return (
+    <ContactSheet
+      contact={contact}
+      open={open}
+      onOpenChange={onOpenChange}
+    />
   );
 }
