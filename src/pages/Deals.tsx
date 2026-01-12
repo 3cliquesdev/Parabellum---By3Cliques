@@ -38,6 +38,7 @@ import BulkMoveDealsDialog from "@/components/deals/BulkMoveDealsDialog";
 import BulkActionsBar from "@/components/deals/BulkActionsBar";
 import BulkTransferToSellerDialog from "@/components/deals/BulkTransferToSellerDialog";
 import { TransferDealsDialog } from "@/components/deals/TransferDealsDialog";
+import { CleanupInvalidAssignmentsDialog } from "@/components/deals/CleanupInvalidAssignmentsDialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -329,8 +330,8 @@ export default function Deals() {
           closed_at: new Date().toISOString(),
           // Salvar email e nome do cliente Kiwify
           lead_email: validatedData.customer_email,
-          // Auto-atribuir ao usuário atual se não tiver responsável
-          assigned_to: pendingWonDeal.assigned_to || user?.id,
+          // Manter assigned_to existente, NÃO auto-atribuir a não-vendedores
+          assigned_to: pendingWonDeal.assigned_to || null,
         },
       },
       {
@@ -382,7 +383,8 @@ export default function Deals() {
           status: "won",
           value: data.value,
           closed_at: new Date().toISOString(),
-          assigned_to: pendingWonDeal.assigned_to || user?.id,
+          // Manter assigned_to existente, NÃO auto-atribuir a não-vendedores
+          assigned_to: pendingWonDeal.assigned_to || null,
           is_organic_sale: false, // Venda manual do vendedor, não orgânica
         },
       },
@@ -467,6 +469,8 @@ export default function Deals() {
             </p>
           </div>
           <div className="flex gap-2">
+            {/* Botão de limpeza de responsáveis inválidos - apenas para quem gerencia pipelines */}
+            {canManagePipelines && <CleanupInvalidAssignmentsDialog />}
             {canViewSalesDistribution && (
               <Button variant="outline" asChild className="gap-2">
                 <Link to="/reports/sales-distribution">
