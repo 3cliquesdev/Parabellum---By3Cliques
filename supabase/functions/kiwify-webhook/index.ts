@@ -711,9 +711,15 @@ async function handlePaidOrder(
     }
   }
 
-  // 🎯 Se encontrou deal com vendedor, marcar como PENDING (aguardando validação 30 min)
-  if (matchingDeal && matchingDeal.assigned_to) {
-    console.log('[kiwify-webhook] ✅ Deal encontrado, marcando como pending:', matchingDeal.id);
+  // 🎯 Se encontrou deal existente (COM ou SEM vendedor)
+  if (matchingDeal) {
+    const kiwifyValue = Commissions.product_base_price / 100;
+    const valueFormatted = new Intl.NumberFormat('pt-BR', {
+      style: 'currency', currency: 'BRL'
+    }).format(kiwifyValue);
+    
+    console.log('[kiwify-webhook] ✅ Deal encontrado:', matchingDeal.id, 
+                'Com vendedor:', !!matchingDeal.assigned_to, 'Valor:', valueFormatted);
     
     // Buscar kiwify_event recém-criado
     const { data: kiwifyEvent } = await supabase
@@ -724,16 +730,6 @@ async function handlePaidOrder(
       .limit(1)
       .single();
 
-    // Marcar deal como pending payment (vendedor tem 30 min para validar)
-    await supabase
-      .from('deals')
-      .update({
-        pending_payment_at: new Date().toISOString(),
-        pending_kiwify_event_id: kiwifyEvent?.id || null,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', matchingDeal.id);
-
     // Vincular kiwify_event ao deal para rastreamento
     if (kiwifyEvent) {
       await supabase
@@ -742,48 +738,112 @@ async function handlePaidOrder(
         .eq('id', kiwifyEvent.id);
     }
 
-    // 🔔 NOTIFICAR VENDEDOR com urgência
-    const valueFormatted = new Intl.NumberFormat('pt-BR', {
-      style: 'currency', currency: 'BRL'
-    }).format(Commissions.product_base_price / 100);
+    if (matchingDeal.assigned_to) {
+      // CENÁRIO A: Deal COM vendedor → marcar como pending (vendedor valida em 30 min)
+      await supabase
+        .from('deals')
+        .update({
+          pending_payment_at: new Date().toISOString(),
+          pending_kiwify_event_id: kiwifyEvent?.id || null,
+          value: kiwifyValue, // Atualizar valor com valor real da Kiwify
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', matchingDeal.id);
 
-    const deadline = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      // 🔔 NOTIFICAR VENDEDOR com urgência
+      const deadline = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
-    await supabase.from('notifications').insert({
-      user_id: matchingDeal.assigned_to,
-      type: 'payment_pending_validation',
-      title: '💰 Cliente Pagou! Validar Venda',
-      message: `${Customer.full_name} pagou ${valueFormatted} por ${Product.product_name}. Informe o código Kiwify em até 30 minutos ou será marcado como venda orgânica.`,
-      metadata: {
-        deal_id: matchingDeal.id,
-        deal_title: matchingDeal.title,
-        kiwify_event_id: kiwifyEvent?.id,
-        order_id,
-        customer_email: Customer.email,
-        customer_name: Customer.full_name,
-        product_name: Product.product_name,
-        value: Commissions.product_base_price / 100,
-        deadline
-      },
-      read: false
-    });
-
-    console.log('[kiwify-webhook] 🔔 Vendedor notificado, deadline:', deadline);
-
-    // Registrar na timeline do contact (se existir)
-    if (matchingDeal.contact_id) {
-      await supabase.from('interactions').insert({
-        customer_id: matchingDeal.contact_id,
-        type: 'note',
-        channel: 'other',
-        content: `💳 Pagamento detectado! Vendedor tem 30 minutos para validar. Produto: ${Product.product_name} - ${valueFormatted}`,
+      await supabase.from('notifications').insert({
+        user_id: matchingDeal.assigned_to,
+        type: 'payment_pending_validation',
+        title: '💰 Cliente Pagou! Validar Venda',
+        message: `${Customer.full_name} pagou ${valueFormatted} por ${Product.product_name}. Informe o código Kiwify em até 30 minutos ou será marcado como venda orgânica.`,
         metadata: {
           deal_id: matchingDeal.id,
+          deal_title: matchingDeal.title,
+          kiwify_event_id: kiwifyEvent?.id,
           order_id,
-          pending_validation: true,
+          customer_email: Customer.email,
+          customer_name: Customer.full_name,
+          product_name: Product.product_name,
+          value: kiwifyValue,
           deadline
-        }
+        },
+        read: false
       });
+
+      console.log('[kiwify-webhook] 🔔 Vendedor notificado, deadline:', deadline);
+
+      // Registrar na timeline do contact
+      if (matchingDeal.contact_id) {
+        await supabase.from('interactions').insert({
+          customer_id: matchingDeal.contact_id,
+          type: 'note',
+          channel: 'other',
+          content: `💳 Pagamento detectado! Vendedor tem 30 minutos para validar. Produto: ${Product.product_name} - ${valueFormatted}`,
+          metadata: {
+            deal_id: matchingDeal.id,
+            order_id,
+            pending_validation: true,
+            deadline
+          }
+        });
+      }
+    } else {
+      // CENÁRIO B: Deal SEM vendedor → fechar como venda orgânica automaticamente
+      console.log('[kiwify-webhook] 🌿 Deal sem vendedor, fechando como venda orgânica');
+      
+      await supabase
+        .from('deals')
+        .update({
+          status: 'won',
+          is_organic_sale: true,
+          value: kiwifyValue, // Atualizar valor com valor real da Kiwify
+          closed_at: new Date().toISOString(),
+          pending_payment_at: null,
+          pending_kiwify_event_id: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', matchingDeal.id);
+
+      // Atualizar contato para customer
+      if (matchingDeal.contact_id) {
+        await supabase
+          .from('contacts')
+          .update({
+            status: 'customer',
+            subscription_plan: Product.product_name,
+            total_ltv: kiwifyValue,
+            last_kiwify_event: 'paid',
+            last_kiwify_event_at: new Date().toISOString()
+          })
+          .eq('id', matchingDeal.contact_id);
+
+        // Registrar na timeline do contato
+        await supabase.from('interactions').insert({
+          customer_id: matchingDeal.contact_id,
+          type: 'note',
+          channel: 'other',
+          content: `✅ Venda orgânica! ${valueFormatted} por ${Product.product_name} - Deal fechado automaticamente (sem vendedor atribuído)`,
+          metadata: {
+            deal_id: matchingDeal.id,
+            order_id,
+            organic: true,
+            value: kiwifyValue
+          }
+        });
+      }
+
+      console.log('[kiwify-webhook] ✅ Deal orgânico fechado:', matchingDeal.id, 'Valor:', valueFormatted);
+
+      // IMPORTANTE: Retornar aqui para não criar deal/contato duplicado
+      return new Response(JSON.stringify({
+        success: true,
+        action: 'closed_organic',
+        deal_id: matchingDeal.id,
+        value: kiwifyValue,
+        message: `Deal sem vendedor fechado como venda orgânica: ${valueFormatted}`
+      }), { status: 200, headers: corsHeaders });
     }
   }
   // FIM DO FECHAMENTO AUTOMÁTICO
