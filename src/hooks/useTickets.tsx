@@ -22,6 +22,7 @@ export function useTickets(
   const isConsultant = role === 'consultant';
   const isFinancialAgent = role === 'financial_agent';
   const isSupportAgent = role === 'support_agent';
+  const isEcommerceAnalyst = role === 'ecommerce_analyst';
   const isUser = role === 'user';
 
   return useQuery({
@@ -92,8 +93,8 @@ export function useTickets(
           query = query.eq("created_by", user.id);
         }
         // For other filters, let RLS handle it (consultant policy filters by consultant_id)
-      } else if (isFinancialAgent || isSupportAgent) {
-        // Support/Financial agents: assigned to self, unassigned, or created by self
+      } else if (isFinancialAgent || isSupportAgent || isEcommerceAnalyst) {
+        // Support/Financial/Ecommerce agents: assigned to self, unassigned, or created by self
         if (assignedFilter === 'mine') {
           query = query.eq("assigned_to", user.id);
         } else if (assignedFilter === 'unassigned') {
@@ -101,7 +102,7 @@ export function useTickets(
         } else if (assignedFilter === 'created_by_me') {
           query = query.eq("created_by", user.id);
         } else {
-          // "all" for support_agent/financial_agent means: assigned to self, unassigned, OR created by self
+          // "all" means: assigned to self, unassigned, OR created by self
           query = query.or(`assigned_to.eq.${user.id},assigned_to.is.null,created_by.eq.${user.id}`);
         }
       } else {
