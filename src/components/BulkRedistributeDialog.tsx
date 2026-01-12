@@ -18,9 +18,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { useAgentConversationsList } from "@/hooks/useAgentConversations";
 import { useSupportAgents } from "@/hooks/useSupportAgents";
+import { useDepartments } from "@/hooks/useDepartments";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, ArrowRightLeft, Users, Bot, User } from "lucide-react";
+import { Loader2, ArrowRightLeft, Users, Bot, User, Building2 } from "lucide-react";
 import { differenceInHours, differenceInMinutes } from "date-fns";
 
 interface BulkRedistributeDialogProps {
@@ -30,7 +31,7 @@ interface BulkRedistributeDialogProps {
   agentName: string;
 }
 
-type DestinationType = "agent" | "pool" | "auto";
+type DestinationType = "agent" | "pool" | "auto" | "department";
 
 function getSLAIndicator(lastMessageAt: string) {
   const hours = differenceInHours(new Date(), new Date(lastMessageAt));
@@ -58,11 +59,13 @@ export function BulkRedistributeDialog({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [destinationType, setDestinationType] = useState<DestinationType>("auto");
   const [targetAgentId, setTargetAgentId] = useState<string>("");
+  const [targetDepartmentId, setTargetDepartmentId] = useState<string>("");
   const [sendCsat, setSendCsat] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: conversations, isLoading } = useAgentConversationsList(agentId);
   const { data: agents } = useSupportAgents();
+  const { data: departments } = useDepartments();
 
   // Filtrar agentes online (exceto o atual)
   const availableAgents = useMemo(() => {
@@ -101,6 +104,11 @@ export function BulkRedistributeDialog({
       return;
     }
 
+    if (destinationType === "department" && !targetDepartmentId) {
+      toast.error("Selecione um departamento de destino");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -109,6 +117,7 @@ export function BulkRedistributeDialog({
           conversationIds: Array.from(selectedIds),
           destinationType,
           targetAgentId: destinationType === "agent" ? targetAgentId : null,
+          targetDepartmentId: destinationType === "department" ? targetDepartmentId : null,
           sendCsat,
           sourceAgentId: agentId,
         },
@@ -244,7 +253,39 @@ export function BulkRedistributeDialog({
                     </p>
                   </div>
                 </label>
+
+                <label className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer">
+                  <RadioGroupItem value="department" />
+                  <Building2 className="h-4 w-4 text-primary" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Departamento específico</p>
+                    <p className="text-xs text-muted-foreground">
+                      Distribui entre agentes online do departamento
+                    </p>
+                  </div>
+                </label>
               </RadioGroup>
+
+              {destinationType === "department" && (
+                <Select value={targetDepartmentId} onValueChange={setTargetDepartmentId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o departamento..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments?.filter(d => d.is_active).map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: dept.color || '#6B7280' }}
+                          />
+                          <span>{dept.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
               {destinationType === "agent" && (
                 <Select value={targetAgentId} onValueChange={setTargetAgentId}>
