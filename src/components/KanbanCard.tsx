@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Pencil, MessageSquare, Phone, FileText, ArrowRightLeft, Trash2 } from "lucide-react";
+import { Pencil, MessageSquare, Phone, FileText, ArrowRightLeft, Trash2, Star } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -158,10 +159,38 @@ export default function KanbanCard({
 
         {/* Main draggable area */}
         <div {...listeners} {...attributes} className={cn("space-y-2", isSelectionMode && "pl-6")}>
-          {/* Line 1: Deal Title */}
-          <h4 className="font-medium text-sm text-foreground line-clamp-1 pr-8" title={deal.title}>
-            {deal.title}
-          </h4>
+          {/* Line 1: Deal Title + Returning Customer Badge */}
+          <div className="flex items-center gap-1.5">
+            <h4 className="font-medium text-sm text-foreground line-clamp-1 pr-8 flex-1" title={deal.title}>
+              {deal.title}
+            </h4>
+            
+            {/* Badge de Cliente Existente */}
+            {(deal as any).is_returning_customer && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge 
+                      variant="outline" 
+                      className="bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 border-amber-300 text-[10px] px-1.5 py-0 h-4 flex-shrink-0 gap-0.5"
+                    >
+                      <Star className="h-2.5 w-2.5 fill-amber-500" />
+                      Cliente
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[250px]">
+                    <p className="font-medium mb-1">Já possui:</p>
+                    <ul className="text-xs list-disc pl-3">
+                      {((deal as any).existing_products || []).map((p: string, i: number) => (
+                        <li key={i}>{p}</li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-muted-foreground mt-1 pt-1 border-t">Oportunidade de upsell!</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
 
           {/* Line 2: Contact name (clickable) + Value */}
           <div className="flex items-center justify-between gap-2">

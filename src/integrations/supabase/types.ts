@@ -1799,11 +1799,13 @@ export type Database = {
           contact_id: string | null
           created_at: string
           currency: string | null
+          existing_products: Json | null
           expected_close_date: string | null
           expected_revenue: number | null
           gross_value: number | null
           id: string
           is_organic_sale: boolean | null
+          is_returning_customer: boolean | null
           kiwify_fee: number | null
           lead_email: string | null
           lead_phone: string | null
@@ -1836,11 +1838,13 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           currency?: string | null
+          existing_products?: Json | null
           expected_close_date?: string | null
           expected_revenue?: number | null
           gross_value?: number | null
           id?: string
           is_organic_sale?: boolean | null
+          is_returning_customer?: boolean | null
           kiwify_fee?: number | null
           lead_email?: string | null
           lead_phone?: string | null
@@ -1873,11 +1877,13 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           currency?: string | null
+          existing_products?: Json | null
           expected_close_date?: string | null
           expected_revenue?: number | null
           gross_value?: number | null
           id?: string
           is_organic_sale?: boolean | null
+          is_returning_customer?: boolean | null
           kiwify_fee?: number | null
           lead_email?: string | null
           lead_phone?: string | null

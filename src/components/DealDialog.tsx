@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Target, ArrowRightLeft, Package, ExternalLink } from "lucide-react";
+import { Target, ArrowRightLeft, Package, ExternalLink, Star } from "lucide-react";
 import { useCreateDeal, useUpdateDeal } from "@/hooks/useDeals";
 import { useContacts } from "@/hooks/useContacts";
 import { useOrganizations } from "@/hooks/useOrganizations";
@@ -336,6 +336,24 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
             </p>
           </div>
         )}
+        {/* Alerta de Cliente Existente para Upsell */}
+        {deal && (deal as any).is_returning_customer && (
+          <div className="mb-4 p-3 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <Star className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5 fill-amber-400" />
+              <div>
+                <p className="font-medium text-amber-800">Cliente Existente</p>
+                <p className="text-sm text-amber-700">
+                  Este cliente já possui: {((deal as any).existing_products || []).join(', ') || 'produtos anteriores'}
+                </p>
+                <p className="text-xs text-amber-600 mt-1">
+                  💡 Considere oferecer um upgrade ou produto complementar!
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField

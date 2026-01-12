@@ -883,6 +883,62 @@ serve(async (req) => {
             console.error('[form-submit-v3] Error creating deal:', dealError);
           } else if (newDeal) {
             console.log(`[form-submit-v3] Deal created: ${newDeal.id}, assigned_to: ${assignedTo}`);
+            
+            // Verificar se é cliente existente com compras anteriores no Kiwify
+            const { data: contact } = await supabase
+              .from('contacts')
+              .select('email, total_ltv')
+              .eq('id', contactId)
+              .single();
+            
+            if (contact?.email) {
+              // Buscar compras anteriores no Kiwify
+              const { data: previousPurchases } = await supabase
+                .from('kiwify_events')
+                .select('id, payload')
+                .eq('customer_email', contact.email.toLowerCase())
+                .in('event_type', ['paid', 'order_approved'])
+                .order('created_at', { ascending: false });
+              
+              if (previousPurchases && previousPurchases.length > 0) {
+                console.log(`[form-submit-v3] Cliente existente detectado! ${previousPurchases.length} compras anteriores`);
+                
+                // Extrair nomes dos produtos únicos
+                const existingProducts = [...new Set(
+                  previousPurchases
+                    .map(p => (p.payload as any)?.Product?.product_name)
+                    .filter(Boolean)
+                )];
+                
+                // Atualizar deal com flag de cliente existente
+                await supabase
+                  .from('deals')
+                  .update({
+                    is_returning_customer: true,
+                    existing_products: existingProducts,
+                  })
+                  .eq('id', newDeal.id);
+                
+                // Registrar nota na timeline para o vendedor
+                const totalLTV = contact.total_ltv || 0;
+                const ltvFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalLTV);
+                
+                await supabase
+                  .from('interactions')
+                  .insert({
+                    customer_id: contactId,
+                    type: 'note',
+                    channel: 'system',
+                    content: `🌟 **Cliente Existente Detectado!**\n\nEste lead já é nosso cliente e possui ${existingProducts.length} produto(s):\n• ${existingProducts.join('\n• ')}\n\n💰 LTV Total: ${ltvFormatted}\n\n💡 **Oportunidade de Upsell:** Considere oferecer um upgrade ou produto complementar!`,
+                    metadata: { 
+                      auto_generated: true, 
+                      type: 'returning_customer_alert',
+                      existing_products: existingProducts,
+                      total_ltv: totalLTV
+                    }
+                  });
+              }
+            }
           }
         }
         
