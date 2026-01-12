@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   DndContext,
@@ -17,9 +17,10 @@ import {
   sortableKeyboardCoordinates,
   horizontalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { ArrowLeft, Plus, Settings2, Users, Filter } from "lucide-react";
+import { ArrowLeft, Plus, Settings2, Users, Filter, FileInput, Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { useProjectBoard, useUpdateProjectBoard } from "@/hooks/useProjectBoards";
 import { useProjectColumns, useReorderProjectColumns } from "@/hooks/useProjectColumns";
 import { useProjectCards, useMoveProjectCard, ProjectCard } from "@/hooks/useProjectCards";
@@ -30,6 +31,7 @@ import { CreateColumnDialog } from "@/components/projects/CreateColumnDialog";
 import { CardModal } from "@/components/projects/CardModal";
 import { ProjectMembersDialog } from "@/components/projects/ProjectMembersDialog";
 import { BoardSettingsDialog } from "@/components/projects/BoardSettingsDialog";
+import { ImportTicketsDialog } from "@/components/projects/ImportTicketsDialog";
 import { Badge } from "@/components/ui/badge";
 
 export default function ProjectBoardPage() {
@@ -41,6 +43,10 @@ export default function ProjectBoardPage() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [importTicketsOpen, setImportTicketsOpen] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   // Queries
   const { data: board, isLoading: boardLoading } = useProjectBoard(boardId);
@@ -50,6 +56,15 @@ export default function ProjectBoardPage() {
   // Mutations
   const moveCard = useMoveProjectCard();
   const reorderColumns = useReorderProjectColumns();
+  const updateBoard = useUpdateProjectBoard();
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditingName]);
 
   // Realtime
   useProjectRealtime(boardId);
@@ -167,6 +182,26 @@ export default function ProjectBoardPage() {
   const totalCards = cards.length;
   const completedCards = cards.filter((c) => c.is_completed).length;
 
+  const handleStartEditingName = () => {
+    setEditedName(board.name);
+    setIsEditingName(true);
+  };
+
+  const handleSaveName = () => {
+    if (editedName.trim() && editedName !== board.name) {
+      updateBoard.mutate({
+        id: board.id,
+        name: editedName.trim(),
+      });
+    }
+    setIsEditingName(false);
+  };
+
+  const handleCancelEditingName = () => {
+    setIsEditingName(false);
+    setEditedName(board.name);
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -181,7 +216,45 @@ export default function ProjectBoardPage() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold text-foreground">{board.name}</h1>
+              {isEditingName ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    ref={nameInputRef}
+                    value={editedName}
+                    onChange={(e) => setEditedName(e.target.value)}
+                    onBlur={handleSaveName}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSaveName();
+                      if (e.key === "Escape") handleCancelEditingName();
+                    }}
+                    className="text-xl font-bold h-auto py-1 px-2 w-64"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={handleSaveName}
+                  >
+                    <Check className="h-4 w-4 text-green-600" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={handleCancelEditingName}
+                  >
+                    <X className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ) : (
+                <h1
+                  className="text-xl font-bold text-foreground cursor-pointer hover:bg-muted px-2 py-1 rounded inline-flex items-center gap-2 group"
+                  onClick={handleStartEditingName}
+                >
+                  {board.name}
+                  <Pencil className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </h1>
+              )}
               {board.description && (
                 <p className="text-sm text-muted-foreground">{board.description}</p>
               )}
@@ -191,6 +264,10 @@ export default function ProjectBoardPage() {
             </Badge>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setImportTicketsOpen(true)}>
+              <FileInput className="h-4 w-4 mr-2" />
+              Importar Tickets
+            </Button>
             <Button variant="outline" size="sm">
               <Filter className="h-4 w-4 mr-2" />
               Filtros
@@ -279,6 +356,13 @@ export default function ProjectBoardPage() {
           board={board}
         />
       )}
+
+      <ImportTicketsDialog
+        open={importTicketsOpen}
+        onOpenChange={setImportTicketsOpen}
+        boardId={boardId!}
+        columns={columns}
+      />
     </div>
   );
 }
