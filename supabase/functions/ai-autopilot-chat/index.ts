@@ -1108,7 +1108,7 @@ Responda APENAS: skip ou search`
                   'match_knowledge_articles',
                   {
                     query_embedding: queryEmbedding,
-                    match_threshold: 0.75,
+                    match_threshold: 0.50,
                     match_count: 5,
                   }
                 );
