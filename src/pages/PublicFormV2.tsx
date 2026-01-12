@@ -152,41 +152,45 @@ export default function PublicFormV2({ formId: propFormId, schema: propSchema, i
         responses[field.id] = answers[field.id] || null;
       }
 
-      const { data: result, error } = await supabase.functions.invoke('form-submit-v3', {
-        body: {
+      // 🔧 FIX: Usar fetch direto para garantir acesso público (sem necessidade de auth)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/form-submit-v3`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({
           form_id: formId,
           responses,
-        },
+        }),
       });
 
-      // Tratar erro de limite de submissões (pode vir no error do Supabase client)
-      if (error) {
-        // Tentar parsear o body do erro para verificar se é limite atingido
-        try {
-          const errorBody = typeof error.context?.body === 'string' 
-            ? JSON.parse(error.context.body) 
-            : error.context?.body;
-          
-          if (errorBody?.error === 'submission_limit_reached') {
-            setSubmissionError({
-              type: 'limit',
-              message: errorBody.message || 'Você já preencheu este formulário anteriormente.'
-            });
-            return;
-          }
-        } catch (parseError) {
-          // Se não conseguir parsear, continua para erro genérico
-        }
-        throw error;
+      const result = await response.json();
+
+      // Tratar erro de rate limit
+      if (response.status === 429) {
+        setSubmissionError({
+          type: 'generic',
+          message: result.error || 'Muitas tentativas. Aguarde um momento e tente novamente.'
+        });
+        return;
       }
-      
-      // Check for submission limit error (caso venha no result com success=true)
-      if (result?.error === 'submission_limit_reached') {
+
+      // Tratar erro de limite de submissões
+      if (response.status === 403 || result?.error === 'submission_limit_reached') {
         setSubmissionError({
           type: 'limit',
           message: result.message || 'Você já preencheu este formulário o número máximo de vezes permitido.'
         });
         return;
+      }
+
+      // Tratar outros erros HTTP
+      if (!response.ok) {
+        throw new Error(result?.error || `Erro HTTP ${response.status}`);
       }
       
       if (!result?.success) throw new Error(result?.error || 'Erro ao processar formulário');

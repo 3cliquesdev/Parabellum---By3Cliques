@@ -308,19 +308,29 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   console.log('[handle-whatsapp-event] Text:', messageText);
 
   // 1. Buscar ou criar contato TEMPORÁRIO (visitante)
-  let contactId: string;
+  // 🔧 FIX: Usar .limit(1) em vez de .single() para evitar erro quando há duplicatas
+  let contactId: string = '';
   let isKnownCustomer = false;
   let contactName = customerName;
   
-  const { data: existingContact } = await supabase
+  // Buscar contatos por telefone - preferir o que tem email, senão o mais recente
+  const { data: existingContacts } = await supabase
     .from('contacts')
-    .select('id, email, first_name, last_name')
+    .select('id, email, first_name, last_name, created_at')
     .eq('phone', phoneForDatabase)
-    .single();
+    .order('email', { ascending: false, nullsFirst: false }) // Prioriza quem tem email
+    .order('created_at', { ascending: false }) // Depois o mais recente
+    .limit(5);
+
+  // Escolher o melhor contato (com email > mais recente)
+  const existingContact = existingContacts && existingContacts.length > 0 
+    ? existingContacts.find((c: { id: string; email: string | null }) => c.email) || existingContacts[0]
+    : null;
 
   if (existingContact) {
     contactId = existingContact.id;
-    console.log('[handle-whatsapp-event] Existing contact found:', contactId);
+    console.log('[handle-whatsapp-event] ✅ Existing contact found:', contactId, 
+      existingContacts && existingContacts.length > 1 ? `(${existingContacts.length} duplicates exist)` : '');
     
     // ✅ SE TEM EMAIL VINCULADO = CLIENTE JÁ VERIFICADO
     if (existingContact.email) {
@@ -328,32 +338,64 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       contactName = `${existingContact.first_name || ''} ${existingContact.last_name || ''}`.trim() || customerName;
       console.log(`[handle-whatsapp-event] 🎯 Cliente conhecido: ${contactName} (${existingContact.email})`);
     }
+    
+    // 🔧 Atualizar whatsapp_id se mudou (caso de LID)
+    if (jidForSending && existingContact.id) {
+      await supabase
+        .from('contacts')
+        .update({ whatsapp_id: jidForSending })
+        .eq('id', existingContact.id);
+    }
   } else {
     // Criar contato temporário como "Visitante"
     const names = customerName.split(' ');
     const firstName = names[0] || customerName;
     const lastName = names.slice(1).join(' ') || '';
 
+    // 🔧 FIX: Usar upsert com on_conflict para evitar duplicação em race condition
     const { data: newContact, error: contactError } = await supabase
       .from('contacts')
-      .insert({
+      .upsert({
         first_name: firstName,
         last_name: lastName,
         phone: phoneForDatabase,        // ✅ Número real (não LID)
         whatsapp_id: jidForSending,     // ✅ JID para envio (alternativo se LID)
         source: 'whatsapp',
         status: 'lead',
+      }, {
+        onConflict: 'phone',
+        ignoreDuplicates: false
       })
       .select()
       .single();
 
     if (contactError) {
-      console.error('[handle-whatsapp-event] Error creating contact:', contactError);
-      throw contactError;
+      // Se falhou no upsert, tentar buscar novamente (pode ter sido criado por outra requisição)
+      console.warn('[handle-whatsapp-event] ⚠️ Upsert failed, trying to fetch:', contactError.message);
+      const { data: retryContact } = await supabase
+        .from('contacts')
+        .select('id, email, first_name, last_name')
+        .eq('phone', phoneForDatabase)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (retryContact && retryContact.length > 0) {
+        contactId = retryContact[0].id;
+        console.log('[handle-whatsapp-event] ✅ Found contact on retry:', contactId);
+      } else {
+        console.error('[handle-whatsapp-event] ❌ Error creating contact:', contactError);
+        throw contactError;
+      }
+    } else if (newContact) {
+      contactId = newContact.id;
+      console.log('[handle-whatsapp-event] ✅ New contact created:', contactId);
     }
-
-    contactId = newContact.id;
-    console.log('[handle-whatsapp-event] New temporary contact created:', contactId);
+  }
+  
+  // Verificar se contactId foi definido
+  if (!contactId) {
+    console.error('[handle-whatsapp-event] ❌ Failed to get or create contact');
+    throw new Error('Failed to get or create contact');
   }
 
   // 2. Buscar ou criar conversa usando RPC function
