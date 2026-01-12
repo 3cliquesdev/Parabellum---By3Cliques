@@ -416,19 +416,26 @@ serve(async (req) => {
     if (conversation.channel === 'whatsapp' && contact) {
       console.log('[route-conversation] 📱 Enviando mensagem de fila via WhatsApp...');
       
-      // Buscar instância WhatsApp conectada
+      // Buscar instância WhatsApp - PRIORIZAR INSTÂNCIA VINCULADA
       let instanceId = conversation.whatsapp_instance_id;
       
       if (!instanceId) {
-        // Fallback: buscar qualquer instância conectada
+        // Fallback: buscar instância conectada (ordenada por created_at para consistência)
+        console.log('[route-conversation] ⚠️ Conversa sem instância vinculada - usando fallback');
         const { data: activeInstance } = await supabase
           .from('whatsapp_instances')
-          .select('id')
+          .select('id, instance_name')
           .eq('status', 'connected')
+          .order('created_at', { ascending: true })
           .limit(1)
           .maybeSingle();
         
+        if (activeInstance) {
+          console.log('[route-conversation] 🔄 Usando instância FALLBACK:', activeInstance.instance_name);
+        }
         instanceId = activeInstance?.id;
+      } else {
+        console.log('[route-conversation] ✅ Usando instância VINCULADA:', instanceId);
       }
       
       if (instanceId) {
