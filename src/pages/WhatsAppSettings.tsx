@@ -81,7 +81,7 @@ export default function WhatsAppSettings() {
   };
 
   const handleTestConnection = async (instance: any) => {
-    setTestResult(null); // Clear previous result
+    setTestResult(null);
     const result = await testConnectionMutation.mutateAsync({
       instance_id: instance.id,
     });
@@ -161,318 +161,316 @@ export default function WhatsAppSettings() {
     }
   };
 
-
   return (
     <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Gestão de WhatsApp
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Configure instâncias WhatsApp com Evolution API
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">
+            Gestão de WhatsApp
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Configure instâncias WhatsApp com Evolution API
+          </p>
+          {getStatusIndicator()}
+          {/* Webhook URL Display */}
+          <div className="mt-3 p-3 bg-muted/50 rounded-lg border border-border">
+            <p className="text-xs font-semibold text-muted-foreground mb-1">
+              🔗 URL do Webhook (configurada automaticamente):
             </p>
-            {getStatusIndicator()}
-            {/* Webhook URL Display */}
-            <div className="mt-3 p-3 bg-muted/50 rounded-lg border border-border">
-              <p className="text-xs font-semibold text-muted-foreground mb-1">
-                🔗 URL do Webhook (configurada automaticamente):
-              </p>
-              <div className="flex items-center gap-2">
-                <code className="text-xs bg-background px-2 py-1 rounded border flex-1 font-mono">
-                  {import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-whatsapp-event
-                </code>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    navigator.clipboard.writeText(
-                      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-whatsapp-event`
-                    );
-                  }}
-                >
-                  Copiar
-                </Button>
-              </div>
+            <div className="flex items-center gap-2">
+              <code className="text-xs bg-background px-2 py-1 rounded border flex-1 font-mono">
+                {import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-whatsapp-event
+              </code>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-whatsapp-event`
+                  );
+                }}
+              >
+                Copiar
+              </Button>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={handleSync}
-              disabled={syncMutation.isPending}
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleSync}
+            disabled={syncMutation.isPending}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+            {syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar com API'}
+          </Button>
+          <Button onClick={handleNewInstance}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nova Instância
+          </Button>
+        </div>
+      </div>
+
+      {/* API Status Warning */}
+      {apiStatus?.status === 'offline' && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            ⚠️ API Evolution inacessível ou offline. Certifique-se de que a URL é pública (HTTPS) e não localhost.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {apiStatus?.status === 'slow' && (
+        <Alert>
+          <Zap className="h-4 w-4" />
+          <AlertDescription>
+            ⚠️ Alta latência detectada ({apiStatus.latency}ms). A conexão pode estar lenta.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Test Result Display */}
+      {testResult && !testResult.success && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle className="font-semibold">
+            {testResult.errorType === 'cors' && '🚫 Bloqueio de CORS'}
+            {testResult.errorType === 'mixed_content' && '🔒 Bloqueio de Mixed Content (HTTPS → HTTP)'}
+            {testResult.errorType === 'auth' && '🔑 Token de API Inválido'}
+            {testResult.errorType === 'not_found' && '❌ Endpoint Não Encontrado'}
+            {testResult.errorType === 'timeout' && '⏱️ Timeout de Conexão'}
+            {testResult.errorType === 'network' && '🌐 Erro de Rede'}
+          </AlertTitle>
+          <AlertDescription className="mt-2 space-y-2">
+            <p className="font-medium">{testResult.errorMessage}</p>
+            <p className="text-sm opacity-90">{testResult.technicalDetails}</p>
+            {testResult.errorType === 'mixed_content' && (
+              <div className="mt-3 p-3 bg-destructive/10 rounded border border-destructive/20">
+                <p className="text-xs font-semibold">✅ Solução:</p>
+                <p className="text-xs mt-1">Configure SSL/HTTPS na sua Evolution API. A maioria dos servidores VPS oferece certificados gratuitos via Let's Encrypt.</p>
+              </div>
+            )}
+            {testResult.errorType === 'cors' && (
+              <div className="mt-3 p-3 bg-destructive/10 rounded border border-destructive/20">
+                <p className="text-xs font-semibold">✅ Solução:</p>
+                <p className="text-xs mt-1">Adicione no .env da Evolution API:</p>
+                <code className="text-xs block mt-1 bg-black/20 p-2 rounded">
+                  CORS_ORIGIN=*<br/>
+                  CORS_METHODS=POST,GET,PUT,DELETE<br/>
+                  CORS_CREDENTIALS=true
+                </code>
+                <p className="text-xs mt-1">Depois reinicie o serviço.</p>
+              </div>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {testResult && testResult.success && (
+        <Alert className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
+          <Activity className="h-4 w-4 text-green-600" />
+          <AlertTitle className="text-green-800 dark:text-green-300">
+            ✅ Conexão OK
+          </AlertTitle>
+          <AlertDescription className="text-green-700 dark:text-green-400">
+            API respondeu com sucesso em {testResult.latency}ms
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Webhook Diagnostics Display */}
+      {webhookDiagnostics && (
+        <Alert 
+          variant={webhookDiagnostics.overallStatus === "fail" ? "destructive" : "default"}
+          className={webhookDiagnostics.overallStatus === "pass" ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" : ""}
+        >
+          <Stethoscope className="h-4 w-4" />
+          <AlertTitle className="font-semibold">
+            {webhookDiagnostics.overallStatus === "pass" ? "✅" : webhookDiagnostics.overallStatus === "warn" ? "⚠️" : "❌"} Diagnóstico do Webhook
+          </AlertTitle>
+          <AlertDescription className="mt-2 space-y-3">
+            <p className="font-medium">{webhookDiagnostics.summary}</p>
+            <div className="space-y-2 text-sm">
+              {webhookDiagnostics.checks?.map((check: any, idx: number) => (
+                <div key={idx} className="flex items-start gap-2 p-2 bg-background/50 rounded border">
+                  <span>
+                    {check.status === "pass" ? "✅" : check.status === "warn" ? "⚠️" : check.status === "fail" ? "❌" : "ℹ️"}
+                  </span>
+                  <div className="flex-1">
+                    <p className="font-medium">{check.name}</p>
+                    {check.details && (
+                      <pre className="text-xs mt-1 text-muted-foreground overflow-x-auto">
+                        {JSON.stringify(check.details, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setWebhookDiagnostics(null)}
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
-              {syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar com API'}
+              Fechar
             </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Instances Table */}
+      <Card>
+        {isLoading ? (
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground">Carregando instâncias...</p>
+          </div>
+        ) : instances && instances.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Número</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Inbox</TableHead>
+                <TableHead>Vinculação</TableHead>
+                <TableHead className="w-[100px]">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {instances.map((instance: any) => (
+                <TableRow key={instance.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">{instance.name}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {instance.phone_number || (
+                      <span className="text-muted-foreground text-sm">
+                        Não conectado
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>{getStatusBadge(instance.status)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={instance.inbox_enabled !== false}
+                        onCheckedChange={(checked) => handleToggleInbox(instance.id, checked)}
+                      />
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        {instance.inbox_enabled !== false ? (
+                          <>
+                            <Inbox className="w-3 h-3" />
+                            Ativo
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-3 h-3" />
+                            Só envio
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      {instance.user ? (
+                        <Badge variant="default" className="text-xs bg-green-600">
+                          👤 Dono: {instance.user.full_name}
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">
+                          🏢 Geral
+                        </Badge>
+                      )}
+                      {instance.department && (
+                        <Badge variant="outline" className="text-xs">
+                          📁 {instance.department.name}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleTestConnection(instance)}>
+                          <Activity className="w-4 h-4 mr-2" />
+                          🔍 Testar Conexão API
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleTestWebhook(instance)}
+                          disabled={testWebhookMutation.isPending}
+                        >
+                          <Stethoscope className="w-4 h-4 mr-2" />
+                          🩺 Diagnosticar Webhook
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleReconfigureWebhook(instance)}
+                          disabled={reconfigureWebhookMutation.isPending}
+                        >
+                          <Webhook className="w-4 h-4 mr-2" />
+                          🔧 Reconfigurar Webhook
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {instance.status !== 'connected' && (
+                          <DropdownMenuItem onClick={() => handleConnect(instance)}>
+                            <QrCode className="w-4 h-4 mr-2" />
+                            Conectar
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => handleEdit(instance)}>
+                          <Settings className="w-4 h-4 mr-2" />
+                          Configurar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleHardReset(instance)}
+                          className="text-orange-600"
+                        >
+                          <Zap className="w-4 h-4 mr-2" />
+                          🔄 Reset Forçado
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(instance.id)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Remover
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <div className="p-8 text-center space-y-4">
+            <Smartphone className="w-12 h-12 mx-auto text-muted-foreground" />
+            <div>
+              <p className="font-medium text-foreground">
+                Nenhuma instância configurada
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Crie sua primeira instância WhatsApp para começar
+              </p>
+            </div>
             <Button onClick={handleNewInstance}>
               <Plus className="w-4 h-4 mr-2" />
               Nova Instância
             </Button>
           </div>
-        </div>
-
-        {/* API Status Warning */}
-        {apiStatus?.status === 'offline' && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              ⚠️ API Evolution inacessível ou offline. Certifique-se de que a URL é pública (HTTPS) e não localhost.
-            </AlertDescription>
-          </Alert>
         )}
-
-        {apiStatus?.status === 'slow' && (
-          <Alert>
-            <Zap className="h-4 w-4" />
-            <AlertDescription>
-              ⚠️ Alta latência detectada ({apiStatus.latency}ms). A conexão pode estar lenta.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Test Result Display */}
-        {testResult && !testResult.success && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle className="font-semibold">
-              {testResult.errorType === 'cors' && '🚫 Bloqueio de CORS'}
-              {testResult.errorType === 'mixed_content' && '🔒 Bloqueio de Mixed Content (HTTPS → HTTP)'}
-              {testResult.errorType === 'auth' && '🔑 Token de API Inválido'}
-              {testResult.errorType === 'not_found' && '❌ Endpoint Não Encontrado'}
-              {testResult.errorType === 'timeout' && '⏱️ Timeout de Conexão'}
-              {testResult.errorType === 'network' && '🌐 Erro de Rede'}
-            </AlertTitle>
-            <AlertDescription className="mt-2 space-y-2">
-              <p className="font-medium">{testResult.errorMessage}</p>
-              <p className="text-sm opacity-90">{testResult.technicalDetails}</p>
-              {testResult.errorType === 'mixed_content' && (
-                <div className="mt-3 p-3 bg-destructive/10 rounded border border-destructive/20">
-                  <p className="text-xs font-semibold">✅ Solução:</p>
-                  <p className="text-xs mt-1">Configure SSL/HTTPS na sua Evolution API. A maioria dos servidores VPS oferece certificados gratuitos via Let's Encrypt.</p>
-                </div>
-              )}
-              {testResult.errorType === 'cors' && (
-                <div className="mt-3 p-3 bg-destructive/10 rounded border border-destructive/20">
-                  <p className="text-xs font-semibold">✅ Solução:</p>
-                  <p className="text-xs mt-1">Adicione no .env da Evolution API:</p>
-                  <code className="text-xs block mt-1 bg-black/20 p-2 rounded">
-                    CORS_ORIGIN=*<br/>
-                    CORS_METHODS=POST,GET,PUT,DELETE<br/>
-                    CORS_CREDENTIALS=true
-                  </code>
-                  <p className="text-xs mt-1">Depois reinicie o serviço.</p>
-                </div>
-              )}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {testResult && testResult.success && (
-          <Alert className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-            <Activity className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-800 dark:text-green-300">
-              ✅ Conexão OK
-            </AlertTitle>
-            <AlertDescription className="text-green-700 dark:text-green-400">
-              API respondeu com sucesso em {testResult.latency}ms
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Webhook Diagnostics Display */}
-        {webhookDiagnostics && (
-          <Alert 
-            variant={webhookDiagnostics.overallStatus === "fail" ? "destructive" : "default"}
-            className={webhookDiagnostics.overallStatus === "pass" ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" : ""}
-          >
-            <Stethoscope className="h-4 w-4" />
-            <AlertTitle className="font-semibold">
-              {webhookDiagnostics.overallStatus === "pass" ? "✅" : webhookDiagnostics.overallStatus === "warn" ? "⚠️" : "❌"} Diagnóstico do Webhook
-            </AlertTitle>
-            <AlertDescription className="mt-2 space-y-3">
-              <p className="font-medium">{webhookDiagnostics.summary}</p>
-              <div className="space-y-2 text-sm">
-                {webhookDiagnostics.checks?.map((check: any, idx: number) => (
-                  <div key={idx} className="flex items-start gap-2 p-2 bg-background/50 rounded border">
-                    <span>
-                      {check.status === "pass" ? "✅" : check.status === "warn" ? "⚠️" : check.status === "fail" ? "❌" : "ℹ️"}
-                    </span>
-                    <div className="flex-1">
-                      <p className="font-medium">{check.name}</p>
-                      {check.details && (
-                        <pre className="text-xs mt-1 text-muted-foreground overflow-x-auto">
-                          {JSON.stringify(check.details, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setWebhookDiagnostics(null)}
-              >
-                Fechar
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Instances Table */}
-        <Card>
-          {isLoading ? (
-            <div className="p-8 text-center">
-              <p className="text-muted-foreground">Carregando instâncias...</p>
-            </div>
-          ) : instances && instances.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Número</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Inbox</TableHead>
-                  <TableHead>Vinculação</TableHead>
-                  <TableHead className="w-[100px]">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {instances.map((instance: any) => (
-                  <TableRow key={instance.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Smartphone className="w-4 h-4 text-muted-foreground" />
-                        <span className="font-medium">{instance.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {instance.phone_number || (
-                        <span className="text-muted-foreground text-sm">
-                          Não conectado
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(instance.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={instance.inbox_enabled !== false}
-                          onCheckedChange={(checked) => handleToggleInbox(instance.id, checked)}
-                        />
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          {instance.inbox_enabled !== false ? (
-                            <>
-                              <Inbox className="w-3 h-3" />
-                              Ativo
-                            </>
-                          ) : (
-                            <>
-                              <Send className="w-3 h-3" />
-                              Só envio
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {instance.user ? (
-                          <Badge variant="default" className="text-xs bg-green-600">
-                            👤 Dono: {instance.user.full_name}
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-xs">
-                            🏢 Geral
-                          </Badge>
-                        )}
-                        {instance.department && (
-                          <Badge variant="outline" className="text-xs">
-                            📁 {instance.department.name}
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleTestConnection(instance)}>
-                            <Activity className="w-4 h-4 mr-2" />
-                            🔍 Testar Conexão API
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleTestWebhook(instance)}
-                            disabled={testWebhookMutation.isPending}
-                          >
-                            <Stethoscope className="w-4 h-4 mr-2" />
-                            🩺 Diagnosticar Webhook
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleReconfigureWebhook(instance)}
-                            disabled={reconfigureWebhookMutation.isPending}
-                          >
-                            <Webhook className="w-4 h-4 mr-2" />
-                            🔧 Reconfigurar Webhook
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {instance.status !== 'connected' && (
-                            <DropdownMenuItem onClick={() => handleConnect(instance)}>
-                              <QrCode className="w-4 h-4 mr-2" />
-                              Conectar
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem onClick={() => handleEdit(instance)}>
-                            <Settings className="w-4 h-4 mr-2" />
-                            Configurar
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => handleHardReset(instance)}
-                            className="text-orange-600"
-                          >
-                            <Zap className="w-4 h-4 mr-2" />
-                            🔄 Reset Forçado
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(instance.id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Remover
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="p-8 text-center space-y-4">
-              <Smartphone className="w-12 h-12 mx-auto text-muted-foreground" />
-              <div>
-                <p className="font-medium text-foreground">
-                  Nenhuma instância configurada
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Crie sua primeira instância WhatsApp para começar
-                </p>
-              </div>
-              <Button onClick={handleNewInstance}>
-                <Plus className="w-4 h-4 mr-2" />
-                Nova Instância
-              </Button>
-            </div>
-          )}
-        </Card>
-      </div>
+      </Card>
 
       <WhatsAppInstanceDialog
         open={dialogOpen}
