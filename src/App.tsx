@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RealtimeNotifications from "./components/RealtimeNotifications";
 import { WhatsAppDisconnectMonitor } from "./components/WhatsAppDisconnectMonitor";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { useVersionCheck } from "./hooks/useVersionCheck";
 
 import { PageLoadingSkeleton } from "./components/PageLoadingSkeleton";
 
@@ -109,17 +110,24 @@ const queryClient = new QueryClient({
   },
 });
 
+// Componente wrapper para usar o hook de versão
+const VersionCheckWrapper = ({ children }: { children: React.ReactNode }) => {
+  useVersionCheck();
+  return <>{children}</>;
+};
+
 const App = () => {
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-          <RealtimeNotifications />
-          <WhatsAppDisconnectMonitor />
-          <Suspense fallback={<PageLoadingSkeleton />}>
+          <VersionCheckWrapper>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <RealtimeNotifications />
+              <WhatsAppDisconnectMonitor />
+              <Suspense fallback={<PageLoadingSkeleton />}>
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/auth" element={<Auth />} />
@@ -219,12 +227,13 @@ const App = () => {
               
               {/* Catch-all route - must be last */}
               <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </AppErrorBoundary>
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+          </VersionCheckWrapper>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   );
 };
 
