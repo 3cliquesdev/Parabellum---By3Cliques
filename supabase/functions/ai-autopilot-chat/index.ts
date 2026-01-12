@@ -1251,6 +1251,26 @@ Responda APENAS: skip ou search`
 
     const hasRecentOTPVerification = !!recentVerification;
     
+    // 🆕 FASE: Verificar se cliente JÁ FEZ OTP ALGUMA VEZ (primeiro contato)
+    // Se nunca verificou = primeiro contato, precisa OTP para identificar
+    let hasEverVerifiedOTP = false;
+    if (contactEmail) {
+      const { data: anyVerification } = await supabaseClient
+        .from('email_verifications')
+        .select('id')
+        .eq('email', contactEmail)
+        .eq('verified', true)
+        .limit(1);
+      
+      hasEverVerifiedOTP = !!(anyVerification && anyVerification.length > 0);
+    }
+
+    console.log('[ai-autopilot-chat] 🔍 FIRST CONTACT CHECK:', {
+      contact_email: contactEmail,
+      has_ever_verified_otp: hasEverVerifiedOTP,
+      is_first_contact: !hasEverVerifiedOTP && contactHasEmail
+    });
+    
     console.log('[ai-autopilot-chat] 🔍 FINANCIAL SECURITY CHECK:', {
       is_financial_request: isFinancialRequest,
       has_recent_otp: hasRecentOTPVerification,
@@ -1484,27 +1504,128 @@ Digite **"reenviar"** se precisar de um novo código.`;
     }
     
     // ============================================================
-    // 🚨 IDENTITY WALL - OTP AUTOMÁTICO PARA CONTEXTO FINANCEIRO
+    // 🚨 IDENTITY WALL - OTP AUTOMÁTICO 
+    // Regras:
+    // 1. PRIMEIRO CONTATO (tem email, nunca verificou) → OTP para identificar
+    // 2. CONTEXTO FINANCEIRO (já identificado, sem OTP recente) → OTP para segurança
+    // 3. CLIENTE IDENTIFICADO (já verificou alguma vez) → Atendimento normal
     // ============================================================
     // Funciona para TODOS os canais (não só WhatsApp)
     if (contactHasEmail) {
       const maskedEmail = maskEmail(contactEmail);
       
       // Debug log comparando isFinancialRequest vs isFinancialContext
-      console.log('[ai-autopilot-chat] 🔐 FINANCIAL DETECTION DEBUG:', {
+      console.log('[ai-autopilot-chat] 🔐 IDENTITY WALL DEBUG:', {
         is_financial_request: isFinancialRequest,
         is_financial_context: isFinancialContext,
-        message: customerMessage.substring(0, 50),
-        will_trigger_otp: isFinancialRequest && !hasRecentOTPVerification
+        has_ever_verified_otp: hasEverVerifiedOTP,
+        has_recent_otp: hasRecentOTPVerification,
+        is_first_contact: !hasEverVerifiedOTP,
+        message: customerMessage.substring(0, 50)
       });
       
-      // CASO 1: Contexto FINANCEIRO - Precisa verificação OTP
-      if (isFinancialRequest && !hasRecentOTPVerification) {
+      // CASO 1: PRIMEIRO CONTATO - Tem email mas NUNCA verificou OTP
+      if (!hasEverVerifiedOTP) {
+        console.log('[ai-autopilot-chat] 🔐 DECISION POINT: FIRST_CONTACT_OTP', {
+          is_first_contact: true,
+          has_ever_verified: false,
+          will_send_otp: true,
+          current_channel: responseChannel
+        });
+        
+        try {
+          // Enviar OTP automaticamente para identificação
+          await supabaseClient.functions.invoke('send-verification-code', {
+            body: { email: contactEmail, type: 'customer' }
+          });
+          
+          // BYPASS DIRETO - NÃO CHAMAR A IA
+          const directOTPResponse = `Olá ${contactName}! Bem-vindo(a)!
+
+Para garantir um atendimento personalizado e seguro, preciso confirmar sua identidade.
+
+Enviei um código de **6 dígitos** para **${maskedEmail}**.
+
+Por favor, **digite o código** que você recebeu para continuar.`;
+
+          // Salvar mensagem no banco
+          const { data: savedMsg } = await supabaseClient
+            .from('messages')
+            .insert({
+              conversation_id: conversationId,
+              content: directOTPResponse,
+              sender_type: 'user',
+              is_ai_generated: true,
+              channel: responseChannel
+            })
+            .select()
+            .single();
+          
+          // Enviar via WhatsApp se necessário
+          if (responseChannel === 'whatsapp' && contact?.phone) {
+            let whatsappInstance = null;
+            
+            if (conversation.whatsapp_instance_id) {
+              const { data } = await supabaseClient
+                .from('whatsapp_instances')
+                .select('*')
+                .eq('id', conversation.whatsapp_instance_id)
+                .single();
+              whatsappInstance = data;
+            }
+            
+            if (!whatsappInstance) {
+              const { data } = await supabaseClient
+                .from('whatsapp_instances')
+                .select('*')
+                .eq('status', 'connected')
+                .limit(1)
+                .maybeSingle();
+              whatsappInstance = data;
+            }
+            
+            if (whatsappInstance) {
+              await supabaseClient.functions.invoke('send-whatsapp-message', {
+                body: {
+                  instance_id: whatsappInstance.id,
+                  phone_number: contact.phone,
+                  whatsapp_id: contact.whatsapp_id,
+                  message: directOTPResponse
+                }
+              });
+            }
+          }
+          
+          // ⚡ RETURN EARLY - NÃO CONTINUAR PARA A IA
+          return new Response(JSON.stringify({
+            response: directOTPResponse,
+            messageId: savedMsg?.id,
+            awaitingOTP: true,
+            isFirstContact: true,
+            debug: { 
+              reason: 'first_contact_identification_otp',
+              email_sent_to: maskedEmail,
+              bypassed_ai: true,
+              contact_name: contactName,
+              channel: responseChannel
+            }
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+          
+        } catch (error) {
+          console.error('[ai-autopilot-chat] ❌ Erro ao disparar OTP primeiro contato:', error);
+          // Se falhar, continua para IA tentar lidar
+        }
+      }
+      
+      // CASO 2: CONTEXTO FINANCEIRO - Cliente já identificado, precisa OTP recente
+      else if (isFinancialRequest && !hasRecentOTPVerification) {
         console.log('[ai-autopilot-chat] 🔐 DECISION POINT: FINANCIAL_OTP_BARRIER', {
           is_financial_context: true,
+          has_ever_verified: true,
           has_recent_otp: false,
           will_send_otp: true,
-          all_channels: true,
           current_channel: responseChannel
         });
         
@@ -1540,10 +1661,8 @@ Por favor, **digite o código** que você recebeu para continuar.`;
           
           // Enviar via WhatsApp se necessário
           if (responseChannel === 'whatsapp' && contact?.phone) {
-            // CORRIGIDO: Priorizar instância vinculada à conversa
             let whatsappInstance = null;
             
-            // 1. Tentar instância vinculada à conversa
             if (conversation.whatsapp_instance_id) {
               const { data } = await supabaseClient
                 .from('whatsapp_instances')
@@ -1551,10 +1670,8 @@ Por favor, **digite o código** que você recebeu para continuar.`;
                 .eq('id', conversation.whatsapp_instance_id)
                 .single();
               whatsappInstance = data;
-              console.log('[ai-autopilot-chat] 🔗 OTP: Usando instância vinculada:', whatsappInstance?.instance_name);
             }
             
-            // 2. Fallback: qualquer instância conectada
             if (!whatsappInstance) {
               const { data } = await supabaseClient
                 .from('whatsapp_instances')
@@ -1563,7 +1680,6 @@ Por favor, **digite o código** que você recebeu para continuar.`;
                 .limit(1)
                 .maybeSingle();
               whatsappInstance = data;
-              console.log('[ai-autopilot-chat] 🔄 OTP: Fallback para instância:', whatsappInstance?.instance_name);
             }
             
             if (whatsappInstance) {
@@ -1601,9 +1717,10 @@ Por favor, **digite o código** que você recebeu para continuar.`;
           // Se falhar, continua para IA tentar lidar
         }
       }
-      // CASO 2: Contexto NORMAL - Apenas boas-vindas (CORRIGIDO: removido !hasRecentOTPVerification)
-      else if (!isFinancialRequest) {
-        console.log('[ai-autopilot-chat] ✅ Cliente conhecido - Boas-vindas sem OTP');
+      
+      // CASO 3: CLIENTE IDENTIFICADO - Já verificou alguma vez, contexto normal
+      else if (hasEverVerifiedOTP && !isFinancialRequest) {
+        console.log('[ai-autopilot-chat] ✅ Cliente identificado - Atendimento normal sem OTP');
         
         priorityInstruction = `=== INSTRUÇÃO PRIORITÁRIA - IGNORE TUDO ABAIXO ATÉ SEGUIR ISSO ===
 
@@ -1616,13 +1733,14 @@ A PRIMEIRA coisa que você DEVE falar é uma saudação calorosa com o nome do c
 
 `;
         
-        identityWallNote = `\n\n**CLIENTE CONHECIDO:**
+        identityWallNote = `\n\n**CLIENTE IDENTIFICADO:**
 Cliente: ${contactName}${contactCompany}
 Email: ${contactEmail}
 Status: ${contactStatus}
 
 → Seja caloroso e amigável
-→ Mostre que reconhecemos o cliente`;
+→ Mostre que reconhecemos o cliente
+→ NÃO peça verificação (já foi identificado anteriormente)`;
       }
       
     } else if (!contactHasEmail && responseChannel === 'whatsapp') {
