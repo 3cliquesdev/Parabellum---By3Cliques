@@ -41,7 +41,7 @@ serve(async (req) => {
       const { data: agentRoles } = await supabase
         .from("user_roles")
         .select("user_id")
-        .in("role", ["support_agent", "sales_rep", "consultant"]);
+        .in("role", ["support_agent", "sales_rep"]);
 
       const agentIds = [...new Set(agentRoles?.map((r) => r.user_id) || [])];
 
