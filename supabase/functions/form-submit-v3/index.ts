@@ -840,35 +840,50 @@ serve(async (req) => {
       }
       
       if (pipelineId) {
-        // Get first stage of the pipeline
-        const { data: firstStage } = await supabase
-          .from('stages')
-          .select('id')
-          .eq('pipeline_id', pipelineId)
-          .order('position', { ascending: true })
-          .limit(1)
-          .single();
-
-        const dealTitle = `Lead via ${form.name}`;
-        
-        const { data: newDeal, error: dealError } = await supabase
+        // Verificar se já existe deal aberto para este contato no mesmo pipeline
+        const { data: existingDeal } = await supabase
           .from('deals')
-          .insert({
-            title: dealTitle,
-            contact_id: contactId,
-            pipeline_id: pipelineId,
-            stage_id: firstStage?.id,
-            assigned_to: assignedTo, // ROUTING: use the assignee from get_assignee_for_form
-            status: 'open',
-            value: 0,
-          })
-          .select()
-          .single();
+          .select('id')
+          .eq('contact_id', contactId)
+          .eq('status', 'open')
+          .eq('pipeline_id', pipelineId)
+          .maybeSingle();
 
-        if (dealError) {
-          console.error('[form-submit-v3] Error creating deal:', dealError);
-        } else if (newDeal) {
-          console.log(`[form-submit-v3] Deal created: ${newDeal.id}, assigned_to: ${assignedTo}`);
+        if (existingDeal) {
+          console.log(`[form-submit-v3] Deal já existe para este contato: ${existingDeal.id}`);
+          // Deal already exists, skip creation
+        } else {
+          // Get first stage of the pipeline
+          const { data: firstStage } = await supabase
+            .from('stages')
+            .select('id')
+            .eq('pipeline_id', pipelineId)
+            .order('position', { ascending: true })
+            .limit(1)
+            .single();
+
+          const dealTitle = `Lead via ${form.name}`;
+          
+          const { data: newDeal, error: dealError } = await supabase
+            .from('deals')
+            .insert({
+              title: dealTitle,
+              contact_id: contactId,
+              pipeline_id: pipelineId,
+              stage_id: firstStage?.id,
+              assigned_to: assignedTo,
+              lead_source: 'formulario',
+              status: 'open',
+              value: 0,
+            })
+            .select()
+            .single();
+
+          if (dealError) {
+            console.error('[form-submit-v3] Error creating deal:', dealError);
+          } else if (newDeal) {
+            console.log(`[form-submit-v3] Deal created: ${newDeal.id}, assigned_to: ${assignedTo}`);
+          }
         }
         
         // Trigger playbook based on score routing (if configured)

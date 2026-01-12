@@ -153,35 +153,49 @@ serve(async (req) => {
       // Usar o mesmo para criar o deal
       const dealPipelineId = pipeline_id;
 
-      const { data: firstStage } = await supabase
-        .from("stages")
-        .select("id")
-        .eq("pipeline_id", dealPipelineId)
-        .order("position", { ascending: true })
-        .limit(1)
-        .single();
-
-      const { data: deal, error: dealError } = await supabase
+      // Verificar se já existe deal aberto para este contato no mesmo pipeline
+      const { data: existingDeal } = await supabase
         .from("deals")
-        .insert({
-          title: `Lead via Formulário: ${first_name} ${last_name}`,
-          contact_id: contact_id,
-          pipeline_id: dealPipelineId,
-          stage_id: firstStage?.id,
-          assigned_to: assigned_to,
-          lead_source: "form",
-          lead_email: email,
-          lead_phone: phone,
-          status: "open",
-        })
-        .select()
-        .single();
+        .select("id")
+        .eq("contact_id", contact_id)
+        .eq("status", "open")
+        .eq("pipeline_id", dealPipelineId)
+        .maybeSingle();
 
-      if (dealError) {
-        console.error("Deal creation error:", dealError);
+      if (existingDeal) {
+        console.log("[submit-form] Deal já existe para este contato:", existingDeal.id);
+        created_record = { type: "deal", id: existingDeal.id, existing: true };
       } else {
-        created_record = { type: "deal", id: deal.id };
-        console.log("Deal created:", deal.id);
+        const { data: firstStage } = await supabase
+          .from("stages")
+          .select("id")
+          .eq("pipeline_id", dealPipelineId)
+          .order("position", { ascending: true })
+          .limit(1)
+          .single();
+
+        const { data: deal, error: dealError } = await supabase
+          .from("deals")
+          .insert({
+            title: `Lead via Formulário: ${first_name} ${last_name}`,
+            contact_id: contact_id,
+            pipeline_id: dealPipelineId,
+            stage_id: firstStage?.id,
+            assigned_to: assigned_to,
+            lead_source: "formulario",
+            lead_email: email,
+            lead_phone: phone,
+            status: "open",
+          })
+          .select()
+          .single();
+
+        if (dealError) {
+          console.error("Deal creation error:", dealError);
+        } else {
+          created_record = { type: "deal", id: deal.id };
+          console.log("Deal created:", deal.id);
+        }
       }
 
     } else if (form.target_type === "ticket") {

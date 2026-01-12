@@ -41,6 +41,8 @@ interface DealFilterPopoverProps {
 const LEAD_SOURCES = [
   { value: "kiwify", label: "Kiwify" },
   { value: "kiwify_upsell", label: "Kiwify Upsell" },
+  { value: "formulario", label: "Formulário" },
+  { value: "form", label: "Formulário (legacy)" },
   { value: "manual", label: "Manual" },
   { value: "webchat", label: "Web Chat" },
   { value: "whatsapp", label: "WhatsApp" },
