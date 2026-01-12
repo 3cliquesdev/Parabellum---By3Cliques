@@ -109,7 +109,7 @@ export function TagDialog({ open, onOpenChange, tag }: TagDialogProps) {
             <Label>Categoria</Label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione onde usar" />
+                <SelectValue placeholder="Selecione a categoria" />
               </SelectTrigger>
               <SelectContent>
                 {TAG_CATEGORIES.map((cat) => (
@@ -119,6 +119,9 @@ export function TagDialog({ open, onOpenChange, tag }: TagDialogProps) {
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              A categoria é apenas para organização. Tags podem ser usadas em qualquer contexto (clientes, conversas, tickets, etc).
+            </p>
           </div>
 
           <div className="space-y-2">

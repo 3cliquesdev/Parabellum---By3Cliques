@@ -14,7 +14,7 @@ interface ConversationTagsSectionProps {
 export function ConversationTagsSection({ conversationId }: ConversationTagsSectionProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const { data: allTags = [] } = useTags("conversation");
+  const { data: allTags = [] } = useTags(); // Tags universais - sem filtro por categoria
   const { data: conversationTags = [] } = useConversationTags(conversationId);
   const addTag = useAddConversationTag();
   const removeTag = useRemoveConversationTag();
@@ -67,7 +67,7 @@ export function ConversationTagsSection({ conversationId }: ConversationTagsSect
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-56 p-2 bg-popover border border-border z-50" align="start">
-          <div className="text-xs font-medium text-foreground mb-2">Tags de Conversa</div>
+          <div className="text-xs font-medium text-foreground mb-2">Adicionar Tag</div>
           <div className="relative mb-2">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input

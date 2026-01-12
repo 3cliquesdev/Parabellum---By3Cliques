@@ -19,7 +19,7 @@ export function TicketTagsCard({ ticketId, readonly = false }: TicketTagsCardPro
   const [search, setSearch] = useState("");
   
   const { data: ticketTags = [], isLoading, addTag, removeTag } = useTicketTags(ticketId);
-  const { data: allTags = [] } = useTags("ticket");
+  const { data: allTags = [] } = useTags(); // Tags universais - sem filtro por categoria
 
   const ticketTagIds = ticketTags.map((t: any) => t.tag_id);
   const availableTags = allTags.filter((tag: any) => !ticketTagIds.includes(tag.id));
@@ -73,7 +73,7 @@ export function TicketTagsCard({ ticketId, readonly = false }: TicketTagsCardPro
                   {filteredTags.length === 0 ? (
                     <p className="text-xs text-muted-foreground text-center py-2">
                       {allTags.length === 0
-                        ? "Nenhuma tag de ticket cadastrada"
+                        ? "Nenhuma tag cadastrada"
                         : availableTags.length === 0
                         ? "Todas as tags já foram adicionadas"
                         : "Nenhuma tag encontrada"}
