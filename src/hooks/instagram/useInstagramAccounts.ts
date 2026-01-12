@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -49,34 +50,36 @@ export const useActiveInstagramAccount = () => {
 };
 
 export const useConnectInstagram = () => {
-  const startOAuth = () => {
-    const clientId = import.meta.env.VITE_FACEBOOK_APP_ID;
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
-    
-    if (!clientId) {
-      toast.error("Facebook App ID não configurado");
-      return;
+  const [isLoading, setIsLoading] = useState(false);
+
+  const startOAuth = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-start-oauth");
+
+      if (error) {
+        console.error("Error starting OAuth:", error);
+        toast.error("Erro ao iniciar conexão com Instagram");
+        return;
+      }
+
+      if (data.error) {
+        toast.error(data.message || data.error);
+        return;
+      }
+
+      if (data.authUrl) {
+        window.location.href = data.authUrl;
+      }
+    } catch (error) {
+      console.error("Error starting OAuth:", error);
+      toast.error("Erro ao conectar com Instagram");
+    } finally {
+      setIsLoading(false);
     }
-
-    const scope = [
-      "instagram_basic",
-      "instagram_manage_comments",
-      "instagram_manage_messages",
-      "pages_read_engagement",
-      "pages_show_list",
-    ].join(",");
-
-    const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?` +
-      `client_id=${clientId}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&scope=${scope}` +
-      `&response_type=code`;
-
-    window.location.href = authUrl;
   };
 
-  return { startOAuth };
+  return { startOAuth, isLoading };
 };
 
 export const useDisconnectInstagram = () => {
