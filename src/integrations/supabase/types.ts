@@ -7343,6 +7343,10 @@ export type Database = {
       }
       get_least_loaded_consultant: { Args: never; Returns: string }
       get_least_loaded_sales_rep: { Args: never; Returns: string }
+      get_least_loaded_sales_rep_for_pipeline: {
+        Args: { p_pipeline_id?: string }
+        Returns: string
+      }
       get_or_create_conversation: {
         Args: {
           p_channel?: string
