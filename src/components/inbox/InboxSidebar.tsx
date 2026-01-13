@@ -133,7 +133,12 @@ function AgentsSection({ agentStats, agentsOpen, setAgentsOpen, setRedistributeA
         <ChevronDown className={cn("h-4 w-4 transition-transform", agentsOpen && "rotate-180")} />
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-1 mt-1">
-        {agentStats.map((agent) => {
+        {[...agentStats]
+          .sort((a, b) => {
+            const statusOrder = { online: 0, busy: 1, offline: 2 };
+            return (statusOrder[a.status as keyof typeof statusOrder] ?? 2) - (statusOrder[b.status as keyof typeof statusOrder] ?? 2);
+          })
+          .map((agent) => {
           const hasWarning = agent.slaWarningCount > 0;
           const hasCritical = agent.slaCriticalCount > 0;
           
