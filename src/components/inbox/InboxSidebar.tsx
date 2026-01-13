@@ -7,6 +7,7 @@ import { useDepartments } from "@/hooks/useDepartments";
 import { useTeams } from "@/hooks/useTeams";
 import { useTags } from "@/hooks/useTags";
 import { useAgentConversations } from "@/hooks/useAgentConversations";
+import { useManageAvailabilityStatus } from "@/hooks/useManageAvailabilityStatus";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -14,6 +15,12 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { BulkRedistributeDialog } from "@/components/BulkRedistributeDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   MessageCircle, 
   User, 
@@ -89,6 +96,130 @@ function FilterItem({ icon, label, count, isActive, onClick, variant = "default"
         </Badge>
       )}
     </button>
+  );
+}
+
+interface AgentsSectionProps {
+  agentStats: Array<{
+    agentId: string;
+    agentName: string;
+    avatarUrl: string | null;
+    status: string;
+    conversationCount: number;
+    slaCriticalCount: number;
+    slaWarningCount: number;
+  }>;
+  agentsOpen: boolean;
+  setAgentsOpen: (open: boolean) => void;
+  setRedistributeAgent: (agent: { id: string; name: string } | null) => void;
+}
+
+function AgentsSection({ agentStats, agentsOpen, setAgentsOpen, setRedistributeAgent }: AgentsSectionProps) {
+  const manageStatus = useManageAvailabilityStatus();
+
+  const handleStatusChange = (agentId: string, newStatus: 'online' | 'busy' | 'offline') => {
+    manageStatus.mutate({ user_id: agentId, new_status: newStatus });
+  };
+
+  return (
+    <Collapsible open={agentsOpen} onOpenChange={setAgentsOpen} className="px-2 mt-4">
+      <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:bg-muted/50 rounded-lg">
+        <div className="flex items-center gap-2">
+          <UserCog className="h-3.5 w-3.5" />
+          Por Atendente
+        </div>
+        <ChevronDown className={cn("h-4 w-4 transition-transform", agentsOpen && "rotate-180")} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-1 mt-1">
+        {agentStats.map((agent) => {
+          const hasWarning = agent.slaWarningCount > 0;
+          const hasCritical = agent.slaCriticalCount > 0;
+          
+          return (
+            <div
+              key={agent.agentId}
+              className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 group"
+            >
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="relative">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={agent.avatarUrl || undefined} />
+                    <AvatarFallback className="text-[10px]">
+                      {agent.agentName?.[0] || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button 
+                        className={cn(
+                          "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 transition-all",
+                          agent.status === "online" && "bg-green-500",
+                          agent.status === "busy" && "bg-yellow-500",
+                          agent.status === "offline" && "bg-gray-400"
+                        )}
+                        title="Clique para alterar status"
+                      />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="min-w-[160px]">
+                      <DropdownMenuItem 
+                        onClick={() => handleStatusChange(agent.agentId, 'online')}
+                        className="gap-2"
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                        Online
+                        {agent.status === 'online' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleStatusChange(agent.agentId, 'busy')}
+                        className="gap-2"
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+                        Ocupado
+                        {agent.status === 'busy' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleStatusChange(agent.agentId, 'offline')}
+                        className="gap-2"
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full bg-gray-400" />
+                        Offline (Férias)
+                        {agent.status === 'offline' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <span className="text-sm truncate">{agent.agentName.split(' ')[0]}</span>
+              </div>
+              
+              <div className="flex items-center gap-1.5">
+                {hasCritical && (
+                  <Badge variant="destructive" className="h-5 min-w-5 px-1 text-[10px]">
+                    {agent.slaCriticalCount}
+                  </Badge>
+                )}
+                {hasWarning && !hasCritical && (
+                  <Badge className="h-5 min-w-5 px-1 text-[10px] bg-orange-500">
+                    {agent.slaWarningCount}
+                  </Badge>
+                )}
+                <Badge variant="secondary" className="h-5 min-w-5 px-1 text-[10px]">
+                  {agent.conversationCount}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => setRedistributeAgent({ id: agent.agentId, name: agent.agentName })}
+                  title="Redistribuir conversas"
+                >
+                  <ArrowRightLeft className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -350,73 +481,12 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
 
         {/* Agents Section - Only for managers/admins */}
         {isManagerOrAdmin && agentStats && agentStats.length > 0 && (
-          <Collapsible open={agentsOpen} onOpenChange={setAgentsOpen} className="px-2 mt-4">
-            <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2">
-                <UserCog className="h-3.5 w-3.5" />
-                Por Atendente
-              </div>
-              <ChevronDown className={cn("h-4 w-4 transition-transform", agentsOpen && "rotate-180")} />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1 mt-1">
-              {agentStats.map((agent) => {
-                const hasWarning = agent.slaWarningCount > 0;
-                const hasCritical = agent.slaCriticalCount > 0;
-                
-                return (
-                  <div
-                    key={agent.agentId}
-                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 group"
-                  >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <div className="relative">
-                        <Avatar className="h-6 w-6">
-                          <AvatarImage src={agent.avatarUrl || undefined} />
-                          <AvatarFallback className="text-[10px]">
-                            {agent.agentName?.[0] || "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span 
-                          className={cn(
-                            "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background",
-                            agent.status === "online" && "bg-green-500",
-                            agent.status === "busy" && "bg-yellow-500",
-                            agent.status === "offline" && "bg-gray-400"
-                          )}
-                        />
-                      </div>
-                      <span className="text-sm truncate">{agent.agentName.split(' ')[0]}</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-1.5">
-                      {hasCritical && (
-                        <Badge variant="destructive" className="h-5 min-w-5 px-1 text-[10px]">
-                          {agent.slaCriticalCount}
-                        </Badge>
-                      )}
-                      {hasWarning && !hasCritical && (
-                        <Badge className="h-5 min-w-5 px-1 text-[10px] bg-orange-500">
-                          {agent.slaWarningCount}
-                        </Badge>
-                      )}
-                      <Badge variant="secondary" className="h-5 min-w-5 px-1 text-[10px]">
-                        {agent.conversationCount}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => setRedistributeAgent({ id: agent.agentId, name: agent.agentName })}
-                        title="Redistribuir conversas"
-                      >
-                        <ArrowRightLeft className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </CollapsibleContent>
-          </Collapsible>
+          <AgentsSection 
+            agentStats={agentStats}
+            agentsOpen={agentsOpen}
+            setAgentsOpen={setAgentsOpen}
+            setRedistributeAgent={setRedistributeAgent}
+          />
         )}
 
         <div className="h-4" />
