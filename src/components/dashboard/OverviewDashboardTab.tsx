@@ -14,7 +14,7 @@ interface OverviewDashboardTabProps {
 }
 
 export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
-  const { data: kiwifyFinancials } = useKiwifyFinancials();
+  const { data: kiwifyFinancials } = useKiwifyFinancials(dateRange?.from, dateRange?.to);
   const { totalPipelineValue, weightedValue } = usePipelineValue();
   const { data: conversionData } = useDealsConversionAnalysis(dateRange);
   const { data: slaAlerts } = useSLAAlerts();
