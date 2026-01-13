@@ -36,7 +36,8 @@ import {
   Building2,
   AlertTriangle,
   UserCog,
-  ArrowRightLeft
+  ArrowRightLeft,
+  MoreVertical
 } from "lucide-react";
 
 interface InboxSidebarCounts {
@@ -148,45 +149,14 @@ function AgentsSection({ agentStats, agentsOpen, setAgentsOpen, setRedistributeA
                       {agent.agentName?.[0] || "?"}
                     </AvatarFallback>
                   </Avatar>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button 
-                        className={cn(
-                          "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 transition-all",
-                          agent.status === "online" && "bg-green-500",
-                          agent.status === "busy" && "bg-yellow-500",
-                          agent.status === "offline" && "bg-gray-400"
-                        )}
-                        title="Clique para alterar status"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="min-w-[160px]">
-                      <DropdownMenuItem 
-                        onClick={() => handleStatusChange(agent.agentId, 'online')}
-                        className="gap-2"
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
-                        Online
-                        {agent.status === 'online' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleStatusChange(agent.agentId, 'busy')}
-                        className="gap-2"
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
-                        Ocupado
-                        {agent.status === 'busy' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleStatusChange(agent.agentId, 'offline')}
-                        className="gap-2"
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full bg-gray-400" />
-                        Offline (Férias)
-                        {agent.status === 'offline' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <span 
+                    className={cn(
+                      "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background",
+                      agent.status === "online" && "bg-green-500",
+                      agent.status === "busy" && "bg-yellow-500",
+                      agent.status === "offline" && "bg-gray-400"
+                    )}
+                  />
                 </div>
                 <span className="text-sm truncate">{agent.agentName.split(' ')[0]}</span>
               </div>
@@ -214,6 +184,44 @@ function AgentsSection({ agentStats, agentsOpen, setAgentsOpen, setRedistributeA
                 >
                   <ArrowRightLeft className="h-3 w-3" />
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Alterar status"
+                    >
+                      <MoreVertical className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[160px]">
+                    <DropdownMenuItem 
+                      onClick={() => handleStatusChange(agent.agentId, 'online')}
+                      className="gap-2"
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                      Online
+                      {agent.status === 'online' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => handleStatusChange(agent.agentId, 'busy')}
+                      className="gap-2"
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+                      Ocupado
+                      {agent.status === 'busy' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => handleStatusChange(agent.agentId, 'offline')}
+                      className="gap-2"
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full bg-gray-400" />
+                      Offline (Férias)
+                      {agent.status === 'offline' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           );
