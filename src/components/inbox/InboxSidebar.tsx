@@ -235,7 +235,7 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
 
   const [groupsOpen, setGroupsOpen] = useState(true);
   const [tagsOpen, setTagsOpen] = useState(false);
-  const [agentsOpen, setAgentsOpen] = useState(false);
+  const [agentsOpen, setAgentsOpen] = useState(true);
   const [tagSearch, setTagSearch] = useState("");
   const [redistributeAgent, setRedistributeAgent] = useState<{ id: string; name: string } | null>(null);
 
