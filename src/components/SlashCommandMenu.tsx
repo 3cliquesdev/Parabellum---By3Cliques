@@ -128,17 +128,24 @@ export function SlashCommandMenu({ children, value, onChange, onKeyDown, inputRe
 
   return (
     <div className="relative w-full">
+      {/* Children (input/textarea) separado do PopoverTrigger para não interferir no foco */}
+      <div onKeyDown={handleKeyDown}>
+        {children}
+      </div>
+      
+      {/* Popover controlado apenas por estado */}
       <Popover open={open} onOpenChange={setOpen}>
+        {/* Trigger invisível apenas para ancoragem do popover */}
         <PopoverTrigger asChild>
-          <div onKeyDown={handleKeyDown}>
-            {children}
-          </div>
+          <div className="absolute bottom-0 left-0 w-0 h-0" />
         </PopoverTrigger>
         <PopoverContent 
           className="p-0 w-96" 
           align="start"
           side="top"
           sideOffset={8}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
         >
           <Command>
             <CommandList>
