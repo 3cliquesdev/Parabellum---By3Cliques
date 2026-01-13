@@ -9,6 +9,10 @@ import { TeamEfficiencyWidget } from "@/components/widgets/TeamEfficiencyWidget"
 import { BusyHoursHeatmap } from "@/components/widgets/BusyHoursHeatmap";
 import { ChannelPerformanceComparison } from "@/components/widgets/ChannelPerformanceComparison";
 import { AIUsageWidget } from "@/components/widgets/AIUsageWidget";
+import { useWhatsAppInstances } from "@/hooks/useWhatsAppInstances";
+import { useConversations } from "@/hooks/useConversations";
+import { useTeamOnlineCount } from "@/hooks/useTeamOnlineCount";
+import { useAverageResponseTime } from "@/hooks/useAverageResponseTime";
 
 interface OperationalDashboardTabProps {
   dateRange?: DateRange;
@@ -19,13 +23,32 @@ export function OperationalDashboardTab({ dateRange }: OperationalDashboardTabPr
   const startDate = dateRange?.from || startOfMonth(new Date());
   const endDate = dateRange?.to || endOfMonth(new Date());
 
+  const { data: whatsappInstances } = useWhatsAppInstances();
+  const { data: conversations } = useConversations({ status: ['open'], channels: [], tags: [], search: '', slaExpired: false });
+  const { data: teamOnlineCount } = useTeamOnlineCount();
+  const { data: avgResponseTime } = useAverageResponseTime(startDate, endDate);
+
+  const connectedInstances = whatsappInstances?.filter(i => i.status === 'connected').length || 0;
+  const totalInstances = whatsappInstances?.length || 0;
+  const activeConversations = conversations?.length || 0;
+
+  const formatTime = (minutes: number | undefined) => {
+    if (!minutes || minutes === 0) return "0m";
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const mins = Math.round(minutes % 60);
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+    return `${Math.round(minutes)}m`;
+  };
+
   return (
     <BentoGrid cols={4}>
       {/* ROW 1: 4 KPI Cards */}
       <BentoCard>
         <KPICard 
           title="Instâncias WhatsApp" 
-          value="--"
+          value={`${connectedInstances}/${totalInstances}`}
           icon={MessageSquare}
           description="ativas"
         />
@@ -33,7 +56,7 @@ export function OperationalDashboardTab({ dateRange }: OperationalDashboardTabPr
       <BentoCard>
         <KPICard 
           title="Equipe Online" 
-          value="--"
+          value={(teamOnlineCount || 0).toString()}
           icon={Users}
           description="agentes disponíveis"
         />
@@ -41,7 +64,7 @@ export function OperationalDashboardTab({ dateRange }: OperationalDashboardTabPr
       <BentoCard>
         <KPICard 
           title="Conversas Ativas" 
-          value="--"
+          value={activeConversations.toString()}
           icon={MessageSquare}
           description="em atendimento"
         />
@@ -49,7 +72,7 @@ export function OperationalDashboardTab({ dateRange }: OperationalDashboardTabPr
       <BentoCard>
         <KPICard 
           title="Tempo Médio Resposta" 
-          value="--"
+          value={formatTime(avgResponseTime)}
           icon={Clock}
           description="min"
         />

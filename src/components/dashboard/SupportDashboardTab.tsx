@@ -10,6 +10,8 @@ import { SLAComplianceWidget } from "@/components/widgets/SLAComplianceWidget";
 import { SentimentDistributionWidget } from "@/components/widgets/SentimentDistributionWidget";
 import { TopTopicsWidget } from "@/components/widgets/TopTopicsWidget";
 import { useSLAAlerts } from "@/hooks/useSLAAlerts";
+import { useTicketCounts } from "@/hooks/useTicketCounts";
+import { useSupportMetrics } from "@/hooks/useSupportMetrics";
 
 interface SupportDashboardTabProps {
   dateRange?: DateRange;
@@ -17,11 +19,29 @@ interface SupportDashboardTabProps {
 
 export function SupportDashboardTab({ dateRange }: SupportDashboardTabProps) {
   const { data: slaAlerts } = useSLAAlerts();
+  const { data: ticketCounts } = useTicketCounts();
   const activeSlaAlerts = slaAlerts?.length || 0;
 
   // Default date range if not provided
   const startDate = dateRange?.from || startOfMonth(new Date());
   const endDate = dateRange?.to || endOfMonth(new Date());
+
+  const { data: supportMetrics } = useSupportMetrics(startDate, endDate);
+
+  const formatTime = (minutes: number | undefined) => {
+    if (!minutes || minutes === 0) return "0s";
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const mins = Math.round(minutes % 60);
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+    if (minutes >= 1) {
+      const mins = Math.floor(minutes);
+      const secs = Math.round((minutes - mins) * 60);
+      return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    }
+    return `${Math.round(minutes * 60)}s`;
+  };
 
   return (
     <BentoGrid cols={4}>
@@ -37,7 +57,7 @@ export function SupportDashboardTab({ dateRange }: SupportDashboardTabProps) {
       <BentoCard>
         <KPICard 
           title="Tickets Abertos" 
-          value="--"
+          value={(ticketCounts?.total || 0).toString()}
           icon={Headphones}
           description="aguardando resposta"
         />
@@ -45,7 +65,7 @@ export function SupportDashboardTab({ dateRange }: SupportDashboardTabProps) {
       <BentoCard>
         <KPICard 
           title="FRT Médio" 
-          value="--"
+          value={formatTime(supportMetrics?.avgFRT)}
           icon={Clock}
           description="first response time"
         />
@@ -53,7 +73,7 @@ export function SupportDashboardTab({ dateRange }: SupportDashboardTabProps) {
       <BentoCard>
         <KPICard 
           title="CSAT" 
-          value="--"
+          value={supportMetrics?.avgCSAT ? `${supportMetrics.avgCSAT.toFixed(1)}/5` : "0/5"}
           icon={Target}
           description="satisfação do cliente"
         />

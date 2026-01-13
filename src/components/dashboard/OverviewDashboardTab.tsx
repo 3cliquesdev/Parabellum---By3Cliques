@@ -1,23 +1,37 @@
 import { TrendingUp, Target, DollarSign, Clock, Headphones, MessageSquare, Users } from "lucide-react";
 import { DateRange } from "react-day-picker";
+import { startOfMonth, endOfMonth } from "date-fns";
 import { BentoGrid, BentoCard } from "@/components/ui/bento-grid";
 import { KPICard } from "@/components/widgets/KPICard";
 import { useKiwifyFinancials } from "@/hooks/useKiwifyFinancials";
 import { usePipelineValue } from "@/hooks/usePipelineValue";
 import { useDealsConversionAnalysis } from "@/hooks/useDealsConversionAnalysis";
 import { useSLAAlerts } from "@/hooks/useSLAAlerts";
+import { useTicketCounts } from "@/hooks/useTicketCounts";
+import { useSupportMetrics } from "@/hooks/useSupportMetrics";
+import { useWhatsAppInstances } from "@/hooks/useWhatsAppInstances";
+import { useConversations } from "@/hooks/useConversations";
+import { useTeamOnlineCount } from "@/hooks/useTeamOnlineCount";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 interface OverviewDashboardTabProps {
   dateRange?: DateRange;
 }
 
 export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
+  // Default date range if not provided
+  const startDate = dateRange?.from || startOfMonth(new Date());
+  const endDate = dateRange?.to || endOfMonth(new Date());
+
   const { data: kiwifyFinancials } = useKiwifyFinancials(dateRange?.from, dateRange?.to);
   const { totalPipelineValue, weightedValue } = usePipelineValue();
   const { data: conversionData } = useDealsConversionAnalysis(dateRange);
   const { data: slaAlerts } = useSLAAlerts();
+  const { data: ticketCounts } = useTicketCounts();
+  const { data: supportMetrics } = useSupportMetrics(startDate, endDate);
+  const { data: whatsappInstances } = useWhatsAppInstances();
+  const { data: conversations } = useConversations({ status: ['open'], channels: [], tags: [], search: '', slaExpired: false });
+  const { data: teamOnlineCount } = useTeamOnlineCount();
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -26,7 +40,26 @@ export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
     }).format(value);
   };
 
+  const formatTime = (minutes: number | undefined) => {
+    if (!minutes || minutes === 0) return "0s";
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const mins = Math.round(minutes % 60);
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+    if (minutes >= 1) {
+      const mins = Math.floor(minutes);
+      const secs = Math.round((minutes - mins) * 60);
+      return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    }
+    return `${Math.round(minutes * 60)}s`;
+  };
+
   const activeSlaAlerts = slaAlerts?.length || 0;
+  const connectedInstances = whatsappInstances?.filter(i => i.status === 'connected').length || 0;
+  const totalInstances = whatsappInstances?.length || 0;
+  const activeConversations = conversations?.length || 0;
+  const queuedConversations = conversations?.filter(c => !c.assigned_to).length || 0;
 
   return (
     <BentoGrid cols={4}>
@@ -89,19 +122,19 @@ export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
               />
               <KPICard 
                 title="Tickets Abertos" 
-                value="--"
+                value={(ticketCounts?.total || 0).toString()}
                 icon={Headphones}
                 description="aguardando"
               />
               <KPICard 
                 title="FRT Médio" 
-                value="--"
+                value={formatTime(supportMetrics?.avgFRT)}
                 icon={Clock}
                 description="first response"
               />
               <KPICard 
                 title="CSAT" 
-                value="--"
+                value={supportMetrics?.avgCSAT ? `${supportMetrics.avgCSAT.toFixed(1)}/5` : "0/5"}
                 icon={Target}
                 description="satisfação"
               />
@@ -163,25 +196,25 @@ export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
             <div className="grid grid-cols-4 gap-4">
               <KPICard 
                 title="WhatsApp" 
-                value="--"
+                value={`${connectedInstances}/${totalInstances}`}
                 icon={MessageSquare}
                 description="instâncias ativas"
               />
               <KPICard 
                 title="Equipe Online" 
-                value="--"
+                value={(teamOnlineCount || 0).toString()}
                 icon={Users}
                 description="agentes disponíveis"
               />
               <KPICard 
                 title="Conversas Ativas" 
-                value="--"
+                value={activeConversations.toString()}
                 icon={MessageSquare}
                 description="em atendimento"
               />
               <KPICard 
                 title="Fila" 
-                value="--"
+                value={queuedConversations.toString()}
                 icon={Clock}
                 description="aguardando"
               />
