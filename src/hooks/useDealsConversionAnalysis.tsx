@@ -20,7 +20,14 @@ export type DealSource = "all" | "organic" | "form" | "whatsapp";
 
 export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSource = "all") {
   return useQuery({
-    queryKey: ["deals-conversion-analysis", dateRange?.from, dateRange?.to, source],
+    queryKey: [
+      "deals-conversion-analysis",
+      dateRange?.from?.toISOString() || "no-from",
+      dateRange?.to?.toISOString() || "no-to",
+      source,
+    ],
+    staleTime: 0,
+    refetchOnMount: true,
     queryFn: async (): Promise<DealsConversionAnalysis> => {
       console.log("📊 useDealsConversionAnalysis: Fetching data...");
 
@@ -172,6 +179,5 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
         maxTimeToWinDays,
       };
     },
-    staleTime: 1000 * 60 * 1, // 1 minute (reduced for faster refresh)
   });
 }

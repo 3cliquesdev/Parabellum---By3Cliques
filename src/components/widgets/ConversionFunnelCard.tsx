@@ -27,9 +27,9 @@ const sourceLabels: Record<DealSource, string> = {
 
 export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
   const [source, setSource] = useState<DealSource>("all");
-  const { data, isLoading } = useDealsConversionAnalysis(dateRange, source);
+  const { data, isLoading, isFetching } = useDealsConversionAnalysis(dateRange, source);
 
-  if (isLoading) {
+  if (isLoading || isFetching) {
     return (
       <Card className="p-5">
         <Skeleton className="h-6 w-48 mb-4" />
