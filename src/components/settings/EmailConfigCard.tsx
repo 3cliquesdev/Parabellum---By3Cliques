@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Loader2, Send, ExternalLink } from "lucide-react";
+import { Mail, Loader2, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -85,11 +85,11 @@ export default function EmailConfigCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Mail className="h-5 w-5 text-blue-600" />
-          Configurações de Email
+          <Mail className="h-5 w-5 text-primary" />
+          Remetentes de Email
         </CardTitle>
         <CardDescription>
-          Gerencie remetentes e teste envio de emails via Resend
+          Configure os remetentes e teste envio de emails
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -100,12 +100,14 @@ export default function EmailConfigCard() {
         ) : (
           <>
             <div className="space-y-4">
-              <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg border border-emerald-200 dark:border-emerald-900">
-                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                  Domínio Verificado: {verifiedDomain}
-                </span>
-              </div>
+              {verifiedDomain && (
+                <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg border border-emerald-200 dark:border-emerald-900">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                    Domínio ativo: {verifiedDomain}
+                  </span>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="customer-sender">Remetente para Clientes</Label>
@@ -180,20 +182,6 @@ export default function EmailConfigCard() {
                   )}
                 </Button>
               </div>
-            </div>
-
-            <div className="pt-4 border-t">
-              <p className="text-sm text-muted-foreground mb-2">
-                💡 Para verificar novos domínios no Resend:
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open("https://resend.com/domains", "_blank")}
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Abrir Resend Domains
-              </Button>
             </div>
           </>
         )}
