@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useCreateTicket } from "@/hooks/useCreateTicket";
 import { useContacts } from "@/hooks/useContacts";
 import { useDepartments } from "@/hooks/useDepartments";
@@ -56,7 +56,15 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>("medium");
-  const [category, setCategory] = useState<string>("outro");
+  const [category, setCategory] = useState<string>("");
+  
+  // Definir categoria inicial quando categorias carregarem
+  useEffect(() => {
+    if (categories.length > 0 && !category) {
+      const defaultCat = categories.find(c => c.name === 'outro') || categories[0];
+      setCategory(defaultCat.name);
+    }
+  }, [categories, category]);
   const [customerId, setCustomerId] = useState<string>("");
   const [departmentId, setDepartmentId] = useState<string>("");
   const [customerSearch, setCustomerSearch] = useState("");
@@ -404,16 +412,26 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                   </Button>
                 </div>
               ) : (
-                <Select value={category} onValueChange={setCategory}>
+              <Select 
+                  value={category} 
+                  onValueChange={setCategory}
+                  disabled={categories.length === 0}
+                >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder={categories.length === 0 ? "Carregando..." : "Selecione"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.name}>
-                        {categoryLabels[cat.name] || cat.name}
-                      </SelectItem>
-                    ))}
+                    {categories.length > 0 ? (
+                      categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.name}>
+                          {categoryLabels[cat.name] || cat.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="p-2 text-sm text-muted-foreground text-center">
+                        Carregando categorias...
+                      </div>
+                    )}
                   </SelectContent>
                 </Select>
               )}

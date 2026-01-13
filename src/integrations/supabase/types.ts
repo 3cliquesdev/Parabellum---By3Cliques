@@ -7545,7 +7545,16 @@ export type Database = {
         | "rejected"
         | "expired"
       sender_type: "user" | "contact" | "system"
-      ticket_category: "financeiro" | "tecnico" | "bug" | "outro"
+      ticket_category:
+        | "financeiro"
+        | "tecnico"
+        | "bug"
+        | "outro"
+        | "duvida"
+        | "problema_tecnico"
+        | "sugestao"
+        | "reclamacao"
+        | "saque"
       ticket_priority: "low" | "medium" | "high" | "urgent"
       ticket_status:
         | "open"
@@ -7776,7 +7785,17 @@ export const Constants = {
         "expired",
       ],
       sender_type: ["user", "contact", "system"],
-      ticket_category: ["financeiro", "tecnico", "bug", "outro"],
+      ticket_category: [
+        "financeiro",
+        "tecnico",
+        "bug",
+        "outro",
+        "duvida",
+        "problema_tecnico",
+        "sugestao",
+        "reclamacao",
+        "saque",
+      ],
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status: [
         "open",
