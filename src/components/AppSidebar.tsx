@@ -256,7 +256,7 @@ export function AppSidebar() {
           queryFn: async () => {
             const { data } = await supabase
               .from('tickets')
-              .select('id, title, status, priority')
+              .select('id, subject, status, priority, ticket_number')
               .neq('status', 'closed')
               .order('created_at', { ascending: false })
               .limit(50);
