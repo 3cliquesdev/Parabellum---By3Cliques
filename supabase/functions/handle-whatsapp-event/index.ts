@@ -26,12 +26,58 @@ interface EvolutionWebhook {
       };
       imageMessage?: {
         caption?: string;
+        url?: string;
+        mimetype?: string;
+        mediaKey?: string;
+        directPath?: string;
+        fileLength?: number;
       };
       videoMessage?: {
         caption?: string;
+        url?: string;
+        mimetype?: string;
+        mediaKey?: string;
+        directPath?: string;
+        fileLength?: number;
+        seconds?: number;
+      };
+      audioMessage?: {
+        url?: string;
+        mimetype?: string;
+        mediaKey?: string;
+        directPath?: string;
+        fileLength?: number;
+        seconds?: number;
+        ptt?: boolean; // Push-to-talk (áudio gravado)
+      };
+      pttMessage?: {
+        url?: string;
+        mimetype?: string;
+        seconds?: number;
       };
       documentMessage?: {
         caption?: string;
+        url?: string;
+        mimetype?: string;
+        fileName?: string;
+        mediaKey?: string;
+        directPath?: string;
+        fileLength?: number;
+      };
+      stickerMessage?: {
+        url?: string;
+        mimetype?: string;
+        isAnimated?: boolean;
+      };
+      locationMessage?: {
+        degreesLatitude?: number;
+        degreesLongitude?: number;
+        name?: string;
+        address?: string;
+      };
+      contactMessage?: {
+        displayName?: string;
+        vcard?: string;
       };
     };
     messageTimestamp?: number;
@@ -41,6 +87,15 @@ interface EvolutionWebhook {
   sender?: string;
   server_url?: string;
   apikey?: string;
+}
+
+// Interface para informações de mídia
+interface MediaInfo {
+  type: 'image' | 'video' | 'audio' | 'document' | 'sticker';
+  mimeType: string;
+  caption?: string;
+  durationSeconds?: number;
+  fileName?: string;
 }
 
 /**
@@ -288,18 +343,35 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   
   const customerName = data.pushName || phoneForDatabase;
 
-  // Extrair texto da mensagem (suporta diferentes tipos de mensagem)
+  // 📸 Detectar se é mídia e preparar texto da mensagem
   let messageText = '';
+  const mediaInfo = detectMediaType(data.message);
+  let hasMedia = false;
+  
   if (data.message?.conversation) {
     messageText = data.message.conversation;
   } else if (data.message?.extendedTextMessage?.text) {
     messageText = data.message.extendedTextMessage.text;
-  } else if (data.message?.imageMessage?.caption) {
-    messageText = data.message.imageMessage.caption || '[Imagem]';
-  } else if (data.message?.videoMessage?.caption) {
-    messageText = data.message.videoMessage.caption || '[Vídeo]';
-  } else if (data.message?.documentMessage?.caption) {
-    messageText = data.message.documentMessage.caption || '[Documento]';
+  } else if (data.message?.imageMessage) {
+    messageText = data.message.imageMessage.caption || '';
+    hasMedia = true;
+  } else if (data.message?.videoMessage) {
+    messageText = data.message.videoMessage.caption || '';
+    hasMedia = true;
+  } else if (data.message?.audioMessage || data.message?.pttMessage) {
+    messageText = ''; // Áudio não tem legenda
+    hasMedia = true;
+  } else if (data.message?.documentMessage) {
+    messageText = data.message.documentMessage.caption || `📎 ${data.message.documentMessage.fileName || 'Documento'}`;
+    hasMedia = true;
+  } else if (data.message?.stickerMessage) {
+    messageText = ''; // Sticker não tem texto
+    hasMedia = true;
+  } else if (data.message?.locationMessage) {
+    const loc = data.message.locationMessage;
+    messageText = `📍 Localização: ${loc.name || loc.address || `${loc.degreesLatitude}, ${loc.degreesLongitude}`}`;
+  } else if (data.message?.contactMessage) {
+    messageText = `👤 Contato: ${data.message.contactMessage.displayName || 'Contato'}`;
   } else {
     messageText = '[Mensagem não suportada]';
   }
@@ -649,7 +721,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   // 5. Inserir mensagem do cliente
   const newMessage = {
     conversation_id: conversationId,
-    content: messageText,
+    content: messageText || (hasMedia ? '' : '[Mensagem vazia]'),
     sender_type: 'contact',
     sender_id: null,
     is_ai_generated: false,
@@ -658,17 +730,57 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
 
   console.log('[handle-whatsapp-event] 📨 Trying to insert message:', newMessage);
 
-  const { error: messageError } = await supabase
+  const { data: insertedMessage, error: messageError } = await supabase
     .from('messages')
-    .insert(newMessage);
-
+    .insert(newMessage)
+    .select('id')
+    .single();
 
   if (messageError) {
     console.error('[handle-whatsapp-event] Error inserting message:', messageError);
     throw messageError;
   }
 
-  console.log('[handle-whatsapp-event] Message inserted successfully');
+  console.log('[handle-whatsapp-event] Message inserted successfully:', insertedMessage?.id);
+
+  // 📸 FASE 5: Se tem mídia, baixar e salvar como attachment
+  if (hasMedia && insertedMessage?.id) {
+    console.log(`[handle-whatsapp-event] 📸 Processing media attachment for message ${insertedMessage.id}`);
+    
+    try {
+      const mediaResult = await downloadAndSaveMedia(supabase, instance, data, conversationId);
+      
+      if (mediaResult) {
+        // Criar entrada em media_attachments
+        const attachmentData = {
+          message_id: insertedMessage.id,
+          conversation_id: conversationId,
+          storage_bucket: 'chat-attachments',
+          storage_path: mediaResult.storagePath,
+          mime_type: mediaResult.mimeType,
+          file_size: mediaResult.size,
+          original_filename: `whatsapp_${mediaInfo?.type || 'media'}`,
+          status: 'ready',
+          duration_seconds: mediaResult.durationSeconds || null,
+        };
+        
+        const { error: attachmentError } = await supabase
+          .from('media_attachments')
+          .insert(attachmentData);
+        
+        if (attachmentError) {
+          console.error('[handle-whatsapp-event] ❌ Error creating media_attachment:', attachmentError);
+        } else {
+          console.log('[handle-whatsapp-event] ✅ Media attachment created successfully');
+        }
+      } else {
+        console.log('[handle-whatsapp-event] ⚠️ Could not download media - message saved without attachment');
+      }
+    } catch (mediaError) {
+      console.error('[handle-whatsapp-event] ❌ Error processing media:', mediaError);
+      // Não falhar a mensagem toda por causa de erro no media
+    }
+  }
 
   // 6. Se ai_mode = 'autopilot', disparar AI
   if (instance.ai_mode === 'autopilot') {
@@ -956,6 +1068,174 @@ function extractRating(message: string): number | null {
   }
   
   return null;
+}
+
+// 📸 Função auxiliar: Detectar tipo de mídia na mensagem
+function detectMediaType(message: any): MediaInfo | null {
+  if (message?.imageMessage) {
+    return {
+      type: 'image',
+      mimeType: message.imageMessage.mimetype || 'image/jpeg',
+      caption: message.imageMessage.caption,
+    };
+  }
+  if (message?.audioMessage) {
+    return {
+      type: 'audio',
+      mimeType: message.audioMessage.mimetype || 'audio/ogg',
+      durationSeconds: message.audioMessage.seconds,
+    };
+  }
+  if (message?.pttMessage) {
+    return {
+      type: 'audio',
+      mimeType: message.pttMessage.mimetype || 'audio/ogg',
+      durationSeconds: message.pttMessage.seconds,
+    };
+  }
+  if (message?.videoMessage) {
+    return {
+      type: 'video',
+      mimeType: message.videoMessage.mimetype || 'video/mp4',
+      caption: message.videoMessage.caption,
+      durationSeconds: message.videoMessage.seconds,
+    };
+  }
+  if (message?.documentMessage) {
+    return {
+      type: 'document',
+      mimeType: message.documentMessage.mimetype || 'application/octet-stream',
+      caption: message.documentMessage.caption,
+      fileName: message.documentMessage.fileName,
+    };
+  }
+  if (message?.stickerMessage) {
+    return {
+      type: 'sticker',
+      mimeType: message.stickerMessage.mimetype || 'image/webp',
+    };
+  }
+  return null;
+}
+
+// 📥 Função auxiliar: Baixar mídia da Evolution API e salvar no Storage
+async function downloadAndSaveMedia(
+  supabase: any,
+  instance: any,
+  messageData: any,
+  conversationId: string
+): Promise<{ storagePath: string; mimeType: string; size: number; durationSeconds?: number } | null> {
+  try {
+    const mediaInfo = detectMediaType(messageData);
+    if (!mediaInfo) {
+      console.log('[handle-whatsapp-event] 📸 No media detected in message');
+      return null;
+    }
+
+    console.log(`[handle-whatsapp-event] 📸 Media detected: ${mediaInfo.type} (${mediaInfo.mimeType})`);
+
+    // Montar URL da Evolution API
+    const baseUrl = instance.api_url.replace(/\/manager$/, '').replace(/\/$/, '');
+    const apiKey = instance.api_token;
+
+    if (!baseUrl || !apiKey) {
+      console.error('[handle-whatsapp-event] ❌ Missing API URL or token for media download');
+      return null;
+    }
+
+    // Baixar mídia via Evolution API (getBase64FromMediaMessage)
+    console.log(`[handle-whatsapp-event] 📥 Downloading media from Evolution API...`);
+    
+    const downloadResponse = await fetch(
+      `${baseUrl}/chat/getBase64FromMediaMessage/${instance.instance_name}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey,
+        },
+        body: JSON.stringify({
+          message: messageData,
+          convertToMp4: mediaInfo.type === 'audio', // Converter áudio para formato compatível
+        }),
+      }
+    );
+
+    if (!downloadResponse.ok) {
+      console.error(`[handle-whatsapp-event] ❌ Failed to download media: HTTP ${downloadResponse.status}`);
+      const errorText = await downloadResponse.text();
+      console.error('[handle-whatsapp-event] Error details:', errorText);
+      return null;
+    }
+
+    const mediaResult = await downloadResponse.json();
+    const base64Data = mediaResult.base64;
+    const actualMimeType = mediaResult.mimetype || mediaInfo.mimeType;
+
+    if (!base64Data) {
+      console.error('[handle-whatsapp-event] ❌ No base64 data returned from Evolution API');
+      return null;
+    }
+
+    console.log(`[handle-whatsapp-event] ✅ Media downloaded: ${base64Data.length} chars base64, mime: ${actualMimeType}`);
+
+    // Converter base64 para buffer
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    // Determinar extensão do arquivo
+    const extensionMap: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+      'audio/ogg': 'ogg',
+      'audio/mp4': 'mp4',
+      'audio/mpeg': 'mp3',
+      'audio/opus': 'opus',
+      'video/mp4': 'mp4',
+      'video/3gpp': '3gp',
+      'application/pdf': 'pdf',
+    };
+    const extension = extensionMap[actualMimeType] || 'bin';
+    
+    // Gerar nome único para o arquivo
+    const timestamp = Date.now();
+    const randomId = crypto.randomUUID().substring(0, 8);
+    const filename = `whatsapp_${mediaInfo.type}_${timestamp}_${randomId}.${extension}`;
+    const storagePath = `whatsapp/${instance.id}/${filename}`;
+
+    // Upload para Supabase Storage
+    console.log(`[handle-whatsapp-event] 📤 Uploading to storage: ${storagePath}`);
+    
+    const { error: uploadError } = await supabase.storage
+      .from('chat-attachments')
+      .upload(storagePath, bytes, {
+        contentType: actualMimeType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('[handle-whatsapp-event] ❌ Storage upload failed:', uploadError);
+      return null;
+    }
+
+    console.log(`[handle-whatsapp-event] ✅ Media saved to storage: ${storagePath}`);
+
+    return {
+      storagePath,
+      mimeType: actualMimeType,
+      size: bytes.length,
+      durationSeconds: mediaInfo.durationSeconds,
+    };
+  } catch (error) {
+    console.error('[handle-whatsapp-event] ❌ Error downloading media:', error);
+    return null;
+  }
 }
 
 // 📤 Função auxiliar: Enviar mensagem WhatsApp

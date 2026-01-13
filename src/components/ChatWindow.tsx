@@ -459,20 +459,32 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                       }
 
                       // Parse media attachments from message
+                      // Nota: URLs são geradas no hook useMessagesWithMedia para attachments de buckets privados
                       let attachments: any[] = [];
                       try {
                         if ((message as any).media_attachments) {
                           attachments = (message as any).media_attachments
-                            .filter((a: any) => a.status === 'ready')
-                            .map((a: any) => ({
-                              id: a.id,
-                              url: a.public_url || a.presigned_url,
-                              mimeType: a.mime_type,
-                              filename: a.original_filename,
-                              size: a.file_size,
-                              waveformData: a.waveform_data,
-                              durationSeconds: a.duration_seconds,
-                            }));
+                            .filter((a: any) => a.status === 'ready' && a.storage_bucket && a.storage_path)
+                            .map((a: any) => {
+                              // Gerar URL pública/assinada a partir do storage_path
+                              let url = '';
+                              if (a.storage_bucket && a.storage_path) {
+                                const { data } = supabase.storage
+                                  .from(a.storage_bucket)
+                                  .getPublicUrl(a.storage_path);
+                                url = data?.publicUrl || '';
+                              }
+                              
+                              return {
+                                id: a.id,
+                                url,
+                                mimeType: a.mime_type,
+                                filename: a.original_filename,
+                                size: a.file_size,
+                                waveformData: a.waveform_data,
+                                durationSeconds: a.duration_seconds,
+                              };
+                            });
                         }
                       } catch (e) {
                         // Ignore parse errors
