@@ -98,7 +98,7 @@ export function MacrosPopover({ onSelectMacro, disabled }: MacrosPopoverProps) {
         
         <div className="p-2 border-t bg-muted/30">
           <p className="text-[10px] text-muted-foreground text-center">
-            Digite <code className="px-1 rounded bg-muted">/</code> ou{" "}
+            Digite <code className="px-1 rounded bg-muted">\</code> ou{" "}
             <code className="px-1 rounded bg-muted">Ctrl+M</code> para acessar macros
           </p>
         </div>

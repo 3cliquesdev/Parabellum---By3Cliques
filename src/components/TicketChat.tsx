@@ -183,7 +183,7 @@ export function TicketChat({ ticketId, channel = 'platform' }: TicketChatProps) 
             <Textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder={isInternal ? "Digite uma nota interna... (Ctrl+M para macros)" : "Digite sua resposta... (/ ou Ctrl+M para macros)"}
+              placeholder={isInternal ? "Digite uma nota interna... (Ctrl+M para macros)" : "Digite sua resposta... (\\ ou Ctrl+M para macros)"}
               rows={3}
               className={isInternal ? 'border-amber-300 focus:border-amber-400' : ''}
             />
