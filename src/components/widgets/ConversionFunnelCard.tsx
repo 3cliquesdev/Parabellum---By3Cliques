@@ -1,10 +1,10 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  TrendingUp, 
-  TrendingDown, 
   Clock, 
   Target,
   CheckCircle2,
@@ -12,14 +12,22 @@ import {
   Hourglass
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
-import { useDealsConversionAnalysis } from "@/hooks/useDealsConversionAnalysis";
+import { useDealsConversionAnalysis, DealSource } from "@/hooks/useDealsConversionAnalysis";
 
 interface ConversionFunnelCardProps {
   dateRange?: DateRange;
 }
 
+const sourceLabels: Record<DealSource, string> = {
+  all: "Todos",
+  organic: "Orgânico",
+  form: "Formulários",
+  whatsapp: "WhatsApp",
+};
+
 export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
-  const { data, isLoading } = useDealsConversionAnalysis(dateRange);
+  const [source, setSource] = useState<DealSource>("all");
+  const { data, isLoading } = useDealsConversionAnalysis(dateRange, source);
 
   if (isLoading) {
     return (
@@ -53,13 +61,23 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
         <div className="flex items-center gap-2">
           <Target className="w-5 h-5 text-primary" />
           <h3 className="text-base font-semibold text-foreground">
-            Funil de Conversão (Criados → Fechados)
+            Funil de Conversão
           </h3>
         </div>
         <Badge variant="secondary" className="text-xs">
           {totalCreated} criados
         </Badge>
       </div>
+
+      {/* Source Filter Tabs */}
+      <Tabs value={source} onValueChange={(v) => setSource(v as DealSource)} className="mb-4">
+        <TabsList className="grid w-full grid-cols-4 h-8">
+          <TabsTrigger value="all" className="text-xs px-2">Todos</TabsTrigger>
+          <TabsTrigger value="organic" className="text-xs px-2">Orgânico</TabsTrigger>
+          <TabsTrigger value="form" className="text-xs px-2">Formulários</TabsTrigger>
+          <TabsTrigger value="whatsapp" className="text-xs px-2">WhatsApp</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div className="space-y-4">
         {/* Total Criados */}
