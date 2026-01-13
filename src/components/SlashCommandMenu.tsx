@@ -43,32 +43,46 @@ export function SlashCommandMenu({ children, value, onChange, onKeyDown, inputRe
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
-  // Detectar quando usuário digita "/" ou "\"
+  // Detectar quando usuário digita "\" - COM DEBOUNCE para evitar lag
   useEffect(() => {
     // Não sobrescrever se está no modo shortcut
     if (isShortcutMode && open) return;
 
-    const lastBackslashIndex = value.lastIndexOf("\\");
-    const triggerIndex = lastBackslashIndex;
-    
-    if (triggerIndex !== -1) {
-      const textAfterTrigger = value.substring(triggerIndex + 1);
-      
-      // Se não tem espaço depois do trigger, pode ser comando
-      if (!textAfterTrigger.includes(" ") && !textAfterTrigger.includes("\n")) {
-        setSlashPosition(triggerIndex);
-        setSearchQuery(textAfterTrigger);
+    // Check rápido: se não tem "\", fechar menu e sair imediatamente
+    if (!value.includes("\\")) {
+      if (open) {
+        setOpen(false);
         setIsShortcutMode(false);
-        setOpen(true);
-        setSelectedIndex(0);
+      }
+      return;
+    }
+
+    // Debounce de 100ms para evitar processamento excessivo durante digitação rápida
+    const timer = setTimeout(() => {
+      const lastBackslashIndex = value.lastIndexOf("\\");
+      const triggerIndex = lastBackslashIndex;
+      
+      if (triggerIndex !== -1) {
+        const textAfterTrigger = value.substring(triggerIndex + 1);
+        
+        // Se não tem espaço depois do trigger, pode ser comando
+        if (!textAfterTrigger.includes(" ") && !textAfterTrigger.includes("\n")) {
+          setSlashPosition(triggerIndex);
+          setSearchQuery(textAfterTrigger);
+          setIsShortcutMode(false);
+          setOpen(true);
+          setSelectedIndex(0);
+        } else {
+          setOpen(false);
+          setIsShortcutMode(false);
+        }
       } else {
         setOpen(false);
         setIsShortcutMode(false);
       }
-    } else {
-      setOpen(false);
-      setIsShortcutMode(false);
-    }
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, [value, isShortcutMode, open]);
 
   const handleSelectMacro = async (macro: any) => {

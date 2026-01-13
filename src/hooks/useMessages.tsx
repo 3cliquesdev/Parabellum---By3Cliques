@@ -16,6 +16,7 @@ export function useMessages(conversationId: string | null) {
       if (!conversationId) return [];
 
       // FASE 4: Join com profiles para buscar nome/avatar do remetente
+      // FASE 5: Join com media_attachments para buscar anexos (imagens, áudios, vídeos)
       const { data, error } = await supabase
         .from("messages")
         .select(`
@@ -25,6 +26,17 @@ export function useMessages(conversationId: string | null) {
             full_name,
             avatar_url,
             job_title
+          ),
+          media_attachments(
+            id,
+            storage_path,
+            storage_bucket,
+            mime_type,
+            original_filename,
+            file_size,
+            status,
+            waveform_data,
+            duration_seconds
           )
         `)
         .eq("conversation_id", conversationId)
