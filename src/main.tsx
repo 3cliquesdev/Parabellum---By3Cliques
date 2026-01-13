@@ -3,10 +3,14 @@ import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "next-themes";
 import App from "./App.tsx";
 import "./index.css";
+import { ensureLatestBuild, getCurrentBuildId } from "./lib/build/ensureLatestBuild";
 
 // ============================================
-// LIMPEZA AGRESSIVA DE CACHE NO STARTUP
+// SISTEMA DE AUTO-HEAL DE BUILD + LIMPEZA
 // ============================================
+
+// Log do build atual para diagnóstico
+console.log('[Main] 🏗️ Build ID:', getCurrentBuildId());
 
 // 1. Remove service workers residuais (PWA antigo)
 if ('serviceWorker' in navigator) {
@@ -68,7 +72,12 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
-console.log('[Main] 🚀 App iniciando (cache limpo)');
+// 5. Verifica se o build está atualizado (auto-heal)
+ensureLatestBuild().catch((e) => {
+  console.warn('[Main] ⚠️ Erro no ensureLatestBuild:', e);
+});
+
+console.log('[Main] 🚀 App iniciando');
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
