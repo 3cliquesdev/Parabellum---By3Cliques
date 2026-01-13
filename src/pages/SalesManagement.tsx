@@ -27,6 +27,7 @@ import { TopPerformersWidget } from "@/components/widgets/premium/TopPerformersW
 import { TeamActivitiesWidget } from "@/components/widgets/premium/TeamActivitiesWidget";
 import { PipelineFunnelChart } from "@/components/widgets/premium/PipelineFunnelChart";
 import { ConversionFunnelCard } from "@/components/widgets/ConversionFunnelCard";
+import { StageConversionChart } from "@/components/widgets/StageConversionChart";
 import { useDealsConversionAnalysis } from "@/hooks/useDealsConversionAnalysis";
 
 export default function SalesManagement() {
@@ -176,10 +177,15 @@ export default function SalesManagement() {
         </div>
         
         {/* ROW 3: Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <RevenueTimelineChart dateRange={dateRange} />
           <PipelineFunnelChart />
+        </div>
+        
+        {/* ROW 4: Conversão */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ConversionFunnelCard dateRange={dateRange} />
+          <StageConversionChart />
         </div>
         
         {/* ROW 4: Rankings + Activities */}

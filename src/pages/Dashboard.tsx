@@ -28,6 +28,7 @@ import { ConversionRateWidget } from "@/components/widgets/ConversionRateWidget"
 import { RecentActionsWidget } from "@/components/widgets/RecentActionsWidget";
 import RottenDealsWidget from "@/components/widgets/RottenDealsWidget";
 import LostReasonsWidget from "@/components/widgets/LostReasonsWidget";
+import { StageConversionChart } from "@/components/widgets/StageConversionChart";
 import { SLAAlertWidget } from "@/components/widgets/SLAAlertWidget";
 import { WhatsAppStatusWidget } from "@/components/admin/WhatsAppStatusWidget";
 import { TeamOnlineWidget } from "@/components/widgets/TeamOnlineWidget";
@@ -228,6 +229,11 @@ export default function Dashboard() {
           <BentoCard span="2">
             <ConversionFunnelCard />
           </BentoCard>
+          <BentoCard span="2">
+            <StageConversionChart />
+          </BentoCard>
+          
+          {/* ROW 6: Análises */}
           <BentoCard span="2">
             <RottenDealsWidget />
           </BentoCard>
