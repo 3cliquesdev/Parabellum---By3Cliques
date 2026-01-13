@@ -10,14 +10,48 @@ export function useSalesFunnel(pipelineId?: string) {
   return useQuery({
     queryKey: ["sales-funnel", pipelineId, user?.id, role],
     queryFn: async () => {
+      // Se não tiver pipeline especificado, buscar o pipeline padrão (com mais deals)
+      let targetPipelineId = pipelineId;
+      
+      if (!targetPipelineId) {
+        const { data: defaultPipeline } = await supabase
+          .from("pipelines")
+          .select("id")
+          .eq("is_default", true)
+          .maybeSingle();
+        
+        if (defaultPipeline?.id) {
+          targetPipelineId = defaultPipeline.id;
+        } else {
+          // Fallback: buscar o pipeline com mais deals abertos
+          const { data: pipelineStats } = await supabase
+            .from("deals")
+            .select("pipeline_id")
+            .eq("status", "open")
+            .not("pipeline_id", "is", null);
+          
+          if (pipelineStats && pipelineStats.length > 0) {
+            // Contar deals por pipeline
+            const pipelineCounts = pipelineStats.reduce((acc, deal) => {
+              acc[deal.pipeline_id] = (acc[deal.pipeline_id] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+            
+            // Pegar o pipeline com mais deals
+            targetPipelineId = Object.entries(pipelineCounts)
+              .sort(([, a], [, b]) => b - a)[0]?.[0];
+          }
+        }
+      }
+
       let query = supabase
         .from("deals")
         .select("value, stage_id, stages(name, position)")
         .eq("status", "open");
 
-      // Filtrar por pipeline se especificado
-      if (pipelineId) {
-        query = query.eq("pipeline_id", pipelineId);
+      // Sempre filtrar por pipeline para evitar mistura de stages
+      if (targetPipelineId) {
+        query = query.eq("pipeline_id", targetPipelineId);
       }
 
       // Sales rep vê apenas seus próprios dados

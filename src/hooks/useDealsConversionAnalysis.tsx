@@ -22,41 +22,85 @@ export function useDealsConversionAnalysis(dateRange?: DateRange) {
     queryFn: async (): Promise<DealsConversionAnalysis> => {
       console.log("📊 useDealsConversionAnalysis: Fetching data...");
 
-      let query = supabase
+      // Build date filters
+      const fromDate = dateRange?.from?.toISOString();
+      const toDate = dateRange?.to?.toISOString();
+
+      // Use count: exact to get real counts without 1000 limit
+      let createdQuery = supabase
         .from("deals")
-        .select("id, status, created_at, closed_at");
+        .select("*", { count: "exact", head: true });
+      
+      let wonQuery = supabase
+        .from("deals")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "won");
+      
+      let lostQuery = supabase
+        .from("deals")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "lost");
+      
+      let openQuery = supabase
+        .from("deals")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "open");
 
-      // Filter by creation date range
-      if (dateRange?.from) {
-        query = query.gte("created_at", dateRange.from.toISOString());
+      // Apply date filters to all queries
+      if (fromDate) {
+        createdQuery = createdQuery.gte("created_at", fromDate);
+        wonQuery = wonQuery.gte("created_at", fromDate);
+        lostQuery = lostQuery.gte("created_at", fromDate);
+        openQuery = openQuery.gte("created_at", fromDate);
       }
-      if (dateRange?.to) {
-        query = query.lte("created_at", dateRange.to.toISOString());
+      if (toDate) {
+        createdQuery = createdQuery.lte("created_at", toDate);
+        wonQuery = wonQuery.lte("created_at", toDate);
+        lostQuery = lostQuery.lte("created_at", toDate);
+        openQuery = openQuery.lte("created_at", toDate);
       }
 
-      const { data: deals, error } = await query;
+      // Execute all count queries in parallel
+      const [createdResult, wonResult, lostResult, openResult] = await Promise.all([
+        createdQuery,
+        wonQuery,
+        lostQuery,
+        openQuery,
+      ]);
 
-      if (error) {
-        console.error("❌ useDealsConversionAnalysis error:", error);
-        throw error;
+      if (createdResult.error) {
+        console.error("❌ useDealsConversionAnalysis error:", createdResult.error);
+        throw createdResult.error;
       }
 
-      const totalCreated = deals?.length || 0;
-      const wonDeals = deals?.filter((d) => d.status === "won") || [];
-      const lostDeals = deals?.filter((d) => d.status === "lost") || [];
-      const openDeals = deals?.filter((d) => d.status === "open") || [];
-
-      const totalWon = wonDeals.length;
-      const totalLost = lostDeals.length;
-      const totalOpen = openDeals.length;
+      const totalCreated = createdResult.count || 0;
+      const totalWon = wonResult.count || 0;
+      const totalLost = lostResult.count || 0;
+      const totalOpen = openResult.count || 0;
 
       // Calculate conversion rates (created -> won/lost)
       const createdToWonRate = totalCreated > 0 ? (totalWon / totalCreated) * 100 : 0;
       const createdToLostRate = totalCreated > 0 ? (totalLost / totalCreated) * 100 : 0;
 
+      // Fetch won deals with dates for time calculation (separate query)
+      let wonDealsQuery = supabase
+        .from("deals")
+        .select("created_at, closed_at")
+        .eq("status", "won")
+        .not("closed_at", "is", null);
+
+      if (fromDate) {
+        wonDealsQuery = wonDealsQuery.gte("created_at", fromDate);
+      }
+      if (toDate) {
+        wonDealsQuery = wonDealsQuery.lte("created_at", toDate);
+      }
+
+      const { data: wonDeals } = await wonDealsQuery;
+
       // Calculate time to win for won deals
       const timeToWinDays: number[] = [];
-      wonDeals.forEach((deal) => {
+      wonDeals?.forEach((deal) => {
         if (deal.closed_at && deal.created_at) {
           const days = differenceInDays(
             new Date(deal.closed_at),

@@ -10,22 +10,65 @@ export interface StageConversion {
   conversionRate: number;
 }
 
-export function useStageConversionRates() {
+export function useStageConversionRates(pipelineId?: string) {
   return useQuery({
-    queryKey: ["stage-conversion-rates"],
+    queryKey: ["stage-conversion-rates", pipelineId],
     queryFn: async () => {
-      // Get all stages
-      const { data: stages, error: stagesError } = await supabase
+      // Determinar o pipeline a usar
+      let targetPipelineId = pipelineId;
+      
+      if (!targetPipelineId) {
+        const { data: defaultPipeline } = await supabase
+          .from("pipelines")
+          .select("id")
+          .eq("is_default", true)
+          .maybeSingle();
+        
+        if (defaultPipeline?.id) {
+          targetPipelineId = defaultPipeline.id;
+        } else {
+          // Fallback: buscar o pipeline com mais deals
+          const { data: pipelineStats } = await supabase
+            .from("deals")
+            .select("pipeline_id")
+            .not("pipeline_id", "is", null);
+          
+          if (pipelineStats && pipelineStats.length > 0) {
+            const pipelineCounts = pipelineStats.reduce((acc, deal) => {
+              acc[deal.pipeline_id] = (acc[deal.pipeline_id] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+            
+            targetPipelineId = Object.entries(pipelineCounts)
+              .sort(([, a], [, b]) => b - a)[0]?.[0];
+          }
+        }
+      }
+
+      // Get stages only from the target pipeline
+      let stagesQuery = supabase
         .from("stages")
         .select("id, name, position")
         .order("position", { ascending: true });
 
+      if (targetPipelineId) {
+        stagesQuery = stagesQuery.eq("pipeline_id", targetPipelineId);
+      }
+
+      const { data: stages, error: stagesError } = await stagesQuery;
+
       if (stagesError) throw stagesError;
 
-      // Get all deals with their stage
-      const { data: deals, error: dealsError } = await supabase
+      // Get deals only from the target pipeline
+      let dealsQuery = supabase
         .from("deals")
         .select("id, stage_id, status");
+
+      if (targetPipelineId) {
+        dealsQuery = dealsQuery.eq("pipeline_id", targetPipelineId);
+      }
+
+      const { data: deals, error: dealsError } = await dealsQuery;
 
       if (dealsError) throw dealsError;
 
