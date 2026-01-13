@@ -74,9 +74,9 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
   // FASE 5: Agent Presence
   const { otherUsers, setTyping } = useTicketPresence(ticket.id);
 
-  // Filtrar apenas usuários de suporte para atribuição de tickets
+  // Filtrar usuários que podem receber tickets (suporte + financeiro)
   const supportUsers = users.filter((user: any) => 
-    ['support_agent', 'support_manager', 'admin', 'manager'].includes(user.role)
+    ['support_agent', 'support_manager', 'admin', 'manager', 'financial_manager', 'financial_agent'].includes(user.role)
   );
 
   const handleStatusChange = (status: string) => {

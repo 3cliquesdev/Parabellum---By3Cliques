@@ -79,9 +79,9 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
   const { data: users = [] } = useUsers();
   
-  // Filtrar usuários que podem receber tickets
+  // Filtrar usuários que podem receber tickets (suporte + financeiro)
   const supportUsers = users.filter(u => 
-    ['support_agent', 'support_manager', 'admin', 'manager'].includes(u.role) &&
+    ['support_agent', 'support_manager', 'admin', 'manager', 'financial_manager', 'financial_agent'].includes(u.role) &&
     !u.is_blocked &&
     !u.is_archived
   );
