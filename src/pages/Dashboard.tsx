@@ -28,6 +28,7 @@ import RottenDealsWidget from "@/components/widgets/RottenDealsWidget";
 import LostReasonsWidget from "@/components/widgets/LostReasonsWidget";
 import { SLAAlertWidget } from "@/components/widgets/SLAAlertWidget";
 import { WhatsAppStatusWidget } from "@/components/admin/WhatsAppStatusWidget";
+import { TeamOnlineWidget } from "@/components/widgets/TeamOnlineWidget";
 
 // Widgets Sales Rep
 import { MySalesWidget } from "@/components/widgets/MySalesWidget";
@@ -190,13 +191,16 @@ export default function Dashboard() {
           </BentoCard>
           
           {/* ROW 2: SLA Alert + WhatsApp Status */}
-          {(role === "admin" || role === "manager") && (
+          {(role === "admin" || role === "manager" || role === "support_manager") && (
             <>
               <BentoCard span="2">
                 <SLAAlertWidget />
               </BentoCard>
               <BentoCard span="2">
                 <WhatsAppStatusWidget />
+              </BentoCard>
+              <BentoCard span="2">
+                <TeamOnlineWidget />
               </BentoCard>
             </>
           )}
