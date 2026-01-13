@@ -64,23 +64,25 @@ export default function Support() {
       case 'my_open':
         return { 
           assignedFilter: 'mine' as const,
-          advancedFilters: { search: '', status: ['open', 'in_progress', 'waiting_customer'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false }
+          advancedFilters: { search: '', status: ['open', 'in_progress', 'waiting_customer'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false, noTags: false }
         };
       case 'unassigned':
         return { assignedFilter: 'unassigned' as const };
       case 'sla_expired':
-        return { advancedFilters: { search: '', status: [], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: true } };
+        return { advancedFilters: { search: '', status: [], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: true, noTags: false } };
+      case 'no_tags':
+        return { advancedFilters: { search: '', status: ['open', 'in_progress', 'waiting_customer'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false, noTags: true } };
       case 'archived':
-        return { advancedFilters: { search: '', status: ['resolved', 'closed'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false } };
+        return { advancedFilters: { search: '', status: ['resolved', 'closed'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false, noTags: false } };
       case 'open':
       case 'in_progress':
       case 'waiting_customer':
       case 'resolved':
       case 'closed':
-        return { advancedFilters: { search: '', status: [sidebarFilter], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false } };
+        return { advancedFilters: { search: '', status: [sidebarFilter], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false, noTags: false } };
       case 'all':
         // "Todos" now excludes archived tickets
-        return { advancedFilters: { search: '', status: ['open', 'in_progress', 'waiting_customer'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false } };
+        return { advancedFilters: { search: '', status: ['open', 'in_progress', 'waiting_customer'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false, noTags: false } };
       default:
         return {};
     }

@@ -5,8 +5,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { Clock, AlertCircle, CheckCircle, UserPen, AlertTriangle, Eye } from "lucide-react";
+import { Clock, AlertCircle, CheckCircle, UserPen, AlertTriangle, Eye, Tag } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ViewingInfo {
   user_id: string;
@@ -113,6 +115,23 @@ export function TicketsTable({
 }: TicketsTableProps) {
   const { user } = useAuth();
 
+  // Fetch ticket IDs that have tags
+  const ticketIds = tickets.map(t => t.id);
+  const { data: ticketTagsData } = useQuery({
+    queryKey: ["ticket-tags-check", ticketIds.join(',')],
+    queryFn: async () => {
+      if (ticketIds.length === 0) return [];
+      const { data } = await supabase
+        .from("ticket_tags")
+        .select("ticket_id")
+        .in("ticket_id", ticketIds);
+      return data || [];
+    },
+    enabled: ticketIds.length > 0,
+  });
+
+  const ticketIdsWithTags = new Set(ticketTagsData?.map(tt => tt.ticket_id) || []);
+
   if (tickets.length === 0) {
     return (
       <div className="flex items-center justify-center h-full p-8 text-center bg-card">
@@ -205,6 +224,21 @@ export function TicketsTable({
                   <span className="text-sm font-medium truncate text-foreground">
                     {ticket.subject}
                   </span>
+                  {/* No tags indicator */}
+                  {!ticketIdsWithTags.has(ticket.id) && !['resolved', 'closed'].includes(ticket.status) && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex-shrink-0 inline-flex items-center text-[10px] px-1 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300">
+                            <Tag className="h-2.5 w-2.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p className="text-xs">Sem tag</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                   {showCreatedByMeBadge && (
                     <span className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                       <UserPen className="h-2.5 w-2.5" />

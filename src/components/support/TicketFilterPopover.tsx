@@ -31,6 +31,7 @@ export interface TicketFilters {
   tags: string[];
   dateRange?: DateRange;
   slaExpired: boolean;
+  noTags?: boolean;
 }
 
 interface TicketFilterPopoverProps {
@@ -71,6 +72,7 @@ export const defaultTicketFilters: TicketFilters = {
   tags: [],
   dateRange: undefined,
   slaExpired: false,
+  noTags: false,
 };
 
 export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPopoverProps) {

@@ -43,6 +43,13 @@ export function useTicketCounts() {
         .from("tickets")
         .select("id, status, assigned_to, due_date, created_by, customer_id");
 
+      // Also fetch ticket_tags to know which tickets have tags
+      const { data: ticketTagsData } = await supabase
+        .from("ticket_tags")
+        .select("ticket_id");
+      
+      const ticketIdsWithTags = new Set(ticketTagsData?.map(tt => tt.ticket_id) || []);
+
       // Optimize query based on role (RLS handles security, this is for performance)
       if (!canSeeAllTickets) {
         if (isUser) {
@@ -66,6 +73,7 @@ export function useTicketCounts() {
         unassigned: 0,
         sla_expired: 0,
         archived: 0,
+        no_tags: 0,
       };
 
       // Initialize counts for all statuses
@@ -113,6 +121,11 @@ export function useTicketCounts() {
           !isArchived
         ) {
           counts.sla_expired++;
+        }
+
+        // No tags (apenas ativos)
+        if (!ticketIdsWithTags.has(ticket.id) && !isArchived) {
+          counts.no_tags++;
         }
       });
 

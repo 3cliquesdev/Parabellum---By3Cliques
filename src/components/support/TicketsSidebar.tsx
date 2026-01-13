@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   FolderOpen,
   Archive,
+  Tag,
 } from "lucide-react";
 
 export type SidebarFilter = string;
@@ -32,6 +33,7 @@ const mainFilters: FilterItem[] = [
   { key: 'my_open', label: 'Meus tickets abertos', icon: <User className="w-4 h-4" />, countKey: 'my_open' },
   { key: 'unassigned', label: 'Não atribuídos', icon: <FolderOpen className="w-4 h-4" />, countKey: 'unassigned' },
   { key: 'sla_expired', label: 'SLA vencido', icon: <AlertTriangle className="w-4 h-4" />, countKey: 'sla_expired', variant: 'danger' },
+  { key: 'no_tags', label: 'Sem tag', icon: <Tag className="w-4 h-4" />, countKey: 'no_tags', variant: 'warning' },
 ];
 
 export function TicketsSidebar({ selectedFilter, onFilterChange }: TicketsSidebarProps) {

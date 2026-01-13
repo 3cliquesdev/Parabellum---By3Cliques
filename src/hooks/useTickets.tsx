@@ -176,6 +176,16 @@ export function useTickets(
         }
       }
 
+      // No tags filter - filter tickets that have NO tags
+      if (advancedFilters?.noTags) {
+        const { data: allTicketTagsData } = await supabase
+          .from("ticket_tags")
+          .select("ticket_id");
+
+        const ticketIdsWithAnyTags = new Set(allTicketTagsData?.map(tt => tt.ticket_id) || []);
+        filteredData = filteredData.filter(ticket => !ticketIdsWithAnyTags.has(ticket.id));
+      }
+
       // Client-side search filter
       if (advancedFilters?.search) {
         const searchLower = advancedFilters.search.toLowerCase();

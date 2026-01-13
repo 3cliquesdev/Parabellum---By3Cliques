@@ -346,10 +346,10 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
           </Card>
         )}
 
-        {/* Tags do Ticket */}
+        {/* Tags do Ticket - sempre editável, independente do status */}
         <TicketTagsCard 
           ticketId={ticket.id} 
-          readonly={ticket.status === 'resolved' || ticket.status === 'closed'}
+          readonly={false}
         />
 
         {/* Financial Approval Bar (só para financial_manager) */}
