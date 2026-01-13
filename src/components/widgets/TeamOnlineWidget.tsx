@@ -22,7 +22,7 @@ interface TeamMember {
   full_name: string | null;
   avatar_url: string | null;
   availability_status: string | null;
-  department: string | null;
+  department: { name: string } | null;
 }
 
 const statusConfig = {
@@ -74,10 +74,16 @@ export function TeamOnlineWidget() {
 
       const userIds = userRoles.map((ur) => ur.user_id);
 
-      // Buscar profiles com status
+      // Buscar profiles com status e nome do departamento
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, full_name, avatar_url, availability_status, department")
+        .select(`
+          id, 
+          full_name, 
+          avatar_url, 
+          availability_status, 
+          department:departments(name)
+        `)
         .in("id", userIds);
 
       if (profilesError) throw profilesError;
@@ -309,9 +315,9 @@ function TeamMemberRow({
         <p className="text-sm font-medium text-foreground truncate">
           {member.full_name || "Sem nome"}
         </p>
-        {member.department && (
+      {member.department?.name && (
           <p className="text-xs text-muted-foreground truncate">
-            {member.department}
+            {member.department.name}
           </p>
         )}
       </div>
