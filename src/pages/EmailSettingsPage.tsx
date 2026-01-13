@@ -1,9 +1,11 @@
-import { ArrowLeft, Mail, Palette, Send, FileText } from "lucide-react";
+import { ArrowLeft, Mail, Palette, Send, FileText, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { EmailBrandingCard } from "@/components/settings/EmailBrandingCard";
 import { EmailSendersCard } from "@/components/settings/EmailSendersCard";
 import EmailConfigCard from "@/components/settings/EmailConfigCard";
+import { ResendDomainManager } from "@/components/settings/ResendDomainManager";
+import { ResendApiStatusCard } from "@/components/settings/ResendApiStatusCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function EmailSettingsPage() {
@@ -50,7 +52,7 @@ export default function EmailSettingsPage() {
               Templates
             </TabsTrigger>
             <TabsTrigger value="domain" className="gap-2">
-              <Mail className="h-4 w-4" />
+              <Globe className="h-4 w-4" />
               Domínio
             </TabsTrigger>
           </TabsList>
@@ -77,6 +79,8 @@ export default function EmailSettingsPage() {
           </TabsContent>
 
           <TabsContent value="domain" className="space-y-6">
+            <ResendApiStatusCard />
+            <ResendDomainManager />
             <EmailConfigCard />
           </TabsContent>
         </Tabs>
