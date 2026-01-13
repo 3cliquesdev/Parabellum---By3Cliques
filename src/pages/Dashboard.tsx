@@ -1,12 +1,14 @@
 import { useSearchParams } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, TrendingUp, Target, DollarSign, Briefcase } from "lucide-react";
+import { Loader2, TrendingUp, Target, DollarSign, Briefcase, Clock } from "lucide-react";
 import { OnboardingWidget } from "@/components/widgets/OnboardingWidget";
 import { useConversionMetrics } from "@/hooks/useConversionMetrics";
 import { useKiwifyFinancials } from "@/hooks/useKiwifyFinancials";
 import { usePipelineValue } from "@/hooks/usePipelineValue";
 import { useDeals } from "@/hooks/useDeals";
+import { useDealsConversionAnalysis } from "@/hooks/useDealsConversionAnalysis";
+import { ConversionFunnelCard } from "@/components/widgets/ConversionFunnelCard";
 import { PageContainer, PageHeader, PageContent } from "@/components/ui/page-container";
 import { BentoGrid, BentoCard } from "@/components/ui/bento-grid";
 
@@ -47,6 +49,7 @@ export default function Dashboard() {
   const { data: kiwifyFinancials } = useKiwifyFinancials();
   const { totalPipelineValue, weightedValue } = usePipelineValue();
   const { data: deals } = useDeals();
+  const { data: conversionData } = useDealsConversionAnalysis();
 
   // Helper function
   const formatCurrency = (value: number) => {
@@ -165,10 +168,11 @@ export default function Dashboard() {
           </BentoCard>
           <BentoCard>
             <KPICard 
-              title="Conversão" 
-              value={`${conversionStats?.conversionRate?.toFixed(1) || 0}%`}
+              title="Criados → Ganhos" 
+              value={`${conversionData?.createdToWonRate?.toFixed(1) || 0}%`}
               trend="+3%"
               icon={Target}
+              description={`${conversionData?.totalWon || 0} de ${conversionData?.totalCreated || 0}`}
             />
           </BentoCard>
           <BentoCard>
@@ -182,11 +186,10 @@ export default function Dashboard() {
           </BentoCard>
           <BentoCard>
             <KPICard 
-              title="Deals Ativos" 
-              value={openDeals}
-              trend="-2"
-              trendUp={false}
-              icon={Briefcase}
+              title="Ciclo Médio" 
+              value={`${conversionData?.avgTimeToWinDays || 0} dias`}
+              icon={Clock}
+              description="tempo p/ ganhar"
             />
           </BentoCard>
           
@@ -221,14 +224,19 @@ export default function Dashboard() {
             <HotDealsWidget />
           </BentoCard>
           
-          {/* ROW 5: Análises + Ações */}
+          {/* ROW 5: Funil de Conversão */}
+          <BentoCard span="2">
+            <ConversionFunnelCard />
+          </BentoCard>
           <BentoCard span="2">
             <RottenDealsWidget />
           </BentoCard>
-          <BentoCard>
+          
+          {/* ROW 6: Análises + Ações */}
+          <BentoCard span="2">
             <LostReasonsWidget />
           </BentoCard>
-          <BentoCard>
+          <BentoCard span="2">
             <RecentActionsWidget />
           </BentoCard>
           
