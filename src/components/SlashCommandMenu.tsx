@@ -48,9 +48,8 @@ export function SlashCommandMenu({ children, value, onChange, onKeyDown, inputRe
     // Não sobrescrever se está no modo shortcut
     if (isShortcutMode && open) return;
 
-    const lastSlashIndex = value.lastIndexOf("/");
     const lastBackslashIndex = value.lastIndexOf("\\");
-    const triggerIndex = Math.max(lastSlashIndex, lastBackslashIndex);
+    const triggerIndex = lastBackslashIndex;
     
     if (triggerIndex !== -1) {
       const textAfterTrigger = value.substring(triggerIndex + 1);
@@ -132,7 +131,7 @@ export function SlashCommandMenu({ children, value, onChange, onKeyDown, inputRe
               <CommandEmpty>
                 <div className="p-4 text-center text-muted-foreground">
                   <p className="text-sm">Nenhuma macro encontrada</p>
-                  <p className="text-xs mt-1">Digite "/" ou "\" seguido de um atalho</p>
+                  <p className="text-xs mt-1">Digite "\" seguido de um atalho</p>
                   <p className="text-xs text-muted-foreground/60 mt-1">
                     <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px]">Ctrl</kbd>
                     {" + "}

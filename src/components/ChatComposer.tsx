@@ -32,7 +32,7 @@ export function ChatComposer({
   onSendMessage,
   isSending,
   isDisabled,
-  placeholder = "Digite sua mensagem... (/ ou Ctrl+M para macros)",
+  placeholder = "Digite sua mensagem... (\\ ou Ctrl+M para macros)",
   selectedChannel = "web_chat",
   onChannelChange,
   availableChannels = [],
