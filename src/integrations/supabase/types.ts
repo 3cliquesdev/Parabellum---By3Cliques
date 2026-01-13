@@ -7329,6 +7329,10 @@ export type Database = {
         Args: { p_end: string; p_start: string }
         Returns: number
       }
+      get_consultant_contact_ids: {
+        Args: { consultant_user_id: string }
+        Returns: string[]
+      }
       get_conversation_heatmap: {
         Args: { p_end: string; p_start: string }
         Returns: {
