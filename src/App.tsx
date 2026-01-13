@@ -10,6 +10,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RealtimeNotifications from "./components/RealtimeNotifications";
 import { WhatsAppDisconnectMonitor } from "./components/WhatsAppDisconnectMonitor";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner";
 
 import { PageLoadingSkeleton } from "./components/PageLoadingSkeleton";
 
@@ -124,6 +125,7 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <>
+            <UpdateAvailableBanner />
             <Toaster />
             <Sonner />
             <BrowserRouter>

@@ -250,3 +250,31 @@ export async function forceUpdate(): Promise<void> {
   await clearAllCaches();
   forceReload();
 }
+
+/**
+ * Verifica se há atualização disponível (sem fazer reload)
+ * Retorna true se há uma versão mais nova no servidor
+ */
+export async function checkForUpdate(): Promise<boolean> {
+  try {
+    const currentBuildId = getCurrentBuildId();
+    const latestBuildId = await fetchLatestBuildId();
+    
+    if (!latestBuildId) {
+      return false;
+    }
+    
+    const hasUpdate = latestBuildId !== currentBuildId;
+    
+    if (hasUpdate) {
+      console.log('[BuildCheck] 🆕 Nova versão disponível!');
+      console.log('[BuildCheck] Atual:', currentBuildId);
+      console.log('[BuildCheck] Nova:', latestBuildId);
+    }
+    
+    return hasUpdate;
+  } catch (e) {
+    console.warn('[BuildCheck] ⚠️ Erro ao verificar atualização:', e);
+    return false;
+  }
+}
