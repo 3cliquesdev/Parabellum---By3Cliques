@@ -2,46 +2,36 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, TrendingUp, Target, DollarSign, Briefcase, Clock } from "lucide-react";
+import { Loader2, TrendingUp, LayoutGrid, Headphones, DollarSign, Settings } from "lucide-react";
 import { OnboardingWidget } from "@/components/widgets/OnboardingWidget";
-import { useConversionMetrics } from "@/hooks/useConversionMetrics";
-import { useKiwifyFinancials } from "@/hooks/useKiwifyFinancials";
 import { usePipelineValue } from "@/hooks/usePipelineValue";
-import { useDeals } from "@/hooks/useDeals";
-import { useDealsConversionAnalysis } from "@/hooks/useDealsConversionAnalysis";
-import { ConversionFunnelCard } from "@/components/widgets/ConversionFunnelCard";
 import { PageContainer, PageHeader, PageContent } from "@/components/ui/page-container";
 import { BentoGrid, BentoCard } from "@/components/ui/bento-grid";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
 import { startOfMonth, endOfMonth } from "date-fns";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // KPI Card Component
 import { KPICard } from "@/components/widgets/KPICard";
-
-// Widgets BI - Gráficos
-import { SalesByRepWidget } from "@/components/widgets/SalesByRepWidget";
-import { RevenueEvolutionWidget } from "@/components/widgets/RevenueEvolutionWidget";
-import { SalesFunnelWidget } from "@/components/widgets/SalesFunnelWidget";
-import { HotDealsWidget } from "@/components/widgets/HotDealsWidget";
-
-// Widgets Legacy
-import { FinancialStatusWidget } from "@/components/widgets/FinancialStatusWidget";
-import { LTVWidget } from "@/components/widgets/LTVWidget";
-import { ConversionRateWidget } from "@/components/widgets/ConversionRateWidget";
-import { RecentActionsWidget } from "@/components/widgets/RecentActionsWidget";
-import RottenDealsWidget from "@/components/widgets/RottenDealsWidget";
-import LostReasonsWidget from "@/components/widgets/LostReasonsWidget";
-import { StageConversionChart } from "@/components/widgets/StageConversionChart";
-import { SLAAlertWidget } from "@/components/widgets/SLAAlertWidget";
-import { WhatsAppStatusWidget } from "@/components/admin/WhatsAppStatusWidget";
-import { TeamOnlineWidget } from "@/components/widgets/TeamOnlineWidget";
 
 // Widgets Sales Rep
 import { MySalesWidget } from "@/components/widgets/MySalesWidget";
 import { MyActivitiesWidget } from "@/components/widgets/MyActivitiesWidget";
 import { MyLeadsWidget } from "@/components/widgets/MyLeadsWidget";
 import { MyPerformanceWidget } from "@/components/widgets/MyPerformanceWidget";
+import { HotDealsWidget } from "@/components/widgets/HotDealsWidget";
+import { SalesFunnelWidget } from "@/components/widgets/SalesFunnelWidget";
+import RottenDealsWidget from "@/components/widgets/RottenDealsWidget";
+
+// Dashboard Tabs
+import {
+  OverviewDashboardTab,
+  SalesDashboardTab,
+  SupportDashboardTab,
+  FinancialDashboardTab,
+  OperationalDashboardTab,
+} from "@/components/dashboard";
 
 export default function Dashboard() {
   const [searchParams] = useSearchParams();
@@ -55,12 +45,7 @@ export default function Dashboard() {
     to: endOfMonth(new Date()),
   }));
   
-  // ✅ Todos os hooks no topo - antes de qualquer return condicional
-  const { data: conversionStats } = useConversionMetrics();
-  const { data: kiwifyFinancials } = useKiwifyFinancials();
-  const { totalPipelineValue, weightedValue } = usePipelineValue();
-  const { data: deals } = useDeals();
-  const { data: conversionData } = useDealsConversionAnalysis(dateRange);
+  const { weightedValue } = usePipelineValue();
 
   // Helper function
   const formatCurrency = (value: number) => {
@@ -69,8 +54,6 @@ export default function Dashboard() {
       currency: "BRL",
     }).format(value);
   };
-
-  const openDeals = deals?.filter(d => d.status === 'open').length || 0;
 
   if (loading) {
     return (
@@ -83,7 +66,6 @@ export default function Dashboard() {
   }
 
   // VENDEDOR: Dashboard Pessoal - Bento Grid
-  // Garantir que user.id existe antes de renderizar widgets
   if (role && (role as string) === "sales_rep" && user?.id) {
     return (
       <PageContainer>
@@ -135,134 +117,65 @@ export default function Dashboard() {
     );
   }
 
-  // Visualização Financeira - widgets financeiros
-  if (view === "financial") {
-    return (
-      <PageContainer>
-        <PageHeader title="Dashboard Financeiro" description="Análise de receitas e vendas" />
-        <PageContent>
-          <div className="space-y-6">
-            <FinancialStatusWidget />
-            
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <div className="min-h-[400px]">
-                <LTVWidget />
-              </div>
-              <div className="min-h-[400px]">
-                <ConversionRateWidget />
-              </div>
-            </div>
-          </div>
-        </PageContent>
-      </PageContainer>
-    );
-  }
-
-  // ADMIN/MANAGER: Dashboard Geral com Business Intelligence - Bento Grid
+  // ADMIN/MANAGER: Dashboard com Tabs por Área
   return (
     <PageContainer>
       <PageHeader 
-        title="Dashboard de Vendas" 
-        description="Inteligência de negócios em tempo real"
+        title="Dashboard" 
+        description="Visão geral do sistema"
       >
         <DateRangePicker value={dateRange} onChange={setDateRange} />
       </PageHeader>
       <PageContent>
-        <BentoGrid cols={4}>
-          {/* ROW 1: 4 KPI Cards */}
-          <BentoCard>
-            <KPICard 
-              title="Pipeline" 
-              value={formatCurrency(totalPipelineValue)} 
-              trend="+12%" 
-              icon={TrendingUp}
-              description="ponderado"
-            />
-          </BentoCard>
-          <BentoCard>
-            <KPICard 
-              title="Criados → Ganhos" 
-              value={`${conversionData?.createdToWonRate?.toFixed(1) || 0}%`}
-              trend="+3%"
-              icon={Target}
-              description={`${conversionData?.totalWon || 0} de ${conversionData?.totalCreated || 0}`}
-            />
-          </BentoCard>
-          <BentoCard>
-            <KPICard 
-              title="Receita Líquida" 
-              value={formatCurrency(kiwifyFinancials?.totalNetRevenue || 0)}
-              trend="+8%"
-              icon={DollarSign}
-              description="depositado pela Kiwify"
-            />
-          </BentoCard>
-          <BentoCard>
-            <KPICard 
-              title="Ciclo Médio" 
-              value={`${conversionData?.avgTimeToWinDays || 0} dias`}
-              icon={Clock}
-              description="tempo p/ ganhar"
-            />
-          </BentoCard>
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="mb-6 bg-muted/50 p-1">
+            <TabsTrigger value="overview" className="gap-2">
+              <LayoutGrid className="h-4 w-4" />
+              Visão Geral
+            </TabsTrigger>
+            <TabsTrigger value="sales" className="gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Vendas
+            </TabsTrigger>
+            <TabsTrigger value="support" className="gap-2">
+              <Headphones className="h-4 w-4" />
+              Suporte
+            </TabsTrigger>
+            <TabsTrigger value="financial" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              Financeiro
+            </TabsTrigger>
+            <TabsTrigger value="operations" className="gap-2">
+              <Settings className="h-4 w-4" />
+              Operacional
+            </TabsTrigger>
+          </TabsList>
           
-          {/* ROW 2: SLA Alert + WhatsApp Status */}
-          {(role === "admin" || role === "manager" || role === "support_manager") && (
-            <>
-              <BentoCard span="2">
-                <SLAAlertWidget />
-              </BentoCard>
-              <BentoCard span="2">
-                <WhatsAppStatusWidget />
-              </BentoCard>
-              <BentoCard span="2">
-                <TeamOnlineWidget />
-              </BentoCard>
-            </>
-          )}
+          <TabsContent value="overview">
+            <OverviewDashboardTab dateRange={dateRange} />
+          </TabsContent>
           
-          {/* ROW 3: Charts */}
-          <BentoCard span="2">
-            <SalesByRepWidget />
-          </BentoCard>
-          <BentoCard span="2">
-            <RevenueEvolutionWidget />
-          </BentoCard>
+          <TabsContent value="sales">
+            <SalesDashboardTab dateRange={dateRange} />
+          </TabsContent>
           
-          {/* ROW 4: Funil + Hot Deals */}
-          <BentoCard span="2">
-            <SalesFunnelWidget />
-          </BentoCard>
-          <BentoCard span="2">
-            <HotDealsWidget />
-          </BentoCard>
+          <TabsContent value="support">
+            <SupportDashboardTab dateRange={dateRange} />
+          </TabsContent>
           
-          {/* ROW 5: Funil de Conversão */}
-          <BentoCard span="2">
-            <ConversionFunnelCard dateRange={dateRange} />
-          </BentoCard>
-          <BentoCard span="2">
-            <StageConversionChart />
-          </BentoCard>
+          <TabsContent value="financial">
+            <FinancialDashboardTab />
+          </TabsContent>
           
-          {/* ROW 6: Análises */}
-          <BentoCard span="2">
-            <RottenDealsWidget />
-          </BentoCard>
-          
-          {/* ROW 6: Análises + Ações */}
-          <BentoCard span="2">
-            <LostReasonsWidget />
-          </BentoCard>
-          <BentoCard span="2">
-            <RecentActionsWidget />
-          </BentoCard>
-          
-          {/* ROW 6: Onboarding Progress (apenas se não completou) */}
-          <BentoCard span="full">
-            <OnboardingWidget />
-          </BentoCard>
-        </BentoGrid>
+          <TabsContent value="operations">
+            <OperationalDashboardTab dateRange={dateRange} />
+          </TabsContent>
+        </Tabs>
+        
+        {/* Onboarding Widget - aparece em todas as tabs se não completou */}
+        <div className="mt-6">
+          <OnboardingWidget />
+        </div>
       </PageContent>
     </PageContainer>
   );
