@@ -119,7 +119,7 @@ export default function Auth() {
         <div className="relative z-10 flex flex-col justify-center flex-1">
           {/* Logo */}
           <div className="mb-12">
-            <img src={logoLight} alt="PARABELLUM" className="h-32 w-auto mb-8 object-contain" />
+            <img src={logoLight} alt="PARABELLUM" width={235} height={128} className="h-32 w-auto mb-8 object-contain" loading="eager" fetchPriority="high" />
             <div className="h-1 w-24 bg-primary/60 rounded-full" />
           </div>
 
@@ -148,7 +148,7 @@ export default function Auth() {
         <div className="w-full max-w-md space-y-8">
           {/* Mobile Logo */}
           <div className="lg:hidden mb-8 text-center">
-            <img src={logoLight} alt="PARABELLUM" className="h-24 w-auto mx-auto mb-4" />
+            <img src={logoLight} alt="PARABELLUM" width={176} height={96} className="h-24 w-auto mx-auto mb-4" loading="eager" fetchPriority="high" />
           </div>
 
           {/* Header */}
