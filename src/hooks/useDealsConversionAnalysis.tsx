@@ -16,9 +16,11 @@ export interface DealsConversionAnalysis {
   maxTimeToWinDays: number;
 }
 
-export function useDealsConversionAnalysis(dateRange?: DateRange) {
+export type DealSource = "all" | "organic" | "form" | "whatsapp";
+
+export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSource = "all") {
   return useQuery({
-    queryKey: ["deals-conversion-analysis", dateRange?.from, dateRange?.to],
+    queryKey: ["deals-conversion-analysis", dateRange?.from, dateRange?.to, source],
     queryFn: async (): Promise<DealsConversionAnalysis> => {
       console.log("📊 useDealsConversionAnalysis: Fetching data...");
 
@@ -26,25 +28,34 @@ export function useDealsConversionAnalysis(dateRange?: DateRange) {
       const fromDate = dateRange?.from?.toISOString();
       const toDate = dateRange?.to?.toISOString();
 
+      // Helper to apply source filter
+      const applySourceFilter = (query: any) => {
+        if (source === "organic") {
+          return query.eq("is_organic_sale", true);
+        } else if (source === "form") {
+          return query.eq("lead_source", "formulario");
+        } else if (source === "whatsapp") {
+          return query.eq("lead_source", "whatsapp");
+        }
+        return query;
+      };
+
       // Use count: exact to get real counts without 1000 limit
-      let createdQuery = supabase
-        .from("deals")
-        .select("*", { count: "exact", head: true });
+      let createdQuery = applySourceFilter(
+        supabase.from("deals").select("*", { count: "exact", head: true })
+      );
       
-      let wonQuery = supabase
-        .from("deals")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "won");
+      let wonQuery = applySourceFilter(
+        supabase.from("deals").select("*", { count: "exact", head: true }).eq("status", "won")
+      );
       
-      let lostQuery = supabase
-        .from("deals")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "lost");
+      let lostQuery = applySourceFilter(
+        supabase.from("deals").select("*", { count: "exact", head: true }).eq("status", "lost")
+      );
       
-      let openQuery = supabase
-        .from("deals")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "open");
+      let openQuery = applySourceFilter(
+        supabase.from("deals").select("*", { count: "exact", head: true }).eq("status", "open")
+      );
 
       // Apply date filters to all queries
       if (fromDate) {
@@ -83,11 +94,13 @@ export function useDealsConversionAnalysis(dateRange?: DateRange) {
       const createdToLostRate = totalCreated > 0 ? (totalLost / totalCreated) * 100 : 0;
 
       // Fetch won deals with dates for time calculation (separate query)
-      let wonDealsQuery = supabase
-        .from("deals")
-        .select("created_at, closed_at")
-        .eq("status", "won")
-        .not("closed_at", "is", null);
+      let wonDealsQuery = applySourceFilter(
+        supabase
+          .from("deals")
+          .select("created_at, closed_at")
+          .eq("status", "won")
+          .not("closed_at", "is", null)
+      );
 
       if (fromDate) {
         wonDealsQuery = wonDealsQuery.gte("created_at", fromDate);

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,6 +12,9 @@ import { useDealsConversionAnalysis } from "@/hooks/useDealsConversionAnalysis";
 import { ConversionFunnelCard } from "@/components/widgets/ConversionFunnelCard";
 import { PageContainer, PageHeader, PageContent } from "@/components/ui/page-container";
 import { BentoGrid, BentoCard } from "@/components/ui/bento-grid";
+import { DateRangePicker } from "@/components/DateRangePicker";
+import { DateRange } from "react-day-picker";
+import { startOfMonth, endOfMonth } from "date-fns";
 
 // KPI Card Component
 import { KPICard } from "@/components/widgets/KPICard";
@@ -45,12 +49,18 @@ export default function Dashboard() {
   const { role, loading } = useUserRole();
   const { user } = useAuth();
   
+  // Date range state for filtering
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => ({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  }));
+  
   // ✅ Todos os hooks no topo - antes de qualquer return condicional
   const { data: conversionStats } = useConversionMetrics();
   const { data: kiwifyFinancials } = useKiwifyFinancials();
   const { totalPipelineValue, weightedValue } = usePipelineValue();
   const { data: deals } = useDeals();
-  const { data: conversionData } = useDealsConversionAnalysis();
+  const { data: conversionData } = useDealsConversionAnalysis(dateRange);
 
   // Helper function
   const formatCurrency = (value: number) => {
@@ -153,8 +163,10 @@ export default function Dashboard() {
     <PageContainer>
       <PageHeader 
         title="Dashboard de Vendas" 
-        description="Inteligência de negócios em tempo real" 
-      />
+        description="Inteligência de negócios em tempo real"
+      >
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
+      </PageHeader>
       <PageContent>
         <BentoGrid cols={4}>
           {/* ROW 1: 4 KPI Cards */}
@@ -227,7 +239,7 @@ export default function Dashboard() {
           
           {/* ROW 5: Funil de Conversão */}
           <BentoCard span="2">
-            <ConversionFunnelCard />
+            <ConversionFunnelCard dateRange={dateRange} />
           </BentoCard>
           <BentoCard span="2">
             <StageConversionChart />
