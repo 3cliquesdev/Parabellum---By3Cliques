@@ -164,7 +164,7 @@ export default function Dashboard() {
           </TabsContent>
           
           <TabsContent value="financial">
-            <FinancialDashboardTab />
+            <FinancialDashboardTab dateRange={dateRange} />
           </TabsContent>
           
           <TabsContent value="operations">

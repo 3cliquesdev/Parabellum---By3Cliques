@@ -8,9 +8,14 @@ import { ConversionRateWidget } from "@/components/widgets/ConversionRateWidget"
 import { FinancialKPIsWidget } from "@/components/widgets/FinancialKPIsWidget";
 import { TopAffiliatesWidget } from "@/components/widgets/TopAffiliatesWidget";
 import { RevenueBreakdownWidget } from "@/components/widgets/RevenueBreakdownWidget";
+import { DateRange } from "react-day-picker";
 
-export function FinancialDashboardTab() {
-  const { data: kiwifyFinancials } = useKiwifyFinancials();
+interface FinancialDashboardTabProps {
+  dateRange?: DateRange;
+}
+
+export function FinancialDashboardTab({ dateRange }: FinancialDashboardTabProps) {
+  const { data: kiwifyFinancials } = useKiwifyFinancials(dateRange?.from, dateRange?.to);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -70,15 +75,15 @@ export function FinancialDashboardTab() {
       
       {/* ROW 4: KPIs + Affiliates */}
       <BentoCard span="2">
-        <FinancialKPIsWidget />
+        <FinancialKPIsWidget startDate={dateRange?.from} endDate={dateRange?.to} />
       </BentoCard>
       <BentoCard span="2">
-        <TopAffiliatesWidget />
+        <TopAffiliatesWidget startDate={dateRange?.from} endDate={dateRange?.to} />
       </BentoCard>
       
       {/* ROW 5: Revenue Breakdown */}
       <BentoCard span="full">
-        <RevenueBreakdownWidget />
+        <RevenueBreakdownWidget startDate={dateRange?.from} endDate={dateRange?.to} />
       </BentoCard>
     </BentoGrid>
   );
