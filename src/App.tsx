@@ -9,8 +9,6 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RealtimeNotifications from "./components/RealtimeNotifications";
 import { WhatsAppDisconnectMonitor } from "./components/WhatsAppDisconnectMonitor";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
-import { useVersionCheck } from "./hooks/useVersionCheck";
-import { VersionUpdateModal } from "./components/VersionUpdateModal";
 
 import { PageLoadingSkeleton } from "./components/PageLoadingSkeleton";
 
@@ -118,23 +116,13 @@ const queryClient = new QueryClient({
   },
 });
 
-// Componente wrapper para usar o hook de versão
-const VersionCheckWrapper = ({ children }: { children: React.ReactNode }) => {
-  const { showUpdateModal, handleUpdate } = useVersionCheck();
-  return (
-    <>
-      <VersionUpdateModal isOpen={showUpdateModal} onUpdate={handleUpdate} />
-      {children}
-    </>
-  );
-};
 
 const App = () => {
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <VersionCheckWrapper>
+          <>
             <Toaster />
             <Sonner />
             <BrowserRouter>
@@ -252,7 +240,7 @@ const App = () => {
               </Routes>
             </Suspense>
           </BrowserRouter>
-          </VersionCheckWrapper>
+          </>
         </TooltipProvider>
       </QueryClientProvider>
     </AppErrorBoundary>
