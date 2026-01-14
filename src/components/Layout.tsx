@@ -1,7 +1,12 @@
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-
+import { useProfilesRealtime } from "@/hooks/useProfilesRealtime";
+import { useTicketsRealtime } from "@/hooks/useTicketsRealtime";
 export default function Layout({ children }: { children: React.ReactNode }) {
+  // Realtime global para toda a aplicação
+  useProfilesRealtime();
+  useTicketsRealtime();
+
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full overflow-hidden">
