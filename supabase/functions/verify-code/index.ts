@@ -56,10 +56,57 @@ serve(async (req) => {
 
     // Se não encontrou nenhum código válido, verificar por que
     if (!verifications || verifications.length === 0) {
-      // Verificar se existe algum código para este email
-      const { data: anyCode } = await supabase
+      // PRIMEIRO: Verificar se o código DIGITADO pelo usuário existe (mesmo que expirado/usado)
+      const { data: typedCode } = await supabase
         .from('email_verifications')
         .select('code, verified, expires_at, attempts')
+        .eq('email', email)
+        .eq('code', code)  // Buscar o código específico que o usuário digitou
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      // Se o código digitado existe no banco
+      if (typedCode && typedCode.length > 0) {
+        const codeInfo = typedCode[0];
+        
+        // Verificar se já foi usado
+        if (codeInfo.verified) {
+          return new Response(JSON.stringify({ 
+            success: false,
+            error: 'Este código já foi utilizado. Verifique seu email para o código mais recente.' 
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Verificar se expirou
+        if (new Date(codeInfo.expires_at) < new Date()) {
+          return new Response(JSON.stringify({ 
+            success: false,
+            error: 'Este código expirou. Verifique seu email para o código mais recente que enviamos.' 
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Verificar se excedeu tentativas
+        if (codeInfo.attempts >= 3) {
+          return new Response(JSON.stringify({ 
+            success: false,
+            error: 'Máximo de tentativas excedido. Solicite um novo código.' 
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
+      // Verificar se existe algum código para este email (para dar feedback útil)
+      const { data: anyCode } = await supabase
+        .from('email_verifications')
+        .select('code')
         .eq('email', email)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -67,50 +114,17 @@ serve(async (req) => {
       if (!anyCode || anyCode.length === 0) {
         return new Response(JSON.stringify({ 
           success: false,
-          error: 'Nenhum código encontrado para este e-mail' 
+          error: 'Nenhum código encontrado para este e-mail. Solicite um novo código.' 
         }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const lastCode = anyCode[0];
-      
-      // Dar feedback específico do problema
-      if (lastCode.verified) {
-        return new Response(JSON.stringify({ 
-          success: false,
-          error: 'Este código já foi utilizado. Solicite um novo código.' 
-        }), {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      if (new Date(lastCode.expires_at) < new Date()) {
-        return new Response(JSON.stringify({ 
-          success: false,
-          error: 'Código expirado. Solicite um novo.' 
-        }), {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      if (lastCode.attempts >= 3) {
-        return new Response(JSON.stringify({ 
-          success: false,
-          error: 'Máximo de tentativas excedido. Solicite um novo código.' 
-        }), {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Se chegou aqui, o código está errado
+      // Se chegou aqui, o código digitado nunca existiu ou está incorreto
       return new Response(JSON.stringify({ 
         success: false,
-        error: 'Código incorreto. Verifique e tente novamente.' 
+        error: 'Código inválido. Verifique se digitou corretamente.' 
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
