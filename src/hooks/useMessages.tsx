@@ -48,26 +48,26 @@ export function useMessages(conversationId: string | null) {
     enabled: !!conversationId,
   });
 
-  // Realtime subscription
+  // Realtime subscription - usando padrão do useProfilesRealtime
   useEffect(() => {
     if (!conversationId) return;
 
     const channel = supabase
-      .channel("schema-db-changes")
+      .channel(`messages-realtime-${conversationId}`)
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*", // Todos eventos: INSERT, UPDATE, DELETE
           schema: "public",
           table: "messages",
           filter: `conversation_id=eq.${conversationId}`,
         },
         async (payload) => {
-          console.log("New message received:", payload);
+          console.log("[Realtime] Message changed:", payload.eventType, payload.new);
           const newMessage = payload.new as Message;
           
-          // 🚨 FASE 2: INTERCEPTADOR DE FALLBACK NO FRONTEND
-          if (newMessage.is_ai_generated) {
+          // 🚨 FASE 2: INTERCEPTADOR DE FALLBACK NO FRONTEND (apenas para INSERT)
+          if (payload.eventType === 'INSERT' && newMessage.is_ai_generated) {
             const content = newMessage.content?.toLowerCase() || '';
             const fallbackPhrases = [
               'vou chamar um especialista',
@@ -84,17 +84,12 @@ export function useMessages(conversationId: string | null) {
               console.log('🚨 [Frontend] Fallback detectado na mensagem da IA - Forçando handoff');
               
               try {
-                // 1. Forçar route-conversation
                 const { error: routeError } = await supabase.functions.invoke('route-conversation', {
                   body: { conversationId }
                 });
                 
                 if (!routeError) {
                   console.log('✅ [Frontend] Handoff forçado via interceptador');
-                  
-                  // 2. Invalidar queries para atualizar UI
-                  queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
-                  queryClient.invalidateQueries({ queryKey: ["conversations"] });
                 } else {
                   console.error('❌ [Frontend] Erro ao forçar handoff:', routeError);
                 }
@@ -104,19 +99,15 @@ export function useMessages(conversationId: string | null) {
             }
           }
           
-          queryClient.setQueryData(
-            ["messages", conversationId],
-            (old: Message[] | undefined) => {
-              if (!old) return [newMessage];
-              return [...old, newMessage];
-            }
-          );
-
-          // Update conversation's last_message_at
+          // Invalidar queries para forçar refetch com dados completos (joins)
+          queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[Realtime] Messages channel status for ${conversationId}:`, status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
