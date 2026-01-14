@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Settings, FlaskConical, LayoutTemplate, AlertTriangle, Eye, Send } from "lucide-react";
+import { ArrowLeft, Settings, FlaskConical, LayoutTemplate, AlertTriangle } from "lucide-react";
 import {
   EmailTemplateBuilderV2,
   ABTestingPanel,
@@ -132,17 +132,16 @@ export default function EmailBuilderV2Page() {
           </div>
           
           <div className="flex items-center gap-2">
+            <PreviewPanel
+              blocks={displayBlocks}
+              subject={template.default_subject}
+              preheader={template.default_preheader}
+            />
             <SendTestEmailDialog
               templateId={id || ""}
               blocks={displayBlocks}
               subject={template.default_subject}
               preheader={template.default_preheader}
-              trigger={
-                <Button variant="outline" size="sm">
-                  <Send className="h-4 w-4 mr-2" />
-                  Enviar Teste
-                </Button>
-              }
             />
             <Button
               variant="outline"
@@ -187,13 +186,6 @@ export default function EmailBuilderV2Page() {
             >
               <Settings className="h-4 w-4 mr-2" />
               Config
-            </TabsTrigger>
-            <TabsTrigger
-              value="preview"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              Preview
             </TabsTrigger>
             <TabsTrigger
               value="ab-testing"
@@ -259,13 +251,6 @@ export default function EmailBuilderV2Page() {
               </div>
             </TabsContent>
 
-            <TabsContent value="preview" className="m-0 h-full">
-              <PreviewPanel
-                blocks={displayBlocks}
-                subject={template.default_subject}
-                preheader={template.default_preheader}
-              />
-            </TabsContent>
 
             <TabsContent value="ab-testing" className="p-4 m-0">
               <ABTestingPanel
