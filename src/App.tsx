@@ -210,6 +210,7 @@ const App = () => {
               <Route path="/settings/audit-logs" element={<ProtectedRoute requiredPermission="audit.view_logs"><Layout><AuditLogs /></Layout></ProtectedRoute>} />
               <Route path="/settings/skills" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SkillsSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/whatsapp" element={<ProtectedRoute requiredPermission="settings.whatsapp"><Layout><WhatsAppSettings /></Layout></ProtectedRoute>} />
+              <Route path="/whatsapp-instances" element={<ProtectedRoute requiredPermission="settings.whatsapp"><Layout><WhatsAppSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/webhooks" element={<ProtectedRoute requiredPermission="settings.webhooks"><Layout><WebhooksSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/macros" element={<ProtectedRoute requiredPermission="inbox.access"><Layout><Macros /></Layout></ProtectedRoute>} />
               <Route path="/settings/teams" element={<ProtectedRoute requiredPermission="settings.teams"><Layout><Teams /></Layout></ProtectedRoute>} />
