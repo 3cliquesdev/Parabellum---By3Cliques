@@ -89,9 +89,12 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
     );
   }
 
-  // Status filter
+  // Status filter - por padrão, oculta conversas fechadas (arquivadas)
   if (filters.status.length > 0) {
     result = result.filter(item => filters.status.includes(item.status));
+  } else {
+    // Padrão: mostrar apenas conversas NÃO fechadas (open, pending, etc.)
+    result = result.filter(item => item.status !== 'closed');
   }
 
   // Assigned to filter
