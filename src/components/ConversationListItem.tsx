@@ -4,6 +4,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ChannelIcon } from "@/components/ChannelIcon";
 import { SentimentBadge } from "@/components/SentimentBadge";
+import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow, differenceInMinutes, differenceInHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -241,6 +242,24 @@ function ConversationListItemComponent({
 
         {/* Linha 3: Badges */}
         <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Tag de Cliente Verificado Kiwify */}
+          {conversation.contacts?.kiwify_validated ? (
+            <Badge 
+              variant="outline" 
+              className="bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-600 text-[10px] px-1.5 py-0 h-5 gap-0.5"
+            >
+              <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
+              Cliente
+            </Badge>
+          ) : (
+            <Badge 
+              variant="outline" 
+              className="bg-muted/50 text-muted-foreground border-muted text-[10px] px-1.5 py-0 h-5"
+            >
+              Não Cliente
+            </Badge>
+          )}
+
           {conversation.department_data && (
             <Badge 
               variant="outline" 
