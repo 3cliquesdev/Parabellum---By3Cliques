@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Bot, Sparkles, BotOff } from "lucide-react";
 import { useCreateWhatsAppInstance, useUpdateWhatsAppInstance } from "@/hooks/useWhatsAppInstances";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUsers } from "@/hooks/useUsers";
@@ -49,6 +50,7 @@ const formSchema = z.object({
   department_id: z.string().optional(),
   user_id: z.string().optional(),
   inbox_enabled: z.boolean().default(true),
+  ai_mode: z.enum(['autopilot', 'copilot', 'disabled']).default('autopilot'),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -94,6 +96,7 @@ export function WhatsAppInstanceDialog({
       department_id: "__none__",
       user_id: "__none__",
       inbox_enabled: true,
+      ai_mode: "autopilot",
     },
   });
 
@@ -109,6 +112,7 @@ export function WhatsAppInstanceDialog({
         department_id: instance.department_id || "__none__",
         user_id: instance.user_id || "__none__",
         inbox_enabled: instance.inbox_enabled !== false,
+        ai_mode: instance.ai_mode || "autopilot",
       });
     } else if (open && !instance) {
       console.log('[WhatsAppInstanceDialog] Reinicializando form para nova instância');
@@ -120,6 +124,7 @@ export function WhatsAppInstanceDialog({
         department_id: "__none__",
         user_id: "__none__",
         inbox_enabled: true,
+        ai_mode: "autopilot",
       });
     }
   }, [open, instance, form]);
@@ -132,6 +137,7 @@ export function WhatsAppInstanceDialog({
         department_id: data.department_id === "__none__" ? null : data.department_id,
         user_id: data.user_id === "__none__" ? null : data.user_id,
         inbox_enabled: data.inbox_enabled,
+        ai_mode: data.ai_mode,
       };
       
       if (instance) {
@@ -323,6 +329,47 @@ export function WhatsAppInstanceDialog({
                   </Select>
                   <FormDescription>
                     Mensagens recebidas serão atribuídas diretamente a este usuário. Deixe vazio para roteamento geral.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="ai_mode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Modo da IA</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o modo" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="autopilot">
+                        <div className="flex items-center gap-2">
+                          <Bot className="h-4 w-4 text-green-500" />
+                          <span>Autopilot (IA responde automaticamente)</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="copilot">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-blue-500" />
+                          <span>Copilot (IA sugere respostas)</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="disabled">
+                        <div className="flex items-center gap-2">
+                          <BotOff className="h-4 w-4 text-muted-foreground" />
+                          <span>Desligado (somente humanos)</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Define como a IA irá atuar nas conversas desta instância
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

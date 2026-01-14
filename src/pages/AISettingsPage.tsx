@@ -1,12 +1,15 @@
-import { ArrowLeft, Brain, Sparkles, BookOpen } from "lucide-react";
+import { ArrowLeft, Brain, Sparkles, BookOpen, Power } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import AIModelConfigCard from "@/components/settings/AIModelConfigCard";
 import { AITrainerStatsWidget } from "@/components/settings/AITrainerStatsWidget";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { useAIGlobalConfig } from "@/hooks/useAIGlobalConfig";
 
 export default function AISettingsPage() {
   const navigate = useNavigate();
+  const { isAIEnabled, isLoading, toggleAI, isToggling } = useAIGlobalConfig();
 
   return (
     <div className="min-h-screen bg-background">
@@ -34,6 +37,38 @@ export default function AISettingsPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6 space-y-6">
+        {/* AI Global Toggle - NEW */}
+        <Card className={isAIEnabled ? "border-green-500/30 bg-green-500/5" : "border-destructive/30 bg-destructive/5"}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Power className={`h-5 w-5 ${isAIEnabled ? 'text-green-500' : 'text-destructive'}`} />
+              Status Global da IA
+            </CardTitle>
+            <CardDescription>
+              Controle mestre para ativar ou desativar a IA em todo o sistema
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">
+                  IA {isAIEnabled ? 'Ativada' : 'Desativada'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {isAIEnabled 
+                    ? 'A IA está respondendo conversas conforme configuração de cada instância' 
+                    : 'Nenhuma conversa será atendida pela IA enquanto estiver desligada'}
+                </p>
+              </div>
+              <Switch 
+                checked={isAIEnabled} 
+                onCheckedChange={toggleAI}
+                disabled={isLoading || isToggling}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         {/* AI Model Selection */}
         <AIModelConfigCard />
 
