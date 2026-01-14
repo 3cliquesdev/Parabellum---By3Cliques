@@ -1191,6 +1191,8 @@ export type Database = {
           id: string
           kiwify_customer_id: string | null
           kiwify_subscription_id: string | null
+          kiwify_validated: boolean | null
+          kiwify_validated_at: string | null
           last_contact_date: string | null
           last_kiwify_event: string | null
           last_kiwify_event_at: string | null
@@ -1236,6 +1238,8 @@ export type Database = {
           id?: string
           kiwify_customer_id?: string | null
           kiwify_subscription_id?: string | null
+          kiwify_validated?: boolean | null
+          kiwify_validated_at?: string | null
           last_contact_date?: string | null
           last_kiwify_event?: string | null
           last_kiwify_event_at?: string | null
@@ -1281,6 +1285,8 @@ export type Database = {
           id?: string
           kiwify_customer_id?: string | null
           kiwify_subscription_id?: string | null
+          kiwify_validated?: boolean | null
+          kiwify_validated_at?: string | null
           last_contact_date?: string | null
           last_kiwify_event?: string | null
           last_kiwify_event_at?: string | null
