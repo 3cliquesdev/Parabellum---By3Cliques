@@ -17,7 +17,7 @@ import { TicketsBulkActionsBar } from "@/components/support/TicketsBulkActionsBa
 import { BulkMoveToProjectDialog } from "@/components/support/BulkMoveToProjectDialog";
 import { BulkTransferTicketsDialog } from "@/components/support/BulkTransferTicketsDialog";
 import { useBulkArchiveTickets } from "@/hooks/useBulkArchiveTickets";
-import { useTicketsRealtime } from "@/hooks/useTicketsRealtime";
+
 
 type MobileView = 'list' | 'details';
 
@@ -40,8 +40,6 @@ export default function Support() {
   const { getViewersForTicket, setViewingTicket } = useTicketsPresence();
   const bulkArchive = useBulkArchiveTickets();
   
-  // Habilitar realtime para tickets
-  useTicketsRealtime();
 
   const handleBulkArchive = () => {
     bulkArchive.mutate(selectedTicketIds, {

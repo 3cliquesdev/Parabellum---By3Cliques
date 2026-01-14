@@ -85,8 +85,10 @@ export function useUpdateTicket() {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      queryClient.invalidateQueries({ queryKey: ["ticket", data.id] });
+      queryClient.invalidateQueries({ queryKey: ["ticket-counts"] });
       toast({
         title: "Ticket atualizado com sucesso",
       });

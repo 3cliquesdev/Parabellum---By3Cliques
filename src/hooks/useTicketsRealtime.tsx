@@ -7,7 +7,7 @@ export function useTicketsRealtime() {
 
   useEffect(() => {
     const channel = supabase
-      .channel("tickets-realtime")
+      .channel("tickets-global-realtime")
       .on(
         "postgres_changes",
         {
@@ -43,7 +43,9 @@ export function useTicketsRealtime() {
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("[Realtime] Tickets channel status:", status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
