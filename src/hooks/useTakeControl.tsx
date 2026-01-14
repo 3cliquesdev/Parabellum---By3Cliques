@@ -34,6 +34,24 @@ export function useTakeControl() {
 
       if (updateError) throw updateError;
 
+      // 🔧 FIX: Verificar se a atualização foi aplicada (proteção contra race condition)
+      const { data: updatedConv } = await supabase
+        .from('conversations')
+        .select('ai_mode')
+        .eq('id', conversationId)
+        .single();
+
+      if (updatedConv?.ai_mode !== 'copilot') {
+        console.warn('[useTakeControl] ⚠️ ai_mode não foi atualizado! Tentando novamente...');
+        // Retry com força
+        await supabase
+          .from('conversations')
+          .update({ ai_mode: 'copilot', assigned_to: user.id })
+          .eq('id', conversationId);
+      }
+
+      console.log('[useTakeControl] ✅ Conversa atualizada para copilot:', updatedConv?.ai_mode);
+
       // 2. Buscar perfil do usuário para mensagem de sistema
       const { data: profile } = await supabase
         .from('profiles')

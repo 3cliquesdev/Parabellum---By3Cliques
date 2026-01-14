@@ -703,14 +703,32 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   }
 
   // 4. FASE 2: Vincular instância e atribuir conversa (normal flow)
+  // 🔧 FIX: Buscar ai_mode ATUAL da conversa para NÃO sobrescrever se atendente já assumiu
+  const { data: currentConv } = await supabase
+    .from('conversations')
+    .select('ai_mode, assigned_to')
+    .eq('id', conversationId)
+    .single();
+
   const updateData: any = {
     whatsapp_instance_id: instance.id,
-    ai_mode: instance.ai_mode,
   };
 
-  if (instance.user_id) {
+  // 🔧 FIX: Só definir ai_mode se a conversa não tiver (nova) ou se for null
+  // NUNCA sobrescrever copilot, disabled, ou waiting_human - atendente já assumiu!
+  if (!currentConv?.ai_mode || currentConv.ai_mode === null) {
+    updateData.ai_mode = instance.ai_mode;
+    console.log('[handle-whatsapp-event] Setting initial ai_mode:', instance.ai_mode);
+  } else {
+    console.log('[handle-whatsapp-event] ⚠️ Preservando ai_mode existente:', currentConv.ai_mode, '(não sobrescrevendo)');
+  }
+
+  // 🔧 FIX: Só atribuir ao dono da instância se ainda não tiver assigned_to
+  if (instance.user_id && !currentConv?.assigned_to) {
     updateData.assigned_to = instance.user_id;
     console.log('[handle-whatsapp-event] Assigned to owner:', instance.user_id);
+  } else if (currentConv?.assigned_to) {
+    console.log('[handle-whatsapp-event] ⚠️ Preservando assigned_to existente:', currentConv.assigned_to);
   }
 
   await supabase
@@ -793,9 +811,14 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   
   console.log('[handle-whatsapp-event] 🤖 AI Global Status:', isAIGloballyEnabled ? 'ENABLED' : 'DISABLED');
   console.log('[handle-whatsapp-event] 🤖 Instance AI Mode:', instance.ai_mode);
+  
+  // 🔧 FIX: Usar ai_mode da CONVERSA, não da instância!
+  // Isso garante que se atendente assumiu (copilot), IA não responde automaticamente
+  const conversationAIMode = currentConv?.ai_mode || instance.ai_mode;
+  console.log('[handle-whatsapp-event] 🤖 Conversation AI Mode (decisão final):', conversationAIMode);
 
   // 7. Se ai_mode = 'autopilot' E IA global está ativada, disparar AI
-  if (isAIGloballyEnabled && instance.ai_mode === 'autopilot') {
+  if (isAIGloballyEnabled && conversationAIMode === 'autopilot') {
     console.log('[handle-whatsapp-event] Triggering AI autopilot...');
     
     try {
