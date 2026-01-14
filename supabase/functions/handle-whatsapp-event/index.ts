@@ -575,6 +575,93 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     return; // Não processar mais nada após validação OTP
   }
 
+  // 🔄 FLUXO DE REENVIO OTP - Quando bloqueado, permitir "reenviar" após 10 minutos
+  if (metadata.otp_blocked) {
+    const isResetRequest = /reenviar|novo c[óo]digo|tentar novamente/i.test(messageText);
+    const blockedAt = metadata.otp_blocked_at ? new Date(metadata.otp_blocked_at) : null;
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const canResend = blockedAt && blockedAt < tenMinutesAgo;
+    
+    console.log(`[handle-whatsapp-event] 🚫 OTP blocked - Reset request: ${isResetRequest}, Can resend: ${canResend}`);
+    
+    if (isResetRequest && canResend) {
+      // ✅ Permitir nova tentativa
+      console.log('[handle-whatsapp-event] 🔄 Resetting OTP block - allowing new attempt');
+      
+      const claimedEmail = metadata.claimant_email;
+      
+      // Gerar novo código OTP
+      try {
+        const { data: otpResponse, error: otpError } = await supabase.functions.invoke('send-verification-code', {
+          body: { email: claimedEmail, type: 'customer' },
+        });
+        
+        if (!otpError && otpResponse?.success) {
+          const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+          
+          // Atualizar metadata - resetar bloqueio
+          await supabase
+            .from('conversations')
+            .update({
+              customer_metadata: {
+                ...metadata,
+                awaiting_otp: true,
+                otp_blocked: false,
+                otp_blocked_at: null,
+                otp_attempts: 0,
+                otp_expires_at: expiresAt.toISOString(),
+              },
+              ai_mode: 'autopilot', // Voltar para autopilot
+            })
+            .eq('id', conversationId);
+          
+          await sendWhatsAppMessage(
+            supabase,
+            instance,
+            phoneForDatabase,
+            jidForSending,
+            `🔄 *Novo Código Enviado!*\n\nEnviamos um novo código de 6 dígitos para:\n*${claimedEmail.replace(/(.{3}).*@/, '$1***@')}*\n\n⏰ Válido por 10 minutos.\n\nDigite o código para confirmar sua identidade.`
+          );
+          
+          // Inserir mensagem
+          await supabase.from('messages').insert({
+            conversation_id: conversationId,
+            content: messageText,
+            sender_type: 'contact',
+            sender_id: null,
+          });
+          
+          return;
+        }
+      } catch (err) {
+        console.error('[handle-whatsapp-event] ❌ Error resending OTP:', err);
+      }
+    }
+    
+    // 🚫 Ainda bloqueado - informar cliente
+    const minutesUntilResend = canResend ? 0 : Math.ceil(((blockedAt?.getTime() || 0) + 10 * 60 * 1000 - Date.now()) / 60000);
+    
+    await sendWhatsAppMessage(
+      supabase,
+      instance,
+      phoneForDatabase,
+      jidForSending,
+      canResend 
+        ? `🔄 Para receber um novo código de verificação, digite *"reenviar"*.`
+        : `🚫 *Verificação Bloqueada*\n\nAguarde ${minutesUntilResend} minuto(s) para solicitar um novo código.\n\nOu aguarde um atendente confirmar sua identidade.`
+    );
+    
+    // Inserir mensagem
+    await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      content: messageText,
+      sender_type: 'contact',
+      sender_id: null,
+    });
+    
+    return; // Não processar mais nada
+  }
+
   // 🔍 DETECÇÃO DE EMAIL NA MENSAGEM - APENAS PARA VISITANTES
   // FASE 4: Se cliente já tem email cadastrado, pular TODO o fluxo de verificação
   if (!isKnownCustomer) {
@@ -988,19 +1075,25 @@ async function handleOTPValidation(
   const claimedContactId = metadata.claimed_contact_id;
   const attempts = metadata.otp_attempts || 0;
 
-  console.log(`[handle-whatsapp-event] 🔐 Validating OTP attempt ${attempts + 1}/2`);
+  console.log(`[handle-whatsapp-event] 🔐 Validating OTP attempt ${attempts + 1}/3`);
 
-  // Verificar código no banco
-  const { data: verification } = await supabase
+  // Buscar código OTP mais recente para este email
+  const { data: latestOtp } = await supabase
     .from('email_verifications')
     .select('*')
     .eq('email', claimedEmail)
-    .eq('code', trimmedCode)
     .eq('verified', false)
-    .gte('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
     .limit(1)
     .single();
+
+  // Verificar se o código digitado está correto
+  const isValidCode = latestOtp && 
+    latestOtp.code === trimmedCode && 
+    new Date(latestOtp.expires_at) > new Date();
+  
+  // Usar o registro para validação
+  const verification = isValidCode ? latestOtp : null;
 
   if (verification) {
     // ✅ CÓDIGO CORRETO - VINCULAR CONTATO
@@ -1080,10 +1173,13 @@ async function handleOTPValidation(
   } else {
     // ❌ CÓDIGO INCORRETO
     const newAttempts = attempts + 1;
+    const maskedEmail = claimedEmail.replace(/(.{3}).*@/, '$1***@');
 
-    if (newAttempts >= 2) {
-      // 🚨 BLOQUEIO POR EXCESSO DE TENTATIVAS (MÁXIMO 2)
-      console.log('[handle-whatsapp-event] 🚨 Max OTP attempts reached - triggering fraud alert');
+    console.log(`[handle-whatsapp-event] ❌ OTP incorrect - attempt ${newAttempts}/3 - expected: ${latestOtp?.code || 'N/A'}, received: ${messageText.trim()}`);
+
+    if (newAttempts >= 3) {
+      // 🚨 BLOQUEIO POR EXCESSO DE TENTATIVAS (MÁXIMO 3)
+      console.log('[handle-whatsapp-event] 🚨 Max OTP attempts reached (3) - triggering fraud alert');
 
       await supabase
         .from('conversations')
@@ -1091,6 +1187,8 @@ async function handleOTPValidation(
           customer_metadata: {
             ...metadata,
             otp_blocked: true,
+            otp_blocked_at: new Date().toISOString(),
+            otp_attempts: newAttempts,
             awaiting_otp: false,
           },
           ai_mode: 'copilot', // Forçar handoff humano
@@ -1113,13 +1211,13 @@ async function handleOTPValidation(
         instance,
         conv.contacts.phone,
         conv.contacts.whatsapp_id,
-        `🚨 *Tentativas Excedidas*\n\nPor segurança, bloqueamos novas tentativas de verificação.\n\nUm atendente humano será acionado para confirmar sua identidade manualmente.`
+        `🚨 *Tentativas Excedidas (3/3)*\n\nPor segurança, bloqueamos novas tentativas de verificação.\n\nUm atendente humano será acionado para confirmar sua identidade manualmente.\n\n💡 _Após 10 minutos, digite "reenviar" para receber um novo código._`
       );
 
       // Inserir alerta de fraude
       await supabase.from('messages').insert({
         conversation_id: conversationId,
-        content: `🚨 ALERTA DE SEGURANÇA: Cliente excedeu 3 tentativas de OTP. Email reivindicado: ${claimedEmail}`,
+        content: `🚨 ALERTA DE SEGURANÇA: Cliente excedeu 3 tentativas de OTP. Email reivindicado: ${claimedEmail}. Código esperado: ${latestOtp?.code || 'expirado'}`,
         sender_type: 'system',
         sender_id: null,
       });
@@ -1141,12 +1239,13 @@ async function handleOTPValidation(
         .eq('id', conversationId)
         .single();
 
+      const remainingAttempts = 3 - newAttempts;
       await sendWhatsAppMessage(
         supabase,
         instance,
         conv.contacts.phone,
         conv.contacts.whatsapp_id,
-        `❌ *Código Incorreto*\n\nTentativa ${newAttempts} de 3.\n\nVerifique seu email e tente novamente.`
+        `❌ *Código Incorreto*\n\nTentativa ${newAttempts}/3. Restam ${remainingAttempts} tentativa(s).\n\n📧 Verifique sua caixa de entrada (e spam) no email:\n*${maskedEmail}*\n\n💡 O código tem 6 dígitos numéricos.`
       );
     }
 
