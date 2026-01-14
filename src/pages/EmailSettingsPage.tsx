@@ -12,9 +12,9 @@ export default function EmailSettingsPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Header */}
-      <header className="bg-card border-b px-4 py-4 sticky top-0 z-10">
+      <header className="flex-shrink-0 bg-card border-b px-4 py-4">
         <div className="container mx-auto flex items-center gap-4">
           <Button
             variant="ghost"
@@ -35,55 +35,57 @@ export default function EmailSettingsPage() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-6">
-        <Tabs defaultValue="branding" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 max-w-xl">
-            <TabsTrigger value="branding" className="gap-2">
-              <Palette className="h-4 w-4" />
-              Branding
-            </TabsTrigger>
-            <TabsTrigger value="senders" className="gap-2">
-              <Send className="h-4 w-4" />
-              Remetentes
-            </TabsTrigger>
-            <TabsTrigger value="templates" className="gap-2">
-              <FileText className="h-4 w-4" />
-              Templates
-            </TabsTrigger>
-            <TabsTrigger value="domain" className="gap-2">
-              <Globe className="h-4 w-4" />
-              Domínio
-            </TabsTrigger>
-          </TabsList>
+      {/* Main Content - Scrollável */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="container mx-auto px-4 py-6">
+          <Tabs defaultValue="branding" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4 max-w-xl">
+              <TabsTrigger value="branding" className="gap-2">
+                <Palette className="h-4 w-4" />
+                Branding
+              </TabsTrigger>
+              <TabsTrigger value="senders" className="gap-2">
+                <Send className="h-4 w-4" />
+                Remetentes
+              </TabsTrigger>
+              <TabsTrigger value="templates" className="gap-2">
+                <FileText className="h-4 w-4" />
+                Templates
+              </TabsTrigger>
+              <TabsTrigger value="domain" className="gap-2">
+                <Globe className="h-4 w-4" />
+                Domínio
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="branding" className="space-y-6">
-            <EmailBrandingCard />
-          </TabsContent>
+            <TabsContent value="branding" className="space-y-6">
+              <EmailBrandingCard />
+            </TabsContent>
 
-          <TabsContent value="senders" className="space-y-6">
-            <EmailSendersCard />
-          </TabsContent>
+            <TabsContent value="senders" className="space-y-6">
+              <EmailSendersCard />
+            </TabsContent>
 
-          <TabsContent value="templates" className="space-y-6">
-            <div className="text-center py-8 border rounded-lg">
-              <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">Templates de Email</h3>
-              <p className="text-muted-foreground mb-4">
-                Gerencie todos os templates de email do sistema
-              </p>
-              <Button onClick={() => navigate("/email-templates")}>
-                Acessar Templates
-              </Button>
-            </div>
-          </TabsContent>
+            <TabsContent value="templates" className="space-y-6">
+              <div className="text-center py-8 border rounded-lg">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">Templates de Email</h3>
+                <p className="text-muted-foreground mb-4">
+                  Gerencie todos os templates de email do sistema
+                </p>
+                <Button onClick={() => navigate("/email-templates")}>
+                  Acessar Templates
+                </Button>
+              </div>
+            </TabsContent>
 
-          <TabsContent value="domain" className="space-y-6">
-            <ResendApiStatusCard />
-            <ResendDomainManager />
-            <EmailConfigCard />
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="domain" className="space-y-6">
+              <ResendApiStatusCard />
+              <ResendDomainManager />
+              <EmailConfigCard />
+            </TabsContent>
+          </Tabs>
+        </div>
       </main>
     </div>
   );
