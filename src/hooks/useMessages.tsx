@@ -65,8 +65,49 @@ export function useMessages(conversationId: string | null) {
         async (payload) => {
           console.log("[Realtime] Message changed:", payload.eventType, payload.new);
           const newMessage = payload.new as Message;
+          const oldMessage = payload.old as Message;
           
-          // 🚨 FASE 2: INTERCEPTADOR DE FALLBACK NO FRONTEND (apenas para INSERT)
+          // ✨ MERGE OTIMISTA - Sem refetch, atualiza cache diretamente
+          if (payload.eventType === 'INSERT') {
+            queryClient.setQueryData(
+              ["messages", conversationId],
+              (old: any[] = []) => {
+                // Verificar se já existe (optimistic ou real)
+                const existsReal = old.some(m => m.id === newMessage.id);
+                if (existsReal) return old;
+                
+                // Substituir mensagem temporária pela real
+                const tempIndex = old.findIndex(m => 
+                  m.id?.startsWith('temp-') && 
+                  m.content === newMessage.content &&
+                  m.sender_id === newMessage.sender_id
+                );
+                
+                if (tempIndex !== -1) {
+                  const updated = [...old];
+                  updated[tempIndex] = { ...newMessage, status: 'sent' };
+                  return updated;
+                }
+                
+                // Nova mensagem (de outro usuário/sistema)
+                return [...old, { ...newMessage, status: 'sent' }];
+              }
+            );
+          } else if (payload.eventType === 'UPDATE') {
+            queryClient.setQueryData(
+              ["messages", conversationId],
+              (old: any[] = []) => old.map(m => 
+                m.id === newMessage.id ? { ...m, ...newMessage } : m
+              )
+            );
+          } else if (payload.eventType === 'DELETE' && oldMessage) {
+            queryClient.setQueryData(
+              ["messages", conversationId],
+              (old: any[] = []) => old.filter(m => m.id !== oldMessage.id)
+            );
+          }
+          
+          // 🚨 INTERCEPTADOR DE FALLBACK (apenas para INSERT de IA)
           if (payload.eventType === 'INSERT' && newMessage.is_ai_generated) {
             const content = newMessage.content?.toLowerCase() || '';
             const fallbackPhrases = [
@@ -81,28 +122,26 @@ export function useMessages(conversationId: string | null) {
             const isFallbackMessage = fallbackPhrases.some(phrase => content.includes(phrase));
             
             if (isFallbackMessage) {
-              console.log('🚨 [Frontend] Fallback detectado na mensagem da IA - Forçando handoff');
-              
+              console.log('🚨 [Frontend] Fallback detectado - Forçando handoff');
               try {
-                const { error: routeError } = await supabase.functions.invoke('route-conversation', {
+                await supabase.functions.invoke('route-conversation', {
                   body: { conversationId }
                 });
-                
-                if (!routeError) {
-                  console.log('✅ [Frontend] Handoff forçado via interceptador');
-                } else {
-                  console.error('❌ [Frontend] Erro ao forçar handoff:', routeError);
-                }
               } catch (error) {
-                console.error('❌ [Frontend] Exceção ao forçar handoff:', error);
+                console.error('❌ [Frontend] Erro ao forçar handoff:', error);
               }
             }
           }
           
-          // Invalidar queries para forçar refetch com dados completos (joins)
-          queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
-          queryClient.invalidateQueries({ queryKey: ["conversations"] });
-          queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
+          // Atualizar sidebar com debounce (baixa prioridade)
+          queryClient.invalidateQueries({ 
+            queryKey: ["conversations"],
+            refetchType: 'active'
+          });
+          queryClient.invalidateQueries({ 
+            queryKey: ["conversation", conversationId],
+            refetchType: 'active'
+          });
         }
       )
       .subscribe((status) => {
@@ -130,8 +169,6 @@ export function useSendMessage() {
 
   return useMutation({
     mutationFn: async (message: SendMessageParams) => {
-      // ✅ FASE 2: Garantir canal para mensagens Web Chat
-      // ✅ FASE 7: Suporte a is_internal
       const messageWithChannel = {
         ...message,
         channel: message.channel || 'web_chat',
@@ -146,7 +183,6 @@ export function useSendMessage() {
 
       if (error) throw error;
 
-      // Update conversation's last_message_at (apenas se não for nota interna)
       if (!message.is_internal) {
         await supabase
           .from("conversations")
@@ -156,11 +192,59 @@ export function useSendMessage() {
 
       return data;
     },
-    onError: (error: Error) => {
+
+    // ✨ OPTIMISTIC UPDATE - Mensagem aparece INSTANTANEAMENTE
+    onMutate: async (newMessage) => {
+      await queryClient.cancelQueries({ 
+        queryKey: ["messages", newMessage.conversation_id] 
+      });
+
+      const previousMessages = queryClient.getQueryData<any[]>(
+        ["messages", newMessage.conversation_id]
+      );
+
+      const optimisticMessage = {
+        id: `temp-${Date.now()}`,
+        conversation_id: newMessage.conversation_id,
+        content: newMessage.content,
+        sender_type: newMessage.sender_type,
+        sender_id: newMessage.sender_id,
+        is_ai_generated: false,
+        is_internal: newMessage.is_internal || false,
+        channel: newMessage.channel || 'web_chat',
+        created_at: new Date().toISOString(),
+        status: 'sending',
+        media_attachments: [],
+        sender: null,
+      };
+
+      queryClient.setQueryData(
+        ["messages", newMessage.conversation_id],
+        (old: any[] = []) => [...old, optimisticMessage]
+      );
+
+      return { previousMessages };
+    },
+
+    // Rollback em caso de erro
+    onError: (error: Error, variables, context) => {
+      if (context?.previousMessages) {
+        queryClient.setQueryData(
+          ["messages", variables.conversation_id],
+          context.previousMessages
+        );
+      }
       toast({
         title: "Erro ao enviar mensagem",
         description: error.message,
         variant: "destructive",
+      });
+    },
+
+    // Sincronizar após sucesso (não bloqueia UI)
+    onSettled: (_data, _error, variables) => {
+      queryClient.invalidateQueries({ 
+        queryKey: ["messages", variables.conversation_id] 
       });
     },
   });
