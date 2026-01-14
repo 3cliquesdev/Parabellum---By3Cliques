@@ -764,9 +764,19 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   // 📸 FASE 5: Se tem mídia, baixar e salvar como attachment
   if (hasMedia && insertedMessage?.id) {
     console.log(`[handle-whatsapp-event] 📸 Processing media attachment for message ${insertedMessage.id}`);
+    console.log(`[handle-whatsapp-event] 📸 Media structure check:`, JSON.stringify({
+      hasImageMessage: !!data.message?.imageMessage,
+      hasVideoMessage: !!data.message?.videoMessage,
+      hasAudioMessage: !!data.message?.audioMessage,
+      hasPttMessage: !!data.message?.pttMessage,
+      hasDocumentMessage: !!data.message?.documentMessage,
+      hasStickerMessage: !!data.message?.stickerMessage,
+    }));
     
     try {
-      const mediaResult = await downloadAndSaveMedia(supabase, instance, data, conversationId);
+      // CORREÇÃO: Passar data.message (onde estão imageMessage, audioMessage, etc.)
+      // não o objeto data completo
+      const mediaResult = await downloadAndSaveMedia(supabase, instance, data.message, conversationId);
       
       if (mediaResult) {
         // Criar entrada em media_attachments
