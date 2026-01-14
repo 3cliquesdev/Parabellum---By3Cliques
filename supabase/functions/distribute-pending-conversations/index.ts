@@ -141,6 +141,7 @@ Deno.serve(async (req: Request) => {
     console.log(`[distribute-pending] Agentes online - Support: ${supportAgents.length}, Sales: ${salesAgents.length}`);
 
     // Buscar conversas pendentes (sem agente atribuído)
+    // 🆕 Priorizar conversas com needs_human_review = true
     const { data: pendingConversations, error: pendingError } = await supabaseClient
       .from('conversations')
       .select(`
@@ -149,10 +150,12 @@ Deno.serve(async (req: Request) => {
         ai_mode, 
         previous_agent_id,
         created_at,
+        needs_human_review,
         conversation_queue!left(priority, queued_at)
       `)
       .eq('status', 'open')
       .is('assigned_to', null)
+      .order('needs_human_review', { ascending: false, nullsFirst: false }) // needs_human_review = true primeiro
       .order('created_at', { ascending: true }) // FIFO
       .limit(maxConversations * Math.max(supportAgents.length + salesAgents.length, 1));
 
@@ -269,7 +272,8 @@ Deno.serve(async (req: Request) => {
         .from('conversations')
         .update({
           assigned_to: agentId,
-          ai_mode: 'waiting_human' // Agente precisa responder primeiro
+          ai_mode: 'waiting_human', // Agente precisa responder primeiro
+          needs_human_review: false // 🆕 Resetar flag quando atribuído
         })
         .eq('id', conv.id);
 

@@ -3675,14 +3675,14 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
     // ============================================================
     // FASE 4: FALLBACK DETECTOR - After tool calls to prevent duplicates
     // ============================================================
-    const isFallbackResponse = FALLBACK_PHRASES.some(phrase => 
+    let isFallbackResponse = FALLBACK_PHRASES.some(phrase => 
       assistantMessage.toLowerCase().includes(phrase)
     );
 
     if (isFallbackResponse) {
       console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO - Executando handoff REAL');
       
-      // 1. MUDAR O MODO (Desligar IA)
+      // 1. MUDAR O MODO (Desligar IA) - temporário até saber se tem agente
       await supabaseClient
         .from('conversations')
         .update({ ai_mode: 'copilot' })
@@ -3699,6 +3699,39 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
         console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
       } else {
         console.log('[ai-autopilot-chat] ✅ Conversa roteada:', routeResult);
+        
+        // 🆕 Se ninguém online, IA continua atendendo
+        if (routeResult?.no_agents_available) {
+          console.log('[ai-autopilot-chat] ⚠️ Sem agentes online - IA continuará atendendo');
+          
+          // Reverter para autopilot e marcar para review humano
+          await supabaseClient
+            .from('conversations')
+            .update({ 
+              ai_mode: 'autopilot',
+              needs_human_review: true  // Flag para quando agente ficar online
+            })
+            .eq('id', conversationId);
+          
+          // Gerar resposta útil da IA ao invés de handoff
+          const originalResponse = assistantMessage;
+          
+          // Se a resposta original era de handoff, gerar algo mais útil
+          if (isFallbackResponse) {
+            assistantMessage = `Entendi sua solicitação! Vou fazer o possível para te ajudar.
+
+${originalResponse.includes('transferir') || originalResponse.includes('aguarde') 
+  ? 'Poderia me dar mais detalhes sobre sua situação para que eu possa te ajudar melhor?' 
+  : originalResponse}
+
+💡 Se precisar de atendimento especializado, nossa equipe está disponível de Segunda a Sexta, das 09h às 18h.`;
+          }
+          
+          // Não prosseguir com lógica de handoff/ticket
+          isFallbackResponse = false;
+          
+          console.log('[ai-autopilot-chat] ✅ IA continuará atendendo - conversa marcada para review humano');
+        }
       }
       
       // 3. CRIAR TICKET AUTOMÁTICO PARA CASOS FINANCEIROS (apenas se não criado por tool call)

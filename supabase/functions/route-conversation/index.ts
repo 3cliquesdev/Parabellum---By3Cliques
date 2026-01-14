@@ -399,63 +399,9 @@ serve(async (req) => {
         onConflict: 'conversation_id'
       });
 
-    // Enviar mensagem de espera ao cliente
-    const queueMessage = '📢 Nossos atendentes estão ocupados ou ausentes no momento. Deixe sua mensagem que responderemos em breve. ⏰';
-    
-    await supabase
-      .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        content: queueMessage,
-        sender_type: 'system',
-        message_type: 'system',
-        is_ai_generated: true
-      });
-
-    // Enviar via WhatsApp se o canal for WhatsApp
-    if (conversation.channel === 'whatsapp' && contact) {
-      console.log('[route-conversation] 📱 Enviando mensagem de fila via WhatsApp...');
-      
-      // Buscar instância WhatsApp - PRIORIZAR INSTÂNCIA VINCULADA
-      let instanceId = conversation.whatsapp_instance_id;
-      
-      if (!instanceId) {
-        // Fallback: buscar instância conectada (ordenada por created_at para consistência)
-        console.log('[route-conversation] ⚠️ Conversa sem instância vinculada - usando fallback');
-        const { data: activeInstance } = await supabase
-          .from('whatsapp_instances')
-          .select('id, instance_name')
-          .eq('status', 'connected')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        
-        if (activeInstance) {
-          console.log('[route-conversation] 🔄 Usando instância FALLBACK:', activeInstance.instance_name);
-        }
-        instanceId = activeInstance?.id;
-      } else {
-        console.log('[route-conversation] ✅ Usando instância VINCULADA:', instanceId);
-      }
-      
-      if (instanceId) {
-        try {
-          await supabase.functions.invoke('send-whatsapp-message', {
-            body: {
-              instance_id: instanceId,
-              phone_number: contact.phone,
-              whatsapp_id: contact.whatsapp_id,
-              message: queueMessage
-            }
-          });
-          console.log('[route-conversation] ✅ Mensagem de fila enviada via WhatsApp');
-        } catch (whatsappError) {
-          console.error('[route-conversation] ❌ Erro ao enviar via WhatsApp:', whatsappError);
-        }
-      } else {
-        console.log('[route-conversation] ⚠️ Nenhuma instância WhatsApp conectada para enviar mensagem');
-      }
-    }
+    // 🆕 NÃO enviar mensagem automática - a decisão é do chamador (ai-autopilot-chat)
+    // Isso permite que a IA continue atendendo quando ninguém está online
+    console.log('[route-conversation] ℹ️ Conversa adicionada à fila - sem mensagem automática');
 
     // Verificar posição na fila
     const { count: queuePosition } = await supabase
@@ -471,7 +417,8 @@ serve(async (req) => {
         assigned_to: null,
         assignment_type: 'queued',
         queue_position: queuePosition || 1,
-        message: 'Conversa adicionada à fila de espera'
+        no_agents_available: true,  // 🆕 Flag para o chamador saber que não há agentes
+        message: 'Conversa adicionada à fila de espera - nenhum agente disponível'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

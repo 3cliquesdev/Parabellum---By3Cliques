@@ -1481,6 +1481,7 @@ export type Database = {
           first_response_at: string | null
           id: string
           last_message_at: string
+          needs_human_review: boolean | null
           previous_agent_id: string | null
           rating_sent_at: string | null
           related_ticket_id: string | null
@@ -1504,6 +1505,7 @@ export type Database = {
           first_response_at?: string | null
           id?: string
           last_message_at?: string
+          needs_human_review?: boolean | null
           previous_agent_id?: string | null
           rating_sent_at?: string | null
           related_ticket_id?: string | null
@@ -1527,6 +1529,7 @@ export type Database = {
           first_response_at?: string | null
           id?: string
           last_message_at?: string
+          needs_human_review?: boolean | null
           previous_agent_id?: string | null
           rating_sent_at?: string | null
           related_ticket_id?: string | null
