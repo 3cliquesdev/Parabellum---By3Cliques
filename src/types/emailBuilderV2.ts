@@ -26,6 +26,8 @@ export type ConditionOperator =
 export type ConditionAction = 'show' | 'hide';
 export type LogicGroup = 'AND' | 'OR';
 
+export type ButtonAction = 'link' | 'download' | 'email' | 'phone';
+
 export interface BlockContent {
   html?: string;
   text?: string;
@@ -39,6 +41,11 @@ export interface BlockContent {
   name?: string;
   role?: string;
   email?: string;
+  // Button action types
+  buttonAction?: ButtonAction;
+  fileUrl?: string;
+  emailSubject?: string;
+  phone?: string;
 }
 
 export interface BlockStyles {

@@ -115,6 +115,31 @@ function generateImageBlockHtml(block: EmailBlock): string {
 }
 
 /**
+ * Generates the href for a button based on action type
+ */
+function generateButtonHref(block: EmailBlock): string {
+  const action = block.content.buttonAction || 'link';
+  
+  switch (action) {
+    case 'download':
+      return block.content.fileUrl || block.content.url || "#";
+    case 'email': {
+      const email = block.content.email || "";
+      const subject = block.content.emailSubject;
+      return subject 
+        ? `mailto:${email}?subject=${encodeURIComponent(subject)}`
+        : `mailto:${email}`;
+    }
+    case 'phone':
+      const phone = (block.content.phone || "").replace(/\s/g, "");
+      return `tel:${phone}`;
+    case 'link':
+    default:
+      return block.content.url || "#";
+  }
+}
+
+/**
  * Generates HTML for a button block
  */
 function generateButtonBlockHtml(block: EmailBlock): string {
@@ -126,6 +151,11 @@ function generateButtonBlockHtml(block: EmailBlock): string {
   const fontSize = block.styles.fontSize || "14px";
   const fontWeight = block.styles.fontWeight || "500";
 
+  const href = generateButtonHref(block);
+  const action = block.content.buttonAction || 'link';
+  const downloadAttr = action === 'download' ? 'download' : '';
+  const targetAttr = action === 'link' ? 'target="_blank"' : '';
+
   return `
     <tr>
       <td style="padding: 16px 24px; text-align: ${textAlign};">
@@ -133,8 +163,9 @@ function generateButtonBlockHtml(block: EmailBlock): string {
           <tr>
             <td style="background-color: ${backgroundColor}; border-radius: ${borderRadius};">
               <a 
-                href="${block.content.url || "#"}" 
-                target="_blank" 
+                href="${href}" 
+                ${targetAttr}
+                ${downloadAttr}
                 style="
                   display: inline-block;
                   padding: ${padding.top} ${padding.right} ${padding.bottom} ${padding.left};
