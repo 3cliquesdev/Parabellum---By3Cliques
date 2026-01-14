@@ -31,17 +31,20 @@ export function useProfilesRealtime() {
               const key = query.queryKey[0];
               return typeof key === 'string' && (
                 key.startsWith("users-by-department") ||
-                key === "users-by-department" ||
+                key.startsWith("agent-conversations") ||
                 key === "operational-users" ||
-                key === "agent-conversations" ||
-                key === "conversations"
+                key === "conversations" ||
+                key === "inbox-view" ||
+                key === "inbox-counts"
               );
             }
           });
           
-          // Invalidar por ID específico se disponível
+          // Invalidar queries específicas que exibem status
           queryClient.invalidateQueries({ queryKey: ["users-by-department"] });
           queryClient.invalidateQueries({ queryKey: ["operational-users"] });
+          queryClient.invalidateQueries({ queryKey: ["agent-conversations-stats"] });
+          queryClient.invalidateQueries({ queryKey: ["agent-conversations-list"] });
         }
       )
       .subscribe();
