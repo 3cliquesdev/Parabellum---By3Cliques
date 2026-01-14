@@ -15,9 +15,32 @@ export function useTicketsRealtime() {
           schema: "public",
           table: "tickets",
         },
-        () => {
+        (payload) => {
+          console.log("[Realtime] Ticket changed:", payload.new);
+          
+          // Queries principais de listagem
           queryClient.invalidateQueries({ queryKey: ["tickets"] });
           queryClient.invalidateQueries({ queryKey: ["ticket-counts"] });
+          
+          // Query do ticket individual (para /support/:ticketId)
+          const ticketId = (payload.new as any)?.id;
+          if (ticketId) {
+            queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] });
+            queryClient.invalidateQueries({ queryKey: ["ticket-comments", ticketId] });
+            queryClient.invalidateQueries({ queryKey: ["ticket-events", ticketId] });
+          }
+          
+          // Invalidar queries relacionadas usando predicate abrangente
+          queryClient.invalidateQueries({
+            predicate: (query) => {
+              const key = query.queryKey[0];
+              return typeof key === 'string' && (
+                key.startsWith("ticket") ||
+                key === "contact-tickets" ||
+                key === "tickets-prefetch"
+              );
+            }
+          });
         }
       )
       .subscribe();
