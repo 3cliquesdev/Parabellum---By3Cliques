@@ -1564,9 +1564,10 @@ Responda APENAS: skip ou search`
     const contactCompany = contact.company ? ` da empresa ${contact.company}` : '';
     const contactStatus = contact.status || 'lead';
     
-    // 🆕 CORREÇÃO: Cliente é "conhecido" se tem email OU se foi validado via Kiwify
+    // 🆕 CORREÇÃO: Cliente é "conhecido" se tem email OU se foi validado via Kiwify OU se está na base como customer
     const isKiwifyValidated = contact.kiwify_validated === true;
-    const isValidatedCustomer = contactHasEmail || isKiwifyValidated;
+    const isCustomerInDatabase = contact.status === 'customer';
+    const isValidatedCustomer = contactHasEmail || isKiwifyValidated || isCustomerInDatabase;
     
     // 🔐 LGPD: Dados mascarados para exposição à IA
     const safeEmail = maskEmail(contactEmail);
@@ -1575,10 +1576,11 @@ Responda APENAS: skip ou search`
     console.log('[ai-autopilot-chat] 🔐 Identity Wall Check:', {
       hasEmail: contactHasEmail,
       isKiwifyValidated: isKiwifyValidated,
+      isCustomerInDatabase: isCustomerInDatabase,
       isValidatedCustomer: isValidatedCustomer,
       email: safeEmail,
       channel: responseChannel,
-      isKnownCustomer: isValidatedCustomer
+      contactStatus: contact.status
     });
     
     // ============================================================
@@ -1762,14 +1764,18 @@ Responda APENAS: skip ou search`
     // ============================================================
     // 🎯 DECISION MATRIX - Log unificado para debugging de fluxo
     // ============================================================
-    const willAskForEmail = !contactHasEmail;
+    // 🆕 OTP apenas para contexto FINANCEIRO quando cliente NÃO tem email verificado
+    const needsOTPForFinancial = isFinancialRequest && !contactHasEmail && isValidatedCustomer;
+    const willAskForEmail = !isValidatedCustomer; // Só pede email se não for cliente conhecido
     const willSendOTP = contactHasEmail && !hasEverVerifiedOTP;
     const willAskFinancialOTP = contactHasEmail && hasEverVerifiedOTP && isFinancialRequest && !hasRecentOTPVerification;
-    const willProcessNormally = contactHasEmail && hasEverVerifiedOTP && !isFinancialRequest;
+    const willProcessNormally = isValidatedCustomer && !isFinancialRequest;
     
     console.log('[ai-autopilot-chat] 🎯 DECISION MATRIX:', {
       // Inputs
       contactHasEmail,
+      isCustomerInDatabase,
+      isKiwifyValidated,
       hasEverVerifiedOTP,
       hasRecentOTPVerification,
       isFinancialRequest,
@@ -1778,6 +1784,7 @@ Responda APENAS: skip ou search`
       willSendOTP,
       willAskFinancialOTP,
       willProcessNormally,
+      needsOTPForFinancial,
       // Context
       customer_name: contactName,
       customer_email: safeEmail,
@@ -1838,29 +1845,46 @@ Responda APENAS: skip ou search`
     });
     
     if (intentType === 'skip' && !isFinancialContext && isFirstMessageOfSession) {
-      // CASO 1: Cliente conhecido (tem email OU validado Kiwify) = saudação personalizada direta
+      // CASO 1: Cliente conhecido (tem email OU validado Kiwify OU status=customer) = saudação personalizada direta
       if (isValidatedCustomer) {
         console.log('[ai-autopilot-chat] 🎯 BYPASS DA IA - Saudação direta para cliente conhecido', {
           hasEmail: contactHasEmail,
-          isKiwifyValidated: isKiwifyValidated
+          isKiwifyValidated: isKiwifyValidated,
+          isCustomerInDatabase: isCustomerInDatabase
         });
         
-        // Saudação diferenciada para cliente Kiwify sem email
+        // Saudação diferenciada por tipo de identificação
         let directGreeting: string;
-        if (isKiwifyValidated && !contactHasEmail) {
+        let greetingReason: string;
+        
+        if (contactHasEmail) {
+          // Cliente com email - saudação padrão
+          directGreeting = await getMessageTemplate(
+            supabaseClient,
+            'saudacao_cliente_conhecido',
+            { contact_name: contactName || '' }
+          ) || `Olá ${contactName}! Bem-vindo(a) de volta! Como posso te ajudar hoje?`;
+          greetingReason = 'known_customer_greeting_bypass';
+        } else if (isKiwifyValidated) {
           // Cliente Kiwify identificado pelo telefone
           directGreeting = await getMessageTemplate(
             supabaseClient,
             'saudacao_cliente_kiwify',
             { contact_name: contactName || '' }
           ) || `Olá ${contactName}! 🎉\n\nIdentifiquei você automaticamente pelo seu número de WhatsApp.\n\nComo posso te ajudar hoje?`;
-        } else {
-          // Cliente com email
+          greetingReason = 'kiwify_customer_greeting_bypass';
+        } else if (isCustomerInDatabase) {
+          // 🆕 Cliente identificado pela base de contatos (status = customer)
           directGreeting = await getMessageTemplate(
             supabaseClient,
-            'saudacao_cliente_conhecido',
+            'saudacao_cliente_base',
             { contact_name: contactName || '' }
-          ) || `Olá ${contactName}! Bem-vindo(a) de volta! Como posso te ajudar hoje?`;
+          ) || `Olá, ${contactName}! 👋\n\nQue bom ter você de volta! Como posso te ajudar hoje?`;
+          greetingReason = 'database_customer_greeting_bypass';
+        } else {
+          // Fallback (não deveria chegar aqui)
+          directGreeting = `Olá ${contactName}! Como posso te ajudar hoje?`;
+          greetingReason = 'fallback_greeting';
         }
         
         // Salvar mensagem da IA
@@ -1901,9 +1925,11 @@ Responda APENAS: skip ou search`
           messageId: savedMsg?.id,
           directGreeting: true,
           debug: { 
-            reason: isKiwifyValidated && !contactHasEmail ? 'kiwify_customer_greeting_bypass' : 'known_customer_greeting_bypass',
+            reason: greetingReason,
             customer_name: contactName,
             isKiwifyValidated: isKiwifyValidated,
+            isCustomerInDatabase: isCustomerInDatabase,
+            hasEmail: contactHasEmail,
             bypassed_ai: true
           }
         }), {
