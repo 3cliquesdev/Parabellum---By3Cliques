@@ -68,7 +68,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ModeToggle } from "@/components/ModeToggle";
-import { BuildInfoPopover } from "@/components/BuildInfoPopover";
+import { SidebarVersionIndicator } from "@/components/SidebarVersionIndicator";
 import ProfileEditDialog from "@/components/ProfileEditDialog";
 import { AvailabilityToggle } from "@/components/AvailabilityToggle";
 
@@ -418,6 +418,9 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
 
+      {/* Indicador de versão com aviso de atualização */}
+      <SidebarVersionIndicator />
+
       <SidebarContent className="px-2">
         {/* Loading state */}
         {(loading || permissionsLoading) ? (
@@ -491,11 +494,6 @@ export function AppSidebar() {
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
-            
-            {/* Build Info - discreto no rodapé */}
-            <div className="flex justify-center pt-1">
-              <BuildInfoPopover />
-            </div>
           </div>
         ) : (
           <div className="space-y-2">
@@ -538,9 +536,6 @@ export function AppSidebar() {
               >
                 <LogOut className="h-4 w-4" />
               </Button>
-              
-              {/* Build Info - compacto quando collapsed */}
-              <BuildInfoPopover />
             </div>
           </div>
         )}
