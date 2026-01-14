@@ -2,10 +2,13 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useProfilesRealtime } from "@/hooks/useProfilesRealtime";
 import { useTicketsRealtime } from "@/hooks/useTicketsRealtime";
+import { useDealsRealtime } from "@/hooks/useDealsRealtime";
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   // Realtime global para toda a aplicação
   useProfilesRealtime();
   useTicketsRealtime();
+  useDealsRealtime();
 
   return (
     <SidebarProvider>
