@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Info, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -10,12 +10,14 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-// Intervalo de verificação: 60 segundos
-const CHECK_INTERVAL_MS = 60 * 1000;
+// Intervalo de verificação: 30 segundos (mais frequente)
+const CHECK_INTERVAL_MS = 30 * 1000;
 
 export function SidebarVersionIndicator() {
   const [hasUpdate, setHasUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const previousHasUpdate = useRef(false);
   
   const buildId = getCurrentBuildId();
   
@@ -42,43 +44,89 @@ export function SidebarVersionIndicator() {
   useEffect(() => {
     const checkUpdate = async () => {
       const updateAvailable = await checkForUpdate();
+      
+      // Se antes não tinha update e agora tem, mostrar toast
+      if (updateAvailable && !previousHasUpdate.current) {
+        toast.info("Nova versão disponível!", {
+          description: "Clique no ícone de versão para atualizar.",
+          duration: 10000,
+          action: {
+            label: "Atualizar",
+            onClick: () => {
+              setUpdating(true);
+              setTimeout(() => forceUpdate(), 300);
+            },
+          },
+        });
+      }
+      
+      previousHasUpdate.current = updateAvailable;
       setHasUpdate(updateAvailable);
     };
     
     // Verificar imediatamente
     checkUpdate();
     
-    // Verificar a cada 60 segundos
+    // Verificar a cada 30 segundos
     const interval = setInterval(checkUpdate, CHECK_INTERVAL_MS);
     
     return () => clearInterval(interval);
   }, []);
   
   const handleForceUpdate = async () => {
-    setUpdating(true);
-    toast.info("Atualizando para nova versão...");
-    setTimeout(() => {
-      forceUpdate();
-    }, 500);
+    if (hasUpdate) {
+      setUpdating(true);
+      toast.info("Atualizando para nova versão...");
+      setTimeout(() => {
+        forceUpdate();
+      }, 500);
+    } else {
+      // Verificar manualmente
+      setChecking(true);
+      toast.info("Verificando atualizações...");
+      const updateAvailable = await checkForUpdate();
+      setChecking(false);
+      
+      if (updateAvailable) {
+        setHasUpdate(true);
+        toast.success("Nova versão encontrada!", {
+          action: {
+            label: "Atualizar",
+            onClick: () => {
+              setUpdating(true);
+              setTimeout(() => forceUpdate(), 300);
+            },
+          },
+        });
+      } else {
+        toast.success("Você está na versão mais recente!");
+      }
+    }
   };
   
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Button
-          variant="ghost"
+          variant={hasUpdate ? "default" : "ghost"}
           size="icon"
-          className="h-9 w-9 relative"
+          className={cn(
+            "h-9 w-9 relative transition-all duration-300",
+            hasUpdate && "bg-primary text-primary-foreground"
+          )}
           title={hasUpdate ? "Nova versão disponível!" : `Versão: ${formatBuildId(buildId)}`}
         >
           <Info className="h-4 w-4" />
-          {/* Badge de notificação quando há update */}
+          {/* Badge animado quando há update */}
           {hasUpdate && (
-            <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
+            <div className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+            </div>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-3" align="end" side="top">
+      <PopoverContent className="w-60 p-3" align="end" side="top">
         <div className="space-y-3">
           <div className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">Versão atual:</span>
@@ -86,19 +134,37 @@ export function SidebarVersionIndicator() {
             v{formatBuildId(buildId)}
           </div>
           
-          {hasUpdate ? (
-            <Button 
-              size="sm" 
-              className="w-full h-8 text-xs"
-              onClick={handleForceUpdate}
-              disabled={updating}
-            >
-              <RefreshCw className={cn("h-3 w-3 mr-1.5", updating && "animate-spin")} />
-              Atualizar Agora
-            </Button>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              ✓ Você está na versão mais recente
+          {hasUpdate && (
+            <div className="p-2 rounded bg-primary/10 border border-primary/20 text-xs text-primary font-medium">
+              ✨ Nova versão disponível!
+            </div>
+          )}
+          
+          {/* BOTÃO SEMPRE VISÍVEL */}
+          <Button 
+            size="sm" 
+            className="w-full h-8 text-xs"
+            variant={hasUpdate ? "default" : "outline"}
+            onClick={handleForceUpdate}
+            disabled={updating || checking}
+          >
+            <RefreshCw className={cn(
+              "h-3 w-3 mr-1.5", 
+              (updating || checking) && "animate-spin"
+            )} />
+            {updating 
+              ? "Atualizando..." 
+              : checking 
+                ? "Verificando..." 
+                : hasUpdate 
+                  ? "Atualizar Agora" 
+                  : "Verificar Atualização"
+            }
+          </Button>
+          
+          {!hasUpdate && !updating && !checking && (
+            <p className="text-[10px] text-muted-foreground text-center">
+              ✓ Versão mais recente
             </p>
           )}
         </div>
