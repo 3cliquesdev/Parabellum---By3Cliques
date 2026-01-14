@@ -714,16 +714,55 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   }
 
   // 4. FASE 2: Vincular instância e atribuir conversa (normal flow)
+  // 🔧 KIWIFY VALIDATION: Verificar se o contato tem compra na Kiwify ANTES de atribuir
+  const SUPORTE_DEPT_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+  const COMERCIAL_DEPT_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+
+  let isKiwifyCustomer = false;
+  let targetDepartmentId = COMERCIAL_DEPT_ID; // Default: lead vai para Comercial
+
+  try {
+    console.log('[handle-whatsapp-event] 🔍 Validando contato na Kiwify...');
+    const { data: kiwifyValidation, error: kiwifyError } = await supabase.functions.invoke('validate-by-kiwify-phone', {
+      body: { 
+        phone: phoneForDatabase,
+        contact_id: contactId
+      }
+    });
+
+    if (kiwifyError) {
+      console.error('[handle-whatsapp-event] ⚠️ Erro na validação Kiwify:', kiwifyError);
+    } else if (kiwifyValidation?.found) {
+      isKiwifyCustomer = true;
+      targetDepartmentId = SUPORTE_DEPT_ID;
+      console.log(`[handle-whatsapp-event] ✅ Cliente Kiwify identificado - direcionando para Suporte`);
+      console.log(`[handle-whatsapp-event] 📦 Produtos:`, kiwifyValidation.customer?.products);
+    } else {
+      console.log(`[handle-whatsapp-event] 📋 Lead sem compra Kiwify - direcionando para Comercial`);
+    }
+  } catch (kiwifyErr) {
+    console.error('[handle-whatsapp-event] ⚠️ Exceção na validação Kiwify:', kiwifyErr);
+  }
+
   // 🔧 FIX: Buscar ai_mode ATUAL da conversa para NÃO sobrescrever se atendente já assumiu
   const { data: currentConv } = await supabase
     .from('conversations')
-    .select('ai_mode, assigned_to')
+    .select('ai_mode, assigned_to, department')
     .eq('id', conversationId)
     .single();
 
   const updateData: any = {
     whatsapp_instance_id: instance.id,
   };
+
+  // 🔧 KIWIFY: Definir departamento baseado na validação Kiwify
+  // Só atualizar se a conversa ainda não tiver departamento definido
+  if (!currentConv?.department) {
+    updateData.department = targetDepartmentId;
+    console.log('[handle-whatsapp-event] 🏢 Definindo departamento:', isKiwifyCustomer ? 'Suporte (cliente Kiwify)' : 'Comercial (lead)');
+  } else {
+    console.log('[handle-whatsapp-event] ⚠️ Preservando departamento existente:', currentConv.department);
+  }
 
   // 🔧 FIX: Só definir ai_mode se a conversa não tiver (nova) ou se for null
   // NUNCA sobrescrever copilot, disabled, ou waiting_human - atendente já assumiu!
@@ -734,12 +773,13 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     console.log('[handle-whatsapp-event] ⚠️ Preservando ai_mode existente:', currentConv.ai_mode, '(não sobrescrevendo)');
   }
 
-  // 🔧 FIX: Só atribuir ao dono da instância se ainda não tiver assigned_to
-  if (instance.user_id && !currentConv?.assigned_to) {
-    updateData.assigned_to = instance.user_id;
-    console.log('[handle-whatsapp-event] Assigned to owner:', instance.user_id);
-  } else if (currentConv?.assigned_to) {
+  // 🚫 REMOVIDO: Atribuição automática ao dono da instância
+  // Isso causava conversas irem para Thaynara (vendas) mesmo sendo clientes
+  // Agora a atribuição será feita pelo route-conversation baseado no departamento
+  if (currentConv?.assigned_to) {
     console.log('[handle-whatsapp-event] ⚠️ Preservando assigned_to existente:', currentConv.assigned_to);
+  } else {
+    console.log('[handle-whatsapp-event] 📭 Conversa sem atribuição - será roteada pelo route-conversation');
   }
 
   await supabase
