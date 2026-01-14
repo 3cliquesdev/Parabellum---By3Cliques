@@ -217,31 +217,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Buscar emails dos contatos das conversas pendentes
+    // Buscar status dos contatos das conversas pendentes
     const contactIds = [...new Set(pendingConversations.map(c => c.contact_id))];
     const { data: contacts } = await supabaseClient
       .from('contacts')
-      .select('id, email')
+      .select('id, status')
       .in('id', contactIds);
 
-    const contactEmailMap: Record<string, string | null> = {};
+    // Mapear status dos contatos por ID
+    const contactStatusMap: Record<string, string | null> = {};
     if (contacts) {
       for (const c of contacts) {
-        contactEmailMap[c.id] = c.email;
+        contactStatusMap[c.id] = c.status;
       }
     }
-
-    // Buscar emails verificados
-    const emails = contacts?.map(c => c.email).filter(Boolean) || [];
-    const { data: verifiedEmails } = emails.length > 0 
-      ? await supabaseClient
-          .from('email_verifications')
-          .select('email')
-          .in('email', emails)
-          .eq('verified', true)
-      : { data: [] };
-
-    const verifiedEmailSet = new Set(verifiedEmails?.map(v => v.email) || []);
 
     // Contar conversas atuais por agente para load balancing
     const { data: agentCounts } = await supabaseClient
@@ -264,21 +253,23 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Distribuir conversas usando round-robin com load balancing baseado na verificação de email
+    // Distribuir conversas usando round-robin com load balancing baseado no status do contato
     let distributedCount = 0;
     const assignedToThisAgent: string[] = [];
     const currentAgentRole = agentRolesMap[agentId];
 
     for (const conv of pendingConversations) {
-      // Verificar se o email do contato foi verificado
-      const contactEmail = contactEmailMap[conv.contact_id];
-      const isEmailVerified = contactEmail ? verifiedEmailSet.has(contactEmail) : false;
+      // Verificar status do contato para determinar roteamento
+      const contactStatus = contactStatusMap[conv.contact_id];
+      const isCustomer = contactStatus === 'customer';
 
       // Determinar qual pool de agentes deve receber esta conversa
-      // Email verificado = cliente existente = support_agent
-      // Email não verificado = lead novo = sales_rep
-      const targetRole = isEmailVerified ? 'support_agent' : 'sales_rep';
-      const targetAgentPool = isEmailVerified ? supportAgents : salesAgents;
+      // status = 'customer' = cliente existente = support_agent
+      // qualquer outro status (lead, prospect, null) = sales_rep
+      const targetRole = isCustomer ? 'support_agent' : 'sales_rep';
+      const targetAgentPool = isCustomer ? supportAgents : salesAgents;
+      
+      console.log(`[distribute-pending] Contato ${conv.contact_id} - status: ${contactStatus} → ${targetRole}`);
 
       // Se o agente atual não tem a role correta para esta conversa, pular
       if (currentAgentRole !== targetRole) {
