@@ -64,7 +64,7 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ModeToggle } from "@/components/ModeToggle";
@@ -457,6 +457,10 @@ export function AppSidebar() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <Avatar className="h-10 w-10">
+                  <AvatarImage 
+                    src={profile?.avatar_url || undefined} 
+                    alt={profile?.full_name || "Usuário"} 
+                  />
                   <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                     {profile?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || "U"}
                   </AvatarFallback>
@@ -508,6 +512,10 @@ export function AppSidebar() {
             <div className="flex justify-center">
               <div className="relative">
                 <Avatar className="h-10 w-10">
+                  <AvatarImage 
+                    src={profile?.avatar_url || undefined} 
+                    alt={profile?.full_name || "Usuário"} 
+                  />
                   <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                     {profile?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || "U"}
                   </AvatarFallback>
