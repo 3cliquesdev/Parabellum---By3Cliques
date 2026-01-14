@@ -418,9 +418,6 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
 
-      {/* Indicador de versão com aviso de atualização */}
-      <SidebarVersionIndicator />
-
       <SidebarContent className="px-2">
         {/* Loading state */}
         {(loading || permissionsLoading) ? (
@@ -498,6 +495,9 @@ export function AppSidebar() {
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
+
+            {/* Indicador de versão */}
+            <SidebarVersionIndicator />
           </div>
         ) : (
           <div className="space-y-2">
@@ -545,6 +545,9 @@ export function AppSidebar() {
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
+
+            {/* Indicador de versão */}
+            <SidebarVersionIndicator />
           </div>
         )}
       </SidebarFooter>
