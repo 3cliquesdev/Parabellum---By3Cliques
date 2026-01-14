@@ -155,8 +155,9 @@ serve(async (req) => {
         .update({
           email: customerData.email,
           status: 'customer',
-          // Marcar como validado via Kiwify (usando campo existente ou metadata)
           source: 'kiwify_validated',
+          kiwify_validated: true,
+          kiwify_validated_at: new Date().toISOString(),
         })
         .eq('id', contact_id)
         .select()
