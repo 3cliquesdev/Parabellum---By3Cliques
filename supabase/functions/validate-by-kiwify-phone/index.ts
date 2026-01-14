@@ -88,10 +88,13 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[validate-by-kiwify-phone] Buscando compras Kiwify para: ${normalizedPhone}`);
+    // Extrair últimos 9 dígitos para busca flexível (ignora DDI e variações de formato)
+    const last9Digits = normalizedPhone.slice(-9);
+    
+    console.log(`[validate-by-kiwify-phone] Buscando compras Kiwify para: ${normalizedPhone} (últimos 9: ${last9Digits})`);
 
-    // Buscar compras na Kiwify onde o mobile normalizado bate
-    // Usamos LIKE porque o formato pode variar (+55... vs 55...)
+    // Buscar compras na Kiwify usando filtro SQL direto no campo mobile do JSON
+    // Isso bypassa o limite de 1000 rows e busca em TODOS os eventos
     const { data: kiwifyEvents, error: kiwifyError } = await supabaseClient
       .from('kiwify_events')
       .select(`
@@ -102,18 +105,21 @@ serve(async (req) => {
         created_at
       `)
       .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
-      .order('created_at', { ascending: false });
+      .filter("payload->Customer->>'mobile'", 'ilike', `%${last9Digits}`)
+      .order('created_at', { ascending: false })
+      .limit(50); // Limita a 50 eventos matching (suficiente para histórico)
 
     if (kiwifyError) {
       console.error('[validate-by-kiwify-phone] Erro ao buscar kiwify_events:', kiwifyError);
       throw kiwifyError;
     }
 
-    // Filtrar eventos onde o mobile normalizado bate
+    // Os eventos já vêm filtrados do banco, mas validamos a normalização completa
     const matchingEvents = (kiwifyEvents || []).filter(event => {
       const customerMobile = event.payload?.Customer?.mobile || '';
       const normalizedCustomerMobile = normalizePhone(customerMobile);
-      return normalizedCustomerMobile === normalizedPhone;
+      // Compara últimos 9 dígitos para flexibilidade
+      return normalizedCustomerMobile.slice(-9) === last9Digits;
     });
 
     if (matchingEvents.length === 0) {
