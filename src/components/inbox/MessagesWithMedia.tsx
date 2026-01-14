@@ -1,0 +1,173 @@
+import { useMemo } from "react";
+import { MessageBubble } from "@/components/inbox/MessageBubble";
+import { InternalNoteMessage } from "@/components/InternalNoteMessage";
+import { useMediaUrls } from "@/hooks/useMediaUrls";
+import type { Tables } from "@/integrations/supabase/types";
+
+type Contact = Tables<"contacts"> & {
+  organizations: Tables<"organizations"> | null;
+};
+
+type Conversation = Tables<"conversations">;
+
+interface Message {
+  id: string;
+  content: string;
+  created_at: string;
+  sender_type: string;
+  is_ai_generated: boolean;
+  is_internal: boolean;
+  attachment_url?: string | null;
+  status?: string;
+  sender?: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    job_title: string | null;
+  } | null;
+  media_attachments?: Array<{
+    id: string;
+    status: string;
+    storage_bucket: string;
+    storage_path: string;
+    mime_type: string;
+    original_filename?: string;
+    file_size?: number;
+    waveform_data?: any;
+    duration_seconds?: number;
+  }>;
+}
+
+interface MessagesWithMediaProps {
+  messages: Message[];
+  contact: Contact | null | undefined;
+  conversation: Conversation;
+  isAdmin: boolean;
+  isManager: boolean;
+  messagesEndRef: React.RefObject<HTMLDivElement>;
+}
+
+export function MessagesWithMedia({
+  messages,
+  contact,
+  conversation,
+  isAdmin,
+  isManager,
+  messagesEndRef,
+}: MessagesWithMediaProps) {
+  // Extrair todos os attachments prontos de todas as mensagens
+  const allAttachments = useMemo(() => {
+    const attachments: Array<{
+      id: string;
+      storage_bucket: string;
+      storage_path: string;
+      mime_type: string;
+      original_filename?: string;
+      file_size?: number;
+      waveform_data?: any;
+      duration_seconds?: number;
+    }> = [];
+
+    messages.forEach(msg => {
+      if (msg.media_attachments) {
+        msg.media_attachments
+          .filter(a => a.status === 'ready' && a.storage_bucket && a.storage_path)
+          .forEach(a => attachments.push(a));
+      }
+    });
+
+    return attachments;
+  }, [messages]);
+
+  // Carregar signed URLs para todos os attachments
+  const { urls: mediaUrls, isLoading: mediaLoading, getUrl } = useMediaUrls(allAttachments);
+
+  return (
+    <div className="space-y-4">
+      {messages.map((message) => {
+        const isCustomer = message.sender_type === 'contact';
+        const isSystem = message.sender_type === 'system';
+        const isAI = message.is_ai_generated;
+        const isInternalNote = message.is_internal;
+        
+        // Parse AI debug metadata
+        let usedArticles: any[] = [];
+        try {
+          if (isAI && message.attachment_url) {
+            const metadata = JSON.parse(message.attachment_url);
+            usedArticles = metadata.used_articles || [];
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+
+        // Mapear attachments com signed URLs
+        const attachments = (message.media_attachments || [])
+          .filter(a => a.status === 'ready' && a.storage_bucket && a.storage_path)
+          .map(a => {
+            const urlResult = getUrl(a.id);
+            return {
+              id: a.id,
+              url: urlResult?.url || '',
+              mimeType: urlResult?.mimeType || a.mime_type,
+              filename: urlResult?.filename || a.original_filename,
+              size: urlResult?.size || a.file_size,
+              waveformData: urlResult?.waveformData || a.waveform_data,
+              durationSeconds: urlResult?.durationSeconds || a.duration_seconds,
+              isLoading: !urlResult && mediaLoading,
+            };
+          })
+          .filter(a => a.url); // Só mostrar attachments com URL carregada
+
+        // Renderizar notas internas com estilo especial
+        if (isInternalNote) {
+          return (
+            <InternalNoteMessage
+              key={message.id}
+              content={message.content}
+              createdAt={message.created_at}
+              senderName={message.sender?.full_name}
+            />
+          );
+        }
+
+        if (isSystem) {
+          return (
+            <div key={message.id} className="flex justify-center py-3">
+              <div className="bg-slate-200/50 dark:bg-zinc-800/50 px-4 py-2 rounded-full">
+                <p className="text-xs text-slate-600 dark:text-zinc-400 text-center">
+                  📢 {message.content}
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <MessageBubble
+            key={message.id}
+            content={message.content}
+            createdAt={message.created_at}
+            isCustomer={isCustomer}
+            isAI={isAI}
+            sender={message.sender ? {
+              id: message.sender.id,
+              full_name: message.sender.full_name,
+              avatar_url: message.sender.avatar_url || null,
+              job_title: message.sender.job_title || null,
+            } : null}
+            contactInitials={`${contact?.first_name?.[0] || ''}${contact?.last_name?.[0] || ''}`}
+          channel={conversation.channel}
+          showChannel={false}
+          status={message.status as "sending" | "sent" | "delivered" | "failed" | undefined}
+          usedArticles={usedArticles}
+            isAdmin={isAdmin}
+            isManager={isManager}
+            attachments={attachments}
+          />
+        );
+      })}
+      <div ref={messagesEndRef} />
+    </div>
+  );
+}

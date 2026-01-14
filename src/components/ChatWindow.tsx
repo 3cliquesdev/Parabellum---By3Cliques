@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,6 +27,7 @@ import { ConversationTagsSection } from "@/components/inbox/ConversationTagsSect
 import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { SuperComposer } from "@/components/inbox/SuperComposer";
 import { MessageSkeleton } from "@/components/inbox/MessageSkeleton";
+import { MessagesWithMedia } from "@/components/inbox/MessagesWithMedia";
 import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { useMarkAsRead } from "@/hooks/useUnreadCount";
 import { supabase } from "@/integrations/supabase/client";
@@ -458,106 +459,14 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                     <div className="text-slate-500 dark:text-zinc-400">Nenhuma mensagem ainda</div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {messages.map((message) => {
-                      const isCustomer = message.sender_type === 'contact';
-                      const isSystem = message.sender_type === 'system';
-                      const isAI = message.is_ai_generated;
-                      const isInternalNote = message.is_internal;
-                      
-                      // Parse AI debug metadata
-                      let usedArticles: any[] = [];
-                      try {
-                        if (isAI && message.attachment_url) {
-                          const metadata = JSON.parse(message.attachment_url);
-                          usedArticles = metadata.used_articles || [];
-                        }
-                      } catch (e) {
-                        // Ignore parse errors
-                      }
-
-                      // Parse media attachments from message
-                      // Nota: URLs são geradas no hook useMessagesWithMedia para attachments de buckets privados
-                      let attachments: any[] = [];
-                      try {
-                        if ((message as any).media_attachments) {
-                          attachments = (message as any).media_attachments
-                            .filter((a: any) => a.status === 'ready' && a.storage_bucket && a.storage_path)
-                            .map((a: any) => {
-                              // Gerar URL pública/assinada a partir do storage_path
-                              let url = '';
-                              if (a.storage_bucket && a.storage_path) {
-                                const { data } = supabase.storage
-                                  .from(a.storage_bucket)
-                                  .getPublicUrl(a.storage_path);
-                                url = data?.publicUrl || '';
-                              }
-                              
-                              return {
-                                id: a.id,
-                                url,
-                                mimeType: a.mime_type,
-                                filename: a.original_filename,
-                                size: a.file_size,
-                                waveformData: a.waveform_data,
-                                durationSeconds: a.duration_seconds,
-                              };
-                            });
-                        }
-                      } catch (e) {
-                        // Ignore parse errors
-                      }
-
-                      // Renderizar notas internas com estilo especial
-                      if (isInternalNote) {
-                        return (
-                          <InternalNoteMessage
-                            key={message.id}
-                            content={message.content}
-                            createdAt={message.created_at}
-                            senderName={message.sender?.full_name}
-                          />
-                        );
-                      }
-
-                      if (isSystem) {
-                        return (
-                          <div key={message.id} className="flex justify-center py-3">
-                            <div className="bg-slate-200/50 dark:bg-zinc-800/50 px-4 py-2 rounded-full">
-                              <p className="text-xs text-slate-600 dark:text-zinc-400 text-center">
-                                📢 {message.content}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <MessageBubble
-                          key={message.id}
-                          content={message.content}
-                          createdAt={message.created_at}
-                          isCustomer={isCustomer}
-                          isAI={isAI}
-                          sender={message.sender ? {
-                            id: message.sender.id,
-                            full_name: message.sender.full_name,
-                            avatar_url: message.sender.avatar_url || null,
-                            job_title: message.sender.job_title || null,
-                          } : null}
-                          contactInitials={`${contact?.first_name?.[0] || ''}${contact?.last_name?.[0] || ''}`}
-                          channel={conversation.channel}
-                          showChannel={false}
-                          status={(message as any).status}
-                          usedArticles={usedArticles}
-                          isAdmin={isAdmin}
-                          isManager={isManager}
-                          attachments={attachments}
-                        />
-                      );
-                    })}
-                    <div ref={messagesEndRef} />
-                  </div>
+                <MessagesWithMedia 
+                    messages={messages}
+                    contact={contact}
+                    conversation={conversation}
+                    isAdmin={isAdmin}
+                    isManager={isManager}
+                    messagesEndRef={messagesEndRef}
+                  />
                 )}
               </div>
             </div>
