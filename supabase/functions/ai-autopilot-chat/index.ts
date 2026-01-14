@@ -166,7 +166,24 @@ const FALLBACK_PHRASES = [
   'não sei como',
   'sorry',
   'i cannot',
-  'unable to'
+  'unable to',
+  // 🆕 FASE 5: Novas frases anti-alucinação
+  'não tenho certeza',
+  'preciso verificar',
+  'não posso confirmar',
+  'não sei informar',
+  'deixa eu consultar',
+  'melhor falar com',
+  'recomendo aguardar',
+  'preciso de mais informações',
+  'não localizei',
+  'não encontrei registro',
+  'sistema não mostra',
+  'não aparece aqui',
+  // Português informal
+  'num sei',
+  'n sei',
+  'nao sei',
 ];
 
 // 🔐 BARREIRA FINANCEIRA UNIFICADA - Palavras que EXIGEM cliente identificado + OTP
@@ -214,9 +231,9 @@ interface ConfidenceResult {
   department?: string;
 }
 
-// Thresholds
-const SCORE_DIRECT = 0.80;
-const SCORE_CAUTIOUS = 0.65;
+// Thresholds - FASE 4: Aumentados para ser mais conservador
+const SCORE_DIRECT = 0.85;   // Antes: 0.80 - Aumentado para respostas mais seguras
+const SCORE_CAUTIOUS = 0.70; // Antes: 0.65 - Aumentada margem de segurança
 
 // Indicadores de conflito
 const CONFLICT_INDICATORS = ['porém', 'entretanto', 'no entanto', 'diferente', 'contrário', 'atualizado', 'novo', 'antigo'];
@@ -339,6 +356,24 @@ function calculateConfidenceScore(query: string, documents: RetrievedDocument[])
   // 4. FÓRMULA: SCORE = 0.6*retrieval + 0.4*coverage - 0.25*conflicts
   let score = (0.6 * confRetrieval) + (0.4 * coverage);
   if (conflicts) score -= 0.25;
+  
+  // 🆕 FASE 4: Boost para matches semânticos fortes
+  const hasSemanticMatch = documents.some(d => d.similarity && d.similarity > 0.8);
+  if (hasSemanticMatch) {
+    score += 0.1; // Boost de 10% para matches semânticos fortes
+  }
+  
+  // 🆕 FASE 4: Penalidade para documentos muito antigos (> 6 meses)
+  const now = Date.now();
+  const hasVeryOldDoc = documents.some(d => {
+    if (!d.updated_at) return false;
+    const ageMs = now - new Date(d.updated_at).getTime();
+    return ageMs > 180 * 24 * 60 * 60 * 1000; // 180 dias
+  });
+  if (hasVeryOldDoc) {
+    score -= 0.1; // Penalidade de 10% para docs desatualizados
+  }
+  
   score = Math.max(0, Math.min(1, score)); // Clamp 0-1
   
   // 5. Determinar ação
