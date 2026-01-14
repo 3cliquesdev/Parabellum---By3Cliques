@@ -1,10 +1,20 @@
-import { defineConfig } from "vite";
+import { defineConfig, Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 // Gera BUILD_ID único por build (timestamp ISO)
 const BUILD_ID = new Date().toISOString();
+
+// Plugin para injetar BUILD_ID no HTML durante o build
+function htmlBuildIdPlugin(): Plugin {
+  return {
+    name: 'html-build-id',
+    transformIndexHtml(html) {
+      return html.replace('__BUILD_PLACEHOLDER__', BUILD_ID);
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -21,6 +31,7 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
+    htmlBuildIdPlugin(),
     mode === "development" && componentTagger(),
   ].filter(Boolean),
   resolve: {
