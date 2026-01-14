@@ -7,6 +7,7 @@ interface TransferData {
   ticket_id: string;
   department_id: string;
   internal_note: string;
+  assigned_to?: string | null;
 }
 
 export function useTicketTransfer() {
@@ -15,7 +16,7 @@ export function useTicketTransfer() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ ticket_id, department_id, internal_note }: TransferData) => {
+    mutationFn: async ({ ticket_id, department_id, internal_note, assigned_to }: TransferData) => {
       // Buscar departamento anterior
       const { data: currentTicket } = await supabase
         .from("tickets")
@@ -25,12 +26,23 @@ export function useTicketTransfer() {
       
       const previousDepartment = (currentTicket?.departments as any)?.name || "Desconhecido";
 
+      // Buscar nome do assignee se fornecido
+      let assigneeName: string | null = null;
+      if (assigned_to) {
+        const { data: assignee } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", assigned_to)
+          .single();
+        assigneeName = assignee?.full_name || null;
+      }
+
       const { data, error } = await supabase
         .from("tickets")
         .update({
           department_id,
           status: 'in_progress',
-          assigned_to: null, // Remove atribuição ao transferir
+          assigned_to: assigned_to ?? null,
         })
         .eq("id", ticket_id)
         .select(`
@@ -42,11 +54,12 @@ export function useTicketTransfer() {
       if (error) throw error;
 
       // Criar comentário interno de transferência
+      const assignmentNote = assigneeName ? ` (atribuído para ${assigneeName})` : '';
       await supabase
         .from("ticket_comments")
         .insert({
           ticket_id,
-          content: `📤 Ticket transferido para ${data.department?.name}\n\n${internal_note}`,
+          content: `📤 Ticket transferido para ${data.department?.name}${assignmentNote}\n\n${internal_note}`,
           is_internal: true,
           created_by: user?.id,
         });

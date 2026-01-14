@@ -10,9 +10,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useTicketTransfer } from "@/hooks/useTicketTransfer";
 import { useDepartments } from "@/hooks/useDepartments";
-import { ArrowRight, AlertCircle } from "lucide-react";
+import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
+import { ArrowRight, AlertCircle, User } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface TransferToFinancialDialogProps {
@@ -29,10 +37,12 @@ export function TransferToFinancialDialog({
   hasEvidence,
 }: TransferToFinancialDialogProps) {
   const [internalNote, setInternalNote] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
   const { mutate: transferTicket, isPending } = useTicketTransfer();
   const { data: departments = [] } = useDepartments();
 
   const financialDept = departments.find(d => d.name === 'Financeiro');
+  const { data: financialUsers = [], isLoading: isLoadingUsers } = useUsersByDepartment(financialDept?.id);
 
   const handleTransfer = () => {
     if (!financialDept) {
@@ -44,11 +54,13 @@ export function TransferToFinancialDialog({
         ticket_id: ticketId,
         department_id: financialDept.id,
         internal_note: internalNote || "Ticket enviado para análise financeira.",
+        assigned_to: selectedUserId || null,
       },
       {
         onSuccess: () => {
           onOpenChange(false);
           setInternalNote("");
+          setSelectedUserId("");
         },
       }
     );
@@ -78,6 +90,29 @@ export function TransferToFinancialDialog({
               </AlertDescription>
             </Alert>
           )}
+
+          {/* Atribuir para usuário */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Atribuir para
+            </Label>
+            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+              <SelectTrigger>
+                <SelectValue placeholder={isLoadingUsers ? "Carregando..." : "Selecione um responsável (opcional)"} />
+              </SelectTrigger>
+              <SelectContent>
+                {financialUsers.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.full_name} {user.job_title ? `(${user.job_title})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Se não selecionar, o ticket ficará disponível para qualquer membro do Financeiro
+            </p>
+          </div>
 
           {/* Internal Note */}
           <div className="space-y-2">
