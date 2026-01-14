@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit, Trash2, Brain, Zap, Wrench, FlaskConical } from "lucide-react";
+import { Plus, Edit, Trash2, Brain, Zap, Wrench, FlaskConical, Power } from "lucide-react";
+import { useAIGlobalConfig } from "@/hooks/useAIGlobalConfig";
 import { SandboxTest } from "@/components/SandboxTest";
 import { RLHFMetricsCard } from "@/components/RLHFMetricsCard";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,6 +27,7 @@ export default function AIStudio() {
   const { data: routingRules, isLoading: loadingRules } = useRoutingRules();
   const deleteRoutingRule = useDeleteRoutingRule();
   const { data: tools, isLoading: loadingTools } = useAITools();
+  const { isAIEnabled, isLoading: isLoadingAI, toggleAI, isToggling } = useAIGlobalConfig();
   
   const [selectedPersonaForTools, setSelectedPersonaForTools] = useState<string | null>(null);
   const { data: personaTools } = usePersonaTools(selectedPersonaForTools);
@@ -79,6 +81,32 @@ export default function AIStudio() {
           </p>
         </div>
       </div>
+
+      {/* Global AI Toggle Card */}
+      <Card className={isAIEnabled ? "border-green-500/30 bg-green-500/5" : "border-destructive/30 bg-destructive/5"}>
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Power className={`h-5 w-5 ${isAIEnabled ? 'text-green-500' : 'text-destructive'}`} />
+              <div>
+                <p className="font-medium">
+                  IA {isAIEnabled ? 'Ativada' : 'Desativada'} Globalmente
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {isAIEnabled
+                    ? 'A IA está respondendo automaticamente conforme configuração'
+                    : 'Todas as respostas automáticas estão pausadas'}
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isAIEnabled}
+              onCheckedChange={toggleAI}
+              disabled={isLoadingAI || isToggling}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="personas" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
