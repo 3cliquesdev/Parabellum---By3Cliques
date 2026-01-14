@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Smartphone, Settings, Trash2, QrCode, AlertTriangle, Zap, Activity, RefreshCw, Webhook, Stethoscope, Inbox, Send } from "lucide-react";
+import { Plus, MoreVertical, Smartphone, Settings, Trash2, QrCode, AlertTriangle, Zap, Activity, RefreshCw, Webhook, Stethoscope, Inbox, Send, Bot, Sparkles, BotOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useUpdateWhatsAppInstance } from "@/hooks/useWhatsAppInstances";
 import { toast } from "sonner";
@@ -28,6 +28,7 @@ import { useReconfigureWebhook, useTestWebhook } from "@/hooks/useWhatsAppWebhoo
 import { WhatsAppInstanceDialog } from "@/components/WhatsAppInstanceDialog";
 import { QRCodeModal } from "@/components/QRCodeModal";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useAIGlobalConfig } from "@/hooks/useAIGlobalConfig";
 
 export default function WhatsAppSettings() {
   const { data: instances, isLoading } = useWhatsAppInstances();
@@ -45,7 +46,7 @@ export default function WhatsAppSettings() {
   const [selectedInstance, setSelectedInstance] = useState<any>(null);
   const [testResult, setTestResult] = useState<any>(null);
   const [webhookDiagnostics, setWebhookDiagnostics] = useState<any>(null);
-
+  const { isAIEnabled } = useAIGlobalConfig();
   // API Status for first instance (for demonstration)
   const firstInstance = instances?.[0];
   const { data: apiStatus } = useWhatsAppAPIStatus(
@@ -333,6 +334,7 @@ export default function WhatsAppSettings() {
                 <TableHead>Nome</TableHead>
                 <TableHead>Número</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Modo IA</TableHead>
                 <TableHead>Inbox</TableHead>
                 <TableHead>Vinculação</TableHead>
                 <TableHead className="w-[100px]">Ações</TableHead>
@@ -355,6 +357,29 @@ export default function WhatsAppSettings() {
                     )}
                   </TableCell>
                   <TableCell>{getStatusBadge(instance.status)}</TableCell>
+                  <TableCell>
+                    {!isAIEnabled ? (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        <BotOff className="h-3 w-3 mr-1" />
+                        IA Global OFF
+                      </Badge>
+                    ) : instance.ai_mode === 'autopilot' ? (
+                      <Badge className="bg-green-600">
+                        <Bot className="h-3 w-3 mr-1" />
+                        Autopilot
+                      </Badge>
+                    ) : instance.ai_mode === 'copilot' ? (
+                      <Badge variant="secondary" className="bg-blue-600 text-white">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Copilot
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        <BotOff className="h-3 w-3 mr-1" />
+                        Desligado
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Switch

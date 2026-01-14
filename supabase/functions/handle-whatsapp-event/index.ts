@@ -782,8 +782,20 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     }
   }
 
-  // 6. Se ai_mode = 'autopilot', disparar AI
-  if (instance.ai_mode === 'autopilot') {
+  // 6. Verificar toggle global de IA ANTES de processar
+  const { data: globalAIConfig } = await supabase
+    .from('system_configurations')
+    .select('value')
+    .eq('key', 'ai_global_enabled')
+    .maybeSingle();
+
+  const isAIGloballyEnabled = globalAIConfig?.value !== 'false';
+  
+  console.log('[handle-whatsapp-event] 🤖 AI Global Status:', isAIGloballyEnabled ? 'ENABLED' : 'DISABLED');
+  console.log('[handle-whatsapp-event] 🤖 Instance AI Mode:', instance.ai_mode);
+
+  // 7. Se ai_mode = 'autopilot' E IA global está ativada, disparar AI
+  if (isAIGloballyEnabled && instance.ai_mode === 'autopilot') {
     console.log('[handle-whatsapp-event] Triggering AI autopilot...');
     
     try {
@@ -841,7 +853,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     } catch (aiError) {
       console.error('[handle-whatsapp-event] Error triggering AI:', aiError);
     }
-  } else if (instance.ai_mode === 'copilot') {
+  } else if (isAIGloballyEnabled && instance.ai_mode === 'copilot') {
     console.log('[handle-whatsapp-event] Copilot mode - generating suggestion...');
     
     try {
@@ -854,6 +866,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     } catch (copilotError) {
       console.error('[handle-whatsapp-event] Error generating copilot suggestion:', copilotError);
     }
+  } else {
+    console.log('[handle-whatsapp-event] ⏸️ AI skipped - Global:', isAIGloballyEnabled, 'Instance mode:', instance.ai_mode);
   }
 }
 
