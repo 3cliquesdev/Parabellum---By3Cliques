@@ -2,8 +2,20 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Monitor, Smartphone, RefreshCw, Code, Eye } from "lucide-react";
 import { generateEmailHTML, replaceVariables, defaultSampleData } from "@/utils/emailHtmlGenerator";
 import { useEmailVariables } from "@/hooks/useEmailBuilderV2";
@@ -13,9 +25,26 @@ interface PreviewPanelProps {
   blocks: EmailBlock[];
   subject?: string;
   preheader?: string;
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function PreviewPanel({ blocks, subject, preheader }: PreviewPanelProps) {
+const CATEGORY_LABELS: Record<string, string> = {
+  contact: "Contato",
+  deal: "Negócio",
+  organization: "Organização",
+  custom: "Personalizados",
+};
+
+export function PreviewPanel({ 
+  blocks, 
+  subject, 
+  preheader, 
+  trigger,
+  open,
+  onOpenChange 
+}: PreviewPanelProps) {
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
   const [showHtml, setShowHtml] = useState(false);
   const [sampleData, setSampleData] = useState<Record<string, string>>(defaultSampleData);
@@ -52,23 +81,22 @@ export function PreviewPanel({ blocks, subject, preheader }: PreviewPanelProps) 
     setSampleData(defaultSampleData);
   };
 
-  return (
-    <div className="h-full flex flex-col">
-      <Tabs defaultValue="preview" className="flex-1 flex flex-col">
-        <TabsList className="mx-4 mt-4 grid grid-cols-2">
-          <TabsTrigger value="preview" className="gap-2">
-            <Eye className="h-4 w-4" />
-            Preview
-          </TabsTrigger>
-          <TabsTrigger value="data" className="gap-2">
-            <Code className="h-4 w-4" />
-            Dados
-          </TabsTrigger>
-        </TabsList>
+  const defaultTrigger = (
+    <Button variant="outline" size="sm">
+      <Eye className="h-4 w-4 mr-2" />
+      Preview
+    </Button>
+  );
 
-        <TabsContent value="preview" className="flex-1 flex flex-col m-0 p-4">
-          {/* Preview controls */}
-          <div className="flex items-center justify-between mb-4">
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        {trigger || defaultTrigger}
+      </DialogTrigger>
+      <DialogContent className="max-w-[95vw] w-[1400px] h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 py-4 border-b shrink-0">
+          <div className="flex items-center justify-between">
+            <DialogTitle>Preview do Email</DialogTitle>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
@@ -84,127 +112,128 @@ export function PreviewPanel({ blocks, subject, preheader }: PreviewPanelProps) 
               >
                 <Smartphone className="h-4 w-4" />
               </Button>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowHtml(!showHtml)}
-            >
-              <Code className="h-4 w-4 mr-2" />
-              {showHtml ? "Preview" : "HTML"}
-            </Button>
-          </div>
-
-          {/* Subject preview */}
-          {previewSubject && (
-            <div className="mb-4 p-3 bg-muted rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Assunto</p>
-              <p className="font-medium">{previewSubject}</p>
-            </div>
-          )}
-
-          {/* Email preview */}
-          <div className="flex-1 relative overflow-hidden border rounded-lg bg-slate-100">
-            {showHtml ? (
-              <ScrollArea className="h-full">
-                <pre className="p-4 text-xs font-mono whitespace-pre-wrap break-all">
-                  {generatedHtml}
-                </pre>
-              </ScrollArea>
-            ) : (
-              <div
-                className="h-full overflow-auto flex justify-center p-4"
-                style={{
-                  backgroundColor: "#f1f5f9",
-                }}
+              <div className="w-px h-6 bg-border mx-2" />
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowHtml(!showHtml)}
               >
-                <iframe
-                  srcDoc={generatedHtml}
-                  title="Email Preview"
-                  className="bg-white shadow-lg rounded-lg"
-                  style={{
-                    width: viewMode === "mobile" ? "375px" : "600px",
-                    height: "100%",
-                    minHeight: "500px",
-                    border: "none",
-                  }}
-                />
+                <Code className="h-4 w-4 mr-2" />
+                {showHtml ? "Visual" : "HTML"}
+              </Button>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left: Preview */}
+          <div className="flex-1 flex flex-col overflow-hidden bg-muted/30">
+            {/* Subject preview */}
+            {previewSubject && (
+              <div className="mx-6 mt-4 p-3 bg-card rounded-lg border">
+                <p className="text-xs text-muted-foreground mb-1">Assunto</p>
+                <p className="font-medium">{previewSubject}</p>
               </div>
             )}
-          </div>
-        </TabsContent>
 
-        <TabsContent value="data" className="flex-1 m-0 p-0">
-          <ScrollArea className="h-full">
-            <div className="p-4 space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Dados de Exemplo</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Personalize os valores para testar a prévia
-                  </p>
-                </div>
-                <Button size="sm" variant="outline" onClick={handleResetData}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Resetar
-                </Button>
-              </div>
-
-              {Object.entries(groupedVariables).map(([category, vars]) => (
-                <div key={category} className="space-y-3">
-                  <h4 className="text-sm font-medium capitalize text-muted-foreground">
-                    {category === "contact" && "Contato"}
-                    {category === "deal" && "Negócio"}
-                    {category === "organization" && "Organização"}
-                    {category === "custom" && "Personalizados"}
-                    {!["contact", "deal", "organization", "custom"].includes(category) && category}
-                  </h4>
-                  
-                  {vars.map((variable) => (
-                    <div key={variable.variable_key} className="space-y-1">
-                      <Label className="text-xs flex items-center gap-2">
-                        <code className="text-primary bg-primary/10 px-1 rounded">
-                          {`{{${variable.variable_key}}}`}
-                        </code>
-                        <span className="text-muted-foreground">{variable.display_name}</span>
-                      </Label>
-                      <Input
-                        value={sampleData[variable.variable_key] || ""}
-                        onChange={(e) => handleUpdateSampleData(variable.variable_key, e.target.value)}
-                        placeholder={variable.sample_value || ""}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                  ))}
-                </div>
-              ))}
-
-              {/* Fallback if no variables from DB */}
-              {Object.keys(groupedVariables).length === 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-muted-foreground">Variáveis Padrão</h4>
-                  
-                  {Object.entries(defaultSampleData).map(([key, defaultValue]) => (
-                    <div key={key} className="space-y-1">
-                      <Label className="text-xs">
-                        <code className="text-primary bg-primary/10 px-1 rounded">
-                          {`{{${key}}}`}
-                        </code>
-                      </Label>
-                      <Input
-                        value={sampleData[key] || ""}
-                        onChange={(e) => handleUpdateSampleData(key, e.target.value)}
-                        placeholder={defaultValue}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                  ))}
+            {/* Email preview */}
+            <div className="flex-1 overflow-auto p-6">
+              {showHtml ? (
+                <ScrollArea className="h-full bg-card rounded-lg border">
+                  <pre className="p-4 text-xs font-mono whitespace-pre-wrap break-all">
+                    {generatedHtml}
+                  </pre>
+                </ScrollArea>
+              ) : (
+                <div className="h-full flex justify-center">
+                  <iframe
+                    srcDoc={generatedHtml}
+                    title="Email Preview"
+                    className="bg-white shadow-lg rounded-lg border"
+                    style={{
+                      width: viewMode === "mobile" ? "375px" : "600px",
+                      height: "100%",
+                      minHeight: "600px",
+                    }}
+                  />
                 </div>
               )}
             </div>
-          </ScrollArea>
-        </TabsContent>
-      </Tabs>
-    </div>
+          </div>
+
+          {/* Right: Sample Data */}
+          <div className="w-80 border-l bg-card flex flex-col">
+            <div className="p-4 border-b flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="font-medium text-sm">Dados de Exemplo</h3>
+                <p className="text-xs text-muted-foreground">
+                  Personalize os valores
+                </p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={handleResetData}>
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            </div>
+
+            <ScrollArea className="flex-1">
+              <div className="p-4">
+                {Object.keys(groupedVariables).length > 0 ? (
+                  <Accordion type="multiple" defaultValue={["contact"]} className="space-y-2">
+                    {Object.entries(groupedVariables).map(([category, vars]) => (
+                      <AccordionItem key={category} value={category} className="border rounded-lg px-3">
+                        <AccordionTrigger className="text-sm py-3 hover:no-underline">
+                          {CATEGORY_LABELS[category] || category}
+                          <span className="text-xs text-muted-foreground ml-2">
+                            ({vars.length})
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-3 space-y-3">
+                          {vars.map((variable) => (
+                            <div key={variable.variable_key} className="space-y-1">
+                              <Label className="text-xs flex items-center gap-2">
+                                <code className="text-primary bg-primary/10 px-1 rounded text-[10px]">
+                                  {`{{${variable.variable_key}}}`}
+                                </code>
+                              </Label>
+                              <Input
+                                value={sampleData[variable.variable_key] || ""}
+                                onChange={(e) => handleUpdateSampleData(variable.variable_key, e.target.value)}
+                                placeholder={variable.sample_value || variable.display_name}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                          ))}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Variáveis padrão do sistema
+                    </p>
+                    {Object.entries(defaultSampleData).map(([key, defaultValue]) => (
+                      <div key={key} className="space-y-1">
+                        <Label className="text-xs">
+                          <code className="text-primary bg-primary/10 px-1 rounded text-[10px]">
+                            {`{{${key}}}`}
+                          </code>
+                        </Label>
+                        <Input
+                          value={sampleData[key] || ""}
+                          onChange={(e) => handleUpdateSampleData(key, e.target.value)}
+                          placeholder={defaultValue}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
