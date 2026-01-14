@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -7,16 +7,18 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 type Message = Tables<"messages">;
 type MessageInsert = TablesInsert<"messages">;
 
+// Debounce global para invalidação de conversations (evita spam)
+let conversationsInvalidateTimeout: ReturnType<typeof setTimeout> | null = null;
+
 export function useMessages(conversationId: string | null) {
   const queryClient = useQueryClient();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const query = useQuery({
     queryKey: ["messages", conversationId],
     queryFn: async () => {
       if (!conversationId) return [];
 
-      // FASE 4: Join com profiles para buscar nome/avatar do remetente
-      // FASE 5: Join com media_attachments para buscar anexos (imagens, áudios, vídeos)
       const { data, error } = await supabase
         .from("messages")
         .select(`
@@ -48,16 +50,23 @@ export function useMessages(conversationId: string | null) {
     enabled: !!conversationId,
   });
 
-  // Realtime subscription - usando padrão do useProfilesRealtime
+  // Realtime subscription - otimizado para evitar conflitos
   useEffect(() => {
     if (!conversationId) return;
+
+    // Limpar canal existente antes de criar novo (evita duplicação)
+    if (channelRef.current) {
+      console.log(`[Realtime] Removing existing channel for ${conversationId}`);
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
 
     const channel = supabase
       .channel(`messages-realtime-${conversationId}`)
       .on(
         "postgres_changes",
         {
-          event: "*", // Todos eventos: INSERT, UPDATE, DELETE
+          event: "*",
           schema: "public",
           table: "messages",
           filter: `conversation_id=eq.${conversationId}`,
@@ -72,9 +81,11 @@ export function useMessages(conversationId: string | null) {
             queryClient.setQueryData(
               ["messages", conversationId],
               (old: any[] = []) => {
-                // Verificar se já existe (optimistic ou real)
-                const existsReal = old.some(m => m.id === newMessage.id);
-                if (existsReal) return old;
+                // Verificar duplicata por ID real
+                if (old.some(m => m.id === newMessage.id)) {
+                  console.log('[Realtime] Ignorando duplicata:', newMessage.id);
+                  return old;
+                }
                 
                 // Substituir mensagem temporária pela real
                 const tempIndex = old.findIndex(m => 
@@ -84,12 +95,14 @@ export function useMessages(conversationId: string | null) {
                 );
                 
                 if (tempIndex !== -1) {
+                  console.log('[Realtime] Substituindo temp por real:', newMessage.id);
                   const updated = [...old];
                   updated[tempIndex] = { ...newMessage, status: 'sent' };
                   return updated;
                 }
                 
-                // Nova mensagem (de outro usuário/sistema)
+                // Nova mensagem de outro usuário/cliente
+                console.log('[Realtime] Nova mensagem:', newMessage.id);
                 return [...old, { ...newMessage, status: 'sent' }];
               }
             );
@@ -133,23 +146,33 @@ export function useMessages(conversationId: string | null) {
             }
           }
           
-          // Atualizar sidebar com debounce (baixa prioridade)
-          queryClient.invalidateQueries({ 
-            queryKey: ["conversations"],
-            refetchType: 'active'
-          });
-          queryClient.invalidateQueries({ 
-            queryKey: ["conversation", conversationId],
-            refetchType: 'active'
-          });
+          // Debounce para atualizar sidebar (evita spam de re-renders)
+          if (conversationsInvalidateTimeout) {
+            clearTimeout(conversationsInvalidateTimeout);
+          }
+          conversationsInvalidateTimeout = setTimeout(() => {
+            queryClient.invalidateQueries({ 
+              queryKey: ["conversations"],
+              refetchType: 'active'
+            });
+            queryClient.invalidateQueries({ 
+              queryKey: ["conversation", conversationId],
+              refetchType: 'active'
+            });
+          }, 300);
         }
       )
       .subscribe((status) => {
         console.log(`[Realtime] Messages channel status for ${conversationId}:`, status);
       });
 
+    channelRef.current = channel;
+
     return () => {
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
   }, [conversationId, queryClient]);
 
@@ -241,11 +264,19 @@ export function useSendMessage() {
       });
     },
 
-    // Sincronizar após sucesso (não bloqueia UI)
+    // ✅ NÃO fazer invalidateQueries de messages - realtime já atualiza
+    // Apenas atualizar conversations para sidebar
     onSettled: (_data, _error, variables) => {
-      queryClient.invalidateQueries({ 
-        queryKey: ["messages", variables.conversation_id] 
-      });
+      // Debounce para evitar múltiplos updates
+      if (conversationsInvalidateTimeout) {
+        clearTimeout(conversationsInvalidateTimeout);
+      }
+      conversationsInvalidateTimeout = setTimeout(() => {
+        queryClient.invalidateQueries({ 
+          queryKey: ["conversations"],
+          refetchType: 'active'
+        });
+      }, 200);
     },
   });
 }

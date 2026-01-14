@@ -1,4 +1,5 @@
 import { memo, useEffect, useState, useRef, CSSProperties } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ChannelIcon } from "@/components/ChannelIcon";
@@ -8,8 +9,7 @@ import { formatDistanceToNow, differenceInMinutes, differenceInHours } from "dat
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 import { useSentimentAnalysis, type Sentiment } from "@/hooks/useSentimentAnalysis";
-import { useMessages } from "@/hooks/useMessages";
-
+import { supabase } from "@/integrations/supabase/client";
 type Contact = Tables<"contacts"> & {
   organizations: Tables<"organizations"> | null;
 };
@@ -125,7 +125,22 @@ function ConversationListItemComponent({
   unreadCount = 0,
   style
 }: ConversationListItemProps) {
-  const { data: messages } = useMessages(conversation.id);
+  // ✅ Query simples SEM realtime subscription - evita 50+ canais desnecessários
+  const { data: messages } = useQuery({
+    queryKey: ["messages-sentiment", conversation.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("messages")
+        .select("id, content, sender_type, sender_id, created_at")
+        .eq("conversation_id", conversation.id)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      return data || [];
+    },
+    staleTime: 2 * 60 * 1000, // 2 min - não precisa atualizar sempre
+    enabled: !!conversation.id,
+  });
+  
   const sentimentAnalysis = useSentimentAnalysis();
   const [sentiment, setSentiment] = useState<Sentiment | null>(null);
   const hasAnalyzedRef = useRef(false);
@@ -162,8 +177,8 @@ function ConversationListItemComponent({
   const sla = getSLAColor(lastMessageDate);
   const waitTime = formatWaitTime(lastMessageDate);
 
-  // Última mensagem preview
-  const lastMessage = messages?.[messages.length - 1];
+  // Última mensagem preview (query retorna em ordem DESC, então [0] é a última)
+  const lastMessage = messages?.[0];
   const lastMessagePreview = lastMessage?.content?.slice(0, 50) || "";
 
   return (
