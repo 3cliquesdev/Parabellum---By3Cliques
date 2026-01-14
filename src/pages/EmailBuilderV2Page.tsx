@@ -6,11 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Settings, FlaskConical, LayoutTemplate, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Settings, FlaskConical, LayoutTemplate, AlertTriangle, Eye, Send } from "lucide-react";
 import {
   EmailTemplateBuilderV2,
   ABTestingPanel,
   LayoutLibrary,
+  PreviewPanel,
+  SendTestEmailDialog,
 } from "@/components/email-builder-v2";
 import {
   useEmailTemplateV2,
@@ -33,9 +35,16 @@ export default function EmailBuilderV2Page() {
   
   const [layoutLibraryOpen, setLayoutLibraryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("editor");
+  const [currentBlocks, setCurrentBlocks] = useState<EmailBlock[]>([]);
+
+  // Track blocks changes for preview
+  const displayBlocks = currentBlocks.length > 0 ? currentBlocks : (blocks as unknown as EmailBlock[]) || [];
 
   const handleSaveBlocks = async (newBlocks: EmailBlock[]) => {
     if (!id) return;
+    
+    // Update local state for live preview
+    setCurrentBlocks(newBlocks);
     
     try {
       await saveBlocks.mutateAsync({ templateId: id, blocks: newBlocks });
@@ -46,6 +55,10 @@ export default function EmailBuilderV2Page() {
     } catch (error) {
       // Error handled by hook
     }
+  };
+
+  const handleBlocksChange = (newBlocks: EmailBlock[]) => {
+    setCurrentBlocks(newBlocks);
   };
 
   const handleToggleABTesting = async (enabled: boolean) => {
@@ -119,6 +132,18 @@ export default function EmailBuilderV2Page() {
           </div>
           
           <div className="flex items-center gap-2">
+            <SendTestEmailDialog
+              templateId={id || ""}
+              blocks={displayBlocks}
+              subject={template.default_subject}
+              preheader={template.default_preheader}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Send className="h-4 w-4 mr-2" />
+                  Enviar Teste
+                </Button>
+              }
+            />
             <Button
               variant="outline"
               size="sm"
@@ -164,11 +189,18 @@ export default function EmailBuilderV2Page() {
               Config
             </TabsTrigger>
             <TabsTrigger
+              value="preview"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Preview
+            </TabsTrigger>
+            <TabsTrigger
               value="ab-testing"
               className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
             >
               <FlaskConical className="h-4 w-4 mr-2" />
-              A/B Test
+              A/B
             </TabsTrigger>
           </TabsList>
 
@@ -225,6 +257,14 @@ export default function EmailBuilderV2Page() {
                   </div>
                 </div>
               </div>
+            </TabsContent>
+
+            <TabsContent value="preview" className="m-0 h-full">
+              <PreviewPanel
+                blocks={displayBlocks}
+                subject={template.default_subject}
+                preheader={template.default_preheader}
+              />
             </TabsContent>
 
             <TabsContent value="ab-testing" className="p-4 m-0">

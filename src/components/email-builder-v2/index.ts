@@ -8,3 +8,5 @@ export { LayoutLibrary } from "./LayoutLibrary";
 export { EmailTemplatesV2List } from "./EmailTemplatesV2List";
 export { CreateTemplateV2Dialog } from "./CreateTemplateV2Dialog";
 export { MigrateTemplateButton } from "./MigrateTemplateButton";
+export { PreviewPanel } from "./PreviewPanel";
+export { SendTestEmailDialog } from "./SendTestEmailDialog";
