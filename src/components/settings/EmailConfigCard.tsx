@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Loader2, Send } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Mail, Loader2, Send, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -81,6 +82,20 @@ export default function EmailConfigCard() {
   const employeeSender = configs?.find(c => c.key === "email_sender_employee")?.value || "";
   const verifiedDomain = configs?.find(c => c.key === "email_verified_domain")?.value || "";
 
+  // Check if sender domains match the primary verified domain
+  const getSenderDomain = (sender: string) => {
+    const match = sender.match(/<[^@]+@([^>]+)>/);
+    return match ? match[1] : null;
+  };
+
+  const customerDomain = getSenderDomain(customerSender);
+  const employeeDomain = getSenderDomain(employeeSender);
+  
+  const hasDomainMismatch = verifiedDomain && (
+    (customerDomain && !customerDomain.includes(verifiedDomain)) ||
+    (employeeDomain && !employeeDomain.includes(verifiedDomain))
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -104,9 +119,19 @@ export default function EmailConfigCard() {
                 <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg border border-emerald-200 dark:border-emerald-900">
                   <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                    Domínio ativo: {verifiedDomain}
+                    Domínio principal: {verifiedDomain}
                   </span>
                 </div>
+              )}
+
+              {hasDomainMismatch && (
+                <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-amber-700 dark:text-amber-400">
+                    <strong>Atenção:</strong> Os remetentes usam domínio diferente do principal ({verifiedDomain}). 
+                    Considere atualizar os emails para usar o mesmo domínio verificado.
+                  </AlertDescription>
+                </Alert>
               )}
 
               <div className="space-y-2">

@@ -10,7 +10,8 @@ import {
   ChevronDown, 
   ChevronRight,
   Trash2,
-  Shield
+  Shield,
+  Star
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +51,20 @@ export function ResendDomainManager() {
   const queryClient = useQueryClient();
   const [expandedDomains, setExpandedDomains] = useState<Record<string, boolean>>({});
 
+  // Fetch primary domain from system_configurations
+  const { data: primaryDomain } = useQuery({
+    queryKey: ["primary-domain"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("system_configurations")
+        .select("value")
+        .eq("key", "email_verified_domain")
+        .single();
+      if (error && error.code !== "PGRST116") throw error;
+      return data?.value || null;
+    },
+  });
+
   // Fetch all domains
   const { data: domainsData, isLoading, refetch } = useQuery({
     queryKey: ["resend-domains"],
@@ -60,6 +75,32 @@ export function ResendDomainManager() {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
       return data.domains as ResendDomain[];
+    },
+  });
+
+  // Set primary domain mutation
+  const setPrimaryMutation = useMutation({
+    mutationFn: async (domainName: string) => {
+      const { error } = await supabase
+        .from("system_configurations")
+        .update({ value: domainName })
+        .eq("key", "email_verified_domain");
+      if (error) throw error;
+    },
+    onSuccess: (_, domainName) => {
+      queryClient.invalidateQueries({ queryKey: ["primary-domain"] });
+      queryClient.invalidateQueries({ queryKey: ["email-configs"] });
+      toast({
+        title: "✅ Domínio principal atualizado",
+        description: `${domainName} agora é o domínio principal para envio de emails`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao definir domínio principal",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -242,8 +283,32 @@ export function ResendDomainManager() {
                         {getStatusIcon(domain.status)}
                         <span className="font-medium">{domain.name}</span>
                         {getStatusBadge(domain.status)}
+                        {domain.status === "verified" && primaryDomain === domain.name && (
+                          <Badge className="bg-amber-500 text-black gap-1">
+                            <Star className="h-3 w-3 fill-current" />
+                            Principal
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        {domain.status === "verified" && primaryDomain !== domain.name && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPrimaryMutation.mutate(domain.name)}
+                            disabled={setPrimaryMutation.isPending}
+                            className="text-amber-600 border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+                          >
+                            {setPrimaryMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Star className="h-4 w-4 mr-1" />
+                                Definir Principal
+                              </>
+                            )}
+                          </Button>
+                        )}
                         {domain.status !== "verified" && (
                           <Button
                             variant="outline"
