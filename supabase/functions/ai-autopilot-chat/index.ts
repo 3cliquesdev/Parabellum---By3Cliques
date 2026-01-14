@@ -22,6 +22,39 @@ async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
   }
 }
 
+// Helper: Buscar template de mensagem do banco ai_message_templates
+async function getMessageTemplate(
+  supabaseClient: any,
+  key: string,
+  variables: Record<string, string> = {}
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseClient
+      .from('ai_message_templates')
+      .select('content, is_active')
+      .eq('key', key)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.log(`[getMessageTemplate] Template "${key}" não encontrado ou inativo`);
+      return null;
+    }
+
+    // Substituir variáveis {{var}} pelos valores
+    let content = data.content;
+    Object.entries(variables).forEach(([varKey, value]) => {
+      content = content.replace(new RegExp(`\\{\\{${varKey}\\}\\}`, 'g'), value || '');
+    });
+
+    console.log(`[getMessageTemplate] ✅ Template "${key}" carregado com sucesso`);
+    return content;
+  } catch (error) {
+    console.error(`[getMessageTemplate] Erro ao buscar template "${key}":`, error);
+    return null;
+  }
+}
+
 // FASE 2: Função para gerar hash SHA-256 da pergunta normalizada
 async function generateQuestionHash(message: string): Promise<string> {
   const normalized = message
@@ -1630,7 +1663,12 @@ Responda APENAS: skip ou search`
       if (contactHasEmail) {
         console.log('[ai-autopilot-chat] 🎯 BYPASS DA IA - Saudação direta para cliente conhecido');
         
-        const directGreeting = `Olá ${contactName}! Bem-vindo(a) de volta! Como posso te ajudar hoje?`;
+        // Buscar template do banco ou usar fallback
+        const directGreeting = await getMessageTemplate(
+          supabaseClient,
+          'saudacao_cliente_conhecido',
+          { contact_name: contactName || '' }
+        ) || `Olá ${contactName}! Bem-vindo(a) de volta! Como posso te ajudar hoje?`;
         
         // Salvar mensagem da IA
         const { data: savedMsg } = await supabaseClient
@@ -1683,7 +1721,12 @@ Responda APENAS: skip ou search`
       if (!contactHasEmail && responseChannel === 'whatsapp') {
         console.log('[ai-autopilot-chat] 🎯 BYPASS DA IA - Pedindo email para lead novo');
         
-        const leadGreeting = `Olá${contactName ? ' ' + contactName : ''}! Para garantir um atendimento personalizado e seguro, preciso que você me informe seu email.`;
+        // Buscar template do banco ou usar fallback
+        const leadGreeting = await getMessageTemplate(
+          supabaseClient,
+          'saudacao_cliente_novo',
+          { contact_name: contactName || '' }
+        ) || `Olá${contactName ? ' ' + contactName : ''}! Para garantir um atendimento personalizado e seguro, preciso que você me informe seu email.`;
         
         // Salvar mensagem da IA
         const { data: savedMsg } = await supabaseClient
