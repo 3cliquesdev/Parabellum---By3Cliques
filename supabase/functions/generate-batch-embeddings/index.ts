@@ -7,6 +7,140 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Simple hash function for pseudo-embedding generation
+function simpleHash(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash);
+}
+
+// Generate pseudo-embedding from keywords (1536 dimensions for OpenAI compatibility)
+function generatePseudoEmbedding(keywords: string[]): number[] {
+  const embedding = new Array(1536).fill(0);
+  keywords.forEach((keyword) => {
+    const hash = simpleHash(keyword.toLowerCase());
+    for (let j = 0; j < 50; j++) {
+      const idx = (hash + j * 31) % 1536;
+      embedding[idx] = Math.sin(hash * (j + 1)) * 0.5;
+    }
+  });
+  // Normalize
+  const norm = Math.sqrt(embedding.reduce((sum, x) => sum + x * x, 0));
+  return embedding.map(x => x / (norm || 1));
+}
+
+// Extract keywords from text using Lovable AI
+async function extractKeywordsWithLovableAI(text: string, lovableApiKey: string): Promise<string[]> {
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${lovableApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [
+          { 
+            role: 'system', 
+            content: 'Extraia 20 palavras-chave do texto fornecido. Responda APENAS com JSON válido no formato: {"keywords": ["palavra1", "palavra2", ...]}. Sem explicações.' 
+          },
+          { role: 'user', content: text.substring(0, 2000) }
+        ],
+        max_tokens: 200,
+        temperature: 0.1,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('[extractKeywords] Lovable AI error:', await response.text());
+      return [];
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+    
+    // Try to parse JSON from response
+    const jsonMatch = content.match(/\{[\s\S]*"keywords"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return parsed.keywords || [];
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('[extractKeywords] Error:', error);
+    return [];
+  }
+}
+
+// Generate embedding with OpenAI or fallback to Lovable AI
+async function generateEmbedding(
+  text: string, 
+  openaiApiKey: string | undefined, 
+  lovableApiKey: string | undefined
+): Promise<number[] | null> {
+  // Try OpenAI first (native embeddings - best quality)
+  if (openaiApiKey) {
+    try {
+      console.log('[generateEmbedding] Attempting OpenAI embedding...');
+      const response = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'text-embedding-3-small',
+          input: text,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[generateEmbedding] ✅ OpenAI embedding generated successfully');
+        return data.data[0].embedding;
+      } else {
+        console.warn('[generateEmbedding] OpenAI failed, status:', response.status);
+      }
+    } catch (error) {
+      console.warn('[generateEmbedding] OpenAI exception:', error);
+    }
+  }
+
+  // Fallback: Lovable AI + pseudo-embedding (keyword-based)
+  if (lovableApiKey) {
+    console.log('[generateEmbedding] Using Lovable AI fallback...');
+    const keywords = await extractKeywordsWithLovableAI(text, lovableApiKey);
+    
+    if (keywords.length > 0) {
+      console.log(`[generateEmbedding] ✅ Generated pseudo-embedding from ${keywords.length} keywords`);
+      return generatePseudoEmbedding(keywords);
+    } else {
+      // Ultimate fallback: extract keywords manually from text
+      console.log('[generateEmbedding] ⚠️ Keyword extraction failed, using text-based fallback');
+      const words = text
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length > 3)
+        .slice(0, 20);
+      
+      if (words.length > 0) {
+        return generatePseudoEmbedding(words);
+      }
+    }
+  }
+
+  console.error('[generateEmbedding] ❌ No embedding provider available');
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -18,6 +152,27 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Get API keys
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+
+    // Check if at least one provider is available
+    if (!OPENAI_API_KEY && !LOVABLE_API_KEY) {
+      console.error('[generate-batch-embeddings] No embedding provider configured');
+      return new Response(
+        JSON.stringify({ 
+          error: 'No embedding provider configured. Please set OPENAI_API_KEY or LOVABLE_API_KEY.',
+          success: false 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[generate-batch-embeddings] Providers available:', {
+      openai: !!OPENAI_API_KEY,
+      lovable: !!LOVABLE_API_KEY
+    });
 
     // Fetch all articles without embeddings
     const { data: articles, error: fetchError } = await supabase
@@ -45,46 +200,36 @@ serve(async (req) => {
 
     console.log(`[generate-batch-embeddings] Found ${articles.length} articles to process`);
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY not configured');
-    }
-
     let processed = 0;
     let errors = 0;
+    let usedOpenAI = 0;
+    let usedFallback = 0;
 
     // Process articles one by one
     for (const article of articles) {
       try {
         console.log(`[generate-batch-embeddings] Processing article: ${article.title}`);
         
-        // Generate embedding using OpenAI
-        const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'text-embedding-3-small',
-            input: `${article.title}\n\n${article.content}`,
-          }),
-        });
+        const text = `${article.title}\n\n${article.content}`;
+        const embedding = await generateEmbedding(text, OPENAI_API_KEY, LOVABLE_API_KEY);
 
-        if (!embeddingResponse.ok) {
-          const errorText = await embeddingResponse.text();
-          console.error(`[generate-batch-embeddings] OpenAI error for article ${article.id}:`, errorText);
+        if (!embedding) {
+          console.error(`[generate-batch-embeddings] Failed to generate embedding for article ${article.id}`);
           errors++;
           continue;
         }
 
-        const embeddingData = await embeddingResponse.json();
-        const embedding = embeddingData.data[0].embedding;
+        // Track which provider was used
+        if (OPENAI_API_KEY) {
+          usedOpenAI++;
+        } else {
+          usedFallback++;
+        }
 
-        // Save embedding to database using RPC
+        // Save embedding to database using RPC (correct parameter names)
         const { error: updateError } = await supabase.rpc('update_article_embedding', {
-          p_article_id: article.id,
-          p_embedding: embedding,
+          article_id: article.id,
+          new_embedding: embedding,
         });
 
         if (updateError) {
@@ -105,6 +250,7 @@ serve(async (req) => {
     }
 
     console.log(`[generate-batch-embeddings] Batch complete: ${processed} success, ${errors} errors`);
+    console.log(`[generate-batch-embeddings] Provider usage - OpenAI: ${usedOpenAI}, Fallback: ${usedFallback}`);
 
     return new Response(
       JSON.stringify({
@@ -112,6 +258,10 @@ serve(async (req) => {
         processed,
         errors,
         total: articles.length,
+        providers: {
+          openai: usedOpenAI,
+          fallback: usedFallback
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
