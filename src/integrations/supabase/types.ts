@@ -7213,6 +7213,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      batch_validate_kiwify_contacts: { Args: never; Returns: number }
       calculate_business_due_date: {
         Args: {
           p_start_date: string
