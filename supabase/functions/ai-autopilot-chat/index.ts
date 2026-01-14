@@ -1583,6 +1583,33 @@ Responda APENAS: skip ou search`
       contactStatus: contact.status
     });
     
+    // 🆕 CORREÇÃO: Se é cliente validado mas status não é 'customer', atualizar
+    if (isValidatedCustomer && contact.status !== 'customer') {
+      console.log('[ai-autopilot-chat] 🔄 Atualizando status para customer...');
+      await supabaseClient
+        .from('contacts')
+        .update({ status: 'customer' })
+        .eq('id', contact.id);
+    }
+    
+    // 🆕 CORREÇÃO: Cliente validado vai para SUPORTE, não Comercial
+    const SUPORTE_DEPT_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+    if (isValidatedCustomer) {
+      const { data: currentConv } = await supabaseClient
+        .from('conversations')
+        .select('department')
+        .eq('id', conversationId)
+        .single();
+      
+      if (currentConv && currentConv.department !== SUPORTE_DEPT_ID) {
+        console.log('[ai-autopilot-chat] 🏢 Movendo conversa para Suporte (cliente validado)');
+        await supabaseClient
+          .from('conversations')
+          .update({ department: SUPORTE_DEPT_ID })
+          .eq('id', conversationId);
+      }
+    }
+    
     // ============================================================
     // 🎯 SISTEMA ANTI-ALUCINAÇÃO - VERIFICAÇÃO DE CONFIANÇA
     // ============================================================

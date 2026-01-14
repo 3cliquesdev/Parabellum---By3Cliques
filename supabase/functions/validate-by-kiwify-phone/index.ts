@@ -153,31 +153,41 @@ serve(async (req) => {
       products_count: products.length
     });
 
-    // Se temos contact_id, atualizar o contato com os dados da Kiwify
+    // Se temos contact_id, SEMPRE atualizar o contato quando encontrar na Kiwify (mesmo sem email)
     let updatedContact = null;
-    if (contact_id && customerData.email) {
+    if (contact_id) {
+      const updateData: Record<string, any> = {
+        status: 'customer',
+        source: 'kiwify_validated',
+        kiwify_validated: true,
+        kiwify_validated_at: new Date().toISOString(),
+      };
+      
+      // Só adiciona email se existir
+      if (customerData.email) {
+        updateData.email = customerData.email;
+      }
+      
       const { data: updated, error: updateError } = await supabaseClient
         .from('contacts')
-        .update({
-          email: customerData.email,
-          status: 'customer',
-          source: 'kiwify_validated',
-          kiwify_validated: true,
-          kiwify_validated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', contact_id)
         .select()
         .single();
 
       if (!updateError && updated) {
         updatedContact = updated;
-        console.log(`[validate-by-kiwify-phone] ✅ Contato ${contact_id} atualizado com email Kiwify`);
+        console.log(`[validate-by-kiwify-phone] ✅ Contato ${contact_id} atualizado para customer`, {
+          hasEmail: !!customerData.email,
+          email: customerData.email || 'sem email'
+        });
 
         // Registrar interação de identificação
+        const emailInfo = customerData.email ? `Email: ${customerData.email}. ` : '';
         await supabaseClient.from('interactions').insert({
           customer_id: contact_id,
           type: 'internal_note',
-          content: `✅ Cliente identificado automaticamente via número Kiwify. Email: ${customerData.email}. Produtos: ${products.join(', ')}`,
+          content: `✅ Cliente identificado automaticamente via número Kiwify. ${emailInfo}Produtos: ${products.join(', ')}`,
           channel: 'system'
         });
       }
