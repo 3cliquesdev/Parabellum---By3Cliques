@@ -428,19 +428,33 @@ const INFORMATIONAL_PATTERNS = [
   /me\s+explica/i,
 ];
 
-  // Template de mensagem de sucesso do ticket (CONTEXTUAL)
-function createTicketSuccessMessage(
+  // Template de mensagem de sucesso do ticket (CONTEXTUAL) - ASYNC para buscar templates do banco
+async function createTicketSuccessMessage(
+  supabaseClient: any,
   ticketId: string, 
   issueType: string = 'financeiro', 
   orderId?: string,
   withdrawalData?: { amount?: number; cpf_last4?: string },
   ticketNumber?: string | null
-): string {
+): Promise<string> {
   // Usa ticket_number se disponível, senão fallback para UUID truncado
   const formattedId = ticketNumber || ticketId.slice(0, 8).toUpperCase();
   
-  // FASE 5: Mensagem específica para SAQUE com dados coletados
+  // FASE 5: Mensagem específica para SAQUE com dados coletados - buscar template
   if (issueType === 'saque' && withdrawalData?.amount) {
+    const saqueTemplate = await getMessageTemplate(
+      supabaseClient,
+      'saque_sucesso',
+      {
+        ticket_id: formattedId,
+        valor: withdrawalData.amount.toFixed(2),
+        cpf_last4: withdrawalData.cpf_last4 || ''
+      }
+    );
+    
+    if (saqueTemplate) return saqueTemplate;
+    
+    // Fallback se template não existir
     return `**Solicitação de saque registrada!**
 
 **Protocolo:** #${formattedId}
@@ -2780,9 +2794,13 @@ Se estiver correto, vou te transferir para nosso time comercial. Se digitou erra
             
             console.log('[ai-autopilot-chat] 🔐 OTP pendente marcado na metadata (verify_customer_email tool)');
             
-            // Build response message (NEVER show code to client)
+            // Build response message usando template do banco (NEVER show code to client)
             const safeEmail = maskEmail(emailInformado);
-            assistantMessage = `Encontrei seu cadastro, ${existingCustomer.first_name}!
+            assistantMessage = await getMessageTemplate(
+              supabaseClient,
+              'otp_enviado',
+              { masked_email: safeEmail, contact_name: existingCustomer.first_name || '' }
+            ) || `Encontrei seu cadastro, ${existingCustomer.first_name}!
 
 Enviei um código de 6 dígitos para **${safeEmail}**.
 
@@ -2844,13 +2862,17 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
             
             console.log('[ai-autopilot-chat] 🔐 OTP pendente atualizado na metadata (resend_otp tool)');
 
-            // Build response message (NEVER show code to client)
+            // Build response message usando template do banco (NEVER show code to client)
             const safeEmail = maskEmail(contactEmail);
-            assistantMessage = `Código reenviado com sucesso!
+            assistantMessage = await getMessageTemplate(
+              supabaseClient,
+              'otp_reenvio',
+              { masked_email: safeEmail }
+            ) || `Código reenviado com sucesso!
 
 Enviei um novo código de 6 dígitos para **${safeEmail}**.
 
-Por favor, verifique sua caixa de entrada (e spam) e digite o código que você recebeu.`;
+Por favor, verifique sua caixa de entrada (e spam) e digite o código que você recebido.`;
 
             // Log dev mode internally (never show code to client)
             if (otpData.dev_mode) {
@@ -3291,7 +3313,8 @@ Via: Atendimento Automatizado (IA)`;
               } : undefined;
 
               // 🎯 SUBSTITUIR COMPLETAMENTE - Ticket criado = Problema resolvido = Não precisa desculpa
-              assistantMessage = createTicketSuccessMessage(
+              assistantMessage = await createTicketSuccessMessage(
+                supabaseClient,
                 ticket.id,
                 args.issue_type,
                 args.order_id,
@@ -3699,7 +3722,8 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             .eq('id', conversationId);
           
           // 🎯 SUBSTITUIR COMPLETAMENTE - Ticket criado = Mensagem limpa e profissional
-          assistantMessage = createTicketSuccessMessage(
+          assistantMessage = await createTicketSuccessMessage(
+            supabaseClient,
             ticket?.id || '',
             'financeiro',
             undefined,
