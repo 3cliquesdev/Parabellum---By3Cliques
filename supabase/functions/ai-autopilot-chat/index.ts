@@ -615,6 +615,102 @@ serve(async (req) => {
     
       console.log(`[ai-autopilot-chat] Canal da última mensagem: ${responseChannel}, Departamento: ${department}`);
 
+    // 🆕 FASE KIWIFY: Validação automática por número Kiwify (antes do cache!)
+    // Se contato não tem email, tentar identificar automaticamente via compra Kiwify
+    const contactHasEmailForKiwify = contact.email && contact.email.trim() !== '';
+    
+    if (!contactHasEmailForKiwify && (contact.phone || contact.whatsapp_id)) {
+      console.log('[ai-autopilot-chat] 🔍 Tentando validação automática via Kiwify...');
+      
+      try {
+        const { data: kiwifyValidation, error: kiwifyError } = await supabaseClient.functions.invoke(
+          'validate-by-kiwify-phone',
+          { 
+            body: { 
+              phone: contact.phone,
+              whatsapp_id: contact.whatsapp_id,
+              contact_id: contact.id 
+            } 
+          }
+        );
+
+        if (!kiwifyError && kiwifyValidation?.found) {
+          console.log(`[ai-autopilot-chat] ✅ Cliente IDENTIFICADO via Kiwify!`, {
+            name: kiwifyValidation.customer?.name,
+            email: kiwifyValidation.customer?.email,
+            products: kiwifyValidation.customer?.products?.length
+          });
+
+          // Atualizar contato local com email da Kiwify para continuar o fluxo
+          contact.email = kiwifyValidation.customer?.email;
+          contact.status = 'customer';
+
+          // 🎉 Enviar mensagem de boas-vindas personalizada
+          const welcomeProducts = kiwifyValidation.customer?.products?.slice(0, 3).map((p: string) => `• ${p}`).join('\n') || '';
+          const welcomeMessage = `Olá, ${kiwifyValidation.customer?.name?.split(' ')[0] || 'cliente'}! 🎉
+
+Identificamos você automaticamente pelo seu número de WhatsApp.
+
+📦 *Seus produtos:*
+${welcomeProducts}
+
+Como posso ajudar você hoje?`;
+
+          // Salvar mensagem de boas-vindas
+          const { data: welcomeMsgData } = await supabaseClient
+            .from("messages")
+            .insert({
+              conversation_id: conversationId,
+              content: welcomeMessage,
+              sender_type: "user",
+              is_ai_generated: true,
+              channel: responseChannel,
+            })
+            .select('id')
+            .single();
+
+          // Atualizar last_message_at
+          await supabaseClient
+            .from("conversations")
+            .update({ last_message_at: new Date().toISOString() })
+            .eq("id", conversationId);
+
+          // Se WhatsApp, enviar via Evolution API
+          if (responseChannel === 'whatsapp' && welcomeMsgData) {
+            const whatsappInstance = await getWhatsAppInstanceForConversation(
+              supabaseClient, 
+              conversationId, 
+              conversation.whatsapp_instance_id
+            );
+
+            if (whatsappInstance) {
+              await supabaseClient.functions.invoke('send-whatsapp-message', {
+                body: {
+                  instance_id: whatsappInstance.id,
+                  phone_number: contact.phone,
+                  whatsapp_id: contact.whatsapp_id,
+                  message: welcomeMessage,
+                },
+              });
+
+              await supabaseClient
+                .from('messages')
+                .update({ status: 'sent' })
+                .eq('id', welcomeMsgData.id);
+            }
+          }
+
+          // Continuar processamento normal (agora com email identificado)
+          console.log('[ai-autopilot-chat] ✅ Continuando com cliente identificado via Kiwify');
+        } else {
+          console.log('[ai-autopilot-chat] ℹ️ Nenhuma compra Kiwify encontrada para este número');
+        }
+      } catch (kiwifyErr) {
+        console.warn('[ai-autopilot-chat] ⚠️ Erro na validação Kiwify (não crítico):', kiwifyErr);
+        // Não falhar o fluxo principal se Kiwify falhar
+      }
+    }
+
     // FASE 1: Verificar se deve pular cache para experiência personalizada
     const contactHasEmailForCache = contact.email && contact.email.trim() !== '';
     const isFinancialForCache = FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
