@@ -33,12 +33,11 @@ export function TourButton({
   const { completed, isLoading, markComplete, resetTour } = useTourProgress(tourId);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
 
-  // Auto-start tour if not completed
+  // Auto-start tour always (regardless of completion status)
   useEffect(() => {
     if (
       autoStart &&
       !isLoading &&
-      !completed &&
       !isActive &&
       !hasAutoStarted &&
       steps.length > 0
