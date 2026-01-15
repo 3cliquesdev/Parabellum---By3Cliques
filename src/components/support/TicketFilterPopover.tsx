@@ -10,7 +10,7 @@ import { useTags } from "@/hooks/useTags";
 import { useActiveTicketStatuses } from "@/hooks/useTicketStatuses";
 import { getStatusIcon } from "@/lib/ticketStatusIcons";
 import { useDepartments } from "@/hooks/useDepartments";
-import { useSupportAgents } from "@/hooks/useSupportAgents";
+import { useInternalUsers } from "@/hooks/useInternalUsers";
 import { 
   Select,
   SelectContent,
@@ -96,7 +96,7 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
   const { data: ticketTags = [] } = useTags("ticket");
   const { data: ticketStatuses = [] } = useActiveTicketStatuses();
   const { data: departments = [] } = useDepartments({ activeOnly: true });
-  const { data: agents = [] } = useSupportAgents();
+  const { data: agents = [] } = useInternalUsers();
 
   // Count active filters
   const activeFilterCount = [
