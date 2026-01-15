@@ -11,6 +11,7 @@ import RealtimeNotifications from "./components/RealtimeNotifications";
 import { WhatsAppDisconnectMonitor } from "./components/WhatsAppDisconnectMonitor";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner";
+import { TourProvider } from "./components/tour/TourProvider";
 
 import { PageLoadingSkeleton } from "./components/PageLoadingSkeleton";
 
@@ -124,14 +125,15 @@ const App = () => {
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <>
-            <UpdateAvailableBanner />
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <RealtimeNotifications />
-              <WhatsAppDisconnectMonitor />
-              <Suspense fallback={<PageLoadingSkeleton />}>
+          <TourProvider>
+            <>
+              <UpdateAvailableBanner />
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <RealtimeNotifications />
+                <WhatsAppDisconnectMonitor />
+                <Suspense fallback={<PageLoadingSkeleton />}>
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/auth" element={<Auth />} />
@@ -242,9 +244,10 @@ const App = () => {
               {/* Catch-all route - must be last */}
               <Route path="*" element={<NotFound />} />
               </Routes>
-            </Suspense>
-          </BrowserRouter>
-          </>
+              </Suspense>
+            </BrowserRouter>
+            </>
+          </TourProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </AppErrorBoundary>
