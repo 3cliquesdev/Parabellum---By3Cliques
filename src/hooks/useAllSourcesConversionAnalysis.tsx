@@ -11,7 +11,7 @@ export interface SourceAnalysis {
 }
 
 const sourceConfig: { source: Exclude<DealSource, "all">; label: string }[] = [
-  { source: "organic_new", label: "1ª Compra Kiwify" },
+  { source: "organic_new", label: "1ª Compra Kiwify Orgânica" },
   { source: "organic_recurring", label: "Recorrente" },
   { source: "form", label: "Formulários" },
   { source: "whatsapp", label: "WhatsApp" },
