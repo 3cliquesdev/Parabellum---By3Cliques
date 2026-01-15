@@ -205,6 +205,7 @@ export function useTickets(
         const searchLower = advancedFilters.search.toLowerCase();
         filteredData = filteredData.filter(ticket => {
           const ticketId = ticket.id.toLowerCase();
+          const ticketNumber = (ticket.ticket_number || '').toLowerCase();
           const subject = (ticket.subject || '').toLowerCase();
           const customerFirstName = (ticket.customer?.first_name || '').toLowerCase();
           const customerLastName = (ticket.customer?.last_name || '').toLowerCase();
@@ -212,6 +213,7 @@ export function useTickets(
           
           return (
             ticketId.includes(searchLower) ||
+            ticketNumber.includes(searchLower) ||
             subject.includes(searchLower) ||
             customerFirstName.includes(searchLower) ||
             customerLastName.includes(searchLower) ||
