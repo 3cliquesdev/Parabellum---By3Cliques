@@ -17,6 +17,7 @@ import { TicketsBulkActionsBar } from "@/components/support/TicketsBulkActionsBa
 import { BulkMoveToProjectDialog } from "@/components/support/BulkMoveToProjectDialog";
 import { BulkTransferTicketsDialog } from "@/components/support/BulkTransferTicketsDialog";
 import { useBulkArchiveTickets } from "@/hooks/useBulkArchiveTickets";
+import { TicketFilterPopover, TicketFilters, defaultTicketFilters } from "@/components/support/TicketFilterPopover";
 
 
 type MobileView = 'list' | 'details';
@@ -33,6 +34,7 @@ export default function Support() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [moveToProjectOpen, setMoveToProjectOpen] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<TicketFilters>(defaultTicketFilters);
   const [bulkTransferOpen, setBulkTransferOpen] = useState(false);
   
   const { isSupportManager } = useUserRole();
@@ -60,33 +62,38 @@ export default function Support() {
     }
   }, [isMobile, mobileView, selectedTicketId, setViewingTicket]);
 
-  // Convert sidebar filter to hook parameters
+  // Convert sidebar filter to hook parameters, merging with advanced filters
   const getHookParams = () => {
+    // Base filters from advanced popover
+    const baseFilters: TicketFilters = {
+      ...advancedFilters,
+      search: advancedFilters.search || searchTerm,
+    };
+
     switch (sidebarFilter) {
       case 'my_open':
         return { 
           assignedFilter: 'mine' as const,
-          advancedFilters: { search: '', status: ['open', 'in_progress', 'waiting_customer'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false, noTags: false }
+          advancedFilters: { ...baseFilters, status: baseFilters.status.length > 0 ? baseFilters.status : ['open', 'in_progress', 'waiting_customer'] }
         };
       case 'unassigned':
-        return { assignedFilter: 'unassigned' as const };
+        return { assignedFilter: 'unassigned' as const, advancedFilters: baseFilters };
       case 'sla_expired':
-        return { advancedFilters: { search: '', status: [], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: true, noTags: false } };
+        return { advancedFilters: { ...baseFilters, slaExpired: true } };
       case 'no_tags':
-        return { advancedFilters: { search: '', status: ['open', 'in_progress', 'waiting_customer'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false, noTags: true } };
+        return { advancedFilters: { ...baseFilters, noTags: true, status: baseFilters.status.length > 0 ? baseFilters.status : ['open', 'in_progress', 'waiting_customer'] } };
       case 'archived':
-        return { advancedFilters: { search: '', status: ['resolved', 'closed'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false, noTags: false } };
+        return { advancedFilters: { ...baseFilters, status: ['resolved', 'closed'] } };
       case 'open':
       case 'in_progress':
       case 'waiting_customer':
       case 'resolved':
       case 'closed':
-        return { advancedFilters: { search: '', status: [sidebarFilter], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false, noTags: false } };
+        return { advancedFilters: { ...baseFilters, status: [sidebarFilter] } };
       case 'all':
-        // "Todos" now excludes archived tickets
-        return { advancedFilters: { search: '', status: ['open', 'in_progress', 'waiting_customer'], priority: [], category: [], channel: [], tags: [], dateRange: undefined, slaExpired: false, noTags: false } };
+        return { advancedFilters: { ...baseFilters, status: baseFilters.status.length > 0 ? baseFilters.status : ['open', 'in_progress', 'waiting_customer'] } };
       default:
-        return {};
+        return { advancedFilters: baseFilters };
     }
   };
 
@@ -98,34 +105,19 @@ export default function Support() {
     hookParams.advancedFilters
   );
 
-  // Client-side search
-  const filteredTickets = searchTerm
-    ? allTickets.filter(ticket => {
-        const search = searchTerm.toLowerCase();
-        return (
-          ticket.id.toLowerCase().includes(search) ||
-          (ticket.ticket_number || '').toLowerCase().includes(search) ||
-          ticket.subject.toLowerCase().includes(search) ||
-          (ticket.customer?.first_name || '').toLowerCase().includes(search) ||
-          (ticket.customer?.last_name || '').toLowerCase().includes(search) ||
-          (ticket.customer?.email || '').toLowerCase().includes(search)
-        );
-      })
-    : allTickets;
-
-  // Pagination
-  const totalTickets = filteredTickets.length;
+  // Pagination (filtering is done in the hook now)
+  const totalTickets = allTickets.length;
   const totalPages = Math.ceil(totalTickets / TICKETS_PER_PAGE);
   const startIndex = (currentPage - 1) * TICKETS_PER_PAGE;
   const endIndex = Math.min(startIndex + TICKETS_PER_PAGE, totalTickets);
-  const paginatedTickets = filteredTickets.slice(startIndex, endIndex);
+  const paginatedTickets = allTickets.slice(startIndex, endIndex);
 
   const selectedTicket = allTickets.find((t) => t.id === selectedTicketId);
 
   // Reset page when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [sidebarFilter, searchTerm]);
+  }, [sidebarFilter, advancedFilters]);
 
   const handleSelectTicket = (ticketId: string) => {
     if (isMobile) {
@@ -208,13 +200,13 @@ export default function Support() {
         </div>
         
         <div className="flex-1 overflow-y-auto">
-          {filteredTickets.length === 0 ? (
+          {allTickets.length === 0 ? (
             <div className="flex items-center justify-center h-full p-8">
               <p className="text-muted-foreground text-center">Nenhum ticket encontrado</p>
             </div>
           ) : (
             <div className="divide-y divide-border bg-card">
-              {filteredTickets.map((ticket) => (
+              {allTickets.map((ticket) => (
                 <TicketCard
                   key={ticket.id}
                   ticket={ticket}
@@ -245,16 +237,11 @@ export default function Support() {
           </div>
           
           <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                placeholder="Buscar protocolo, assunto..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 h-9"
-              />
-            </div>
+            {/* Filtros Avançados */}
+            <TicketFilterPopover 
+              filters={advancedFilters} 
+              onFiltersChange={setAdvancedFilters} 
+            />
 
             {/* Pagination */}
             {totalPages > 1 && (
