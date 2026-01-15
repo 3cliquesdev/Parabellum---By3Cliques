@@ -79,94 +79,94 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
         </TabsList>
       </Tabs>
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         {/* Total Criados */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-primary" />
-              <span className="text-sm font-medium text-foreground">Criados</span>
+              <div className="w-4 h-4 rounded-full bg-primary" />
+              <span className="text-base font-semibold text-foreground">Criados</span>
             </div>
-            <span className="text-sm font-semibold text-foreground">{totalCreated}</span>
+            <span className="text-xl font-bold text-primary">{totalCreated}</span>
           </div>
-          <Progress value={100} className="h-2" />
+          <Progress value={100} className="h-3" />
         </div>
 
         {/* Ganhos */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              <span className="text-sm font-medium text-foreground">Ganhos</span>
+              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              <span className="text-base font-semibold text-foreground">Ganhos</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">{totalWon}</span>
-              <Badge variant="success" className="text-xs">
+            <div className="flex items-center gap-3">
+              <span className="text-xl font-bold text-emerald-600">{totalWon}</span>
+              <Badge variant="success" className="text-sm px-2.5 py-0.5 font-semibold">
                 {createdToWonRate.toFixed(1)}%
               </Badge>
             </div>
           </div>
           <Progress 
             value={createdToWonRate} 
-            className="h-2 [&>div]:bg-emerald-500" 
+            className="h-3 [&>div]:bg-emerald-500" 
           />
         </div>
 
         {/* Perdidos */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <XCircle className="w-4 h-4 text-destructive" />
-              <span className="text-sm font-medium text-foreground">Perdidos</span>
+              <XCircle className="w-5 h-5 text-destructive" />
+              <span className="text-base font-semibold text-foreground">Perdidos</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">{totalLost}</span>
-              <Badge variant="destructive" className="text-xs">
+            <div className="flex items-center gap-3">
+              <span className="text-xl font-bold text-destructive">{totalLost}</span>
+              <Badge variant="destructive" className="text-sm px-2.5 py-0.5 font-semibold">
                 {createdToLostRate.toFixed(1)}%
               </Badge>
             </div>
           </div>
           <Progress 
             value={createdToLostRate} 
-            className="h-2 [&>div]:bg-destructive" 
+            className="h-3 [&>div]:bg-destructive" 
           />
         </div>
 
         {/* Em Aberto */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Hourglass className="w-4 h-4 text-amber-500" />
-              <span className="text-sm font-medium text-foreground">Em aberto</span>
+              <Hourglass className="w-5 h-5 text-amber-500" />
+              <span className="text-base font-semibold text-foreground">Em aberto</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">{totalOpen}</span>
-              <Badge variant="warning" className="text-xs">
+            <div className="flex items-center gap-3">
+              <span className="text-xl font-bold text-amber-600">{totalOpen}</span>
+              <Badge variant="warning" className="text-sm px-2.5 py-0.5 font-semibold">
                 {openRate.toFixed(1)}%
               </Badge>
             </div>
           </div>
           <Progress 
             value={openRate} 
-            className="h-2 [&>div]:bg-amber-500" 
+            className="h-3 [&>div]:bg-amber-500" 
           />
         </div>
       </div>
 
       {/* Time to Win Stats */}
-      <div className="mt-5 pt-4 border-t border-border">
-        <div className="flex items-center gap-2 mb-3">
-          <Clock className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-muted-foreground">Tempo para Ganhar</span>
+      <div className="mt-6 pt-5 border-t border-border">
+        <div className="flex items-center gap-2 mb-4">
+          <Clock className="w-5 h-5 text-muted-foreground" />
+          <span className="text-base font-semibold text-muted-foreground">Tempo para Ganhar</span>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div className="text-center p-3 rounded-lg bg-accent/50">
-            <div className="text-2xl font-bold text-foreground">{avgTimeToWinDays}</div>
-            <div className="text-xs text-muted-foreground">dias (média)</div>
+          <div className="text-center p-4 rounded-xl bg-accent border border-border/50">
+            <div className="text-3xl font-bold text-foreground">{avgTimeToWinDays}</div>
+            <div className="text-sm text-muted-foreground mt-1">dias (média)</div>
           </div>
-          <div className="text-center p-3 rounded-lg bg-accent/50">
-            <div className="text-2xl font-bold text-foreground">{medianTimeToWinDays}</div>
-            <div className="text-xs text-muted-foreground">dias (mediana)</div>
+          <div className="text-center p-4 rounded-xl bg-accent border border-border/50">
+            <div className="text-3xl font-bold text-foreground">{medianTimeToWinDays}</div>
+            <div className="text-sm text-muted-foreground mt-1">dias (mediana)</div>
           </div>
         </div>
       </div>
