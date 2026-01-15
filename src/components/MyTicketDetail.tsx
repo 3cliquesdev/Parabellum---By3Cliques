@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import ReactMarkdown from 'react-markdown';
 import { 
   ArrowLeft, 
   Send, 
@@ -154,7 +155,26 @@ export default function MyTicketDetail({
           <CardContent className="space-y-3">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Descrição</p>
-              <p className="text-sm whitespace-pre-wrap">{ticket.description}</p>
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown
+                  components={{
+                    strong: ({ children }) => (
+                      <span className="font-semibold text-foreground">{children}</span>
+                    ),
+                    p: ({ children }) => (
+                      <p className="mb-2 leading-relaxed text-sm text-foreground/90">{children}</p>
+                    ),
+                    a: ({ href, children }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer" 
+                         className="text-primary hover:underline">
+                        {children}
+                      </a>
+                    ),
+                  }}
+                >
+                  {ticket.description}
+                </ReactMarkdown>
+              </div>
             </div>
             <Separator />
             <div className="grid grid-cols-2 gap-4 text-sm">

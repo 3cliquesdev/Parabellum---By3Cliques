@@ -26,6 +26,7 @@ import { ptBR } from "date-fns/locale";
 import { useUsers } from "@/hooks/useUsers";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Link } from "react-router-dom";
+import ReactMarkdown from 'react-markdown';
 
 interface TicketDetailsProps {
   ticket: any;
@@ -337,10 +338,25 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="max-h-64 overflow-y-auto">
-                <p className="text-sm whitespace-pre-wrap leading-relaxed">
+              <div className="max-h-64 overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown
+                  components={{
+                    strong: ({ children }) => (
+                      <span className="font-semibold text-foreground">{children}</span>
+                    ),
+                    p: ({ children }) => (
+                      <p className="mb-2 leading-relaxed text-sm text-foreground/90">{children}</p>
+                    ),
+                    a: ({ href, children }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer" 
+                         className="text-primary hover:underline">
+                        {children}
+                      </a>
+                    ),
+                  }}
+                >
                   {ticket.description}
-                </p>
+                </ReactMarkdown>
               </div>
             </CardContent>
           </Card>
