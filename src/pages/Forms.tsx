@@ -15,12 +15,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, ExternalLink, Pencil, Trash2, Copy, Ticket, Sparkles } from "lucide-react";
-import { useForms, useDeleteForm, useUpdateForm } from "@/hooks/useForms";
+import { Plus, ExternalLink, Trash2, Copy, Ticket, Sparkles, Download } from "lucide-react";
+import { useForms, useDeleteForm, useUpdateForm, Form } from "@/hooks/useForms";
 import FormDialog from "@/components/FormDialog";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { usePublicTicketPortalConfig, useTogglePortal } from "@/hooks/usePublicTicketPortal";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 
 export default function Forms() {
   const [searchParams] = useSearchParams();
@@ -75,6 +77,86 @@ export default function Forms() {
       title: "Link copiado!",
       description: "Link do portal público copiado para a área de transferência.",
     });
+  };
+
+  const exportFormSubmissions = async (form: Form) => {
+    try {
+      const { data: submissions, error } = await supabase
+        .from("form_submissions")
+        .select(`
+          id,
+          answers,
+          created_at,
+          contact:contacts(first_name, last_name, email, phone)
+        `)
+        .eq("form_id", form.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      if (!submissions?.length) {
+        toast({
+          title: "Sem dados",
+          description: "Este formulário ainda não tem submissões.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Create headers (fixed columns + form fields)
+      const fixedHeaders = ["Data", "Nome", "Email", "Telefone"];
+      const fieldHeaders = form.schema.fields.map((f) => f.label);
+      const headers = [...fixedHeaders, ...fieldHeaders];
+
+      // Create data rows
+      const rows = submissions.map((sub) => {
+        const contact = sub.contact as { first_name?: string; last_name?: string; email?: string; phone?: string } | null;
+        const dateFormatted = format(new Date(sub.created_at), "dd/MM/yyyy HH:mm");
+        const name = contact
+          ? `${contact.first_name || ""} ${contact.last_name || ""}`.trim()
+          : "-";
+        const email = contact?.email || "-";
+        const phone = contact?.phone || "-";
+
+        // Map answers to fields
+        const answers = form.schema.fields.map((field) => {
+          const value = (sub.answers as Record<string, any>)?.[field.id];
+          if (Array.isArray(value)) {
+            return value.map((v) => (typeof v === "object" && v?.name ? v.name : v)).join(", ");
+          }
+          return value || "-";
+        });
+
+        return [dateFormatted, name, email, phone, ...answers];
+      });
+
+      // Generate CSV with BOM for Excel compatibility
+      const csv = [
+        headers.join(";"),
+        ...rows.map((r) =>
+          r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")
+        ),
+      ].join("\n");
+
+      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${form.name}-respostas-${format(new Date(), "yyyy-MM-dd")}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+
+      toast({
+        title: "Exportado com sucesso!",
+        description: `${submissions.length} respostas exportadas.`,
+      });
+    } catch (error) {
+      console.error("Error exporting submissions:", error);
+      toast({
+        title: "Erro ao exportar",
+        description: "Não foi possível exportar as respostas.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isLoading || portalLoading) {
@@ -237,6 +319,14 @@ export default function Forms() {
                       title="Editar no Builder 2.0"
                     >
                       <Sparkles className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => exportFormSubmissions(form)}
+                      title="Baixar respostas (CSV)"
+                    >
+                      <Download className="h-4 w-4" />
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
