@@ -21,6 +21,8 @@ interface ConversionFunnelCardProps {
 const sourceLabels: Record<DealSource, string> = {
   all: "Todos",
   organic: "Orgânico",
+  organic_new: "Nova Venda",
+  organic_recurring: "Recorrente",
   form: "Formulários",
   whatsapp: "WhatsApp",
 };
@@ -71,11 +73,13 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
 
       {/* Source Filter Tabs */}
       <Tabs value={source} onValueChange={(v) => setSource(v as DealSource)} className="mb-4">
-        <TabsList className="grid w-full grid-cols-4 h-8">
-          <TabsTrigger value="all" className="text-xs px-2">Todos</TabsTrigger>
-          <TabsTrigger value="organic" className="text-xs px-2">Orgânico</TabsTrigger>
-          <TabsTrigger value="form" className="text-xs px-2">Formulários</TabsTrigger>
-          <TabsTrigger value="whatsapp" className="text-xs px-2">WhatsApp</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-6 h-8">
+          <TabsTrigger value="all" className="text-xs px-1">Todos</TabsTrigger>
+          <TabsTrigger value="organic" className="text-xs px-1">Orgânico</TabsTrigger>
+          <TabsTrigger value="organic_new" className="text-xs px-1">Nova</TabsTrigger>
+          <TabsTrigger value="organic_recurring" className="text-xs px-1">Recorr.</TabsTrigger>
+          <TabsTrigger value="form" className="text-xs px-1">Forms</TabsTrigger>
+          <TabsTrigger value="whatsapp" className="text-xs px-1">WhatsApp</TabsTrigger>
         </TabsList>
       </Tabs>
 
