@@ -31,7 +31,7 @@ import {
   Bot, 
   Users, 
   ChevronDown,
-  Archive,
+  CheckCircle2,
   Tag,
   Search,
   Building2,
@@ -50,7 +50,7 @@ interface InboxSidebarCounts {
   unassigned: number;
   aiQueue: number;
   humanQueue: number;
-  archived: number;
+  closed: number;
   byDepartment: Array<{ id: string; name: string; color: string | null; count: number }>;
   byTag: Array<{ id: string; name: string; color: string | null; count: number }>;
 }
@@ -392,16 +392,16 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
 
           <div className="h-px bg-border my-2" />
 
-          {/* Archived with highlight when there are archived conversations */}
+          {/* Encerradas with highlight when there are closed conversations */}
           <div className="relative">
             <FilterItem
-              icon={<Archive className="h-4 w-4" />}
-              label="Arquivadas"
-              count={counts.archived}
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              label="Encerradas"
+              count={counts.closed}
               isActive={isFilterActive("archived")}
               onClick={() => setFilter("archived")}
             />
-            {counts.archived > 0 && !isFilterActive("archived") && (
+            {counts.closed > 0 && !isFilterActive("archived") && (
               <div className="absolute -top-1 -right-1">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
@@ -411,10 +411,10 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
             )}
           </div>
           
-          {/* Archived conversations hint */}
-          {counts.archived > 0 && !isFilterActive("archived") && (
+          {/* Closed conversations hint */}
+          {counts.closed > 0 && !isFilterActive("archived") && (
             <p className="px-3 py-1 text-[10px] text-muted-foreground italic">
-              💡 {counts.archived} conversa{counts.archived > 1 ? 's' : ''} arquivada{counts.archived > 1 ? 's' : ''} por inatividade
+              💡 {counts.closed} conversa{counts.closed > 1 ? 's' : ''} encerrada{counts.closed > 1 ? 's' : ''} por inatividade
             </p>
           )}
         </div>

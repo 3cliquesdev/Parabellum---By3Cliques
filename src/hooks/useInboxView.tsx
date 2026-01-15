@@ -319,7 +319,7 @@ export interface InboxCounts {
   notResponded: number;
   unassigned: number;
   unread: number;
-  archived: number;
+  closed: number;
   byDepartment: Array<{ id: string; name: string; color: string | null; count: number }>;
   byTag: Array<{ id: string; name: string; color: string | null; count: number }>;
 }
@@ -389,7 +389,7 @@ export function useInboxCounts(userId?: string) {
         notResponded: openItems.filter(i => i.last_sender_type === "contact").length,
         unassigned: openItems.filter(i => !i.assigned_to).length,
         unread: items.reduce((sum, i) => sum + (i.unread_count || 0), 0),
-        archived: items.filter(i => i.status === "closed").length,
+        closed: items.filter(i => i.status === "closed").length,
         byDepartment,
         byTag,
       };

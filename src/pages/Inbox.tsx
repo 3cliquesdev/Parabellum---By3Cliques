@@ -187,7 +187,7 @@ export default function Inbox() {
     notResponded: 0,
     unassigned: 0,
     unread: 0,
-    archived: 0,
+    closed: 0,
     byDepartment: [],
     byTag: [],
   };
@@ -300,12 +300,12 @@ export default function Inbox() {
           <div className="flex-none px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800">
             <p className="text-xs text-yellow-800 dark:text-yellow-200">
               ⚠️ Nenhuma conversa neste filtro.
-              {sidebarCounts.archived > 0 && (
+              {sidebarCounts.closed > 0 && (
                 <button 
                   onClick={() => navigate('/inbox?filter=archived')}
                   className="ml-1 underline hover:no-underline font-medium"
                 >
-                  Ver {sidebarCounts.archived} arquivadas
+                  Ver {sidebarCounts.closed} encerradas
                 </button>
               )}
             </p>
