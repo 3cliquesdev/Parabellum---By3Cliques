@@ -6610,6 +6610,7 @@ export type Database = {
       }
       ticket_comments: {
         Row: {
+          attachments: Json | null
           content: string
           created_at: string
           created_by: string | null
@@ -6619,6 +6620,7 @@ export type Database = {
           ticket_id: string
         }
         Insert: {
+          attachments?: Json | null
           content: string
           created_at?: string
           created_by?: string | null
@@ -6628,6 +6630,7 @@ export type Database = {
           ticket_id: string
         }
         Update: {
+          attachments?: Json | null
           content?: string
           created_at?: string
           created_by?: string | null

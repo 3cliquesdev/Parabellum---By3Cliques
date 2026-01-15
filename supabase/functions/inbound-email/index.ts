@@ -8,6 +8,85 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Tipo para anexo salvo
+interface SavedAttachment {
+  url: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
+// Função para processar e salvar anexos de email
+async function processEmailAttachments(
+  supabase: any,
+  ticketId: string,
+  attachments: any[] | undefined
+): Promise<SavedAttachment[]> {
+  if (!attachments || attachments.length === 0) {
+    return [];
+  }
+
+  console.log(`[inbound-email] 📎 Processando ${attachments.length} anexo(s)...`);
+  const savedAttachments: SavedAttachment[] = [];
+
+  for (const attachment of attachments) {
+    try {
+      // Resend fornece: filename, content_type, content (base64)
+      const fileName = attachment.filename || attachment.name || `attachment-${Date.now()}`;
+      const contentType = attachment.content_type || attachment.type || 'application/octet-stream';
+      const content = attachment.content || attachment.data;
+
+      if (!content) {
+        console.warn(`[inbound-email] ⚠️ Anexo sem conteúdo: ${fileName}`);
+        continue;
+      }
+
+      // Decode base64
+      const binaryString = atob(content);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      // Path único no storage
+      const storagePath = `email-replies/${ticketId}/${Date.now()}-${fileName}`;
+
+      console.log(`[inbound-email] 📤 Uploading: ${fileName} (${bytes.length} bytes)`);
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('ticket-attachments')
+        .upload(storagePath, bytes, {
+          contentType,
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error(`[inbound-email] ❌ Erro upload ${fileName}:`, uploadError.message);
+        continue;
+      }
+
+      // Obter URL pública
+      const { data: { publicUrl } } = supabase.storage
+        .from('ticket-attachments')
+        .getPublicUrl(uploadData.path);
+
+      savedAttachments.push({
+        url: publicUrl,
+        name: fileName,
+        type: contentType,
+        size: bytes.length
+      });
+
+      console.log(`[inbound-email] ✅ Anexo salvo: ${fileName}`);
+    } catch (err: any) {
+      console.error(`[inbound-email] ❌ Erro processando anexo:`, err.message);
+    }
+  }
+
+  console.log(`[inbound-email] 📎 Total anexos salvos: ${savedAttachments.length}`);
+  return savedAttachments;
+}
+
 // Inline HMAC verification helper (to avoid external CDN dependency)
 async function verifyWebhookSignature(payload: string, secret: string, headers: Record<string, string>): Promise<boolean> {
   const timestamp = headers["webhook-timestamp"];
@@ -260,19 +339,23 @@ Deno.serve(async (req) => {
         if (existingTicket && !ticketError) {
           console.log("[inbound-email] ✅ Encontrado ticket existente:", existingTicket.id);
 
-          // Adicionar como comentário no ticket
+          // Processar anexos do email
+          const savedAttachments = await processEmailAttachments(supabase, existingTicket.id, attachments);
+
+          // Adicionar como comentário no ticket (com anexos)
           const { error: commentError } = await supabase.from("ticket_comments").insert({
             ticket_id: existingTicket.id,
             content: emailContent,
             created_by: null, // Comentário do cliente (não de agente)
             is_internal: false,
             source: "email_reply",
+            attachments: savedAttachments.length > 0 ? savedAttachments : null,
           });
 
           if (commentError) {
             console.error("[inbound-email] Erro ao inserir comentário:", commentError);
           } else {
-            console.log("[inbound-email] ✅ Comentário adicionado ao ticket");
+            console.log("[inbound-email] ✅ Comentário adicionado ao ticket", savedAttachments.length > 0 ? `com ${savedAttachments.length} anexo(s)` : "");
           }
 
           // Atualizar ticket: status, message_id e updated_at
@@ -382,19 +465,23 @@ Deno.serve(async (req) => {
         if (ticketBySubject) {
           console.log("[inbound-email] ✅ Ticket encontrado por subject:", ticketBySubject.id);
           
-          // Adicionar como comentário no ticket
+          // Processar anexos do email
+          const savedAttachments = await processEmailAttachments(supabase, ticketBySubject.id, attachments);
+          
+          // Adicionar como comentário no ticket (com anexos)
           const { error: commentError } = await supabase.from("ticket_comments").insert({
             ticket_id: ticketBySubject.id,
             content: emailContent,
             created_by: null, // Comentário do cliente
             is_internal: false,
             source: "email_reply",
+            attachments: savedAttachments.length > 0 ? savedAttachments : null,
           });
 
           if (commentError) {
             console.error("[inbound-email] Erro ao inserir comentário:", commentError);
           } else {
-            console.log("[inbound-email] ✅ Comentário adicionado ao ticket via subject match");
+            console.log("[inbound-email] ✅ Comentário adicionado ao ticket via subject match", savedAttachments.length > 0 ? `com ${savedAttachments.length} anexo(s)` : "");
           }
 
           // Atualizar ticket
