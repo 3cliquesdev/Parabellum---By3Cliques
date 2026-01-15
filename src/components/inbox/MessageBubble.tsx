@@ -145,18 +145,44 @@ export function MessageBubble({
           {/* Attachments */}
           {attachments.length > 0 && (
             <div className="space-y-2 mb-2">
-              {attachments.map((attachment) => (
-                <MediaPreview
-                  key={attachment.id}
-                  url={attachment.url}
-                  mimeType={attachment.mimeType}
-                  filename={attachment.filename}
-                  size={attachment.size}
-                  waveformData={attachment.waveformData}
-                  durationSeconds={attachment.durationSeconds}
-                  compact
-                />
-              ))}
+              {attachments.map((attachment) => {
+                // ✅ Detectar mídia pendente de download
+                const isPending = !attachment.url || attachment.url === '';
+                
+                if (isPending) {
+                  return (
+                    <div 
+                      key={attachment.id}
+                      className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30"
+                    >
+                      <div className="w-8 h-8 rounded bg-muted flex items-center justify-center animate-pulse">
+                        <span className="text-muted-foreground text-xs">⏳</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Mídia pendente
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/70">
+                          Download em andamento...
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <MediaPreview
+                    key={attachment.id}
+                    url={attachment.url}
+                    mimeType={attachment.mimeType}
+                    filename={attachment.filename}
+                    size={attachment.size}
+                    waveformData={attachment.waveformData}
+                    durationSeconds={attachment.durationSeconds}
+                    compact
+                  />
+                );
+              })}
             </div>
           )}
 

@@ -902,19 +902,12 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   // 📸 FASE 5: Se tem mídia, baixar e salvar como attachment
   if (hasMedia && insertedMessage?.id) {
     console.log(`[handle-whatsapp-event] 📸 Processing media attachment for message ${insertedMessage.id}`);
-    console.log(`[handle-whatsapp-event] 📸 Media structure check:`, JSON.stringify({
-      hasImageMessage: !!data.message?.imageMessage,
-      hasVideoMessage: !!data.message?.videoMessage,
-      hasAudioMessage: !!data.message?.audioMessage,
-      hasPttMessage: !!data.message?.pttMessage,
-      hasDocumentMessage: !!data.message?.documentMessage,
-      hasStickerMessage: !!data.message?.stickerMessage,
-    }));
+    console.log(`[handle-whatsapp-event] 📸 Full message structure:`, JSON.stringify(data.message, null, 2));
+    console.log(`[handle-whatsapp-event] 📸 Message key:`, JSON.stringify(data.key, null, 2));
     
     try {
-      // CORREÇÃO: Passar data.message (onde estão imageMessage, audioMessage, etc.)
-      // não o objeto data completo
-      const mediaResult = await downloadAndSaveMedia(supabase, instance, data.message, conversationId);
+      // ✅ CORREÇÃO: Passar objeto completo com key + message para Evolution API
+      const mediaResult = await downloadAndSaveMedia(supabase, instance, data, conversationId);
       
       if (mediaResult) {
         // Criar entrada em media_attachments
@@ -940,7 +933,25 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           console.log('[handle-whatsapp-event] ✅ Media attachment created successfully');
         }
       } else {
-        console.log('[handle-whatsapp-event] ⚠️ Could not download media - message saved without attachment');
+        console.log('[handle-whatsapp-event] ⚠️ Could not download media - creating pending attachment');
+        
+        // ✅ FALLBACK: Criar attachment com status pending_download para retry posterior
+        const pendingAttachment = {
+          message_id: insertedMessage.id,
+          conversation_id: conversationId,
+          storage_bucket: 'chat-attachments',
+          storage_path: null,
+          mime_type: mediaInfo?.mimeType || 'application/octet-stream',
+          original_filename: `whatsapp_${mediaInfo?.type || 'media'}_pending`,
+          status: 'pending_download',
+          duration_seconds: mediaInfo?.durationSeconds || null,
+        };
+        
+        await supabase
+          .from('media_attachments')
+          .insert(pendingAttachment);
+        
+        console.log('[handle-whatsapp-event] 📋 Pending attachment created for later retry');
       }
     } catch (mediaError) {
       console.error('[handle-whatsapp-event] ❌ Error processing media:', mediaError);
@@ -1336,13 +1347,19 @@ function detectMediaType(message: any): MediaInfo | null {
 }
 
 // 📥 Função auxiliar: Baixar mídia da Evolution API e salvar no Storage
+// ✅ CORREÇÃO: Recebe objeto completo (data) com key + message
 async function downloadAndSaveMedia(
   supabase: any,
   instance: any,
-  messageData: any,
+  fullData: { key: any; message?: any },
   conversationId: string
 ): Promise<{ storagePath: string; mimeType: string; size: number; durationSeconds?: number } | null> {
+  const MAX_RETRIES = 3;
+  
   try {
+    const messageData = fullData.message;
+    const messageKey = fullData.key;
+    
     const mediaInfo = detectMediaType(messageData);
     if (!mediaInfo) {
       console.log('[handle-whatsapp-event] 📸 No media detected in message');
@@ -1350,6 +1367,7 @@ async function downloadAndSaveMedia(
     }
 
     console.log(`[handle-whatsapp-event] 📸 Media detected: ${mediaInfo.type} (${mediaInfo.mimeType})`);
+    console.log(`[handle-whatsapp-event] 📸 Message key for download:`, JSON.stringify(messageKey));
 
     // Montar URL da Evolution API
     const baseUrl = instance.api_url.replace(/\/manager$/, '').replace(/\/$/, '');
@@ -1360,28 +1378,72 @@ async function downloadAndSaveMedia(
       return null;
     }
 
-    // Baixar mídia via Evolution API (getBase64FromMediaMessage)
-    console.log(`[handle-whatsapp-event] 📥 Downloading media from Evolution API...`);
+    // ✅ CORREÇÃO: Payload correto para Evolution API - precisa de key + message
+    const evolutionPayload = {
+      message: {
+        key: messageKey,
+        message: messageData,
+      },
+      convertToMp4: mediaInfo.type === 'audio', // Converter áudio para formato compatível
+    };
     
-    const downloadResponse = await fetch(
-      `${baseUrl}/chat/getBase64FromMediaMessage/${instance.instance_name}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': apiKey,
-        },
-        body: JSON.stringify({
-          message: messageData,
-          convertToMp4: mediaInfo.type === 'audio', // Converter áudio para formato compatível
-        }),
-      }
-    );
+    console.log(`[handle-whatsapp-event] 📥 Evolution API payload:`, JSON.stringify(evolutionPayload, null, 2));
 
-    if (!downloadResponse.ok) {
-      console.error(`[handle-whatsapp-event] ❌ Failed to download media: HTTP ${downloadResponse.status}`);
-      const errorText = await downloadResponse.text();
-      console.error('[handle-whatsapp-event] Error details:', errorText);
+    // ✅ RETRY com backoff exponencial
+    let downloadResponse: Response | null = null;
+    let lastError: string = '';
+    
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        console.log(`[handle-whatsapp-event] 📥 Download attempt ${attempt}/${MAX_RETRIES}...`);
+        
+        downloadResponse = await fetch(
+          `${baseUrl}/chat/getBase64FromMediaMessage/${instance.instance_name}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': apiKey,
+            },
+            body: JSON.stringify(evolutionPayload),
+          }
+        );
+        
+        if (downloadResponse.ok) {
+          console.log(`[handle-whatsapp-event] ✅ Download successful on attempt ${attempt}`);
+          break;
+        }
+        
+        lastError = `HTTP ${downloadResponse.status}`;
+        console.warn(`[handle-whatsapp-event] ⚠️ Attempt ${attempt} failed: ${lastError}`);
+        
+        if (attempt < MAX_RETRIES) {
+          const backoffMs = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+          console.log(`[handle-whatsapp-event] ⏳ Waiting ${backoffMs}ms before retry...`);
+          await new Promise(r => setTimeout(r, backoffMs));
+        }
+      } catch (fetchError) {
+        lastError = fetchError instanceof Error ? fetchError.message : 'Network error';
+        console.warn(`[handle-whatsapp-event] ⚠️ Fetch error on attempt ${attempt}: ${lastError}`);
+        
+        if (attempt < MAX_RETRIES) {
+          const backoffMs = 1000 * Math.pow(2, attempt - 1);
+          await new Promise(r => setTimeout(r, backoffMs));
+        }
+      }
+    }
+
+    if (!downloadResponse || !downloadResponse.ok) {
+      console.error(`[handle-whatsapp-event] ❌ Failed to download media after ${MAX_RETRIES} attempts: ${lastError}`);
+      
+      // Tentar ler detalhes do erro se possível
+      if (downloadResponse) {
+        try {
+          const errorText = await downloadResponse.text();
+          console.error('[handle-whatsapp-event] Error details:', errorText);
+        } catch {}
+      }
+      
       return null;
     }
 
@@ -1391,6 +1453,7 @@ async function downloadAndSaveMedia(
 
     if (!base64Data) {
       console.error('[handle-whatsapp-event] ❌ No base64 data returned from Evolution API');
+      console.error('[handle-whatsapp-event] Response:', JSON.stringify(mediaResult));
       return null;
     }
 
