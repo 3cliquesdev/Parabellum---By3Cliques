@@ -86,6 +86,9 @@ export function TourProvider({ children }: TourProviderProps) {
   useEffect(() => {
     if (!isActive || steps.length === 0) return;
 
+    let attempts = 0;
+    const maxAttempts = 10;
+
     const updatePosition = () => {
       const step = steps[currentStep];
       if (!step) return;
@@ -97,18 +100,42 @@ export function TourProvider({ children }: TourProviderProps) {
         
         // Scroll element into view
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        attempts = 0;
+      } else {
+        setTargetRect(null);
       }
     };
 
     updatePosition();
+    
+    // Retry finding element with timeout
+    const retryInterval = setInterval(() => {
+      if (!targetRect && attempts < maxAttempts) {
+        attempts++;
+        updatePosition();
+      } else if (attempts >= maxAttempts) {
+        console.warn(`Tour: Element not found after ${maxAttempts} attempts: ${steps[currentStep]?.target}`);
+        // Auto-skip to next step if element not found
+        clearInterval(retryInterval);
+        if (currentStep < steps.length - 1) {
+          setCurrentStep(prev => prev + 1);
+        } else {
+          endTour();
+        }
+      } else {
+        clearInterval(retryInterval);
+      }
+    }, 100);
+
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition);
 
     return () => {
+      clearInterval(retryInterval);
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition);
     };
-  }, [isActive, currentStep, steps]);
+  }, [isActive, currentStep, steps, endTour]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -152,26 +179,24 @@ export function TourProvider({ children }: TourProviderProps) {
       {/* Tour Overlay */}
       {isActive && createPortal(
         <>
-          {/* Dark overlay with cutout */}
-          <div 
-            className="fixed inset-0 z-[9998] pointer-events-none"
-            style={{
-              background: targetRect 
-                ? `radial-gradient(ellipse at ${targetRect.left + targetRect.width / 2}px ${targetRect.top + targetRect.height / 2}px, transparent ${Math.max(targetRect.width, targetRect.height) / 2 + 20}px, rgba(0,0,0,0.7) ${Math.max(targetRect.width, targetRect.height) / 2 + 40}px)`
-                : 'rgba(0,0,0,0.7)',
-            }}
-          />
-
-          {/* Spotlight border */}
+          {/* Spotlight with box-shadow overlay - replaces radial gradient */}
           {targetRect && (
             <div
-              className="fixed z-[9999] pointer-events-none rounded-lg border-2 border-primary shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+              className="fixed z-[9998] pointer-events-none rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-background"
               style={{
                 top: targetRect.top - 8,
                 left: targetRect.left - 8,
                 width: targetRect.width + 16,
                 height: targetRect.height + 16,
+                boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.75)',
               }}
+            />
+          )}
+
+          {/* Fallback overlay when no target */}
+          {!targetRect && (
+            <div 
+              className="fixed inset-0 z-[9998] pointer-events-none bg-black/75"
             />
           )}
 
