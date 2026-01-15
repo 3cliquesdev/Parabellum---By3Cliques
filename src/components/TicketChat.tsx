@@ -10,13 +10,35 @@ import { Label } from "@/components/ui/label";
 import { useTicketComments } from "@/hooks/useTicketComments";
 import { useCreateComment } from "@/hooks/useCreateComment";
 import { supabase } from "@/integrations/supabase/client";
-import { Mail, Lock, MessageSquare } from "lucide-react";
+import { Mail, Lock, MessageSquare, Paperclip, FileText, Image, File } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { SafeHTML } from "@/components/SafeHTML";
 import { ChannelBadge } from "@/components/ChannelBadge";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+
+// Tipo para anexos de comentário
+interface CommentAttachment {
+  url: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
+// Helper para formatar tamanho de arquivo
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Helper para ícone baseado no tipo
+function getFileIcon(type: string) {
+  if (type.startsWith('image/')) return Image;
+  if (type.includes('pdf') || type.includes('document')) return FileText;
+  return File;
+}
 
 interface TicketChatProps {
   ticketId: string;
@@ -147,6 +169,41 @@ export function TicketChat({ ticketId, channel = 'platform' }: TicketChatProps) 
                       html={comment.content}
                       className="text-sm whitespace-pre-wrap"
                     />
+                    
+                    {/* Renderizar anexos se existirem */}
+                    {comment.attachments && Array.isArray(comment.attachments) && comment.attachments.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-border/50">
+                        {(comment.attachments as unknown as CommentAttachment[]).map((att, idx) => {
+                          const FileIcon = getFileIcon(att.type);
+                          const isImage = att.type.startsWith('image/');
+                          
+                          return (
+                            <a 
+                              key={idx}
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg text-xs hover:bg-muted/80 transition-colors group"
+                            >
+                              {isImage ? (
+                                <img 
+                                  src={att.url} 
+                                  alt={att.name}
+                                  className="w-8 h-8 object-cover rounded"
+                                />
+                              ) : (
+                                <FileIcon className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
+                              )}
+                              <div className="flex flex-col">
+                                <span className="font-medium truncate max-w-[150px]">{att.name}</span>
+                                <span className="text-muted-foreground">{formatFileSize(att.size)}</span>
+                              </div>
+                              <Paperclip className="w-3 h-3 text-muted-foreground ml-1" />
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
