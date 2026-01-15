@@ -28,7 +28,7 @@ async function fetchSourceData(
       case "organic_recurring":
         return query.eq("is_organic_sale", true).eq("is_returning_customer", true);
       case "form":
-        return query.eq("lead_source", "form");
+        return query.eq("lead_source", "formulario");
       case "whatsapp":
         return query.eq("lead_source", "whatsapp");
       default:
