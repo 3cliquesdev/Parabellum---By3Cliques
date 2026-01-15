@@ -63,7 +63,9 @@ export function getBuildInfo() {
 export async function copyBuildInfo(): Promise<boolean> {
   try {
     const info = getBuildInfo();
-    const text = `Build ID: ${info.buildId}\nMode: ${info.mode}\nURL: ${info.currentUrl}\nTimestamp: ${info.timestamp}\nUser Agent: ${info.userAgent}`;
+    const text = Object.entries(info)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
@@ -72,61 +74,107 @@ export async function copyBuildInfo(): Promise<boolean> {
 }
 
 /**
- * Limpa todos os caches do browser
+ * Limpa absolutamente todos os caches do navegador
  */
-async function clearAllCaches(): Promise<void> {
-  console.log('[BuildCheck] 🧹 Limpando caches...');
+export async function clearAllCaches(): Promise<void> {
+  console.log("[ensureLatestBuild] Iniciando limpeza agressiva de caches...");
   
-  // 1. Limpa Cache Storage
+  // 1. Limpar Cache Storage (PWA)
   if ('caches' in window) {
     try {
       const cacheNames = await caches.keys();
+      console.log("[ensureLatestBuild] Limpando caches:", cacheNames);
       await Promise.all(cacheNames.map(name => caches.delete(name)));
-      console.log('[BuildCheck] ✅ Cache Storage limpo:', cacheNames.length, 'caches');
     } catch (e) {
-      console.warn('[BuildCheck] ⚠️ Erro ao limpar Cache Storage:', e);
+      console.warn("[ensureLatestBuild] Erro ao limpar caches:", e);
     }
   }
   
-  // 2. Remove service workers
+  // 2. Desregistrar todos os Service Workers
   if ('serviceWorker' in navigator) {
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map(r => r.unregister()));
-      console.log('[BuildCheck] ✅ Service Workers removidos:', registrations.length);
+      console.log("[ensureLatestBuild] Desregistrando", registrations.length, "service workers");
+      await Promise.all(registrations.map(reg => reg.unregister()));
     } catch (e) {
-      console.warn('[BuildCheck] ⚠️ Erro ao remover Service Workers:', e);
+      console.warn("[ensureLatestBuild] Erro ao desregistrar service workers:", e);
     }
   }
   
-  // 3. Limpa IndexedDB conhecido
+  // 3. Limpar IndexedDB
   if ('indexedDB' in window) {
     try {
-      indexedDB.deleteDatabase('CRMChatDB');
-      console.log('[BuildCheck] ✅ IndexedDB CRMChatDB limpo');
+      const databases = await indexedDB.databases?.() || [];
+      for (const db of databases) {
+        if (db.name) {
+          console.log("[ensureLatestBuild] Deletando IndexedDB:", db.name);
+          indexedDB.deleteDatabase(db.name);
+        }
+      }
     } catch (e) {
-      console.warn('[BuildCheck] ⚠️ Erro ao limpar IndexedDB:', e);
+      console.warn("[ensureLatestBuild] Erro ao limpar IndexedDB:", e);
     }
   }
+  
+  // 4. Limpar localStorage relacionado a build
+  try {
+    Object.values(STORAGE_KEYS).forEach(key => {
+      localStorage.removeItem(key);
+    });
+  } catch (e) {
+    console.warn("[ensureLatestBuild] Erro ao limpar localStorage:", e);
+  }
+  
+  console.log("[ensureLatestBuild] Limpeza de caches concluída");
 }
 
 /**
- * Força reload com cache-bust
+ * Força reload agressivo da página
  */
-function forceReload(): void {
-  // Incrementa contador de force updates
-  const count = parseInt(sessionStorage.getItem(STORAGE_KEYS.FORCE_UPDATE_COUNT) || '0', 10);
-  sessionStorage.setItem(STORAGE_KEYS.FORCE_UPDATE_COUNT, String(count + 1));
+export function forceReload(): void {
+  const baseUrl = window.location.origin + window.location.pathname;
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(7);
   
-  // Gera URL com cache-bust
-  const url = new URL(window.location.href);
-  url.searchParams.set('_cb', Date.now().toString());
+  // Limpar sessionStorage também
+  try {
+    sessionStorage.clear();
+  } catch (e) {
+    console.warn("[ensureLatestBuild] Erro ao limpar sessionStorage:", e);
+  }
   
-  console.log('[BuildCheck] 🔄 Forçando reload para:', url.toString());
-  
-  // Usa replace para não poluir histórico
-  window.location.replace(url.toString());
+  // Redirect com múltiplos cache-busters
+  window.location.replace(`${baseUrl}?_force=${timestamp}&_nc=${random}`);
 }
+
+/**
+ * Hard refresh - limpa tudo e recarrega
+ */
+export async function hardRefresh(): Promise<void> {
+  console.log("[ensureLatestBuild] Executando Hard Refresh...");
+  
+  // Limpar absolutamente tudo
+  await clearAllCaches();
+  
+  // Limpar todo localStorage
+  try {
+    localStorage.clear();
+  } catch (e) {
+    console.warn("[ensureLatestBuild] Erro ao limpar localStorage:", e);
+  }
+  
+  // Limpar sessionStorage
+  try {
+    sessionStorage.clear();
+  } catch (e) {
+    console.warn("[ensureLatestBuild] Erro ao limpar sessionStorage:", e);
+  }
+  
+  // Forçar reload
+  forceReload();
+}
+
+// Função auxiliar removida - usar forceReload() acima
 
 /**
  * Verifica se deve fazer check (evita loops)
@@ -155,34 +203,62 @@ function shouldCheck(): boolean {
  */
 async function fetchLatestBuildId(): Promise<string | null> {
   try {
-    // Fetch do index.html com cache-bust
-    const response = await fetch(`/index.html?_cb=${Date.now()}`, {
+    // Tenta buscar build-id do HTML com cache-bust agressivo
+    const timestamp = Date.now();
+    const response = await fetch(`/index.html?_cb=${timestamp}`, { 
       cache: 'no-store',
       headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-      },
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
     });
     
     if (!response.ok) {
-      console.warn('[BuildCheck] ⚠️ Falha ao buscar index.html:', response.status);
+      console.warn("[ensureLatestBuild] Falha ao buscar index.html:", response.status);
       return null;
     }
     
     const html = await response.text();
+    const match = html.match(/<meta\s+name="app-build-id"\s+content="([^"]+)"/i);
     
-    // Extrai o build-id do meta tag
-    const match = html.match(/<meta\s+name="app-build-id"\s+content="([^"]+)"/);
     if (match && match[1] && match[1] !== '__BUILD_PLACEHOLDER__') {
       return match[1];
     }
     
-    console.log('[BuildCheck] ℹ️ Build ID não encontrado no HTML (placeholder ou ausente)');
-    return null;
-  } catch (e) {
-    console.warn('[BuildCheck] ⚠️ Erro ao buscar latest build:', e);
+    // FALLBACK: Usar ETag ou Last-Modified do response
+    const etag = response.headers.get('etag');
+    const lastModified = response.headers.get('last-modified');
+    
+    if (etag) {
+      console.log("[ensureLatestBuild] Usando ETag como fallback:", etag);
+      return `etag-${etag}`;
+    }
+    
+    if (lastModified) {
+      console.log("[ensureLatestBuild] Usando Last-Modified como fallback:", lastModified);
+      return `lm-${lastModified}`;
+    }
+    
+    // FALLBACK 2: Hash do conteúdo HTML
+    const contentHash = await hashContent(html);
+    console.log("[ensureLatestBuild] Usando hash do conteúdo como fallback:", contentHash);
+    return `hash-${contentHash}`;
+    
+  } catch (error) {
+    console.error("[ensureLatestBuild] Erro ao buscar versão:", error);
     return null;
   }
+}
+
+/**
+ * Gera hash simples do conteúdo para comparação
+ */
+async function hashContent(content: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**

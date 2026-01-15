@@ -1,22 +1,24 @@
 import { useState, useEffect, useRef } from "react";
-import { Info, RefreshCw } from "lucide-react";
+import { Info, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   getCurrentBuildId, 
   checkForUpdate, 
-  forceUpdate 
+  forceUpdate,
+  hardRefresh
 } from "@/lib/build/ensureLatestBuild";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-// Intervalo de verificação: 30 segundos (mais frequente)
+// Intervalo de verificação: 30 segundos
 const CHECK_INTERVAL_MS = 30 * 1000;
 
 export function SidebarVersionIndicator() {
   const [hasUpdate, setHasUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [hardRefreshing, setHardRefreshing] = useState(false);
   const previousHasUpdate = useRef(false);
   
   const buildId = getCurrentBuildId();
@@ -36,6 +38,10 @@ export function SidebarVersionIndicator() {
       }
     } catch {
       // não é uma data válida
+    }
+    // Para hashes/etags, mostrar versão curta
+    if (id.startsWith('hash-') || id.startsWith('etag-') || id.startsWith('lm-')) {
+      return id.substring(0, 16) + '...';
     }
     return id.slice(0, 16);
   };
@@ -104,6 +110,18 @@ export function SidebarVersionIndicator() {
     }
   };
   
+  const handleHardRefresh = async () => {
+    setHardRefreshing(true);
+    toast.info("Limpando todos os caches e recarregando...", {
+      description: "Isso pode levar alguns segundos."
+    });
+    
+    // Pequeno delay para o toast aparecer
+    setTimeout(async () => {
+      await hardRefresh();
+    }, 500);
+  };
+  
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -126,12 +144,14 @@ export function SidebarVersionIndicator() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-60 p-3" align="end" side="top">
+      <PopoverContent className="w-64 p-3" align="end" side="top">
         <div className="space-y-3">
           <div className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">Versão atual:</span>
             <br />
-            v{formatBuildId(buildId)}
+            <code className="text-[10px] bg-muted px-1 py-0.5 rounded">
+              {formatBuildId(buildId)}
+            </code>
           </div>
           
           {hasUpdate && (
@@ -140,13 +160,13 @@ export function SidebarVersionIndicator() {
             </div>
           )}
           
-          {/* BOTÃO SEMPRE VISÍVEL */}
+          {/* Botão de atualização normal */}
           <Button 
             size="sm" 
             className="w-full h-8 text-xs"
             variant={hasUpdate ? "default" : "outline"}
             onClick={handleForceUpdate}
-            disabled={updating || checking}
+            disabled={updating || checking || hardRefreshing}
           >
             <RefreshCw className={cn(
               "h-3 w-3 mr-1.5", 
@@ -162,11 +182,30 @@ export function SidebarVersionIndicator() {
             }
           </Button>
           
-          {!hasUpdate && !updating && !checking && (
+          {/* Botão de Hard Refresh */}
+          <Button 
+            size="sm" 
+            className="w-full h-8 text-xs"
+            variant="destructive"
+            onClick={handleHardRefresh}
+            disabled={updating || checking || hardRefreshing}
+          >
+            <Trash2 className={cn(
+              "h-3 w-3 mr-1.5", 
+              hardRefreshing && "animate-spin"
+            )} />
+            {hardRefreshing ? "Limpando..." : "Hard Refresh (Limpar Cache)"}
+          </Button>
+          
+          {!hasUpdate && !updating && !checking && !hardRefreshing && (
             <p className="text-[10px] text-muted-foreground text-center">
               ✓ Versão mais recente
             </p>
           )}
+          
+          <p className="text-[9px] text-muted-foreground/70 text-center border-t pt-2">
+            Use "Hard Refresh" se a atualização normal não funcionar
+          </p>
         </div>
       </PopoverContent>
     </Popover>
