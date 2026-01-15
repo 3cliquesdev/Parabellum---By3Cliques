@@ -39,10 +39,13 @@ const LOST_REASONS = [
   { value: "investimento_hibrido", label: "Investimento para o híbrido" },
   { value: "fora_momento", label: "Fora do momento de compra" },
   { value: "desistiu_queda_vendas", label: "Desistiu da compra - queda de vendas" },
-  { value: "outro", label: "Outro" },
   { value: "ja_comprou_duplicidade", label: "Já comprou/Duplicidade" },
   { value: "sem_interesse_produto", label: "Não tinha interesse em nenhum produto" },
   { value: "sem_interesse_dropshipping", label: "Não tinha interesse em fazer dropshipping" },
+  { value: "reembolsado", label: "Reembolsado" },
+  { value: "estorno", label: "Estorno/Chargeback" },
+  { value: "migracao_pagamento_anterior", label: "Migração (pagamento anterior)" },
+  { value: "outro", label: "Outro" },
 ];
 
 export default function LostReasonDialog({

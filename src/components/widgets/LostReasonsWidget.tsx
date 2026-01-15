@@ -44,7 +44,7 @@ export default function LostReasonsWidget() {
   }
 
   const chartData = lostReasons.map((item) => ({
-    reason: item.reason.length > 20 ? item.reason.substring(0, 20) + "..." : item.reason,
+    reason: item.reasonLabel.length > 20 ? item.reasonLabel.substring(0, 20) + "..." : item.reasonLabel,
     count: item.count,
     value: item.totalValue,
   }));
@@ -65,8 +65,8 @@ export default function LostReasonsWidget() {
             {top3.map((reason, idx) => (
               <div key={idx} className="p-3 rounded-lg border border-border bg-muted/50">
                 <p className="text-xs text-muted-foreground mb-1">Top {idx + 1}</p>
-                <p className="text-sm font-medium truncate" title={reason.reason}>
-                  {reason.reason}
+                <p className="text-sm font-medium truncate" title={reason.reasonLabel}>
+                  {reason.reasonLabel}
                 </p>
                 <p className="text-lg font-bold text-destructive">{reason.count}</p>
                 <p className="text-xs text-muted-foreground">
