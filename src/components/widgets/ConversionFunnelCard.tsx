@@ -2,14 +2,14 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Clock, 
   Target,
   CheckCircle2,
   XCircle,
-  Hourglass
+  Hourglass,
+  TrendingUp
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { useDealsConversionAnalysis, DealSource } from "@/hooks/useDealsConversionAnalysis";
@@ -20,8 +20,7 @@ interface ConversionFunnelCardProps {
 
 const sourceLabels: Record<DealSource, string> = {
   all: "Todos",
-  organic: "Orgânico",
-  organic_new: "Nova Venda",
+  organic_new: "1ª Compra",
   organic_recurring: "Recorrente",
   form: "Formulários",
   whatsapp: "WhatsApp",
@@ -36,9 +35,13 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
       <Card className="p-5">
         <Skeleton className="h-6 w-48 mb-4" />
         <div className="space-y-4">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Skeleton className="h-28 w-full rounded-xl" />
+            <Skeleton className="h-28 w-full rounded-xl" />
+            <Skeleton className="h-28 w-full rounded-xl" />
+            <Skeleton className="h-28 w-full rounded-xl" />
+          </div>
         </div>
       </Card>
     );
@@ -59,6 +62,7 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
 
   return (
     <Card className="p-5">
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Target className="w-5 h-5 text-primary" />
@@ -66,111 +70,90 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
             Funil de Conversão
           </h3>
         </div>
-        <Badge variant="secondary" className="text-xs">
-          {totalCreated} criados
-        </Badge>
       </div>
 
       {/* Source Filter Tabs */}
-      <Tabs value={source} onValueChange={(v) => setSource(v as DealSource)} className="mb-4">
-        <TabsList className="grid w-full grid-cols-6 h-8">
-          <TabsTrigger value="all" className="text-xs px-1">Todos</TabsTrigger>
-          <TabsTrigger value="organic" className="text-xs px-1">Orgânico</TabsTrigger>
-          <TabsTrigger value="organic_new" className="text-xs px-1">Nova</TabsTrigger>
-          <TabsTrigger value="organic_recurring" className="text-xs px-1">Recorr.</TabsTrigger>
-          <TabsTrigger value="form" className="text-xs px-1">Forms</TabsTrigger>
-          <TabsTrigger value="whatsapp" className="text-xs px-1">WhatsApp</TabsTrigger>
+      <Tabs value={source} onValueChange={(v) => setSource(v as DealSource)} className="mb-5">
+        <TabsList className="grid w-full grid-cols-5 h-9">
+          <TabsTrigger value="all" className="text-xs px-2">Todos</TabsTrigger>
+          <TabsTrigger value="organic_new" className="text-xs px-2" title="Primeira Compra Kiwify">1ª Compra</TabsTrigger>
+          <TabsTrigger value="organic_recurring" className="text-xs px-2">Recorrente</TabsTrigger>
+          <TabsTrigger value="form" className="text-xs px-2">Formulários</TabsTrigger>
+          <TabsTrigger value="whatsapp" className="text-xs px-2">WhatsApp</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      <div className="space-y-5">
-        {/* Total Criados */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-primary" />
-              <span className="text-base font-semibold text-foreground">Criados</span>
-            </div>
-            <span className="text-xl font-bold text-primary">{totalCreated}</span>
+      {/* Premium Grid Layout - All data visible at once */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Card Criados */}
+        <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200/50 dark:border-blue-800/50 transition-all hover:shadow-md">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp className="w-4 h-4 text-blue-500" />
+            <span className="text-sm font-medium text-muted-foreground">Criados</span>
           </div>
-          <Progress value={100} className="h-3" />
+          <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{totalCreated}</div>
         </div>
 
-        {/* Ganhos */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-              <span className="text-base font-semibold text-foreground">Ganhos</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xl font-bold text-emerald-600">{totalWon}</span>
-              <Badge variant="success" className="text-sm px-2.5 py-0.5 font-semibold">
-                {createdToWonRate.toFixed(1)}%
-              </Badge>
-            </div>
+        {/* Card Ganhos */}
+        <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/50 transition-all hover:shadow-md">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <span className="text-sm font-medium text-muted-foreground">Ganhos</span>
           </div>
-          <Progress 
-            value={createdToWonRate} 
-            className="h-3 [&>div]:bg-emerald-500" 
-          />
+          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{totalWon}</div>
+          <div className="flex items-center gap-2 mt-2">
+            <Progress value={createdToWonRate} className="h-1.5 flex-1 [&>div]:bg-emerald-500" />
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 min-w-[40px] text-right">
+              {createdToWonRate.toFixed(1)}%
+            </span>
+          </div>
         </div>
 
-        {/* Perdidos */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <XCircle className="w-5 h-5 text-destructive" />
-              <span className="text-base font-semibold text-foreground">Perdidos</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xl font-bold text-destructive">{totalLost}</span>
-              <Badge variant="destructive" className="text-sm px-2.5 py-0.5 font-semibold">
-                {createdToLostRate.toFixed(1)}%
-              </Badge>
-            </div>
+        {/* Card Perdidos */}
+        <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200/50 dark:border-red-800/50 transition-all hover:shadow-md">
+          <div className="flex items-center gap-2 mb-2">
+            <XCircle className="w-4 h-4 text-red-500" />
+            <span className="text-sm font-medium text-muted-foreground">Perdidos</span>
           </div>
-          <Progress 
-            value={createdToLostRate} 
-            className="h-3 [&>div]:bg-destructive" 
-          />
+          <div className="text-3xl font-bold text-red-600 dark:text-red-400">{totalLost}</div>
+          <div className="flex items-center gap-2 mt-2">
+            <Progress value={createdToLostRate} className="h-1.5 flex-1 [&>div]:bg-red-500" />
+            <span className="text-xs font-semibold text-red-600 dark:text-red-400 min-w-[40px] text-right">
+              {createdToLostRate.toFixed(1)}%
+            </span>
+          </div>
         </div>
 
-        {/* Em Aberto */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Hourglass className="w-5 h-5 text-amber-500" />
-              <span className="text-base font-semibold text-foreground">Em aberto</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xl font-bold text-amber-600">{totalOpen}</span>
-              <Badge variant="warning" className="text-sm px-2.5 py-0.5 font-semibold">
-                {openRate.toFixed(1)}%
-              </Badge>
-            </div>
+        {/* Card Em Aberto */}
+        <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/50 dark:border-amber-800/50 transition-all hover:shadow-md">
+          <div className="flex items-center gap-2 mb-2">
+            <Hourglass className="w-4 h-4 text-amber-500" />
+            <span className="text-sm font-medium text-muted-foreground">Em Aberto</span>
           </div>
-          <Progress 
-            value={openRate} 
-            className="h-3 [&>div]:bg-amber-500" 
-          />
+          <div className="text-3xl font-bold text-amber-600 dark:text-amber-400">{totalOpen}</div>
+          <div className="flex items-center gap-2 mt-2">
+            <Progress value={openRate} className="h-1.5 flex-1 [&>div]:bg-amber-500" />
+            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 min-w-[40px] text-right">
+              {openRate.toFixed(1)}%
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Time to Win Stats */}
-      <div className="mt-6 pt-5 border-t border-border">
-        <div className="flex items-center gap-2 mb-4">
-          <Clock className="w-5 h-5 text-muted-foreground" />
-          <span className="text-base font-semibold text-muted-foreground">Tempo para Ganhar</span>
+      <div className="mt-5 pt-4 border-t border-border">
+        <div className="flex items-center gap-2 mb-3">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-muted-foreground">Tempo para Ganhar</span>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="text-center p-4 rounded-xl bg-accent border border-border/50">
-            <div className="text-3xl font-bold text-foreground">{avgTimeToWinDays}</div>
-            <div className="text-sm text-muted-foreground mt-1">dias (média)</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="text-center p-3 rounded-xl bg-accent/50 border border-border/50">
+            <div className="text-2xl font-bold text-foreground">{avgTimeToWinDays}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">dias (média)</div>
           </div>
-          <div className="text-center p-4 rounded-xl bg-accent border border-border/50">
-            <div className="text-3xl font-bold text-foreground">{medianTimeToWinDays}</div>
-            <div className="text-sm text-muted-foreground mt-1">dias (mediana)</div>
+          <div className="text-center p-3 rounded-xl bg-accent/50 border border-border/50">
+            <div className="text-2xl font-bold text-foreground">{medianTimeToWinDays}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">dias (mediana)</div>
           </div>
         </div>
       </div>
