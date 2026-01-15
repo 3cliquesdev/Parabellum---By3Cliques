@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { X, ChevronLeft, ChevronRight, Circle } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface TourStep {
@@ -37,12 +37,18 @@ interface TourProviderProps {
   children: React.ReactNode;
 }
 
+const TOOLTIP_HEIGHT = 220; // Estimated height of tooltip
+const TOOLTIP_WIDTH = 320;
+const PADDING = 16;
+
 export function TourProvider({ children }: TourProviderProps) {
   const [isActive, setIsActive] = useState(false);
   const [steps, setSteps] = useState<TourStep[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [onCompleteCallback, setOnCompleteCallback] = useState<(() => void) | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   const startTour = useCallback((tourSteps: TourStep[], onComplete?: () => void) => {
     setSteps(tourSteps);
@@ -59,6 +65,7 @@ export function TourProvider({ children }: TourProviderProps) {
     setSteps([]);
     setCurrentStep(0);
     setTargetRect(null);
+    setTooltipPosition(null);
     setOnCompleteCallback(null);
   }, [onCompleteCallback]);
 
@@ -82,60 +89,117 @@ export function TourProvider({ children }: TourProviderProps) {
     }
   }, [steps.length]);
 
+  // Calculate tooltip position based on available space
+  const calculateTooltipPosition = useCallback((rect: DOMRect) => {
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    
+    let top: number;
+    let left: number;
+    
+    // Decide if tooltip goes below or above
+    if (spaceBelow >= TOOLTIP_HEIGHT + PADDING) {
+      // Place below
+      top = rect.bottom + PADDING;
+    } else if (spaceAbove >= TOOLTIP_HEIGHT + PADDING) {
+      // Place above
+      top = rect.top - TOOLTIP_HEIGHT - PADDING;
+    } else {
+      // Default to wherever there's more space, clamped
+      if (spaceBelow >= spaceAbove) {
+        top = rect.bottom + PADDING;
+      } else {
+        top = rect.top - TOOLTIP_HEIGHT - PADDING;
+      }
+    }
+    
+    // Clamp top to viewport
+    top = Math.max(PADDING, Math.min(top, viewportHeight - TOOLTIP_HEIGHT - PADDING));
+    
+    // Calculate left position - try to align with target, but keep in viewport
+    left = rect.left;
+    left = Math.max(PADDING, Math.min(left, viewportWidth - TOOLTIP_WIDTH - PADDING));
+    
+    return { top, left };
+  }, []);
+
   // Update target element position
   useEffect(() => {
-    if (!isActive || steps.length === 0) return;
+    if (!isActive || steps.length === 0) {
+      setTargetRect(null);
+      setTooltipPosition(null);
+      return;
+    }
 
     let attempts = 0;
-    const maxAttempts = 10;
+    const maxAttempts = 15;
+    let retryInterval: NodeJS.Timeout | null = null;
 
     const updatePosition = () => {
       const step = steps[currentStep];
-      if (!step) return;
+      if (!step) return false;
 
       const element = document.querySelector(step.target);
       if (element) {
         const rect = element.getBoundingClientRect();
         setTargetRect(rect);
+        setTooltipPosition(calculateTooltipPosition(rect));
         
         // Scroll element into view
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        attempts = 0;
-      } else {
-        setTargetRect(null);
+        return true;
       }
+      return false;
     };
 
-    updatePosition();
-    
-    // Retry finding element with timeout
-    const retryInterval = setInterval(() => {
-      if (!targetRect && attempts < maxAttempts) {
-        attempts++;
-        updatePosition();
+    // Try immediately
+    if (updatePosition()) {
+      return;
+    }
+
+    // Retry finding element with interval
+    retryInterval = setInterval(() => {
+      attempts++;
+      if (updatePosition()) {
+        if (retryInterval) clearInterval(retryInterval);
       } else if (attempts >= maxAttempts) {
         console.warn(`Tour: Element not found after ${maxAttempts} attempts: ${steps[currentStep]?.target}`);
+        if (retryInterval) clearInterval(retryInterval);
         // Auto-skip to next step if element not found
-        clearInterval(retryInterval);
         if (currentStep < steps.length - 1) {
           setCurrentStep(prev => prev + 1);
         } else {
           endTour();
         }
-      } else {
-        clearInterval(retryInterval);
       }
     }, 100);
 
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition);
+    const handleResize = () => {
+      if (targetRect) {
+        const step = steps[currentStep];
+        if (step) {
+          const element = document.querySelector(step.target);
+          if (element) {
+            const rect = element.getBoundingClientRect();
+            setTargetRect(rect);
+            setTooltipPosition(calculateTooltipPosition(rect));
+          }
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleResize);
 
     return () => {
-      clearInterval(retryInterval);
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition);
+      if (retryInterval) clearInterval(retryInterval);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleResize);
     };
-  }, [isActive, currentStep, steps, endTour]);
+  }, [isActive, currentStep, steps, endTour, calculateTooltipPosition]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -176,8 +240,8 @@ export function TourProvider({ children }: TourProviderProps) {
     >
       {children}
 
-      {/* Tour Overlay - Only render when we have a valid target */}
-      {isActive && targetRect && currentTourStep && createPortal(
+      {/* Tour Overlay - Only render when we have a valid target AND tooltip position */}
+      {isActive && targetRect && tooltipPosition && currentTourStep && createPortal(
         <>
           {/* Spotlight with box-shadow overlay */}
           <div
@@ -193,10 +257,11 @@ export function TourProvider({ children }: TourProviderProps) {
 
           {/* Tooltip */}
           <Card
-            className="fixed z-[10000] w-80 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-2"
+            ref={tooltipRef}
+            className="fixed z-[10000] w-80 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-2 bg-card border-border"
             style={{
-              top: targetRect.bottom + 16,
-              left: Math.max(16, Math.min(targetRect.left, window.innerWidth - 336)),
+              top: tooltipPosition.top,
+              left: tooltipPosition.left,
             }}
           >
             <CardContent className="p-4">

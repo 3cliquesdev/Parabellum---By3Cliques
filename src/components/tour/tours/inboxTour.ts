@@ -23,14 +23,4 @@ export const INBOX_TOUR_STEPS: TourStep[] = [
     title: "👤 Painel do Contato",
     content: "Veja informações do cliente: dados de contato, histórico de compras, tickets relacionados. Edite os dados diretamente aqui.",
   },
-  {
-    target: '[data-tour="inbox-ai-toggle"]',
-    title: "🤖 Modo IA",
-    content: "Ative o modo IA para respostas automáticas inteligentes. A IA pode responder perguntas frequentes e transferir para humano quando necessário.",
-  },
-  {
-    target: '[data-tour="inbox-quick-actions"]',
-    title: "⚡ Ações Rápidas",
-    content: "Use atalhos para: criar ticket, transferir conversa, adicionar tags, usar respostas prontas (/) e encerrar atendimento.",
-  },
 ];
