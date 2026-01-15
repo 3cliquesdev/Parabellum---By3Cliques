@@ -12,6 +12,60 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     
+    <!-- SCRIPT NUCLEAR: Verifica versão ANTES do React carregar -->
+    <script>
+      (function() {
+        var CHECK_KEY = 'nuclear_version_check';
+        var BUILD_META = document.querySelector('meta[name="app-build-id"]');
+        var currentBuild = BUILD_META ? BUILD_META.content : 'unknown';
+        
+        // Evita loop infinito (máximo 2 tentativas)
+        var attempts = parseInt(sessionStorage.getItem(CHECK_KEY) || '0');
+        if (attempts >= 2) {
+          console.log('[Nuclear] Max attempts reached, stopping');
+          sessionStorage.removeItem(CHECK_KEY);
+          return;
+        }
+        
+        // Busca HTML fresco do servidor
+        fetch('/index.html?_nc=' + Date.now(), {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        })
+        .then(function(r) { return r.text(); })
+        .then(function(html) {
+          var match = html.match(/app-build-id.*content="([^"]+)"/);
+          var serverBuild = match ? match[1] : 'unknown';
+          
+          if (serverBuild !== '__BUILD_PLACEHOLDER__' && 
+              serverBuild !== currentBuild && 
+              currentBuild !== '__BUILD_PLACEHOLDER__') {
+            console.warn('[Nuclear] ⚠️ VERSÃO ANTIGA! Forçando reload...');
+            console.warn('[Nuclear] Local:', currentBuild, '| Servidor:', serverBuild);
+            
+            // Incrementa contador
+            sessionStorage.setItem(CHECK_KEY, String(attempts + 1));
+            
+            // Limpa caches se disponível
+            if ('caches' in window) {
+              caches.keys().then(function(names) {
+                names.forEach(function(name) { caches.delete(name); });
+              });
+            }
+            
+            // Força reload agressivo
+            location.replace(location.pathname + '?_force=' + Date.now());
+          } else {
+            // Versão ok, limpa contador
+            sessionStorage.removeItem(CHECK_KEY);
+          }
+        })
+        .catch(function(e) {
+          console.warn('[Nuclear] Erro na verificação:', e);
+        });
+      })();
+    </script>
+    
     <title>Parabellum</title>
     <link rel="icon" href="/favicon.png" type="image/png">
     
