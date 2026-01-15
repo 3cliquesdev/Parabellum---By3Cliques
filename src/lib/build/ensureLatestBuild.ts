@@ -1,8 +1,9 @@
 /**
- * Sistema de Auto-Heal de Build
+ * Sistema de Auto-Heal de Build v2
  * 
  * Detecta se o app está rodando uma versão antiga e força atualização.
  * Isso resolve o problema de cache onde a "versão antiga" reaparece.
+ * Inclui Hard Refresh para limpeza completa de caches.
  */
 
 // Declaração global do BUILD_ID injetado pelo Vite
