@@ -231,9 +231,9 @@ interface ConfidenceResult {
   department?: string;
 }
 
-// Thresholds - FASE 4: Aumentados para ser mais conservador
-const SCORE_DIRECT = 0.85;   // Antes: 0.80 - Aumentado para respostas mais seguras
-const SCORE_CAUTIOUS = 0.70; // Antes: 0.65 - Aumentada margem de segurança
+// Thresholds - FASE 5: Aumentados para reduzir alucinações
+const SCORE_DIRECT = 0.90;   // Antes: 0.85 - Só responde direto com alta certeza
+const SCORE_CAUTIOUS = 0.80; // Antes: 0.70 - Margem maior para resposta cautelosa
 
 // Indicadores de conflito
 const CONFLICT_INDICATORS = ['porém', 'entretanto', 'no entanto', 'diferente', 'contrário', 'atualizado', 'novo', 'antigo'];
@@ -1418,13 +1418,13 @@ Responda APENAS: skip ou search`
                   const embeddingData = await embeddingResponse.json();
                   const queryEmbedding = embeddingData.data[0].embedding;
                   
-                  // Buscar artigos similares
+                  // Buscar artigos similares - FASE 5: Threshold aumentado para reduzir alucinações
                   const { data: semanticResults, error: semanticError } = await supabaseClient.rpc(
                     'match_knowledge_articles',
                     {
                       query_embedding: queryEmbedding,
-                      match_threshold: 0.50,
-                      match_count: 5,
+                      match_threshold: 0.70, // Antes: 0.50 - Só retorna artigos realmente relevantes
+                      match_count: 3,        // Antes: 5 - Menos artigos, mais qualidade
                     }
                   );
 
@@ -1635,10 +1635,11 @@ Responda APENAS: skip ou search`
     });
 
     // 🚨 HANDOFF AUTOMÁTICO POR BAIXA CONFIANÇA
-    // Apenas se score muito baixo E não for saudação/small talk
+    // FASE 5: Corrigido - Faz handoff baseado no SCORE, não na existência de artigos
+    // Antes: só fazia handoff se knowledgeArticles.length === 0 (bug - ignorava artigos irrelevantes)
     const isSimpleGreeting = /^(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|ok|tá|ta|sim|não|nao)[\s!?.,]*$/i.test(customerMessage.trim());
     
-    if (confidenceResult.action === 'handoff' && !isSimpleGreeting && knowledgeArticles.length === 0) {
+    if (confidenceResult.action === 'handoff' && !isSimpleGreeting) {
       console.log('[ai-autopilot-chat] 🚨 LOW CONFIDENCE HANDOFF - Score:', confidenceResult.score);
       
       // Atualizar ai_mode para waiting_human

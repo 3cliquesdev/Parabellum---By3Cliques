@@ -1,12 +1,12 @@
 /**
- * Sprint 2: Sistema Anti-Alucinação com SCORE
+ * Sprint 5: Sistema Anti-Alucinação com SCORE (Atualizado)
  * 
  * Fórmula: SCORE = 0.6 * conf_retrieval + 0.4 * coverage - 0.25 * conflicts
  * 
- * Limiares:
- * - SCORE >= 0.80: Resposta direta
- * - 0.65 <= SCORE < 0.80: Resposta cautelosa
- * - SCORE < 0.65: Handoff automático
+ * Limiares ATUALIZADOS (mais conservadores):
+ * - SCORE >= 0.90: Resposta direta (alta certeza)
+ * - 0.80 <= SCORE < 0.90: Resposta cautelosa
+ * - SCORE < 0.80: Handoff automático
  */
 
 export interface RetrievedDocument {
@@ -171,14 +171,15 @@ export function calculateConfidenceScore(input: ConfidenceInput): ConfidenceResu
     0.6 * conf_retrieval + 0.4 * coverage - conflictPenalty
   ));
 
-  // Determinar ação
+  // Determinar ação - FASE 5: Thresholds mais conservadores
   let action: 'direct' | 'cautious' | 'handoff';
   let reason: string;
 
-  if (score >= 0.80) {
+  // SCORE_DIRECT = 0.90, SCORE_CAUTIOUS = 0.80
+  if (score >= 0.90) {
     action = 'direct';
     reason = `Alta confiança (${(score * 100).toFixed(0)}%) - resposta direta`;
-  } else if (score >= 0.65) {
+  } else if (score >= 0.80) {
     action = 'cautious';
     reason = `Confiança média (${(score * 100).toFixed(0)}%) - resposta cautelosa`;
   } else {
