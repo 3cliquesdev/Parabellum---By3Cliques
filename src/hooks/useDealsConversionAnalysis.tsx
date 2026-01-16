@@ -16,7 +16,7 @@ export interface DealsConversionAnalysis {
   maxTimeToWinDays: number;
 }
 
-export type DealSource = "all" | "organic" | "form" | "whatsapp" | "other";
+export type DealSource = "all" | "organic" | "form" | "whatsapp";
 
 export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSource = "all") {
   return useQuery({
@@ -38,19 +38,14 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
       // Helper to apply source filter - categorias que cobrem todos os deals
       const applySourceFilter = (query: any) => {
         if (source === "organic") {
-          // Vendas orgânicas (Kiwify direto) - independente de recorrência
-          return query.eq("is_organic_sale", true);
+          // Orgânica = Kiwify direto (is_organic_sale) + Recuperação automática (lead_source NULL)
+          return query.or("is_organic_sale.eq.true,lead_source.is.null");
         } else if (source === "form") {
-          // Leads de formulário que NÃO são orgânicos
-          return query.eq("lead_source", "formulario").eq("is_organic_sale", false);
+          // Leads de formulário
+          return query.eq("lead_source", "formulario");
         } else if (source === "whatsapp") {
-          // Leads de WhatsApp que NÃO são orgânicos
-          return query.eq("lead_source", "whatsapp").eq("is_organic_sale", false);
-        } else if (source === "other") {
-          // Outros: não orgânico E lead_source diferente de formulario/whatsapp
-          return query
-            .eq("is_organic_sale", false)
-            .or("lead_source.is.null,lead_source.not.in.(formulario,whatsapp)");
+          // Leads de WhatsApp
+          return query.eq("lead_source", "whatsapp");
         }
         return query;
       };
