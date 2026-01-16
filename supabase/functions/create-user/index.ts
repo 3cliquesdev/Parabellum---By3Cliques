@@ -82,17 +82,38 @@ serve(async (req) => {
       );
     }
 
-    // Check if the requesting user is an admin
-    const { data: roles, error: roleError } = await supabaseAdmin
+    // Check if the requesting user has permission to manage users
+    const { data: userRole, error: roleError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
       .single();
 
-    if (roleError || roles?.role !== 'admin') {
+    if (roleError) {
       console.error('Role check failed:', roleError);
       return new Response(
-        JSON.stringify({ error: 'Forbidden: Admin role required' }),
+        JSON.stringify({ error: 'Forbidden: Unable to verify permissions' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Admin always has permission
+    const isAdmin = userRole?.role === 'admin';
+
+    // Check permission in role_permissions table
+    const { data: permission } = await supabaseAdmin
+      .from('role_permissions')
+      .select('enabled')
+      .eq('role', userRole?.role)
+      .eq('permission_key', 'users.manage')
+      .single();
+
+    const hasPermission = isAdmin || permission?.enabled === true;
+
+    if (!hasPermission) {
+      console.error('Permission denied for role:', userRole?.role);
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: Você não tem permissão para criar usuários' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
