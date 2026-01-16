@@ -77,15 +77,35 @@ serve(async (req) => {
       );
     }
 
-    const { data: roles, error: roleError } = await supabaseAdmin
+    const { data: userRole, error: roleError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
       .single();
 
-    if (roleError || roles?.role !== 'admin') {
+    if (roleError) {
       return new Response(
-        JSON.stringify({ error: 'Forbidden: Admin role required' }),
+        JSON.stringify({ error: 'Forbidden: Unable to verify permissions' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Admin always has permission
+    const isAdmin = userRole?.role === 'admin';
+
+    // Check permission in role_permissions table
+    const { data: permission } = await supabaseAdmin
+      .from('role_permissions')
+      .select('enabled')
+      .eq('role', userRole?.role)
+      .eq('permission_key', 'users.manage')
+      .single();
+
+    const hasPermission = isAdmin || permission?.enabled === true;
+
+    if (!hasPermission) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: Você não tem permissão para reenviar emails' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -110,7 +130,7 @@ serve(async (req) => {
     }
 
     // Get user role and profile
-    const { data: userRole } = await supabaseAdmin
+    const { data: targetUserRole } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', user_id)
@@ -123,7 +143,7 @@ serve(async (req) => {
       .single();
 
     const email = targetUser.user.email;
-    const role = userRole?.role || 'sales_rep';
+    const role = targetUserRole?.role || 'sales_rep';
     const fullName = profile?.full_name || email?.split('@')[0] || 'Usuário';
 
     console.log('Reenviando email de boas-vindas para:', email);

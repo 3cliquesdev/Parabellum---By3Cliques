@@ -47,16 +47,36 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verificar se o usuário é admin
+    // Verificar se o usuário tem permissão para gerenciar usuários
     const { data: roleData } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', adminUser.id)
       .single();
 
-    if (!roleData || roleData.role !== 'admin') {
+    if (!roleData) {
       return new Response(
-        JSON.stringify({ error: 'Apenas administradores podem gerenciar status de usuários' }),
+        JSON.stringify({ error: 'Não foi possível verificar permissões' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Admin sempre tem permissão
+    const isAdmin = roleData.role === 'admin';
+
+    // Verificar permissão na tabela role_permissions
+    const { data: permission } = await supabaseAdmin
+      .from('role_permissions')
+      .select('enabled')
+      .eq('role', roleData.role)
+      .eq('permission_key', 'users.manage')
+      .single();
+
+    const hasPermission = isAdmin || permission?.enabled === true;
+
+    if (!hasPermission) {
+      return new Response(
+        JSON.stringify({ error: 'Você não tem permissão para gerenciar status de usuários' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

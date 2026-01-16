@@ -47,16 +47,34 @@ Deno.serve(async (req) => {
 
     console.log('[update-user] Request from user:', user.id);
 
-    // Check if requesting user is admin
+    // Check if requesting user has permission to manage users
     const { data: roleData, error: roleError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
       .single();
 
-    if (roleError || roleData?.role !== 'admin') {
-      console.error('[update-user] Permission denied - user is not admin');
-      throw new Error('Only admins can update users');
+    if (roleError) {
+      console.error('[update-user] Role check failed:', roleError);
+      throw new Error('Unable to verify permissions');
+    }
+
+    // Admin always has permission
+    const isAdmin = roleData?.role === 'admin';
+
+    // Check permission in role_permissions table
+    const { data: permission } = await supabaseAdmin
+      .from('role_permissions')
+      .select('enabled')
+      .eq('role', roleData?.role)
+      .eq('permission_key', 'users.manage')
+      .single();
+
+    const hasPermission = isAdmin || permission?.enabled === true;
+
+    if (!hasPermission) {
+      console.error('[update-user] Permission denied for role:', roleData?.role);
+      throw new Error('Você não tem permissão para atualizar usuários');
     }
 
     // Parse request body
