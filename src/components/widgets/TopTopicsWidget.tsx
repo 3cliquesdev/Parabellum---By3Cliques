@@ -12,9 +12,15 @@ interface TopTopicsWidgetProps {
 const TOPIC_ICONS: Record<string, string> = {
   'Financeiro': '💰',
   'Tecnico': '🔧',
+  'Técnico': '🔧',
   'Bug': '🐛',
-  'Outro': '💬',
-  'Outros': '💬',
+  'Saque': '💸',
+  'Reclamacao': '😤',
+  'Reclamação': '😤',
+  'Duvida': '❔',
+  'Dúvida': '❔',
+  'Outro': '❓',
+  'Outros': '❓',
 };
 
 export function TopTopicsWidget({ startDate, endDate }: TopTopicsWidgetProps) {
@@ -41,10 +47,10 @@ export function TopTopicsWidget({ startDate, endDate }: TopTopicsWidgetProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MessageSquare className="h-5 w-5 text-primary" />
-          Top 5 Tópicos Mais Frequentes
+          Top 5 Categorias
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Dúvidas que a IA mais respondeu
+          Categorias de tickets mais frequentes
         </p>
       </CardHeader>
       <CardContent>

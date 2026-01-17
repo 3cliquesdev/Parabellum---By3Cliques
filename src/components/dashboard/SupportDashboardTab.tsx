@@ -9,6 +9,7 @@ import { VolumeResolutionWidget } from "@/components/widgets/VolumeResolutionWid
 import { SLAComplianceWidget } from "@/components/widgets/SLAComplianceWidget";
 import { SentimentDistributionWidget } from "@/components/widgets/SentimentDistributionWidget";
 import { TopTopicsWidget } from "@/components/widgets/TopTopicsWidget";
+import { TopTagsWidget } from "@/components/widgets/TopTagsWidget";
 import { useSLAAlerts } from "@/hooks/useSLAAlerts";
 import { useTicketCounts } from "@/hooks/useTicketCounts";
 import { useSupportMetrics } from "@/hooks/useSupportMetrics";
@@ -95,12 +96,17 @@ export function SupportDashboardTab({ dateRange }: SupportDashboardTabProps) {
         <SLAComplianceWidget startDate={startDate} endDate={endDate} />
       </BentoCard>
       
-      {/* ROW 4: Sentiment + Topics */}
+      {/* ROW 4: Tags + Categorias */}
       <BentoCard span="2">
-        <SentimentDistributionWidget />
+        <TopTagsWidget startDate={startDate} endDate={endDate} />
       </BentoCard>
       <BentoCard span="2">
         <TopTopicsWidget startDate={startDate} endDate={endDate} />
+      </BentoCard>
+      
+      {/* ROW 5: Sentiment */}
+      <BentoCard span="4">
+        <SentimentDistributionWidget />
       </BentoCard>
     </BentoGrid>
   );
