@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { SubscriptionMetrics, ProductCategory } from "@/hooks/useKiwifySubscriptions";
-import { Users, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
+import { Users, ShoppingCart, DollarSign, RotateCcw } from "lucide-react";
 
 interface SubscriptionMetricsCardsProps {
   data?: SubscriptionMetrics;
@@ -16,38 +16,38 @@ const formatCurrency = (value: number) => {
 export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps) {
   if (!data) return null;
 
-  const churnRate = data.totalAtivas > 0 
-    ? ((data.totalCanceladas / (data.totalAtivas + data.totalCanceladas)) * 100).toFixed(1)
-    : '0';
-
   const metrics = [
     {
-      title: 'Assinaturas Ativas',
-      value: data.totalAtivas.toLocaleString('pt-BR'),
+      title: 'Assinaturas',
+      subtitle: 'Clientes únicos',
+      value: (data.totalAssinaturas ?? 0).toLocaleString('pt-BR'),
       icon: Users,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
     },
     {
-      title: 'Faturamento Recorrente',
-      value: formatCurrency(data.faturamentoRecorrente),
-      icon: DollarSign,
+      title: 'Vendas Brutas',
+      subtitle: 'Produtos vendidos',
+      value: (data.vendasBrutas ?? 0).toLocaleString('pt-BR'),
+      icon: ShoppingCart,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
     {
-      title: 'Canceladas',
-      value: data.totalCanceladas.toLocaleString('pt-BR'),
-      icon: TrendingDown,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
+      title: 'Vendas Líquidas',
+      subtitle: 'Após reembolsos',
+      value: (data.vendasLiquidas ?? 0).toLocaleString('pt-BR'),
+      icon: DollarSign,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
     },
     {
-      title: 'Taxa de Churn',
-      value: `${churnRate}%`,
-      icon: TrendingUp,
-      color: parseFloat(churnRate) > 10 ? 'text-red-600' : 'text-green-600',
-      bgColor: parseFloat(churnRate) > 10 ? 'bg-red-50' : 'bg-green-50',
+      title: 'Reembolsos',
+      subtitle: 'Devoluções',
+      value: (data.reembolsos?.length ?? 0).toLocaleString('pt-BR'),
+      icon: RotateCcw,
+      color: 'text-red-600',
+      bgColor: 'bg-red-50',
     },
   ];
 
@@ -59,6 +59,7 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{metric.title}</p>
+                <p className="text-xs text-muted-foreground/70">{metric.subtitle}</p>
                 <p className="text-2xl font-bold mt-1">{metric.value}</p>
               </div>
               <div className={`p-3 rounded-full ${metric.bgColor}`}>

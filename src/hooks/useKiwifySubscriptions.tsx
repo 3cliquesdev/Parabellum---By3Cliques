@@ -20,7 +20,26 @@ export interface SubscriptionData {
   affiliateCommission: number;
 }
 
+export interface RefundData {
+  orderId: string;
+  customerEmail: string;
+  customerName: string;
+  productName: string;
+  refundDate: string;
+  originalDate: string;
+  value: number;
+}
+
 export interface SubscriptionMetrics {
+  // Métricas de clientes únicos
+  totalAssinaturas: number; // Clientes únicos (emails distintos)
+  
+  // Métricas de vendas
+  vendasBrutas: number; // Total de orders únicos
+  vendasLiquidas: number; // Brutas - reembolsos
+  reembolsos: RefundData[]; // Lista com data de cada reembolso
+  
+  // Métricas legadas (mantidas para compatibilidade)
   totalAtivas: number;
   totalCanceladas: number;
   faturamentoRecorrente: number;
@@ -59,45 +78,55 @@ function parseSubscriptionStatus(eventType: string, subscriptionStatus?: string)
   return 'active';
 }
 
+// Format date for comparison (YYYY-MM-DD)
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
   return useQuery({
     queryKey: ['kiwify-subscriptions', startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async (): Promise<SubscriptionMetrics> => {
       console.log('[useKiwifySubscriptions] Fetching subscription data...');
       
-      // Fetch all subscription-related events
-      let query = supabase
+      // Fetch paid events
+      let paidQuery = supabase
         .from('kiwify_events')
         .select('*')
-        .in('event_type', ['paid', 'order_approved', 'subscription_canceled', 'subscription_ended', 'subscription_renewed'])
+        .eq('event_type', 'paid')
         .order('created_at', { ascending: false });
 
-      // Apply date filters if provided
+      // Apply date filters with margin for approved_date filtering
       if (startDate) {
-        query = query.gte('created_at', startDate.toISOString());
+        const marginStart = new Date(startDate);
+        marginStart.setDate(marginStart.getDate() - 7);
+        paidQuery = paidQuery.gte('created_at', marginStart.toISOString());
       }
       if (endDate) {
-        const endOfDay = new Date(endDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        query = query.lte('created_at', endOfDay.toISOString());
+        const marginEnd = new Date(endDate);
+        marginEnd.setDate(marginEnd.getDate() + 7);
+        paidQuery = paidQuery.lte('created_at', marginEnd.toISOString());
       }
 
-      // Paginate to get all events
-      const allEvents: any[] = [];
+      // Paginate to get all paid events
+      const allPaidEvents: any[] = [];
       let page = 0;
       const pageSize = 1000;
       let hasMore = true;
 
       while (hasMore && page < 50) {
-        const { data, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
+        const { data, error } = await paidQuery.range(page * pageSize, (page + 1) * pageSize - 1);
         
         if (error) {
-          console.error('[useKiwifySubscriptions] Error fetching events:', error);
+          console.error('[useKiwifySubscriptions] Error fetching paid events:', error);
           throw error;
         }
 
         if (data && data.length > 0) {
-          allEvents.push(...data);
+          allPaidEvents.push(...data);
           hasMore = data.length === pageSize;
           page++;
         } else {
@@ -105,13 +134,115 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         }
       }
 
-      console.log(`[useKiwifySubscriptions] Total events fetched: ${allEvents.length}`);
+      console.log(`[useKiwifySubscriptions] Total paid events fetched: ${allPaidEvents.length}`);
 
-      // Process events to build subscription map
+      // Filter by approved_date within the selected period
+      const startDateStr = startDate ? formatLocalDate(startDate) : null;
+      const endDateStr = endDate ? formatLocalDate(endDate) : null;
+
+      const filteredPaidEvents = allPaidEvents.filter(event => {
+        const payload = event.payload as any;
+        const approvedDate = payload?.approved_date;
+        if (!approvedDate) return false;
+        
+        const approvedDateStr = approvedDate.split('T')[0];
+        
+        if (startDateStr && approvedDateStr < startDateStr) return false;
+        if (endDateStr && approvedDateStr > endDateStr) return false;
+        
+        return true;
+      });
+
+      console.log(`[useKiwifySubscriptions] Filtered paid events by approved_date: ${filteredPaidEvents.length}`);
+
+      // Dedupe by order_id (keep first occurrence)
+      const uniqueOrdersMap = new Map<string, any>();
+      for (const event of filteredPaidEvents) {
+        const payload = event.payload as any;
+        const orderId = payload?.order_id || payload?.OrderId;
+        if (orderId && !uniqueOrdersMap.has(orderId)) {
+          uniqueOrdersMap.set(orderId, event);
+        }
+      }
+
+      const uniqueOrders = Array.from(uniqueOrdersMap.values());
+      console.log(`[useKiwifySubscriptions] Unique orders: ${uniqueOrders.length}`);
+
+      // Calculate unique customers (unique emails)
+      const uniqueCustomerEmails = new Set<string>();
+      for (const event of uniqueOrders) {
+        const payload = event.payload as any;
+        const email = payload?.Customer?.email || payload?.customer_email;
+        if (email) {
+          uniqueCustomerEmails.add(email.toLowerCase());
+        }
+      }
+
+      console.log(`[useKiwifySubscriptions] Unique customers: ${uniqueCustomerEmails.size}`);
+
+      // Fetch refund events for orders in the period
+      const orderIds = Array.from(uniqueOrdersMap.keys());
+      const refunds: RefundData[] = [];
+
+      if (orderIds.length > 0) {
+        // Fetch refunded events
+        const { data: refundEvents, error: refundError } = await supabase
+          .from('kiwify_events')
+          .select('*')
+          .eq('event_type', 'refunded');
+
+        if (!refundError && refundEvents) {
+          for (const refund of refundEvents) {
+            const payload = refund.payload as any;
+            const refundOrderId = payload?.order_id || payload?.OrderId;
+            
+            // Check if this refund is for an order in our period
+            if (refundOrderId && uniqueOrdersMap.has(refundOrderId)) {
+              const originalEvent = uniqueOrdersMap.get(refundOrderId);
+              const originalPayload = originalEvent?.payload as any;
+              
+              refunds.push({
+                orderId: refundOrderId,
+                customerEmail: payload?.Customer?.email || payload?.customer_email || '',
+                customerName: payload?.Customer?.full_name || payload?.customer_name || 'Cliente',
+                productName: payload?.Product?.name || payload?.product_name || 'Produto',
+                refundDate: refund.created_at,
+                originalDate: originalPayload?.approved_date || originalEvent?.created_at || '',
+                value: (payload?.product_base_price || 0) / 100,
+              });
+            }
+          }
+        }
+      }
+
+      console.log(`[useKiwifySubscriptions] Refunds found: ${refunds.length}`);
+
+      // Process subscriptions for the table and category breakdown
       const subscriptionMap = new Map<string, SubscriptionData>();
       const processedOrderIds = new Set<string>();
 
-      for (const event of allEvents) {
+      // Fetch subscription status events
+      let statusQuery = supabase
+        .from('kiwify_events')
+        .select('*')
+        .in('event_type', ['subscription_canceled', 'subscription_ended'])
+        .order('created_at', { ascending: false });
+
+      const { data: statusEvents } = await statusQuery;
+      const statusByOrderId = new Map<string, string>();
+      
+      for (const event of statusEvents || []) {
+        const payload = event.payload as any;
+        const orderId = payload?.order_id || payload?.OrderId;
+        const subscriptionId = payload?.Subscription?.id || payload?.subscription_id;
+        const key = subscriptionId || orderId;
+        
+        if (key && !statusByOrderId.has(key)) {
+          statusByOrderId.set(key, event.event_type);
+        }
+      }
+
+      for (const event of uniqueOrders) {
         const payload = event.payload as any;
         if (!payload) continue;
 
@@ -120,24 +251,7 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         const uniqueKey = subscriptionId || orderId;
         
         if (!uniqueKey) continue;
-
-        // Check if subscription (has plan or subscription data)
-        const isSubscription = payload.Subscription?.plan || payload.subscription_plan || 
-          payload.charges_type === 'subscription' || 
-          (payload.Product?.name || '').toLowerCase().includes('assinatura');
-
-        if (!isSubscription && !subscriptionId) continue;
-
-        // Skip if already processed with better status
-        if (processedOrderIds.has(uniqueKey)) {
-          const existing = subscriptionMap.get(uniqueKey);
-          // Update status if it's a cancellation event
-          if (existing && (event.event_type === 'subscription_canceled' || event.event_type === 'subscription_ended')) {
-            existing.status = parseSubscriptionStatus(event.event_type, payload.subscription_status);
-          }
-          continue;
-        }
-
+        if (processedOrderIds.has(uniqueKey)) continue;
         processedOrderIds.add(uniqueKey);
 
         const productName = payload.Product?.name || payload.product_name || 'Produto não identificado';
@@ -145,6 +259,21 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         const myCommission = (payload.my_commission || 0) / 100;
         const kiwifyFee = (payload.kiwify_fee || 0) / 100;
         const affiliateCommission = (payload.affiliate_commission || 0) / 100;
+        
+        // Determine status
+        let status: 'active' | 'canceled' | 'ended' = 'active';
+        const statusEvent = statusByOrderId.get(uniqueKey);
+        if (statusEvent === 'subscription_canceled') {
+          status = 'canceled';
+        } else if (statusEvent === 'subscription_ended') {
+          status = 'ended';
+        }
+
+        // Check if refunded
+        const isRefunded = refunds.some(r => r.orderId === orderId);
+        if (isRefunded) {
+          status = 'canceled';
+        }
         
         const subscription: SubscriptionData = {
           id: uniqueKey,
@@ -155,7 +284,7 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
           offerName: payload.Subscription?.plan?.name || payload.offer_name || 'Oferta padrão',
           customerName: payload.Customer?.full_name || payload.customer_name || 'Cliente',
           customerEmail: payload.Customer?.email || payload.customer_email || '',
-          status: parseSubscriptionStatus(event.event_type, payload.subscription_status),
+          status,
           grossValue,
           netValue: myCommission,
           kiwifyFee,
@@ -194,15 +323,29 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         }
       }
 
-      console.log(`[useKiwifySubscriptions] Total subscriptions: ${subscriptions.length}, Active: ${totalAtivas}, Canceled: ${totalCanceladas}`);
-
-      return {
+      const result: SubscriptionMetrics = {
+        // Novas métricas
+        totalAssinaturas: uniqueCustomerEmails.size,
+        vendasBrutas: uniqueOrders.length,
+        vendasLiquidas: uniqueOrders.length - refunds.length,
+        reembolsos: refunds,
+        
+        // Métricas legadas
         totalAtivas,
         totalCanceladas,
         faturamentoRecorrente,
         subscriptions,
         byCategory,
       };
+
+      console.log(`[useKiwifySubscriptions] Final metrics:`, {
+        totalAssinaturas: result.totalAssinaturas,
+        vendasBrutas: result.vendasBrutas,
+        vendasLiquidas: result.vendasLiquidas,
+        reembolsos: result.reembolsos.length,
+      });
+
+      return result;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

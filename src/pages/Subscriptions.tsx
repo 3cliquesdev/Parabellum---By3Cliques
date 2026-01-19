@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useKiwifySubscriptions, ProductCategory, SubscriptionStatus } from "@/hooks/useKiwifySubscriptions";
 import { SubscriptionMetricsCards } from "@/components/subscriptions/SubscriptionMetricsCards";
 import { SubscriptionTable } from "@/components/subscriptions/SubscriptionTable";
+import { RefundsTable } from "@/components/subscriptions/RefundsTable";
 import { Download, Search, Filter, RefreshCw } from "lucide-react";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -115,8 +116,8 @@ export default function Subscriptions() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Assinaturas</h1>
-          <p className="text-muted-foreground">Visão geral de todas as assinaturas Kiwify</p>
+          <h1 className="text-2xl font-bold">Vendas Kiwify</h1>
+          <p className="text-muted-foreground">Assinaturas, vendas e reembolsos do período</p>
         </div>
         <div className="flex items-center gap-2">
           <DateRangePicker 
@@ -141,6 +142,11 @@ export default function Subscriptions() {
         <SubscriptionMetricsCards data={data} />
       )}
 
+      {/* Refunds Table */}
+      {!isLoading && data?.reembolsos && data.reembolsos.length > 0 && (
+        <RefundsTable refunds={data.reembolsos} />
+      )}
+
       {/* Filters */}
       <Card>
         <CardContent className="pt-6 space-y-4">
@@ -159,15 +165,15 @@ export default function Subscriptions() {
               <TabsList>
                 <TabsTrigger value="all">
                   Todas
-                  {data && <Badge variant="secondary" className="ml-2 text-xs">{data.totalAtivas + data.totalCanceladas}</Badge>}
+                  {data && <Badge variant="secondary" className="ml-2 text-xs">{data.vendasBrutas ?? 0}</Badge>}
                 </TabsTrigger>
                 <TabsTrigger value="active">
                   Ativas
-                  {data && <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-700">{data.totalAtivas}</Badge>}
+                  {data && <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-700">{data.totalAtivas ?? 0}</Badge>}
                 </TabsTrigger>
                 <TabsTrigger value="canceled">
                   Canceladas
-                  {data && <Badge variant="secondary" className="ml-2 text-xs bg-red-100 text-red-700">{data.totalCanceladas}</Badge>}
+                  {data && <Badge variant="secondary" className="ml-2 text-xs bg-red-100 text-red-700">{data.totalCanceladas ?? 0}</Badge>}
                 </TabsTrigger>
               </TabsList>
             </Tabs>
