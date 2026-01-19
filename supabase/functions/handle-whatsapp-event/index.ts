@@ -576,9 +576,36 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   }
 
   // 🔄 FLUXO DE REENVIO OTP - Quando bloqueado, permitir "reenviar" após 10 minutos
-  if (metadata.otp_blocked) {
+  // ✅ FIX: Clientes conhecidos (com email já verificado) ignoram completamente o bloqueio OTP
+  let currentMetadata = { ...metadata };
+  
+  if (currentMetadata.otp_blocked && isKnownCustomer) {
+    // 🧹 Limpar metadata obsoleta de cliente já verificado
+    console.log('[handle-whatsapp-event] 🧹 Limpando OTP metadata obsoleta de cliente verificado');
+    
+    const cleanedMetadata = {
+      ...currentMetadata,
+      otp_blocked: false,
+      otp_blocked_at: null,
+      awaiting_otp: false,
+      otp_attempts: 0,
+    };
+    
+    await supabase
+      .from('conversations')
+      .update({
+        customer_metadata: cleanedMetadata
+      })
+      .eq('id', conversationId);
+    
+    // Atualizar metadata local para continuar o fluxo corretamente
+    currentMetadata = cleanedMetadata;
+  }
+  
+  // Agora processar o bloqueio apenas se ainda for válido (cliente NÃO conhecido)
+  if (currentMetadata.otp_blocked) {
     const isResetRequest = /reenviar|novo c[óo]digo|tentar novamente/i.test(messageText);
-    const blockedAt = metadata.otp_blocked_at ? new Date(metadata.otp_blocked_at) : null;
+    const blockedAt = currentMetadata.otp_blocked_at ? new Date(currentMetadata.otp_blocked_at) : null;
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
     const canResend = blockedAt && blockedAt < tenMinutesAgo;
     
@@ -588,7 +615,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       // ✅ Permitir nova tentativa
       console.log('[handle-whatsapp-event] 🔄 Resetting OTP block - allowing new attempt');
       
-      const claimedEmail = metadata.claimant_email;
+      const claimedEmail = currentMetadata.claimant_email;
       
       // Gerar novo código OTP
       try {
@@ -604,7 +631,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             .from('conversations')
             .update({
               customer_metadata: {
-                ...metadata,
+                ...currentMetadata,
                 awaiting_otp: true,
                 otp_blocked: false,
                 otp_blocked_at: null,
