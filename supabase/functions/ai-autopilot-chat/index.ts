@@ -2459,17 +2459,24 @@ Você encontrou POUCA informação na base de conhecimento sobre o assunto.
 
     const contextualizedSystemPrompt = `${priorityInstruction}${antiHallucinationInstruction}
 
+**🚫 REGRA CRÍTICA DE HANDOFF (OBRIGATÓRIO):**
+VOCÊ NÃO PODE transferir para atendente humano (request_human_agent) até que o cliente esteja IDENTIFICADO:
+- Cliente DEVE ter fornecido email E email foi verificado na base (email_verified_in_db=true)
+- OU cliente já tem email cadastrado no contato
+
+SE cliente pedir atendente humano mas NÃO está identificado:
+→ Responda: "Claro! Para conectar você com um atendente, preciso primeiro confirmar sua identidade. Qual é o seu email de cadastro?"
+→ AGUARDE o email
+→ Use verify_customer_email para validar
+→ SÓ ENTÃO pode usar request_human_agent
+
 **⚠️ REGRA CRÍTICA ANTI-ALUCINAÇÃO:**
 Se você NÃO encontrar informação na BASE DE CONHECIMENTO para responder a pergunta do cliente:
 1. NÃO INVENTE informações
 2. NÃO use conhecimento externo não validado pela empresa
-3. DIGA HONESTAMENTE: "Não encontrei essa informação na minha base de conhecimento. Posso te conectar com um especialista?"
-4. Use a ferramenta request_human_agent com reason: "info_nao_disponivel" se o cliente aceitar
-
-**EXEMPLOS DE COMO RESPONDER QUANDO NÃO SABE:**
-- "Boa pergunta! Essa é uma informação que preciso validar. Quer que eu te conecte com um especialista?"
-- "Não encontrei essa informação específica na nossa base. Posso transferir para alguém que possa confirmar?"
-- "Para te dar uma resposta precisa, seria melhor você falar com um de nossos especialistas. Posso transferir?"
+3. Se cliente JÁ IDENTIFICADO (tem email verificado): "Não encontrei essa informação. Posso te conectar com um especialista?"
+4. Se cliente NÃO IDENTIFICADO: "Não encontrei essa informação. Para te ajudar melhor, qual é o seu email de cadastro?"
+5. AGUARDE email → verifique → depois pode oferecer handoff
 
 É MELHOR admitir que não sabe do que fornecer informação ERRADA.
 
@@ -2867,7 +2874,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         type: 'function',
         function: {
           name: 'request_human_agent',
-          description: 'Transfere a conversa para um atendente humano. Use quando: 1) Cliente pedir explicitamente atendimento humano, 2) Dados do cliente estiverem incorretos e precisarem de correção, 3) Situação complexa que requer intervenção humana.',
+          description: 'Transfere a conversa para um atendente humano. ⚠️ PRÉ-REQUISITO OBRIGATÓRIO: Cliente DEVE estar identificado por email (email_verified_in_db=true) OU ter email cadastrado no contato. NÃO use esta ferramenta se cliente ainda não forneceu email - nesse caso, PEÇA O EMAIL PRIMEIRO usando verify_customer_email. Use apenas quando: 1) Cliente JÁ IDENTIFICADO pedir explicitamente atendimento humano, 2) Dados estiverem incorretos APÓS identificação por email, 3) Caso complexo APÓS identificação.',
           parameters: {
             type: 'object',
             properties: {
@@ -3858,6 +3865,23 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
           try {
             const args = JSON.parse(toolCall.function.arguments);
             console.log('[ai-autopilot-chat] 👤 Executando handoff manual:', args);
+
+            // 🆕 VALIDAÇÃO: Bloquear handoff se cliente não está identificado por email
+            const hasEmailInContact = contact.email && contact.email.length > 0;
+            const hasEmailVerifiedInDb = conversation.customer_metadata?.email_verified_in_db === true;
+            const isIdentified = hasEmailInContact || hasEmailVerifiedInDb;
+
+            if (!isIdentified) {
+              console.log('[ai-autopilot-chat] ⛔ Handoff BLOQUEADO - Cliente não identificado por email');
+              console.log('[ai-autopilot-chat] 📧 contact.email:', contact.email);
+              console.log('[ai-autopilot-chat] 📧 email_verified_in_db:', conversation.customer_metadata?.email_verified_in_db);
+              
+              // Retornar mensagem instruindo a pedir email primeiro
+              assistantMessage = 'Para poder te conectar com um atendente, preciso primeiro confirmar sua identidade. Qual é o seu email de cadastro?';
+              
+              // Não executa o handoff - força a IA a pedir email
+              continue;
+            }
 
             const handoffReason = args.reason || 'solicitacao_cliente';
             const handoffNote = args.internal_note || 'Transferência solicitada pela IA';
