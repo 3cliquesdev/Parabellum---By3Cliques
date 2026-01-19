@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { SubscriptionMetrics, ProductCategory } from "@/hooks/useKiwifySubscriptions";
-import { Users, ShoppingCart, DollarSign, RotateCcw, UserPlus, UserCheck } from "lucide-react";
+import { Users, ShoppingCart, DollarSign, RotateCcw, UserPlus, UserCheck, Repeat, Star, Package } from "lucide-react";
 
 interface SubscriptionMetricsCardsProps {
   data?: SubscriptionMetrics;
@@ -16,10 +16,11 @@ const formatCurrency = (value: number) => {
 export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps) {
   if (!data) return null;
 
-  const metrics = [
+  // Primeira linha: Clientes
+  const clientesMetrics = [
     {
       title: 'Clientes Únicos',
-      subtitle: 'Total de assinaturas',
+      subtitle: 'Emails distintos',
       value: (data.totalAssinaturas ?? 0).toLocaleString('pt-BR'),
       icon: Users,
       color: 'text-primary',
@@ -41,9 +42,13 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
       color: 'text-violet-600',
       bgColor: 'bg-violet-50',
     },
+  ];
+
+  // Segunda linha: Vendas
+  const vendasMetrics = [
     {
       title: 'Vendas Brutas',
-      subtitle: 'Produtos vendidos',
+      subtitle: 'Total de orders',
       value: (data.vendasBrutas ?? 0).toLocaleString('pt-BR'),
       icon: ShoppingCart,
       color: 'text-blue-600',
@@ -67,22 +72,74 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
     },
   ];
 
+  // Terceira linha: Classificação por Tipo (alinhado com Kiwify)
+  const tipoVendaMetrics = [
+    {
+      title: 'Novas Assinaturas',
+      subtitle: 'Primeira cobrança',
+      value: (data.novasAssinaturas ?? 0).toLocaleString('pt-BR'),
+      icon: Star,
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-50',
+    },
+    {
+      title: 'Renovações',
+      subtitle: 'Cobranças recorrentes',
+      value: (data.renovacoes ?? 0).toLocaleString('pt-BR'),
+      icon: Repeat,
+      color: 'text-cyan-600',
+      bgColor: 'bg-cyan-50',
+    },
+    {
+      title: 'Produtos Únicos',
+      subtitle: 'Sem recorrência',
+      value: (data.produtosUnicos ?? 0).toLocaleString('pt-BR'),
+      icon: Package,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+    },
+  ];
+
+  const renderMetricCard = (metric: typeof clientesMetrics[0]) => (
+    <Card key={metric.title}>
+      <CardContent className="pt-4 pb-4">
+        <div className="flex flex-col items-center text-center">
+          <div className={`p-2 rounded-full ${metric.bgColor} mb-2`}>
+            <metric.icon className={`h-4 w-4 ${metric.color}`} />
+          </div>
+          <p className="text-2xl font-bold">{metric.value}</p>
+          <p className="text-xs font-medium text-muted-foreground">{metric.title}</p>
+          <p className="text-xs text-muted-foreground/70">{metric.subtitle}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      {metrics.map((metric) => (
-        <Card key={metric.title}>
-          <CardContent className="pt-4 pb-4">
-            <div className="flex flex-col items-center text-center">
-              <div className={`p-2 rounded-full ${metric.bgColor} mb-2`}>
-                <metric.icon className={`h-4 w-4 ${metric.color}`} />
-              </div>
-              <p className="text-2xl font-bold">{metric.value}</p>
-              <p className="text-xs font-medium text-muted-foreground">{metric.title}</p>
-              <p className="text-xs text-muted-foreground/70">{metric.subtitle}</p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+    <div className="space-y-4">
+      {/* Linha 1: Clientes */}
+      <div>
+        <p className="text-sm font-medium text-muted-foreground mb-2">Clientes</p>
+        <div className="grid grid-cols-3 gap-4">
+          {clientesMetrics.map(renderMetricCard)}
+        </div>
+      </div>
+
+      {/* Linha 2: Vendas */}
+      <div>
+        <p className="text-sm font-medium text-muted-foreground mb-2">Vendas</p>
+        <div className="grid grid-cols-3 gap-4">
+          {vendasMetrics.map(renderMetricCard)}
+        </div>
+      </div>
+
+      {/* Linha 3: Tipo de Venda (métricas Kiwify) */}
+      <div>
+        <p className="text-sm font-medium text-muted-foreground mb-2">Tipo de Venda</p>
+        <div className="grid grid-cols-3 gap-4">
+          {tipoVendaMetrics.map(renderMetricCard)}
+        </div>
+      </div>
     </div>
   );
 }

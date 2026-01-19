@@ -41,6 +41,11 @@ export interface SubscriptionMetrics {
   vendasLiquidas: number; // Brutas - reembolsos
   reembolsos: RefundData[]; // Lista com data de cada reembolso
   
+  // Classificação por tipo de venda (líquidas - já descontando reembolsos)
+  novasAssinaturas: number; // charges.completed.length = 1
+  renovacoes: number; // charges.completed.length > 1
+  produtosUnicos: number; // Sem subscription plan (venda única)
+  
   // Métricas legadas (mantidas para compatibilidade)
   totalAtivas: number;
   totalCanceladas: number;
@@ -170,6 +175,33 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       const uniqueOrders = Array.from(uniqueOrdersMap.values());
       console.log(`[useKiwifySubscriptions] Unique orders: ${uniqueOrders.length}`);
 
+      // Classificar vendas por tipo: Nova Assinatura, Renovação ou Produto Único
+      const novasAssinaturasOrders = new Set<string>();
+      const renovacoesOrders = new Set<string>();
+      const produtosUnicosOrders = new Set<string>();
+
+      for (const event of uniqueOrders) {
+        const payload = event.payload as any;
+        const orderId = payload?.order_id || payload?.OrderId;
+        if (!orderId) continue;
+
+        const chargesCompleted = payload?.Subscription?.charges?.completed || [];
+        const hasPlan = !!payload?.Subscription?.plan?.id;
+
+        if (!hasPlan) {
+          // Produto único (sem subscription plan)
+          produtosUnicosOrders.add(orderId);
+        } else if (chargesCompleted.length === 1) {
+          // Nova assinatura (primeira cobrança)
+          novasAssinaturasOrders.add(orderId);
+        } else {
+          // Renovação (cobranças recorrentes)
+          renovacoesOrders.add(orderId);
+        }
+      }
+
+      console.log(`[useKiwifySubscriptions] Classification - New: ${novasAssinaturasOrders.size}, Renewal: ${renovacoesOrders.size}, Unique: ${produtosUnicosOrders.size}`);
+
       // Calculate unique customers (unique emails)
       const uniqueCustomerEmails = new Set<string>();
       const emailToFirstOrderDate = new Map<string, string>(); // Track first order date in period
@@ -263,6 +295,15 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       }
 
       console.log(`[useKiwifySubscriptions] Refunds found: ${refunds.length}`);
+
+      // Calcular vendas líquidas por tipo (descontando reembolsos de cada categoria)
+      const refundedOrderIds = new Set(refunds.map(r => r.orderId));
+      
+      const novasAssinaturasLiquidas = [...novasAssinaturasOrders].filter(id => !refundedOrderIds.has(id)).length;
+      const renovacoesLiquidas = [...renovacoesOrders].filter(id => !refundedOrderIds.has(id)).length;
+      const produtosUnicosLiquidos = [...produtosUnicosOrders].filter(id => !refundedOrderIds.has(id)).length;
+
+      console.log(`[useKiwifySubscriptions] Liquid sales - New: ${novasAssinaturasLiquidas}, Renewal: ${renovacoesLiquidas}, Unique: ${produtosUnicosLiquidos}`);
 
       // Process subscriptions for the table and category breakdown
       const subscriptionMap = new Map<string, SubscriptionData>();
@@ -379,6 +420,11 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         vendasLiquidas: uniqueOrders.length - refunds.length,
         reembolsos: refunds,
         
+        // Classificação por tipo (líquidas)
+        novasAssinaturas: novasAssinaturasLiquidas,
+        renovacoes: renovacoesLiquidas,
+        produtosUnicos: produtosUnicosLiquidos,
+        
         // Métricas legadas
         totalAtivas,
         totalCanceladas,
@@ -393,6 +439,9 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         clientesRecorrentes: result.clientesRecorrentes,
         vendasBrutas: result.vendasBrutas,
         vendasLiquidas: result.vendasLiquidas,
+        novasAssinaturas: result.novasAssinaturas,
+        renovacoes: result.renovacoes,
+        produtosUnicos: result.produtosUnicos,
         reembolsos: result.reembolsos.length,
       });
 
