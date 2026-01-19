@@ -8,8 +8,6 @@ import { useProjectBoards } from "@/hooks/useProjectBoards";
 import { ProjectBoardCard } from "@/components/projects/ProjectBoardCard";
 import { CreateBoardDialog } from "@/components/projects/CreateBoardDialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TourButton } from "@/components/tour/TourButton";
-import { PROJECTS_TOUR_ID, PROJECTS_TOUR_STEPS } from "@/components/tour/tours";
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -134,12 +132,6 @@ export default function ProjectsPage() {
         onOpenChange={setCreateDialogOpen}
       />
 
-      {/* Tour Button */}
-      <TourButton
-        tourId={PROJECTS_TOUR_ID}
-        steps={PROJECTS_TOUR_STEPS}
-        autoStart={true}
-      />
     </div>
   );
 }

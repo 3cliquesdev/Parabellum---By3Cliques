@@ -26,8 +26,6 @@ import { useResendWelcomeEmail } from "@/hooks/useResendWelcomeEmail";
 import { useProfileSkills } from "@/hooks/useProfileSkills";
 import { useManageAvailabilityStatus } from "@/hooks/useManageAvailabilityStatus";
 import { cn } from "@/lib/utils";
-import { TourButton } from "@/components/tour/TourButton";
-import { USERS_TOUR_ID, USERS_TOUR_STEPS } from "@/components/tour/tours";
 
 // Import type from useUsers hook
 type UserWithRole = NonNullable<ReturnType<typeof useUsers>['data']>[number];
@@ -450,12 +448,6 @@ export default function Users() {
         onConfirm={handleArchiveConfirm}
       />
 
-      {/* Tour Button */}
-      <TourButton
-        tourId={USERS_TOUR_ID}
-        steps={USERS_TOUR_STEPS}
-        autoStart={true}
-      />
     </div>
   );
 }

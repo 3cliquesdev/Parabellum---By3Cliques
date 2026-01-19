@@ -28,8 +28,6 @@ import {
 import { useNavigate } from "react-router-dom";
 import { SettingsCategory } from "@/components/settings/SettingsCategory";
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { TourButton } from "@/components/tour/TourButton";
-import { SETTINGS_TOUR_ID, SETTINGS_TOUR_STEPS } from "@/components/tour/tours";
 
 export default function Settings() {
   const { hasPermission, loading } = useRolePermissions();
@@ -300,12 +298,6 @@ export default function Settings() {
         </SettingsCategory>
       </div>
 
-      {/* Tour Button */}
-      <TourButton
-        tourId={SETTINGS_TOUR_ID}
-        steps={SETTINGS_TOUR_STEPS}
-        autoStart={true}
-      />
     </div>
   );
 }

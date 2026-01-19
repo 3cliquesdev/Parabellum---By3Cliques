@@ -1,0 +1,145 @@
+import { TourStep } from "./TourProvider";
+import {
+  DASHBOARD_TOUR_ID,
+  DASHBOARD_TOUR_STEPS,
+  INBOX_TOUR_ID,
+  INBOX_TOUR_STEPS,
+  DEALS_TOUR_ID,
+  DEALS_TOUR_STEPS,
+  CONTACTS_TOUR_ID,
+  CONTACTS_TOUR_STEPS,
+  TICKETS_TOUR_ID,
+  TICKETS_TOUR_STEPS,
+  FORMS_TOUR_ID,
+  FORMS_TOUR_STEPS,
+  AUTOMATIONS_TOUR_ID,
+  AUTOMATIONS_TOUR_STEPS,
+  KNOWLEDGE_TOUR_ID,
+  KNOWLEDGE_TOUR_STEPS,
+  PROJECTS_TOUR_ID,
+  PROJECTS_TOUR_STEPS,
+  USERS_TOUR_ID,
+  USERS_TOUR_STEPS,
+  SETTINGS_TOUR_ID,
+  SETTINGS_TOUR_STEPS,
+  PORTFOLIO_TOUR_ID,
+  PORTFOLIO_TOUR_STEPS,
+  SALES_TASKS_TOUR_ID,
+  SALES_TASKS_TOUR_STEPS,
+} from "./tours";
+
+export interface TutorialConfig {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  route: string;
+  steps: TourStep[];
+}
+
+export const AVAILABLE_TUTORIALS: TutorialConfig[] = [
+  {
+    id: DASHBOARD_TOUR_ID,
+    title: "Dashboard",
+    description: "Conheça o painel principal do sistema",
+    icon: "LayoutDashboard",
+    route: "/dashboard",
+    steps: DASHBOARD_TOUR_STEPS,
+  },
+  {
+    id: INBOX_TOUR_ID,
+    title: "Inbox",
+    description: "Gerencie todas as conversas com clientes",
+    icon: "MessageSquare",
+    route: "/inbox",
+    steps: INBOX_TOUR_STEPS,
+  },
+  {
+    id: DEALS_TOUR_ID,
+    title: "Deals",
+    description: "Visualize seu funil de vendas",
+    icon: "Target",
+    route: "/deals",
+    steps: DEALS_TOUR_STEPS,
+  },
+  {
+    id: CONTACTS_TOUR_ID,
+    title: "Contatos",
+    description: "Acesse sua base de clientes e leads",
+    icon: "Users",
+    route: "/contacts",
+    steps: CONTACTS_TOUR_STEPS,
+  },
+  {
+    id: TICKETS_TOUR_ID,
+    title: "Tickets",
+    description: "Gerencie tickets de suporte",
+    icon: "Ticket",
+    route: "/tickets",
+    steps: TICKETS_TOUR_STEPS,
+  },
+  {
+    id: FORMS_TOUR_ID,
+    title: "Formulários",
+    description: "Configure formulários de captura",
+    icon: "FileText",
+    route: "/forms",
+    steps: FORMS_TOUR_STEPS,
+  },
+  {
+    id: AUTOMATIONS_TOUR_ID,
+    title: "Automações",
+    description: "Configure automações inteligentes",
+    icon: "Zap",
+    route: "/automations",
+    steps: AUTOMATIONS_TOUR_STEPS,
+  },
+  {
+    id: KNOWLEDGE_TOUR_ID,
+    title: "Base de Conhecimento",
+    description: "Gerencie artigos para a IA",
+    icon: "BookOpen",
+    route: "/knowledge",
+    steps: KNOWLEDGE_TOUR_STEPS,
+  },
+  {
+    id: PROJECTS_TOUR_ID,
+    title: "Projetos",
+    description: "Gerencie projetos e entregas",
+    icon: "FolderKanban",
+    route: "/projects",
+    steps: PROJECTS_TOUR_STEPS,
+  },
+  {
+    id: PORTFOLIO_TOUR_ID,
+    title: "Carteira",
+    description: "Visualize sua carteira de clientes",
+    icon: "Briefcase",
+    route: "/portfolio",
+    steps: PORTFOLIO_TOUR_STEPS,
+  },
+  {
+    id: SALES_TASKS_TOUR_ID,
+    title: "Tarefas de Vendas",
+    description: "Gerencie tarefas comerciais",
+    icon: "CheckSquare",
+    route: "/sales-tasks",
+    steps: SALES_TASKS_TOUR_STEPS,
+  },
+  {
+    id: USERS_TOUR_ID,
+    title: "Usuários",
+    description: "Gerencie usuários do sistema",
+    icon: "UserCog",
+    route: "/users",
+    steps: USERS_TOUR_STEPS,
+  },
+  {
+    id: SETTINGS_TOUR_ID,
+    title: "Configurações",
+    description: "Ajuste as configurações do sistema",
+    icon: "Settings",
+    route: "/settings",
+    steps: SETTINGS_TOUR_STEPS,
+  },
+];

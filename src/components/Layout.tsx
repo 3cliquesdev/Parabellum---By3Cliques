@@ -3,6 +3,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useProfilesRealtime } from "@/hooks/useProfilesRealtime";
 import { useTicketsRealtime } from "@/hooks/useTicketsRealtime";
 import { useDealsRealtime } from "@/hooks/useDealsRealtime";
+import { GlobalTourButton } from "@/components/tour/GlobalTourButton";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   // Realtime global para toda a aplicação
@@ -26,6 +27,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
+
+        {/* Global Tutorial Button */}
+        <GlobalTourButton />
       </div>
     </SidebarProvider>
   );

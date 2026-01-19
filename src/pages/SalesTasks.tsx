@@ -9,8 +9,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, Mail, MessageCircle, Phone, CheckCircle2, SkipForward, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { TourButton } from "@/components/tour/TourButton";
-import { SALES_TASKS_TOUR_ID, SALES_TASKS_TOUR_STEPS } from "@/components/tour/tours";
 
 const taskTypeIcons = {
   email: Mail,
@@ -266,12 +264,6 @@ export default function SalesTasks() {
         </Card>
       )}
 
-      {/* Tour Button */}
-      <TourButton
-        tourId={SALES_TASKS_TOUR_ID}
-        steps={SALES_TASKS_TOUR_STEPS}
-        autoStart={true}
-      />
     </div>
   );
 }
