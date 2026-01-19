@@ -242,8 +242,8 @@ function ConversationListItemComponent({
 
         {/* Linha 3: Badges */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Tag de Cliente Verificado Kiwify */}
-          {conversation.contacts?.kiwify_validated ? (
+        {/* Tag de Cliente Verificado */}
+          {(conversation.contacts?.kiwify_validated || conversation.contacts?.status === 'customer') ? (
             <Badge 
               variant="outline" 
               className="bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-600 text-[10px] px-1.5 py-0 h-5 gap-0.5"

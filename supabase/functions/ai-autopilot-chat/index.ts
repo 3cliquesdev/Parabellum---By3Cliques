@@ -1669,6 +1669,35 @@ Responda APENAS: skip ou search`
         channel: responseChannel
       });
       
+      // 📤 ENVIAR PARA WHATSAPP (se for canal WhatsApp)
+      if (responseChannel === 'whatsapp' && contact?.phone) {
+        const whatsappInstance = await getWhatsAppInstanceForConversation(
+          supabaseClient, 
+          conversationId, 
+          conversation.whatsapp_instance_id
+        );
+        
+        if (whatsappInstance) {
+          console.log('[ai-autopilot-chat] 📤 Enviando mensagem de handoff via WhatsApp');
+          const { error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
+            body: {
+              instance_id: whatsappInstance.id,
+              phone_number: contact.phone,
+              whatsapp_id: contact.whatsapp_id,
+              message: handoffMessage,
+              conversation_id: conversationId,
+              use_queue: true
+            }
+          });
+          
+          if (whatsappError) {
+            console.error('[ai-autopilot-chat] ❌ Erro ao enviar handoff via WhatsApp:', whatsappError);
+          } else {
+            console.log('[ai-autopilot-chat] ✅ Handoff enviado via WhatsApp');
+          }
+        }
+      }
+      
       // Registrar nota interna
       await supabaseClient.from('interactions').insert({
         customer_id: contact.id,
