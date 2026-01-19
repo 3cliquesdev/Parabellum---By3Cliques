@@ -101,8 +101,13 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
   if (error || !data) {
     return (
       <Card className="border-destructive">
-        <CardContent className="p-6">
-          <p className="text-destructive">Erro ao carregar dados financeiros</p>
+        <CardContent className="p-6 space-y-2">
+          <p className="text-destructive font-medium">Erro ao carregar dados financeiros</p>
+          {error && (
+            <p className="text-sm text-muted-foreground">
+              {error.message || 'Erro desconhecido'}
+            </p>
+          )}
         </CardContent>
       </Card>
     );
