@@ -27,12 +27,13 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
-import { BarChart3, Sparkles, Headphones, TrendingUp, Brain, Rocket, MessageCircle, DollarSign } from "lucide-react";
+import { BarChart3, Sparkles, Headphones, TrendingUp, Brain, Rocket, MessageCircle, DollarSign, Target } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DateRange } from "react-day-picker";
 import { KiwifyFinancialReport } from "@/components/widgets/KiwifyFinancialReport";
 import { ChurnWidget } from "@/components/widgets/ChurnWidget";
 import { useKiwifyCompleteMetrics } from "@/hooks/useKiwifyCompleteMetrics";
+import { DailyMetricsTab } from "@/components/analytics/DailyMetricsTab";
 export default function Analytics() {
   const { role, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
@@ -126,16 +127,19 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Main Tabs: Support, AI, Onboarding, WhatsApp, Sales, Financeiro */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
+            <TabsTrigger value="metrics" className="flex items-center gap-2">
+              <Target className="h-4 w-4" />
+              Métricas
+            </TabsTrigger>
             <TabsTrigger value="support" className="flex items-center gap-2">
               <Headphones className="h-4 w-4" />
               Suporte
             </TabsTrigger>
             <TabsTrigger value="ai" className="flex items-center gap-2">
               <Brain className="h-4 w-4" />
-              Inteligência Artificial
+              IA
             </TabsTrigger>
             <TabsTrigger value="onboarding" className="flex items-center gap-2">
               <Rocket className="h-4 w-4" />
@@ -154,6 +158,11 @@ export default function Analytics() {
               Financeiro
             </TabsTrigger>
           </TabsList>
+
+          {/* TAB 0: Métricas Diárias - Criados vs Ganhos */}
+          <TabsContent value="metrics" className="space-y-6">
+            <DailyMetricsTab startDate={startDate} endDate={endDate} />
+          </TabsContent>
 
           {/* TAB 1: Support Performance */}
           <TabsContent value="support" className="space-y-6">
