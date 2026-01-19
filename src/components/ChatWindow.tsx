@@ -32,6 +32,7 @@ import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { useMarkAsRead } from "@/hooks/useUnreadCount";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -63,6 +64,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { isAdmin, isManager, isSalesRep } = useUserRole();
+  const { hasPermission } = useRolePermissions();
   const { data: messages = [], isLoading: isMessagesLoading } = useMessages(conversation?.id || null);
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
   const { data: activePersona } = useActivePersona(conversation?.id || null);
@@ -395,16 +397,18 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   <span className="text-xs hidden xl:inline">Ticket</span>
                 </Button>
                 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTransferDialogOpen(true)}
-                  className="h-7 gap-1 px-2"
-                  disabled={conversation.status === "closed"}
-                >
-                  <ArrowRightLeft className="h-3.5 w-3.5" />
-                  <span className="text-xs hidden xl:inline">Transferir</span>
-                </Button>
+                {hasPermission('inbox.transfer') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTransferDialogOpen(true)}
+                    className="h-7 gap-1 px-2"
+                    disabled={conversation.status === "closed"}
+                  >
+                    <ArrowRightLeft className="h-3.5 w-3.5" />
+                    <span className="text-xs hidden xl:inline">Transferir</span>
+                  </Button>
+                )}
                 
                 <Button
                   variant="default"

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { useTransferConversation } from "@/hooks/useTransferConversation";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { ArrowRightLeft, Users } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -45,8 +46,10 @@ export default function TransferConversationDialog({
   conversation,
   currentUserId,
 }: TransferConversationDialogProps) {
-  // Early return se não há conversa selecionada ou contato
-  if (!conversation || !conversation.contacts) {
+  const { hasPermission } = useRolePermissions();
+  
+  // Early return se não há conversa selecionada, contato ou permissão
+  if (!conversation || !conversation.contacts || !hasPermission('inbox.transfer')) {
     return null;
   }
 
