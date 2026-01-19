@@ -108,7 +108,7 @@ export interface KiwifyCompleteMetrics {
 
 export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minValue: number = 0) {
   return useQuery({
-    queryKey: ['kiwify-complete-metrics', startDate?.toISOString(), endDate?.toISOString(), minValue],
+    queryKey: ['kiwify-complete-metrics', 'v3', startDate?.toISOString(), endDate?.toISOString(), minValue],
     queryFn: async (): Promise<KiwifyCompleteMetrics> => {
       // Format dates using local timezone (not UTC) to avoid day shift issues
       const formatLocalDate = (date: Date): string => {
@@ -121,18 +121,46 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       const startDateStr = startDate ? formatLocalDate(startDate) : null;
       const endDateStr = endDate ? formatLocalDate(endDate) : null;
       
-      // Fetch all events (we'll filter by approved_date in JS since it's in payload)
+      // Optimization: Apply initial created_at filter to reduce data volume
+      // Use a margin of 7 days to account for webhook delays
+      const marginDays = 7;
+      let createdAtStart: string | null = null;
+      let createdAtEnd: string | null = null;
+      
+      if (startDate) {
+        const marginStartDate = new Date(startDate);
+        marginStartDate.setDate(marginStartDate.getDate() - marginDays);
+        createdAtStart = marginStartDate.toISOString();
+      }
+      if (endDate) {
+        const marginEndDate = new Date(endDate);
+        marginEndDate.setDate(marginEndDate.getDate() + marginDays);
+        marginEndDate.setHours(23, 59, 59, 999);
+        createdAtEnd = marginEndDate.toISOString();
+      }
+      
+      // Fetch events with database-level filtering for performance
       const allEvents: any[] = [];
       let page = 0;
       const pageSize = 1000;
+      const maxPages = 50; // Safety limit: max 50k events
       let hasMore = true;
 
-      while (hasMore) {
-        const query = supabase
+      while (hasMore && page < maxPages) {
+        let query = supabase
           .from('kiwify_events')
           .select('event_type, payload, created_at')
-          .range(page * pageSize, (page + 1) * pageSize - 1)
           .order('created_at', { ascending: false });
+        
+        // Apply created_at filters at database level (optimization)
+        if (createdAtStart) {
+          query = query.gte('created_at', createdAtStart);
+        }
+        if (createdAtEnd) {
+          query = query.lte('created_at', createdAtEnd);
+        }
+        
+        query = query.range(page * pageSize, (page + 1) * pageSize - 1);
 
         const { data, error } = await query;
         if (error) throw error;
@@ -144,6 +172,11 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
         } else {
           hasMore = false;
         }
+      }
+      
+      // Safety check: if we hit max pages, log warning
+      if (page >= maxPages) {
+        console.warn('⚠️ Kiwify: Limite de páginas atingido. Considere restringir o período.');
       }
       
       // Helper to check if event is within date range using ONLY approved_date from payload
