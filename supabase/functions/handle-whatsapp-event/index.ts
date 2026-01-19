@@ -639,7 +639,9 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     }
     
     // 🚫 Ainda bloqueado - informar cliente
-    const minutesUntilResend = canResend ? 0 : Math.ceil(((blockedAt?.getTime() || 0) + 10 * 60 * 1000 - Date.now()) / 60000);
+    // FIX: Usar Date.now() como fallback e garantir que nunca seja negativo
+    const blockedAtTime = blockedAt?.getTime() || Date.now();
+    const minutesUntilResend = canResend ? 0 : Math.max(0, Math.ceil((blockedAtTime + 10 * 60 * 1000 - Date.now()) / 60000));
     
     await sendWhatsAppMessage(
       supabase,
