@@ -13,6 +13,7 @@ import { DocumentUploader } from "@/components/DocumentUploader";
 import { KnowledgeColumnMapper } from "@/components/KnowledgeColumnMapper";
 import { DataPreviewTable } from "@/components/DataPreviewTable";
 import { KnowledgeImportProgress } from "@/components/KnowledgeImportProgress";
+import { KnowledgeTemplateDownload } from "@/components/knowledge/KnowledgeTemplateDownload";
 import { useImportKnowledge } from "@/hooks/useImportKnowledge";
 import { useImportDocument } from "@/hooks/useImportDocument";
 import { useImportOctadesk } from "@/hooks/useImportOctadesk";
@@ -463,6 +464,9 @@ export default function KnowledgeImport() {
 
         {/* Spreadsheets Tab */}
         <TabsContent value="spreadsheets" className="space-y-6">
+          {/* Template Download */}
+          <KnowledgeTemplateDownload />
+          
           {/* Step 1: Upload */}
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-foreground">Etapa 1: Upload</h2>

@@ -11,6 +11,7 @@ import ChatWindow from "@/components/ChatWindow";
 import ContactDetailsSidebar from "@/components/ContactDetailsSidebar";
 import { InboxSidebar } from "@/components/inbox/InboxSidebar";
 import InboxFilterPopover, { type InboxFilters } from "@/components/inbox/InboxFilterPopover";
+import { BulkActionsBar } from "@/components/inbox/BulkActionsBar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import { ArrowLeft, User } from "lucide-react";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
 import { TourButton } from "@/components/tour/TourButton";
 import { INBOX_TOUR_ID, INBOX_TOUR_STEPS } from "@/components/tour/tours";
+import { useBulkReactivateAI } from "@/hooks/useBulkReactivateAI";
 
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -295,6 +297,16 @@ export default function Inbox() {
         <div className="flex-none border-b border-border px-3 py-2 bg-card">
           <InboxFilterPopover filters={filters} onFiltersChange={setFilters} />
         </div>
+        
+        {/* Bulk Actions Bar for waiting_human conversations */}
+        {filter === 'human_queue' && (
+          <BulkActionsBar
+            selectedIds={[]}
+            onClearSelection={() => {}}
+            waitingHumanCount={filteredConversations.filter(c => c.ai_mode === 'waiting_human').length}
+            waitingHumanIds={filteredConversations.filter(c => c.ai_mode === 'waiting_human').map(c => c.id)}
+          />
+        )}
         
         {hasHiddenConversations && (
           <div className="flex-none px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800">
