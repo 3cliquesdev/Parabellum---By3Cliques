@@ -1033,19 +1033,80 @@ async function handlePaidOrder(
     console.warn('[kiwify-webhook] Auth error:', authErr);
   }
 
-  // 2.5 🆕 REGISTRAR VENDA ORGÂNICA (SEM CRIAR DEAL - vai para relatórios financeiros via kiwify_events)
+  // 2.5 🆕 CRIAR DEAL AUTOMATICAMENTE PARA VENDA DE NOVO CLIENTE
   const grossValue = Commissions.product_base_price / 100;
   const netValue = (Commissions.my_commission || Commissions.product_base_price) / 100;
   const kiwifyFee = (Commissions.kiwify_fee || 0) / 100;
 
-  // ✅ Registrar venda na timeline do cliente (dados financeiros preservados em kiwify_events)
+  // Buscar pipeline padrão e última stage
+  const { data: defaultPipeline } = await supabase
+    .from('pipelines')
+    .select('id')
+    .eq('is_default', true)
+    .single();
+
+  let organicDealId = null;
+
+  if (defaultPipeline) {
+    // Buscar última stage (Ganho) do pipeline padrão
+    const { data: lastStage } = await supabase
+      .from('stages')
+      .select('id')
+      .eq('pipeline_id', defaultPipeline.id)
+      .order('position', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (lastStage) {
+      // Criar deal e marcar como ganho imediatamente
+      const { data: organicDeal, error: dealError } = await supabase
+        .from('deals')
+        .insert({
+          title: `Venda Orgânica - ${Product.product_name}`,
+          contact_id: contact.id,
+          pipeline_id: defaultPipeline.id,
+          stage_id: lastStage.id,
+          status: 'won',
+          value: netValue,
+          gross_value: grossValue,
+          net_value: netValue,
+          kiwify_fee: kiwifyFee,
+          affiliate_commission: affiliateCommission,
+          affiliate_name: affiliateName,
+          affiliate_email: affiliateEmail,
+          is_organic_sale: true,
+          is_returning_customer: false,
+          lead_source: 'kiwify_direto',
+          closed_at: new Date().toISOString(),
+          product_id: product?.id,
+        })
+        .select()
+        .single();
+
+      if (dealError) {
+        console.error('[kiwify-webhook] ❌ Erro ao criar deal orgânico:', dealError);
+      } else if (organicDeal) {
+        organicDealId = organicDeal.id;
+        console.log('[kiwify-webhook] ✅ Deal orgânico criado e ganho:', organicDeal.id);
+
+        // Vincular kiwify_event ao deal
+        await supabase
+          .from('kiwify_events')
+          .update({ linked_deal_id: organicDeal.id })
+          .eq('order_id', order_id)
+          .is('linked_deal_id', null);
+      }
+    }
+  }
+
+  // ✅ Registrar venda na timeline do cliente
   await supabase
     .from('interactions')
     .insert({
       customer_id: contact.id,
       type: 'note',
       channel: 'other',
-      content: `💰 Venda Kiwify Orgânica: ${Product.product_name} - Bruto: R$ ${grossValue.toFixed(2)}, Líquido: R$ ${netValue.toFixed(2)}`,
+      content: `Venda Kiwify: ${Product.product_name} - Bruto: R$ ${grossValue.toFixed(2)}, Líquido: R$ ${netValue.toFixed(2)}`,
       metadata: {
         source: 'kiwify_organic',
         product_name: Product.product_name,
@@ -1058,10 +1119,11 @@ async function handlePaidOrder(
         affiliate_name: affiliateName,
         affiliate_email: affiliateEmail,
         order_id,
+        deal_id: organicDealId,
       }
     });
 
-  console.log('[kiwify-webhook] ✅ Venda orgânica registrada (SEM deal): Bruto R$', grossValue.toFixed(2), 'Líquido R$', netValue.toFixed(2));
+  console.log('[kiwify-webhook] ✅ Venda orgânica com deal:', organicDealId, 'Bruto R$', grossValue.toFixed(2), 'Líquido R$', netValue.toFixed(2));
 
   // 3. Buscar produto por offer_id PRIMEIRO (se disponível), fallback para external_id
   let playbook_ids: string[] = [];
@@ -1348,16 +1410,78 @@ async function handleUpsellOrder(
     })
     .eq('id', existingContact.id);
 
-  // 2.5 🆕 REGISTRAR UPSELL ORGÂNICO (SEM CRIAR DEAL - vai para relatórios financeiros via kiwify_events)
+  // 2.5 🆕 CRIAR DEAL NO PIPELINE DE RECORRÊNCIA
+  // Buscar Pipeline de Recorrência
+  const { data: recurrencePipeline } = await supabase
+    .from('pipelines')
+    .select('id')
+    .eq('name', 'Pipeline de Recorrência')
+    .single();
+
+  let upsellDealId = null;
+
+  if (recurrencePipeline) {
+    // Buscar stage "Ganho" do pipeline de recorrência
+    const { data: recurrenceStage } = await supabase
+      .from('stages')
+      .select('id')
+      .eq('pipeline_id', recurrencePipeline.id)
+      .eq('name', 'Ganho')
+      .single();
+
+    if (recurrenceStage) {
+      // Criar deal e marcar como ganho imediatamente no Pipeline de Recorrência
+      const { data: upsellDeal, error: dealError } = await supabase
+        .from('deals')
+        .insert({
+          title: `Recorrência - ${Product.product_name}`,
+          contact_id: existingContact.id,
+          pipeline_id: recurrencePipeline.id,
+          stage_id: recurrenceStage.id,
+          status: 'won',
+          value: netValue,
+          gross_value: grossValue,
+          net_value: netValue,
+          kiwify_fee: kiwifyFee,
+          affiliate_commission: upsellAffiliateCommission,
+          affiliate_name: upsellAffiliateName,
+          affiliate_email: upsellAffiliateEmail,
+          is_organic_sale: true,
+          is_returning_customer: true,
+          lead_source: 'kiwify_recorrencia',
+          closed_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (dealError) {
+        console.error('[kiwify-webhook] ❌ Erro ao criar deal de recorrência:', dealError);
+      } else if (upsellDeal) {
+        upsellDealId = upsellDeal.id;
+        console.log('[kiwify-webhook] ✅ Deal de recorrência criado e ganho:', upsellDeal.id);
+
+        // Vincular kiwify_event ao deal
+        await supabase
+          .from('kiwify_events')
+          .update({ linked_deal_id: upsellDeal.id })
+          .eq('order_id', order_id)
+          .is('linked_deal_id', null);
+      }
+    }
+  } else {
+    console.warn('[kiwify-webhook] ⚠️ Pipeline de Recorrência não encontrado, upsell sem deal');
+  }
+
+  // ✅ Registrar upsell na timeline do cliente
   await supabase
     .from('interactions')
     .insert({
       customer_id: existingContact.id,
       type: 'note',
       channel: 'other',
-      content: `💰 Upsell Kiwify Orgânico: ${Product.product_name} - Bruto: R$ ${grossValue.toFixed(2)}, Líquido: R$ ${netValue.toFixed(2)}`,
+      content: `Upsell Kiwify: ${Product.product_name} - Bruto: R$ ${grossValue.toFixed(2)}, Líquido: R$ ${netValue.toFixed(2)}`,
       metadata: {
-        source: 'kiwify_organic_upsell',
+        source: 'kiwify_recorrencia',
         product_name: Product.product_name,
         product_id: Product.product_id,
         gross_value: grossValue,
@@ -1366,10 +1490,11 @@ async function handleUpsellOrder(
         affiliate_commission: upsellAffiliateCommission,
         affiliate_name: upsellAffiliateName,
         affiliate_email: upsellAffiliateEmail,
+        deal_id: upsellDealId,
       }
     });
 
-  console.log('[kiwify-webhook] ✅ Upsell orgânico registrado (SEM deal): Bruto R$', grossValue.toFixed(2), 'Líquido R$', netValue.toFixed(2));
+  console.log('[kiwify-webhook] ✅ Upsell com deal:', upsellDealId, 'Bruto R$', grossValue.toFixed(2), 'Líquido R$', netValue.toFixed(2));
 
   // 3. Buscar produto e playbooks (NOVA LÓGICA: offer_id primeiro, product_id como offer_id, external_id)
   let product = null;
