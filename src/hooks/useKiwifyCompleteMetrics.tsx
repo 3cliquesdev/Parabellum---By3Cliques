@@ -110,9 +110,16 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
   return useQuery({
     queryKey: ['kiwify-complete-metrics', startDate?.toISOString(), endDate?.toISOString(), minValue],
     queryFn: async (): Promise<KiwifyCompleteMetrics> => {
-      // Format dates for approved_date comparison (YYYY-MM-DD)
-      const startDateStr = startDate ? startDate.toISOString().split('T')[0] : null;
-      const endDateStr = endDate ? endDate.toISOString().split('T')[0] : null;
+      // Format dates using local timezone (not UTC) to avoid day shift issues
+      const formatLocalDate = (date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      
+      const startDateStr = startDate ? formatLocalDate(startDate) : null;
+      const endDateStr = endDate ? formatLocalDate(endDate) : null;
       
       // Fetch all events (we'll filter by approved_date in JS since it's in payload)
       const allEvents: any[] = [];
