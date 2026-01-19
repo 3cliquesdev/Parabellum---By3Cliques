@@ -40,17 +40,18 @@ export function useLeadCreationMetrics(startDate: Date, endDate: Date) {
     queryKey: ["lead-creation-metrics", formatLocalDate(startDate), formatLocalDate(endDate)],
     queryFn: async (): Promise<DailyMetrics> => {
       const startStr = formatLocalDate(startDate);
-      // End of day to include full last day
-      const endDateAdjusted = new Date(endDate);
-      endDateAdjusted.setHours(23, 59, 59, 999);
-      const endStr = endDateAdjusted.toISOString();
+      const endStr = formatLocalDate(endDate);
+      
+      // Use consistent datetime boundaries (local timezone)
+      const startDateTime = `${startStr}T00:00:00`;
+      const endDateTime = `${endStr}T23:59:59`;
 
       // 1. Fetch deals created in period
       const { data: dealsCreated, error: createdError } = await supabase
         .from("deals")
         .select("id, status, value, lead_source, created_at, closed_at")
-        .gte("created_at", startStr)
-        .lte("created_at", endStr);
+        .gte("created_at", startDateTime)
+        .lte("created_at", endDateTime);
 
       if (createdError) throw createdError;
 
@@ -59,8 +60,8 @@ export function useLeadCreationMetrics(startDate: Date, endDate: Date) {
         .from("deals")
         .select("id, status, value, lead_source, closed_at")
         .eq("status", "won")
-        .gte("closed_at", startStr)
-        .lte("closed_at", endStr);
+        .gte("closed_at", startDateTime)
+        .lte("closed_at", endDateTime);
 
       if (wonError) throw wonError;
 
@@ -69,8 +70,8 @@ export function useLeadCreationMetrics(startDate: Date, endDate: Date) {
         .from("deals")
         .select("id, status, value, lead_source, closed_at")
         .eq("status", "lost")
-        .gte("closed_at", startStr)
-        .lte("closed_at", endStr);
+        .gte("closed_at", startDateTime)
+        .lte("closed_at", endDateTime);
 
       if (lostError) throw lostError;
 
@@ -198,8 +199,8 @@ export function useLeadCreationMetrics(startDate: Date, endDate: Date) {
         kiwifyEvents: kiwifyMetrics,
       };
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    refetchOnWindowFocus: false,
+    staleTime: 30 * 1000, // 30 seconds for more reactive updates
+    refetchOnWindowFocus: true,
   });
 }
 
