@@ -14,8 +14,6 @@ import { useKnowledgeStats } from "@/hooks/useKnowledgeStats";
 import { KnowledgeBrainStatus } from "@/components/KnowledgeBrainStatus";
 import KnowledgeArticleDialog from "@/components/KnowledgeArticleDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TourButton } from "@/components/tour/TourButton";
-import { KNOWLEDGE_TOUR_ID, KNOWLEDGE_TOUR_STEPS } from "@/components/tour/tours";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -277,12 +275,6 @@ export default function Knowledge() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Tour Button */}
-      <TourButton
-        tourId={KNOWLEDGE_TOUR_ID}
-        steps={KNOWLEDGE_TOUR_STEPS}
-        autoStart={true}
-      />
     </div>
   );
 }

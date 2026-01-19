@@ -19,8 +19,6 @@ import { BulkMoveToProjectDialog } from "@/components/support/BulkMoveToProjectD
 import { BulkTransferTicketsDialog } from "@/components/support/BulkTransferTicketsDialog";
 import { useBulkArchiveTickets } from "@/hooks/useBulkArchiveTickets";
 import { TicketFilterPopover, TicketFilters, defaultTicketFilters } from "@/components/support/TicketFilterPopover";
-import { TourButton } from "@/components/tour/TourButton";
-import { TICKETS_TOUR_ID, TICKETS_TOUR_STEPS } from "@/components/tour/tours";
 
 
 type MobileView = 'list' | 'details';
@@ -391,8 +389,6 @@ export default function Support() {
         </div>
       </div>
 
-      {/* Tour Button */}
-      <TourButton tourId={TICKETS_TOUR_ID} steps={TICKETS_TOUR_STEPS} />
 
       <CreateTicketDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
 

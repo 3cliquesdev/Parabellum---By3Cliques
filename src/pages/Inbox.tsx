@@ -17,8 +17,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, User } from "lucide-react";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
-import { TourButton } from "@/components/tour/TourButton";
-import { INBOX_TOUR_ID, INBOX_TOUR_STEPS } from "@/components/tour/tours";
 import { useBulkReactivateAI } from "@/hooks/useBulkReactivateAI";
 
 import type { Tables } from "@/integrations/supabase/types";
@@ -344,8 +342,6 @@ export default function Inbox() {
         <ContactDetailsSidebar conversation={activeConversation} />
       </div>
 
-      {/* Tour Button */}
-      <TourButton tourId={INBOX_TOUR_ID} steps={INBOX_TOUR_STEPS} />
     </div>
   );
 }

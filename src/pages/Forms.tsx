@@ -23,8 +23,6 @@ import { Switch } from "@/components/ui/switch";
 import { usePublicTicketPortalConfig, useTogglePortal } from "@/hooks/usePublicTicketPortal";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { TourButton } from "@/components/tour/TourButton";
-import { FORMS_TOUR_ID, FORMS_TOUR_STEPS } from "@/components/tour/tours";
 
 export default function Forms() {
   const [searchParams] = useSearchParams();
@@ -364,8 +362,6 @@ export default function Forms() {
         </div>
       )}
 
-      {/* Tour Button */}
-      <TourButton tourId={FORMS_TOUR_ID} steps={FORMS_TOUR_STEPS} />
     </div>
   );
 }

@@ -24,8 +24,6 @@ import QBRGeneratorDialog from "@/components/QBRGeneratorDialog";
 import { useChurnPrediction } from "@/hooks/useChurnPrediction";
 import { CSGoalsWidget } from "@/components/widgets/CSGoalsWidget";
 import { ChangeConsultantDialog } from "@/components/playbooks/ChangeConsultantDialog";
-import { TourButton } from "@/components/tour/TourButton";
-import { PORTFOLIO_TOUR_ID, PORTFOLIO_TOUR_STEPS } from "@/components/tour/tours";
 
 export default function MyPortfolio() {
   const navigate = useNavigate();
@@ -461,12 +459,6 @@ export default function MyPortfolio() {
         currentConsultantId={changeConsultantData?.currentConsultantId}
       />
 
-      {/* Tour Button */}
-      <TourButton
-        tourId={PORTFOLIO_TOUR_ID}
-        steps={PORTFOLIO_TOUR_STEPS}
-        autoStart={true}
-      />
     </div>
   );
 }
