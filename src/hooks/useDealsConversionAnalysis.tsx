@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DateRange } from "react-day-picker";
 import { differenceInDays } from "date-fns";
+import { getDateTimeBoundaries, formatLocalDate } from "@/lib/dateUtils";
 
 export interface DealsConversionAnalysis {
   totalCreated: number;
@@ -22,18 +23,20 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
   return useQuery({
     queryKey: [
       "deals-conversion-analysis",
-      dateRange?.from?.toISOString() || "no-from",
-      dateRange?.to?.toISOString() || "no-to",
+      dateRange?.from ? formatLocalDate(dateRange.from) : "no-from",
+      dateRange?.to ? formatLocalDate(dateRange.to) : "no-to",
       source,
     ],
-    staleTime: 0,
+    staleTime: 30 * 1000, // 30 seconds for more reactive updates
     refetchOnMount: true,
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<DealsConversionAnalysis> => {
       console.log("📊 useDealsConversionAnalysis: Fetching data...");
 
-      // Build date filters
-      const fromDate = dateRange?.from?.toISOString();
-      const toDate = dateRange?.to?.toISOString();
+      // Build date filters using consistent boundaries
+      const { startDateTime: fromDate, endDateTime: toDate } = dateRange?.from && dateRange?.to
+        ? getDateTimeBoundaries(dateRange.from, dateRange.to)
+        : { startDateTime: dateRange?.from ? `${formatLocalDate(dateRange.from)}T00:00:00` : null, endDateTime: dateRange?.to ? `${formatLocalDate(dateRange.to)}T23:59:59` : null };
 
       // Helper to apply source filter
       const applySourceFilter = (query: any) => {

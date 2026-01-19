@@ -1,24 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format, subMonths, startOfMonth } from "date-fns";
+import { format, subMonths, startOfMonth, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatLocalDate } from "@/lib/dateUtils";
 
 export function useRevenueEvolution() {
   return useQuery({
     queryKey: ["revenue-evolution-kiwify"],
     queryFn: async () => {
+      // Add 7-day margin before the 6-month window for database optimization
       const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
+      const queryStartDate = subDays(sixMonthsAgo, 7);
       
       console.log("📊 useRevenueEvolution: Buscando dados de kiwify_events", {
-        desde: sixMonthsAgo.toISOString()
+        desde: formatLocalDate(sixMonthsAgo),
+        queryDesde: formatLocalDate(queryStartDate)
       });
 
-      // Buscar eventos pagos dos últimos 6 meses
+      // Fetch paid events with a 7-day margin for optimization
       const { data: paidEvents, error: paidError } = await supabase
         .from("kiwify_events")
         .select("payload, created_at")
         .in("event_type", ["paid", "order_approved"])
-        .gte("created_at", sixMonthsAgo.toISOString())
+        .gte("created_at", `${formatLocalDate(queryStartDate)}T00:00:00`)
         .order("created_at", { ascending: true });
 
       if (paidError) {
@@ -26,7 +30,7 @@ export function useRevenueEvolution() {
         throw paidError;
       }
 
-      // Buscar order_ids reembolsados/chargebacks para excluir
+      // Fetch refunded/chargedback order_ids to exclude
       const { data: refundedEvents } = await supabase
         .from("kiwify_events")
         .select("payload")
@@ -40,21 +44,22 @@ export function useRevenueEvolution() {
 
       console.log(`📊 useRevenueEvolution: ${refundedOrderIds.size} pedidos reembolsados excluídos`);
 
-      // Deduplicar por order_id e excluir reembolsos
+      // Deduplicate by order_id and exclude refunds
       const uniqueOrdersMap = new Map<string, any>();
       paidEvents?.forEach(event => {
-        const orderId = (event.payload as any)?.order_id;
+        const payload = event.payload as any;
+        const orderId = payload?.order_id;
         if (!orderId) return;
         if (refundedOrderIds.has(orderId)) return;
         if (!uniqueOrdersMap.has(orderId)) {
-          uniqueOrdersMap.set(orderId, event);
+          uniqueOrdersMap.set(orderId, { ...event, payload });
         }
       });
 
       const events = Array.from(uniqueOrdersMap.values());
       console.log(`✅ useRevenueEvolution: ${events.length} pedidos únicos`);
 
-      // Inicializar últimos 6 meses
+      // Initialize last 6 months
       const revenueByMonth = new Map<
         string,
         { month: string; revenue: number; dealsCount: number }
@@ -72,14 +77,18 @@ export function useRevenueEvolution() {
         });
       }
 
-      // Adicionar valores dos eventos kiwify
+      // Add values from kiwify events using approved_date
       events.forEach((event) => {
-        const monthKey = format(new Date(event.created_at), "yyyy-MM");
+        // Use approved_date from payload for accurate period attribution
+        const approvedDate = event.payload?.approved_date;
+        if (!approvedDate) return;
+        
+        const monthKey = format(new Date(approvedDate), "yyyy-MM");
         const monthData = revenueByMonth.get(monthKey);
 
         if (monthData) {
-          // Usar my_commission (receita líquida após taxas Kiwify)
-          const commissions = (event.payload as any)?.Commissions;
+          // Use my_commission (net revenue after Kiwify fees)
+          const commissions = event.payload?.Commissions;
           const netValue = (commissions?.my_commission || 0) / 100;
           
           monthData.revenue += netValue;
@@ -92,6 +101,7 @@ export function useRevenueEvolution() {
       
       return result;
     },
-    staleTime: 1000 * 60 * 5, // 5 minutos
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchOnWindowFocus: true,
   });
 }

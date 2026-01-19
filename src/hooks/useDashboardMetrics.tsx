@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DateRange } from "react-day-picker";
-import { differenceInDays, subDays, startOfDay, endOfDay } from "date-fns";
+import { differenceInDays, subDays } from "date-fns";
+import { getDateTimeBoundaries, formatLocalDate } from "@/lib/dateUtils";
 
 export interface DashboardMetrics {
   revenueWon: number;
@@ -40,18 +41,18 @@ const getPreviousPeriod = (range: DateRange): DateRange => {
 
 export function useDashboardMetrics(dateRange: DateRange | undefined) {
   return useQuery({
-    queryKey: ["dashboard-metrics", dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+    queryKey: ["dashboard-metrics", dateRange?.from ? formatLocalDate(dateRange.from) : null, dateRange?.to ? formatLocalDate(dateRange.to) : null],
     queryFn: async (): Promise<DashboardMetrics> => {
       if (!dateRange?.from || !dateRange?.to) {
         return getEmptyMetrics();
       }
 
-      const startDate = startOfDay(dateRange.from).toISOString();
-      const endDate = endOfDay(dateRange.to).toISOString();
+      const { startDateTime: startDate, endDateTime: endDate } = getDateTimeBoundaries(dateRange.from, dateRange.to);
       
       const previousPeriod = getPreviousPeriod(dateRange);
-      const prevStartDate = previousPeriod.from ? startOfDay(previousPeriod.from).toISOString() : null;
-      const prevEndDate = previousPeriod.to ? endOfDay(previousPeriod.to).toISOString() : null;
+      const { startDateTime: prevStartDate, endDateTime: prevEndDate } = previousPeriod.from && previousPeriod.to 
+        ? getDateTimeBoundaries(previousPeriod.from, previousPeriod.to)
+        : { startDateTime: null, endDateTime: null };
 
       // Fetch current period data
       const [

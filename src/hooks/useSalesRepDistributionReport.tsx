@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { startOfDay, startOfWeek, startOfMonth, subDays } from "date-fns";
+import { startOfWeek, startOfMonth, subDays } from "date-fns";
+import { formatLocalDate, getStartOfDayString } from "@/lib/dateUtils";
 
 export interface SalesRepDistribution {
   sales_rep_id: string;
@@ -39,13 +40,18 @@ export interface DistributionStats {
 }
 
 export function useSalesRepDistributionReport() {
-  const today = startOfDay(new Date());
+  const today = new Date();
   const weekStart = startOfWeek(today, { weekStartsOn: 1 });
   const monthStart = startOfMonth(today);
 
+  // Use consistent date formatting
+  const todayStart = getStartOfDayString(today);
+  const weekStartStr = getStartOfDayString(weekStart);
+  const monthStartStr = getStartOfDayString(monthStart);
+
   // Fetch distribution by sales rep
   const { data: bySalesRep, isLoading: loadingReps } = useQuery({
-    queryKey: ["sales-rep-distribution", today.toISOString()],
+    queryKey: ["sales-rep-distribution", formatLocalDate(today)],
     queryFn: async (): Promise<SalesRepDistribution[]> => {
       // Get sales reps only (not consultants)
       const { data: userRoles, error: rolesError } = await supabase
@@ -74,21 +80,21 @@ export function useSalesRepDistributionReport() {
             .from("lead_distribution_logs")
             .select("*", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
-            .gte("created_at", today.toISOString());
+            .gte("created_at", todayStart);
 
           // Leads received this week
           const { count: weekCount } = await supabase
             .from("lead_distribution_logs")
             .select("*", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
-            .gte("created_at", weekStart.toISOString());
+            .gte("created_at", weekStartStr);
 
           // Leads received this month
           const { count: monthCount } = await supabase
             .from("lead_distribution_logs")
             .select("*", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
-            .gte("created_at", monthStart.toISOString());
+            .gte("created_at", monthStartStr);
 
           // Open deals
           const { count: openDeals } = await supabase
@@ -103,7 +109,7 @@ export function useSalesRepDistributionReport() {
             .select("*", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
             .eq("status", "won")
-            .gte("closed_at", monthStart.toISOString());
+            .gte("closed_at", monthStartStr);
 
           // Total closed deals this month (for conversion rate)
           const { count: closedDeals } = await supabase
@@ -111,7 +117,7 @@ export function useSalesRepDistributionReport() {
             .select("*", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
             .in("status", ["won", "lost"])
-            .gte("closed_at", monthStart.toISOString());
+            .gte("closed_at", monthStartStr);
 
           // Last lead received
           const { data: lastLead } = await supabase
@@ -149,8 +155,11 @@ export function useSalesRepDistributionReport() {
   });
 
   // Fetch distribution history
+  const sevenDaysAgo = subDays(today, 7);
+  const sevenDaysAgoStr = getStartOfDayString(sevenDaysAgo);
+  
   const { data: distributionHistory, isLoading: loadingHistory } = useQuery({
-    queryKey: ["distribution-history", subDays(today, 7).toISOString()],
+    queryKey: ["distribution-history", formatLocalDate(sevenDaysAgo)],
     queryFn: async (): Promise<DistributionLog[]> => {
       const { data: logs, error } = await supabase
         .from("lead_distribution_logs")
@@ -165,7 +174,7 @@ export function useSalesRepDistributionReport() {
           previous_assigned_to,
           contact_id
         `)
-        .gte("created_at", subDays(today, 7).toISOString())
+        .gte("created_at", sevenDaysAgoStr)
         .order("created_at", { ascending: false })
         .limit(100);
 

@@ -2,6 +2,7 @@ import { useQueries } from "@tanstack/react-query";
 import { DateRange } from "react-day-picker";
 import { supabase } from "@/integrations/supabase/client";
 import { DealsConversionAnalysis, DealSource } from "./useDealsConversionAnalysis";
+import { getDateTimeBoundaries, formatLocalDate } from "@/lib/dateUtils";
 
 export interface SourceAnalysis {
   source: DealSource;
@@ -37,13 +38,15 @@ async function fetchSourceData(
   };
 
   const applyDateFilter = (query: any) => {
-    if (dateRange?.from) {
-      query = query.gte("created_at", dateRange.from.toISOString());
-    }
-    if (dateRange?.to) {
-      const endOfDay = new Date(dateRange.to);
-      endOfDay.setHours(23, 59, 59, 999);
-      query = query.lte("created_at", endOfDay.toISOString());
+    if (dateRange?.from && dateRange?.to) {
+      const { startDateTime, endDateTime } = getDateTimeBoundaries(dateRange.from, dateRange.to);
+      query = query.gte("created_at", startDateTime).lte("created_at", endDateTime);
+    } else if (dateRange?.from) {
+      const startDateTime = `${formatLocalDate(dateRange.from)}T00:00:00`;
+      query = query.gte("created_at", startDateTime);
+    } else if (dateRange?.to) {
+      const endDateTime = `${formatLocalDate(dateRange.to)}T23:59:59`;
+      query = query.lte("created_at", endDateTime);
     }
     return query;
   };
@@ -106,9 +109,10 @@ async function fetchSourceData(
 export function useAllSourcesConversionAnalysis(dateRange?: DateRange) {
   const queries = useQueries({
     queries: sourceConfig.map((config) => ({
-      queryKey: ["deals-conversion", dateRange?.from?.toISOString(), dateRange?.to?.toISOString(), config.source],
+      queryKey: ["deals-conversion", dateRange?.from ? formatLocalDate(dateRange.from) : null, dateRange?.to ? formatLocalDate(dateRange.to) : null, config.source],
       queryFn: () => fetchSourceData(dateRange, config.source),
-      staleTime: 5 * 60 * 1000,
+      staleTime: 30 * 1000, // 30 seconds for more reactive updates
+      refetchOnWindowFocus: true,
     })),
   });
 

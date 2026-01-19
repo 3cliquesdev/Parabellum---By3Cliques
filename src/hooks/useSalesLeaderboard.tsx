@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "./useUserRole";
+import { formatLocalDate } from "@/lib/dateUtils";
 
 export interface LeaderboardEntry {
   userId: string;
@@ -25,8 +26,12 @@ export function useSalesLeaderboard(month?: number, year?: number) {
       const targetMonth = month ?? now.getMonth() + 1;
       const targetYear = year ?? now.getFullYear();
 
-      const startDate = new Date(targetYear, targetMonth - 1, 1).toISOString();
-      const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59).toISOString();
+      // Use formatLocalDate for consistent date boundaries
+      const startDateObj = new Date(targetYear, targetMonth - 1, 1);
+      const endDateObj = new Date(targetYear, targetMonth, 0); // Last day of month
+      
+      const startDate = `${formatLocalDate(startDateObj)}T00:00:00`;
+      const endDate = `${formatLocalDate(endDateObj)}T23:59:59`;
 
       console.log("📅 Period:", { startDate, endDate });
 
@@ -124,6 +129,7 @@ export function useSalesLeaderboard(month?: number, year?: number) {
 
       return sortedLeaderboard;
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    refetchOnWindowFocus: true,
   });
 }
