@@ -8,13 +8,14 @@ const corsHeaders = {
 
 interface SendEmailRequest {
   to: string;
-  to_name: string;
+  to_name?: string;
   subject: string;
   html: string;
-  customer_id: string;
+  customer_id?: string;
   playbook_execution_id?: string;
   is_customer_email?: boolean; // Default: true - usa branding de cliente
   branding_id?: string; // Opcional: branding específico
+  isTest?: boolean; // Flag para emails de teste (não requer customer_id)
 }
 
 interface EmailBranding {
@@ -42,16 +43,26 @@ serve(async (req) => {
       customer_id, 
       playbook_execution_id,
       is_customer_email = true,
-      branding_id
+      branding_id,
+      isTest = false
     }: SendEmailRequest = await req.json();
 
-    console.log('[send-email] Request received:', { to, subject, customer_id, playbook_execution_id, is_customer_email, branding_id });
+    console.log('[send-email] Request received:', { to, subject, customer_id, playbook_execution_id, is_customer_email, branding_id, isTest });
 
-    // Validação
-    if (!to || !subject || !html || !customer_id) {
-      console.error('[send-email] Missing fields:', { to: !!to, subject: !!subject, html: !!html, customer_id: !!customer_id });
-      throw new Error('Missing required fields: to, subject, html, customer_id');
+    // Validação básica
+    if (!to || !subject || !html) {
+      console.error('[send-email] Missing fields:', { to: !!to, subject: !!subject, html: !!html });
+      throw new Error('Missing required fields: to, subject, html');
     }
+
+    // customer_id é obrigatório apenas para emails reais (não de teste)
+    if (!isTest && !customer_id) {
+      console.error('[send-email] Missing customer_id for non-test email');
+      throw new Error('Missing required field: customer_id (required for non-test emails)');
+    }
+
+    // Para emails de teste, usar email como nome se to_name não fornecido
+    const recipientName = to_name || to.split('@')[0];
 
     // Inicializar Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -205,13 +216,14 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: `${senderName} <${senderEmail}>`,
-        to: [`${to_name} <${to}>`],
+        to: [`${recipientName} <${to}>`],
         subject,
         html: emailHtml,
         tags: [
-          { name: 'customer_id', value: customer_id },
+          ...(customer_id ? [{ name: 'customer_id', value: customer_id }] : []),
           { name: 'branding', value: sanitizeTagValue(brandName) },
-          ...(playbook_execution_id ? [{ name: 'playbook_execution_id', value: playbook_execution_id }] : [])
+          ...(playbook_execution_id ? [{ name: 'playbook_execution_id', value: playbook_execution_id }] : []),
+          ...(isTest ? [{ name: 'type', value: 'test' }] : [])
         ]
       }),
     });
@@ -225,43 +237,48 @@ serve(async (req) => {
     const resendData = await resendResponse.json();
     console.log('[send-email] Email sent successfully:', resendData);
 
-    // Insert tracking event
-    const { error: trackingError } = await supabase
-      .from('email_tracking_events')
-      .insert({
-        email_id: resendData.id,
-        customer_id,
-        playbook_execution_id: playbook_execution_id || null,
-        event_type: 'sent',
-        metadata: { to, subject, to_name, branding: brandName }
-      });
-
-    if (trackingError) {
-      console.warn('[send-email] Warning: Failed to insert tracking event:', trackingError);
-    }
-
-    const { error: interactionError } = await supabase
-      .from('interactions')
-      .insert({
-        customer_id,
-        playbook_execution_id: playbook_execution_id || null,
-        type: 'email_sent',
-        content: `Email enviado: ${subject}`,
-        channel: 'email',
-        metadata: {
+    // Só registrar tracking e interaction para emails reais (com customer_id)
+    if (customer_id && !isTest) {
+      // Insert tracking event
+      const { error: trackingError } = await supabase
+        .from('email_tracking_events')
+        .insert({
           email_id: resendData.id,
-          to,
-          subject,
-          branding: brandName,
-        }
-      });
+          customer_id,
+          playbook_execution_id: playbook_execution_id || null,
+          event_type: 'sent',
+          metadata: { to, subject, to_name: recipientName, branding: brandName }
+        });
 
-    if (interactionError) {
-      console.error('[send-email] Error inserting interaction:', interactionError);
-      throw interactionError;
+      if (trackingError) {
+        console.warn('[send-email] Warning: Failed to insert tracking event:', trackingError);
+      }
+
+      const { error: interactionError } = await supabase
+        .from('interactions')
+        .insert({
+          customer_id,
+          playbook_execution_id: playbook_execution_id || null,
+          type: 'email_sent',
+          content: `Email enviado: ${subject}`,
+          channel: 'email',
+          metadata: {
+            email_id: resendData.id,
+            to,
+            subject,
+            branding: brandName,
+          }
+        });
+
+      if (interactionError) {
+        console.error('[send-email] Error inserting interaction:', interactionError);
+        throw interactionError;
+      }
+
+      console.log('[send-email] Interaction and tracking registered successfully');
+    } else {
+      console.log('[send-email] Test email - skipping tracking and interaction registration');
     }
-
-    console.log('[send-email] Interaction and tracking registered successfully');
 
     return new Response(
       JSON.stringify({ 
