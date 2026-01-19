@@ -43,11 +43,15 @@ export default function ReportFilterPanel({ report, open, onOpenChange }: Report
   const generateReport = useGenerateReport();
 
   const handleDownload = () => {
+    // Ajustar endDate para incluir todo o dia final (23:59:59.999)
+    const endOfDay = new Date(dateRange.to);
+    endOfDay.setHours(23, 59, 59, 999);
+    
     generateReport.mutate({
       report_type: report.id,
       filters: {
         startDate: dateRange.from.toISOString(),
-        endDate: dateRange.to.toISOString(),
+        endDate: endOfDay.toISOString(),
         departmentId: departmentId === '__all__' ? undefined : departmentId,
         agentId: agentId === '__all__' ? undefined : agentId,
         pipelineId: pipelineId === '__all__' ? undefined : pipelineId,
