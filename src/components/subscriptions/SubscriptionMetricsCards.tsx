@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { SubscriptionMetrics, ProductCategory } from "@/hooks/useKiwifySubscriptions";
-import { Users, ShoppingCart, DollarSign, RotateCcw } from "lucide-react";
+import { Users, ShoppingCart, DollarSign, RotateCcw, UserPlus, UserCheck } from "lucide-react";
 
 interface SubscriptionMetricsCardsProps {
   data?: SubscriptionMetrics;
@@ -18,12 +18,28 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
 
   const metrics = [
     {
-      title: 'Assinaturas',
-      subtitle: 'Clientes únicos',
+      title: 'Clientes Únicos',
+      subtitle: 'Total de assinaturas',
       value: (data.totalAssinaturas ?? 0).toLocaleString('pt-BR'),
       icon: Users,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
+    },
+    {
+      title: 'Clientes Novos',
+      subtitle: 'Primeira compra',
+      value: (data.clientesNovos ?? 0).toLocaleString('pt-BR'),
+      icon: UserPlus,
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50',
+    },
+    {
+      title: 'Clientes Recorrentes',
+      subtitle: 'Compraram antes',
+      value: (data.clientesRecorrentes ?? 0).toLocaleString('pt-BR'),
+      icon: UserCheck,
+      color: 'text-violet-600',
+      bgColor: 'bg-violet-50',
     },
     {
       title: 'Vendas Brutas',
@@ -52,19 +68,17 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {metrics.map((metric) => (
         <Card key={metric.title}>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">{metric.title}</p>
-                <p className="text-xs text-muted-foreground/70">{metric.subtitle}</p>
-                <p className="text-2xl font-bold mt-1">{metric.value}</p>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex flex-col items-center text-center">
+              <div className={`p-2 rounded-full ${metric.bgColor} mb-2`}>
+                <metric.icon className={`h-4 w-4 ${metric.color}`} />
               </div>
-              <div className={`p-3 rounded-full ${metric.bgColor}`}>
-                <metric.icon className={`h-5 w-5 ${metric.color}`} />
-              </div>
+              <p className="text-2xl font-bold">{metric.value}</p>
+              <p className="text-xs font-medium text-muted-foreground">{metric.title}</p>
+              <p className="text-xs text-muted-foreground/70">{metric.subtitle}</p>
             </div>
           </CardContent>
         </Card>
