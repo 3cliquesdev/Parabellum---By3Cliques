@@ -46,20 +46,19 @@ export default function TransferConversationDialog({
   conversation,
   currentUserId,
 }: TransferConversationDialogProps) {
+  // ✅ Todos os hooks PRIMEIRO, antes de qualquer early return
   const { hasPermission } = useRolePermissions();
-  
-  // Early return se não há conversa selecionada, contato ou permissão
-  if (!conversation || !conversation.contacts || !hasPermission('inbox.transfer')) {
-    return null;
-  }
-
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [transferNote, setTransferNote] = useState("");
-  
   const { data: departments } = useDepartments();
   const { data: users, isLoading } = useUsersByDepartment(selectedDepartmentId || undefined);
   const transferMutation = useTransferConversation();
+  
+  // Early return DEPOIS de todos os hooks
+  if (!conversation || !conversation.contacts || !hasPermission('inbox.transfer')) {
+    return null;
+  }
 
   const handleTransfer = () => {
     // Agente é opcional - se não selecionou, usa distribuição automática
