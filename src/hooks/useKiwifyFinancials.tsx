@@ -49,21 +49,61 @@ interface KiwifyEventPayload {
 }
 
 export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
-  return useQuery({
-    queryKey: ["kiwify-financials", startDate?.toISOString(), endDate?.toISOString()],
-    queryFn: async () => {
-      const start = startDate?.toISOString() || "2024-01-01";
-      const end = endDate?.toISOString() || new Date().toISOString();
+  // Helper para formatar data local (evita problemas de timezone com toISOString)
+  const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
-      console.log("📊 useKiwifyFinancials: Buscando dados de kiwify_events", { start, end });
+  const startDateStr = startDate ? formatLocalDate(startDate) : null;
+  const endDateStr = endDate ? formatLocalDate(endDate) : null;
+
+  return useQuery({
+    queryKey: ["kiwify-financials", startDateStr, endDateStr],
+    queryFn: async () => {
+      console.log("📊 useKiwifyFinancials: Buscando dados de kiwify_events", { startDateStr, endDateStr });
+
+      // Aplicar margem de 7 dias no created_at para otimização do banco
+      // A filtragem precisa será feita em memória usando approved_date do payload
+      const marginDays = 7;
+      let createdAtStart: string | null = null;
+      let createdAtEnd: string | null = null;
+
+      if (startDate) {
+        const marginStartDate = new Date(startDate);
+        marginStartDate.setDate(marginStartDate.getDate() - marginDays);
+        createdAtStart = marginStartDate.toISOString();
+      }
+      if (endDate) {
+        const marginEndDate = new Date(endDate);
+        marginEndDate.setDate(marginEndDate.getDate() + marginDays);
+        createdAtEnd = marginEndDate.toISOString();
+      }
+
+      // Função para verificar se evento está dentro do período usando approved_date
+      const isWithinDateRange = (payload: any): boolean => {
+        if (!startDateStr || !endDateStr) return true;
+        
+        const approvedDate = payload?.approved_date;
+        if (!approvedDate) return false;
+        
+        // approved_date vem como "2025-01-16 10:30:00" - extrair apenas a data
+        const eventDateStr = approvedDate.split(' ')[0];
+        return eventDateStr >= startDateStr && eventDateStr <= endDateStr;
+      };
 
       // Primeiro, buscar a contagem total de eventos para saber quantas páginas precisamos
-      const { count, error: countError } = await supabase
+      let countQuery = supabase
         .from("kiwify_events")
         .select("*", { count: "exact", head: true })
-        .in("event_type", ["paid", "order_approved"])
-        .gte("created_at", start)
-        .lte("created_at", end);
+        .in("event_type", ["paid", "order_approved"]);
+
+      if (createdAtStart) countQuery = countQuery.gte("created_at", createdAtStart);
+      if (createdAtEnd) countQuery = countQuery.lte("created_at", createdAtEnd);
+
+      const { count, error: countError } = await countQuery;
 
       if (countError) {
         console.error("❌ useKiwifyFinancials: Erro ao contar eventos:", countError);
@@ -71,24 +111,28 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
       }
 
       const totalEvents = count || 0;
-      console.log(`📊 useKiwifyFinancials: Total de ${totalEvents} eventos para buscar`);
+      console.log(`📊 useKiwifyFinancials: Total de ${totalEvents} eventos para buscar (com margem)`);
 
       // Buscar todos os eventos com paginação (Supabase limita a 1000 por query)
+      // Safety cap: máximo 50 páginas (50k registros)
       const pageSize = 1000;
-      const totalPages = Math.ceil(totalEvents / pageSize);
+      const maxPages = 50;
+      const totalPages = Math.min(Math.ceil(totalEvents / pageSize), maxPages);
       const allEvents: any[] = [];
 
       for (let page = 0; page < totalPages; page++) {
         const from = page * pageSize;
         const to = from + pageSize - 1;
 
-        const { data: pageData, error: pageError } = await supabase
+        let pageQuery = supabase
           .from("kiwify_events")
           .select("*")
-          .in("event_type", ["paid", "order_approved"])
-          .gte("created_at", start)
-          .lte("created_at", end)
-          .range(from, to);
+          .in("event_type", ["paid", "order_approved"]);
+
+        if (createdAtStart) pageQuery = pageQuery.gte("created_at", createdAtStart);
+        if (createdAtEnd) pageQuery = pageQuery.lte("created_at", createdAtEnd);
+
+        const { data: pageData, error: pageError } = await pageQuery.range(from, to);
 
         if (pageError) {
           console.error(`❌ useKiwifyFinancials: Erro na página ${page}:`, pageError);
@@ -102,7 +146,7 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
         console.log(`📊 useKiwifyFinancials: Página ${page + 1}/${totalPages} - ${pageData?.length || 0} eventos`);
       }
 
-      console.log(`✅ useKiwifyFinancials: ${allEvents.length} eventos carregados (total bruto)`);
+      console.log(`✅ useKiwifyFinancials: ${allEvents.length} eventos carregados (total bruto com margem)`);
 
       // 🆕 CORREÇÃO 1: Buscar order_ids que foram reembolsados/chargebacks
       const { data: refundedEvents } = await supabase
@@ -167,6 +211,10 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
 
       events.forEach(event => {
         const payload = event.payload as KiwifyEventPayload;
+        
+        // 🆕 CORREÇÃO: Filtrar por approved_date em memória
+        if (!isWithinDateRange(payload)) return;
+        
         const commissions = payload?.Commissions;
         
         // Extrair valores financeiros do payload (em centavos → converter para reais)
@@ -205,8 +253,11 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
         productData.kiwifyFee += kiwifyFee;
         productData.affiliateCommission += affiliateCommission;
 
-        // Evolução mensal
-        const month = new Date(event.created_at).toISOString().slice(0, 7); // YYYY-MM
+        // 🆕 CORREÇÃO: Evolução mensal usando approved_date do payload
+        const approvedDate = (payload as any)?.approved_date;
+        const month = approvedDate ? approvedDate.substring(0, 7) : null; // YYYY-MM
+        if (!month) return;
+        
         if (!monthMap.has(month)) {
           monthMap.set(month, {
             month,
