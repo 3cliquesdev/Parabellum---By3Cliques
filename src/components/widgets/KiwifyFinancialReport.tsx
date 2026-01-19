@@ -45,6 +45,7 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
       [''],
       ['VENDAS'],
       ['Vendas Aprovadas', data.vendasAprovadas],
+      ['Clientes Únicos', data.clientesUnicos],
       ['Vendas Novas', data.vendasNovas],
       ['Renovações', data.renovacoes],
       [''],
@@ -161,7 +162,7 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
       </Card>
 
       {/* KPIs Principais */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {/* Vendas Aprovadas */}
         <Card>
           <CardContent className="p-6">
@@ -176,6 +177,26 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
               </div>
               <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                 <ShoppingCart className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Clientes Únicos */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Clientes Únicos</p>
+                <p className="text-3xl font-bold">{data.clientesUnicos.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Média {data.vendasAprovadas > 0 && data.clientesUnicos > 0 
+                    ? (data.vendasAprovadas / data.clientesUnicos).toFixed(1) 
+                    : 0} vendas/cliente
+                </p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-cyan-500/10 flex items-center justify-center">
+                <Users className="h-6 w-6 text-cyan-500" />
               </div>
             </div>
           </CardContent>

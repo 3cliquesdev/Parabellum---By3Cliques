@@ -82,6 +82,7 @@ interface AffiliateMetric {
 
 export interface KiwifyCompleteMetrics {
   vendasAprovadas: number;
+  clientesUnicos: number;
   vendasNovas: number;
   renovacoes: number;
   receitaBruta: number;
@@ -250,10 +251,17 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       const productMap = new Map<string, ProductMetric>();
       const affiliateMap = new Map<string, AffiliateMetric>();
       const offerMap = new Map<string, OfferMetric>();
+      const uniqueCustomerEmails = new Set<string>();
 
       for (const event of finalApprovedEvents) {
         const payload = event.payload as KiwifyEventPayload;
         const commissions = payload?.Commissions;
+        
+        // Coletar email único para contagem de clientes
+        const customerEmail = payload?.Customer?.email;
+        if (customerEmail) {
+          uniqueCustomerEmails.add(customerEmail.toLowerCase().trim());
+        }
         
         // Convert centavos to reais (divide by 100)
         const grossValue = Number(commissions?.product_base_price || 0) / 100;
@@ -400,6 +408,7 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
 
       return {
         vendasAprovadas: finalApprovedEvents.length,
+        clientesUnicos: uniqueCustomerEmails.size,
         vendasNovas,
         renovacoes,
         receitaBruta,
