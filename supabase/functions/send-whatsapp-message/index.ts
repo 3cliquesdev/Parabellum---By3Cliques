@@ -13,6 +13,9 @@ interface SendWhatsAppRequest {
   whatsapp_id?: string;    // ✅ PRIORIDADE - JID original (@lid, @s.whatsapp.net)
   message: string;
   delay?: number;
+  conversation_id?: string; // Para vincular à conversa na fila
+  priority?: number;       // 1-10 (1 = urgente, default = 5)
+  use_queue?: boolean;     // Se true, usa fila. Default = true para rate limiting
 }
 
 serve(async (req) => {
@@ -45,6 +48,9 @@ serve(async (req) => {
       );
     }
 
+    // 🆕 FASE 6: Usar fila para rate limiting (default = true)
+    const useQueue = body.use_queue !== false;
+    
     // Buscar instância
     const { data: instance, error: instanceError } = await supabase
       .from('whatsapp_instances')
@@ -58,6 +64,103 @@ serve(async (req) => {
         JSON.stringify({ error: 'Instance not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // 🆕 FASE 6: Sanitizar número para a fila
+    function sanitizePhoneNumberForQueue(phone?: string, whatsappId?: string): string {
+      // Se whatsapp_id for @s.whatsapp.net ou @c.us (número normal), extrair dígitos
+      if (whatsappId && !whatsappId.endsWith('@lid')) {
+        const digitsOnly = whatsappId.replace(/\D/g, '');
+        if (digitsOnly.length === 10 || digitsOnly.length === 11) {
+          return digitsOnly.startsWith('55') ? digitsOnly : `55${digitsOnly}`;
+        }
+        return digitsOnly;
+      }
+      
+      // Se for LID (@lid), usar phone_number como fallback
+      if (whatsappId && whatsappId.endsWith('@lid') && phone) {
+        const sanitized = phone.replace(/\D/g, '');
+        if (sanitized.length === 10 || sanitized.length === 11) {
+          return sanitized.startsWith('55') ? sanitized : `55${sanitized}`;
+        }
+        return sanitized;
+      }
+      
+      // FALLBACK FINAL: phone_number apenas
+      if (phone) {
+        const sanitized = phone.replace(/\D/g, '');
+        if (sanitized.length === 10 || sanitized.length === 11) {
+          return sanitized.startsWith('55') ? sanitized : `55${sanitized}`;
+        }
+        return sanitized;
+      }
+      
+      throw new Error('Nenhum número válido para envio');
+    }
+
+    const cleanNumber = sanitizePhoneNumberForQueue(body.phone_number, body.whatsapp_id);
+    console.log('[send-whatsapp-message] Clean number:', cleanNumber);
+
+    // 🆕 FASE 6: Se usar fila, enfileirar e retornar imediatamente
+    if (useQueue) {
+      console.log('[send-whatsapp-message] 📥 Enfileirando mensagem para rate limiting...');
+      
+      // Verificar rate limits antes de enfileirar
+      const { data: rateLimitCheck } = await supabase
+        .rpc('update_rate_limit_counters', { p_instance_id: body.instance_id });
+      
+      const canSend = rateLimitCheck?.[0]?.can_send ?? true;
+      const waitMs = rateLimitCheck?.[0]?.wait_ms ?? 0;
+      
+      // Calcular scheduled_at baseado no rate limit
+      const scheduledAt = canSend 
+        ? new Date().toISOString()
+        : new Date(Date.now() + waitMs).toISOString();
+      
+      // Inserir na fila
+      const { data: queuedMessage, error: queueError } = await supabase
+        .from('message_queue')
+        .insert({
+          instance_id: body.instance_id,
+          conversation_id: body.conversation_id || null,
+          phone_number: cleanNumber,
+          message: body.message,
+          message_type: 'text',
+          priority: body.priority || 5, // 1 = urgente, 10 = baixa
+          status: 'pending',
+          scheduled_at: scheduledAt,
+          metadata: {
+            original_whatsapp_id: body.whatsapp_id,
+            original_phone: body.phone_number,
+            delay: body.delay || 1200
+          }
+        })
+        .select('id, scheduled_at')
+        .single();
+      
+      if (queueError) {
+        console.error('[send-whatsapp-message] ❌ Erro ao enfileirar:', queueError);
+        // Fallback: enviar diretamente se a fila falhar
+        console.log('[send-whatsapp-message] ⚠️ Fallback para envio direto...');
+      } else {
+        console.log('[send-whatsapp-message] ✅ Mensagem enfileirada:', {
+          id: queuedMessage.id,
+          scheduled_at: queuedMessage.scheduled_at,
+          rate_limited: !canSend
+        });
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            queued: true,
+            queue_id: queuedMessage.id,
+            scheduled_at: queuedMessage.scheduled_at,
+            rate_limited: !canSend,
+            wait_ms: canSend ? 0 : waitMs
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // 🔄 Verificar conexão real antes de enviar
@@ -211,8 +314,8 @@ serve(async (req) => {
       throw new Error('Nenhum número válido para envio');
     }
 
-    const cleanNumber = sanitizePhoneNumber(body.phone_number, body.whatsapp_id);
-    console.log('[send-whatsapp-message] Clean number for Evolution API:', cleanNumber);
+    // Reusar cleanNumber já definido acima para envio direto (fallback ou use_queue=false)
+    console.log('[send-whatsapp-message] Clean number for Evolution API (direct send):', cleanNumber);
 
     // 🚀 ENVIO: Evolution API v2.2.2 - Formato Exato
     const evolutionUrl = `${instance.api_url}/message/sendText/${instance.instance_name}`;

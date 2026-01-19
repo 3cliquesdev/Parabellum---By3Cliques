@@ -231,9 +231,10 @@ interface ConfidenceResult {
   department?: string;
 }
 
-// Thresholds - FASE 5: Aumentados para reduzir alucinações
-const SCORE_DIRECT = 0.90;   // Antes: 0.85 - Só responde direto com alta certeza
-const SCORE_CAUTIOUS = 0.80; // Antes: 0.70 - Margem maior para resposta cautelosa
+// Thresholds - FASE 6: Conservador para reduzir alucinações
+const SCORE_DIRECT = 0.95;   // Antes: 0.90 - Só responde direto com ALTA certeza
+const SCORE_CAUTIOUS = 0.85; // Antes: 0.80 - Margem maior para resposta cautelosa
+const SCORE_MINIMUM = 0.70;  // Novo: Abaixo disso, SEMPRE handoff
 
 // Indicadores de conflito
 const CONFLICT_INDICATORS = ['porém', 'entretanto', 'no entanto', 'diferente', 'contrário', 'atualizado', 'novo', 'antigo'];

@@ -329,12 +329,15 @@ export type Database = {
       }
       ai_personas: {
         Row: {
+          auto_handoff_on_low_confidence: boolean | null
+          conservative_mode: boolean | null
           created_at: string | null
           data_access: Json | null
           id: string
           is_active: boolean | null
           knowledge_base_paths: string[] | null
           max_tokens: number | null
+          min_confidence_threshold: number | null
           name: string
           role: string
           system_prompt: string
@@ -343,12 +346,15 @@ export type Database = {
           use_priority_instructions: boolean | null
         }
         Insert: {
+          auto_handoff_on_low_confidence?: boolean | null
+          conservative_mode?: boolean | null
           created_at?: string | null
           data_access?: Json | null
           id?: string
           is_active?: boolean | null
           knowledge_base_paths?: string[] | null
           max_tokens?: number | null
+          min_confidence_threshold?: number | null
           name: string
           role: string
           system_prompt: string
@@ -357,12 +363,15 @@ export type Database = {
           use_priority_instructions?: boolean | null
         }
         Update: {
+          auto_handoff_on_low_confidence?: boolean | null
+          conservative_mode?: boolean | null
           created_at?: string | null
           data_access?: Json | null
           id?: string
           is_active?: boolean | null
           knowledge_base_paths?: string[] | null
           max_tokens?: number | null
+          min_confidence_threshold?: number | null
           name?: string
           role?: string
           system_prompt?: string
@@ -371,6 +380,104 @@ export type Database = {
           use_priority_instructions?: boolean | null
         }
         Relationships: []
+      }
+      ai_quality_logs: {
+        Row: {
+          action_taken: string | null
+          ai_response: string | null
+          articles_count: number | null
+          articles_used: Json | null
+          confidence_score: number | null
+          contact_id: string | null
+          conversation_id: string | null
+          correction_at: string | null
+          correction_by: string | null
+          coverage_score: number | null
+          created_at: string | null
+          customer_message: string
+          feedback_notes: string | null
+          feedback_type: string | null
+          had_conflicts: boolean | null
+          handoff_reason: string | null
+          id: string
+          persona_id: string | null
+          retrieval_score: number | null
+          was_corrected: boolean | null
+        }
+        Insert: {
+          action_taken?: string | null
+          ai_response?: string | null
+          articles_count?: number | null
+          articles_used?: Json | null
+          confidence_score?: number | null
+          contact_id?: string | null
+          conversation_id?: string | null
+          correction_at?: string | null
+          correction_by?: string | null
+          coverage_score?: number | null
+          created_at?: string | null
+          customer_message: string
+          feedback_notes?: string | null
+          feedback_type?: string | null
+          had_conflicts?: boolean | null
+          handoff_reason?: string | null
+          id?: string
+          persona_id?: string | null
+          retrieval_score?: number | null
+          was_corrected?: boolean | null
+        }
+        Update: {
+          action_taken?: string | null
+          ai_response?: string | null
+          articles_count?: number | null
+          articles_used?: Json | null
+          confidence_score?: number | null
+          contact_id?: string | null
+          conversation_id?: string | null
+          correction_at?: string | null
+          correction_by?: string | null
+          coverage_score?: number | null
+          created_at?: string | null
+          customer_message?: string
+          feedback_notes?: string | null
+          feedback_type?: string | null
+          had_conflicts?: boolean | null
+          handoff_reason?: string | null
+          id?: string
+          persona_id?: string | null
+          retrieval_score?: number | null
+          was_corrected?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_quality_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_quality_logs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_quality_logs_correction_by_fkey"
+            columns: ["correction_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_quality_logs_persona_id_fkey"
+            columns: ["persona_id"]
+            isOneToOne: false
+            referencedRelation: "ai_personas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_response_cache: {
         Row: {
@@ -4196,6 +4303,78 @@ export type Database = {
           },
         ]
       }
+      message_queue: {
+        Row: {
+          conversation_id: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          instance_id: string | null
+          max_retries: number | null
+          media_url: string | null
+          message: string
+          message_type: string | null
+          metadata: Json | null
+          phone_number: string
+          priority: number | null
+          retry_count: number | null
+          scheduled_at: string | null
+          sent_at: string | null
+          status: string | null
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          instance_id?: string | null
+          max_retries?: number | null
+          media_url?: string | null
+          message: string
+          message_type?: string | null
+          metadata?: Json | null
+          phone_number: string
+          priority?: number | null
+          retry_count?: number | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          instance_id?: string | null
+          max_retries?: number | null
+          media_url?: string | null
+          message?: string
+          message_type?: string | null
+          metadata?: Json | null
+          phone_number?: string
+          priority?: number | null
+          retry_count?: number | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_queue_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_queue_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           attachment_type: string | null
@@ -5869,25 +6048,46 @@ export type Database = {
       rate_limits: {
         Row: {
           action_type: string
+          blocked_reason: string | null
           blocked_until: string | null
           id: string
           identifier: string
+          is_blocked: boolean | null
+          max_per_day: number | null
+          max_per_hour: number | null
+          max_per_minute: number | null
+          min_delay_any: number | null
+          min_delay_same_number: number | null
           request_count: number | null
           window_start: string | null
         }
         Insert: {
           action_type: string
+          blocked_reason?: string | null
           blocked_until?: string | null
           id?: string
           identifier: string
+          is_blocked?: boolean | null
+          max_per_day?: number | null
+          max_per_hour?: number | null
+          max_per_minute?: number | null
+          min_delay_any?: number | null
+          min_delay_same_number?: number | null
           request_count?: number | null
           window_start?: string | null
         }
         Update: {
           action_type?: string
+          blocked_reason?: string | null
           blocked_until?: string | null
           id?: string
           identifier?: string
+          is_blocked?: boolean | null
+          max_per_day?: number | null
+          max_per_hour?: number | null
+          max_per_minute?: number | null
+          min_delay_any?: number | null
+          min_delay_same_number?: number | null
           request_count?: number | null
           window_start?: string | null
         }
@@ -7422,6 +7622,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_rate_limit_counters: {
+        Args: { p_instance_id: string }
+        Returns: undefined
+      }
       match_knowledge_articles: {
         Args: {
           match_count?: number
@@ -7464,6 +7668,13 @@ export type Database = {
       update_article_embedding: {
         Args: { article_id: string; new_embedding: string }
         Returns: undefined
+      }
+      update_rate_limit_counters: {
+        Args: { p_instance_id: string }
+        Returns: {
+          can_send: boolean
+          wait_ms: number
+        }[]
       }
       upsert_contact_with_interaction:
         | {
