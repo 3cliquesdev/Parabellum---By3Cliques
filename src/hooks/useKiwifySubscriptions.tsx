@@ -33,6 +33,8 @@ export interface RefundData {
 export interface SubscriptionMetrics {
   // Métricas de clientes únicos
   totalAssinaturas: number; // Clientes únicos (emails distintos)
+  clientesNovos: number; // Primeira compra EVER no período
+  clientesRecorrentes: number; // Já compraram antes do período
   
   // Métricas de vendas
   vendasBrutas: number; // Total de orders únicos
@@ -170,15 +172,60 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
 
       // Calculate unique customers (unique emails)
       const uniqueCustomerEmails = new Set<string>();
+      const emailToFirstOrderDate = new Map<string, string>(); // Track first order date in period
+      
       for (const event of uniqueOrders) {
         const payload = event.payload as any;
         const email = payload?.Customer?.email || payload?.customer_email;
         if (email) {
-          uniqueCustomerEmails.add(email.toLowerCase());
+          const emailLower = email.toLowerCase();
+          uniqueCustomerEmails.add(emailLower);
+          
+          const approvedDate = payload?.approved_date?.split('T')[0] || '';
+          if (!emailToFirstOrderDate.has(emailLower) || approvedDate < emailToFirstOrderDate.get(emailLower)!) {
+            emailToFirstOrderDate.set(emailLower, approvedDate);
+          }
         }
       }
 
       console.log(`[useKiwifySubscriptions] Unique customers: ${uniqueCustomerEmails.size}`);
+
+      // Determine new vs recurring customers
+      // Fetch historical paid events BEFORE start date to check who is recurring
+      let clientesNovos = 0;
+      let clientesRecorrentes = 0;
+
+      if (startDate && uniqueCustomerEmails.size > 0) {
+        // Get all historical orders before the period to identify recurring customers
+        const { data: historicalEvents } = await supabase
+          .from('kiwify_events')
+          .select('payload')
+          .eq('event_type', 'paid')
+          .lt('created_at', startDate.toISOString());
+
+        const historicalCustomers = new Set<string>();
+        for (const event of historicalEvents || []) {
+          const payload = event.payload as any;
+          const email = payload?.Customer?.email || payload?.customer_email;
+          if (email) {
+            historicalCustomers.add(email.toLowerCase());
+          }
+        }
+
+        // Classify each customer
+        for (const email of uniqueCustomerEmails) {
+          if (historicalCustomers.has(email)) {
+            clientesRecorrentes++;
+          } else {
+            clientesNovos++;
+          }
+        }
+      } else {
+        // If no start date, all are considered "new" for this view
+        clientesNovos = uniqueCustomerEmails.size;
+      }
+
+      console.log(`[useKiwifySubscriptions] New customers: ${clientesNovos}, Recurring: ${clientesRecorrentes}`);
 
       // Fetch refund events for orders in the period
       const orderIds = Array.from(uniqueOrdersMap.keys());
@@ -326,6 +373,8 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       const result: SubscriptionMetrics = {
         // Novas métricas
         totalAssinaturas: uniqueCustomerEmails.size,
+        clientesNovos,
+        clientesRecorrentes,
         vendasBrutas: uniqueOrders.length,
         vendasLiquidas: uniqueOrders.length - refunds.length,
         reembolsos: refunds,
@@ -340,6 +389,8 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
 
       console.log(`[useKiwifySubscriptions] Final metrics:`, {
         totalAssinaturas: result.totalAssinaturas,
+        clientesNovos: result.clientesNovos,
+        clientesRecorrentes: result.clientesRecorrentes,
         vendasBrutas: result.vendasBrutas,
         vendasLiquidas: result.vendasLiquidas,
         reembolsos: result.reembolsos.length,
