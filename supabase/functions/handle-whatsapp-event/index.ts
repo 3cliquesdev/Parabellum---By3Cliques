@@ -385,24 +385,37 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   let isKnownCustomer = false;
   let contactName = customerName;
   
-  // Buscar contatos por telefone - preferir o que tem email, senão o mais recente
+  // 🆕 Buscar contatos por telefone NORMALIZADO (últimos 11 dígitos)
+  // Isso permite encontrar clientes com formatos diferentes: +5511..., 5511..., 11...
+  const phoneNormalized = phoneForDatabase.replace(/\D/g, '').slice(-11);
+  console.log('[handle-whatsapp-event] 🔍 Buscando telefone normalizado:', phoneNormalized, '(original:', phoneForDatabase, ')');
+  
   const { data: existingContacts } = await supabase
     .from('contacts')
-    .select('id, email, first_name, last_name, created_at')
-    .eq('phone', phoneForDatabase)
+    .select('id, email, first_name, last_name, phone, created_at')
+    .or(`phone.ilike.%${phoneNormalized},whatsapp_id.ilike.%${phoneNormalized}`)
     .order('email', { ascending: false, nullsFirst: false }) // Prioriza quem tem email
     .order('created_at', { ascending: false }) // Depois o mais recente
-    .limit(5);
+    .limit(10);
+
+  // Filtrar para garantir match exato dos últimos 11 dígitos
+  const matchingContacts = existingContacts?.filter((c: { phone?: string | null }) => {
+    const contactPhoneNorm = (c.phone || '').replace(/\D/g, '').slice(-11);
+    return contactPhoneNorm === phoneNormalized;
+  }) || [];
+  
+  console.log('[handle-whatsapp-event] 📊 Contatos encontrados:', existingContacts?.length || 0, 
+    '→ Matches exatos:', matchingContacts.length);
 
   // Escolher o melhor contato (com email > mais recente)
-  const existingContact = existingContacts && existingContacts.length > 0 
-    ? existingContacts.find((c: { id: string; email: string | null }) => c.email) || existingContacts[0]
+  const existingContact = matchingContacts.length > 0 
+    ? matchingContacts.find((c: { id: string; email: string | null }) => c.email) || matchingContacts[0]
     : null;
 
   if (existingContact) {
     contactId = existingContact.id;
     console.log('[handle-whatsapp-event] ✅ Existing contact found:', contactId, 
-      existingContacts && existingContacts.length > 1 ? `(${existingContacts.length} duplicates exist)` : '');
+      matchingContacts.length > 1 ? `(${matchingContacts.length} duplicates exist)` : '');
     
     // ✅ NOVO FLUXO: Cliente conhecido = telefone existe no banco (independente de ter email)
     // O roteamento é feito pela existência do telefone: existe = Suporte, não existe = Comercial
