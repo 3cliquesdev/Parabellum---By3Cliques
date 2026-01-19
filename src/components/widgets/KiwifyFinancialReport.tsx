@@ -45,7 +45,7 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
       [''],
       ['VENDAS'],
       ['Vendas Aprovadas', data.vendasAprovadas],
-      ['Clientes Únicos', data.clientesUnicos],
+      ['Clientes Únicos', data.clientesUnicos ?? 0],
       ['Vendas Novas', data.vendasNovas],
       ['Renovações', data.renovacoes],
       [''],
@@ -188,10 +188,10 @@ export function KiwifyFinancialReport({ startDate, endDate }: KiwifyFinancialRep
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Clientes Únicos</p>
-                <p className="text-3xl font-bold">{data.clientesUnicos.toLocaleString()}</p>
+                <p className="text-3xl font-bold">{(data.clientesUnicos ?? 0).toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Média {data.vendasAprovadas > 0 && data.clientesUnicos > 0 
-                    ? (data.vendasAprovadas / data.clientesUnicos).toFixed(1) 
+                  Média {data.vendasAprovadas > 0 && (data.clientesUnicos ?? 0) > 0 
+                    ? (data.vendasAprovadas / (data.clientesUnicos ?? 1)).toFixed(1) 
                     : 0} vendas/cliente
                 </p>
               </div>
