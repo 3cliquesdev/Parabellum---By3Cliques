@@ -14,17 +14,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Normaliza o range para dias inteiros (00:00:00 até 23:59:59.999)
-const normalizeRange = (range: DateRange | undefined): DateRange | undefined => {
-  if (!range) return undefined;
+// Normaliza range DURANTE seleção - NÃO força to quando não definido
+const normalizePartialRange = (range: DateRange | undefined): DateRange | undefined => {
+  if (!range || !range.from) return undefined;
   
-  const from = range.from ? startOfDay(range.from) : undefined;
-  let to = range.to ? endOfDay(range.to) : undefined;
+  const from = startOfDay(range.from);
+  // Mantém to como undefined se usuário ainda não selecionou
+  const to = range.to ? endOfDay(range.to) : undefined;
   
-  // Se só tem "from" (usuário clicou 1 dia), define "to" como fim do mesmo dia
-  if (from && !to) {
-    to = endOfDay(from);
-  }
+  return { from, to };
+};
+
+// Normaliza range FINAL - garante que to existe para uso externo
+const normalizeFinalRange = (range: DateRange | undefined): DateRange | undefined => {
+  if (!range || !range.from) return undefined;
+  
+  const from = startOfDay(range.from);
+  // Se só tem from, define to como fim do mesmo dia
+  const to = range.to ? endOfDay(range.to) : endOfDay(from);
   
   return { from, to };
 };
@@ -134,20 +141,22 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
     setActivePreset(preset);
     if (preset !== 'custom') {
       const range = presets[preset].getRange();
-      onChange(normalizeRange(range));
+      onChange(normalizeFinalRange(range));
     }
   };
 
   const handleCalendarSelect = (range: DateRange | undefined) => {
-    const normalized = normalizeRange(range);
-    onChange(normalized);
+    // Durante seleção: NÃO força to = from
+    const partial = normalizePartialRange(range);
     setActivePreset('custom');
     
-    // Só fecha se ambas as datas estiverem definidas e forem diferentes
-    // (range completo selecionado - usuário clicou em duas datas diferentes)
-    if (normalized?.from && normalized?.to && 
-        normalized.from.getTime() !== normalized.to.getTime()) {
+    // Se range completo (usuário selecionou ambas as datas), finaliza
+    if (partial?.from && partial?.to) {
+      onChange(normalizeFinalRange(range));
       setCalendarOpen(false);
+    } else {
+      // Range incompleto - mantém aberto e passa range parcial
+      onChange(partial);
     }
   };
 
