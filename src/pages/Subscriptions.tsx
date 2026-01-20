@@ -26,7 +26,7 @@ export default function Subscriptions() {
   const [selectedCategories, setSelectedCategories] = useState<ProductCategory[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data, isLoading, isError, refetch } = useKiwifySubscriptions(
+  const { data, isLoading, isError, refetch, isFetching } = useKiwifySubscriptions(
     dateRange?.from,
     dateRange?.to
   );
@@ -124,6 +124,15 @@ export default function Subscriptions() {
             value={dateRange} 
             onChange={setDateRange}
           />
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => refetch()} 
+            disabled={isFetching}
+            title="Atualizar dados"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+          </Button>
           <Button variant="outline" onClick={handleExport} disabled={!filteredSubscriptions.length}>
             <Download className="h-4 w-4 mr-2" />
             Exportar

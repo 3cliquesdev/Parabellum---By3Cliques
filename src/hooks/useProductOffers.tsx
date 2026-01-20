@@ -117,6 +117,7 @@ export const useCreateProductOffer = () => {
       queryClient.invalidateQueries({ queryKey: ["product-offers", variables.product_id] });
       queryClient.invalidateQueries({ queryKey: ["unmapped-kiwify-offers"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["kiwify-subscriptions"] });
       
       const duplicatesMsg = data?.duplicatesRemoved 
         ? ` (${data.duplicatesRemoved} duplicata(s) removida(s))` 
@@ -165,6 +166,7 @@ export const useDeleteProductOffer = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product-offers"] });
+      queryClient.invalidateQueries({ queryKey: ["kiwify-subscriptions"] });
       toast({
         title: "Oferta removida",
         description: "A oferta foi removida do produto.",
@@ -242,6 +244,7 @@ export const useMoveProductOffer = () => {
       // Invalida todas as queries relacionadas a ofertas e produtos
       queryClient.invalidateQueries({ queryKey: ["product-offers"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["kiwify-subscriptions"] });
       toast({
         title: result?.merged ? "Oferta mesclada" : "Oferta movida",
         description: result?.merged 
