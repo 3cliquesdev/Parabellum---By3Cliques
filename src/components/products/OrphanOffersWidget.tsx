@@ -14,6 +14,7 @@ export function OrphanOffersWidget() {
   const { data: products } = useProducts();
   const createOffer = useCreateProductOffer();
   const [selectedProducts, setSelectedProducts] = useState<Record<string, string>>({});
+  const [openSelectId, setOpenSelectId] = useState<string | null>(null);
 
   const handleMapOffer = (planId: string, planName: string) => {
     const productId = selectedProducts[planId];
@@ -129,11 +130,14 @@ export function OrphanOffersWidget() {
 
             <div className="flex items-center gap-2">
               <Select
-                key={`select-${offer.plan_id}-${selectedProducts[offer.plan_id] || 'empty'}`}
+                key={`select-${offer.plan_id}`}
                 value={selectedProducts[offer.plan_id] || ''}
-                onValueChange={(value) => 
-                  setSelectedProducts(prev => ({ ...prev, [offer.plan_id]: value }))
-                }
+                open={openSelectId === offer.plan_id}
+                onOpenChange={(open) => setOpenSelectId(open ? offer.plan_id : null)}
+                onValueChange={(value) => {
+                  setSelectedProducts(prev => ({ ...prev, [offer.plan_id]: value }));
+                  setOpenSelectId(null);
+                }}
               >
                 <SelectTrigger className="flex-1">
                   <SelectValue placeholder="Selecionar produto..." />
@@ -142,7 +146,7 @@ export function OrphanOffersWidget() {
                   position="popper" 
                   side="bottom" 
                   align="start"
-                  className="max-h-60"
+                  className="max-h-60 z-[100]"
                 >
                   {products?.map((product) => (
                     <SelectItem key={product.id} value={product.id}>
