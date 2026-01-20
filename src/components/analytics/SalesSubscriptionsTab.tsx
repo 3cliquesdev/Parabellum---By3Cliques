@@ -25,6 +25,7 @@ import { NewVsRecurringChart } from "./subscriptions/NewVsRecurringChart";
 import { ProductPerformanceTable } from "./subscriptions/ProductPerformanceTable";
 import { SalesRepRankingWidget } from "./subscriptions/SalesRepRankingWidget";
 import { WhoSoldRankingWidget } from "./subscriptions/WhoSoldRankingWidget";
+import { WonDealsByChannelWidget } from "./subscriptions/WonDealsByChannelWidget";
 
 interface SalesSubscriptionsTabProps {
   startDate: Date;
@@ -207,6 +208,9 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
           subscriptionData={subscriptionData}
           isLoading={isLoading}
         />
+
+        {/* Won Deals Breakdown by Channel & Seller */}
+        <WonDealsByChannelWidget startDate={startDate} endDate={endDate} />
 
         {/* Charts Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
