@@ -149,7 +149,7 @@ export default function Subscriptions() {
               ({unmappedOffers.reduce((sum, o) => sum + (o.event_count || 0), 0)} vendas aparecendo como "Outros")
             </span>
             <Link 
-              to="/products?tab=diagnostic" 
+              to="/settings/products?tab=diagnostic" 
               className="text-primary underline font-medium hover:text-primary/80"
             >
               Mapear agora →
