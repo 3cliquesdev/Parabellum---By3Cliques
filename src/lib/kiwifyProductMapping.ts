@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface ProductMapping {
   productName: string;
   category: string;
+  sourceType: 'organico' | 'afiliado' | 'comercial';
 }
 
 export interface ProductMappingMaps {
@@ -25,6 +26,7 @@ export async function fetchProductMappings(): Promise<ProductMappingMaps> {
     .select(`
       offer_id,
       kiwify_product_id,
+      source_type,
       products:product_id (
         name
       )
@@ -38,9 +40,12 @@ export async function fetchProductMappings(): Promise<ProductMappingMaps> {
     const productName = (mapping.products as any)?.name;
     if (!productName) continue;
 
+    const sourceType = (mapping.source_type as 'organico' | 'afiliado' | 'comercial') || 'organico';
+
     const mappingData: ProductMapping = { 
       productName, 
-      category: productName // Categoria = nome do produto mapeado
+      category: productName, // Categoria = nome do produto mapeado
+      sourceType
     };
 
     // Map by offer_id (primary)
