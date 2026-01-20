@@ -65,6 +65,9 @@ export function VisualFunnelChart({ dateRange }: VisualFunnelChartProps) {
   ];
 
   const maxValue = totalCreated || 1;
+  
+  // Larguras mínimas progressivas para manter o formato de funil
+  const minWidths = [100, 70, 50, 35]; // Criados, Ganhos, Perdidos, Aberto
 
   return (
     <Card>
@@ -77,7 +80,8 @@ export function VisualFunnelChart({ dateRange }: VisualFunnelChartProps) {
       <CardContent>
         <div className="flex flex-col items-center gap-2 py-2">
           {stages.map((stage, index) => {
-            const widthPercent = Math.max((stage.value / maxValue) * 100, 15);
+            const proportionalWidth = (stage.value / maxValue) * 100;
+            const widthPercent = Math.max(proportionalWidth, minWidths[index]);
             const percentage = totalCreated > 0 
               ? ((stage.value / totalCreated) * 100).toFixed(1) 
               : "0";
