@@ -82,6 +82,7 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
     offer_id: string;
     offer_name: string;
     price: number;
+    source_type?: string;
   } | null>(null);
 
   const form = useForm<ProductFormData>({
@@ -252,7 +253,16 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
               <div className="space-y-1.5 max-h-32 overflow-y-auto">
                 {offers.map((offer) => (
                   <div key={offer.id} className="flex items-center justify-between text-sm bg-background rounded px-2 py-1.5">
-                    <span className="text-foreground truncate flex-1">{offer.offer_name}</span>
+                    <div className="flex items-center gap-2 flex-1 truncate">
+                      <span className="text-foreground truncate">{offer.offer_name}</span>
+                      <Badge 
+                        variant={offer.source_type === 'afiliado' ? 'secondary' : 'outline'}
+                        className="text-[10px] shrink-0"
+                      >
+                        {offer.source_type === 'afiliado' ? 'Afiliado' : 
+                         offer.source_type === 'comercial' ? 'Comercial' : 'Orgânico'}
+                      </Badge>
+                    </div>
                     <div className="flex items-center gap-1 ml-2 shrink-0">
                       <Badge variant="outline" className="text-xs">
                         R$ {offer.price.toFixed(2).replace('.', ',')}
@@ -263,7 +273,10 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
                         size="icon"
                         className="h-6 w-6"
                         onClick={() => {
-                          setOfferToMove(offer);
+                          setOfferToMove({
+                            ...offer,
+                            source_type: offer.source_type,
+                          });
                           setMoveOfferDialogOpen(true);
                         }}
                         title="Mover para outro produto"

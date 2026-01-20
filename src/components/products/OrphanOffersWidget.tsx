@@ -16,7 +16,7 @@ export function OrphanOffersWidget() {
   const [selectedProducts, setSelectedProducts] = useState<Record<string, string>>({});
   const [openSelectId, setOpenSelectId] = useState<string | null>(null);
 
-  const handleMapOffer = (planId: string, planName: string) => {
+  const handleMapOffer = (planId: string, planName: string, detectedSourceType: 'afiliado' | 'organico') => {
     const productId = selectedProducts[planId];
     if (!productId) return;
 
@@ -26,6 +26,7 @@ export function OrphanOffersWidget() {
       offer_name: planName,
       price: 0,
       source: 'kiwify',
+      source_type: detectedSourceType,
     }, {
       onSuccess: () => {
         setSelectedProducts(prev => {
@@ -159,7 +160,7 @@ export function OrphanOffersWidget() {
               <Button
                 size="sm"
                 disabled={!selectedProducts[offer.plan_id] || createOffer.isPending}
-                onClick={() => handleMapOffer(offer.plan_id, offer.plan_name)}
+                onClick={() => handleMapOffer(offer.plan_id, offer.plan_name, offer.detected_source_type)}
               >
                 Mapear
               </Button>

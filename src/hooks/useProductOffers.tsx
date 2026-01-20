@@ -46,6 +46,7 @@ export const useCreateProductOffer = () => {
       offer_name: string;
       price: number;
       source?: string;
+      source_type?: 'afiliado' | 'organico' | 'comercial' | 'unknown';
     }) => {
       // Buscar TODOS os registros existentes para esse offer_id (pode haver duplicatas)
       const { data: existingList, error: fetchError } = await supabase
@@ -99,8 +100,12 @@ export const useCreateProductOffer = () => {
       const { data, error } = await supabase
         .from("product_offers")
         .insert({
-          ...offer,
+          product_id: offer.product_id,
+          offer_id: offer.offer_id,
+          offer_name: offer.offer_name,
+          price: offer.price,
           source: offer.source || "kiwify",
+          source_type: offer.source_type || "unknown",
         })
         .select()
         .single();
