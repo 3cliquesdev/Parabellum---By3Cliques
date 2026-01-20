@@ -27,13 +27,14 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
-import { BarChart3, Sparkles, Headphones, TrendingUp, Brain, Rocket, MessageCircle, DollarSign, Target } from "lucide-react";
+import { BarChart3, Sparkles, Headphones, TrendingUp, Brain, Rocket, MessageCircle, DollarSign, Target, FileText } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DateRange } from "react-day-picker";
 import { KiwifyFinancialReport } from "@/components/widgets/KiwifyFinancialReport";
 import { ChurnWidget } from "@/components/widgets/ChurnWidget";
 import { useKiwifyCompleteMetrics } from "@/hooks/useKiwifyCompleteMetrics";
 import { DailyMetricsTab } from "@/components/analytics/DailyMetricsTab";
+import { SubscriptionsAnalyticsTab } from "@/components/analytics/SubscriptionsAnalyticsTab";
 export default function Analytics() {
   const { role, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
@@ -128,10 +129,14 @@ export default function Analytics() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="metrics" className="flex items-center gap-2">
               <Target className="h-4 w-4" />
               Métricas
+            </TabsTrigger>
+            <TabsTrigger value="subscriptions" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Assinaturas
             </TabsTrigger>
             <TabsTrigger value="support" className="flex items-center gap-2">
               <Headphones className="h-4 w-4" />
@@ -164,7 +169,12 @@ export default function Analytics() {
             <DailyMetricsTab startDate={startDate} endDate={endDate} />
           </TabsContent>
 
-          {/* TAB 1: Support Performance */}
+          {/* TAB 1: Assinaturas - Análise de Vendas e Assinaturas */}
+          <TabsContent value="subscriptions" className="space-y-6">
+            <SubscriptionsAnalyticsTab startDate={startDate} endDate={endDate} />
+          </TabsContent>
+
+          {/* TAB 2: Support Performance */}
           <TabsContent value="support" className="space-y-6">
             {/* AI Executive Summary */}
             <AIExecutiveSummary 
