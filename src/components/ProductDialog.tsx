@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +70,7 @@ interface ProductDialogProps {
 }
 
 export function ProductDialog({ open, onOpenChange, product, initialData }: ProductDialogProps) {
+  const queryClient = useQueryClient();
   const updateProduct = useUpdateProduct();
   const { data: deliveryGroups } = useDeliveryGroups();
   const { data: offers } = useProductOffers(product?.id || null);
@@ -152,6 +154,9 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
           title: "Produto criado",
           description: `${productName} foi cadastrado com sucesso`,
         });
+        
+        // Invalidar cache para atualizar lista instantaneamente
+        queryClient.invalidateQueries({ queryKey: ["products"] });
       } finally {
         setIsCreating(false);
       }
