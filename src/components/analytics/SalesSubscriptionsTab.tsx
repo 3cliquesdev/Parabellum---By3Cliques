@@ -1,6 +1,5 @@
 import { useKiwifySubscriptions } from "@/hooks/useKiwifySubscriptions";
-import { useDealsConversionAnalysis } from "@/hooks/useDealsConversionAnalysis";
-import { useLeadCreationMetrics } from "@/hooks/useLeadCreationMetrics";
+import { useAllSourcesConversionAnalysis } from "@/hooks/useAllSourcesConversionAnalysis";
 import { DateRange } from "react-day-picker";
 import { FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,11 +44,10 @@ function formatCurrency(value: number): string {
 export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptionsTabProps) {
   const { data: subscriptionData, isLoading: subscriptionLoading } = useKiwifySubscriptions(startDate, endDate);
   const dateRange: DateRange = { from: startDate, to: endDate };
-  const { data: conversionData, isLoading: conversionLoading } = useDealsConversionAnalysis(dateRange);
-  const { data: leadMetrics, isLoading: leadLoading } = useLeadCreationMetrics(startDate, endDate);
+  const { totals: conversionTotals, isLoading: conversionLoading } = useAllSourcesConversionAnalysis(dateRange);
   
   const { exportToPDF, isExporting } = useExportPDF();
-  const isLoading = subscriptionLoading || conversionLoading || leadLoading;
+  const isLoading = subscriptionLoading || conversionLoading;
 
   const handleExportPDF = async () => {
     try {
@@ -63,14 +61,18 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
     }
   };
 
-  // Calculate metrics
-  const kiwifyTotal = leadMetrics?.kiwifyEvents?.total || 0;
-  const totalCreated = leadMetrics?.totalCreated || 0;
-  const totalWon = leadMetrics?.totalWon || 0;
-  const totalGross = leadMetrics?.kiwifyEvents?.totalGross || 0;
-  const totalNet = leadMetrics?.kiwifyEvents?.totalNet || 0;
-  const newCustomers = leadMetrics?.kiwifyEvents?.newCustomers || 0;
-  const recurring = leadMetrics?.kiwifyEvents?.recurring || 0;
+  // Calculate metrics - using synced data from useAllSourcesConversionAnalysis
+  const totalCreated = conversionTotals?.totalCreated || 0;
+  const totalWon = conversionTotals?.totalWon || 0;
+  const totalLost = conversionTotals?.totalLost || 0;
+  const totalOpen = conversionTotals?.totalOpen || 0;
+
+  // Kiwify metrics from subscription data (uses the correct SubscriptionMetrics interface)
+  const kiwifyTotal = subscriptionData?.vendasLiquidas || 0;
+  const newCustomers = subscriptionData?.clientesNovos || 0;
+  const recurring = subscriptionData?.clientesRecorrentes || 0;
+  const totalGross = subscriptionData?.subscriptions?.reduce((sum, s) => sum + (s.grossValue || 0), 0) || 0;
+  const totalNet = subscriptionData?.subscriptions?.reduce((sum, s) => sum + (s.netValue || 0), 0) || 0;
 
   const conversionRate = totalCreated > 0 
     ? ((totalWon / totalCreated) * 100).toFixed(1)
@@ -100,7 +102,7 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
       icon: Users,
       color: "text-blue-600",
       bgColor: "bg-blue-100 dark:bg-blue-900/30",
-      subtext: formatCurrency(leadMetrics?.totalOpenValue || 0),
+      subtext: `${totalOpen} em aberto`,
       tooltip: "Total de deals criados no período"
     },
     {
@@ -111,7 +113,7 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
       bgColor: "bg-green-100 dark:bg-green-900/30",
       percent: percentGanhos,
       percentColor: "green",
-      subtext: formatCurrency(leadMetrics?.totalWonValue || 0),
+      subtext: formatCurrency(totalNet),
       tooltip: "Deals ganhos / Deals criados"
     },
     {
@@ -129,7 +131,7 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
       icon: Target,
       color: "text-amber-600",
       bgColor: "bg-amber-100 dark:bg-amber-900/30",
-      subtext: `${leadMetrics?.totalLost || 0} perdidos`,
+      subtext: `${totalLost} perdidos`,
       tooltip: "Taxa de conversão (Ganhos / Criados)"
     },
   ];
