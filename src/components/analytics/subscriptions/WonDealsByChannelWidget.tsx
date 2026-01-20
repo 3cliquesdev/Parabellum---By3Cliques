@@ -169,18 +169,18 @@ export function WonDealsByChannelWidget({ startDate, endDate }: WonDealsByChanne
                   {breakdownItems.map((item) => (
                     <div
                       key={item.channel}
-                      className="flex items-center gap-3 p-2 rounded-lg bg-white dark:bg-card border border-border/50"
+                      className="flex items-center gap-3 p-2 rounded-lg bg-white dark:bg-slate-800 border border-border/50"
                     >
                       <span className="text-lg">{item.icon}</span>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium">{item.channel}</span>
+                          <span className="text-sm font-medium text-foreground">{item.channel}</span>
                           <div className="flex items-center gap-3 text-sm">
-                            <span className="text-muted-foreground">{item.deals} deals</span>
-                            <span className="font-medium text-green-600">{formatCurrency(item.revenue)}</span>
+                            <span className="text-foreground/70">{item.deals} deals</span>
+                            <span className="font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(item.revenue)}</span>
                           </div>
                         </div>
-                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all"
                             style={{ 
@@ -219,17 +219,17 @@ export function WonDealsByChannelWidget({ startDate, endDate }: WonDealsByChanne
                   </span>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium">{rep.repName}</span>
+                      <span className="text-sm font-medium text-foreground">{rep.repName}</span>
                       <div className="flex items-center gap-3 text-sm">
-                        <span className="text-muted-foreground">
+                        <span className="text-foreground/70">
                           {rep.deals} deals
                         </span>
-                        <span className="font-medium text-green-600">
+                        <span className="font-medium text-emerald-600 dark:text-emerald-400">
                           {formatCurrency(rep.revenue)}
                         </span>
                       </div>
                     </div>
-                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-blue-500 rounded-full transition-all"
                         style={{ width: `${(rep.revenue / maxRevenue) * 100}%` }}
@@ -263,12 +263,12 @@ export function WonDealsByChannelWidget({ startDate, endDate }: WonDealsByChanne
                   >
                     <Icon className={`h-5 w-5 ${iconColor}`} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{cat.repName}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm font-medium text-foreground truncate">{cat.repName}</p>
+                      <p className="text-xs text-foreground/60">
                         {cat.deals} deals • {cat.percentage.toFixed(0)}%
                       </p>
                     </div>
-                    <span className="text-sm font-semibold text-green-600">
+                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                       {formatCurrency(cat.revenue)}
                     </span>
                   </div>
