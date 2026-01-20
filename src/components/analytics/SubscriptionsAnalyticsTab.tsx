@@ -92,7 +92,7 @@ export function SubscriptionsAnalyticsTab({ startDate, endDate }: SubscriptionsA
 
         {/* ROW 5: Top Vendedores + Análise de Churn */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <SalesRepRankingWidget />
+          <SalesRepRankingWidget startDate={startDate} endDate={endDate} />
           <ChurnAnalysisCard subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
         </div>
 

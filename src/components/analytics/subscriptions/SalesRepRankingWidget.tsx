@@ -3,6 +3,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useSalesByRep } from "@/hooks/useSalesByRep";
 import { Trophy, Medal } from "lucide-react";
 
+interface SalesRepRankingWidgetProps {
+  startDate?: Date;
+  endDate?: Date;
+}
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -12,8 +17,8 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function SalesRepRankingWidget() {
-  const { data, isLoading } = useSalesByRep();
+export function SalesRepRankingWidget({ startDate, endDate }: SalesRepRankingWidgetProps) {
+  const { data, isLoading } = useSalesByRep(startDate, endDate);
 
   if (isLoading) {
     return (

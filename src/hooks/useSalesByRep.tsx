@@ -3,23 +3,27 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useUserRole } from "./useUserRole";
 
-export function useSalesByRep() {
+export function useSalesByRep(startDate?: Date, endDate?: Date) {
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
 
   return useQuery({
-    queryKey: ["sales-by-rep", user?.id, role],
+    queryKey: ["sales-by-rep", user?.id, role, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
-      // Query base para buscar deals ganhos este mês
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-
       let query = supabase
         .from("deals")
         .select("value, assigned_to, profiles!deals_assigned_to_fkey(full_name)")
-        .eq("status", "won")
-        .gte("closed_at", startOfMonth.toISOString());
+        .eq("status", "won");
+
+      // Aplicar filtro de data se fornecido
+      if (startDate) {
+        query = query.gte("closed_at", startDate.toISOString());
+      }
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        query = query.lte("closed_at", endOfDay.toISOString());
+      }
 
       // Sales rep vê apenas seus próprios dados
       if (role === "sales_rep" && user?.id) {
