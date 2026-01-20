@@ -10,20 +10,37 @@ export interface LeadBySource {
   color: string;
 }
 
-const SOURCE_CONFIG: Record<string, { label: string; color: string }> = {
-  manual: { label: "Manual", color: "hsl(var(--chart-1))" },
-  formulario: { label: "Formulário", color: "hsl(var(--chart-2))" },
-  form: { label: "Formulário", color: "hsl(var(--chart-2))" },
-  whatsapp: { label: "WhatsApp", color: "hsl(var(--chart-3))" },
-  chat_widget: { label: "Chat Web", color: "hsl(var(--chart-4))" },
-  webchat: { label: "Chat Web", color: "hsl(var(--chart-4))" },
-  indicacao: { label: "Indicação", color: "hsl(var(--chart-5))" },
-  referral: { label: "Indicação", color: "hsl(var(--chart-5))" },
-  kiwify_organic: { label: "Kiwify Orgânico", color: "#10B981" },
-  kiwify_direto: { label: "Kiwify Direto", color: "#059669" },
-  kiwify_recorrencia: { label: "Kiwify Recorrência", color: "#14B8A6" },
-  recuperacao: { label: "Recuperação", color: "#EF4444" },
-  legado: { label: "Legado", color: "#9CA3AF" },
+// Categories grouped by business channel
+const SOURCE_CONFIG: Record<string, { label: string; color: string; category: string }> = {
+  // Formulários (verde)
+  formulario: { label: "Formulários", color: "#10B981", category: "formularios" },
+  form: { label: "Formulários", color: "#10B981", category: "formularios" },
+  webchat: { label: "Formulários", color: "#10B981", category: "formularios" },
+  chat_widget: { label: "Formulários", color: "#10B981", category: "formularios" },
+  
+  // WhatsApp/Comercial (azul)
+  whatsapp: { label: "WhatsApp/Comercial", color: "#3B82F6", category: "comercial" },
+  manual: { label: "WhatsApp/Comercial", color: "#3B82F6", category: "comercial" },
+  comercial: { label: "WhatsApp/Comercial", color: "#3B82F6", category: "comercial" },
+  
+  // Orgânico (roxo)
+  kiwify_direto: { label: "Orgânico", color: "#8B5CF6", category: "organico" },
+  kiwify_organic: { label: "Orgânico", color: "#8B5CF6", category: "organico" },
+  
+  // Afiliados/Parceiros (laranja)
+  afiliado: { label: "Afiliados/Parceiros", color: "#F59E0B", category: "afiliados" },
+  parceiro: { label: "Afiliados/Parceiros", color: "#F59E0B", category: "afiliados" },
+  
+  // Indicação (rosa)
+  indicacao: { label: "Indicação", color: "#EC4899", category: "indicacao" },
+  referral: { label: "Indicação", color: "#EC4899", category: "indicacao" },
+  
+  // Recorrência (ciano)
+  kiwify_recorrencia: { label: "Recorrência", color: "#06B6D4", category: "recorrencia" },
+  
+  // Outros
+  recuperacao: { label: "Recuperação", color: "#EF4444", category: "outros" },
+  legado: { label: "Legado", color: "#9CA3AF", category: "outros" },
 };
 
 export function useLeadsBySource(startDate: Date, endDate: Date) {
@@ -57,6 +74,7 @@ export function useLeadsBySource(startDate: Date, endDate: Date) {
           const config = SOURCE_CONFIG[source.toLowerCase()] || {
             label: source.charAt(0).toUpperCase() + source.slice(1),
             color: "#6B7280",
+            category: "outros",
           };
           return {
             source,
