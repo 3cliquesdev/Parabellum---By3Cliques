@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchProductMappings, getMappedProduct as getMappedProductHelper, categorizeProduct } from "@/lib/kiwifyProductMapping";
 
 // Categoria dinâmica: usa o nome do produto mapeado diretamente
 export type ProductCategory = string;
@@ -57,25 +58,8 @@ export interface SubscriptionMetrics {
   byCategory: Record<ProductCategory, { ativas: number; canceladas: number; faturamento: number }>;
 }
 
-// Categorize product based on name
-function categorizeProduct(productName: string): ProductCategory {
-  const name = productName?.toLowerCase() || '';
-  
-  if (name.includes('uni3cliques') || name.includes('uni 3 cliques') || name.includes('uni3')) {
-    return 'Uni 3 Cliques';
-  }
-  if (name.includes('híbrido') || name.includes('hibrido')) {
-    return 'Híbrido';
-  }
-  if (name.includes('shopee creation') || name.includes('creation') || name.includes('shopee')) {
-    return 'Shopee Creation';
-  }
-  if (name.includes('associado premium') || name.includes('sabr') || name.includes('premium')) {
-    return 'Associado Premium';
-  }
-  
-  return 'Outros';
-}
+// Categorize product based on name - using imported helper
+// Function is now imported from kiwifyProductMapping.ts
 
 // Parse subscription status from Kiwify event
 function parseSubscriptionStatus(eventType: string, subscriptionStatus?: string): 'active' | 'canceled' | 'ended' {
@@ -102,41 +86,8 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
     queryFn: async (): Promise<SubscriptionMetrics> => {
       console.log('[useKiwifySubscriptions] Fetching subscription data...');
       
-      // 1. Buscar mapeamentos de product_offers para usar o nome do PRODUTO INTERNO
-      // Agora busca TAMBÉM kiwify_product_id para fallback
-      const { data: offerMappings } = await supabase
-        .from('product_offers')
-        .select(`
-          offer_id,
-          kiwify_product_id,
-          products:product_id (
-            name
-          )
-        `)
-        .eq('is_active', true);
-
-      // Criar Maps para lookup O(1): 
-      // 1. offer_id → { productName, category }
-      // 2. kiwify_product_id → { productName, category } (fallback)
-      const offerToProduct = new Map<string, { productName: string; category: string }>();
-      const productIdToProduct = new Map<string, { productName: string; category: string }>();
-      
-      for (const mapping of offerMappings || []) {
-        const productName = (mapping.products as any)?.name;
-        if (!productName) continue;
-        
-        const mappingData = { productName, category: productName };
-        
-        // Map by offer_id (primary)
-        if (mapping.offer_id) {
-          offerToProduct.set(mapping.offer_id, mappingData);
-        }
-        
-        // Map by kiwify_product_id (fallback for products without offer_id)
-        if (mapping.kiwify_product_id) {
-          productIdToProduct.set(mapping.kiwify_product_id, mappingData);
-        }
-      }
+      // 1. Buscar mapeamentos usando helper centralizado
+      const { offerMap: offerToProduct, productIdMap: productIdToProduct } = await fetchProductMappings();
       
       console.log(`[useKiwifySubscriptions] Loaded ${offerToProduct.size} offer mappings + ${productIdToProduct.size} product_id mappings`);
       
@@ -217,42 +168,9 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       console.log(`[useKiwifySubscriptions] Unique orders: ${uniqueOrders.length}`);
       
       // Helper function para obter produto MAPEADO { name, category }
-      // Categoria = nome do produto mapeado, garantindo que mudanças reflitam imediatamente
-      // AGORA COM FALLBACK para kiwify_product_id quando offer_id não existe
+      // Usando helper centralizado de src/lib/kiwifyProductMapping.ts
       const getMappedProduct = (payload: any): { name: string; category: string } => {
-        // 1. Tentar por offer_id (prioridade)
-        // Assinaturas: Subscription.plan.id | Produtos avulsos: Product.product_offer_id
-        const offerId = payload?.Subscription?.plan?.id || payload?.Product?.product_offer_id;
-        
-        if (offerId && offerToProduct.has(offerId)) {
-          const mapped = offerToProduct.get(offerId)!;
-          return { 
-            name: mapped.productName, 
-            category: mapped.category
-          };
-        }
-        
-        // 2. NOVO: Tentar por product_id (fallback para produtos sem offer_id)
-        const productId = payload?.Product?.product_id;
-        if (productId && productIdToProduct.has(productId)) {
-          const mapped = productIdToProduct.get(productId)!;
-          return { 
-            name: mapped.productName, 
-            category: mapped.category
-          };
-        }
-        
-        // 3. Fallback final: usar nome do Kiwify e inferir categoria
-        const kiwifyName = payload?.Subscription?.plan?.name 
-          || payload?.Product?.product_offer_name 
-          || payload?.Product?.name 
-          || payload?.product_name 
-          || 'Produto não identificado';
-        
-        return { 
-          name: kiwifyName, 
-          category: categorizeProduct(kiwifyName) // Só usa inferência se NÃO mapeado
-        };
+        return getMappedProductHelper(payload, offerToProduct, productIdToProduct);
       };
 
       // Classificar vendas por tipo: Nova Assinatura, Renovação ou Produto Único
