@@ -12,6 +12,7 @@
 
 import { useKiwifySubscriptions } from "@/hooks/useKiwifySubscriptions";
 import { useDealsCounts } from "@/hooks/useDealsCounts";
+import { useLeadCreationMetrics } from "@/hooks/useLeadCreationMetrics";
 import { DateRange } from "react-day-picker";
 import { Download, FileText, FileCode, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import { SalesRepRankingWidget } from "./subscriptions/SalesRepRankingWidget";
 import { WhoSoldRankingWidget } from "./subscriptions/WhoSoldRankingWidget";
 import { WonDealsByChannelWidget } from "./subscriptions/WonDealsByChannelWidget";
 import { SalesChannelQuantityWidget } from "./subscriptions/SalesChannelQuantityWidget";
+import { ConversionFunnelWidget } from "./subscriptions/ConversionFunnelWidget";
 // Premium widgets (do Dashboard de Vendas)
 import { VisualFunnelChart } from "@/components/widgets/VisualFunnelChart";
 import { StageConversionChart } from "@/components/widgets/StageConversionChart";
@@ -70,10 +72,13 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
   // ⚠️ LÓGICA TRAVADA: Usar useDealsCounts (query simples + cache 60s)
   const { data: dealsCounts, isLoading: dealsLoading } = useDealsCounts(startDate, endDate);
   
+  // Dados de leads para o funil completo
+  const { data: leadMetrics, isLoading: leadsLoading } = useLeadCreationMetrics(startDate, endDate);
+  
   const { exportToPDF, isExporting: isExportingPDF } = useExportPDF();
   const { exportToXML, isExporting: isExportingXML } = useExportXML();
   const { exportToExcel, isExporting: isExportingExcel } = useExportExcel();
-  const isLoading = subscriptionLoading || dealsLoading;
+  const isLoading = subscriptionLoading || dealsLoading || leadsLoading;
   const isExporting = isExportingPDF || isExportingXML || isExportingExcel;
 
   const handleExportPDF = async () => {
@@ -350,6 +355,13 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
         {/* KPI Cards */}
         <CompactMetricsGrid label="Resumo do Funil" metrics={resumoMetrics} columns={4} />
         <CompactMetricsGrid label="Receita e Breakdown" metrics={receitaMetrics} columns={4} />
+
+        {/* 0. Funil de Conversão Completo (210 vendas, 9 reembolsos, novos/recorrentes) */}
+        <ConversionFunnelWidget 
+          leadMetrics={leadMetrics}
+          subscriptionData={subscriptionData}
+          isLoading={isLoading}
+        />
 
         {/* 1. Detalhamento por Canal (com Insight + Quem Ganhou os Deals) */}
         <WonDealsByChannelWidget startDate={startDate} endDate={endDate} />
