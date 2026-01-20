@@ -52,24 +52,31 @@ export function useLeadsBySource(startDate: Date, endDate: Date) {
 
       const { data: deals, error } = await supabase
         .from("deals")
-        .select("lead_source, is_organic_sale")
+        .select("lead_source, is_organic_sale, affiliate_name")
         .gte("created_at", startStr)
         .lte("created_at", endStr);
 
       if (error) throw error;
 
-      // Count by CATEGORY - prioriza is_organic_sale para classificar afiliados
+      // Count by CATEGORY - considera affiliate_name para classificar afiliados corretamente
       const categoryMap = new Map<string, { count: number; label: string; color: string }>();
       let total = 0;
 
       (deals || []).forEach((deal) => {
         const source = (deal.lead_source || "manual").toLowerCase();
         
-        // PRIORIDADE: Se is_organic_sale = false, é afiliado (independente do lead_source)
         let config: { label: string; color: string; category: string };
-        if (deal.is_organic_sale === false) {
+        
+        // PRIORIDADE 1: Fontes comerciais SEMPRE são WhatsApp/Comercial
+        if (["whatsapp", "manual", "comercial", "webchat"].includes(source)) {
+          config = { label: "WhatsApp/Comercial", color: "#3B82F6", category: "comercial" };
+        }
+        // PRIORIDADE 2: Afiliado só se tiver affiliate_name confirmado
+        else if (deal.is_organic_sale === false && deal.affiliate_name) {
           config = { label: "Afiliados/Parceiros", color: "#F59E0B", category: "afiliados" };
-        } else {
+        }
+        // PRIORIDADE 3: Usar mapeamento padrão
+        else {
           config = SOURCE_CONFIG[source] || {
             label: "Outros",
             color: "#6B7280",
