@@ -99,6 +99,27 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
     queryFn: async (): Promise<SubscriptionMetrics> => {
       console.log('[useKiwifySubscriptions] Fetching subscription data...');
       
+      // 1. Buscar mapeamentos de product_offers para usar o nome do PRODUTO INTERNO
+      const { data: offerMappings } = await supabase
+        .from('product_offers')
+        .select(`
+          offer_id,
+          products:product_id (
+            name
+          )
+        `)
+        .eq('is_active', true);
+
+      // Criar Map para lookup O(1): offer_id → nome do produto interno
+      const offerToProductName = new Map<string, string>();
+      for (const mapping of offerMappings || []) {
+        if (mapping.offer_id && (mapping.products as any)?.name) {
+          offerToProductName.set(mapping.offer_id, (mapping.products as any).name);
+        }
+      }
+      
+      console.log(`[useKiwifySubscriptions] Loaded ${offerToProductName.size} offer mappings`);
+      
       // Fetch paid events
       let paidQuery = supabase
         .from('kiwify_events')
@@ -174,6 +195,20 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
 
       const uniqueOrders = Array.from(uniqueOrdersMap.values());
       console.log(`[useKiwifySubscriptions] Unique orders: ${uniqueOrders.length}`);
+      
+      // Helper function para obter o nome do produto MAPEADO
+      const getMappedProductName = (payload: any): string => {
+        // Tentar obter offer_id de diferentes locais no payload
+        const offerId = payload?.Subscription?.plan?.id || payload?.Product?.offer_id;
+        
+        // Se existe mapeamento, usar o nome do produto interno
+        if (offerId && offerToProductName.has(offerId)) {
+          return offerToProductName.get(offerId)!;
+        }
+        
+        // Fallback: usar nome do plano ou produto do Kiwify
+        return payload?.Subscription?.plan?.name || payload?.Product?.name || payload?.product_name || 'Produto não identificado';
+      };
 
       // Classificar vendas por tipo: Nova Assinatura, Renovação ou Produto Único
       const novasAssinaturasOrders = new Set<string>();
@@ -342,9 +377,8 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         if (processedOrderIds.has(uniqueKey)) continue;
         processedOrderIds.add(uniqueKey);
 
-        // Use plan name or product name for identification
-        const planName = payload.Subscription?.plan?.name;
-        const productName = planName || payload.Product?.name || payload.product_name || 'Produto não identificado';
+        // Usar nome do produto MAPEADO (da tabela product_offers)
+        const productName = getMappedProductName(payload);
         const grossValue = (payload.product_base_price || payload.Product?.price || 0) / 100;
         const myCommission = (payload.my_commission || 0) / 100;
         const kiwifyFee = (payload.kiwify_fee || 0) / 100;
