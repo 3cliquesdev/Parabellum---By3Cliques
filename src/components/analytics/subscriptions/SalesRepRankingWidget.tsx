@@ -70,15 +70,15 @@ export function SalesRepRankingWidget({ startDate, endDate }: SalesRepRankingWid
               const percentage = (rep.totalSales / maxSales) * 100;
               return (
                 <div key={rep.repName} className="space-y-1">
-                  <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Medal className={`h-4 w-4 ${getMedalColor(index)}`} />
-                      <span className="font-medium text-sm truncate max-w-[120px]">
+                      <span className="font-medium text-sm whitespace-nowrap">
                         {rep.repName}
                       </span>
                     </div>
                     <span className="font-bold text-sm text-primary">
-                      {formatCurrency(rep.totalSales)}
+                      {rep.dealsCount} vendas
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -88,8 +88,8 @@ export function SalesRepRankingWidget({ startDate, endDate }: SalesRepRankingWid
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
-                    <span className="text-xs text-muted-foreground w-12 text-right">
-                      {rep.dealsCount} deals
+                    <span className="text-xs text-muted-foreground w-16 text-right">
+                      {formatCurrency(rep.totalSales)}
                     </span>
                   </div>
                 </div>

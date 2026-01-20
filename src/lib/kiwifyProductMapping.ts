@@ -110,8 +110,8 @@ export function getMappedProduct(
     return { name: mapped.productName, category: mapped.category };
   }
 
-  // 3. Fallback: usar nome do Kiwify e inferir categoria
-  // CORRIGIDO: priorizar Product.product_name antes de Product.name
+  // 3. Fallback: usar nome do Kiwify COMO categoria (não "Outros")
+  // ⚠️ LÓGICA TRAVADA: Mostrar nome original para produtos não mapeados
   const kiwifyName = 
     payload?.Subscription?.plan?.name ||
     payload?.Product?.product_offer_name ||
@@ -122,7 +122,7 @@ export function getMappedProduct(
 
   return {
     name: kiwifyName,
-    category: categorizeProduct(kiwifyName)
+    category: kiwifyName  // ✅ Usar nome original como categoria, não "Outros"
   };
 }
 

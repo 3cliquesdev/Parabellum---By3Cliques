@@ -62,21 +62,23 @@ export function useDealsCounts(startDate: Date | undefined, endDate: Date | unde
         throw createdError;
       }
 
-      // Query 2: Contar deals GANHOS fechados no período
+      // Query 2: Contar deals GANHOS criados no período (não por closed_at)
+      // ⚠️ LÓGICA TRAVADA: Usar created_at para consistência com totalCreated
       const { count: totalWon } = await supabase
         .from("deals")
         .select("*", { count: "exact", head: true })
         .eq("status", "won")
-        .gte("closed_at", startDateTime)
-        .lte("closed_at", endDateTime);
+        .gte("created_at", startDateTime)
+        .lte("created_at", endDateTime);
 
-      // Query 3: Contar deals PERDIDOS fechados no período
+      // Query 3: Contar deals PERDIDOS criados no período (não por closed_at)
+      // ⚠️ LÓGICA TRAVADA: Usar created_at para consistência com totalCreated
       const { count: totalLost } = await supabase
         .from("deals")
         .select("*", { count: "exact", head: true })
         .eq("status", "lost")
-        .gte("closed_at", startDateTime)
-        .lte("closed_at", endDateTime);
+        .gte("created_at", startDateTime)
+        .lte("created_at", endDateTime);
 
       // Query 4: Contar deals ABERTOS criados no período
       const { count: totalOpen } = await supabase

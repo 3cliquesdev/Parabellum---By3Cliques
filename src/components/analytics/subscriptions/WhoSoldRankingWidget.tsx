@@ -89,7 +89,7 @@ export function WhoSoldRankingWidget({ subscriptionData, isLoading }: WhoSoldRan
       });
     }
 
-    // Ordenar por vendas decrescente (igual ao menu Assinaturas)
+    // Ordenar por QUANTIDADE de vendas (não receita)
     return result.sort((a, b) => b.sales - a.sales);
   }, [subscriptionData?.subscriptions]);
 
@@ -139,7 +139,7 @@ export function WhoSoldRankingWidget({ subscriptionData, isLoading }: WhoSoldRan
   // Calcular totais para mostrar no cabeçalho
   const totalSales = categories.reduce((sum, c) => sum + c.sales, 0);
   const totalRevenue = categories.reduce((sum, c) => sum + c.revenue, 0);
-  const maxRevenue = Math.max(...categories.map((c) => c.revenue));
+  const maxSales = Math.max(...categories.map((c) => c.sales), 1);
 
   const getMedalColor = (index: number) => {
     switch (index) {
@@ -156,7 +156,7 @@ export function WhoSoldRankingWidget({ subscriptionData, isLoading }: WhoSoldRan
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-lg font-semibold">
             <Trophy className="h-5 w-5 text-amber-500" />
-            Quem Vendeu (Ranking por Receita)
+            Quem Vendeu (Ranking por Quantidade)
           </CardTitle>
           <div className="text-sm text-muted-foreground">
             Total: <span className="font-semibold text-foreground">{totalSales}</span> vendas · <span className="font-semibold text-green-600">{formatCurrency(totalRevenue)}</span>
@@ -186,7 +186,7 @@ export function WhoSoldRankingWidget({ subscriptionData, isLoading }: WhoSoldRan
                         className="w-3 h-3 rounded-full shrink-0"
                         style={{ backgroundColor: category.color }}
                       />
-                      <span className="font-medium text-sm">{category.label}</span>
+                      <span className="font-medium text-sm whitespace-nowrap">{category.label}</span>
                     </div>
                   </td>
                   <td className="py-3 text-center">
@@ -207,7 +207,7 @@ export function WhoSoldRankingWidget({ subscriptionData, isLoading }: WhoSoldRan
                   </td>
                   <td className="py-3">
                     <Progress
-                      value={(category.revenue / maxRevenue) * 100}
+                      value={(category.sales / maxSales) * 100}
                       className="h-2"
                       style={
                         {
