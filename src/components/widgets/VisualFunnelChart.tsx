@@ -1,6 +1,10 @@
+/**
+ * ⚠️ LÓGICA TRAVADA - Usar useDealsCounts (query simples, cache 60s)
+ */
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAllSourcesConversionAnalysis } from "@/hooks/useAllSourcesConversionAnalysis";
+import { useDealsCounts } from "@/hooks/useDealsCounts";
 import { DateRange } from "react-day-picker";
 import { TrendingDown } from "lucide-react";
 
@@ -9,7 +13,7 @@ interface VisualFunnelChartProps {
 }
 
 export function VisualFunnelChart({ dateRange }: VisualFunnelChartProps) {
-  const { totals, isLoading } = useAllSourcesConversionAnalysis(dateRange);
+  const { data: totals, isLoading } = useDealsCounts(dateRange?.from, dateRange?.to);
 
   if (isLoading) {
     return (

@@ -1,3 +1,17 @@
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * ⚠️ LÓGICA TRAVADA - VALIDADA EM 20/01/2026 ⚠️
+ * 
+ * Este hook é a FONTE ÚNICA DE VERDADE para métricas do Kiwify.
+ * Usado pelo menu /subscriptions e dashboard /analytics.
+ * 
+ * NÃO ALTERAR esta lógica de contagem sem:
+ * 1. Comparar resultados com o Kiwify
+ * 2. Validar com dados do dia 15/01/2026
+ * 3. Aprovar com o usuário antes de aplicar
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProductMappings, getMappedProduct as getMappedProductHelper, categorizeProduct } from "@/lib/kiwifyProductMapping";

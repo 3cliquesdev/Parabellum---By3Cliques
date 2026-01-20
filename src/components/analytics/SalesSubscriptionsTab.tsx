@@ -1,5 +1,17 @@
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * ⚠️ LÓGICA TRAVADA - VALIDADA EM 20/01/2026 ⚠️
+ * 
+ * Este componente usa fontes de dados VALIDADAS:
+ * - useDealsCounts: Contagem simples de deals (306 em 15/01/2026)
+ * - useKiwifySubscriptions: Vendas Kiwify (já validado no menu /subscriptions)
+ * 
+ * NÃO ALTERAR a lógica de contagem sem aprovação!
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+
 import { useKiwifySubscriptions } from "@/hooks/useKiwifySubscriptions";
-import { useAllSourcesConversionAnalysis } from "@/hooks/useAllSourcesConversionAnalysis";
+import { useDealsCounts } from "@/hooks/useDealsCounts";
 import { DateRange } from "react-day-picker";
 import { Download, FileText, FileCode, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,12 +64,14 @@ function formatCurrency(value: number): string {
 export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptionsTabProps) {
   const { data: subscriptionData, isLoading: subscriptionLoading } = useKiwifySubscriptions(startDate, endDate);
   const dateRange: DateRange = { from: startDate, to: endDate };
-  const { totals: conversionTotals, isLoading: conversionLoading } = useAllSourcesConversionAnalysis(dateRange);
+  
+  // ⚠️ LÓGICA TRAVADA: Usar useDealsCounts (query simples + cache 60s)
+  const { data: dealsCounts, isLoading: dealsLoading } = useDealsCounts(startDate, endDate);
   
   const { exportToPDF, isExporting: isExportingPDF } = useExportPDF();
   const { exportToXML, isExporting: isExportingXML } = useExportXML();
   const { exportToExcel, isExporting: isExportingExcel } = useExportExcel();
-  const isLoading = subscriptionLoading || conversionLoading;
+  const isLoading = subscriptionLoading || dealsLoading;
   const isExporting = isExportingPDF || isExportingXML || isExportingExcel;
 
   const handleExportPDF = async () => {
@@ -74,10 +88,10 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
 
   const handleExportXML = async () => {
     try {
-      const totalCreated = conversionTotals?.totalCreated || 0;
-      const totalWon = conversionTotals?.totalWon || 0;
-      const totalLost = conversionTotals?.totalLost || 0;
-      const totalOpen = conversionTotals?.totalOpen || 0;
+      const totalCreated = dealsCounts?.totalCreated || 0;
+      const totalWon = dealsCounts?.totalWon || 0;
+      const totalLost = dealsCounts?.totalLost || 0;
+      const totalOpen = dealsCounts?.totalOpen || 0;
 
       const totalGross = subscriptionData?.subscriptions?.reduce((sum, s) => sum + (s.grossValue || 0), 0) || 0;
       const totalNet = subscriptionData?.subscriptions?.reduce((sum, s) => sum + (s.netValue || 0), 0) || 0;
@@ -121,10 +135,10 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
 
   const handleExportExcel = async () => {
     try {
-      const totalCreated = conversionTotals?.totalCreated || 0;
-      const totalWon = conversionTotals?.totalWon || 0;
-      const totalLost = conversionTotals?.totalLost || 0;
-      const totalOpen = conversionTotals?.totalOpen || 0;
+      const totalCreated = dealsCounts?.totalCreated || 0;
+      const totalWon = dealsCounts?.totalWon || 0;
+      const totalLost = dealsCounts?.totalLost || 0;
+      const totalOpen = dealsCounts?.totalOpen || 0;
 
       const totalGross = subscriptionData?.subscriptions?.reduce((sum, s) => sum + (s.grossValue || 0), 0) || 0;
       const totalNet = subscriptionData?.subscriptions?.reduce((sum, s) => sum + (s.netValue || 0), 0) || 0;
@@ -178,11 +192,11 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
     }
   };
 
-  // Calculate metrics - using synced data from useAllSourcesConversionAnalysis
-  const totalCreated = conversionTotals?.totalCreated || 0;
-  const totalWon = conversionTotals?.totalWon || 0;
-  const totalLost = conversionTotals?.totalLost || 0;
-  const totalOpen = conversionTotals?.totalOpen || 0;
+  // ⚠️ LÓGICA TRAVADA: Usar dados do useDealsCounts (query simples, cache 60s)
+  const totalCreated = dealsCounts?.totalCreated || 0;
+  const totalWon = dealsCounts?.totalWon || 0;
+  const totalLost = dealsCounts?.totalLost || 0;
+  const totalOpen = dealsCounts?.totalOpen || 0;
 
   // Kiwify metrics from subscription data (uses the correct SubscriptionMetrics interface)
   const kiwifyTotal = subscriptionData?.vendasLiquidas || 0;
