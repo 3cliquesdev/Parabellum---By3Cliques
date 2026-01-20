@@ -78,31 +78,48 @@ const SOURCE_LABELS: Record<string, string> = {
   referral: "Referral",
 };
 
-// Classifica canal considerando flag is_organic_sale (prioridade sobre lead_source)
-function getChannelForDeal(deal: { lead_source?: string | null; is_organic_sale?: boolean | null }): { channel: string; color: string } {
+// Classifica canal considerando lead_source E affiliate_name (não apenas is_organic_sale)
+function getChannelForDeal(deal: { 
+  lead_source?: string | null; 
+  is_organic_sale?: boolean | null;
+  affiliate_name?: string | null;
+}): { channel: string; color: string } {
   const source = deal.lead_source?.toLowerCase().trim();
   
-  // PRIORIDADE 1: Se is_organic_sale = false, é venda de afiliado
-  if (deal.is_organic_sale === false) {
-    return { channel: "Afiliados", color: "#f97316" };
+  // PRIORIDADE 1: Fontes comerciais SEMPRE são Comercial (time de vendas)
+  // Mesmo que is_organic_sale=false, se veio do time comercial, é Comercial
+  if (source && ["whatsapp", "manual", "comercial", "webchat"].includes(source)) {
+    return { channel: "Comercial", color: "#3b82f6" };
   }
   
-  // PRIORIDADE 2: Classificar por lead_source
-  if (!source) return { channel: "Outros", color: "#6b7280" };
-  
-  // Recorrência
+  // PRIORIDADE 2: Recorrência
   if (source === "kiwify_recorrencia" || source === "kiwify_renovacao") {
     return { channel: "Recorrência", color: "#06b6d4" };
   }
   
-  // Orgânico (vendas diretas do produtor, confirmado SEM afiliado)
+  // PRIORIDADE 3: Se is_organic_sale = false E TEM affiliate_name → Afiliados
+  // Só é afiliado se realmente tiver um afiliado identificado
+  if (deal.is_organic_sale === false && deal.affiliate_name) {
+    return { channel: "Afiliados", color: "#f97316" };
+  }
+  
+  // PRIORIDADE 4: Orgânico (vendas diretas do produtor)
   if (source === "kiwify_direto" || source === "kiwify_organic" || source === "kiwify_checkout") {
     return { channel: "Orgânico", color: "#8b5cf6" };
   }
   
-  // Comercial (time de vendas)
-  if (["whatsapp", "manual", "comercial"].includes(source)) {
-    return { channel: "Comercial", color: "#3b82f6" };
+  // PRIORIDADE 5: Formulários
+  if (source === "formulario" || source === "form" || source === "chat_widget") {
+    return { channel: "Formulários", color: "#22c55e" };
+  }
+  
+  // PRIORIDADE 6: Sem source definida
+  if (!source) {
+    // Se é afiliado confirmado (tem nome)
+    if (deal.is_organic_sale === false && deal.affiliate_name) {
+      return { channel: "Afiliados", color: "#f97316" };
+    }
+    return { channel: "Outros", color: "#6b7280" };
   }
   
   // Fallback para mapeamento existente
@@ -129,6 +146,7 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
           lead_source,
           assigned_to,
           is_organic_sale,
+          affiliate_name,
           closed_at,
           profiles:assigned_to (
             id,
