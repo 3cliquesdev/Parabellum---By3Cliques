@@ -33,18 +33,20 @@ async function fetchSourceData(
           .not("lead_source", "is", null);
         
       case "organic_recurring":
-        // Recorrência: orgânico + cliente recorrente (exclui form/whatsapp)
+        // Recorrência: orgânico + cliente recorrente
+        // CORRIGIDO: Usa .or() para incluir NULL explicitamente (evita bug do NOT IN com NULL)
         return query
           .eq("is_organic_sale", true)
           .eq("is_returning_customer", true)
-          .not("lead_source", "in", "(formulario,whatsapp)");
+          .or("lead_source.not.in.(formulario,whatsapp),lead_source.is.null");
         
       case "organic_new":
-        // Orgânico: 1ª compra orgânica (exclui form/whatsapp)
+        // Orgânico: 1ª compra orgânica
+        // CORRIGIDO: Usa .or() para incluir NULL explicitamente (evita bug do NOT IN com NULL)
         return query
           .eq("is_organic_sale", true)
           .eq("is_returning_customer", false)
-          .not("lead_source", "in", "(formulario,whatsapp)");
+          .or("lead_source.not.in.(formulario,whatsapp),lead_source.is.null");
         
       case "commercial":
         // Comercial: WhatsApp + Formulários + Manual/Webchat/Indicacao + NULL comercial
