@@ -12,7 +12,7 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
     queryFn: async () => {
       let query = supabase
         .from("deals")
-        .select("value, assigned_to, is_organic_sale, affiliate_commission, profiles!deals_assigned_to_fkey(full_name)")
+        .select("value, assigned_to, is_organic_sale, affiliate_commission, affiliate_name, lead_source, profiles!deals_assigned_to_fkey(full_name)")
         .eq("status", "won");
 
       // Aplicar filtro de data se fornecido
@@ -49,12 +49,21 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
           repId = deal.assigned_to;
           repName = (deal.profiles as any)?.full_name || "Vendedor";
         } else {
-          // Venda sem vendedor - classificar por tipo
-          const hasAffiliate = (deal.affiliate_commission || 0) > 0 || deal.is_organic_sale === false;
-          if (hasAffiliate) {
+          // Venda sem vendedor - classificar por tipo usando lógica de prioridade unificada
+          const source = (deal as any).lead_source?.toLowerCase().trim();
+          
+          // PRIORIDADE 1: Fontes comerciais → Comercial (Não atribuído)
+          if (source && ["whatsapp", "manual", "comercial", "webchat"].includes(source)) {
+            repId = "commercial_unassigned";
+            repName = "Comercial (Não atribuído)";
+          }
+          // PRIORIDADE 2: Afiliado só se tiver affiliate_name confirmado
+          else if (deal.is_organic_sale === false && (deal as any).affiliate_name) {
             repId = "affiliate_sales";
             repName = "Vendas Afiliados";
-          } else {
+          }
+          // PRIORIDADE 3: Demais vendas sem vendedor são orgânicas
+          else {
             repId = "organic_sales";
             repName = "Vendas Orgânicas";
           }
