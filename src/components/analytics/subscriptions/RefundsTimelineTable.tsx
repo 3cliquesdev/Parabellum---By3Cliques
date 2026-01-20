@@ -1,14 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, RefreshCcw } from "lucide-react";
-import { useRefundsTimeline } from "@/hooks/useRefundsTimeline";
+import { RefreshCcw } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { SubscriptionMetrics } from "@/hooks/useKiwifySubscriptions";
 
 interface RefundsTimelineTableProps {
-  startDate: Date;
-  endDate: Date;
+  subscriptionData?: SubscriptionMetrics;
+  isLoading: boolean;
 }
 
 function formatCurrency(value: number): string {
@@ -20,9 +20,7 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function RefundsTimelineTable({ startDate, endDate }: RefundsTimelineTableProps) {
-  const { data: refunds, isLoading } = useRefundsTimeline(startDate, endDate);
-
+export function RefundsTimelineTable({ subscriptionData, isLoading }: RefundsTimelineTableProps) {
   if (isLoading) {
     return (
       <Card>
@@ -48,7 +46,9 @@ export function RefundsTimelineTable({ startDate, endDate }: RefundsTimelineTabl
     );
   }
 
-  if (!refunds || refunds.length === 0) {
+  const refunds = subscriptionData?.reembolsos || [];
+
+  if (refunds.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -67,9 +67,12 @@ export function RefundsTimelineTable({ startDate, endDate }: RefundsTimelineTabl
   }
 
   // Calculate totals
-  const totalRefunds = refunds.filter((r) => r.type === "refund").length;
-  const totalChargebacks = refunds.filter((r) => r.type === "chargeback").length;
   const totalValue = refunds.reduce((sum, r) => sum + r.value, 0);
+
+  // Ordenar por data de reembolso (mais recente primeiro)
+  const sortedRefunds = [...refunds].sort((a, b) => 
+    new Date(b.refundDate).getTime() - new Date(a.refundDate).getTime()
+  );
 
   return (
     <Card>
@@ -81,10 +84,7 @@ export function RefundsTimelineTable({ startDate, endDate }: RefundsTimelineTabl
           </CardTitle>
           <div className="flex items-center gap-4 text-sm">
             <span className="text-muted-foreground">
-              <span className="font-semibold text-foreground">{totalRefunds}</span> reembolsos
-            </span>
-            <span className="text-muted-foreground">
-              <span className="font-semibold text-foreground">{totalChargebacks}</span> chargebacks
+              <span className="font-semibold text-foreground">{refunds.length}</span> reembolsos
             </span>
             <span className="text-red-600 font-bold">
               {formatCurrency(totalValue)}
@@ -101,16 +101,15 @@ export function RefundsTimelineTable({ startDate, endDate }: RefundsTimelineTabl
                 <th className="text-left py-2 font-medium">Cliente</th>
                 <th className="text-left py-2 font-medium">Produto</th>
                 <th className="text-right py-2 font-medium">Valor</th>
-                <th className="text-left py-2 font-medium">Tipo</th>
-                <th className="text-left py-2 font-medium">Motivo</th>
+                <th className="text-left py-2 font-medium">Categoria</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {refunds.slice(0, 20).map((refund) => (
-                <tr key={refund.id} className="hover:bg-muted/30 transition-colors">
+              {sortedRefunds.slice(0, 20).map((refund, index) => (
+                <tr key={`${refund.orderId}-${index}`} className="hover:bg-muted/30 transition-colors">
                   <td className="py-3">
                     <span className="text-sm font-medium">
-                      {format(parseISO(refund.date), "dd/MM/yyyy", { locale: ptBR })}
+                      {format(parseISO(refund.refundDate), "dd/MM/yyyy", { locale: ptBR })}
                     </span>
                   </td>
                   <td className="py-3">
@@ -134,21 +133,9 @@ export function RefundsTimelineTable({ startDate, endDate }: RefundsTimelineTabl
                     </span>
                   </td>
                   <td className="py-3">
-                    {refund.type === "chargeback" ? (
-                      <Badge variant="destructive" className="text-xs">
-                        <AlertTriangle className="h-3 w-3 mr-1" />
-                        Chargeback
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700">
-                        Reembolso
-                      </Badge>
-                    )}
-                  </td>
-                  <td className="py-3">
-                    <span className="text-sm text-muted-foreground">
-                      {refund.reason || "-"}
-                    </span>
+                    <Badge variant="secondary" className="text-xs">
+                      {refund.productCategory}
+                    </Badge>
                   </td>
                 </tr>
               ))}

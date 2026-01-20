@@ -1,4 +1,4 @@
-import { useKiwifyCompleteMetrics } from "@/hooks/useKiwifyCompleteMetrics";
+import { useKiwifySubscriptions, SubscriptionMetrics } from "@/hooks/useKiwifySubscriptions";
 import { useDealsConversionAnalysis } from "@/hooks/useDealsConversionAnalysis";
 import { useLeadCreationMetrics } from "@/hooks/useLeadCreationMetrics";
 import { DateRange } from "react-day-picker";
@@ -23,8 +23,8 @@ interface SubscriptionsAnalyticsTabProps {
 }
 
 export function SubscriptionsAnalyticsTab({ startDate, endDate }: SubscriptionsAnalyticsTabProps) {
-  // Data hooks
-  const { data: kiwifyMetrics, isLoading: kiwifyLoading } = useKiwifyCompleteMetrics(startDate, endDate);
+  // Data hooks - USANDO A MESMA FONTE DO MENU /subscriptions
+  const { data: subscriptionData, isLoading: subscriptionLoading } = useKiwifySubscriptions(startDate, endDate);
   const dateRange: DateRange = { from: startDate, to: endDate };
   const { data: conversionData, isLoading: conversionLoading } = useDealsConversionAnalysis(dateRange);
   const { data: leadMetrics, isLoading: leadLoading } = useLeadCreationMetrics(startDate, endDate);
@@ -32,7 +32,7 @@ export function SubscriptionsAnalyticsTab({ startDate, endDate }: SubscriptionsA
   // PDF Export
   const { exportToPDF, isExporting } = useExportPDF();
 
-  const isLoading = kiwifyLoading || conversionLoading || leadLoading;
+  const isLoading = subscriptionLoading || conversionLoading || leadLoading;
 
   const handleExportPDF = async () => {
     try {
@@ -74,30 +74,30 @@ export function SubscriptionsAnalyticsTab({ startDate, endDate }: SubscriptionsA
         {/* ROW 1: Conversion Funnel (Full Width) */}
         <ConversionFunnelWidget
           leadMetrics={leadMetrics}
-          kiwifyMetrics={kiwifyMetrics}
+          subscriptionData={subscriptionData}
           isLoading={isLoading}
         />
 
         {/* ROW 2: Leads por Fonte (Pie) + Novas vs Recorrentes */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <LeadsBySourceChart startDate={startDate} endDate={endDate} />
-          <NewVsRecurringChart data={kiwifyMetrics} isLoading={kiwifyLoading} />
+          <NewVsRecurringChart data={subscriptionData} isLoading={subscriptionLoading} />
         </div>
 
         {/* ROW 3: Quem Vendeu - Ranking por Canal (Full Width) */}
-        <WhoSoldRankingWidget startDate={startDate} endDate={endDate} />
+        <WhoSoldRankingWidget subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
 
         {/* ROW 4: Performance por Produto (Full Width) */}
-        <ProductPerformanceTable data={kiwifyMetrics} isLoading={kiwifyLoading} />
+        <ProductPerformanceTable subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
 
         {/* ROW 5: Top Vendedores + Análise de Churn */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <SalesRepRankingWidget />
-          <ChurnAnalysisCard data={kiwifyMetrics} isLoading={kiwifyLoading} />
+          <ChurnAnalysisCard subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
         </div>
 
         {/* ROW 6: Reembolsos por Data (Full Width) */}
-        <RefundsTimelineTable startDate={startDate} endDate={endDate} />
+        <RefundsTimelineTable subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
       </div>
     </div>
   );
