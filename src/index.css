@@ -374,6 +374,17 @@
   }
 }
 
+/* Override: Allow scroll on public pages */
+@media (min-width: 1024px) {
+  html.allow-body-scroll,
+  html.allow-body-scroll body,
+  html.allow-body-scroll #root {
+    height: auto;
+    overflow: visible;
+    min-height: 100vh;
+  }
+}
+
 /* Density classes for medium/notebook screens (1024-1400px) */
 @media (min-width: 1024px) and (max-width: 1400px) {
   .bento-compact {

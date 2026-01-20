@@ -54,6 +54,14 @@ export default function MyTickets() {
   const [activeTab, setActiveTab] = useState("all");
   const { toast } = useToast();
 
+  // Enable body scroll for public pages
+  useEffect(() => {
+    document.documentElement.classList.add('allow-body-scroll');
+    return () => {
+      document.documentElement.classList.remove('allow-body-scroll');
+    };
+  }, []);
+
   // Check for stored identity on mount
   useEffect(() => {
     const stored = localStorage.getItem(IDENTITY_STORAGE_KEY);
