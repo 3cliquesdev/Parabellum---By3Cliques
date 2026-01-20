@@ -101,7 +101,7 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
   // Terceira linha: Classificação por Tipo (alinhado com Kiwify) - COM TOOLTIPS
   const tipoVendaMetrics: MetricCardData[] = [
     {
-      title: 'Novas Assinaturas',
+      title: 'Vendas de Assinatura',
       subtitle: 'Primeira cobrança',
       value: (data.novasAssinaturas ?? 0).toLocaleString('pt-BR'),
       icon: Star,
