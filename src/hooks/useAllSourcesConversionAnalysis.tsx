@@ -14,6 +14,7 @@ export interface SourceAnalysis {
 const sourceConfig: { source: Exclude<DealSource, "all">; label: string }[] = [
   { source: "organic_new", label: "1ª Compra Kiwify Orgânica" },
   { source: "organic_recurring", label: "Recorrente" },
+  { source: "affiliate", label: "Afiliados" },
   { source: "form", label: "Formulários" },
   { source: "whatsapp", label: "WhatsApp" },
 ];
@@ -28,6 +29,9 @@ async function fetchSourceData(
         return query.eq("is_organic_sale", true).eq("is_returning_customer", false);
       case "organic_recurring":
         return query.eq("is_organic_sale", true).eq("is_returning_customer", true);
+      case "affiliate":
+        // Afiliados: não é orgânico E não é fonte comercial
+        return query.eq("is_organic_sale", false).not("lead_source", "in", "(formulario,whatsapp,webchat,manual,comercial)");
       case "form":
         return query.eq("lead_source", "formulario");
       case "whatsapp":
@@ -37,7 +41,8 @@ async function fetchSourceData(
     }
   };
 
-  const applyDateFilter = (query: any) => {
+  // Filtro para Criados e Em Aberto (usa created_at)
+  const applyCreatedDateFilter = (query: any) => {
     if (dateRange?.from && dateRange?.to) {
       const { startDateTime, endDateTime } = getDateTimeBoundaries(dateRange.from, dateRange.to);
       query = query.gte("created_at", startDateTime).lte("created_at", endDateTime);
@@ -51,13 +56,28 @@ async function fetchSourceData(
     return query;
   };
 
-  // Fetch counts in parallel
+  // Filtro para Ganhos e Perdidos (usa closed_at)
+  const applyClosedDateFilter = (query: any) => {
+    if (dateRange?.from && dateRange?.to) {
+      const { startDateTime, endDateTime } = getDateTimeBoundaries(dateRange.from, dateRange.to);
+      query = query.gte("closed_at", startDateTime).lte("closed_at", endDateTime);
+    } else if (dateRange?.from) {
+      const startDateTime = `${formatLocalDate(dateRange.from)}T00:00:00`;
+      query = query.gte("closed_at", startDateTime);
+    } else if (dateRange?.to) {
+      const endDateTime = `${formatLocalDate(dateRange.to)}T23:59:59`;
+      query = query.lte("closed_at", endDateTime);
+    }
+    return query;
+  };
+
+  // Fetch counts in parallel - CORRIGIDO: created_at para Criados/Open, closed_at para Won/Lost
   const [createdResult, wonResult, lostResult, openResult, wonDealsResult] = await Promise.all([
-    applyDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }))),
-    applyDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "won"))),
-    applyDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "lost"))),
-    applyDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "open"))),
-    applyDateFilter(applySourceFilter(supabase.from("deals").select("created_at, closed_at").eq("status", "won").not("closed_at", "is", null))),
+    applyCreatedDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }))),
+    applyClosedDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "won"))),
+    applyClosedDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "lost"))),
+    applyCreatedDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "open"))),
+    applyClosedDateFilter(applySourceFilter(supabase.from("deals").select("created_at, closed_at").eq("status", "won").not("closed_at", "is", null))),
   ]);
 
   const totalCreated = createdResult.count || 0;

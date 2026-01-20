@@ -13,28 +13,111 @@ import {
   ShoppingCart,
   RefreshCw,
   FileText,
-  MessageCircle
+  MessageCircle,
+  Users,
+  ArrowDown
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { useDealsConversionAnalysis, DealSource } from "@/hooks/useDealsConversionAnalysis";
 import { useAllSourcesConversionAnalysis, SourceAnalysis } from "@/hooks/useAllSourcesConversionAnalysis";
+import { cn } from "@/lib/utils";
 
 interface ConversionFunnelCardProps {
   dateRange?: DateRange;
 }
 
 const sourceIcons: Record<string, React.ReactNode> = {
-  organic_new: <ShoppingCart className="w-4 h-4 text-blue-500" />,
-  organic_recurring: <RefreshCw className="w-4 h-4 text-purple-500" />,
-  form: <FileText className="w-4 h-4 text-orange-500" />,
-  whatsapp: <MessageCircle className="w-4 h-4 text-green-500" />,
+  organic_new: <ShoppingCart className="w-4 h-4" />,
+  organic_recurring: <RefreshCw className="w-4 h-4" />,
+  affiliate: <Users className="w-4 h-4" />,
+  form: <FileText className="w-4 h-4" />,
+  whatsapp: <MessageCircle className="w-4 h-4" />,
 };
 
-function SourceBreakdownRow({ source, label, data, isLoading }: SourceAnalysis) {
+const sourceColors: Record<string, { bg: string; text: string; border: string; icon: string }> = {
+  organic_new: { bg: "bg-blue-100 dark:bg-blue-950/40", text: "text-blue-700 dark:text-blue-300", border: "border-blue-200 dark:border-blue-800", icon: "text-blue-500" },
+  organic_recurring: { bg: "bg-purple-100 dark:bg-purple-950/40", text: "text-purple-700 dark:text-purple-300", border: "border-purple-200 dark:border-purple-800", icon: "text-purple-500" },
+  affiliate: { bg: "bg-orange-100 dark:bg-orange-950/40", text: "text-orange-700 dark:text-orange-300", border: "border-orange-200 dark:border-orange-800", icon: "text-orange-500" },
+  form: { bg: "bg-amber-100 dark:bg-amber-950/40", text: "text-amber-700 dark:text-amber-300", border: "border-amber-200 dark:border-amber-800", icon: "text-amber-500" },
+  whatsapp: { bg: "bg-green-100 dark:bg-green-950/40", text: "text-green-700 dark:text-green-300", border: "border-green-200 dark:border-green-800", icon: "text-green-500" },
+};
+
+// Premium Funnel Bar Component
+function FunnelBar({ 
+  label, 
+  value, 
+  percentage, 
+  widthPercent, 
+  color,
+  icon: Icon 
+}: { 
+  label: string; 
+  value: number; 
+  percentage: number; 
+  widthPercent: number;
+  color: "blue" | "emerald" | "red" | "amber";
+  icon: React.ElementType;
+}) {
+  const colorMap = {
+    blue: {
+      bar: "from-blue-500 to-blue-600",
+      text: "text-blue-600 dark:text-blue-400",
+      bg: "bg-blue-100 dark:bg-blue-950/30",
+    },
+    emerald: {
+      bar: "from-emerald-500 to-emerald-600",
+      text: "text-emerald-600 dark:text-emerald-400",
+      bg: "bg-emerald-100 dark:bg-emerald-950/30",
+    },
+    red: {
+      bar: "from-red-400 to-red-500",
+      text: "text-red-600 dark:text-red-400",
+      bg: "bg-red-100 dark:bg-red-950/30",
+    },
+    amber: {
+      bar: "from-amber-400 to-amber-500",
+      text: "text-amber-600 dark:text-amber-400",
+      bg: "bg-amber-100 dark:bg-amber-950/30",
+    },
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className={cn("flex items-center justify-center w-8 h-8 rounded-lg", colorMap[color].bg)}>
+        <Icon className={cn("w-4 h-4", colorMap[color].text)} />
+      </div>
+      <div className="flex-1">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-sm font-medium text-foreground">{label}</span>
+          <div className="flex items-center gap-2">
+            <span className={cn("text-lg font-bold", colorMap[color].text)}>{value}</span>
+            {percentage > 0 && (
+              <span className="text-xs text-muted-foreground">({percentage.toFixed(1)}%)</span>
+            )}
+          </div>
+        </div>
+        <div className="h-3 bg-muted/50 rounded-full overflow-hidden">
+          <div 
+            className={cn(
+              "h-full rounded-full bg-gradient-to-r transition-all duration-500",
+              colorMap[color].bar
+            )}
+            style={{ width: `${Math.max(widthPercent, 2)}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Source Card for breakdown
+function SourceCard({ source, label, data, isLoading }: SourceAnalysis) {
+  const colors = sourceColors[source] || sourceColors.organic_new;
+  
   if (isLoading || !data) {
     return (
-      <div className="p-3 rounded-lg bg-accent/30 border border-border/50 animate-pulse">
-        <Skeleton className="h-6 w-full" />
+      <div className={cn("p-3 rounded-xl border animate-pulse", colors.bg, colors.border)}>
+        <Skeleton className="h-16 w-full" />
       </div>
     );
   }
@@ -42,32 +125,25 @@ function SourceBreakdownRow({ source, label, data, isLoading }: SourceAnalysis) 
   const wonRate = data.totalCreated > 0 ? (data.totalWon / data.totalCreated) * 100 : 0;
 
   return (
-    <div className="p-3 rounded-lg bg-accent/30 border border-border/50 hover:bg-accent/50 transition-colors">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {sourceIcons[source]}
-          <span className="font-medium text-foreground">{label}</span>
+    <div className={cn(
+      "p-3 rounded-xl border transition-all hover:shadow-md cursor-default",
+      colors.bg, colors.border
+    )}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className={colors.icon}>{sourceIcons[source]}</span>
+        <span className="text-xs font-medium text-muted-foreground truncate">{label}</span>
+      </div>
+      <div className="flex items-baseline justify-between">
+        <div className="flex items-baseline gap-1">
+          <span className={cn("text-xl font-bold", colors.text)}>{data.totalWon}</span>
+          <span className="text-xs text-muted-foreground">won</span>
         </div>
-        <div className="flex items-center gap-3 sm:gap-5 text-sm flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
-            <span className="font-semibold text-foreground">{data.totalCreated}</span>
-            <span className="text-muted-foreground text-xs">criados</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{data.totalWon}</span>
-            <span className="text-emerald-600 dark:text-emerald-400 text-xs">({wonRate.toFixed(1)}%)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <XCircle className="w-3.5 h-3.5 text-red-500" />
-            <span className="font-semibold text-red-600 dark:text-red-400">{data.totalLost}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Hourglass className="w-3.5 h-3.5 text-amber-500" />
-            <span className="font-semibold text-amber-600 dark:text-amber-400">{data.totalOpen}</span>
-          </div>
-        </div>
+        <span className={cn("text-sm font-semibold", colors.text)}>{wonRate.toFixed(0)}%</span>
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+        <span>{data.totalCreated} criados</span>
+        <span>•</span>
+        <span>{data.totalOpen} aberto</span>
       </div>
     </div>
   );
@@ -87,12 +163,7 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
         <Skeleton className="h-6 w-48 mb-4" />
         <div className="space-y-4">
           <Skeleton className="h-10 w-full" />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Skeleton className="h-28 w-full rounded-xl" />
-            <Skeleton className="h-28 w-full rounded-xl" />
-            <Skeleton className="h-28 w-full rounded-xl" />
-            <Skeleton className="h-28 w-full rounded-xl" />
-          </div>
+          <Skeleton className="h-32 w-full rounded-xl" />
         </div>
       </Card>
     );
@@ -126,125 +197,94 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
 
       {/* Source Filter Tabs */}
       <Tabs value={source} onValueChange={(v) => setSource(v as DealSource)} className="mb-5">
-        <TabsList className="grid w-full grid-cols-5 h-9">
-          <TabsTrigger value="all" className="text-xs px-2">Todos</TabsTrigger>
-          <TabsTrigger value="organic_new" className="text-xs px-2" title="1ª Compra Kiwify Orgânica">1ª Orgânica</TabsTrigger>
-          <TabsTrigger value="organic_recurring" className="text-xs px-2">Recorrente</TabsTrigger>
-          <TabsTrigger value="form" className="text-xs px-2">Formulários</TabsTrigger>
-          <TabsTrigger value="whatsapp" className="text-xs px-2">WhatsApp</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-6 h-9">
+          <TabsTrigger value="all" className="text-xs px-1">Todos</TabsTrigger>
+          <TabsTrigger value="organic_new" className="text-xs px-1" title="1ª Compra Kiwify Orgânica">1ª Orgânica</TabsTrigger>
+          <TabsTrigger value="organic_recurring" className="text-xs px-1">Recorrente</TabsTrigger>
+          <TabsTrigger value="affiliate" className="text-xs px-1">Afiliados</TabsTrigger>
+          <TabsTrigger value="form" className="text-xs px-1">Formulários</TabsTrigger>
+          <TabsTrigger value="whatsapp" className="text-xs px-1">WhatsApp</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {/* Breakdown View for "Todos" */}
-      {showBreakdown ? (
-        <div className="space-y-3">
-          {allSourcesData.sources.map((sourceData) => (
-            <SourceBreakdownRow key={sourceData.source} {...sourceData} />
-          ))}
-          
-          {/* Summary Footer */}
-          <div className="mt-4 pt-4 border-t border-border">
-            <div className="flex items-center gap-2 mb-3">
-              <Target className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-muted-foreground">Resumo Geral</span>
+      {/* Premium Visual Funnel */}
+      <div className="space-y-3 mb-5">
+        <FunnelBar 
+          label="Criados" 
+          value={totalCreated} 
+          percentage={100}
+          widthPercent={100}
+          color="blue"
+          icon={TrendingUp}
+        />
+        <div className="flex justify-center">
+          <ArrowDown className="w-4 h-4 text-muted-foreground/50" />
+        </div>
+        <FunnelBar 
+          label="Ganhos" 
+          value={totalWon} 
+          percentage={createdToWonRate}
+          widthPercent={totalCreated > 0 ? (totalWon / totalCreated) * 100 : 0}
+          color="emerald"
+          icon={CheckCircle2}
+        />
+        <div className="flex justify-center">
+          <ArrowDown className="w-4 h-4 text-muted-foreground/50" />
+        </div>
+        <FunnelBar 
+          label="Perdidos" 
+          value={totalLost} 
+          percentage={createdToLostRate}
+          widthPercent={totalCreated > 0 ? (totalLost / totalCreated) * 100 : 0}
+          color="red"
+          icon={XCircle}
+        />
+        <div className="flex justify-center">
+          <ArrowDown className="w-4 h-4 text-muted-foreground/50" />
+        </div>
+        <FunnelBar 
+          label="Em Aberto" 
+          value={totalOpen} 
+          percentage={openRate}
+          widthPercent={totalCreated > 0 ? (totalOpen / totalCreated) * 100 : 0}
+          color="amber"
+          icon={Hourglass}
+        />
+      </div>
+
+      {/* Breakdown by Source (only shown when "Todos" is selected) */}
+      {showBreakdown && (
+        <div className="pt-4 border-t border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <Target className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-muted-foreground">Breakdown por Canal</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {allSourcesData.sources.map((sourceData) => (
+              <SourceCard key={sourceData.source} {...sourceData} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Time to Win Stats (only shown when specific source selected) */}
+      {!showBreakdown && (
+        <div className="pt-4 border-t border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground">Tempo para Ganhar</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="text-center p-3 rounded-xl bg-accent/50 border border-border/50">
+              <div className="text-2xl font-bold text-foreground">{avgTimeToWinDays}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">dias (média)</div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200/50 dark:border-blue-800/50">
-                <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{totalCreated}</div>
-                <div className="text-xs text-muted-foreground">criados</div>
-              </div>
-              <div className="text-center p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/50">
-                <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{totalWon}</div>
-                <div className="text-xs text-muted-foreground">{createdToWonRate.toFixed(1)}% ganhos</div>
-              </div>
-              <div className="text-center p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200/50 dark:border-red-800/50">
-                <div className="text-xl font-bold text-red-600 dark:text-red-400">{totalLost}</div>
-                <div className="text-xs text-muted-foreground">{createdToLostRate.toFixed(1)}% perdidos</div>
-              </div>
-              <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200/50 dark:border-amber-800/50">
-                <div className="text-xl font-bold text-amber-600 dark:text-amber-400">{totalOpen}</div>
-                <div className="text-xs text-muted-foreground">{openRate.toFixed(1)}% em aberto</div>
-              </div>
+            <div className="text-center p-3 rounded-xl bg-accent/50 border border-border/50">
+              <div className="text-2xl font-bold text-foreground">{medianTimeToWinDays}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">dias (mediana)</div>
             </div>
           </div>
         </div>
-      ) : (
-        <>
-          {/* Premium Grid Layout - Single source view */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {/* Card Criados */}
-            <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200/50 dark:border-blue-800/50 transition-all hover:shadow-md">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-4 h-4 text-blue-500" />
-                <span className="text-sm font-medium text-muted-foreground">Criados</span>
-              </div>
-              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{totalCreated}</div>
-            </div>
-
-            {/* Card Ganhos */}
-            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/50 transition-all hover:shadow-md">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                <span className="text-sm font-medium text-muted-foreground">Ganhos</span>
-              </div>
-              <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{totalWon}</div>
-              <div className="flex items-center gap-2 mt-2">
-                <Progress value={createdToWonRate} className="h-1.5 flex-1 [&>div]:bg-emerald-500" />
-                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 min-w-[40px] text-right">
-                  {createdToWonRate.toFixed(1)}%
-                </span>
-              </div>
-            </div>
-
-            {/* Card Perdidos */}
-            <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200/50 dark:border-red-800/50 transition-all hover:shadow-md">
-              <div className="flex items-center gap-2 mb-2">
-                <XCircle className="w-4 h-4 text-red-500" />
-                <span className="text-sm font-medium text-muted-foreground">Perdidos</span>
-              </div>
-              <div className="text-3xl font-bold text-red-600 dark:text-red-400">{totalLost}</div>
-              <div className="flex items-center gap-2 mt-2">
-                <Progress value={createdToLostRate} className="h-1.5 flex-1 [&>div]:bg-red-500" />
-                <span className="text-xs font-semibold text-red-600 dark:text-red-400 min-w-[40px] text-right">
-                  {createdToLostRate.toFixed(1)}%
-                </span>
-              </div>
-            </div>
-
-            {/* Card Em Aberto */}
-            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/50 dark:border-amber-800/50 transition-all hover:shadow-md">
-              <div className="flex items-center gap-2 mb-2">
-                <Hourglass className="w-4 h-4 text-amber-500" />
-                <span className="text-sm font-medium text-muted-foreground">Em Aberto</span>
-              </div>
-              <div className="text-3xl font-bold text-amber-600 dark:text-amber-400">{totalOpen}</div>
-              <div className="flex items-center gap-2 mt-2">
-                <Progress value={openRate} className="h-1.5 flex-1 [&>div]:bg-amber-500" />
-                <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 min-w-[40px] text-right">
-                  {openRate.toFixed(1)}%
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Time to Win Stats */}
-          <div className="mt-5 pt-4 border-t border-border">
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">Tempo para Ganhar</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="text-center p-3 rounded-xl bg-accent/50 border border-border/50">
-                <div className="text-2xl font-bold text-foreground">{avgTimeToWinDays}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">dias (média)</div>
-              </div>
-              <div className="text-center p-3 rounded-xl bg-accent/50 border border-border/50">
-                <div className="text-2xl font-bold text-foreground">{medianTimeToWinDays}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">dias (mediana)</div>
-              </div>
-            </div>
-          </div>
-        </>
       )}
     </Card>
   );
