@@ -199,15 +199,22 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       // Helper function para obter o nome do produto MAPEADO
       const getMappedProductName = (payload: any): string => {
         // Tentar obter offer_id de diferentes locais no payload
-        const offerId = payload?.Subscription?.plan?.id || payload?.Product?.offer_id;
+        // 1. Assinaturas: Subscription.plan.id
+        // 2. Produtos avulsos: Product.product_offer_id
+        const offerId = payload?.Subscription?.plan?.id || payload?.Product?.product_offer_id;
         
         // Se existe mapeamento, usar o nome do produto interno
         if (offerId && offerToProductName.has(offerId)) {
           return offerToProductName.get(offerId)!;
         }
         
-        // Fallback: usar nome do plano ou produto do Kiwify
-        return payload?.Subscription?.plan?.name || payload?.Product?.name || payload?.product_name || 'Produto não identificado';
+        // Fallback melhorado: usar nome da oferta/plano do Kiwify
+        // Ordem: plan.name → product_offer_name → Product.name → product_name → fallback
+        return payload?.Subscription?.plan?.name 
+          || payload?.Product?.product_offer_name 
+          || payload?.Product?.name 
+          || payload?.product_name 
+          || 'Produto não identificado';
       };
 
       // Classificar vendas por tipo: Nova Assinatura, Renovação ou Produto Único
