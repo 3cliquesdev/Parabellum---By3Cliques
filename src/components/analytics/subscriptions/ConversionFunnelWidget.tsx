@@ -37,8 +37,13 @@ export function ConversionFunnelWidget({ leadMetrics, subscriptionData, isLoadin
   const totalSales = subscriptionData?.vendasBrutas || 0; // Vendas BRUTAS
   const activeSubscriptions = subscriptionData?.totalAssinaturas || 0; // Clientes únicos
   
-  // Contar produtos únicos a partir das assinaturas
+  // Clientes novos e recorrentes
+  const newCustomers = subscriptionData?.clientesNovos || 0;
+  const recurringCustomers = subscriptionData?.clientesRecorrentes || 0;
+  
+  // Contar produtos únicos e ofertas únicas
   const uniqueProducts = new Set(subscriptionData?.subscriptions?.map(s => s.productName) || []).size;
+  const uniqueOffers = new Set(subscriptionData?.subscriptions?.map(s => s.offerName).filter(Boolean) || []).size;
   
   // Reembolsos do período
   const totalRefunds = subscriptionData?.reembolsos?.length || 0;
@@ -74,6 +79,7 @@ export function ConversionFunnelWidget({ leadMetrics, subscriptionData, isLoadin
       color: "bg-purple-500",
       textColor: "text-purple-600",
       bgLight: "bg-purple-50",
+      subtext: `${newCustomers} novos | ${recurringCustomers} recorrentes`,
     },
     {
       label: "Produtos",
@@ -82,6 +88,7 @@ export function ConversionFunnelWidget({ leadMetrics, subscriptionData, isLoadin
       color: "bg-amber-500",
       textColor: "text-amber-600",
       bgLight: "bg-amber-50",
+      subtext: `${uniqueOffers} ofertas`,
     },
     {
       label: "Reembolsos",
@@ -119,6 +126,11 @@ export function ConversionFunnelWidget({ leadMetrics, subscriptionData, isLoadin
                 {stage.conversionRate && (
                   <div className="text-xs text-green-600 font-medium mt-1">
                     {stage.conversionRate}% conv.
+                  </div>
+                )}
+                {stage.subtext && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {stage.subtext}
                   </div>
                 )}
                 {stage.churnRate && (
