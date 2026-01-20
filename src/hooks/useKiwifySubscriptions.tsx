@@ -379,10 +379,17 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
 
         // Usar nome do produto MAPEADO (da tabela product_offers)
         const productName = getMappedProductName(payload);
-        const grossValue = (payload.product_base_price || payload.Product?.price || 0) / 100;
-        const myCommission = (payload.my_commission || 0) / 100;
-        const kiwifyFee = (payload.kiwify_fee || 0) / 100;
-        const affiliateCommission = (payload.affiliate_commission || 0) / 100;
+        
+        // Extrair valores financeiros do objeto Commissions (estrutura real do Kiwify)
+        const commissions = payload.Commissions || {};
+        const grossValue = (commissions.product_base_price || payload.product_base_price || payload.Product?.price || 0) / 100;
+        const myCommission = (commissions.my_commission || payload.my_commission || 0) / 100;
+        const kiwifyFee = (commissions.kiwify_fee || payload.kiwify_fee || 0) / 100;
+        
+        // Calcular comissão de afiliados (soma dos valores de tipo 'affiliate' no commissioned_stores)
+        const affiliateCommission = (commissions.commissioned_stores || [])
+          .filter((store: any) => store.type === 'affiliate')
+          .reduce((sum: number, store: any) => sum + (store.value || 0), 0) / 100;
         
         // Determine status
         let status: 'active' | 'canceled' | 'ended' = 'active';
