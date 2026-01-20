@@ -43,9 +43,9 @@ export function UnifiedOverviewTab({ startDate, endDate }: UnifiedOverviewTabPro
   const { data: kiwifyMetrics, isLoading: kiwifyLoading } = useKiwifyCompleteMetrics(startDate, endDate);
   const { data: leadMetrics, isLoading: leadLoading } = useLeadCreationMetrics(startDate, endDate);
   const { data: supportMetrics, isLoading: supportLoading } = useSupportMetrics(startDate, endDate);
-  const { weightedValue } = usePipelineValue();
+  const { weightedValue, isLoading: pipelineLoading } = usePipelineValue(startDate, endDate);
 
-  const isLoading = kiwifyLoading || leadLoading || supportLoading;
+  const isLoading = kiwifyLoading || leadLoading || supportLoading || pipelineLoading;
 
   if (isLoading) {
     return (

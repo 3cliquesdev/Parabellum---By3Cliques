@@ -1,7 +1,16 @@
-import { useDeals } from "./useDeals";
+import { useDeals, DealFilters } from "./useDeals";
 
-export function usePipelineValue() {
-  const { data: deals, isLoading } = useDeals();
+export function usePipelineValue(startDate?: Date, endDate?: Date) {
+  // Constrói filtros de data se fornecidos
+  const filters: DealFilters | undefined = startDate && endDate 
+    ? {
+        createdDateRange: { from: startDate, to: endDate },
+        leadSource: [],
+        search: '',
+      } 
+    : undefined;
+
+  const { data: deals, isLoading } = useDeals(undefined, filters);
 
   if (isLoading || !deals) {
     return {
