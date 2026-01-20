@@ -1,16 +1,19 @@
 import { useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useKiwifySubscriptions, SubscriptionStatus } from "@/hooks/useKiwifySubscriptions";
 import { SubscriptionMetricsCards } from "@/components/subscriptions/SubscriptionMetricsCards";
 import { SubscriptionTable } from "@/components/subscriptions/SubscriptionTable";
 import { RefundsTable } from "@/components/subscriptions/RefundsTable";
-import { Download, Search, Filter, RefreshCw } from "lucide-react";
+import { useUnmappedOffers } from "@/hooks/useUnmappedOffers";
+import { Download, Search, Filter, RefreshCw, AlertTriangle } from "lucide-react";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DateRangePicker } from "@/components/DateRangePicker";
@@ -32,6 +35,9 @@ export default function Subscriptions() {
     dateRange?.from,
     dateRange?.to
   );
+
+  // Verificar ofertas não mapeadas
+  const { data: unmappedOffers } = useUnmappedOffers();
 
   // Force complete refresh - invalidates cache first, then refetches
   const handleRefresh = async () => {
@@ -133,6 +139,25 @@ export default function Subscriptions() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {/* Alerta de Ofertas Não Mapeadas */}
+      {unmappedOffers && unmappedOffers.length > 0 && (
+        <Alert className="border-warning bg-warning/10">
+          <AlertTriangle className="h-4 w-4 text-warning" />
+          <AlertDescription className="flex items-center justify-between flex-wrap gap-2">
+            <span>
+              <strong>{unmappedOffers.length} ofertas</strong> da Kiwify não estão mapeadas
+              ({unmappedOffers.reduce((sum, o) => sum + (o.event_count || 0), 0)} vendas aparecendo como "Outros")
+            </span>
+            <Link 
+              to="/products?tab=diagnostic" 
+              className="text-primary underline font-medium hover:text-primary/80"
+            >
+              Mapear agora →
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

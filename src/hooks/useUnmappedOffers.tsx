@@ -4,8 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 export interface UnmappedOffer {
   plan_id: string;
   plan_name: string;
-  kiwify_product_id: string;
-  kiwify_product_name: string;
+  kiwify_product_id?: string;
+  kiwify_product_name?: string;
   detected_source_type: 'afiliado' | 'organico';
   event_count: number;
   total_revenue: number;

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,9 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function Products() {
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'products';
+  
   const { hasPermission, loading: permLoading } = useRolePermissions();
   const { data: products, isLoading } = useProducts();
   const deleteProduct = useDeleteProduct();
@@ -157,7 +161,7 @@ export default function Products() {
         </Button>
       </div>
 
-      <Tabs defaultValue="products" className="space-y-6">
+      <Tabs defaultValue={initialTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="products" className="gap-2">
             <Package className="h-4 w-4" />
