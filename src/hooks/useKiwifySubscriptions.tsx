@@ -315,14 +315,18 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
               const originalEvent = uniqueOrdersMap.get(refundOrderId);
               const originalPayload = originalEvent?.payload as any;
               
+              // Extrair valor do objeto Commissions (estrutura real do Kiwify)
+              const refundCommissions = payload?.Commissions || {};
+              const refundValue = (refundCommissions.product_base_price || payload?.product_base_price || payload?.Product?.price || 0) / 100;
+              
               refunds.push({
                 orderId: refundOrderId,
                 customerEmail: payload?.Customer?.email || payload?.customer_email || '',
                 customerName: payload?.Customer?.full_name || payload?.customer_name || 'Cliente',
-                productName: payload?.Product?.name || payload?.product_name || 'Produto',
+                productName: getMappedProductName(payload),
                 refundDate: refund.created_at,
                 originalDate: originalPayload?.approved_date || originalEvent?.created_at || '',
-                value: (payload?.product_base_price || 0) / 100,
+                value: refundValue,
               });
             }
           }
