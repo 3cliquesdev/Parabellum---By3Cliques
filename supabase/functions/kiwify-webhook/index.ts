@@ -790,15 +790,20 @@ async function handlePaidOrder(
         });
       }
     } else {
-      // CENÁRIO B: Deal SEM vendedor → fechar como venda orgânica automaticamente
-      console.log('[kiwify-webhook] 🌿 Deal sem vendedor, fechando como venda orgânica');
+      // CENÁRIO B: Deal SEM vendedor → fechar automaticamente
+      // Determinar se é venda orgânica ou de afiliado baseado na comissão
+      const affiliateCommissionValue = (Commissions.commissioned_stores?.find(s => s.type === 'affiliate')?.value || 0) / 100;
+      const hasAffiliate = affiliateCommissionValue > 0;
+      const saleType = hasAffiliate ? 'Afiliado' : 'Orgânica';
+      
+      console.log(`[kiwify-webhook] 🌿 Deal sem vendedor, fechando como venda ${saleType.toLowerCase()}`);
       
       await supabase
         .from('deals')
         .update({
           status: 'won',
-          is_organic_sale: true,
-          value: kiwifyValue, // Atualizar valor com valor real da Kiwify
+          is_organic_sale: !hasAffiliate, // false se tem afiliado
+          value: kiwifyValue,
           closed_at: new Date().toISOString(),
           pending_payment_at: null,
           pending_kiwify_event_id: null,
@@ -824,17 +829,18 @@ async function handlePaidOrder(
           customer_id: matchingDeal.contact_id,
           type: 'note',
           channel: 'other',
-          content: `✅ Venda orgânica! ${valueFormatted} por ${Product.product_name} - Deal fechado automaticamente (sem vendedor atribuído)`,
+          content: `Venda ${saleType}! ${valueFormatted} por ${Product.product_name} - Deal fechado automaticamente`,
           metadata: {
             deal_id: matchingDeal.id,
             order_id,
-            organic: true,
+            organic: !hasAffiliate,
+            affiliate: hasAffiliate,
             value: kiwifyValue
           }
         });
       }
 
-      console.log('[kiwify-webhook] ✅ Deal orgânico fechado:', matchingDeal.id, 'Valor:', valueFormatted);
+      console.log(`[kiwify-webhook] ✅ Deal ${saleType.toLowerCase()} fechado:`, matchingDeal.id, 'Valor:', valueFormatted);
 
       // IMPORTANTE: Retornar aqui para não criar deal/contato duplicado
       return new Response(JSON.stringify({
@@ -1058,11 +1064,15 @@ async function handlePaidOrder(
       .single();
 
     if (lastStage) {
+      // Determinar se é venda orgânica ou de afiliado baseado na comissão
+      const hasAffiliate = affiliateCommission > 0;
+      const saleType = hasAffiliate ? 'Venda Afiliado' : 'Venda Orgânica';
+      
       // Criar deal e marcar como ganho imediatamente
       const { data: organicDeal, error: dealError } = await supabase
         .from('deals')
         .insert({
-          title: `Venda Orgânica - ${Product.product_name}`,
+          title: `${saleType} - ${Product.product_name}`,
           contact_id: contact.id,
           pipeline_id: defaultPipeline.id,
           stage_id: lastStage.id,
@@ -1074,7 +1084,7 @@ async function handlePaidOrder(
           affiliate_commission: affiliateCommission,
           affiliate_name: affiliateName,
           affiliate_email: affiliateEmail,
-          is_organic_sale: true,
+          is_organic_sale: !hasAffiliate, // false se tem afiliado
           is_returning_customer: false,
           lead_source: 'kiwify_direto',
           closed_at: new Date().toISOString(),
@@ -1430,11 +1440,15 @@ async function handleUpsellOrder(
       .single();
 
     if (recurrenceStage) {
+      // Determinar se é venda orgânica ou de afiliado
+      const hasUpsellAffiliate = upsellAffiliateCommission > 0;
+      const upsellSaleType = hasUpsellAffiliate ? 'Afiliado' : 'Orgânica';
+      
       // Criar deal e marcar como ganho imediatamente no Pipeline de Recorrência
       const { data: upsellDeal, error: dealError } = await supabase
         .from('deals')
         .insert({
-          title: `Recorrência - ${Product.product_name}`,
+          title: `Recorrência ${upsellSaleType} - ${Product.product_name}`,
           contact_id: existingContact.id,
           pipeline_id: recurrencePipeline.id,
           stage_id: recurrenceStage.id,
@@ -1446,7 +1460,7 @@ async function handleUpsellOrder(
           affiliate_commission: upsellAffiliateCommission,
           affiliate_name: upsellAffiliateName,
           affiliate_email: upsellAffiliateEmail,
-          is_organic_sale: true,
+          is_organic_sale: !hasUpsellAffiliate, // false se tem afiliado
           is_returning_customer: true,
           lead_source: 'kiwify_recorrencia',
           closed_at: new Date().toISOString(),

@@ -12,7 +12,7 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
     queryFn: async () => {
       let query = supabase
         .from("deals")
-        .select("value, assigned_to, profiles!deals_assigned_to_fkey(full_name)")
+        .select("value, assigned_to, is_organic_sale, affiliate_commission, profiles!deals_assigned_to_fkey(full_name)")
         .eq("status", "won");
 
       // Aplicar filtro de data se fornecido
@@ -34,16 +34,31 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
 
       if (error) throw error;
 
-      // Agrupar por vendedor
+      // Agrupar por vendedor - separar vendas orgânicas e de afiliados
       const salesByRep = new Map<
         string,
         { repName: string; totalSales: number; dealsCount: number }
       >();
 
       deals?.forEach((deal) => {
-        const repId = deal.assigned_to || "unassigned";
-        const repName =
-          (deal.profiles as any)?.full_name || "Não atribuído";
+        let repId: string;
+        let repName: string;
+
+        if (deal.assigned_to) {
+          // Venda atribuída a um vendedor
+          repId = deal.assigned_to;
+          repName = (deal.profiles as any)?.full_name || "Vendedor";
+        } else {
+          // Venda sem vendedor - classificar por tipo
+          const hasAffiliate = (deal.affiliate_commission || 0) > 0 || deal.is_organic_sale === false;
+          if (hasAffiliate) {
+            repId = "affiliate_sales";
+            repName = "Vendas Afiliados";
+          } else {
+            repId = "organic_sales";
+            repName = "Vendas Orgânicas";
+          }
+        }
 
         if (!salesByRep.has(repId)) {
           salesByRep.set(repId, {
