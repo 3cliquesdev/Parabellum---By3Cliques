@@ -41,11 +41,11 @@ serve(async (req) => {
     let onlineAgents: string[] = [];
     let departmentOnlineAgents: string[] = [];
 
-    // Buscar roles de agentes
+    // Buscar roles de agentes (excluindo consultores - eles só recebem via transferência manual)
     const { data: agentRoles } = await supabase
       .from("user_roles")
       .select("user_id")
-      .in("role", ["support_agent", "sales_rep", "consultant", "cs_manager"]);
+      .in("role", ["support_agent", "sales_rep", "cs_manager"]);
 
     const agentIds = [...new Set(agentRoles?.map((r) => r.user_id) || [])];
 

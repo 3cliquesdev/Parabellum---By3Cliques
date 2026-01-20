@@ -110,60 +110,12 @@ serve(async (req) => {
       );
     }
 
-    // 2. PRIORIDADE 1: STICKY AGENT (Consultor da Carteira)
+    // 2. REMOVIDO: STICKY AGENT (Consultor da Carteira)
+    // Consultores NÃO recebem conversas automaticamente - apenas via transferência manual
+    // O consultant_id serve apenas como referência de carteira
     if (contact?.consultant_id) {
-      console.log('[route-conversation] 🎯 STICKY AGENT detected - Checking consultant availability:', contact.consultant_id);
-      
-      const { data: consultant, error: consultantError } = await supabase
-        .from('profiles')
-        .select('id, full_name, availability_status')
-        .eq('id', contact.consultant_id)
-        .eq('availability_status', 'online')
-        .single();
-      
-      console.log('[route-conversation] 👤 Consultant query result:', { 
-        found: !!consultant, 
-        name: consultant?.full_name,
-        status: consultant?.availability_status,
-        error: consultantError?.message 
-      });
-
-      if (consultant && !consultantError) {
-        console.log('[route-conversation] ✅ STICKY AGENT - Assigning to consultant:', consultant.full_name);
-        
-        // Atribuir ao consultor
-        await supabase
-          .from('conversations')
-          .update({ 
-            assigned_to: consultant.id,
-            ai_mode: 'copilot',
-            last_message_at: new Date().toISOString()
-          })
-          .eq('id', conversationId);
-
-        // Inserir mensagem de sistema
-        await supabase
-          .from('messages')
-          .insert({
-            conversation_id: conversationId,
-            content: `O consultor ${consultant.full_name} entrou na conversa`,
-            sender_type: 'system',
-            message_type: 'system'
-          });
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            assigned_to: consultant.id,
-            agent_name: consultant.full_name,
-            assignment_type: 'sticky_agent',
-            message: `Conversa atribuída ao consultor ${consultant.full_name}`
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      console.log('[route-conversation] Consultant offline or unavailable');
+      console.log('[route-conversation] ℹ️ Contato tem consultor vinculado:', contact.consultant_id);
+      console.log('[route-conversation] ℹ️ Consultores não recebem conversas automáticas - seguindo para distribuição normal');
     }
 
     // 3. PRIORIDADE 2: SKILL-BASED ROUTING (Agentes com Skill Específica + Canal)
