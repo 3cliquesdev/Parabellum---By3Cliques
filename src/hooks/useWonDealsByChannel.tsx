@@ -114,8 +114,8 @@ function getChannelForDeal(deal: {
     return { channel: "Comercial", color: "#3b82f6" };
   }
   
-  // PRIORIDADE 2: Recuperação → agora é Comercial (consolidado)
-  if (title.startsWith("recuperação") || title.startsWith("recuperacao")) {
+  // PRIORIDADE 2: Recuperação/Winback → agora é Comercial (consolidado)
+  if (title.startsWith("recuperação") || title.startsWith("recuperacao") || title.startsWith("winback")) {
     return { channel: "Comercial", color: "#3b82f6" };
   }
   
@@ -268,7 +268,7 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
         } else if (sourceNorm === "webchat") {
           commercialBreakdown.webchat.deals++;
           commercialBreakdown.webchat.revenue += revenue;
-        } else if (titleNorm.startsWith("recuperação") || titleNorm.startsWith("recuperacao")) {
+        } else if (titleNorm.startsWith("recuperação") || titleNorm.startsWith("recuperacao") || titleNorm.startsWith("winback")) {
           commercialBreakdown.recuperacao.deals++;
           commercialBreakdown.recuperacao.revenue += revenue;
           recuperacaoDeals++;
