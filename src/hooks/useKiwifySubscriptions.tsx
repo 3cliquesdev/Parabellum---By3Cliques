@@ -152,7 +152,7 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         const approvedDate = payload?.approved_date;
         if (!approvedDate) return false;
         
-        const approvedDateStr = approvedDate.split('T')[0];
+        const approvedDateStr = approvedDate.substring(0, 10);
         
         if (startDateStr && approvedDateStr < startDateStr) return false;
         if (endDateStr && approvedDateStr > endDateStr) return false;
@@ -213,7 +213,7 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
           const emailLower = email.toLowerCase();
           uniqueCustomerEmails.add(emailLower);
           
-          const approvedDate = payload?.approved_date?.split('T')[0] || '';
+          const approvedDate = payload?.approved_date?.substring(0, 10) || '';
           if (!emailToFirstOrderDate.has(emailLower) || approvedDate < emailToFirstOrderDate.get(emailLower)!) {
             emailToFirstOrderDate.set(emailLower, approvedDate);
           }
