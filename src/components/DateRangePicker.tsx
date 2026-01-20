@@ -151,7 +151,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
     // Atualiza APENAS o estado interno durante a seleção
     const partial = normalizePartialRange(range);
     setDraftRange(partial);
-    setActivePreset('custom');
+    // NÃO chama setActivePreset aqui - isso causa re-render que fecha o popover
     
     // Se range completo (usuário selecionou ambas as datas), finaliza
     if (partial?.from && partial?.to) {
@@ -164,12 +164,17 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
   // Sincroniza draftRange quando o calendário abre
   const handleCalendarOpenChange = (open: boolean) => {
     if (open) {
-      // Ao abrir, inicializa com o valor atual
+      // Ao abrir, já marca como custom e inicializa com o valor atual
+      setActivePreset('custom');
       setDraftRange(value);
     } else {
       // Ao fechar sem completar, descarta seleção incompleta
       if (draftRange?.from && !draftRange?.to) {
         setDraftRange(value);
+        // Restaurar preset anterior se cancelou sem valor definido
+        if (!value?.from) {
+          setActivePreset('thisMonth');
+        }
       }
     }
     setCalendarOpen(open);
@@ -212,7 +217,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
       <Popover open={calendarOpen} onOpenChange={handleCalendarOpenChange}>
         <PopoverTrigger asChild>
           <Button
-            variant={activePreset === 'custom' ? "default" : "outline"}
+            variant={calendarOpen || activePreset === 'custom' ? "default" : "outline"}
             className="gap-2"
           >
             <CalendarIcon className="h-4 w-4" />
