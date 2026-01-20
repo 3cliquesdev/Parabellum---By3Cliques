@@ -211,7 +211,7 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
             {product ? "Configurar Produto" : (initialData?.external_id ? "Cadastrar Produto Kiwify" : "Novo Produto")}
