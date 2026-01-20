@@ -136,6 +136,17 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
         ? ((totalWon / totalCreated) * 100).toFixed(1) + "%"
         : "0%";
 
+      // Agregar por produto
+      const produtosMap = new Map<string, { nome: string; vendas: number; bruto: number; liquido: number }>();
+      subscriptionData?.subscriptions?.forEach(sub => {
+        const key = sub.productCategory || sub.productName;
+        const current = produtosMap.get(key) || { nome: key, vendas: 0, bruto: 0, liquido: 0 };
+        current.vendas++;
+        current.bruto += sub.grossValue || 0;
+        current.liquido += sub.netValue || 0;
+        produtosMap.set(key, current);
+      });
+
       const excelData: ExcelReportData = {
         periodo: { inicio: startDate, fim: endDate },
         resumo: {
@@ -154,6 +165,7 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
           novos: newCustomers,
           recorrentes: recurring,
         },
+        produtos: Array.from(produtosMap.values()).sort((a, b) => b.bruto - a.bruto),
       };
 
       await exportToExcel(excelData, {
