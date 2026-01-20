@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useKiwifySubscriptions, ProductCategory, SubscriptionStatus } from "@/hooks/useKiwifySubscriptions";
+import { useKiwifySubscriptions, SubscriptionStatus } from "@/hooks/useKiwifySubscriptions";
 import { SubscriptionMetricsCards } from "@/components/subscriptions/SubscriptionMetricsCards";
 import { SubscriptionTable } from "@/components/subscriptions/SubscriptionTable";
 import { RefundsTable } from "@/components/subscriptions/RefundsTable";
@@ -16,7 +16,7 @@ import { ptBR } from "date-fns/locale";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
 
-const CATEGORIES: ProductCategory[] = ['Associado Premium', 'Shopee Creation', 'Híbrido', 'Uni 3 Cliques', 'Outros'];
+// Categorias dinâmicas: serão extraídas dos dados retornados
 
 export default function Subscriptions() {
   const queryClient = useQueryClient();
@@ -25,7 +25,7 @@ export default function Subscriptions() {
     to: endOfMonth(new Date()),
   });
   const [statusFilter, setStatusFilter] = useState<SubscriptionStatus>('all');
-  const [selectedCategories, setSelectedCategories] = useState<ProductCategory[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   const { data, isLoading, isError, refetch, isFetching } = useKiwifySubscriptions(
@@ -72,8 +72,17 @@ export default function Subscriptions() {
     return result;
   }, [data?.subscriptions, statusFilter, selectedCategories, searchQuery]);
 
+  // Extrair categorias únicas dos dados (dinâmico, baseado nos mapeamentos)
+  const availableCategories = useMemo(() => {
+    if (!data?.byCategory) return [];
+    return Object.keys(data.byCategory).filter(cat => {
+      const catData = data.byCategory[cat];
+      return catData && (catData.ativas > 0 || catData.canceladas > 0);
+    });
+  }, [data?.byCategory]);
+
   // Toggle category filter
-  const toggleCategory = (category: ProductCategory) => {
+  const toggleCategory = (category: string) => {
     setSelectedCategories(prev => 
       prev.includes(category) 
         ? prev.filter(c => c !== category)
@@ -194,11 +203,11 @@ export default function Subscriptions() {
             </Tabs>
           </div>
 
-          {/* Category Filters */}
+          {/* Category Filters - Dinâmico baseado nos produtos mapeados */}
           <div className="flex flex-wrap gap-2 items-center">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">Categorias:</span>
-            {CATEGORIES.map(category => {
+            {availableCategories.map(category => {
               const catData = data?.byCategory[category];
               const count = catData ? catData.ativas + catData.canceladas : 0;
               const isSelected = selectedCategories.includes(category);

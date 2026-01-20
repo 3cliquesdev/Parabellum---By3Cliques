@@ -23,12 +23,37 @@ type SortDirection = 'asc' | 'desc';
 
 const ITEMS_PER_PAGE = 25;
 
-const categoryColors: Record<ProductCategory, string> = {
+// Cores fixas para categorias conhecidas, cores dinâmicas para novas
+const knownCategoryColors: Record<string, string> = {
   'Associado Premium': 'bg-purple-100 text-purple-700 border-purple-200',
+  'Parceiros - Associado Premium': 'bg-cyan-100 text-cyan-700 border-cyan-200',
   'Shopee Creation': 'bg-orange-100 text-orange-700 border-orange-200',
+  'COMERCIAL - ShopeeCreation': 'bg-amber-100 text-amber-700 border-amber-200',
   'Híbrido': 'bg-blue-100 text-blue-700 border-blue-200',
   'Uni 3 Cliques': 'bg-green-100 text-green-700 border-green-200',
   'Outros': 'bg-gray-100 text-gray-700 border-gray-200',
+};
+
+// Gera cor consistente para categorias desconhecidas baseado no hash do nome
+const getCategoryColor = (category: string): string => {
+  if (knownCategoryColors[category]) {
+    return knownCategoryColors[category];
+  }
+  
+  // Gerar cor baseada no hash do nome para consistência
+  const hash = category.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const dynamicColors = [
+    'bg-pink-100 text-pink-700 border-pink-200',
+    'bg-indigo-100 text-indigo-700 border-indigo-200',
+    'bg-teal-100 text-teal-700 border-teal-200',
+    'bg-rose-100 text-rose-700 border-rose-200',
+    'bg-lime-100 text-lime-700 border-lime-200',
+    'bg-sky-100 text-sky-700 border-sky-200',
+    'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200',
+    'bg-emerald-100 text-emerald-700 border-emerald-200',
+  ];
+  
+  return dynamicColors[hash % dynamicColors.length];
 };
 
 const statusStyles = {
@@ -187,7 +212,7 @@ export function SubscriptionTable({ subscriptions }: SubscriptionTableProps) {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={categoryColors[sub.productCategory]}>
+                  <Badge variant="outline" className={getCategoryColor(sub.productCategory)}>
                     {sub.productCategory}
                   </Badge>
                 </TableCell>

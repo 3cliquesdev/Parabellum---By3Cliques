@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type ProductCategory = 'Associado Premium' | 'Shopee Creation' | 'Híbrido' | 'Uni 3 Cliques' | 'Outros';
+// Categoria dinâmica: usa o nome do produto mapeado diretamente
+export type ProductCategory = string;
 export type SubscriptionStatus = 'active' | 'canceled' | 'ended' | 'all';
 
 export interface SubscriptionData {
@@ -112,19 +113,24 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         `)
         .eq('is_active', true);
 
-      // Criar Map para lookup O(1): offer_id → nome do produto interno
-      const offerToProductName = new Map<string, string>();
+      // Criar Map para lookup O(1): offer_id → { productName, category }
+      // Categoria = nome do produto interno (mapeado), garantindo sincronização
+      const offerToProduct = new Map<string, { productName: string; category: string }>();
       for (const mapping of offerMappings || []) {
         if (mapping.offer_id && (mapping.products as any)?.name) {
-          offerToProductName.set(mapping.offer_id, (mapping.products as any).name);
+          const productName = (mapping.products as any).name;
+          offerToProduct.set(mapping.offer_id, { 
+            productName, 
+            category: productName // Categoria = nome do produto mapeado
+          });
         }
       }
       
-      console.log(`[useKiwifySubscriptions] Loaded ${offerToProductName.size} offer mappings`);
+      console.log(`[useKiwifySubscriptions] Loaded ${offerToProduct.size} offer mappings`);
       // Debug specific known offer IDs
       console.log('[useKiwifySubscriptions] Sample mappings:', {
-        'guilherme_cirilo_9b5b202f': offerToProductName.get('9b5b202f-2735-4d14-906f-fa24c5ec6e09'),
-        'order_bump_5c8c6c69': offerToProductName.get('5c8c6c69-db5b-4f28-9929-5bccc70e94c7'),
+        'guilherme_cirilo_9b5b202f': offerToProduct.get('9b5b202f-2735-4d14-906f-fa24c5ec6e09'),
+        'order_bump_5c8c6c69': offerToProduct.get('5c8c6c69-db5b-4f28-9929-5bccc70e94c7'),
       });
       
       // Fetch paid events
@@ -203,25 +209,34 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       const uniqueOrders = Array.from(uniqueOrdersMap.values());
       console.log(`[useKiwifySubscriptions] Unique orders: ${uniqueOrders.length}`);
       
-      // Helper function para obter o nome do produto MAPEADO
-      const getMappedProductName = (payload: any): string => {
+      // Helper function para obter produto MAPEADO { name, category }
+      // Categoria = nome do produto mapeado, garantindo que mudanças reflitam imediatamente
+      const getMappedProduct = (payload: any): { name: string; category: string } => {
         // Tentar obter offer_id de diferentes locais no payload
         // 1. Assinaturas: Subscription.plan.id
         // 2. Produtos avulsos: Product.product_offer_id
         const offerId = payload?.Subscription?.plan?.id || payload?.Product?.product_offer_id;
         
-        // Se existe mapeamento, usar o nome do produto interno
-        if (offerId && offerToProductName.has(offerId)) {
-          return offerToProductName.get(offerId)!;
+        // Se existe mapeamento, usar o nome do produto interno como nome E categoria
+        if (offerId && offerToProduct.has(offerId)) {
+          const mapped = offerToProduct.get(offerId)!;
+          return { 
+            name: mapped.productName, 
+            category: mapped.category // Categoria = nome do produto mapeado
+          };
         }
         
-        // Fallback melhorado: usar nome da oferta/plano do Kiwify
-        // Ordem: plan.name → product_offer_name → Product.name → product_name → fallback
-        return payload?.Subscription?.plan?.name 
+        // Fallback: usar nome do Kiwify e inferir categoria
+        const kiwifyName = payload?.Subscription?.plan?.name 
           || payload?.Product?.product_offer_name 
           || payload?.Product?.name 
           || payload?.product_name 
           || 'Produto não identificado';
+        
+        return { 
+          name: kiwifyName, 
+          category: categorizeProduct(kiwifyName) // Só usa inferência se NÃO mapeado
+        };
       };
 
       // Classificar vendas por tipo: Nova Assinatura, Renovação ou Produto Único
@@ -333,13 +348,13 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
               const refundCommissions = payload?.Commissions || {};
               const refundValue = (refundCommissions.product_base_price || payload?.product_base_price || payload?.Product?.price || 0) / 100;
               
-              const refundProductName = getMappedProductName(payload);
+              const refundProduct = getMappedProduct(payload);
               refunds.push({
                 orderId: refundOrderId,
                 customerEmail: payload?.Customer?.email || payload?.customer_email || '',
                 customerName: payload?.Customer?.full_name || payload?.customer_name || 'Cliente',
-                productName: refundProductName,
-                productCategory: categorizeProduct(refundProductName),
+                productName: refundProduct.name,
+                productCategory: refundProduct.category,
                 offerName: payload?.Subscription?.plan?.name || payload?.Product?.product_offer_name || payload?.offer_name || 'Oferta padrão',
                 refundDate: refund.created_at,
                 originalDate: originalPayload?.approved_date || originalEvent?.created_at || '',
@@ -398,8 +413,8 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         if (processedOrderIds.has(uniqueKey)) continue;
         processedOrderIds.add(uniqueKey);
 
-        // Usar nome do produto MAPEADO (da tabela product_offers)
-        const productName = getMappedProductName(payload);
+        // Usar produto MAPEADO (da tabela product_offers) - nome E categoria
+        const mappedProduct = getMappedProduct(payload);
         
         // Extrair valores financeiros do objeto Commissions (estrutura real do Kiwify)
         const commissions = payload.Commissions || {};
@@ -431,8 +446,8 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
           id: uniqueKey,
           orderId: orderId || '',
           startDate: payload.approved_date || payload.created_at || event.created_at,
-          productName,
-          productCategory: categorizeProduct(productName),
+          productName: mappedProduct.name,
+          productCategory: mappedProduct.category, // Usa categoria do mapeamento, não inferência
           offerName: payload.Subscription?.plan?.name || payload.offer_name || 'Oferta padrão',
           customerName: payload.Customer?.full_name || payload.customer_name || 'Cliente',
           customerEmail: payload.Customer?.email || payload.customer_email || '',
@@ -449,11 +464,12 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       // Convert to array and calculate metrics
       const subscriptions = Array.from(subscriptionMap.values());
       
-      // Initialize category metrics
-      const categories: ProductCategory[] = ['Associado Premium', 'Shopee Creation', 'Híbrido', 'Uni 3 Cliques', 'Outros'];
-      const byCategory: Record<ProductCategory, { ativas: number; canceladas: number; faturamento: number }> = {} as any;
+      // Initialize category metrics - agora dinâmico baseado nos produtos mapeados
+      const byCategory: Record<string, { ativas: number; canceladas: number; faturamento: number }> = {};
       
-      for (const cat of categories) {
+      // Pré-popular com categorias conhecidas para manter compatibilidade
+      const legacyCategories = ['Associado Premium', 'Shopee Creation', 'Híbrido', 'Uni 3 Cliques', 'Outros'];
+      for (const cat of legacyCategories) {
         byCategory[cat] = { ativas: 0, canceladas: 0, faturamento: 0 };
       }
 
@@ -462,6 +478,11 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       let faturamentoRecorrente = 0;
 
       for (const sub of subscriptions) {
+        // Criar entrada para categoria se não existir (categorias dinâmicas dos mapeamentos)
+        if (!byCategory[sub.productCategory]) {
+          byCategory[sub.productCategory] = { ativas: 0, canceladas: 0, faturamento: 0 };
+        }
+        
         const catMetrics = byCategory[sub.productCategory];
         
         if (sub.status === 'active') {
