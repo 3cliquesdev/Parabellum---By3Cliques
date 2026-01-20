@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Clock, 
@@ -15,7 +14,8 @@ import {
   FileText,
   MessageCircle,
   Users,
-  ArrowDown
+  ArrowDown,
+  UserPlus
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { useDealsConversionAnalysis, DealSource } from "@/hooks/useDealsConversionAnalysis";
@@ -32,14 +32,52 @@ const sourceIcons: Record<string, React.ReactNode> = {
   affiliate: <Users className="w-4 h-4" />,
   form: <FileText className="w-4 h-4" />,
   whatsapp: <MessageCircle className="w-4 h-4" />,
+  other: <UserPlus className="w-4 h-4" />,
 };
 
-const sourceColors: Record<string, { bg: string; text: string; border: string; icon: string }> = {
-  organic_new: { bg: "bg-blue-100 dark:bg-blue-950/40", text: "text-blue-700 dark:text-blue-300", border: "border-blue-200 dark:border-blue-800", icon: "text-blue-500" },
-  organic_recurring: { bg: "bg-purple-100 dark:bg-purple-950/40", text: "text-purple-700 dark:text-purple-300", border: "border-purple-200 dark:border-purple-800", icon: "text-purple-500" },
-  affiliate: { bg: "bg-orange-100 dark:bg-orange-950/40", text: "text-orange-700 dark:text-orange-300", border: "border-orange-200 dark:border-orange-800", icon: "text-orange-500" },
-  form: { bg: "bg-amber-100 dark:bg-amber-950/40", text: "text-amber-700 dark:text-amber-300", border: "border-amber-200 dark:border-amber-800", icon: "text-amber-500" },
-  whatsapp: { bg: "bg-green-100 dark:bg-green-950/40", text: "text-green-700 dark:text-green-300", border: "border-green-200 dark:border-green-800", icon: "text-green-500" },
+const sourceColors: Record<string, { bg: string; text: string; border: string; icon: string; bar: string }> = {
+  organic_new: { 
+    bg: "bg-blue-50 dark:bg-blue-950/40", 
+    text: "text-blue-700 dark:text-blue-300", 
+    border: "border-blue-200 dark:border-blue-800", 
+    icon: "text-blue-500",
+    bar: "bg-blue-500"
+  },
+  organic_recurring: { 
+    bg: "bg-purple-50 dark:bg-purple-950/40", 
+    text: "text-purple-700 dark:text-purple-300", 
+    border: "border-purple-200 dark:border-purple-800", 
+    icon: "text-purple-500",
+    bar: "bg-purple-500"
+  },
+  affiliate: { 
+    bg: "bg-orange-50 dark:bg-orange-950/40", 
+    text: "text-orange-700 dark:text-orange-300", 
+    border: "border-orange-200 dark:border-orange-800", 
+    icon: "text-orange-500",
+    bar: "bg-orange-500"
+  },
+  form: { 
+    bg: "bg-amber-50 dark:bg-amber-950/40", 
+    text: "text-amber-700 dark:text-amber-300", 
+    border: "border-amber-200 dark:border-amber-800", 
+    icon: "text-amber-600",
+    bar: "bg-amber-500"
+  },
+  whatsapp: { 
+    bg: "bg-green-50 dark:bg-green-950/40", 
+    text: "text-green-700 dark:text-green-300", 
+    border: "border-green-200 dark:border-green-800", 
+    icon: "text-green-500",
+    bar: "bg-green-500"
+  },
+  other: { 
+    bg: "bg-slate-50 dark:bg-slate-950/40", 
+    text: "text-slate-700 dark:text-slate-300", 
+    border: "border-slate-200 dark:border-slate-800", 
+    icon: "text-slate-500",
+    bar: "bg-slate-500"
+  },
 };
 
 // Premium Funnel Bar Component
@@ -110,40 +148,66 @@ function FunnelBar({
   );
 }
 
-// Source Card for breakdown
+// Premium Source Card with mini-funnel
 function SourceCard({ source, label, data, isLoading }: SourceAnalysis) {
-  const colors = sourceColors[source] || sourceColors.organic_new;
+  const colors = sourceColors[source] || sourceColors.other;
   
   if (isLoading || !data) {
     return (
-      <div className={cn("p-3 rounded-xl border animate-pulse", colors.bg, colors.border)}>
-        <Skeleton className="h-16 w-full" />
+      <div className={cn("p-4 rounded-xl border animate-pulse", colors.bg, colors.border)}>
+        <Skeleton className="h-24 w-full" />
       </div>
     );
   }
 
   const wonRate = data.totalCreated > 0 ? (data.totalWon / data.totalCreated) * 100 : 0;
+  const wonWidth = data.totalCreated > 0 ? (data.totalWon / data.totalCreated) * 100 : 0;
 
   return (
     <div className={cn(
-      "p-3 rounded-xl border transition-all hover:shadow-md cursor-default",
+      "p-4 rounded-xl border transition-all hover:shadow-md cursor-default",
       colors.bg, colors.border
     )}>
-      <div className="flex items-center gap-2 mb-2">
+      {/* Header com ícone e label */}
+      <div className="flex items-center gap-2 mb-3">
         <span className={colors.icon}>{sourceIcons[source]}</span>
-        <span className="text-xs font-medium text-muted-foreground truncate">{label}</span>
+        <span className="font-medium text-foreground text-sm">{label}</span>
       </div>
-      <div className="flex items-baseline justify-between">
-        <div className="flex items-baseline gap-1">
-          <span className={cn("text-xl font-bold", colors.text)}>{data.totalWon}</span>
-          <span className="text-xs text-muted-foreground">won</span>
+      
+      {/* Mini-Funil Visual */}
+      <div className="space-y-2">
+        {/* Barra Criados (sempre 100%) */}
+        <div>
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-muted-foreground">Criados</span>
+            <span className="font-semibold text-foreground">{data.totalCreated}</span>
+          </div>
+          <div className="h-2 bg-muted/50 rounded-full overflow-hidden">
+            <div className="h-full rounded-full bg-blue-400/70 w-full" />
+          </div>
         </div>
-        <span className={cn("text-sm font-semibold", colors.text)}>{wonRate.toFixed(0)}%</span>
+        
+        {/* Barra Ganhos (proporcional) */}
+        <div>
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-muted-foreground">Ganhos</span>
+            <span className={cn("font-bold", colors.text)}>
+              {data.totalWon} <span className="text-xs font-normal">({wonRate.toFixed(0)}%)</span>
+            </span>
+          </div>
+          <div className="h-2 bg-muted/50 rounded-full overflow-hidden">
+            <div 
+              className={cn("h-full rounded-full transition-all", "bg-emerald-500")}
+              style={{ width: `${Math.max(wonWidth, 2)}%` }}
+            />
+          </div>
+        </div>
       </div>
-      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-        <span>{data.totalCreated} criados</span>
-        <span>•</span>
-        <span>{data.totalOpen} aberto</span>
+      
+      {/* Footer: Em Aberto + Perdidos */}
+      <div className="mt-3 pt-2 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
+        <span>{data.totalOpen} em aberto</span>
+        <span>{data.totalLost} perdidos</span>
       </div>
     </div>
   );
@@ -197,13 +261,14 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
 
       {/* Source Filter Tabs */}
       <Tabs value={source} onValueChange={(v) => setSource(v as DealSource)} className="mb-5">
-        <TabsList className="grid w-full grid-cols-6 h-9">
+        <TabsList className="grid w-full grid-cols-7 h-9">
           <TabsTrigger value="all" className="text-xs px-1">Todos</TabsTrigger>
-          <TabsTrigger value="organic_new" className="text-xs px-1" title="1ª Compra Kiwify Orgânica">1ª Orgânica</TabsTrigger>
+          <TabsTrigger value="organic_new" className="text-xs px-1" title="1ª Compra Orgânica">1ª Orgânica</TabsTrigger>
           <TabsTrigger value="organic_recurring" className="text-xs px-1">Recorrente</TabsTrigger>
           <TabsTrigger value="affiliate" className="text-xs px-1">Afiliados</TabsTrigger>
           <TabsTrigger value="form" className="text-xs px-1">Formulários</TabsTrigger>
           <TabsTrigger value="whatsapp" className="text-xs px-1">WhatsApp</TabsTrigger>
+          <TabsTrigger value="other" className="text-xs px-1">Manual</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -255,11 +320,11 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
       {/* Breakdown by Source (only shown when "Todos" is selected) */}
       {showBreakdown && (
         <div className="pt-4 border-t border-border">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-4">
             <Target className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-muted-foreground">Breakdown por Canal</span>
+            <span className="text-sm font-medium text-foreground">Breakdown por Canal</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {allSourcesData.sources.map((sourceData) => (
               <SourceCard key={sourceData.source} {...sourceData} />
             ))}
