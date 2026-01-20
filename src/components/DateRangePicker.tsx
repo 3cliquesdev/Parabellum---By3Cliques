@@ -142,7 +142,11 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
     const normalized = normalizeRange(range);
     onChange(normalized);
     setActivePreset('custom');
-    if (normalized?.from && normalized?.to) {
+    
+    // Só fecha se ambas as datas estiverem definidas e forem diferentes
+    // (range completo selecionado - usuário clicou em duas datas diferentes)
+    if (normalized?.from && normalized?.to && 
+        normalized.from.getTime() !== normalized.to.getTime()) {
       setCalendarOpen(false);
     }
   };
@@ -198,6 +202,12 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 z-50" align="end">
+          {/* Instrução quando aguardando data final */}
+          {value?.from && !value?.to && (
+            <div className="px-4 py-2 text-sm text-muted-foreground border-b bg-muted/50">
+              Agora selecione a data final
+            </div>
+          )}
           <Calendar
             mode="range"
             selected={value}
