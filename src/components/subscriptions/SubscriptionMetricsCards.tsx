@@ -1,6 +1,12 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { SubscriptionMetrics, ProductCategory } from "@/hooks/useKiwifySubscriptions";
-import { Users, ShoppingCart, DollarSign, RotateCcw, UserPlus, UserCheck, Repeat, Star, Package } from "lucide-react";
+import { Users, ShoppingCart, DollarSign, RotateCcw, UserPlus, UserCheck, Repeat, Star, Package, Info } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface SubscriptionMetricsCardsProps {
   data?: SubscriptionMetrics;
@@ -13,11 +19,31 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
+interface MetricCardData {
+  title: string;
+  subtitle: string;
+  value: string;
+  icon: typeof Users;
+  color: string;
+  bgColor: string;
+  tooltip?: {
+    brutas: number;
+    reembolsadas: number;
+    liquidas: number;
+    note?: string;
+  };
+}
+
 export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps) {
   if (!data) return null;
 
+  // Calcular reembolsos por tipo
+  const reembolsosNovasAssinaturas = (data.novasAssinaturasBrutas ?? 0) - (data.novasAssinaturas ?? 0);
+  const reembolsosRenovacoes = (data.renovacoesBrutas ?? 0) - (data.renovacoes ?? 0);
+  const reembolsosProdutosUnicos = (data.produtosUnicosBrutos ?? 0) - (data.produtosUnicos ?? 0);
+
   // Primeira linha: Clientes
-  const clientesMetrics = [
+  const clientesMetrics: MetricCardData[] = [
     {
       title: 'Clientes Únicos',
       subtitle: 'Emails distintos',
@@ -45,7 +71,7 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
   ];
 
   // Segunda linha: Vendas
-  const vendasMetrics = [
+  const vendasMetrics: MetricCardData[] = [
     {
       title: 'Vendas Brutas',
       subtitle: 'Total de orders',
@@ -72,8 +98,8 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
     },
   ];
 
-  // Terceira linha: Classificação por Tipo (alinhado com Kiwify)
-  const tipoVendaMetrics = [
+  // Terceira linha: Classificação por Tipo (alinhado com Kiwify) - COM TOOLTIPS
+  const tipoVendaMetrics: MetricCardData[] = [
     {
       title: 'Novas Assinaturas',
       subtitle: 'Primeira cobrança',
@@ -81,6 +107,12 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
       icon: Star,
       color: 'text-amber-600',
       bgColor: 'bg-amber-50',
+      tooltip: {
+        brutas: data.novasAssinaturasBrutas ?? 0,
+        reembolsadas: reembolsosNovasAssinaturas,
+        liquidas: data.novasAssinaturas ?? 0,
+        note: 'Kiwify mostra assinaturas ativas agora. Aqui mostramos vendas criadas no período.',
+      },
     },
     {
       title: 'Renovações',
@@ -89,6 +121,11 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
       icon: Repeat,
       color: 'text-cyan-600',
       bgColor: 'bg-cyan-50',
+      tooltip: {
+        brutas: data.renovacoesBrutas ?? 0,
+        reembolsadas: reembolsosRenovacoes,
+        liquidas: data.renovacoes ?? 0,
+      },
     },
     {
       title: 'Produtos Únicos',
@@ -97,13 +134,46 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
       icon: Package,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
+      tooltip: {
+        brutas: data.produtosUnicosBrutos ?? 0,
+        reembolsadas: reembolsosProdutosUnicos,
+        liquidas: data.produtosUnicos ?? 0,
+      },
     },
   ];
 
-  const renderMetricCard = (metric: typeof clientesMetrics[0]) => (
+  const renderMetricCard = (metric: MetricCardData) => (
     <Card key={metric.title}>
       <CardContent className="pt-4 pb-4">
-        <div className="flex flex-col items-center text-center">
+        <div className="flex flex-col items-center text-center relative">
+          {/* Tooltip indicator for cards with tooltip data */}
+          {metric.tooltip && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="absolute top-0 right-0 cursor-help">
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[250px]">
+                  <div className="text-xs space-y-1">
+                    <p className="font-medium">
+                      Brutas: {metric.tooltip.brutas} | Reembolsadas: {metric.tooltip.reembolsadas}
+                    </p>
+                    <p className="text-muted-foreground">
+                      = <span className="font-semibold text-foreground">{metric.tooltip.liquidas}</span> líquidas
+                    </p>
+                    {metric.tooltip.note && (
+                      <p className="text-muted-foreground/80 pt-1 border-t border-border/50 mt-1">
+                        {metric.tooltip.note}
+                      </p>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          
           <div className={`p-2 rounded-full ${metric.bgColor} mb-2`}>
             <metric.icon className={`h-4 w-4 ${metric.color}`} />
           </div>

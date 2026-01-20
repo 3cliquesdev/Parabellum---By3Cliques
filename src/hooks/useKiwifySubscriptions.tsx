@@ -50,6 +50,11 @@ export interface SubscriptionMetrics {
   renovacoes: number; // charges.completed.length > 1
   produtosUnicos: number; // Sem subscription plan (venda única)
   
+  // Classificação por tipo de venda (brutas - antes de descontar reembolsos)
+  novasAssinaturasBrutas: number;
+  renovacoesBrutas: number;
+  produtosUnicosBrutos: number;
+  
   // Métricas legadas (mantidas para compatibilidade)
   totalAtivas: number;
   totalCanceladas: number;
@@ -443,6 +448,11 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         novasAssinaturas: novasAssinaturasLiquidas,
         renovacoes: renovacoesLiquidas,
         produtosUnicos: produtosUnicosLiquidos,
+        
+        // Classificação por tipo (brutas - para tooltips explicativos)
+        novasAssinaturasBrutas: novasAssinaturasOrders.size,
+        renovacoesBrutas: renovacoesOrders.size,
+        produtosUnicosBrutos: produtosUnicosOrders.size,
         
         // Métricas legadas
         totalAtivas,
