@@ -47,6 +47,14 @@ export default function PublicOnboarding() {
   const { toast } = useToast();
   
   const [loading, setLoading] = useState(true);
+
+  // Enable body scroll for public pages
+  useEffect(() => {
+    document.documentElement.classList.add('allow-body-scroll');
+    return () => {
+      document.documentElement.classList.remove('allow-body-scroll');
+    };
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<OnboardingData | null>(null);
   const [playbookInfo, setPlaybookInfo] = useState<{ name: string; description?: string; support_phone?: string } | null>(null);

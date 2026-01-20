@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Navigate } from "react-router-dom";
 import { useQuoteByToken } from "@/hooks/useQuotes";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,14 @@ export default function PublicQuote() {
   const [signatureName, setSignatureName] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectionForm, setShowRejectionForm] = useState(false);
+
+  // Enable body scroll for public pages
+  useEffect(() => {
+    document.documentElement.classList.add('allow-body-scroll');
+    return () => {
+      document.documentElement.classList.remove('allow-body-scroll');
+    };
+  }, []);
 
   const handleAccept = async () => {
     if (!quote || !signatureName.trim()) {

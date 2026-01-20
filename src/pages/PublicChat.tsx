@@ -48,6 +48,14 @@ export default function PublicChat() {
   });
   const upsertContact = useUpsertContact();
   const [isIdentified, setIsIdentified] = useState(false);
+
+  // Enable body scroll for public pages
+  useEffect(() => {
+    document.documentElement.classList.add('allow-body-scroll');
+    return () => {
+      document.documentElement.classList.remove('allow-body-scroll');
+    };
+  }, []);
   const [storedIdentity, setStoredIdentity] = useState<StoredIdentity | null>(null);
   const [autoRouteDepartment, setAutoRouteDepartment] = useState<string | null>(null);
 
