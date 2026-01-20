@@ -17,7 +17,7 @@ export interface DealsConversionAnalysis {
   maxTimeToWinDays: number;
 }
 
-export type DealSource = "all" | "organic_new" | "organic_recurring" | "form" | "whatsapp";
+export type DealSource = "all" | "organic_new" | "organic_recurring" | "affiliate" | "form" | "whatsapp";
 
 export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSource = "all") {
   return useQuery({
@@ -46,6 +46,9 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
         } else if (source === "organic_recurring") {
           // Vendas orgânicas de clientes recorrentes (já compraram antes)
           return query.eq("is_organic_sale", true).eq("is_returning_customer", true);
+        } else if (source === "affiliate") {
+          // Afiliados: não é orgânico E não é fonte comercial
+          return query.eq("is_organic_sale", false).not("lead_source", "in", "(formulario,whatsapp,webchat,manual,comercial)");
         } else if (source === "form") {
           return query.eq("lead_source", "formulario");
         } else if (source === "whatsapp") {
