@@ -2,27 +2,32 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useUserRole } from "./useUserRole";
+import { formatLocalDate, getDateTimeBoundaries } from "@/lib/dateUtils";
 
 export function useSalesByRep(startDate?: Date, endDate?: Date) {
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
 
+  // Gerar chaves estáveis baseadas em data local (YYYY-MM-DD) para evitar problemas de timezone
+  const startKey = startDate ? formatLocalDate(startDate) : undefined;
+  const endKey = endDate ? formatLocalDate(endDate) : undefined;
+
   return useQuery({
-    queryKey: ["sales-by-rep", user?.id, role, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["sales-by-rep", user?.id, role, startKey, endKey],
     queryFn: async () => {
       let query = supabase
         .from("deals")
         .select("value, assigned_to, is_organic_sale, affiliate_commission, affiliate_name, lead_source, title, profiles!deals_assigned_to_fkey(full_name)")
         .eq("status", "won");
 
-      // Aplicar filtro de data se fornecido
-      if (startDate) {
-        query = query.gte("closed_at", startDate.toISOString());
-      }
-      if (endDate) {
-        const endOfDay = new Date(endDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        query = query.lte("closed_at", endOfDay.toISOString());
+      // Aplicar filtro de data usando boundaries locais (timezone-safe)
+      if (startDate && endDate) {
+        const { startDateTime, endDateTime } = getDateTimeBoundaries(startDate, endDate);
+        query = query.gte("closed_at", startDateTime).lte("closed_at", endDateTime);
+      } else if (startDate) {
+        query = query.gte("closed_at", `${formatLocalDate(startDate)}T00:00:00`);
+      } else if (endDate) {
+        query = query.lte("closed_at", `${formatLocalDate(endDate)}T23:59:59`);
       }
 
       // Sales rep vê apenas seus próprios dados

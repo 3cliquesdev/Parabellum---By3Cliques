@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { formatLocalDate, getDateTimeBoundaries } from "@/lib/dateUtils";
 
 interface ChannelData {
   channel: string;
@@ -140,8 +141,12 @@ function getSourceLabel(source: string | null): string {
 }
 
 export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
+  // Gerar chaves estáveis baseadas em data local (YYYY-MM-DD) para evitar problemas de timezone
+  const startKey = startDate ? formatLocalDate(startDate) : undefined;
+  const endKey = endDate ? formatLocalDate(endDate) : undefined;
+
   return useQuery({
-    queryKey: ["won-deals-by-channel", startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["won-deals-by-channel", startKey, endKey],
     queryFn: async (): Promise<WonDealsData> => {
       // Buscar deals ganhos no período
       let query = supabase
@@ -163,14 +168,14 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
         `)
         .eq("status", "won");
 
-      // Filtrar por data de fechamento
-      if (startDate) {
-        query = query.gte("closed_at", startDate.toISOString());
-      }
-      if (endDate) {
-        const endOfDay = new Date(endDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        query = query.lte("closed_at", endOfDay.toISOString());
+      // Filtrar por data de fechamento usando boundaries locais (timezone-safe)
+      if (startDate && endDate) {
+        const { startDateTime, endDateTime } = getDateTimeBoundaries(startDate, endDate);
+        query = query.gte("closed_at", startDateTime).lte("closed_at", endDateTime);
+      } else if (startDate) {
+        query = query.gte("closed_at", `${formatLocalDate(startDate)}T00:00:00`);
+      } else if (endDate) {
+        query = query.lte("closed_at", `${formatLocalDate(endDate)}T23:59:59`);
       }
 
       const { data: deals, error } = await query;
