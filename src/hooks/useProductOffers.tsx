@@ -2,13 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-interface ProductOffer {
+export interface ProductOffer {
   id: string;
   product_id: string;
   offer_id: string;
   offer_name: string;
   price: number;
   source: string;
+  source_type: 'afiliado' | 'organico' | 'comercial' | 'unknown';
   is_active: boolean;
   created_at: string;
 }

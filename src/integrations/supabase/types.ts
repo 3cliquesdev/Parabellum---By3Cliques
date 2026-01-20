@@ -5021,6 +5021,7 @@ export type Database = {
           price: number | null
           product_id: string
           source: string | null
+          source_type: string | null
           updated_at: string | null
         }
         Insert: {
@@ -5032,6 +5033,7 @@ export type Database = {
           price?: number | null
           product_id: string
           source?: string | null
+          source_type?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -5043,6 +5045,7 @@ export type Database = {
           price?: number | null
           product_id?: string
           source?: string | null
+          source_type?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -7446,7 +7449,18 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      unmapped_kiwify_offers: {
+        Row: {
+          detected_source_type: string | null
+          event_count: number | null
+          kiwify_product_id: string | null
+          kiwify_product_name: string | null
+          plan_id: string | null
+          plan_name: string | null
+          total_revenue: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       batch_validate_kiwify_contacts: { Args: never; Returns: number }

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, AlertTriangle, Package, ExternalLink, Settings, AlertCircle } from "lucide-react";
 import { UnmappedProductsSection } from "./UnmappedProductsSection";
+import { OrphanOffersWidget } from "./OrphanOffersWidget";
 
 interface ProductMappingStatus {
   id: string;
@@ -264,6 +265,9 @@ export function ProductMappingDiagnostic() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Orphan Offers Widget - Subscription offers not mapped */}
+      <OrphanOffersWidget />
 
       {/* Unmapped Products Section with Reprocessing */}
       {unmappedAlerts && unmappedAlerts.length > 0 && (

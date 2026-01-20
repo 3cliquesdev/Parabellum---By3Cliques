@@ -342,7 +342,9 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
         if (processedOrderIds.has(uniqueKey)) continue;
         processedOrderIds.add(uniqueKey);
 
-        const productName = payload.Product?.name || payload.product_name || 'Produto não identificado';
+        // Use plan name or product name for identification
+        const planName = payload.Subscription?.plan?.name;
+        const productName = planName || payload.Product?.name || payload.product_name || 'Produto não identificado';
         const grossValue = (payload.product_base_price || payload.Product?.price || 0) / 100;
         const myCommission = (payload.my_commission || 0) / 100;
         const kiwifyFee = (payload.kiwify_fee || 0) / 100;
