@@ -12,84 +12,109 @@ export interface WhoSoldCategory {
   avgTicket: number;
 }
 
-// Categories based on source_type and lead_source
+// Categories for "Who Sold" ranking
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; priority: number }> = {
   organico: { label: "Orgânico", color: "#8B5CF6", priority: 1 },
   afiliado: { label: "Afiliados/Parceiros", color: "#F59E0B", priority: 2 },
-  comercial: { label: "Comercial (3 Cliques)", color: "#3B82F6", priority: 3 },
+  recorrencia: { label: "Recorrência", color: "#06B6D4", priority: 3 },
   formulario: { label: "Formulários", color: "#10B981", priority: 4 },
-  indicacao: { label: "Indicação", color: "#EC4899", priority: 5 },
-  recorrencia: { label: "Recorrência", color: "#06B6D4", priority: 6 },
-  outros: { label: "Outros", color: "#6B7280", priority: 99 },
 };
-
-// Map lead_source to our categories
-function mapSourceToCategory(leadSource: string | null, isAffiliate: boolean): string {
-  if (isAffiliate) return "afiliado";
-  
-  const source = (leadSource || "").toLowerCase();
-  
-  if (source.includes("formulario") || source.includes("form") || source.includes("webchat") || source.includes("chat_widget")) {
-    return "formulario";
-  }
-  if (source.includes("whatsapp") || source.includes("manual") || source.includes("comercial")) {
-    return "comercial";
-  }
-  if (source.includes("indicacao") || source.includes("referral")) {
-    return "indicacao";
-  }
-  if (source.includes("kiwify_recorrencia") || source.includes("recorrencia")) {
-    return "recorrencia";
-  }
-  if (source.includes("kiwify") || source.includes("organic") || source.includes("direto")) {
-    return "organico";
-  }
-  
-  return "outros";
-}
 
 export function useWhoSoldMetrics(startDate: Date, endDate: Date) {
   return useQuery({
     queryKey: ["who-sold-metrics", formatLocalDate(startDate), formatLocalDate(endDate)],
     queryFn: async (): Promise<WhoSoldCategory[]> => {
-      const startStr = `${formatLocalDate(startDate)}T00:00:00`;
-      const endStr = `${formatLocalDate(endDate)}T23:59:59`;
+      const startStr = formatLocalDate(startDate);
+      const endStr = formatLocalDate(endDate);
 
-      // Fetch won deals with their values and sources
-      const { data: deals, error } = await supabase
-        .from("deals")
-        .select("id, value, lead_source, affiliate_name, affiliate_commission, is_organic_sale, gross_value")
-        .eq("status", "won")
-        .gte("closed_at", startStr)
-        .lte("closed_at", endStr);
+      // Use 7-day margin strategy for database query (same as other Kiwify hooks)
+      const marginStart = new Date(startDate);
+      marginStart.setDate(marginStart.getDate() - 7);
+      const marginEnd = new Date(endDate);
+      marginEnd.setDate(marginEnd.getDate() + 7);
+
+      // Fetch paid events from kiwify_events (same source as Assinaturas)
+      const { data: kiwifyEvents, error } = await supabase
+        .from("kiwify_events")
+        .select("*")
+        .eq("event_type", "paid")
+        .gte("created_at", marginStart.toISOString())
+        .lte("created_at", marginEnd.toISOString());
 
       if (error) throw error;
 
-      // Group by category
+      // Deduplicate by order_id and filter by approved_date
+      const seenOrders = new Set<string>();
       const categoryMap = new Map<string, { sales: number; revenue: number }>();
       let totalRevenue = 0;
 
-      (deals || []).forEach((deal) => {
-        // Determine if this is an affiliate sale
-        const isAffiliate = !!deal.affiliate_name || (deal.affiliate_commission && deal.affiliate_commission > 0);
-        const category = mapSourceToCategory(deal.lead_source, isAffiliate);
-        
-        const revenue = deal.gross_value || deal.value || 0;
-        totalRevenue += revenue;
+      for (const event of kiwifyEvents || []) {
+        const payload = event.payload as any;
+        if (!payload) continue;
 
+        // Filter by approved_date within the selected period
+        const approvedDate = payload.approved_date?.substring(0, 10);
+        if (!approvedDate || approvedDate < startStr || approvedDate > endStr) {
+          continue;
+        }
+
+        // Deduplicate by order_id
+        const orderId = payload.order_id || event.id;
+        if (seenOrders.has(orderId)) continue;
+        seenOrders.add(orderId);
+
+        // Get revenue (gross value)
+        const commissions = payload.Commissions || {};
+        const grossValue = Number(commissions.product_base_price || 0) / 100;
+        totalRevenue += grossValue;
+
+        // Detect category based on payload analysis (same logic as useKiwifyCompleteMetrics)
+        let category = "organico";
+
+        // 1. Check for affiliate commission
+        const affiliateStore = commissions.commissioned_stores?.find(
+          (s: any) => s.type === "affiliate"
+        );
+        const affiliateCommission = Number(affiliateStore?.value || 0) / 100;
+
+        if (affiliateCommission > 0) {
+          category = "afiliado";
+        } else {
+          // 2. Check for recurrence (renewal)
+          const chargesCompleted = payload.Subscription?.charges?.completed || [];
+          const isRenewal = chargesCompleted.length > 1;
+
+          if (isRenewal) {
+            category = "recorrencia";
+          } else {
+            // 3. Check lead_source for form-originated sales
+            const leadSource = (payload.lead_source || "").toLowerCase();
+            if (
+              leadSource.includes("formulario") ||
+              leadSource.includes("form") ||
+              leadSource.includes("webchat") ||
+              leadSource.includes("chat_widget")
+            ) {
+              category = "formulario";
+            }
+            // Default: organico
+          }
+        }
+
+        // Accumulate stats
         if (!categoryMap.has(category)) {
           categoryMap.set(category, { sales: 0, revenue: 0 });
         }
-        
+
         const stats = categoryMap.get(category)!;
         stats.sales++;
-        stats.revenue += revenue;
-      });
+        stats.revenue += grossValue;
+      }
 
       // Convert to array with labels and percentages
       const result: WhoSoldCategory[] = Array.from(categoryMap.entries())
         .map(([category, stats]) => {
-          const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG.outros;
+          const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG.organico;
           return {
             category,
             label: config.label,
