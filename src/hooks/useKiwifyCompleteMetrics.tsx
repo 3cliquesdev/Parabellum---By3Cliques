@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchProductMappings, getMappedProduct, isMapped } from '@/lib/kiwifyProductMapping';
 
 interface KiwifyEventPayload {
   order_id?: string;
@@ -140,6 +141,10 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       }
       
       // Fetch events with database-level filtering for performance
+      // PRIMEIRO: buscar mapeamentos de produtos usando helper centralizado
+      const { offerMap: productOfferMap, productIdMap } = await fetchProductMappings();
+      console.log(`📊 useKiwifyCompleteMetrics: Loaded ${productOfferMap.size} offer mappings + ${productIdMap.size} product_id mappings`);
+
       const allEvents: any[] = [];
       let page = 0;
       const pageSize = 1000;
@@ -345,8 +350,9 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
           vendasNovas++;
         }
 
-        // Product breakdown - use Product object path
-        const productName = payload?.Product?.product_name || payload?.product_name || 'Produto Desconhecido';
+        // Product breakdown - USAR MAPEAMENTO CENTRALIZADO
+        const mappedProduct = getMappedProduct(payload, productOfferMap, productIdMap);
+        const productName = mappedProduct.name;
         const productId = payload?.Product?.product_id || payload?.product_id || 'unknown';
         
         if (!productMap.has(productId)) {
@@ -421,22 +427,37 @@ export function useKiwifyCompleteMetrics(startDate?: Date, endDate?: Date, minVa
       const porOferta = Array.from(offerMap.values()).sort((a, b) => b.vendas - a.vendas);
       const topAffiliates = Array.from(affiliateMap.values()).sort((a, b) => b.salesCount - a.salesCount);
 
-      // Fetch mapped offers to identify unmapped ones
-      const { data: mappedOffers } = await supabase
-        .from('product_offers')
-        .select('offer_id');
+      // Identify unmapped offers - USAR HELPER CENTRALIZADO
+      // Agora considera AMBOS: offer_id E kiwify_product_id
+      const ofertasNaoMapeadas: UnmappedOffer[] = [];
       
-      const mappedIds = new Set(mappedOffers?.map(o => o.offer_id) || []);
+      for (const event of finalApprovedEvents) {
+        const payload = event.payload as KiwifyEventPayload;
+        
+        // Se está mapeado (por offer_id OU product_id), pular
+        if (isMapped(payload, productOfferMap, productIdMap)) continue;
+        
+        const offerId = payload?.Subscription?.plan?.id || payload?.Product?.product_id || 'unknown';
+        const offerName = payload?.Subscription?.plan?.name || payload?.Product?.product_name || 'Oferta desconhecida';
+        const productNameUnmapped = payload?.Product?.product_name || 'Produto desconhecido';
+        
+        // Agrupar por offer_id
+        const existing = ofertasNaoMapeadas.find(o => o.offer_id === offerId);
+        if (existing) {
+          existing.vendas++;
+          existing.bruto += Number(payload?.Commissions?.product_base_price || 0) / 100;
+        } else {
+          ofertasNaoMapeadas.push({
+            offer_id: offerId,
+            offer_name: offerName,
+            product_name: productNameUnmapped,
+            vendas: 1,
+            bruto: Number(payload?.Commissions?.product_base_price || 0) / 100
+          });
+        }
+      }
       
-      const ofertasNaoMapeadas: UnmappedOffer[] = porOferta
-        .filter(o => !mappedIds.has(o.offer_id))
-        .map(o => ({
-          offer_id: o.offer_id,
-          offer_name: o.offer_name,
-          product_name: o.product_name,
-          vendas: o.vendas,
-          bruto: o.bruto
-        }));
+      ofertasNaoMapeadas.sort((a, b) => b.vendas - a.vendas);
 
       console.log('📊 Kiwify Metrics:', {
         totalEventos: allEvents.length,

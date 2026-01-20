@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchProductMappings, getMappedProduct } from "@/lib/kiwifyProductMapping";
 
 export interface KiwifyFinancialData {
   totalGrossRevenue: number;
@@ -65,6 +66,9 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
     queryFn: async () => {
       console.log("📊 useKiwifyFinancials: Buscando dados de kiwify_events", { startDateStr, endDateStr });
 
+      // Buscar mapeamentos de produtos usando helper centralizado
+      const { offerMap, productIdMap } = await fetchProductMappings();
+      console.log(`📊 useKiwifyFinancials: Loaded ${offerMap.size} offer mappings + ${productIdMap.size} product_id mappings`);
       // Aplicar margem de 7 dias no created_at para otimização do banco
       // A filtragem precisa será feita em memória usando approved_date do payload
       const marginDays = 7;
@@ -234,8 +238,9 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
         totalKiwifyFees += kiwifyFee;
         totalAffiliateCommissions += affiliateCommission;
 
-        // Breakdown por produto
-        const productName = payload?.Product?.product_name || "Produto não identificado";
+        // Breakdown por produto - USAR MAPEAMENTO CENTRALIZADO
+        const mappedProduct = getMappedProduct(payload, offerMap, productIdMap);
+        const productName = mappedProduct.name;
         if (!productMap.has(productName)) {
           productMap.set(productName, {
             productName,
