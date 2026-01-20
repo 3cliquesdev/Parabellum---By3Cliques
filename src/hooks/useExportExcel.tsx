@@ -53,35 +53,25 @@ export function useExportExcel() {
         const periodoFim = format(data.periodo.fim, "dd/MM/yyyy", { locale: ptBR });
         const geradoEm = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 
-        // Aba 1: Resumo Geral
+        // Aba 1: Resumo Geral - Formato tabela horizontal
         const resumoData = [
           [title],
-          [`Período: ${periodoInicio} a ${periodoFim}`],
-          [`Gerado em: ${geradoEm}`],
+          [`Período: ${periodoInicio} a ${periodoFim} | Gerado em: ${geradoEm}`],
           [],
-          ["RESUMO DO FUNIL", ""],
-          ["Métrica", "Valor"],
-          ["Deals Criados", data.resumo.dealsCreados],
-          ["Deals Ganhos", data.resumo.dealsGanhos],
-          ["Deals Abertos", data.resumo.dealsAbertos],
-          ["Deals Perdidos", data.resumo.dealsPerdidos],
-          ["Taxa de Conversão", data.resumo.taxaConversao],
+          // Headers do Funil
+          ["Deals Criados", "Deals Ganhos", "Deals Abertos", "Deals Perdidos", "Taxa Conversão"],
+          [data.resumo.dealsCreados, data.resumo.dealsGanhos, data.resumo.dealsAbertos, data.resumo.dealsPerdidos, data.resumo.taxaConversao],
           [],
-          ["RECEITA", ""],
-          ["Métrica", "Valor"],
-          ["Receita Bruta", data.receita.bruta],
-          ["Receita Bruta (Formatado)", formatCurrency(data.receita.bruta)],
-          ["Receita Líquida", data.receita.liquida],
-          ["Receita Líquida (Formatado)", formatCurrency(data.receita.liquida)],
+          // Headers de Receita
+          ["Receita Bruta", "Receita Bruta (R$)", "Receita Líquida", "Receita Líquida (R$)"],
+          [data.receita.bruta, formatCurrency(data.receita.bruta), data.receita.liquida, formatCurrency(data.receita.liquida)],
           [],
-          ["CLIENTES", ""],
-          ["Métrica", "Valor"],
-          ["Total de Vendas", data.clientes.total],
-          ["Clientes Novos", data.clientes.novos],
-          ["Clientes Recorrentes", data.clientes.recorrentes],
+          // Headers de Clientes
+          ["Total Vendas", "Clientes Novos", "Clientes Recorrentes"],
+          [data.clientes.total, data.clientes.novos, data.clientes.recorrentes],
         ];
         const resumoSheet = XLSX.utils.aoa_to_sheet(resumoData);
-        resumoSheet["!cols"] = [{ wch: 30 }, { wch: 25 }];
+        resumoSheet["!cols"] = [{ wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 18 }];
         XLSX.utils.book_append_sheet(workbook, resumoSheet, "Resumo");
 
         // Aba 2: Por Categoria (se houver dados)
