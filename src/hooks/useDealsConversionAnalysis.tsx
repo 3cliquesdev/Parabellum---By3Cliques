@@ -17,7 +17,7 @@ export interface DealsConversionAnalysis {
   maxTimeToWinDays: number;
 }
 
-export type DealSource = "all" | "organic_new" | "organic_recurring" | "affiliate" | "form" | "whatsapp";
+export type DealSource = "all" | "organic_new" | "organic_recurring" | "affiliate" | "form" | "whatsapp" | "other";
 
 export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSource = "all") {
   return useQuery({
@@ -53,6 +53,9 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
           return query.eq("lead_source", "formulario");
         } else if (source === "whatsapp") {
           return query.eq("lead_source", "whatsapp");
+        } else if (source === "other") {
+          // Manual/Comercial: fontes manuais ou sem fonte definida
+          return query.in("lead_source", ["manual", "comercial", "webchat", "indicacao"]);
         }
         return query;
       };

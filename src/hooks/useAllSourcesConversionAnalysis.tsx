@@ -12,11 +12,12 @@ export interface SourceAnalysis {
 }
 
 const sourceConfig: { source: Exclude<DealSource, "all">; label: string }[] = [
-  { source: "organic_new", label: "1ª Compra Kiwify Orgânica" },
+  { source: "organic_new", label: "1ª Compra Orgânica" },
   { source: "organic_recurring", label: "Recorrente" },
   { source: "affiliate", label: "Afiliados" },
   { source: "form", label: "Formulários" },
   { source: "whatsapp", label: "WhatsApp" },
+  { source: "other", label: "Manual/Comercial" },
 ];
 
 async function fetchSourceData(
@@ -36,6 +37,9 @@ async function fetchSourceData(
         return query.eq("lead_source", "formulario");
       case "whatsapp":
         return query.eq("lead_source", "whatsapp");
+      case "other":
+        // Manual/Comercial: fontes manuais ou sem fonte definida
+        return query.in("lead_source", ["manual", "comercial", "webchat", "indicacao"]);
       default:
         return query;
     }
