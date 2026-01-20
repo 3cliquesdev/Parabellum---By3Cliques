@@ -142,11 +142,6 @@ export default function Subscriptions() {
         <SubscriptionMetricsCards data={data} />
       )}
 
-      {/* Refunds Table */}
-      {!isLoading && data?.reembolsos && data.reembolsos.length > 0 && (
-        <RefundsTable refunds={data.reembolsos} />
-      )}
-
       {/* Filters */}
       <Card>
         <CardContent className="pt-6 space-y-4">
@@ -232,6 +227,11 @@ export default function Subscriptions() {
           )}
         </CardContent>
       </Card>
+
+      {/* Refunds Table - at the end */}
+      {!isLoading && data?.reembolsos && data.reembolsos.length > 0 && (
+        <RefundsTable refunds={data.reembolsos} />
+      )}
     </div>
   );
 }

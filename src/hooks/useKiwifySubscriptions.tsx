@@ -25,6 +25,8 @@ export interface RefundData {
   customerEmail: string;
   customerName: string;
   productName: string;
+  productCategory: ProductCategory;
+  offerName: string;
   refundDate: string;
   originalDate: string;
   value: number;
@@ -326,11 +328,14 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
               const refundCommissions = payload?.Commissions || {};
               const refundValue = (refundCommissions.product_base_price || payload?.product_base_price || payload?.Product?.price || 0) / 100;
               
+              const refundProductName = getMappedProductName(payload);
               refunds.push({
                 orderId: refundOrderId,
                 customerEmail: payload?.Customer?.email || payload?.customer_email || '',
                 customerName: payload?.Customer?.full_name || payload?.customer_name || 'Cliente',
-                productName: getMappedProductName(payload),
+                productName: refundProductName,
+                productCategory: categorizeProduct(refundProductName),
+                offerName: payload?.Subscription?.plan?.name || payload?.Product?.product_offer_name || payload?.offer_name || 'Oferta padrão',
                 refundDate: refund.created_at,
                 originalDate: originalPayload?.approved_date || originalEvent?.created_at || '',
                 value: refundValue,
