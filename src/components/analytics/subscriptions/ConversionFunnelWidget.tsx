@@ -1,17 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Users, ShoppingCart, CreditCard, Package, RefreshCcw } from "lucide-react";
-import { KiwifyCompleteMetrics } from "@/hooks/useKiwifyCompleteMetrics";
+import { SubscriptionMetrics } from "@/hooks/useKiwifySubscriptions";
 
 interface ConversionFunnelWidgetProps {
   leadMetrics?: {
     totalCreated: number;
   };
-  kiwifyMetrics?: KiwifyCompleteMetrics;
+  subscriptionData?: SubscriptionMetrics;
   isLoading: boolean;
 }
 
-export function ConversionFunnelWidget({ leadMetrics, kiwifyMetrics, isLoading }: ConversionFunnelWidgetProps) {
+export function ConversionFunnelWidget({ leadMetrics, subscriptionData, isLoading }: ConversionFunnelWidgetProps) {
   if (isLoading) {
     return (
       <Card>
@@ -32,15 +32,22 @@ export function ConversionFunnelWidget({ leadMetrics, kiwifyMetrics, isLoading }
     );
   }
 
+  // Usando dados do useKiwifySubscriptions (mesma fonte do menu /subscriptions)
   const totalLeads = leadMetrics?.totalCreated || 0;
-  const totalSales = kiwifyMetrics?.vendasAprovadas || 0;
-  const activeSubscriptions = kiwifyMetrics?.clientesUnicos || 0;
-  const uniqueProducts = kiwifyMetrics?.porProduto?.length || 0;
-  const totalRefunds = (kiwifyMetrics?.reembolsos?.quantidade || 0) + (kiwifyMetrics?.chargebacks?.quantidade || 0);
+  const totalSales = subscriptionData?.vendasBrutas || 0; // Vendas BRUTAS
+  const activeSubscriptions = subscriptionData?.totalAssinaturas || 0; // Clientes únicos
+  
+  // Contar produtos únicos a partir das assinaturas
+  const uniqueProducts = new Set(subscriptionData?.subscriptions?.map(s => s.productName) || []).size;
+  
+  // Reembolsos do período
+  const totalRefunds = subscriptionData?.reembolsos?.length || 0;
 
   // Calculate conversion rates between stages
   const leadsToSalesRate = totalLeads > 0 ? ((totalSales / totalLeads) * 100).toFixed(1) : "0.0";
-  const churnRate = kiwifyMetrics?.taxaChurn?.toFixed(1) || "0.0";
+  
+  // Churn rate baseado em reembolsos vs vendas brutas
+  const churnRate = totalSales > 0 ? ((totalRefunds / totalSales) * 100).toFixed(1) : "0.0";
 
   const stages = [
     {

@@ -1,10 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, TrendingDown, RefreshCcw, Ban } from "lucide-react";
-import { KiwifyCompleteMetrics } from "@/hooks/useKiwifyCompleteMetrics";
+import { SubscriptionMetrics } from "@/hooks/useKiwifySubscriptions";
+import { useMemo } from "react";
 
 interface ChurnAnalysisCardProps {
-  data?: KiwifyCompleteMetrics;
+  subscriptionData?: SubscriptionMetrics;
   isLoading: boolean;
 }
 
@@ -15,7 +16,37 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function ChurnAnalysisCard({ data, isLoading }: ChurnAnalysisCardProps) {
+export function ChurnAnalysisCard({ subscriptionData, isLoading }: ChurnAnalysisCardProps) {
+  // Calcular métricas de churn a partir dos dados do useKiwifySubscriptions
+  const churnMetrics = useMemo(() => {
+    if (!subscriptionData) {
+      return {
+        churnRate: 0,
+        refundsCount: 0,
+        refundsValue: 0,
+        chargebacksCount: 0,
+        chargebacksValue: 0,
+        totalLost: 0,
+      };
+    }
+
+    const refunds = subscriptionData.reembolsos || [];
+    const refundsValue = refunds.reduce((sum, r) => sum + r.value, 0);
+    
+    // Churn rate = (reembolsos / vendas brutas) * 100
+    const vendasBrutas = subscriptionData.vendasBrutas || 0;
+    const churnRate = vendasBrutas > 0 ? (refunds.length / vendasBrutas) * 100 : 0;
+
+    return {
+      churnRate,
+      refundsCount: refunds.length,
+      refundsValue,
+      chargebacksCount: 0, // Chargebacks são tratados como reembolsos na fonte
+      chargebacksValue: 0,
+      totalLost: refundsValue,
+    };
+  }, [subscriptionData]);
+
   if (isLoading) {
     return (
       <Card>
@@ -28,11 +59,6 @@ export function ChurnAnalysisCard({ data, isLoading }: ChurnAnalysisCardProps) {
       </Card>
     );
   }
-
-  const churnRate = data?.taxaChurn || 0;
-  const refunds = data?.reembolsos || { quantidade: 0, valor: 0 };
-  const chargebacks = data?.chargebacks || { quantidade: 0, valor: 0 };
-  const totalLost = refunds.valor + chargebacks.valor;
 
   const getChurnColor = (rate: number) => {
     if (rate <= 2) return "text-green-500";
@@ -53,8 +79,8 @@ export function ChurnAnalysisCard({ data, isLoading }: ChurnAnalysisCardProps) {
           {/* Main Churn Rate */}
           <div className="text-center p-4 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground mb-1">Taxa de Churn</p>
-            <p className={`text-4xl font-bold ${getChurnColor(churnRate)}`}>
-              {churnRate.toFixed(1)}%
+            <p className={`text-4xl font-bold ${getChurnColor(churnMetrics.churnRate)}`}>
+              {churnMetrics.churnRate.toFixed(1)}%
             </p>
           </div>
 
@@ -65,16 +91,16 @@ export function ChurnAnalysisCard({ data, isLoading }: ChurnAnalysisCardProps) {
                 <RefreshCcw className="h-4 w-4 text-orange-500" />
                 <span className="text-xs text-muted-foreground">Reembolsos</span>
               </div>
-              <p className="text-lg font-bold">{refunds.quantidade}</p>
-              <p className="text-xs text-orange-500">{formatCurrency(refunds.valor)}</p>
+              <p className="text-lg font-bold">{churnMetrics.refundsCount}</p>
+              <p className="text-xs text-orange-500">{formatCurrency(churnMetrics.refundsValue)}</p>
             </div>
             <div className="p-3 border rounded-lg">
               <div className="flex items-center gap-2 mb-1">
                 <Ban className="h-4 w-4 text-red-500" />
-                <span className="text-xs text-muted-foreground">Chargebacks</span>
+                <span className="text-xs text-muted-foreground">Canceladas</span>
               </div>
-              <p className="text-lg font-bold">{chargebacks.quantidade}</p>
-              <p className="text-xs text-red-500">{formatCurrency(chargebacks.valor)}</p>
+              <p className="text-lg font-bold">{subscriptionData?.totalCanceladas || 0}</p>
+              <p className="text-xs text-muted-foreground">assinaturas</p>
             </div>
           </div>
 
@@ -85,7 +111,7 @@ export function ChurnAnalysisCard({ data, isLoading }: ChurnAnalysisCardProps) {
               <span className="text-sm font-medium">Valor Perdido</span>
             </div>
             <span className="text-lg font-bold text-red-500">
-              {formatCurrency(totalLost)}
+              {formatCurrency(churnMetrics.totalLost)}
             </span>
           </div>
         </div>

@@ -2,11 +2,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Package, TrendingUp, TrendingDown } from "lucide-react";
-import { KiwifyCompleteMetrics } from "@/hooks/useKiwifyCompleteMetrics";
+import { Package } from "lucide-react";
+import { SubscriptionMetrics, SubscriptionData } from "@/hooks/useKiwifySubscriptions";
+import { useMemo } from "react";
 
 interface ProductPerformanceTableProps {
-  data?: KiwifyCompleteMetrics;
+  subscriptionData?: SubscriptionMetrics;
   isLoading: boolean;
 }
 
@@ -17,7 +18,44 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function ProductPerformanceTable({ data, isLoading }: ProductPerformanceTableProps) {
+interface ProductAggregation {
+  productName: string;
+  productCategory: string;
+  vendas: number;
+  bruto: number;
+  liquido: number;
+}
+
+export function ProductPerformanceTable({ subscriptionData, isLoading }: ProductPerformanceTableProps) {
+  // Agregar dados por produto a partir do array de subscriptions
+  const products = useMemo(() => {
+    if (!subscriptionData?.subscriptions) return [];
+
+    const productMap = new Map<string, ProductAggregation>();
+
+    for (const sub of subscriptionData.subscriptions) {
+      const key = sub.productName;
+      const existing = productMap.get(key);
+
+      if (existing) {
+        existing.vendas += 1;
+        existing.bruto += sub.grossValue;
+        existing.liquido += sub.netValue;
+      } else {
+        productMap.set(key, {
+          productName: sub.productName,
+          productCategory: sub.productCategory,
+          vendas: 1,
+          bruto: sub.grossValue,
+          liquido: sub.netValue,
+        });
+      }
+    }
+
+    // Ordenar por receita bruta decrescente
+    return Array.from(productMap.values()).sort((a, b) => b.bruto - a.bruto);
+  }, [subscriptionData?.subscriptions]);
+
   if (isLoading) {
     return (
       <Card>
@@ -31,7 +69,6 @@ export function ProductPerformanceTable({ data, isLoading }: ProductPerformanceT
     );
   }
 
-  const products = data?.porProduto || [];
   const maxRevenue = Math.max(...products.map(p => p.bruto), 1);
 
   return (
@@ -66,7 +103,7 @@ export function ProductPerformanceTable({ data, isLoading }: ProductPerformanceT
                   const performance = (product.bruto / maxRevenue) * 100;
                   
                   return (
-                    <TableRow key={product.product_id}>
+                    <TableRow key={product.productName}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           {index < 3 && (
@@ -74,8 +111,8 @@ export function ProductPerformanceTable({ data, isLoading }: ProductPerformanceT
                               #{index + 1}
                             </Badge>
                           )}
-                          <span className="truncate max-w-[180px]" title={product.product_name}>
-                            {product.product_name}
+                          <span className="truncate max-w-[180px]" title={product.productName}>
+                            {product.productName}
                           </span>
                         </div>
                       </TableCell>
