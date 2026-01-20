@@ -5016,6 +5016,7 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean | null
+          kiwify_product_id: string | null
           offer_id: string
           offer_name: string
           price: number | null
@@ -5028,6 +5029,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          kiwify_product_id?: string | null
           offer_id: string
           offer_name: string
           price?: number | null
@@ -5040,6 +5042,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          kiwify_product_id?: string | null
           offer_id?: string
           offer_name?: string
           price?: number | null
@@ -7453,6 +7456,7 @@ export type Database = {
         Row: {
           detected_source_type: string | null
           event_count: number | null
+          kiwify_product_id: string | null
           kiwify_product_name: string | null
           plan_id: string | null
           plan_name: string | null

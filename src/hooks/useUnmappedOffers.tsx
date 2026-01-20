@@ -33,6 +33,7 @@ export function useUnmappedOffers() {
 }
 
 // Hook para buscar todas as ofertas mapeadas (para lookup)
+// Agora suporta lookup por offer_id E por kiwify_product_id
 export function useAllProductOffers() {
   return useQuery({
     queryKey: ["all-product-offers"],
@@ -43,6 +44,7 @@ export function useAllProductOffers() {
           id,
           product_id,
           offer_id,
+          kiwify_product_id,
           offer_name,
           source_type,
           products:product_id (
@@ -54,7 +56,7 @@ export function useAllProductOffers() {
 
       if (error) throw error;
 
-      // Create a map for quick lookup by offer_id
+      // Create maps for quick lookup by offer_id AND kiwify_product_id
       const offerMap = new Map<string, { 
         productId: string; 
         productName: string; 
@@ -62,18 +64,33 @@ export function useAllProductOffers() {
         sourceType: string;
       }>();
 
+      const productIdMap = new Map<string, { 
+        productId: string; 
+        productName: string; 
+        offerName: string;
+        sourceType: string;
+      }>();
+
       for (const offer of data || []) {
+        const mappingData = {
+          productId: offer.product_id,
+          productName: (offer.products as any)?.name || 'Produto',
+          offerName: offer.offer_name || '',
+          sourceType: offer.source_type || 'unknown',
+        };
+
+        // Map by offer_id
         if (offer.offer_id) {
-          offerMap.set(offer.offer_id, {
-            productId: offer.product_id,
-            productName: (offer.products as any)?.name || 'Produto',
-            offerName: offer.offer_name || '',
-            sourceType: offer.source_type || 'unknown',
-          });
+          offerMap.set(offer.offer_id, mappingData);
+        }
+
+        // Also map by kiwify_product_id for fallback
+        if (offer.kiwify_product_id) {
+          productIdMap.set(offer.kiwify_product_id, mappingData);
         }
       }
 
-      return offerMap;
+      return { offerMap, productIdMap };
     },
     staleTime: 5 * 60 * 1000,
   });

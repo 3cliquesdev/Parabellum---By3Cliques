@@ -34,7 +34,7 @@ export const useProductOffers = (productId: string | null) => {
   });
 };
 
-// Hook para criar oferta
+// Hook para criar oferta - agora suporta mapeamento por offer_id OU kiwify_product_id
 export const useCreateProductOffer = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -42,17 +42,23 @@ export const useCreateProductOffer = () => {
   return useMutation({
     mutationFn: async (offer: {
       product_id: string;
-      offer_id: string;
+      offer_id: string; // Pode ser offer_id real OU product_id (quando sem offer)
       offer_name: string;
       price: number;
       source?: string;
       source_type?: 'afiliado' | 'organico' | 'comercial' | 'unknown';
+      kiwify_product_id?: string; // NOVO: se presente, mapeia por product_id
     }) => {
-      // Buscar TODOS os registros existentes para esse offer_id (pode haver duplicatas)
+      // Determinar se é mapeamento por offer_id ou kiwify_product_id
+      const isProductIdMapping = !!offer.kiwify_product_id;
+      const lookupField = isProductIdMapping ? 'kiwify_product_id' : 'offer_id';
+      const lookupValue = isProductIdMapping ? offer.kiwify_product_id : offer.offer_id;
+
+      // Buscar registros existentes pelo campo apropriado
       const { data: existingList, error: fetchError } = await supabase
         .from("product_offers")
         .select("id, product_id, created_at")
-        .eq("offer_id", offer.offer_id)
+        .eq(lookupField, lookupValue)
         .order("created_at", { ascending: false });
 
       if (fetchError) throw fetchError;
@@ -96,17 +102,27 @@ export const useCreateProductOffer = () => {
         };
       }
 
-      // Não existe, criar novo
+      // Não existe, criar novo - com suporte a ambos os tipos de mapeamento
+      const insertData: any = {
+        product_id: offer.product_id,
+        offer_name: offer.offer_name,
+        price: offer.price,
+        source: offer.source || "kiwify",
+        source_type: offer.source_type || "unknown",
+      };
+
+      // Se é mapeamento por product_id, salvar em kiwify_product_id
+      // Se é mapeamento por offer_id, salvar em offer_id
+      if (isProductIdMapping) {
+        insertData.kiwify_product_id = offer.kiwify_product_id;
+        insertData.offer_id = offer.offer_id; // Manter offer_id vazio ou igual ao product_id
+      } else {
+        insertData.offer_id = offer.offer_id;
+      }
+
       const { data, error } = await supabase
         .from("product_offers")
-        .insert({
-          product_id: offer.product_id,
-          offer_id: offer.offer_id,
-          offer_name: offer.offer_name,
-          price: offer.price,
-          source: offer.source || "kiwify",
-          source_type: offer.source_type || "unknown",
-        })
+        .insert(insertData)
         .select()
         .single();
 

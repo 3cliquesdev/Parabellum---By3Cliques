@@ -103,35 +103,42 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       console.log('[useKiwifySubscriptions] Fetching subscription data...');
       
       // 1. Buscar mapeamentos de product_offers para usar o nome do PRODUTO INTERNO
+      // Agora busca TAMBÉM kiwify_product_id para fallback
       const { data: offerMappings } = await supabase
         .from('product_offers')
         .select(`
           offer_id,
+          kiwify_product_id,
           products:product_id (
             name
           )
         `)
         .eq('is_active', true);
 
-      // Criar Map para lookup O(1): offer_id → { productName, category }
-      // Categoria = nome do produto interno (mapeado), garantindo sincronização
+      // Criar Maps para lookup O(1): 
+      // 1. offer_id → { productName, category }
+      // 2. kiwify_product_id → { productName, category } (fallback)
       const offerToProduct = new Map<string, { productName: string; category: string }>();
+      const productIdToProduct = new Map<string, { productName: string; category: string }>();
+      
       for (const mapping of offerMappings || []) {
-        if (mapping.offer_id && (mapping.products as any)?.name) {
-          const productName = (mapping.products as any).name;
-          offerToProduct.set(mapping.offer_id, { 
-            productName, 
-            category: productName // Categoria = nome do produto mapeado
-          });
+        const productName = (mapping.products as any)?.name;
+        if (!productName) continue;
+        
+        const mappingData = { productName, category: productName };
+        
+        // Map by offer_id (primary)
+        if (mapping.offer_id) {
+          offerToProduct.set(mapping.offer_id, mappingData);
+        }
+        
+        // Map by kiwify_product_id (fallback for products without offer_id)
+        if (mapping.kiwify_product_id) {
+          productIdToProduct.set(mapping.kiwify_product_id, mappingData);
         }
       }
       
-      console.log(`[useKiwifySubscriptions] Loaded ${offerToProduct.size} offer mappings`);
-      // Debug specific known offer IDs
-      console.log('[useKiwifySubscriptions] Sample mappings:', {
-        'guilherme_cirilo_9b5b202f': offerToProduct.get('9b5b202f-2735-4d14-906f-fa24c5ec6e09'),
-        'order_bump_5c8c6c69': offerToProduct.get('5c8c6c69-db5b-4f28-9929-5bccc70e94c7'),
-      });
+      console.log(`[useKiwifySubscriptions] Loaded ${offerToProduct.size} offer mappings + ${productIdToProduct.size} product_id mappings`);
       
       // Fetch paid events
       let paidQuery = supabase
@@ -211,22 +218,31 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       
       // Helper function para obter produto MAPEADO { name, category }
       // Categoria = nome do produto mapeado, garantindo que mudanças reflitam imediatamente
+      // AGORA COM FALLBACK para kiwify_product_id quando offer_id não existe
       const getMappedProduct = (payload: any): { name: string; category: string } => {
-        // Tentar obter offer_id de diferentes locais no payload
-        // 1. Assinaturas: Subscription.plan.id
-        // 2. Produtos avulsos: Product.product_offer_id
+        // 1. Tentar por offer_id (prioridade)
+        // Assinaturas: Subscription.plan.id | Produtos avulsos: Product.product_offer_id
         const offerId = payload?.Subscription?.plan?.id || payload?.Product?.product_offer_id;
         
-        // Se existe mapeamento, usar o nome do produto interno como nome E categoria
         if (offerId && offerToProduct.has(offerId)) {
           const mapped = offerToProduct.get(offerId)!;
           return { 
             name: mapped.productName, 
-            category: mapped.category // Categoria = nome do produto mapeado
+            category: mapped.category
           };
         }
         
-        // Fallback: usar nome do Kiwify e inferir categoria
+        // 2. NOVO: Tentar por product_id (fallback para produtos sem offer_id)
+        const productId = payload?.Product?.product_id;
+        if (productId && productIdToProduct.has(productId)) {
+          const mapped = productIdToProduct.get(productId)!;
+          return { 
+            name: mapped.productName, 
+            category: mapped.category
+          };
+        }
+        
+        // 3. Fallback final: usar nome do Kiwify e inferir categoria
         const kiwifyName = payload?.Subscription?.plan?.name 
           || payload?.Product?.product_offer_name 
           || payload?.Product?.name 

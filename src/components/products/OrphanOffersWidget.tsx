@@ -16,9 +16,23 @@ export function OrphanOffersWidget() {
   const [selectedProducts, setSelectedProducts] = useState<Record<string, string>>({});
   const [openSelectId, setOpenSelectId] = useState<string | null>(null);
 
-  const handleMapOffer = (planId: string, planName: string, detectedSourceType: 'afiliado' | 'organico') => {
+  // Detectar se o mapeamento é por offer_id ou product_id
+  // Se plan_id === kiwify_product_id, significa que não há offer_id disponível
+  const isProductIdMapping = (offer: typeof unmappedOffers extends (infer T)[] ? T : never) => {
+    return offer.kiwify_product_id && offer.plan_id === offer.kiwify_product_id;
+  };
+
+  const handleMapOffer = (
+    planId: string, 
+    planName: string, 
+    detectedSourceType: 'afiliado' | 'organico',
+    kiwifyProductId?: string
+  ) => {
     const productId = selectedProducts[planId];
     if (!productId) return;
+
+    // Se plan_id === kiwify_product_id, é mapeamento por product_id
+    const useProductIdMapping = kiwifyProductId && planId === kiwifyProductId;
 
     createOffer.mutate({
       product_id: productId,
@@ -27,6 +41,7 @@ export function OrphanOffersWidget() {
       price: 0,
       source: 'kiwify',
       source_type: detectedSourceType,
+      kiwify_product_id: useProductIdMapping ? kiwifyProductId : undefined,
     }, {
       onSuccess: () => {
         setSelectedProducts(prev => {
@@ -104,12 +119,17 @@ export function OrphanOffersWidget() {
                       Produto: {offer.kiwify_product_name}
                     </span>
                   )}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium truncate">{offer.plan_name}</span>
-                    <Badge variant={offer.detected_source_type === 'afiliado' ? 'secondary' : 'outline'}>
-                      {offer.detected_source_type}
-                    </Badge>
-                  </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium truncate">{offer.plan_name}</span>
+                      <Badge variant={offer.detected_source_type === 'afiliado' ? 'secondary' : 'outline'}>
+                        {offer.detected_source_type}
+                      </Badge>
+                      {isProductIdMapping(offer) && (
+                        <Badge variant="outline" className="text-xs bg-warning/10 text-warning border-warning/30">
+                          PRODUCT_ID
+                        </Badge>
+                      )}
+                    </div>
                 </div>
                 <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
@@ -160,7 +180,12 @@ export function OrphanOffersWidget() {
               <Button
                 size="sm"
                 disabled={!selectedProducts[offer.plan_id] || createOffer.isPending}
-                onClick={() => handleMapOffer(offer.plan_id, offer.plan_name, offer.detected_source_type)}
+                onClick={() => handleMapOffer(
+                  offer.plan_id, 
+                  offer.plan_name, 
+                  offer.detected_source_type,
+                  offer.kiwify_product_id
+                )}
               >
                 Mapear
               </Button>
