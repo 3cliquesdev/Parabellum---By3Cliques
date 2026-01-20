@@ -4,10 +4,14 @@
  * 
  * NÃO ALTERAR esta lógica de contagem sem:
  * 1. Comparar resultados com menu /subscriptions
- * 2. Validar com dados do dia 15/01/2026 (306 deals criados)
+ * 2. Validar com dados do dia 15/01/2026
  * 3. Aprovar com o usuário antes de aplicar
  * 
- * Última validação: 306 deals criados em 15/01/2026
+ * REGRA DEFINITIVA (aprovada pelo usuário):
+ * - Deals Criados: created_at → 306 deals em 15/01/2026
+ * - Deals Ganhos: closed_at → 240 deals em 15/01/2026
+ * - Deals Perdidos: closed_at
+ * - Deals Abertos: created_at (não têm fechamento)
  * ════════════════════════════════════════════════════════════════════════════
  */
 
@@ -62,23 +66,24 @@ export function useDealsCounts(startDate: Date | undefined, endDate: Date | unde
         throw createdError;
       }
 
-      // Query 2: Contar deals GANHOS criados no período (não por closed_at)
-      // ⚠️ LÓGICA TRAVADA: Usar created_at para consistência com totalCreated
+      // Query 2: Contar deals GANHOS FECHADOS no período (por closed_at)
+      // ⚠️ LÓGICA TRAVADA: Usar closed_at - aprovado pelo usuário em 20/01/2026
+      // Baseline: 240 deals ganhos em 15/01/2026
       const { count: totalWon } = await supabase
         .from("deals")
         .select("*", { count: "exact", head: true })
         .eq("status", "won")
-        .gte("created_at", startDateTime)
-        .lte("created_at", endDateTime);
+        .gte("closed_at", startDateTime)
+        .lte("closed_at", endDateTime);
 
-      // Query 3: Contar deals PERDIDOS criados no período (não por closed_at)
-      // ⚠️ LÓGICA TRAVADA: Usar created_at para consistência com totalCreated
+      // Query 3: Contar deals PERDIDOS FECHADOS no período (por closed_at)
+      // ⚠️ LÓGICA TRAVADA: Usar closed_at - mesma lógica de ganhos
       const { count: totalLost } = await supabase
         .from("deals")
         .select("*", { count: "exact", head: true })
         .eq("status", "lost")
-        .gte("created_at", startDateTime)
-        .lte("created_at", endDateTime);
+        .gte("closed_at", startDateTime)
+        .lte("closed_at", endDateTime);
 
       // Query 4: Contar deals ABERTOS criados no período
       const { count: totalOpen } = await supabase

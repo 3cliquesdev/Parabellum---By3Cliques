@@ -166,7 +166,11 @@ function getSourceLabel(source: string | null): string {
  * 2. Validar paridade: Widget "Quem Ganhou" = KPI "Deals Ganhos"
  * 3. Aprovar com o usuário antes de aplicar
  * 
- * REGRA: Usar created_at (não closed_at) para paridade com useDealsCounts
+ * REGRA DEFINITIVA (aprovada pelo usuário):
+ * - Deals Ganhos/Perdidos: Filtrar por closed_at (data do FECHAMENTO)
+ * - Deals Criados/Abertos: Filtrar por created_at (data da CRIAÇÃO)
+ * 
+ * Baseline 15/01/2026: 240 deals ganhos (fechados nesse dia)
  * ════════════════════════════════════════════════════════════════════════════
  */
 export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
@@ -175,7 +179,7 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
   const endKey = endDate ? formatLocalDate(endDate) : undefined;
 
   return useQuery({
-    queryKey: ["won-deals-by-channel-v2", startKey, endKey],
+    queryKey: ["won-deals-by-channel-v3", startKey, endKey],
     queryFn: async (): Promise<WonDealsData> => {
       // Buscar deals ganhos no período
       let query = supabase
@@ -189,7 +193,7 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
           assigned_to,
           is_organic_sale,
           affiliate_name,
-          created_at,
+          closed_at,
           profiles:assigned_to (
             id,
             full_name
@@ -197,14 +201,15 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
         `)
         .eq("status", "won");
 
-      // ⚠️ LÓGICA TRAVADA: Filtrar por created_at (não closed_at) para paridade com useDealsCounts
+      // ⚠️ LÓGICA TRAVADA: Filtrar por closed_at (data de FECHAMENTO do deal)
+      // Aprovado pelo usuário em 20/01/2026 - baseline: 240 deals em 15/01/2026
       if (startDate && endDate) {
         const { startDateTime, endDateTime } = getDateTimeBoundaries(startDate, endDate);
-        query = query.gte("created_at", startDateTime).lte("created_at", endDateTime);
+        query = query.gte("closed_at", startDateTime).lte("closed_at", endDateTime);
       } else if (startDate) {
-        query = query.gte("created_at", `${formatLocalDate(startDate)}T00:00:00`);
+        query = query.gte("closed_at", `${formatLocalDate(startDate)}T00:00:00`);
       } else if (endDate) {
-        query = query.lte("created_at", `${formatLocalDate(endDate)}T23:59:59`);
+        query = query.lte("closed_at", `${formatLocalDate(endDate)}T23:59:59`);
       }
 
       const { data: deals, error } = await query;
