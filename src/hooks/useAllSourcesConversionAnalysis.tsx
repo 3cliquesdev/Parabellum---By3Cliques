@@ -17,7 +17,7 @@ const sourceConfig: { source: Exclude<DealSource, "all">; label: string }[] = [
   { source: "affiliate", label: "Afiliados" },
   { source: "form", label: "Formulários" },
   { source: "whatsapp", label: "WhatsApp" },
-  { source: "other", label: "Manual/Comercial" },
+  { source: "other", label: "Outros" },
 ];
 
 async function fetchSourceData(
@@ -38,8 +38,10 @@ async function fetchSourceData(
       case "whatsapp":
         return query.eq("lead_source", "whatsapp");
       case "other":
-        // Manual/Comercial: fontes manuais ou sem fonte definida
-        return query.in("lead_source", ["manual", "comercial", "webchat", "indicacao"]);
+        // Outros: fontes manuais OU sem fonte definida (NULL)
+        return query.or(
+          `lead_source.in.(manual,comercial,webchat,indicacao),lead_source.is.null`
+        );
       default:
         return query;
     }
