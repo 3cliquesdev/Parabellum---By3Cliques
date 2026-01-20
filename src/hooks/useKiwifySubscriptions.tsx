@@ -14,7 +14,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchProductMappings, getMappedProduct as getMappedProductHelper, categorizeProduct } from "@/lib/kiwifyProductMapping";
+import { fetchProductMappings, getMappedProductWithSourceType, categorizeProduct } from "@/lib/kiwifyProductMapping";
 
 // Categoria dinâmica: usa o nome do produto mapeado diretamente
 export type ProductCategory = string;
@@ -34,6 +34,7 @@ export interface SubscriptionData {
   netValue: number;
   kiwifyFee: number;
   affiliateCommission: number;
+  sourceType: 'organico' | 'afiliado' | 'comercial'; // Canal de venda
 }
 
 export interface RefundData {
@@ -186,10 +187,10 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
       const uniqueOrders = Array.from(uniqueOrdersMap.values());
       console.log(`[useKiwifySubscriptions] Unique orders: ${uniqueOrders.length}`);
       
-      // Helper function para obter produto MAPEADO { name, category }
+      // Helper function para obter produto MAPEADO { name, category, sourceType }
       // Usando helper centralizado de src/lib/kiwifyProductMapping.ts
-      const getMappedProduct = (payload: any): { name: string; category: string } => {
-        return getMappedProductHelper(payload, offerToProduct, productIdToProduct);
+      const getMappedProduct = (payload: any): { name: string; category: string; sourceType: 'organico' | 'afiliado' | 'comercial' } => {
+        return getMappedProductWithSourceType(payload, offerToProduct, productIdToProduct);
       };
 
       // Classificar vendas por tipo: Nova Assinatura, Renovação ou Produto Único
@@ -409,6 +410,7 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
           netValue: myCommission,
           kiwifyFee,
           affiliateCommission,
+          sourceType: mappedProduct.sourceType, // Canal de venda (afiliado/organico/comercial)
         };
 
         subscriptionMap.set(uniqueKey, subscription);

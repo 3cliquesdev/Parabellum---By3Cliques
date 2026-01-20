@@ -55,8 +55,8 @@ export function OfferPerformanceTable({ subscriptionData, isLoading }: OfferPerf
       }
     }
 
-    // Ordenar por receita bruta decrescente
-    return Array.from(offerMap.values()).sort((a, b) => b.bruto - a.bruto);
+    // Ordenar por QUANTIDADE de vendas (não receita)
+    return Array.from(offerMap.values()).sort((a, b) => b.vendas - a.vendas);
   }, [subscriptionData?.subscriptions]);
 
   if (isLoading) {

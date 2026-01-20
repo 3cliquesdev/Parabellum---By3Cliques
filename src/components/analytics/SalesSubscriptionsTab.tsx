@@ -41,9 +41,11 @@ import {
 import { LeadsBySourceChart } from "./subscriptions/LeadsBySourceChart";
 import { NewVsRecurringChart } from "./subscriptions/NewVsRecurringChart";
 import { ProductPerformanceTable } from "./subscriptions/ProductPerformanceTable";
+import { OfferPerformanceTable } from "./subscriptions/OfferPerformanceTable";
 import { SalesRepRankingWidget } from "./subscriptions/SalesRepRankingWidget";
 import { WhoSoldRankingWidget } from "./subscriptions/WhoSoldRankingWidget";
 import { WonDealsByChannelWidget } from "./subscriptions/WonDealsByChannelWidget";
+import { SalesChannelQuantityWidget } from "./subscriptions/SalesChannelQuantityWidget";
 // Premium widgets (do Dashboard de Vendas)
 import { VisualFunnelChart } from "@/components/widgets/VisualFunnelChart";
 import { StageConversionChart } from "@/components/widgets/StageConversionChart";
@@ -370,7 +372,13 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
         {/* 5. Performance por Produto */}
         <ProductPerformanceTable subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
 
-        {/* 6. Ranking de Vendedores */}
+        {/* 6. Performance por Oferta */}
+        <OfferPerformanceTable subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
+
+        {/* 7. Canais de Vendas (Ranking por Quantidade) */}
+        <SalesChannelQuantityWidget subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
+
+        {/* 8. Ranking de Vendedores */}
         <SalesRepRankingWidget startDate={startDate} endDate={endDate} />
       </div>
     </div>
