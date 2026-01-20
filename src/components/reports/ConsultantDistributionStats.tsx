@@ -1,6 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserX, UserCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CompactMetricsGrid, type CompactMetric } from "@/components/ui/CompactMetricsGrid";
+import { Users, UserX, UserCheck } from "lucide-react";
 import type { DistributionStats } from "@/hooks/useConsultantDistributionReport";
 
 interface ConsultantDistributionStatsProps {
@@ -11,68 +11,66 @@ interface ConsultantDistributionStatsProps {
 export function ConsultantDistributionStats({ stats, isLoading }: ConsultantDistributionStatsProps) {
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-4" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="mt-1 h-3 w-32" />
-            </CardContent>
-          </Card>
+          <Skeleton key={i} className="h-20" />
         ))}
       </div>
     );
   }
 
-  const cards = [
+  const totalClientes = (stats?.total_linked || 0) + (stats?.total_unlinked || 0);
+  const percentVinculados = totalClientes > 0 
+    ? ((stats?.total_linked || 0) / totalClientes * 100).toFixed(0) + "%"
+    : "0%";
+  const percentSemConsultor = totalClientes > 0 
+    ? ((stats?.total_unlinked || 0) / totalClientes * 100).toFixed(0) + "%"
+    : "0%";
+
+  const metricsData: CompactMetric[] = [
     {
       title: "Clientes Vinculados",
       value: stats?.total_linked || 0,
-      description: `${stats?.avg_per_consultant || 0} média por consultor`,
       icon: UserCheck,
-      className: "text-green-600",
+      color: "text-green-600",
+      bgColor: "bg-green-100 dark:bg-green-900/30",
+      percent: percentVinculados,
+      percentColor: "green",
+      subtext: `${stats?.avg_per_consultant || 0} média/consultor`,
+      tooltip: "Clientes com consultor atribuído"
     },
     {
       title: "Clientes Sem Consultor",
       value: stats?.total_unlinked || 0,
-      description: "Aguardando distribuição",
       icon: UserX,
-      className: stats?.total_unlinked ? "text-red-600" : "text-muted-foreground",
+      color: stats?.total_unlinked ? "text-red-600" : "text-muted-foreground",
+      bgColor: stats?.total_unlinked 
+        ? "bg-red-100 dark:bg-red-900/30" 
+        : "bg-muted/50",
+      percent: percentSemConsultor,
+      percentColor: stats?.total_unlinked ? "red" : "muted",
+      subtext: "Aguardando distribuição",
+      tooltip: "Clientes que ainda não têm consultor"
     },
     {
       title: "Consultores Ativos",
       value: stats?.total_consultants || 0,
-      description: "Com acesso ao sistema",
       icon: Users,
-      className: "text-blue-600",
+      color: "text-blue-600",
+      bgColor: "bg-blue-100 dark:bg-blue-900/30",
+      subtext: "Com acesso ao sistema",
+      tooltip: "Total de consultores ativos na plataforma"
     },
     {
       title: "Total de Clientes",
-      value: (stats?.total_linked || 0) + (stats?.total_unlinked || 0),
-      description: "Com status de cliente",
+      value: totalClientes,
       icon: Users,
-      className: "text-purple-600",
+      color: "text-purple-600",
+      bgColor: "bg-purple-100 dark:bg-purple-900/30",
+      subtext: "Com status de cliente",
+      tooltip: "Vinculados + Sem consultor"
     },
   ];
 
-  return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {cards.map((card) => (
-        <Card key={card.title}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-            <card.icon className={`h-4 w-4 ${card.className}`} />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{card.value.toLocaleString("pt-BR")}</div>
-            <p className="text-xs text-muted-foreground">{card.description}</p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
+  return <CompactMetricsGrid metrics={metricsData} columns={4} />;
 }

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CompactMetricsGrid, type CompactMetric } from "@/components/ui/CompactMetricsGrid";
 import { 
   useLeadCreationMetrics, 
   getLeadSourceLabel, 
@@ -7,13 +8,14 @@ import {
 } from "@/hooks/useLeadCreationMetrics";
 import { 
   TrendingUp, 
-  TrendingDown, 
   Users, 
   Target, 
   DollarSign,
   ShoppingCart,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Banknote,
+  UserPlus
 } from "lucide-react";
 import { 
   BarChart, 
@@ -25,8 +27,7 @@ import {
   ResponsiveContainer,
   Cell,
   PieChart,
-  Pie,
-  Legend
+  Pie
 } from "recharts";
 
 interface DailyMetricsTabProps {
@@ -47,9 +48,14 @@ export function DailyMetricsTab({ startDate, endDate }: DailyMetricsTabProps) {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-32" />
+            <Skeleton key={i} className="h-20" />
+          ))}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-20" />
           ))}
         </div>
         <Skeleton className="h-80" />
@@ -89,71 +95,112 @@ export function DailyMetricsTab({ startDate, endDate }: DailyMetricsTabProps) {
   const gap = kiwifyTotal - dealsWon;
   const hasGap = gap > 0;
 
+  // Calculate percentages
+  const percentGanhos = metrics.totalCreated > 0 
+    ? ((metrics.totalWon / metrics.totalCreated) * 100).toFixed(0) + "%"
+    : "0%";
+  
+  const percentNovos = kiwifyTotal > 0 
+    ? ((metrics.kiwifyEvents.newCustomers / kiwifyTotal) * 100).toFixed(0) + "%"
+    : "0%";
+  
+  const percentRecorrentes = kiwifyTotal > 0 
+    ? ((metrics.kiwifyEvents.recurring / kiwifyTotal) * 100).toFixed(0) + "%"
+    : "0%";
+
+  const percentLiquida = metrics.kiwifyEvents.totalGross > 0
+    ? ((metrics.kiwifyEvents.totalNet / metrics.kiwifyEvents.totalGross) * 100).toFixed(0) + "%"
+    : "0%";
+
+  // Row 1: Resumo do Funil
+  const resumoMetrics: CompactMetric[] = [
+    {
+      title: "Deals Criados",
+      value: metrics.totalCreated,
+      icon: Users,
+      color: "text-blue-600",
+      bgColor: "bg-blue-100 dark:bg-blue-900/30",
+      subtext: formatCurrency(metrics.totalOpenValue),
+      tooltip: "Total de deals criados no período"
+    },
+    {
+      title: "Deals Ganhos",
+      value: metrics.totalWon,
+      icon: TrendingUp,
+      color: "text-green-600",
+      bgColor: "bg-green-100 dark:bg-green-900/30",
+      percent: percentGanhos,
+      percentColor: "green",
+      subtext: formatCurrency(metrics.totalWonValue),
+      tooltip: "Deals ganhos / Deals criados"
+    },
+    {
+      title: "Vendas Kiwify",
+      value: kiwifyTotal,
+      icon: ShoppingCart,
+      color: "text-purple-600",
+      bgColor: "bg-purple-100 dark:bg-purple-900/30",
+      subtext: `${metrics.kiwifyEvents.newCustomers} novos | ${metrics.kiwifyEvents.recurring} recorrentes`,
+      tooltip: "Total de vendas processadas no Kiwify"
+    },
+    {
+      title: "Conversão",
+      value: conversionRate + "%",
+      icon: Target,
+      color: "text-amber-600",
+      bgColor: "bg-amber-100 dark:bg-amber-900/30",
+      subtext: `${metrics.totalLost} perdidos`,
+      tooltip: "Taxa de conversão (Ganhos / Criados)"
+    },
+  ];
+
+  // Row 2: Receita e Breakdown
+  const receitaMetrics: CompactMetric[] = [
+    {
+      title: "Receita Bruta",
+      value: formatCurrency(metrics.kiwifyEvents.totalGross),
+      icon: DollarSign,
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-100 dark:bg-emerald-900/30",
+      tooltip: "Valor total bruto das vendas Kiwify"
+    },
+    {
+      title: "Receita Líquida",
+      value: formatCurrency(metrics.kiwifyEvents.totalNet),
+      icon: Banknote,
+      color: "text-green-600",
+      bgColor: "bg-green-100 dark:bg-green-900/30",
+      percent: percentLiquida,
+      percentColor: "green",
+      tooltip: "Receita após taxas (% do bruto)"
+    },
+    {
+      title: "Clientes Novos",
+      value: metrics.kiwifyEvents.newCustomers,
+      icon: UserPlus,
+      color: "text-cyan-600",
+      bgColor: "bg-cyan-100 dark:bg-cyan-900/30",
+      percent: percentNovos,
+      percentColor: "green",
+      tooltip: "Primeira compra do cliente"
+    },
+    {
+      title: "Recorrentes",
+      value: metrics.kiwifyEvents.recurring,
+      icon: RefreshCw,
+      color: "text-blue-600",
+      bgColor: "bg-blue-100 dark:bg-blue-900/30",
+      percent: percentRecorrentes,
+      percentColor: "muted",
+      tooltip: "Renovações e recompras"
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Deals Criados */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Deals Criados</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.totalCreated}</div>
-            <p className="text-xs text-muted-foreground">
-              Valor em aberto: {formatCurrency(metrics.totalOpenValue)}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Deals Ganhos */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Deals Ganhos</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{metrics.totalWon}</div>
-            <p className="text-xs text-muted-foreground">
-              Valor: {formatCurrency(metrics.totalWonValue)}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Vendas Kiwify */}
-        <Card className={hasGap ? "border-yellow-500/50" : ""}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Vendas Kiwify</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{kiwifyTotal}</div>
-            <div className="flex gap-2 text-xs text-muted-foreground">
-              <span className="text-green-600">Novos: {metrics.kiwifyEvents.newCustomers}</span>
-              <span>|</span>
-              <span className="text-blue-600">
-                <RefreshCw className="h-3 w-3 inline mr-0.5" />
-                {metrics.kiwifyEvents.recurring}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Taxa de Conversão */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Conversão</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{conversionRate}%</div>
-            <p className="text-xs text-muted-foreground">
-              Perdidos: {metrics.totalLost}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* KPI Cards - Compact Layout */}
+      <CompactMetricsGrid label="Resumo do Funil" metrics={resumoMetrics} columns={4} />
+      <CompactMetricsGrid label="Receita e Breakdown" metrics={receitaMetrics} columns={4} />
 
       {/* Gap Alert */}
       {hasGap && (
@@ -174,67 +221,6 @@ export function DailyMetricsTab({ startDate, endDate }: DailyMetricsTabProps) {
           </CardContent>
         </Card>
       )}
-
-      {/* Revenue Cards */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Receita Kiwify */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-green-500" />
-              Receita Kiwify no Período
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Receita Bruta</p>
-                <p className="text-xl font-bold">
-                  {formatCurrency(metrics.kiwifyEvents.totalGross)}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Receita Líquida</p>
-                <p className="text-xl font-bold text-green-600">
-                  {formatCurrency(metrics.kiwifyEvents.totalNet)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Breakdown Kiwify */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <RefreshCw className="h-5 w-5 text-blue-500" />
-              Breakdown de Vendas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Novos Clientes</p>
-                <p className="text-xl font-bold text-green-600">
-                  {metrics.kiwifyEvents.newCustomers}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {((metrics.kiwifyEvents.newCustomers / Math.max(kiwifyTotal, 1)) * 100).toFixed(0)}% do total
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Recorrentes</p>
-                <p className="text-xl font-bold text-blue-600">
-                  {metrics.kiwifyEvents.recurring}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {((metrics.kiwifyEvents.recurring / Math.max(kiwifyTotal, 1)) * 100).toFixed(0)}% do total
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Charts */}
       <div className="grid gap-6 md:grid-cols-2">

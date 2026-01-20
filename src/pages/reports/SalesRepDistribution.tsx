@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CompactMetricsGrid, type CompactMetric } from "@/components/ui/CompactMetricsGrid";
 import {
   Table,
   TableBody,
@@ -82,8 +83,8 @@ export default function SalesRepDistribution() {
   };
 
   // Calculate distribution balance
-  const getDistributionBalance = () => {
-    if (!bySalesRep || bySalesRep.length < 2) return null;
+  const getDistributionBalance = (): { status: "good" | "warning" | "bad" | "neutral"; message: string } => {
+    if (!bySalesRep || bySalesRep.length < 2) return { status: "neutral", message: "Sem dados" };
     const max = Math.max(...bySalesRep.map((r) => r.leads_received_month));
     const min = Math.min(...bySalesRep.map((r) => r.leads_received_month));
     const diff = max - min;
@@ -93,11 +94,11 @@ export default function SalesRepDistribution() {
     const variance = (diff / avg) * 100;
 
     if (variance < 30) {
-      return { status: "good", message: "Distribuição equilibrada" };
+      return { status: "good", message: "Equilibrado" };
     } else if (variance < 60) {
-      return { status: "warning", message: "Distribuição levemente desbalanceada" };
+      return { status: "warning", message: "Leve desbalanço" };
     } else {
-      return { status: "bad", message: "Distribuição muito desbalanceada" };
+      return { status: "bad", message: "Desbalanceado" };
     }
   };
 
@@ -110,15 +111,70 @@ export default function SalesRepDistribution() {
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-10 w-32" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-28" />
+            <Skeleton key={i} className="h-20" />
           ))}
         </div>
         <Skeleton className="h-96" />
       </div>
     );
   }
+
+  // Compact metrics for stats
+  const statsMetrics: CompactMetric[] = [
+    {
+      title: "Leads Hoje",
+      value: stats.total_leads_today,
+      icon: Calendar,
+      color: "text-blue-600",
+      bgColor: "bg-blue-100 dark:bg-blue-900/30",
+      subtext: `p/ ${stats.total_sales_reps} vendedores`,
+      tooltip: "Total de leads distribuídos hoje"
+    },
+    {
+      title: "Leads no Mês",
+      value: stats.total_leads_month,
+      icon: TrendingUp,
+      color: "text-green-600",
+      bgColor: "bg-green-100 dark:bg-green-900/30",
+      subtext: `${stats.avg_leads_per_rep}/vendedor`,
+      tooltip: "Total de leads distribuídos no mês atual"
+    },
+    {
+      title: "Não Atribuídos",
+      value: stats.unassigned_deals,
+      icon: UserPlus,
+      color: stats.unassigned_deals > 0 ? "text-amber-600" : "text-muted-foreground",
+      bgColor: stats.unassigned_deals > 0 
+        ? "bg-amber-100 dark:bg-amber-900/30" 
+        : "bg-muted/50",
+      subtext: "Aguardando distribuição",
+      tooltip: "Leads que ainda não foram atribuídos a nenhum vendedor"
+    },
+    {
+      title: "Balanceamento",
+      value: balance.message,
+      icon: balance.status === "good" 
+        ? CheckCircle 
+        : AlertTriangle,
+      color: balance.status === "good" 
+        ? "text-green-600" 
+        : balance.status === "warning" 
+          ? "text-yellow-600" 
+          : balance.status === "bad"
+            ? "text-red-600"
+            : "text-muted-foreground",
+      bgColor: balance.status === "good"
+        ? "bg-green-100 dark:bg-green-900/30"
+        : balance.status === "warning"
+          ? "bg-yellow-100 dark:bg-yellow-900/30"
+          : balance.status === "bad"
+            ? "bg-red-100 dark:bg-red-900/30"
+            : "bg-muted/50",
+      tooltip: "Variação na distribuição entre vendedores"
+    },
+  ];
 
   return (
     <div className="space-y-6 p-6">
@@ -142,75 +198,8 @@ export default function SalesRepDistribution() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Leads Hoje</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total_leads_today}</div>
-            <p className="text-xs text-muted-foreground">
-              Distribuídos para {stats.total_sales_reps} vendedores
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Leads no Mês</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total_leads_month}</div>
-            <p className="text-xs text-muted-foreground">
-              Média de {stats.avg_leads_per_rep} por vendedor
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
-              Não Atribuídos
-            </CardTitle>
-            <UserPlus className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.unassigned_deals}</div>
-            <p className="text-xs text-muted-foreground">
-              Aguardando distribuição
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Balanceamento</CardTitle>
-            {balance?.status === "good" ? (
-              <CheckCircle className="h-4 w-4 text-green-500" />
-            ) : balance?.status === "warning" ? (
-              <AlertTriangle className="h-4 w-4 text-yellow-500" />
-            ) : (
-              <AlertTriangle className="h-4 w-4 text-red-500" />
-            )}
-          </CardHeader>
-          <CardContent>
-            <Badge
-              variant={
-                balance?.status === "good"
-                  ? "default"
-                  : balance?.status === "warning"
-                  ? "secondary"
-                  : "destructive"
-              }
-            >
-              {balance?.message || "Sem dados"}
-            </Badge>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Stats Cards - Compact Layout */}
+      <CompactMetricsGrid metrics={statsMetrics} columns={4} />
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
