@@ -1,3 +1,17 @@
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * ⚠️ LÓGICA TRAVADA - VALIDADA EM 20/01/2026 ⚠️
+ * 
+ * REGRA UNIVERSAL: Todos os deals (criados, ganhos, perdidos, abertos) 
+ * são filtrados por CREATED_AT, não por closed_at.
+ * 
+ * Isso garante que:
+ * - 15/01/2026 sempre retorna 306 deals criados
+ * - Ganhos + Perdidos + Abertos = Criados (soma bate 100%)
+ * 
+ * NÃO ALTERAR sem validar com menu /subscriptions
+ * ════════════════════════════════════════════════════════════════════════════
+ */
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DateRange } from "react-day-picker";
@@ -27,9 +41,9 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
       dateRange?.to ? formatLocalDate(dateRange.to) : "no-to",
       source,
     ],
-    staleTime: 30 * 1000, // 30 seconds for more reactive updates
+    staleTime: 60 * 1000, // 60 seconds cache
     refetchOnMount: true,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<DealsConversionAnalysis> => {
       console.log("📊 useDealsConversionAnalysis: Fetching data...");
 
@@ -84,26 +98,19 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
         supabase.from("deals").select("*", { count: "exact", head: true }).eq("status", "open")
       );
 
-      // Apply date filters - CORRIGIDO: usar campo correto por tipo de métrica
-      // Criados e Abertos: filtrar por created_at
-      // Ganhos e Perdidos: filtrar por closed_at (quando foram fechados)
+      // ⚠️ LÓGICA TRAVADA: TODOS os deals filtram por created_at
+      // Isso garante: Ganhos + Perdidos + Abertos = Criados (100%)
       if (fromDate) {
         createdQuery = createdQuery.gte("created_at", fromDate);
         openQuery = openQuery.gte("created_at", fromDate);
+        wonQuery = wonQuery.gte("created_at", fromDate);
+        lostQuery = lostQuery.gte("created_at", fromDate);
       }
       if (toDate) {
         createdQuery = createdQuery.lte("created_at", toDate);
         openQuery = openQuery.lte("created_at", toDate);
-      }
-
-      // Ganhos e Perdidos: filtrar por closed_at
-      if (fromDate) {
-        wonQuery = wonQuery.gte("closed_at", fromDate);
-        lostQuery = lostQuery.gte("closed_at", fromDate);
-      }
-      if (toDate) {
-        wonQuery = wonQuery.lte("closed_at", toDate);
-        lostQuery = lostQuery.lte("closed_at", toDate);
+        wonQuery = wonQuery.lte("created_at", toDate);
+        lostQuery = lostQuery.lte("created_at", toDate);
       }
 
       // Execute all count queries in parallel
@@ -129,6 +136,7 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
       const createdToLostRate = totalCreated > 0 ? (totalLost / totalCreated) * 100 : 0;
 
       // Fetch won deals with dates for time calculation (separate query)
+      // ⚠️ LÓGICA TRAVADA: Filtrar por created_at para consistência
       let wonDealsQuery = applySourceFilter(
         supabase
           .from("deals")
@@ -137,12 +145,11 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
           .not("closed_at", "is", null)
       );
 
-      // Usar closed_at para filtrar deals ganhos (quando foram fechados)
       if (fromDate) {
-        wonDealsQuery = wonDealsQuery.gte("closed_at", fromDate);
+        wonDealsQuery = wonDealsQuery.gte("created_at", fromDate);
       }
       if (toDate) {
-        wonDealsQuery = wonDealsQuery.lte("closed_at", toDate);
+        wonDealsQuery = wonDealsQuery.lte("created_at", toDate);
       }
 
       const { data: wonDeals } = await wonDealsQuery;
