@@ -161,6 +161,9 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
         query = query.order("created_at", { ascending: false });
       }
 
+      // Aplicar limite explícito para evitar truncamento pelo limite padrão de 1000
+      query = query.limit(5000);
+
       const { data, error } = await query;
       if (error) throw error;
       return data;

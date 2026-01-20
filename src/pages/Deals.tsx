@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings, Users, Search, Trophy, TrendingDown, CheckSquare, BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDeals, useUpdateDeal, useUpdateDealStage, DealFilters } from "@/hooks/useDeals";
+import { useDealsMetrics } from "@/hooks/useDealsMetrics";
 import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useSalesReps } from "@/hooks/useSalesReps";
@@ -253,20 +254,17 @@ export default function Deals() {
     updateDealStage.mutate({ id: dealId, stage_id: newStageId });
   };
 
-  // Calculate pipeline metrics (MUST be before early returns)
+  // Usar hook dedicado para métricas com filtros corretos
+  // - Criados: filtrado por created_at
+  // - Ganhos/Perdidos: filtrado por closed_at
+  const { data: dealsMetrics } = useDealsMetrics(selectedPipeline, dealFilters.createdDateRange);
+
+  // Calculate additional pipeline metrics (forecast, hot deals, rotten)
   const pipelineMetrics = useMemo(() => {
     if (!filteredDeals || !stages) return null;
 
     const totalValue = filteredDeals
       .filter(d => d.status === "open")
-      .reduce((sum, d) => sum + (d.value || 0), 0);
-
-    const totalWonValue = filteredDeals
-      .filter(d => d.status === "won")
-      .reduce((sum, d) => sum + (d.value || 0), 0);
-
-    const totalLostValue = filteredDeals
-      .filter(d => d.status === "lost")
       .reduce((sum, d) => sum + (d.value || 0), 0);
 
     let weightedForecast = 0;
@@ -283,7 +281,7 @@ export default function Deals() {
 
     const rottenCount = rottenDeals?.length || 0;
 
-    return { totalValue, totalWonValue, totalLostValue, weightedForecast, hotDeals, rottenCount };
+    return { totalValue, weightedForecast, hotDeals, rottenCount };
   }, [filteredDeals, stages, rottenDeals]);
 
   const handleLostReasonConfirm = (reason: string, notes?: string) => {
@@ -510,27 +508,27 @@ export default function Deals() {
               <span className="font-semibold">{formatCurrency(pipelineMetrics.totalValue)}</span>
             </div>
             
-            {pipelineMetrics.totalWonValue > 0 && (
+            {(dealsMetrics?.wonValue ?? 0) > 0 && (
               <>
                 <div className="h-4 border-l border-border" />
                 <div className="flex items-center gap-1.5 whitespace-nowrap">
-                  <Trophy className="h-4 w-4 text-green-600" />
-                  <span className="text-muted-foreground">Ganho:</span>
-                  <span className="font-semibold text-green-600">
-                    {formatCurrency(pipelineMetrics.totalWonValue)}
+                  <Trophy className="h-4 w-4 text-primary" />
+                  <span className="text-muted-foreground">Ganho ({dealsMetrics?.won ?? 0}):</span>
+                  <span className="font-semibold text-primary">
+                    {formatCurrency(dealsMetrics?.wonValue ?? 0)}
                   </span>
                 </div>
               </>
             )}
             
-            {pipelineMetrics.totalLostValue > 0 && (
+            {(dealsMetrics?.lostValue ?? 0) > 0 && (
               <>
                 <div className="h-4 border-l border-border" />
                 <div className="flex items-center gap-1.5 whitespace-nowrap">
                   <TrendingDown className="h-4 w-4 text-destructive" />
-                  <span className="text-muted-foreground">Perdido:</span>
+                  <span className="text-muted-foreground">Perdido ({dealsMetrics?.lost ?? 0}):</span>
                   <span className="font-semibold text-destructive">
-                    {formatCurrency(pipelineMetrics.totalLostValue)}
+                    {formatCurrency(dealsMetrics?.lostValue ?? 0)}
                   </span>
                 </div>
               </>
@@ -538,9 +536,9 @@ export default function Deals() {
             
             <div className="h-4 border-l border-border" />
             <div className="flex items-center gap-1.5 whitespace-nowrap">
-              <TrendingUp className="h-4 w-4 text-green-600" />
+              <TrendingUp className="h-4 w-4 text-primary" />
               <span className="text-muted-foreground">Forecast:</span>
-              <span className="font-semibold text-green-600">
+              <span className="font-semibold text-primary">
                 {formatCurrency(pipelineMetrics.weightedForecast)}
               </span>
             </div>
