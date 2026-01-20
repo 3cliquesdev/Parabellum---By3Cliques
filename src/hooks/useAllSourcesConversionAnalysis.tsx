@@ -1,3 +1,17 @@
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * ⚠️ LÓGICA TRAVADA - VALIDADA EM 20/01/2026 ⚠️
+ * 
+ * REGRA UNIVERSAL: Todos os deals (criados, ganhos, perdidos, abertos) 
+ * são filtrados por CREATED_AT, não por closed_at.
+ * 
+ * Isso garante que:
+ * - 15/01/2026 sempre retorna 306 deals criados
+ * - Ganhos + Perdidos + Abertos = Criados (soma bate 100%)
+ * 
+ * NÃO ALTERAR sem validar com menu /subscriptions
+ * ════════════════════════════════════════════════════════════════════════════
+ */
 import { useQueries } from "@tanstack/react-query";
 import { DateRange } from "react-day-picker";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,8 +73,9 @@ async function fetchSourceData(
     }
   };
 
-  // Filtro para Criados e Em Aberto (usa created_at)
-  const applyCreatedDateFilter = (query: any) => {
+  // ⚠️ LÓGICA TRAVADA: TODOS os deals filtram por created_at
+  // Isso garante: Ganhos + Perdidos + Abertos = Criados (100%)
+  const applyDateFilter = (query: any) => {
     if (dateRange?.from && dateRange?.to) {
       const { startDateTime, endDateTime } = getDateTimeBoundaries(dateRange.from, dateRange.to);
       query = query.gte("created_at", startDateTime).lte("created_at", endDateTime);
@@ -74,28 +89,13 @@ async function fetchSourceData(
     return query;
   };
 
-  // Filtro para Ganhos e Perdidos (usa closed_at)
-  const applyClosedDateFilter = (query: any) => {
-    if (dateRange?.from && dateRange?.to) {
-      const { startDateTime, endDateTime } = getDateTimeBoundaries(dateRange.from, dateRange.to);
-      query = query.gte("closed_at", startDateTime).lte("closed_at", endDateTime);
-    } else if (dateRange?.from) {
-      const startDateTime = `${formatLocalDate(dateRange.from)}T00:00:00`;
-      query = query.gte("closed_at", startDateTime);
-    } else if (dateRange?.to) {
-      const endDateTime = `${formatLocalDate(dateRange.to)}T23:59:59`;
-      query = query.lte("closed_at", endDateTime);
-    }
-    return query;
-  };
-
-  // Fetch counts in parallel - CORRIGIDO: created_at para Criados/Open, closed_at para Won/Lost
+  // ⚠️ LÓGICA TRAVADA: Todos usam created_at para consistência
   const [createdResult, wonResult, lostResult, openResult, wonDealsResult] = await Promise.all([
-    applyCreatedDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }))),
-    applyClosedDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "won"))),
-    applyClosedDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "lost"))),
-    applyCreatedDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "open"))),
-    applyClosedDateFilter(applySourceFilter(supabase.from("deals").select("created_at, closed_at").eq("status", "won").not("closed_at", "is", null))),
+    applyDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }))),
+    applyDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "won"))),
+    applyDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "lost"))),
+    applyDateFilter(applySourceFilter(supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "open"))),
+    applyDateFilter(applySourceFilter(supabase.from("deals").select("created_at, closed_at").eq("status", "won").not("closed_at", "is", null))),
   ]);
 
   const totalCreated = createdResult.count || 0;
@@ -149,8 +149,8 @@ export function useAllSourcesConversionAnalysis(dateRange?: DateRange) {
     queries: sourceConfig.map((config) => ({
       queryKey: ["deals-conversion", dateRange?.from ? formatLocalDate(dateRange.from) : null, dateRange?.to ? formatLocalDate(dateRange.to) : null, config.source],
       queryFn: () => fetchSourceData(dateRange, config.source),
-      staleTime: 30 * 1000, // 30 seconds for more reactive updates
-      refetchOnWindowFocus: true,
+      staleTime: 60 * 1000, // 60 seconds cache
+      refetchOnWindowFocus: false,
     })),
   });
 
