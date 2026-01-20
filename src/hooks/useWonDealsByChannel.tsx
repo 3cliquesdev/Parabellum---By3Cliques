@@ -99,6 +99,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 // Classifica canal considerando lead_source, affiliate_name e título (para recuperação)
+// CONSOLIDADO: Recuperação, Formulários e Comercial → tudo "Comercial" no gráfico
 function getChannelForDeal(deal: { 
   lead_source?: string | null; 
   is_organic_sale?: boolean | null;
@@ -109,40 +110,37 @@ function getChannelForDeal(deal: {
   const title = deal.title?.toLowerCase() || "";
   
   // PRIORIDADE 1: Fontes comerciais SEMPRE são Comercial (time de vendas)
-  // Mesmo que is_organic_sale=false, se veio do time comercial, é Comercial
   if (source && ["whatsapp", "manual", "comercial", "webchat"].includes(source)) {
     return { channel: "Comercial", color: "#3b82f6" };
   }
   
-  // PRIORIDADE 2: Recuperação (título começa com "Recuperação")
+  // PRIORIDADE 2: Recuperação → agora é Comercial (consolidado)
   if (title.startsWith("recuperação") || title.startsWith("recuperacao")) {
-    return { channel: "Recuperação", color: "#a855f7" };
+    return { channel: "Comercial", color: "#3b82f6" };
   }
   
-  // PRIORIDADE 3: Recorrência
+  // PRIORIDADE 3: Formulários → agora é Comercial (consolidado)
+  if (source === "formulario" || source === "form" || source === "chat_widget") {
+    return { channel: "Comercial", color: "#3b82f6" };
+  }
+  
+  // PRIORIDADE 4: Recorrência
   if (source === "kiwify_recorrencia" || source === "kiwify_renovacao") {
     return { channel: "Recorrência", color: "#06b6d4" };
   }
   
-  // PRIORIDADE 4: Se is_organic_sale = false E TEM affiliate_name → Afiliados
-  // Só é afiliado se realmente tiver um afiliado identificado
+  // PRIORIDADE 5: Se is_organic_sale = false E TEM affiliate_name → Afiliados
   if (deal.is_organic_sale === false && deal.affiliate_name) {
     return { channel: "Afiliados", color: "#f97316" };
   }
   
-  // PRIORIDADE 5: Orgânico (vendas diretas do produtor)
+  // PRIORIDADE 6: Orgânico (vendas diretas do produtor)
   if (source === "kiwify_direto" || source === "kiwify_organic" || source === "kiwify_checkout") {
     return { channel: "Orgânico", color: "#8b5cf6" };
   }
   
-  // PRIORIDADE 6: Formulários
-  if (source === "formulario" || source === "form" || source === "chat_widget") {
-    return { channel: "Formulários", color: "#22c55e" };
-  }
-  
   // PRIORIDADE 7: Sem source definida
   if (!source) {
-    // Se é afiliado confirmado (tem nome)
     if (deal.is_organic_sale === false && deal.affiliate_name) {
       return { channel: "Afiliados", color: "#f97316" };
     }
@@ -250,14 +248,14 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
         });
 
         // Contadores por tipo (usando classificação correta)
+        // Nota: Recuperação e Formulários agora são contados como Comercial no gráfico
+        // mas mantemos os contadores individuais para o breakdown detalhado
         if (channel === "Orgânico") organicDeals++;
         else if (channel === "Comercial") commercialDeals++;
         else if (channel === "Afiliados") affiliateDeals++;
         else if (channel === "Recorrência") recurringDeals++;
-        else if (channel === "Recuperação") recuperacaoDeals++;
-        else if (channel === "Formulários") formulariosDeals++;
 
-        // Preencher breakdown comercial (detalhamento do time)
+        // Preencher breakdown comercial e contadores específicos
         const sourceNorm = (deal.lead_source || "").toLowerCase().trim();
         const titleNorm = (deal.title || "").toLowerCase();
         
@@ -273,9 +271,11 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
         } else if (titleNorm.startsWith("recuperação") || titleNorm.startsWith("recuperacao")) {
           commercialBreakdown.recuperacao.deals++;
           commercialBreakdown.recuperacao.revenue += revenue;
+          recuperacaoDeals++;
         } else if (sourceNorm === "formulario" || sourceNorm === "form" || sourceNorm === "chat_widget") {
           commercialBreakdown.formularios.deals++;
           commercialBreakdown.formularios.revenue += revenue;
+          formulariosDeals++;
         }
 
         // Agrupa por vendedor

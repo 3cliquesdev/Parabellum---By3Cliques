@@ -274,18 +274,41 @@ export function WonDealsByChannelWidget({ startDate, endDate }: WonDealsByChanne
           </div>
         )}
 
-        {/* Insight resumido */}
-        <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
-          <p className="text-sm text-foreground">
-            💡 <strong>Insight:</strong>{" "}
-            {((totals.organicDeals + totals.recurringDeals) / totals.totalDeals * 100).toFixed(0)}% das vendas 
-            são automáticas (orgânico + recorrência), sem intervenção do time comercial.
-            {realSalesReps.length > 0 && (
-              <> O time comercial converteu {realSalesReps.reduce((s, r) => s + r.deals, 0)} deals 
-              ({formatCurrency(realSalesReps.reduce((s, r) => s + r.revenue, 0))}).</>
-            )}
-          </p>
-        </div>
+        {/* Insight resumido - usa commercialBreakdown para cálculo correto */}
+        {(() => {
+          // Cálculo correto: soma do breakdown comercial (WhatsApp + Manual + Webchat + Recuperação + Formulários)
+          const totalComercialDeals = 
+            commercialBreakdown.whatsapp.deals + 
+            commercialBreakdown.manual.deals + 
+            commercialBreakdown.webchat.deals + 
+            commercialBreakdown.recuperacao.deals + 
+            commercialBreakdown.formularios.deals;
+          
+          const totalComercialRevenue = 
+            commercialBreakdown.whatsapp.revenue + 
+            commercialBreakdown.manual.revenue + 
+            commercialBreakdown.webchat.revenue + 
+            commercialBreakdown.recuperacao.revenue + 
+            commercialBreakdown.formularios.revenue;
+          
+          const percentualAutomatico = totals.totalDeals > 0 
+            ? ((totals.organicDeals + totals.recurringDeals + totals.affiliateDeals) / totals.totalDeals * 100).toFixed(0)
+            : "0";
+          
+          return (
+            <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+              <p className="text-sm text-foreground">
+                💡 <strong>Insight:</strong>{" "}
+                {percentualAutomatico}% das vendas são automáticas (orgânico + afiliados + recorrência), 
+                sem intervenção do time comercial.
+                {totalComercialDeals > 0 && (
+                  <> O time comercial converteu {totalComercialDeals} deals 
+                  ({formatCurrency(totalComercialRevenue)}).</>
+                )}
+              </p>
+            </div>
+          );
+        })()}
       </CardContent>
     </Card>
   );
