@@ -506,6 +506,8 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
 
       return result;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000, // 30 seconds - reduced to reflect product mapping changes faster
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
