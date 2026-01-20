@@ -12,10 +12,12 @@ import { ConversionFunnelWidget } from "./subscriptions/ConversionFunnelWidget";
 import { LeadsBySourceChart } from "./subscriptions/LeadsBySourceChart";
 import { NewVsRecurringChart } from "./subscriptions/NewVsRecurringChart";
 import { ProductPerformanceTable } from "./subscriptions/ProductPerformanceTable";
+import { OfferPerformanceTable } from "./subscriptions/OfferPerformanceTable";
 import { SalesRepRankingWidget } from "./subscriptions/SalesRepRankingWidget";
 import { ChurnAnalysisCard } from "./subscriptions/ChurnAnalysisCard";
 import { WhoSoldRankingWidget } from "./subscriptions/WhoSoldRankingWidget";
 import { RefundsTimelineTable } from "./subscriptions/RefundsTimelineTable";
+import { TopAffiliatesWidget } from "@/components/widgets/TopAffiliatesWidget";
 
 interface SubscriptionsAnalyticsTabProps {
   startDate: Date;
@@ -90,13 +92,17 @@ export function SubscriptionsAnalyticsTab({ startDate, endDate }: SubscriptionsA
         {/* ROW 4: Performance por Produto (Full Width) */}
         <ProductPerformanceTable subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
 
-        {/* ROW 5: Top Vendedores + Análise de Churn */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* ROW 5: Performance por Oferta (Full Width) */}
+        <OfferPerformanceTable subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
+
+        {/* ROW 6: Top Vendedores + Top Afiliados + Análise de Churn */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <SalesRepRankingWidget startDate={startDate} endDate={endDate} />
+          <TopAffiliatesWidget startDate={startDate} endDate={endDate} />
           <ChurnAnalysisCard subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
         </div>
 
-        {/* ROW 6: Reembolsos por Data (Full Width) */}
+        {/* ROW 7: Reembolsos por Data (Full Width) */}
         <RefundsTimelineTable subscriptionData={subscriptionData} isLoading={subscriptionLoading} />
       </div>
     </div>
