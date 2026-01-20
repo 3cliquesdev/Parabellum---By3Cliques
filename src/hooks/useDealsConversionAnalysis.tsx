@@ -17,7 +17,7 @@ export interface DealsConversionAnalysis {
   maxTimeToWinDays: number;
 }
 
-export type DealSource = "all" | "organic_new" | "organic_recurring" | "affiliate" | "form" | "whatsapp" | "other";
+export type DealSource = "all" | "organic_new" | "organic_recurring" | "affiliate" | "commercial";
 
 export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSource = "all") {
   return useQuery({
@@ -38,24 +38,31 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
         ? getDateTimeBoundaries(dateRange.from, dateRange.to)
         : { startDateTime: dateRange?.from ? `${formatLocalDate(dateRange.from)}T00:00:00` : null, endDateTime: dateRange?.to ? `${formatLocalDate(dateRange.to)}T23:59:59` : null };
 
-      // Helper to apply source filter
+      // Helper to apply source filter - 4 categorias consolidadas
       const applySourceFilter = (query: any) => {
-        if (source === "organic_new") {
-          // Vendas orgânicas de novos clientes (primeira compra)
-          return query.eq("is_organic_sale", true).eq("is_returning_customer", false);
+        if (source === "affiliate") {
+          // Afiliados: is_organic=false COM lead_source explícito (não NULL e não comercial)
+          return query
+            .eq("is_organic_sale", false)
+            .not("lead_source", "in", "(formulario,whatsapp,webchat,manual,comercial,indicacao)")
+            .not("lead_source", "is", null);
         } else if (source === "organic_recurring") {
-          // Vendas orgânicas de clientes recorrentes (já compraram antes)
-          return query.eq("is_organic_sale", true).eq("is_returning_customer", true);
-        } else if (source === "affiliate") {
-          // Afiliados: não é orgânico E não é fonte comercial
-          return query.eq("is_organic_sale", false).not("lead_source", "in", "(formulario,whatsapp,webchat,manual,comercial)");
-        } else if (source === "form") {
-          return query.eq("lead_source", "formulario");
-        } else if (source === "whatsapp") {
-          return query.eq("lead_source", "whatsapp");
-        } else if (source === "other") {
-          // Manual/Comercial: fontes manuais ou sem fonte definida
-          return query.in("lead_source", ["manual", "comercial", "webchat", "indicacao"]);
+          // Recorrência: orgânico + cliente recorrente (exclui form/whatsapp)
+          return query
+            .eq("is_organic_sale", true)
+            .eq("is_returning_customer", true)
+            .not("lead_source", "in", "(formulario,whatsapp)");
+        } else if (source === "organic_new") {
+          // Orgânico: 1ª compra orgânica (exclui form/whatsapp)
+          return query
+            .eq("is_organic_sale", true)
+            .eq("is_returning_customer", false)
+            .not("lead_source", "in", "(formulario,whatsapp)");
+        } else if (source === "commercial") {
+          // Comercial: WhatsApp + Formulários + Manual/Webchat/Indicacao + NULL comercial
+          return query.or(
+            `lead_source.in.(whatsapp,formulario,manual,comercial,webchat,indicacao),and(is_organic_sale.eq.false,lead_source.is.null)`
+          );
         }
         return query;
       };

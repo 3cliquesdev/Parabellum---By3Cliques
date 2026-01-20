@@ -27,21 +27,19 @@ interface ConversionFunnelCardProps {
 }
 
 const sourceIcons: Record<string, React.ReactNode> = {
-  organic_new: <ShoppingCart className="w-4 h-4" />,
-  organic_recurring: <RefreshCw className="w-4 h-4" />,
   affiliate: <Users className="w-4 h-4" />,
-  form: <FileText className="w-4 h-4" />,
-  whatsapp: <MessageCircle className="w-4 h-4" />,
-  other: <UserPlus className="w-4 h-4" />,
+  organic_recurring: <RefreshCw className="w-4 h-4" />,
+  organic_new: <ShoppingCart className="w-4 h-4" />,
+  commercial: <MessageCircle className="w-4 h-4" />,
 };
 
 const sourceColors: Record<string, { bg: string; text: string; border: string; icon: string; bar: string }> = {
-  organic_new: { 
-    bg: "bg-blue-50 dark:bg-blue-950/40", 
-    text: "text-blue-700 dark:text-blue-300", 
-    border: "border-blue-200 dark:border-blue-800", 
-    icon: "text-blue-500",
-    bar: "bg-blue-500"
+  affiliate: { 
+    bg: "bg-orange-50 dark:bg-orange-950/40", 
+    text: "text-orange-700 dark:text-orange-300", 
+    border: "border-orange-200 dark:border-orange-800", 
+    icon: "text-orange-500",
+    bar: "bg-orange-500"
   },
   organic_recurring: { 
     bg: "bg-purple-50 dark:bg-purple-950/40", 
@@ -50,33 +48,19 @@ const sourceColors: Record<string, { bg: string; text: string; border: string; i
     icon: "text-purple-500",
     bar: "bg-purple-500"
   },
-  affiliate: { 
-    bg: "bg-orange-50 dark:bg-orange-950/40", 
-    text: "text-orange-700 dark:text-orange-300", 
-    border: "border-orange-200 dark:border-orange-800", 
-    icon: "text-orange-500",
-    bar: "bg-orange-500"
+  organic_new: { 
+    bg: "bg-blue-50 dark:bg-blue-950/40", 
+    text: "text-blue-700 dark:text-blue-300", 
+    border: "border-blue-200 dark:border-blue-800", 
+    icon: "text-blue-500",
+    bar: "bg-blue-500"
   },
-  form: { 
-    bg: "bg-amber-50 dark:bg-amber-950/40", 
-    text: "text-amber-700 dark:text-amber-300", 
-    border: "border-amber-200 dark:border-amber-800", 
-    icon: "text-amber-600",
-    bar: "bg-amber-500"
-  },
-  whatsapp: { 
-    bg: "bg-green-50 dark:bg-green-950/40", 
-    text: "text-green-700 dark:text-green-300", 
-    border: "border-green-200 dark:border-green-800", 
-    icon: "text-green-500",
-    bar: "bg-green-500"
-  },
-  other: { 
-    bg: "bg-slate-50 dark:bg-slate-950/40", 
-    text: "text-slate-700 dark:text-slate-300", 
-    border: "border-slate-200 dark:border-slate-800", 
-    icon: "text-slate-500",
-    bar: "bg-slate-500"
+  commercial: { 
+    bg: "bg-emerald-50 dark:bg-emerald-950/40", 
+    text: "text-emerald-700 dark:text-emerald-300", 
+    border: "border-emerald-200 dark:border-emerald-800", 
+    icon: "text-emerald-500",
+    bar: "bg-emerald-500"
   },
 };
 
@@ -150,7 +134,7 @@ function FunnelBar({
 
 // Premium Source Card with mini-funnel
 function SourceCard({ source, label, data, isLoading }: SourceAnalysis) {
-  const colors = sourceColors[source] || sourceColors.other;
+  const colors = sourceColors[source] || sourceColors.commercial;
   
   if (isLoading || !data) {
     return (
@@ -259,16 +243,14 @@ export function ConversionFunnelCard({ dateRange }: ConversionFunnelCardProps) {
         </div>
       </div>
 
-      {/* Source Filter Tabs */}
+      {/* Source Filter Tabs - 4 Categorias Consolidadas */}
       <Tabs value={source} onValueChange={(v) => setSource(v as DealSource)} className="mb-5">
-        <TabsList className="grid w-full grid-cols-7 h-9">
-          <TabsTrigger value="all" className="text-xs px-1">Todos</TabsTrigger>
-          <TabsTrigger value="organic_new" className="text-xs px-1" title="1ª Compra Orgânica">1ª Orgânica</TabsTrigger>
-          <TabsTrigger value="organic_recurring" className="text-xs px-1">Recorrente</TabsTrigger>
-          <TabsTrigger value="affiliate" className="text-xs px-1">Afiliados</TabsTrigger>
-          <TabsTrigger value="form" className="text-xs px-1">Formulários</TabsTrigger>
-          <TabsTrigger value="whatsapp" className="text-xs px-1">WhatsApp</TabsTrigger>
-          <TabsTrigger value="other" className="text-xs px-1">Manual</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-5 h-9">
+          <TabsTrigger value="all" className="text-xs px-2">Todos</TabsTrigger>
+          <TabsTrigger value="affiliate" className="text-xs px-2">Afiliados</TabsTrigger>
+          <TabsTrigger value="organic_recurring" className="text-xs px-2">Recorrência</TabsTrigger>
+          <TabsTrigger value="organic_new" className="text-xs px-2">Orgânico</TabsTrigger>
+          <TabsTrigger value="commercial" className="text-xs px-2">Comercial</TabsTrigger>
         </TabsList>
       </Tabs>
 
