@@ -1,7 +1,7 @@
 import { useKiwifySubscriptions } from "@/hooks/useKiwifySubscriptions";
 import { useAllSourcesConversionAnalysis } from "@/hooks/useAllSourcesConversionAnalysis";
 import { DateRange } from "react-day-picker";
-import { Download, FileText, FileCode } from "lucide-react";
+import { Download, FileText, FileCode, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useExportPDF } from "@/hooks/useExportPDF";
 import { useExportXML, type XMLReportData } from "@/hooks/useExportXML";
+import { useExportExcel, type ExcelReportData } from "@/hooks/useExportExcel";
 import { toast } from "sonner";
 import { CompactMetricsGrid, type CompactMetric } from "@/components/ui/CompactMetricsGrid";
 import { 
@@ -55,8 +56,9 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
   
   const { exportToPDF, isExporting: isExportingPDF } = useExportPDF();
   const { exportToXML, isExporting: isExportingXML } = useExportXML();
+  const { exportToExcel, isExporting: isExportingExcel } = useExportExcel();
   const isLoading = subscriptionLoading || conversionLoading;
-  const isExporting = isExportingPDF || isExportingXML;
+  const isExporting = isExportingPDF || isExportingXML || isExportingExcel;
 
   const handleExportPDF = async () => {
     try {
@@ -114,6 +116,53 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
       toast.success("XML exportado com sucesso!");
     } catch (error) {
       toast.error("Erro ao exportar XML. Tente novamente.");
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      const totalCreated = conversionTotals?.totalCreated || 0;
+      const totalWon = conversionTotals?.totalWon || 0;
+      const totalLost = conversionTotals?.totalLost || 0;
+      const totalOpen = conversionTotals?.totalOpen || 0;
+
+      const totalGross = subscriptionData?.subscriptions?.reduce((sum, s) => sum + (s.grossValue || 0), 0) || 0;
+      const totalNet = subscriptionData?.subscriptions?.reduce((sum, s) => sum + (s.netValue || 0), 0) || 0;
+      const newCustomers = subscriptionData?.clientesNovos || 0;
+      const recurring = subscriptionData?.clientesRecorrentes || 0;
+      const kiwifyTotal = subscriptionData?.vendasLiquidas || 0;
+
+      const conversionRate = totalCreated > 0 
+        ? ((totalWon / totalCreated) * 100).toFixed(1) + "%"
+        : "0%";
+
+      const excelData: ExcelReportData = {
+        periodo: { inicio: startDate, fim: endDate },
+        resumo: {
+          dealsCreados: totalCreated,
+          dealsGanhos: totalWon,
+          dealsAbertos: totalOpen,
+          dealsPerdidos: totalLost,
+          taxaConversao: conversionRate,
+        },
+        receita: {
+          bruta: totalGross,
+          liquida: totalNet,
+        },
+        clientes: {
+          total: kiwifyTotal,
+          novos: newCustomers,
+          recorrentes: recurring,
+        },
+      };
+
+      await exportToExcel(excelData, {
+        filename: "Relatorio_Vendas_Assinaturas",
+        title: "Relatório de Vendas e Assinaturas",
+      });
+      toast.success("Excel exportado com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao exportar Excel. Tente novamente.");
     }
   };
 
@@ -252,6 +301,10 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-popover">
+            <DropdownMenuItem onClick={handleExportExcel} disabled={isExportingExcel}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Excel (.xlsx)
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleExportPDF} disabled={isExportingPDF}>
               <FileText className="h-4 w-4 mr-2" />
               PDF (Visual)
