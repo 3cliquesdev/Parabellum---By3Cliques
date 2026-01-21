@@ -203,12 +203,14 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
       });
 
       // Dados do Time Comercial (do useSalesByRep)
-    // Filtrar APENAS vendedores reais (excluir categorias automáticas)
+    // Filtrar APENAS vendedores reais + Oferta Comercial (excluir categorias automáticas)
     const categoriasAutomaticas = [
       "Vendas Orgânicas",
       "Vendas Afiliados", 
       "Comercial (Não atribuído)",
-      "Recuperação"
+      "Recuperação",
+      "Recorrência"
+      // NÃO incluir "Oferta Comercial" - queremos que apareça no relatório!
     ];
 
     const timeComercialData = salesByRepData

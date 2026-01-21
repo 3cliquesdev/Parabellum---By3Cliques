@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useUserRole } from "./useUserRole";
 import { formatLocalDate, getDateTimeBoundaries } from "@/lib/dateUtils";
+import { fetchProductMappings } from "@/lib/kiwifyProductMapping";
 
 export function useSalesByRep(startDate?: Date, endDate?: Date) {
   const { user } = useAuth();
@@ -13,11 +14,11 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
   const endKey = endDate ? formatLocalDate(endDate) : undefined;
 
   return useQuery({
-    queryKey: ["sales-by-rep", user?.id, role, startKey, endKey],
+    queryKey: ["sales-by-rep-v2", user?.id, role, startKey, endKey],
     queryFn: async () => {
       let query = supabase
         .from("deals")
-        .select("value, assigned_to, is_organic_sale, affiliate_commission, affiliate_name, lead_source, title, profiles!deals_assigned_to_fkey(full_name)")
+        .select("value, assigned_to, is_organic_sale, affiliate_commission, affiliate_name, lead_source, title, kiwify_offer_id, profiles!deals_assigned_to_fkey(full_name)")
         .eq("status", "won");
 
       // Aplicar filtro de data usando boundaries locais (timezone-safe)
@@ -40,9 +41,22 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
       if (error) throw error;
 
       // ═══════════════════════════════════════════════════════════════════════════════
+      // Buscar mapeamentos de ofertas comerciais
+      // ═══════════════════════════════════════════════════════════════════════════════
+      const { offerMap } = await fetchProductMappings();
+      
+      // Criar Set de offer_ids comerciais
+      const comercialOfferIds = new Set<string>();
+      offerMap.forEach((mapping, offerId) => {
+        if (mapping.sourceType === 'comercial') {
+          comercialOfferIds.add(offerId);
+        }
+      });
+
+      // ═══════════════════════════════════════════════════════════════════════════════
       // REGRA DEFINITIVA (aprovada 21/01/2026):
       // COMERCIAL = Deal com vendedor atribuído (assigned_to preenchido)
-      // Sem vendedor → classificar por: Afiliado, Recorrência ou Orgânico
+      // Sem vendedor → classificar por: Oferta Comercial, Afiliado, Recorrência ou Orgânico
       // ═══════════════════════════════════════════════════════════════════════════════
       const salesByRep = new Map<
         string,
@@ -74,6 +88,13 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
           else if (deal.is_organic_sale === false && (deal as any).affiliate_name) {
             repId = "affiliate_sales";
             repName = "Vendas Afiliados";
+          }
+          // ═══════════════════════════════════════════════════════════════
+          // NOVO: Comercial via Oferta (kiwify_offer_id mapeado como comercial)
+          // ═══════════════════════════════════════════════════════════════
+          else if ((deal as any).kiwify_offer_id && comercialOfferIds.has((deal as any).kiwify_offer_id)) {
+            repId = "oferta_comercial";
+            repName = "Oferta Comercial";
           }
           // Orgânico (vendas diretas sem vendedor)
           else {
