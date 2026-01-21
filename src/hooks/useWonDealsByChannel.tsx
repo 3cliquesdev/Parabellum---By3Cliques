@@ -113,57 +113,44 @@ const SOURCE_LABELS: Record<string, string> = {
   referral: "Referral",
 };
 
-// Classifica canal considerando lead_source, affiliate_name e título (para recuperação)
-// CONSOLIDADO: Recuperação, Formulários e Comercial → tudo "Comercial" no gráfico
+// ═══════════════════════════════════════════════════════════════════════════════
+// REGRA DEFINITIVA (aprovada 21/01/2026):
+// COMERCIAL = Deal com vendedor atribuído (assigned_to preenchido)
+// Sem vendedor → classificar por: Afiliado, Recorrência ou Orgânico
+// ═══════════════════════════════════════════════════════════════════════════════
 function getChannelForDeal(deal: { 
   lead_source?: string | null; 
   is_organic_sale?: boolean | null;
   affiliate_name?: string | null;
   title?: string | null;
+  assigned_to?: string | null;
 }): { channel: string; color: string } {
+  
+  // ═══════════════════════════════════════════════════════════════
+  // REGRA PRINCIPAL: Se tem vendedor atribuído → COMERCIAL
+  // ═══════════════════════════════════════════════════════════════
+  if (deal.assigned_to) {
+    return { channel: "Comercial", color: "#3b82f6" };
+  }
+  
+  // ═══════════════════════════════════════════════════════════════
+  // SEM VENDEDOR - Classificar por tipo de venda automática
+  // ═══════════════════════════════════════════════════════════════
+  
   const source = deal.lead_source?.toLowerCase().trim();
-  const title = deal.title?.toLowerCase() || "";
   
-  // PRIORIDADE 1: Fontes comerciais SEMPRE são Comercial (time de vendas)
-  if (source && ["whatsapp", "manual", "comercial", "webchat"].includes(source)) {
-    return { channel: "Comercial", color: "#3b82f6" };
-  }
-  
-  // PRIORIDADE 2: Recuperação/Winback → agora é Comercial (consolidado)
-  if (title.startsWith("recuperação") || title.startsWith("recuperacao") || title.startsWith("winback")) {
-    return { channel: "Comercial", color: "#3b82f6" };
-  }
-  
-  // PRIORIDADE 3: Formulários → agora é Comercial (consolidado)
-  if (source === "formulario" || source === "form" || source === "chat_widget") {
-    return { channel: "Comercial", color: "#3b82f6" };
-  }
-  
-  // PRIORIDADE 4: Recorrência
+  // Recorrência
   if (source === "kiwify_recorrencia" || source === "kiwify_renovacao") {
     return { channel: "Recorrência", color: "#06b6d4" };
   }
   
-  // PRIORIDADE 5: Se is_organic_sale = false E TEM affiliate_name → Afiliados
+  // Afiliados (is_organic_sale=false + affiliate_name confirmado)
   if (deal.is_organic_sale === false && deal.affiliate_name) {
     return { channel: "Afiliados", color: "#f97316" };
   }
   
-  // PRIORIDADE 6: Orgânico (vendas diretas do produtor)
-  if (source === "kiwify_direto" || source === "kiwify_organic" || source === "kiwify_checkout") {
-    return { channel: "Orgânico", color: "#8b5cf6" };
-  }
-  
-  // PRIORIDADE 7: Sem source definida
-  if (!source) {
-    if (deal.is_organic_sale === false && deal.affiliate_name) {
-      return { channel: "Afiliados", color: "#f97316" };
-    }
-    return { channel: "Outros", color: "#6b7280" };
-  }
-  
-  // Fallback para mapeamento existente
-  return SOURCE_TO_CHANNEL[source] || { channel: "Outros", color: "#6b7280" };
+  // Orgânico (vendas diretas sem vendedor)
+  return { channel: "Orgânico", color: "#8b5cf6" };
 }
 
 function getSourceLabel(source: string | null): string {
@@ -310,27 +297,33 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
           kiwifyBreakdown.recorrencia.revenue += revenue;
         }
 
-        // Preencher breakdown comercial e contadores específicos
-        const sourceNorm = (deal.lead_source || "").toLowerCase().trim();
-        const titleNorm = (deal.title || "").toLowerCase();
-        
-        if (sourceNorm === "whatsapp") {
-          commercialBreakdown.whatsapp.deals++;
-          commercialBreakdown.whatsapp.revenue += revenue;
-        } else if (sourceNorm === "manual" || sourceNorm === "comercial") {
-          commercialBreakdown.manual.deals++;
-          commercialBreakdown.manual.revenue += revenue;
-        } else if (sourceNorm === "webchat") {
-          commercialBreakdown.webchat.deals++;
-          commercialBreakdown.webchat.revenue += revenue;
-        } else if (titleNorm.startsWith("recuperação") || titleNorm.startsWith("recuperacao") || titleNorm.startsWith("winback")) {
-          commercialBreakdown.recuperacao.deals++;
-          commercialBreakdown.recuperacao.revenue += revenue;
-          recuperacaoDeals++;
-        } else if (sourceNorm === "formulario" || sourceNorm === "form" || sourceNorm === "chat_widget") {
-          commercialBreakdown.formularios.deals++;
-          commercialBreakdown.formularios.revenue += revenue;
-          formulariosDeals++;
+        // Preencher breakdown comercial APENAS para deals COM vendedor
+        if (deal.assigned_to) {
+          const sourceNorm = (deal.lead_source || "").toLowerCase().trim();
+          const titleNorm = (deal.title || "").toLowerCase();
+          
+          if (sourceNorm === "whatsapp") {
+            commercialBreakdown.whatsapp.deals++;
+            commercialBreakdown.whatsapp.revenue += revenue;
+          } else if (sourceNorm === "manual" || sourceNorm === "comercial") {
+            commercialBreakdown.manual.deals++;
+            commercialBreakdown.manual.revenue += revenue;
+          } else if (sourceNorm === "webchat") {
+            commercialBreakdown.webchat.deals++;
+            commercialBreakdown.webchat.revenue += revenue;
+          } else if (titleNorm.startsWith("recuperação") || titleNorm.startsWith("recuperacao") || titleNorm.startsWith("winback")) {
+            commercialBreakdown.recuperacao.deals++;
+            commercialBreakdown.recuperacao.revenue += revenue;
+            recuperacaoDeals++;
+          } else if (sourceNorm === "formulario" || sourceNorm === "form" || sourceNorm === "chat_widget") {
+            commercialBreakdown.formularios.deals++;
+            commercialBreakdown.formularios.revenue += revenue;
+            formulariosDeals++;
+          } else {
+            // Outros canais com vendedor → Manual/Outros
+            commercialBreakdown.manual.deals++;
+            commercialBreakdown.manual.revenue += revenue;
+          }
         }
 
         // Agrupa por vendedor

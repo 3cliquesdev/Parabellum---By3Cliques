@@ -39,7 +39,11 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
 
       if (error) throw error;
 
-      // Agrupar por vendedor - separar vendas orgânicas e de afiliados
+      // ═══════════════════════════════════════════════════════════════════════════════
+      // REGRA DEFINITIVA (aprovada 21/01/2026):
+      // COMERCIAL = Deal com vendedor atribuído (assigned_to preenchido)
+      // Sem vendedor → classificar por: Afiliado, Recorrência ou Orgânico
+      // ═══════════════════════════════════════════════════════════════════════════════
       const salesByRep = new Map<
         string,
         { repName: string; totalSales: number; dealsCount: number }
@@ -50,30 +54,28 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
         let repName: string;
 
         if (deal.assigned_to) {
-          // Venda atribuída a um vendedor
+          // ═══════════════════════════════════════════════════════════════
+          // COMERCIAL: Venda COM vendedor atribuído → Time Comercial
+          // ═══════════════════════════════════════════════════════════════
           repId = deal.assigned_to;
           repName = (deal.profiles as any)?.full_name || "Vendedor";
         } else {
-          // Venda sem vendedor - classificar por tipo usando lógica de prioridade unificada
+          // ═══════════════════════════════════════════════════════════════
+          // SEM VENDEDOR: Classificar por tipo de venda automática
+          // ═══════════════════════════════════════════════════════════════
           const source = (deal as any).lead_source?.toLowerCase().trim();
-          const title = (deal as any).title?.toLowerCase() || "";
           
-          // PRIORIDADE 1: Fontes comerciais → Comercial (Não atribuído)
-          if (source && ["whatsapp", "manual", "comercial", "webchat"].includes(source)) {
-            repId = "commercial_unassigned";
-            repName = "Comercial (Não atribuído)";
+          // Recorrência
+          if (source === "kiwify_recorrencia" || source === "kiwify_renovacao") {
+            repId = "recurring_sales";
+            repName = "Recorrência";
           }
-          // PRIORIDADE 2: Recuperação (título começa com "Recuperação")
-          else if (title.startsWith("recuperação") || title.startsWith("recuperacao")) {
-            repId = "recovery_sales";
-            repName = "Recuperação";
-          }
-          // PRIORIDADE 3: Afiliado só se tiver affiliate_name confirmado
+          // Afiliados (is_organic_sale=false + affiliate_name confirmado)
           else if (deal.is_organic_sale === false && (deal as any).affiliate_name) {
             repId = "affiliate_sales";
             repName = "Vendas Afiliados";
           }
-          // PRIORIDADE 4: Demais vendas sem vendedor são orgânicas
+          // Orgânico (vendas diretas sem vendedor)
           else {
             repId = "organic_sales";
             repName = "Vendas Orgânicas";
