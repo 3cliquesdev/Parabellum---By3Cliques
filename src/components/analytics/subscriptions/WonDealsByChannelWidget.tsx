@@ -216,6 +216,7 @@ export function WonDealsByChannelWidget({ startDate, endDate }: WonDealsByChanne
         {(() => {
           const totalComercialDeals = 
             commercialBreakdown.whatsapp.deals + 
+            commercialBreakdown.ofertaComercial.deals +
             commercialBreakdown.manual.deals + 
             commercialBreakdown.webchat.deals + 
             commercialBreakdown.recuperacao.deals + 
@@ -223,6 +224,7 @@ export function WonDealsByChannelWidget({ startDate, endDate }: WonDealsByChanne
           
           const totalComercialRevenue = 
             commercialBreakdown.whatsapp.revenue + 
+            commercialBreakdown.ofertaComercial.revenue +
             commercialBreakdown.manual.revenue + 
             commercialBreakdown.webchat.revenue + 
             commercialBreakdown.recuperacao.revenue + 
