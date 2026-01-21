@@ -1924,6 +1924,7 @@ export type Database = {
           is_organic_sale: boolean | null
           is_returning_customer: boolean | null
           kiwify_fee: number | null
+          kiwify_offer_id: string | null
           lead_email: string | null
           lead_phone: string | null
           lead_source: string | null
@@ -1966,6 +1967,7 @@ export type Database = {
           is_organic_sale?: boolean | null
           is_returning_customer?: boolean | null
           kiwify_fee?: number | null
+          kiwify_offer_id?: string | null
           lead_email?: string | null
           lead_phone?: string | null
           lead_source?: string | null
@@ -2008,6 +2010,7 @@ export type Database = {
           is_organic_sale?: boolean | null
           is_returning_customer?: boolean | null
           kiwify_fee?: number | null
+          kiwify_offer_id?: string | null
           lead_email?: string | null
           lead_phone?: string | null
           lead_source?: string | null

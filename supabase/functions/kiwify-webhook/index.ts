@@ -1068,6 +1068,9 @@ async function handlePaidOrder(
       const hasAffiliate = affiliateCommission > 0;
       const saleType = hasAffiliate ? 'Venda Afiliado' : 'Venda Orgânica';
       
+      // Extrair offer_id do payload para cruzamento com product_offers
+      const kiwifyOfferId = payload.Subscription?.plan?.id || payload.Product?.offer_id || null;
+      
       // Criar deal e marcar como ganho imediatamente
       const { data: organicDeal, error: dealError } = await supabase
         .from('deals')
@@ -1089,6 +1092,7 @@ async function handlePaidOrder(
           lead_source: 'kiwify_direto',
           closed_at: new Date().toISOString(),
           product_id: product?.id,
+          kiwify_offer_id: kiwifyOfferId, // ✅ Para cruzamento com product_offers.source_type
         })
         .select()
         .single();
@@ -1444,6 +1448,9 @@ async function handleUpsellOrder(
       const hasUpsellAffiliate = upsellAffiliateCommission > 0;
       const upsellSaleType = hasUpsellAffiliate ? 'Afiliado' : 'Orgânica';
       
+      // Extrair offer_id do Product para cruzamento com product_offers
+      const upsellOfferId = Product.offer_id || null;
+      
       // Criar deal e marcar como ganho imediatamente no Pipeline de Recorrência
       const { data: upsellDeal, error: dealError } = await supabase
         .from('deals')
@@ -1464,6 +1471,7 @@ async function handleUpsellOrder(
           is_returning_customer: true,
           lead_source: 'kiwify_recorrencia',
           closed_at: new Date().toISOString(),
+          kiwify_offer_id: upsellOfferId, // ✅ Para cruzamento com product_offers.source_type
         })
         .select()
         .single();

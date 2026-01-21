@@ -114,27 +114,42 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// REGRA DEFINITIVA (aprovada 21/01/2026):
-// COMERCIAL = Deal com vendedor atribuído (assigned_to preenchido)
-// Sem vendedor → classificar por: Afiliado, Recorrência ou Orgânico
+// REGRA DEFINITIVA (aprovada 21/01/2026 - V2):
+// 1. COMERCIAL = Deal com vendedor atribuído (assigned_to preenchido)
+// 2. COMERCIAL = Deal de oferta comercial (kiwify_offer_id → product_offers.source_type)
+// 3. Sem vendedor E sem oferta comercial → Afiliado, Recorrência ou Orgânico
 // ═══════════════════════════════════════════════════════════════════════════════
-function getChannelForDeal(deal: { 
-  lead_source?: string | null; 
-  is_organic_sale?: boolean | null;
-  affiliate_name?: string | null;
-  title?: string | null;
-  assigned_to?: string | null;
-}): { channel: string; color: string } {
+function getChannelForDeal(
+  deal: { 
+    lead_source?: string | null; 
+    is_organic_sale?: boolean | null;
+    affiliate_name?: string | null;
+    title?: string | null;
+    assigned_to?: string | null;
+    kiwify_offer_id?: string | null;
+  },
+  offerSourceTypeMap?: Map<string, string>
+): { channel: string; color: string } {
   
   // ═══════════════════════════════════════════════════════════════
-  // REGRA PRINCIPAL: Se tem vendedor atribuído → COMERCIAL
+  // REGRA 1: Se tem vendedor atribuído → COMERCIAL
   // ═══════════════════════════════════════════════════════════════
   if (deal.assigned_to) {
     return { channel: "Comercial", color: "#3b82f6" };
   }
   
   // ═══════════════════════════════════════════════════════════════
-  // SEM VENDEDOR - Classificar por tipo de venda automática
+  // REGRA 2: Se oferta é comercial → COMERCIAL (mesmo sem vendedor)
+  // ═══════════════════════════════════════════════════════════════
+  if (deal.kiwify_offer_id && offerSourceTypeMap) {
+    const sourceType = offerSourceTypeMap.get(deal.kiwify_offer_id);
+    if (sourceType === 'comercial') {
+      return { channel: "Comercial", color: "#3b82f6" };
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════
+  // SEM VENDEDOR E SEM OFERTA COMERCIAL - Classificar por tipo
   // ═══════════════════════════════════════════════════════════════
   
   const source = deal.lead_source?.toLowerCase().trim();
@@ -181,14 +196,28 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
   const endKey = endDate ? formatLocalDate(endDate) : undefined;
 
   return useQuery({
-    queryKey: ["won-deals-by-channel-v3", startKey, endKey],
+    queryKey: ["won-deals-by-channel-v4", startKey, endKey],
     staleTime: 60 * 1000, // Cache de 60 segundos
     refetchOnWindowFocus: false, // Evitar spam de requests
     retry: 3, // Retry em caso de falha de rede
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Backoff exponencial
     placeholderData: (previousData) => previousData, // Manter dados anteriores durante falha
     queryFn: async (): Promise<WonDealsData> => {
-      // Buscar deals ganhos no período
+      // 1. Buscar mapeamento de ofertas comerciais (offer_id → source_type)
+      const { data: productOffers } = await supabase
+        .from("product_offers")
+        .select("offer_id, source_type")
+        .eq("is_active", true);
+      
+      const offerSourceTypeMap = new Map<string, string>();
+      (productOffers || []).forEach((po) => {
+        if (po.offer_id && po.source_type) {
+          offerSourceTypeMap.set(po.offer_id, po.source_type);
+        }
+      });
+      console.log(`[useWonDealsByChannel] 📦 Loaded ${offerSourceTypeMap.size} offer mappings`);
+
+      // 2. Buscar deals ganhos no período
       let query = supabase
         .from("deals")
         .select(`
@@ -201,6 +230,7 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
           is_organic_sale,
           affiliate_name,
           closed_at,
+          kiwify_offer_id,
           profiles:assigned_to (
             id,
             full_name
@@ -259,8 +289,8 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
       (deals || []).forEach((deal) => {
         const revenue = deal.net_value || deal.value || 0;
         const source = deal.lead_source;
-        // Usa nova função que considera is_organic_sale
-        const { channel, color } = getChannelForDeal(deal);
+        // Usa função que considera: assigned_to, kiwify_offer_id (comercial), is_organic_sale
+        const { channel, color } = getChannelForDeal(deal, offerSourceTypeMap);
 
         // Agrupa por canal
         const existing = channelMap.get(channel) || { deals: 0, revenue: 0, color };
