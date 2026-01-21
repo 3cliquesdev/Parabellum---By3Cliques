@@ -17,7 +17,19 @@ export function useSupportAgents() {
       const { data: userRoles, error: rolesError } = await supabase
         .from("user_roles")
         .select("user_id")
-        .in("role", ["support_agent", "sales_rep", "consultant", "support_manager", "cs_manager"]);
+        .in("role", [
+          // Gestores
+          "admin",
+          "manager", 
+          "general_manager",
+          "financial_manager",
+          // Suporte/Atendimento
+          "support_agent", 
+          "sales_rep", 
+          "consultant", 
+          "support_manager", 
+          "cs_manager"
+        ]);
 
       if (rolesError) throw rolesError;
 
