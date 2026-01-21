@@ -103,6 +103,11 @@ function formatLocalDate(date: Date): string {
 export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
   return useQuery({
     queryKey: ['kiwify-subscriptions', startDate?.toISOString(), endDate?.toISOString()],
+    staleTime: 60 * 1000, // Cache de 60 segundos
+    refetchOnWindowFocus: false, // Evitar spam de requests
+    retry: 3, // Retry em caso de falha de rede
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Backoff exponencial
+    placeholderData: (previousData) => previousData, // Manter dados anteriores durante falha
     queryFn: async (): Promise<SubscriptionMetrics> => {
       console.log('[useKiwifySubscriptions] Fetching subscription data...');
       
@@ -492,8 +497,5 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
 
       return result;
     },
-    staleTime: 30 * 1000, // 30 seconds - reduced to reflect product mapping changes faster
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
   });
 }

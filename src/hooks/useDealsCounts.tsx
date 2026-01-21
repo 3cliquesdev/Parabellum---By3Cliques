@@ -37,7 +37,9 @@ export function useDealsCounts(startDate: Date | undefined, endDate: Date | unde
     ],
     enabled: !!startDate && !!endDate,
     staleTime: 60 * 1000, // Cache de 60 segundos para performance
+    gcTime: 5 * 60 * 1000, // Manter cache por 5 minutos mesmo após unmount
     refetchOnWindowFocus: false, // Não refetch ao focar (usa cache)
+    refetchOnReconnect: true, // Refetch quando reconectar
     retry: 3, // Retry em caso de falha de rede
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Backoff exponencial
     placeholderData: (previousData) => previousData, // Manter dados anteriores durante refetch

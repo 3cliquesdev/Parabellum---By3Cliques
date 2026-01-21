@@ -12,6 +12,8 @@
 
 import { useKiwifySubscriptions } from "@/hooks/useKiwifySubscriptions";
 import { useDealsCounts } from "@/hooks/useDealsCounts";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, Wifi } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Download, FileText, FileCode, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,11 +67,15 @@ function formatCurrency(value: number): string {
 }
 
 export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptionsTabProps) {
-  const { data: subscriptionData, isLoading: subscriptionLoading } = useKiwifySubscriptions(startDate, endDate);
+  const { data: subscriptionData, isLoading: subscriptionLoading, error: subscriptionError, isRefetching: subscriptionRefetching } = useKiwifySubscriptions(startDate, endDate);
   const dateRange: DateRange = { from: startDate, to: endDate };
   
   // ⚠️ LÓGICA TRAVADA: Usar useDealsCounts (query simples + cache 60s)
-  const { data: dealsCounts, isLoading: dealsLoading } = useDealsCounts(startDate, endDate);
+  const { data: dealsCounts, isLoading: dealsLoading, error: dealsError, isRefetching: dealsRefetching } = useDealsCounts(startDate, endDate);
+  
+  // Detectar erro de conexão (ambos hooks falhando)
+  const hasConnectionError = !!(subscriptionError || dealsError);
+  const isRefetching = subscriptionRefetching || dealsRefetching;
   
   const { exportToPDF, isExporting: isExportingPDF } = useExportPDF();
   const { exportToXML, isExporting: isExportingXML } = useExportXML();
@@ -354,6 +360,22 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Connection Error Alert */}
+      {hasConnectionError && (
+        <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10">
+          <Wifi className="h-4 w-4" />
+          <AlertDescription className="flex items-center gap-2">
+            <span>Conexão instável detectada.</span>
+            {isRefetching && (
+              <span className="text-xs animate-pulse">Reconectando...</span>
+            )}
+            <span className="text-xs text-muted-foreground ml-auto">
+              Exibindo últimos dados disponíveis
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Dashboard Content */}
       <div id="sales-subscriptions-dashboard" className="space-y-6 bg-background">

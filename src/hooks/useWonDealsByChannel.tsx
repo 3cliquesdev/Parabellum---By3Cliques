@@ -195,6 +195,11 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
 
   return useQuery({
     queryKey: ["won-deals-by-channel-v3", startKey, endKey],
+    staleTime: 60 * 1000, // Cache de 60 segundos
+    refetchOnWindowFocus: false, // Evitar spam de requests
+    retry: 3, // Retry em caso de falha de rede
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Backoff exponencial
+    placeholderData: (previousData) => previousData, // Manter dados anteriores durante falha
     queryFn: async (): Promise<WonDealsData> => {
       // Buscar deals ganhos no período
       let query = supabase
@@ -420,6 +425,5 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
       };
     },
     enabled: true,
-    staleTime: 1000 * 60 * 2,
   });
 }

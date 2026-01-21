@@ -1,7 +1,8 @@
 import { useKiwifySubscriptions, SubscriptionMetrics } from "@/hooks/useKiwifySubscriptions";
 import { useDealsCounts } from "@/hooks/useDealsCounts";
-import { FileDown } from "lucide-react";
+import { FileDown, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useExportPDF } from "@/hooks/useExportPDF";
 import { toast } from "sonner";
 
@@ -24,13 +25,17 @@ interface SubscriptionsAnalyticsTabProps {
 
 export function SubscriptionsAnalyticsTab({ startDate, endDate }: SubscriptionsAnalyticsTabProps) {
   // Data hooks - USANDO A MESMA FONTE DO MENU /subscriptions
-  const { data: subscriptionData, isLoading: subscriptionLoading } = useKiwifySubscriptions(startDate, endDate);
-  const { data: dealsCounts, isLoading: dealsLoading } = useDealsCounts(startDate, endDate);
+  const { data: subscriptionData, isLoading: subscriptionLoading, error: subscriptionError, isRefetching: subscriptionRefetching } = useKiwifySubscriptions(startDate, endDate);
+  const { data: dealsCounts, isLoading: dealsLoading, error: dealsError, isRefetching: dealsRefetching } = useDealsCounts(startDate, endDate);
   
   // PDF Export
   const { exportToPDF, isExporting } = useExportPDF();
 
   const isLoading = subscriptionLoading || dealsLoading;
+  
+  // Detectar erro de conexão
+  const hasConnectionError = !!(subscriptionError || dealsError);
+  const isRefetching = subscriptionRefetching || dealsRefetching;
 
   const handleExportPDF = async () => {
     // Bloquear exportação enquanto dados carregam
@@ -75,6 +80,22 @@ export function SubscriptionsAnalyticsTab({ startDate, endDate }: SubscriptionsA
           {isExporting ? "Exportando..." : "Exportar PDF"}
         </Button>
       </div>
+
+      {/* Connection Error Alert */}
+      {hasConnectionError && (
+        <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10">
+          <Wifi className="h-4 w-4" />
+          <AlertDescription className="flex items-center gap-2">
+            <span>Conexão instável detectada.</span>
+            {isRefetching && (
+              <span className="text-xs animate-pulse">Reconectando...</span>
+            )}
+            <span className="text-xs text-muted-foreground ml-auto">
+              Exibindo últimos dados disponíveis
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Dashboard Content - Wrapped for PDF export */}
       <div id="subscriptions-dashboard" className="space-y-6 bg-background">
