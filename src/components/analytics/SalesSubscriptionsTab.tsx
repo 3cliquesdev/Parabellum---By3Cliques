@@ -203,7 +203,17 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
       });
 
       // Dados do Time Comercial (do useSalesByRep)
-      const timeComercialData = salesByRepData?.map(rep => ({
+    // Filtrar APENAS vendedores reais (excluir categorias automáticas)
+    const categoriasAutomaticas = [
+      "Vendas Orgânicas",
+      "Vendas Afiliados", 
+      "Comercial (Não atribuído)",
+      "Recuperação"
+    ];
+
+    const timeComercialData = salesByRepData
+      ?.filter(rep => !categoriasAutomaticas.includes(rep.repName))
+      .map(rep => ({
         nome: rep.repName,
         deals: rep.dealsCount,
         receita: rep.totalSales
