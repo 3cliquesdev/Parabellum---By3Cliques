@@ -76,27 +76,29 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
         } else {
           // ═══════════════════════════════════════════════════════════════
           // SEM VENDEDOR: Classificar por tipo de venda automática
+          // HIERARQUIA: Oferta Comercial > Recorrência > Afiliados > Orgânico
           // ═══════════════════════════════════════════════════════════════
           const source = (deal as any).lead_source?.toLowerCase().trim();
           
-          // Recorrência
-          if (source === "kiwify_recorrencia" || source === "kiwify_renovacao") {
+          // ═══════════════════════════════════════════════════════════════
+          // PRIORIDADE 1: Comercial via Oferta (kiwify_offer_id mapeado como comercial)
+          // Mesmo que seja recorrência, se a oferta é comercial, conta como comercial!
+          // ═══════════════════════════════════════════════════════════════
+          if ((deal as any).kiwify_offer_id && comercialOfferIds.has((deal as any).kiwify_offer_id)) {
+            repId = "oferta_comercial";
+            repName = "Oferta Comercial";
+          }
+          // PRIORIDADE 2: Recorrência (não-comercial)
+          else if (source === "kiwify_recorrencia" || source === "kiwify_renovacao") {
             repId = "recurring_sales";
             repName = "Recorrência";
           }
-          // Afiliados (is_organic_sale=false + affiliate_name confirmado)
+          // PRIORIDADE 3: Afiliados (is_organic_sale=false + affiliate_name confirmado)
           else if (deal.is_organic_sale === false && (deal as any).affiliate_name) {
             repId = "affiliate_sales";
             repName = "Vendas Afiliados";
           }
-          // ═══════════════════════════════════════════════════════════════
-          // NOVO: Comercial via Oferta (kiwify_offer_id mapeado como comercial)
-          // ═══════════════════════════════════════════════════════════════
-          else if ((deal as any).kiwify_offer_id && comercialOfferIds.has((deal as any).kiwify_offer_id)) {
-            repId = "oferta_comercial";
-            repName = "Oferta Comercial";
-          }
-          // Orgânico (vendas diretas sem vendedor)
+          // PRIORIDADE 4: Orgânico (fallback)
           else {
             repId = "organic_sales";
             repName = "Vendas Orgânicas";
