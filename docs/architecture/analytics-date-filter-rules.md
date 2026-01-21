@@ -105,3 +105,4 @@ Ao criar um novo hook de métricas:
 |------|-----------|-------------|
 | 20/01/2026 | Criação inicial e validação | Sistema |
 | 21/01/2026 | Auditoria completa de 16 hooks | Sistema |
+| 21/01/2026 | Regra de atribuição: Comercial = assigned_to | Ver sales-channel-attribution-rules.md |
