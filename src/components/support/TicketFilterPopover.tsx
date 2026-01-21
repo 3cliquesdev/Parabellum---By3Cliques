@@ -27,7 +27,8 @@ import {
   CalendarIcon,
   Tag,
   Building2,
-  User
+  User,
+  History
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -35,6 +36,7 @@ import { DateRange } from "react-day-picker";
 
 export interface TicketFilters {
   search: string;
+  searchInHistory: boolean;
   status: string[];
   priority: string[];
   category: string[];
@@ -78,6 +80,7 @@ const CHANNEL_OPTIONS = [
 
 export const defaultTicketFilters: TicketFilters = {
   search: '',
+  searchInHistory: false,
   status: [],
   priority: [],
   category: [],
@@ -109,6 +112,7 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
     filters.slaExpired,
     filters.departmentId !== undefined,
     filters.assignedTo !== undefined,
+    filters.searchInHistory,
   ].filter(Boolean).length;
 
   const handleSearchChange = (value: string) => {
@@ -143,7 +147,10 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar protocolo, assunto, cliente..."
+          placeholder={filters.searchInHistory 
+            ? "Buscar em todo histórico..." 
+            : "Buscar protocolo, assunto, cliente..."
+          }
           value={filters.search}
           onChange={(e) => handleSearchChange(e.target.value)}
           className="pl-9 w-[280px]"
@@ -159,6 +166,21 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
           </Button>
         )}
       </div>
+
+      {/* History Search Toggle */}
+      <Button
+        variant={filters.searchInHistory ? "default" : "outline"}
+        size="sm"
+        onClick={() => onFiltersChange({ 
+          ...filters, 
+          searchInHistory: !filters.searchInHistory 
+        })}
+        className="gap-1"
+        title="Buscar também nos comentários e mensagens de todos os tickets"
+      >
+        <History className="h-3.5 w-3.5" />
+        Histórico
+      </Button>
 
       {/* Quick Filters */}
       <Button

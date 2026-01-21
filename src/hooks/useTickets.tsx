@@ -203,22 +203,44 @@ export function useTickets(
       // Client-side search filter
       if (advancedFilters?.search) {
         const searchLower = advancedFilters.search.toLowerCase();
+        
+        // Se busca no histórico está ativa, buscar também nos comentários
+        let ticketIdsFromComments: Set<string> = new Set();
+        if (advancedFilters.searchInHistory) {
+          const { data: commentMatches } = await supabase
+            .from("ticket_comments")
+            .select("ticket_id")
+            .ilike("content", `%${advancedFilters.search}%`);
+          
+          if (commentMatches) {
+            ticketIdsFromComments = new Set(commentMatches.map(c => c.ticket_id));
+          }
+        }
+        
         filteredData = filteredData.filter(ticket => {
           const ticketId = ticket.id.toLowerCase();
           const ticketNumber = (ticket.ticket_number || '').toLowerCase();
           const subject = (ticket.subject || '').toLowerCase();
+          const description = (ticket.description || '').toLowerCase();
           const customerFirstName = (ticket.customer?.first_name || '').toLowerCase();
           const customerLastName = (ticket.customer?.last_name || '').toLowerCase();
           const customerEmail = (ticket.customer?.email || '').toLowerCase();
           
-          return (
+          // Match básico em campos do ticket
+          const basicMatch = (
             ticketId.includes(searchLower) ||
             ticketNumber.includes(searchLower) ||
             subject.includes(searchLower) ||
+            description.includes(searchLower) ||
             customerFirstName.includes(searchLower) ||
             customerLastName.includes(searchLower) ||
             customerEmail.includes(searchLower)
           );
+          
+          // Se busca no histórico, incluir tickets com match nos comentários
+          const historyMatch = advancedFilters.searchInHistory && ticketIdsFromComments.has(ticket.id);
+          
+          return basicMatch || historyMatch;
         });
       }
       
