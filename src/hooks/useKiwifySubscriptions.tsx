@@ -111,10 +111,37 @@ export function useKiwifySubscriptions(startDate?: Date, endDate?: Date) {
     queryFn: async (): Promise<SubscriptionMetrics> => {
       console.log('[useKiwifySubscriptions] Fetching subscription data...');
       
-      // 1. Buscar mapeamentos usando helper centralizado
-      const { offerMap: offerToProduct, productIdMap: productIdToProduct } = await fetchProductMappings();
+      // 1. Buscar mapeamentos usando helper centralizado COM VALIDAÇÃO
+      let offerToProduct: Map<string, any>;
+      let productIdToProduct: Map<string, any>;
       
-      console.log(`[useKiwifySubscriptions] Loaded ${offerToProduct.size} offer mappings + ${productIdToProduct.size} product_id mappings`);
+      try {
+        const mappings = await fetchProductMappings();
+        offerToProduct = mappings.offerMap;
+        productIdToProduct = mappings.productIdMap;
+        
+        // VALIDAÇÃO CRÍTICA: Garantir que os mapeamentos foram carregados
+        if (offerToProduct.size === 0 && productIdToProduct.size === 0) {
+          console.warn('[useKiwifySubscriptions] ⚠️ Zero mapeamentos carregados! Tentando novamente...');
+          // Retry após 500ms
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const retryMappings = await fetchProductMappings();
+          offerToProduct = retryMappings.offerMap;
+          productIdToProduct = retryMappings.productIdMap;
+          
+          if (offerToProduct.size === 0 && productIdToProduct.size === 0) {
+            console.error('[useKiwifySubscriptions] ❌ ERRO CRÍTICO: Falha ao carregar mapeamentos após retry');
+            // Não lançar erro, continuar com fallback (mostrará nomes originais do Kiwify)
+          }
+        }
+      } catch (mappingError) {
+        console.error('[useKiwifySubscriptions] ❌ Erro ao carregar mapeamentos:', mappingError);
+        // Inicializar com Maps vazios para continuar com fallback
+        offerToProduct = new Map();
+        productIdToProduct = new Map();
+      }
+      
+      console.log(`[useKiwifySubscriptions] ✅ Loaded ${offerToProduct.size} offer mappings + ${productIdToProduct.size} product_id mappings`);
       
       // Fetch paid events
       let paidQuery = supabase

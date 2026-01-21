@@ -21,7 +21,7 @@ export interface ProductMappingMaps {
  * Fetches all active product_offers and creates Maps for O(1) lookups
  */
 export async function fetchProductMappings(): Promise<ProductMappingMaps> {
-  const { data: offerMappings } = await supabase
+  const { data: offerMappings, error } = await supabase
     .from('product_offers')
     .select(`
       offer_id,
@@ -32,6 +32,19 @@ export async function fetchProductMappings(): Promise<ProductMappingMaps> {
       )
     `)
     .eq('is_active', true);
+
+  // Tratamento de erro: lançar exceção para que o React Query faça retry
+  if (error) {
+    console.error('[fetchProductMappings] Erro ao carregar mapeamentos:', error);
+    throw new Error(`Falha ao carregar mapeamentos de produtos: ${error.message}`);
+  }
+
+  // Log de warning se não houver mapeamentos (mas não erro)
+  if (!offerMappings || offerMappings.length === 0) {
+    console.warn('[fetchProductMappings] ⚠️ Nenhum mapeamento encontrado na tabela product_offers');
+  } else {
+    console.log(`[fetchProductMappings] ✅ Carregados ${offerMappings.length} mapeamentos de ofertas`);
+  }
 
   const offerMap = new Map<string, ProductMapping>();
   const productIdMap = new Map<string, ProductMapping>();
