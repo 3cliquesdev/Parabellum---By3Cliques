@@ -16,9 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, User } from "lucide-react";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useBulkTransferTickets } from "@/hooks/useBulkTransferTickets";
+import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 
 interface BulkTransferTicketsDialogProps {
   open: boolean;
@@ -34,18 +35,26 @@ export function BulkTransferTicketsDialog({
   onSuccess,
 }: BulkTransferTicketsDialogProps) {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [internalNote, setInternalNote] = useState<string>("");
 
   const { data: departments = [], isLoading: departmentsLoading } = useDepartments();
+  const { data: departmentUsers = [], isLoading: usersLoading } = useUsersByDepartment(selectedDepartmentId);
   const transferTickets = useBulkTransferTickets();
 
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
       setSelectedDepartmentId("");
+      setSelectedUserId("");
       setInternalNote("");
     }
   }, [open]);
+
+  // Reset user selection when department changes
+  useEffect(() => {
+    setSelectedUserId("");
+  }, [selectedDepartmentId]);
 
   const handleTransfer = () => {
     if (!selectedDepartmentId) return;
@@ -54,6 +63,7 @@ export function BulkTransferTicketsDialog({
       {
         ticketIds: selectedTicketIds,
         departmentId: selectedDepartmentId,
+        assignedTo: selectedUserId || undefined,
         internalNote: internalNote.trim() || undefined,
       },
       {
@@ -107,6 +117,36 @@ export function BulkTransferTicketsDialog({
                 </SelectContent>
               </Select>
             </div>
+
+            {selectedDepartmentId && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Atribuir a (opcional)
+                </Label>
+                <Select
+                  value={selectedUserId}
+                  onValueChange={setSelectedUserId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={usersLoading ? "Carregando..." : "Nenhum (fila do departamento)"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      Nenhum (fila do departamento)
+                    </SelectItem>
+                    {departmentUsers.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Se não selecionar ninguém, os tickets irão para a fila geral do departamento
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Nota interna (opcional)</Label>
