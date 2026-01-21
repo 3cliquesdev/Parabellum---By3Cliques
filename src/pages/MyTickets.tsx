@@ -81,6 +81,41 @@ export default function MyTickets() {
     }
   }, []);
 
+  // Sincronizar nome do contato com banco de dados
+  useEffect(() => {
+    const syncContactName = async () => {
+      if (!identity?.contact_id) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('contacts')
+          .select('first_name, last_name')
+          .eq('id', identity.contact_id)
+          .single();
+        
+        if (error) throw error;
+        
+        // Se o nome mudou, atualizar o localStorage
+        if (data && (data.first_name !== identity.first_name || data.last_name !== identity.last_name)) {
+          console.log('[MyTickets] Nome do contato atualizado:', data.first_name, data.last_name);
+          const updatedIdentity: StoredIdentity = {
+            ...identity,
+            first_name: data.first_name,
+            last_name: data.last_name
+          };
+          localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(updatedIdentity));
+          setIdentity(updatedIdentity);
+        }
+      } catch (error) {
+        console.error('[MyTickets] Erro ao sincronizar nome:', error);
+      }
+    };
+    
+    if (isIdentified && identity?.contact_id) {
+      syncContactName();
+    }
+  }, [isIdentified, identity?.contact_id]);
+
   // Fetch tickets when identified
   useEffect(() => {
     if (isIdentified && identity?.contact_id) {
