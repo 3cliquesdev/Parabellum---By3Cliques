@@ -7,10 +7,18 @@ export function useSearchTickets(searchTerm: string, excludeTicketId?: string) {
     queryFn: async () => {
       if (!searchTerm || searchTerm.length < 2) return [];
 
+      // Normalizar busca por número de ticket
+      let ticketNumberPattern = searchTerm;
+      if (/^\d+$/.test(searchTerm)) {
+        // Se for só números, adicionar zeros para completar 5 dígitos
+        ticketNumberPattern = searchTerm.padStart(5, '0');
+      }
+
       let query = supabase
         .from("tickets")
         .select(`
           id,
+          ticket_number,
           subject,
           status,
           priority,
@@ -26,9 +34,9 @@ export function useSearchTickets(searchTerm: string, excludeTicketId?: string) {
         query = query.neq("id", excludeTicketId);
       }
 
-      // Buscar por ID, assunto ou nome do cliente
+      // Buscar por ID, assunto ou número do ticket
       const { data, error } = await query
-        .or(`subject.ilike.%${searchTerm}%,id.eq.${searchTerm}`)
+        .or(`subject.ilike.%${searchTerm}%,ticket_number.ilike.%${ticketNumberPattern}%,id.eq.${searchTerm}`)
         .limit(10);
 
       if (error) throw error;
