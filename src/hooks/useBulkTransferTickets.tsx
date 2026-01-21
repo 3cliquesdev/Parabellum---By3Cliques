@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 interface BulkTransferParams {
   ticketIds: string[];
   departmentId: string;
+  assignedTo?: string;
   internalNote?: string;
 }
 
@@ -13,7 +14,7 @@ export function useBulkTransferTickets() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ ticketIds, departmentId, internalNote }: BulkTransferParams) => {
+    mutationFn: async ({ ticketIds, departmentId, assignedTo, internalNote }: BulkTransferParams) => {
       if (ticketIds.length === 0) {
         throw new Error("Nenhum ticket selecionado");
       }
@@ -21,13 +22,17 @@ export function useBulkTransferTickets() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      // Update tickets department and clear assignee
+      // Determine status based on assignment
+      const newStatus = assignedTo && assignedTo !== "none" ? "in_progress" : "open";
+      const finalAssignedTo = assignedTo === "none" ? null : (assignedTo || null);
+
+      // Update tickets department and optionally assign
       const { error: updateError } = await supabase
         .from("tickets")
         .update({
           department_id: departmentId,
-          assigned_to: null,
-          status: "open",
+          assigned_to: finalAssignedTo,
+          status: newStatus,
         })
         .in("id", ticketIds);
 
