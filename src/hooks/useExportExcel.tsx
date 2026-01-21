@@ -23,7 +23,8 @@ export interface ExcelReportData {
   };
   categorias?: Array<{ nome: string; deals: number; receita: number }>;
   produtos?: Array<{ nome: string; vendas: number; bruto: number; liquido: number }>;
-  vendedores?: Array<{ nome: string; deals: number; receita: number }>;
+  ofertas?: Array<{ produto: string; oferta: string; vendas: number; bruto: number; liquido: number }>;
+  timeComercial?: Array<{ nome: string; deals: number; receita: number }>;
 }
 
 interface ExportExcelOptions {
@@ -54,7 +55,7 @@ export function useExportExcel() {
         const geradoEm = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 
         // Aba 1: Resumo Geral - Formato tabela horizontal
-        const resumoData = [
+        const resumoData: (string | number)[][] = [
           [title],
           [`Período: ${periodoInicio} a ${periodoFim} | Gerado em: ${geradoEm}`],
           [],
@@ -70,8 +71,39 @@ export function useExportExcel() {
           ["Total Vendas", "Clientes Novos", "Clientes Recorrentes"],
           [data.clientes.total, data.clientes.novos, data.clientes.recorrentes],
         ];
+
+        // Top 5 Produtos no Resumo
+        if (data.produtos && data.produtos.length > 0) {
+          resumoData.push(
+            [],
+            ["TOP 5 PRODUTOS"],
+            ["Produto", "Vendas", "Receita Bruta"],
+            ...data.produtos.slice(0, 5).map(p => [p.nome, p.vendas, formatCurrency(p.bruto)])
+          );
+        }
+
+        // Top 5 Ofertas no Resumo
+        if (data.ofertas && data.ofertas.length > 0) {
+          resumoData.push(
+            [],
+            ["TOP 5 OFERTAS"],
+            ["Oferta", "Vendas", "Receita Bruta"],
+            ...data.ofertas.slice(0, 5).map(o => [o.oferta, o.vendas, formatCurrency(o.bruto)])
+          );
+        }
+
+        // Top 5 Time Comercial no Resumo
+        if (data.timeComercial && data.timeComercial.length > 0) {
+          resumoData.push(
+            [],
+            ["TOP 5 TIME COMERCIAL"],
+            ["Vendedor", "Deals", "Receita"],
+            ...data.timeComercial.slice(0, 5).map(t => [t.nome, t.deals, formatCurrency(t.receita)])
+          );
+        }
+
         const resumoSheet = XLSX.utils.aoa_to_sheet(resumoData);
-        resumoSheet["!cols"] = [{ wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 18 }];
+        resumoSheet["!cols"] = [{ wch: 35 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 18 }];
         XLSX.utils.book_append_sheet(workbook, resumoSheet, "Resumo");
 
         // Aba 2: Por Categoria (se houver dados)
@@ -103,15 +135,34 @@ export function useExportExcel() {
           XLSX.utils.book_append_sheet(workbook, prodSheet, "Por Produto");
         }
 
-        // Aba 4: Por Vendedor (se houver dados)
-        if (data.vendedores && data.vendedores.length > 0) {
-          const vendData = [
-            ["Vendedor", "Deals", "Receita", "Receita (Formatado)"],
-            ...data.vendedores.map(v => [v.nome, v.deals, v.receita, formatCurrency(v.receita)])
+        // Aba 4: Por Oferta (se houver dados)
+        if (data.ofertas && data.ofertas.length > 0) {
+          const ofertaData = [
+            ["Produto", "Oferta", "Vendas", "Valor Bruto", "Bruto (Formatado)", "Valor Líquido", "Líquido (Formatado)"],
+            ...data.ofertas.map(o => [
+              o.produto,
+              o.oferta,
+              o.vendas,
+              o.bruto,
+              formatCurrency(o.bruto),
+              o.liquido,
+              formatCurrency(o.liquido)
+            ])
           ];
-          const vendSheet = XLSX.utils.aoa_to_sheet(vendData);
-          vendSheet["!cols"] = [{ wch: 35 }, { wch: 12 }, { wch: 15 }, { wch: 20 }];
-          XLSX.utils.book_append_sheet(workbook, vendSheet, "Por Vendedor");
+          const ofertaSheet = XLSX.utils.aoa_to_sheet(ofertaData);
+          ofertaSheet["!cols"] = [{ wch: 35 }, { wch: 45 }, { wch: 10 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 18 }];
+          XLSX.utils.book_append_sheet(workbook, ofertaSheet, "Por Oferta");
+        }
+
+        // Aba 5: Time Comercial (se houver dados)
+        if (data.timeComercial && data.timeComercial.length > 0) {
+          const timeData = [
+            ["Membro do Time", "Deals Fechados", "Receita", "Receita (Formatado)"],
+            ...data.timeComercial.map(t => [t.nome, t.deals, t.receita, formatCurrency(t.receita)])
+          ];
+          const timeSheet = XLSX.utils.aoa_to_sheet(timeData);
+          timeSheet["!cols"] = [{ wch: 35 }, { wch: 18 }, { wch: 15 }, { wch: 20 }];
+          XLSX.utils.book_append_sheet(workbook, timeSheet, "Time Comercial");
         }
 
         // Gerar e baixar arquivo

@@ -12,6 +12,7 @@
 
 import { useKiwifySubscriptions } from "@/hooks/useKiwifySubscriptions";
 import { useDealsCounts } from "@/hooks/useDealsCounts";
+import { useSalesByRep } from "@/hooks/useSalesByRep";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Wifi } from "lucide-react";
 import { DateRange } from "react-day-picker";
@@ -72,6 +73,9 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
   
   // ⚠️ LÓGICA TRAVADA: Usar useDealsCounts (query simples + cache 60s)
   const { data: dealsCounts, isLoading: dealsLoading, error: dealsError, isRefetching: dealsRefetching } = useDealsCounts(startDate, endDate);
+  
+  // Dados do Time Comercial para exportação Excel
+  const { data: salesByRepData } = useSalesByRep(startDate, endDate);
   
   // Detectar erro de conexão (ambos hooks falhando)
   const hasConnectionError = !!(subscriptionError || dealsError);
@@ -179,6 +183,32 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
         produtosMap.set(key, current);
       });
 
+      // Agregar por oferta (Produto + Oferta)
+      const ofertasMap = new Map<string, { produto: string; oferta: string; vendas: number; bruto: number; liquido: number }>();
+      subscriptionData?.subscriptions?.forEach(sub => {
+        const produtoNome = sub.productCategory || sub.productName;
+        const ofertaNome = sub.offerName || "Oferta Padrão";
+        const key = `${produtoNome}|${ofertaNome}`;
+        const current = ofertasMap.get(key) || { 
+          produto: produtoNome, 
+          oferta: ofertaNome, 
+          vendas: 0, 
+          bruto: 0, 
+          liquido: 0 
+        };
+        current.vendas++;
+        current.bruto += sub.grossValue || 0;
+        current.liquido += sub.netValue || 0;
+        ofertasMap.set(key, current);
+      });
+
+      // Dados do Time Comercial (do useSalesByRep)
+      const timeComercialData = salesByRepData?.map(rep => ({
+        nome: rep.repName,
+        deals: rep.dealsCount,
+        receita: rep.totalSales
+      })) || [];
+
       const excelData: ExcelReportData = {
         periodo: { inicio: startDate, fim: endDate },
         resumo: {
@@ -198,6 +228,8 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
           recorrentes: recurring,
         },
         produtos: Array.from(produtosMap.values()).sort((a, b) => b.bruto - a.bruto),
+        ofertas: Array.from(ofertasMap.values()).sort((a, b) => b.vendas - a.vendas),
+        timeComercial: timeComercialData,
       };
 
       await exportToExcel(excelData, {
