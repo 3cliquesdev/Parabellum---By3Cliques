@@ -196,8 +196,8 @@ export function useWonDealsByChannel(startDate?: Date, endDate?: Date) {
   const endKey = endDate ? formatLocalDate(endDate) : undefined;
 
   return useQuery({
-    queryKey: ["won-deals-by-channel-v4", startKey, endKey],
-    staleTime: 60 * 1000, // Cache de 60 segundos
+    queryKey: ["won-deals-by-channel-v5", startKey, endKey],
+    staleTime: 30 * 1000, // Cache de 30 segundos
     refetchOnWindowFocus: false, // Evitar spam de requests
     retry: 3, // Retry em caso de falha de rede
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Backoff exponencial
