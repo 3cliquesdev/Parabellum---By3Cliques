@@ -14,7 +14,7 @@ export function useSalesByRep(startDate?: Date, endDate?: Date) {
   const endKey = endDate ? formatLocalDate(endDate) : undefined;
 
   return useQuery({
-    queryKey: ["sales-by-rep-v2", user?.id, role, startKey, endKey],
+    queryKey: ["sales-by-rep-v3", user?.id, role, startKey, endKey],
     queryFn: async () => {
       let query = supabase
         .from("deals")
