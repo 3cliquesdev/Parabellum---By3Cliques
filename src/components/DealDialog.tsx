@@ -30,7 +30,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Target, ArrowRightLeft, Package, ExternalLink, Star } from "lucide-react";
+import { 
+  Target, 
+  ArrowRightLeft, 
+  Package, 
+  ExternalLink, 
+  Star, 
+  CreditCard, 
+  HelpCircle, 
+  Loader2, 
+  CheckCircle, 
+  AlertCircle 
+} from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCreateDeal, useUpdateDeal } from "@/hooks/useDeals";
 import { useContacts } from "@/hooks/useContacts";
 import { useOrganizations } from "@/hooks/useOrganizations";
@@ -41,6 +53,8 @@ import { useSalesReps } from "@/hooks/useSalesReps";
 import { useAvailableSalesReps } from "@/hooks/useAvailableSalesReps";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import MoveToPipelineDialog from "@/components/deals/MoveToPipelineDialog";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -121,6 +135,14 @@ interface DealDialogProps {
   prefilledContactId?: string;
 }
 
+// Helper para formatar moeda
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+};
+
 export default function DealDialog({ deal, trigger, open: externalOpen, onOpenChange, prefilledContactId }: DealDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   
@@ -135,6 +157,7 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
     onOpenChange?.(newOpen);
   };
   const navigate = useNavigate();
+  const { toast } = useToast();
   const createDeal = useCreateDeal();
   const updateDeal = useUpdateDeal();
   const { data: contacts, isLoading: contactsLoading } = useContacts();
@@ -144,10 +167,56 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
   const { role, loading: roleLoading } = useUserRole();
   const { user } = useAuth();
   
+  // Estados para validação Kiwify inline
+  const [kiwifyOrderRef, setKiwifyOrderRef] = useState("");
+  const [kiwifyValidationState, setKiwifyValidationState] = useState<"idle" | "validating" | "success" | "error">("idle");
+  const [kiwifyErrorMessage, setKiwifyErrorMessage] = useState("");
+  const [kiwifyValidatedData, setKiwifyValidatedData] = useState<{
+    value: number;
+    gross_value: number;
+    customer_email: string;
+    order_ref: string;
+  } | null>(null);
+  
   // Check if salesperson has no contacts assigned
   const hasNoContacts = !contactsLoading && (!contacts || contacts.length === 0);
 
-
+  // Função para validar transação Kiwify
+  const handleKiwifyValidate = async () => {
+    if (!kiwifyOrderRef.trim() || !deal?.id) return;
+    
+    setKiwifyValidationState("validating");
+    setKiwifyErrorMessage("");
+    
+    try {
+      const { data, error } = await supabase.functions.invoke("validate-deal-closure", {
+        body: {
+          deal_id: deal.id,
+          kiwify_order_ref: kiwifyOrderRef.trim(),
+        },
+      });
+      
+      if (error || !data?.success) {
+        setKiwifyValidationState("error");
+        setKiwifyErrorMessage(data?.error || error?.message || "Erro desconhecido");
+        return;
+      }
+      
+      setKiwifyValidationState("success");
+      setKiwifyValidatedData(data.data);
+      
+      // Auto-preencher valor no formulário
+      form.setValue("value", data.data.value.toString());
+      
+      toast({
+        title: "✅ Transação Validada",
+        description: `Kiwify: ${formatCurrency(data.data.value)}`,
+      });
+    } catch (err: any) {
+      setKiwifyValidationState("error");
+      setKiwifyErrorMessage(err.message || "Erro ao validar");
+    }
+  };
   const isAdminOrManager = role === "admin" || role === "manager" || role === "general_manager";
   const isSalesRep = role === "sales_rep";
   
@@ -919,6 +988,70 @@ export default function DealDialog({ deal, trigger, open: externalOpen, onOpenCh
                 )}
               />
             </div>
+
+            {/* ═══════════════════════════════════════════════════ */}
+            {/* SEÇÃO: VALIDAÇÃO KIWIFY (apenas edição)            */}
+            {/* ═══════════════════════════════════════════════════ */}
+            {deal && (
+              <div className="border-t pt-4 mt-4">
+                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-success" />
+                  Validação Kiwify
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs">
+                          Valide uma transação Kiwify para vincular ao deal e atualizar o valor automaticamente.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </h3>
+                
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Ex: VYyDiMg"
+                      value={kiwifyOrderRef}
+                      onChange={(e) => setKiwifyOrderRef(e.target.value)}
+                      disabled={kiwifyValidationState === "validating"}
+                      className="font-mono flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleKiwifyValidate}
+                      disabled={kiwifyValidationState === "validating" || !kiwifyOrderRef.trim()}
+                    >
+                      {kiwifyValidationState === "validating" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Validar"
+                      )}
+                    </Button>
+                  </div>
+                  
+                  {kiwifyValidationState === "success" && kiwifyValidatedData && (
+                    <div className="flex items-center gap-2 p-3 bg-success/10 border border-success/20 rounded-lg">
+                      <CheckCircle className="h-5 w-5 text-success" />
+                      <span className="text-sm text-success">
+                        Validado: {formatCurrency(kiwifyValidatedData.value)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {kiwifyValidationState === "error" && (
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                      <AlertCircle className="h-5 w-5 text-destructive" />
+                      <span className="text-sm text-destructive">{kiwifyErrorMessage}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Quick Action: Move to another Pipeline (only when editing) */}
             {deal && pipelines && pipelines.length > 1 && (
