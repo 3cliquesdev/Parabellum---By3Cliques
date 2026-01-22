@@ -469,6 +469,23 @@ async function generateDealsReport(supabase: any, filters: any) {
     // Determinar se é reembolso
     const eReembolso = ['refunded', 'chargedback'].includes(statusPagamento) ? 'Sim' : 'Não';
     
+    // Extrair status da assinatura do payload Kiwify
+    let statusAssinatura = '';
+    if (kiwifyEvent?.payload) {
+      const payload = kiwifyEvent.payload;
+      const subscriptionStatus = payload?.Subscription?.status;
+      
+      if (subscriptionStatus) {
+        const statusMap: Record<string, string> = {
+          'active': 'Ativa',
+          'canceled': 'Cancelada',
+          'ended': 'Encerrada',
+          'waiting_payment': 'Aguardando Pagamento'
+        };
+        statusAssinatura = statusMap[subscriptionStatus] || subscriptionStatus;
+      }
+    }
+    
     // Categoria geral
     let categoria = 'Perdido';
     if (eReembolso === 'Sim') {
@@ -494,6 +511,7 @@ async function generateDealsReport(supabase: any, filters: any) {
       e_assinatura: eAssinatura,
       e_reembolso: eReembolso,
       categoria: categoria,
+      status_assinatura: statusAssinatura,
       
       // Campos adicionais
       id: d.id,
