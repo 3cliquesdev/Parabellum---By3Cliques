@@ -7660,6 +7660,7 @@ export type Database = {
           title: string
         }[]
       }
+      normalize_phone: { Args: { phone: string }; Returns: string }
       reset_inbox_unread_count: {
         Args: { p_conversation_id: string }
         Returns: undefined

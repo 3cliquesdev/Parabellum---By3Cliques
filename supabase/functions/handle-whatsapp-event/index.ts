@@ -407,10 +407,34 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   console.log('[handle-whatsapp-event] 📊 Contatos encontrados:', existingContacts?.length || 0, 
     '→ Matches exatos:', matchingContacts.length);
 
-  // Escolher o melhor contato (com email > mais recente)
-  const existingContact = matchingContacts.length > 0 
-    ? matchingContacts.find((c: { id: string; email: string | null }) => c.email) || matchingContacts[0]
-    : null;
+  // Escolher o melhor contato:
+  // 1. Priorizar quem tem conversa ativa (evita "perder" conversas)
+  // 2. Depois quem tem email
+  // 3. Depois o mais recente
+  let existingContact: { id: string; email: string | null; first_name?: string; last_name?: string } | null = null;
+  
+  if (matchingContacts.length > 0) {
+    // ✅ FIX: Verificar se algum contato tem conversa aberta e priorizar
+    if (matchingContacts.length > 1) {
+      const { data: activeConversations } = await supabase
+        .from('conversations')
+        .select('contact_id')
+        .in('contact_id', matchingContacts.map((c: { id: string }) => c.id))
+        .eq('status', 'open')
+        .limit(1);
+      
+      if (activeConversations?.length > 0) {
+        const activeContactId = activeConversations[0].contact_id;
+        existingContact = matchingContacts.find((c: { id: string }) => c.id === activeContactId) || null;
+        console.log('[handle-whatsapp-event] 📍 Priorizando contato com conversa ativa:', activeContactId);
+      }
+    }
+    
+    // Se não encontrou por conversa ativa, usar critério anterior (email > recente)
+    if (!existingContact) {
+      existingContact = matchingContacts.find((c: { id: string; email: string | null }) => c.email) || matchingContacts[0];
+    }
+  }
 
   if (existingContact) {
     contactId = existingContact.id;
