@@ -82,9 +82,9 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
   // FASE 5: Agent Presence
   const { otherUsers, setTyping } = useTicketPresence(ticket.id);
 
-  // Filtrar usuários que podem receber tickets (suporte + gestão + financeiro)
+  // Filtrar usuários que podem receber tickets (suporte + gestão + financeiro + consultores)
   const supportUsers = users.filter((user: any) => 
-    ['support_agent', 'support_manager', 'admin', 'manager', 'general_manager', 'financial_manager', 'financial_agent'].includes(user.role)
+    ['support_agent', 'support_manager', 'admin', 'manager', 'general_manager', 'financial_manager', 'financial_agent', 'consultant', 'cs_manager'].includes(user.role)
   );
 
   const handleStatusChange = (status: string) => {
