@@ -325,13 +325,13 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
       tooltip: "Deals ganhos / Deals criados"
     },
     {
-      title: "Vendas Kiwify",
+      title: "Vendas Líquidas",
       value: kiwifyTotal,
       icon: ShoppingCart,
       color: "text-purple-600",
       bgColor: "bg-purple-100 dark:bg-purple-900/30",
       subtext: `${newCustomers} novos | ${recurring} recorrentes`,
-      tooltip: "Total de vendas processadas no Kiwify"
+      tooltip: "Vendas aprovadas menos reembolsos (fluxo do período)"
     },
     {
       title: "Conversão",
@@ -435,6 +435,16 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Info Alert sobre diferença de métricas */}
+      <Alert className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
+        <AlertCircle className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-xs text-muted-foreground">
+          <strong>Nota:</strong> Este dashboard mostra <strong>métricas de fluxo</strong> (vendas ocorridas no período). 
+          O painel Kiwify mostra <strong>métricas de snapshot</strong> (assinaturas ativas agora). 
+          Por isso "Clientes Únicos" aqui difere de "Assinaturas" lá.
+        </AlertDescription>
+      </Alert>
 
       {/* Dashboard Content */}
       <div id="sales-subscriptions-dashboard" className="space-y-6 bg-background">

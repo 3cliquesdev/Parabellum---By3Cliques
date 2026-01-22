@@ -68,6 +68,9 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
       icon: Users,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
+      tooltip: {
+        note: 'Emails únicos que compraram no período. Diferente do Kiwify que mostra assinaturas ativas agora (snapshot).',
+      },
     },
     {
       title: 'Vendas Brutas',
@@ -75,6 +78,9 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
       icon: ShoppingCart,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
+      tooltip: {
+        note: 'Total de pedidos aprovados no período (antes de reembolsos). Fluxo de vendas.',
+      },
     },
     {
       title: 'Vendas Líquidas',
@@ -84,6 +90,12 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
       bgColor: 'bg-green-50',
       percent: `${percentLiquidas}%`,
       percentColor: 'text-green-600',
+      tooltip: {
+        brutas: vendasBrutas,
+        reembolsadas: totalReembolsos,
+        liquidas: vendasLiquidas,
+        note: 'Vendas brutas menos reembolsos processados.',
+      },
     },
     {
       title: 'Reembolsos',
@@ -93,6 +105,9 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
       bgColor: 'bg-red-50',
       percent: `${percentReembolsos}%`,
       percentColor: 'text-red-500',
+      tooltip: {
+        note: 'Pedidos reembolsados que tiveram aprovação no período selecionado.',
+      },
     },
   ];
 
@@ -122,7 +137,7 @@ export function SubscriptionMetricsCards({ data }: SubscriptionMetricsCardsProps
         brutas: data.novasAssinaturasBrutas ?? 0,
         reembolsadas: reembolsosNovasAssinaturas,
         liquidas: novasAssinaturas,
-        note: 'Primeira cobrança de assinatura. Kiwify mostra ativas agora; aqui mostramos vendas no período.',
+        note: 'Primeira cobrança de assinatura no período (fluxo). Kiwify mostra "Assinaturas" como total ativo agora (snapshot).',
       },
     },
     {
