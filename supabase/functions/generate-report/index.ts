@@ -400,10 +400,10 @@ async function generateDealsReport(supabase: any, filters: any) {
     return [];
   }
 
-  // Buscar todos os eventos Kiwify para status de pagamento
+  // Buscar todos os eventos Kiwify para status de pagamento e info de assinatura
   const { data: kiwifyEvents } = await supabase
     .from('kiwify_events')
-    .select('order_id, event_type, created_at, customer_email, linked_deal_id');
+    .select('order_id, event_type, created_at, customer_email, linked_deal_id, payload');
 
   // Criar mapa de eventos por deal_id e por email
   const dealEventMap = new Map();
@@ -445,6 +445,38 @@ async function generateDealsReport(supabase: any, filters: any) {
     
     const isCancelled = ['refunded', 'chargedback', 'refund_requested'].includes(statusPagamento);
     
+    // Determinar se é venda confirmada
+    const eVenda = d.status === 'won' && statusPagamento === 'paid' ? 'Sim' : 'Não';
+    
+    // Determinar se é assinatura (tem subscription no payload ou produto recorrente)
+    let eAssinatura = 'Não';
+    if (kiwifyEvent?.payload) {
+      const payload = kiwifyEvent.payload;
+      const hasSubscription = payload?.Subscription?.plan?.id || payload?.subscription_id;
+      const productName = payload?.Product?.product_name || d.products?.name || '';
+      const isRecurring = 
+        hasSubscription ||
+        productName.toLowerCase().includes('mensal') ||
+        productName.toLowerCase().includes('plano') ||
+        productName.toLowerCase().includes('assinatura') ||
+        productName.toLowerCase().includes('recorrente');
+      
+      if (isRecurring) {
+        eAssinatura = 'Sim';
+      }
+    }
+    
+    // Determinar se é reembolso
+    const eReembolso = ['refunded', 'chargedback'].includes(statusPagamento) ? 'Sim' : 'Não';
+    
+    // Categoria geral
+    let categoria = 'Perdido';
+    if (eReembolso === 'Sim') {
+      categoria = 'Reembolso';
+    } else if (eVenda === 'Sim') {
+      categoria = eAssinatura === 'Sim' ? 'Assinatura' : 'Venda';
+    }
+    
     return {
       // Campos principais
       email: email,
@@ -456,6 +488,12 @@ async function generateDealsReport(supabase: any, filters: any) {
       telefone: d.lead_phone || d.contacts?.phone || '',
       status: d.status,
       status_pagamento: statusPagamento,
+      
+      // NOVAS COLUNAS - Classificação
+      e_venda: eVenda,
+      e_assinatura: eAssinatura,
+      e_reembolso: eReembolso,
+      categoria: categoria,
       
       // Campos adicionais
       id: d.id,
