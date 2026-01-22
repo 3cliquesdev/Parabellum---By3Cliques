@@ -221,6 +221,20 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
         receita: rep.totalSales
       })) || [];
 
+      // NOVA: Lista detalhada de clientes com emails
+      const clientesDetalhado = subscriptionData?.subscriptions?.map(sub => ({
+        email: sub.customerEmail || '',
+        nome: sub.customerName || 'Cliente',
+        produto: sub.productCategory || sub.productName,
+        oferta: sub.offerName || 'Oferta Padrão',
+        valorBruto: sub.grossValue || 0,
+        valorLiquido: sub.netValue || 0,
+        data: sub.startDate || '',
+        canal: sub.sourceType === 'comercial' ? 'Comercial' 
+             : sub.sourceType === 'afiliado' ? 'Afiliado' 
+             : 'Orgânico',
+      })) || [];
+
       const excelData: ExcelReportData = {
         periodo: { inicio: startDate, fim: endDate },
         resumo: {
@@ -242,6 +256,7 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
         produtos: Array.from(produtosMap.values()).sort((a, b) => b.bruto - a.bruto),
         ofertas: Array.from(ofertasMap.values()).sort((a, b) => b.vendas - a.vendas),
         timeComercial: timeComercialData,
+        clientesDetalhado, // Com emails!
       };
 
       await exportToExcel(excelData, {

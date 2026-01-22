@@ -25,6 +25,17 @@ export interface ExcelReportData {
   produtos?: Array<{ nome: string; vendas: number; bruto: number; liquido: number }>;
   ofertas?: Array<{ produto: string; oferta: string; vendas: number; bruto: number; liquido: number }>;
   timeComercial?: Array<{ nome: string; deals: number; receita: number }>;
+  // Nova: Lista detalhada de clientes com emails
+  clientesDetalhado?: Array<{
+    email: string;
+    nome: string;
+    produto: string;
+    oferta: string;
+    valorBruto: number;
+    valorLiquido: number;
+    data: string;
+    canal: string;
+  }>;
 }
 
 interface ExportExcelOptions {
@@ -163,6 +174,39 @@ export function useExportExcel() {
           const timeSheet = XLSX.utils.aoa_to_sheet(timeData);
           timeSheet["!cols"] = [{ wch: 35 }, { wch: 18 }, { wch: 15 }, { wch: 20 }];
           XLSX.utils.book_append_sheet(workbook, timeSheet, "Time Comercial");
+        }
+
+        // Aba 6: Clientes Detalhado (com emails!)
+        if (data.clientesDetalhado && data.clientesDetalhado.length > 0) {
+          const clientesData = [
+            ["Email", "Nome", "Produto", "Oferta", "Valor Bruto", "Bruto (R$)", "Valor Líquido", "Líquido (R$)", "Data", "Canal"],
+            ...data.clientesDetalhado.map(c => [
+              c.email,
+              c.nome,
+              c.produto,
+              c.oferta,
+              c.valorBruto,
+              formatCurrency(c.valorBruto),
+              c.valorLiquido,
+              formatCurrency(c.valorLiquido),
+              c.data,
+              c.canal
+            ])
+          ];
+          const clientesSheet = XLSX.utils.aoa_to_sheet(clientesData);
+          clientesSheet["!cols"] = [
+            { wch: 35 }, // Email
+            { wch: 25 }, // Nome
+            { wch: 30 }, // Produto
+            { wch: 35 }, // Oferta
+            { wch: 12 }, // Valor Bruto
+            { wch: 15 }, // Bruto (R$)
+            { wch: 12 }, // Valor Líquido
+            { wch: 15 }, // Líquido (R$)
+            { wch: 12 }, // Data
+            { wch: 12 }, // Canal
+          ];
+          XLSX.utils.book_append_sheet(workbook, clientesSheet, "Clientes Detalhado");
         }
 
         // Gerar e baixar arquivo
