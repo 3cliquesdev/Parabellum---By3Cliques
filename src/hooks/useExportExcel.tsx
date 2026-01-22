@@ -35,6 +35,12 @@ export interface ExcelReportData {
     valorLiquido: number;
     data: string;
     canal: string;
+    // Novas colunas de inteligência
+    eVenda: string;        // "Sim" | "Não"
+    eAssinatura: string;   // "Sim" | "Não"
+    eReembolso: string;    // "Sim" | "Não"
+    categoria: string;     // "Venda" | "Assinatura" | "Reembolso"
+    statusAssinatura: string; // "Ativa" | "Cancelada" | "Encerrada" | "Pago" | etc.
   }>;
 }
 
@@ -176,10 +182,10 @@ export function useExportExcel() {
           XLSX.utils.book_append_sheet(workbook, timeSheet, "Time Comercial");
         }
 
-        // Aba 6: Clientes Detalhado (com emails!)
+        // Aba 6: Clientes Detalhado (com emails e colunas de inteligência!)
         if (data.clientesDetalhado && data.clientesDetalhado.length > 0) {
           const clientesData = [
-            ["Email", "Nome", "Produto", "Oferta", "Valor Bruto", "Bruto (R$)", "Valor Líquido", "Líquido (R$)", "Data", "Canal"],
+            ["Email", "Nome", "Produto", "Oferta", "Valor Bruto", "Bruto (R$)", "Valor Líquido", "Líquido (R$)", "Data", "Canal", "É Venda", "É Assinatura", "É Reembolso", "Categoria", "Status Assinatura"],
             ...data.clientesDetalhado.map(c => [
               c.email,
               c.nome,
@@ -190,7 +196,12 @@ export function useExportExcel() {
               c.valorLiquido,
               formatCurrency(c.valorLiquido),
               c.data,
-              c.canal
+              c.canal,
+              c.eVenda || '',
+              c.eAssinatura || '',
+              c.eReembolso || '',
+              c.categoria || '',
+              c.statusAssinatura || ''
             ])
           ];
           const clientesSheet = XLSX.utils.aoa_to_sheet(clientesData);
@@ -205,6 +216,11 @@ export function useExportExcel() {
             { wch: 15 }, // Líquido (R$)
             { wch: 12 }, // Data
             { wch: 12 }, // Canal
+            { wch: 10 }, // É Venda
+            { wch: 12 }, // É Assinatura
+            { wch: 12 }, // É Reembolso
+            { wch: 14 }, // Categoria
+            { wch: 18 }, // Status Assinatura
           ];
           XLSX.utils.book_append_sheet(workbook, clientesSheet, "Clientes Detalhado");
         }

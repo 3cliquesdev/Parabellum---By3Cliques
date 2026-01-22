@@ -221,19 +221,55 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
         receita: rep.totalSales
       })) || [];
 
-      // NOVA: Lista detalhada de clientes com emails
-      const clientesDetalhado = subscriptionData?.subscriptions?.map(sub => ({
-        email: sub.customerEmail || '',
-        nome: sub.customerName || 'Cliente',
-        produto: sub.productCategory || sub.productName,
-        oferta: sub.offerName || 'Oferta Padrão',
-        valorBruto: sub.grossValue || 0,
-        valorLiquido: sub.netValue || 0,
-        data: sub.startDate || '',
-        canal: sub.sourceType === 'comercial' ? 'Comercial' 
-             : sub.sourceType === 'afiliado' ? 'Afiliado' 
-             : 'Orgânico',
-      })) || [];
+      // Criar Set de orderIds reembolsados para cruzamento
+      const refundedOrderIds = new Set(
+        subscriptionData?.reembolsos?.map(r => r.orderId) || []
+      );
+
+      // NOVA: Lista detalhada de clientes com emails + colunas de inteligência
+      const clientesDetalhado = subscriptionData?.subscriptions?.map(sub => {
+        // Lógica de classificação
+        const temPlano = sub.status && ['active', 'canceled', 'ended', 'waiting_payment'].includes(sub.status);
+        const eAssinatura = temPlano ? 'Sim' : 'Não';
+        const eVenda = (sub.grossValue || 0) > 0 ? 'Sim' : 'Não';
+        const foiReembolsado = refundedOrderIds.has(sub.orderId);
+        const eReembolso = foiReembolsado ? 'Sim' : 'Não';
+
+        // Categoria consolidada
+        let categoria = 'Venda';
+        if (foiReembolsado) categoria = 'Reembolso';
+        else if (temPlano) categoria = 'Assinatura';
+
+        // Status da assinatura mapeado
+        const statusMap: Record<string, string> = {
+          'active': 'Ativa',
+          'canceled': 'Cancelada',
+          'ended': 'Encerrada',
+          'waiting_payment': 'Aguardando Pagamento',
+          'paid': 'Pago',
+          'failed': 'Falhou'
+        };
+        const statusAssinatura = statusMap[sub.status || ''] || sub.status || '';
+
+        return {
+          email: sub.customerEmail || '',
+          nome: sub.customerName || 'Cliente',
+          produto: sub.productCategory || sub.productName,
+          oferta: sub.offerName || 'Oferta Padrão',
+          valorBruto: sub.grossValue || 0,
+          valorLiquido: sub.netValue || 0,
+          data: sub.startDate || '',
+          canal: sub.sourceType === 'comercial' ? 'Comercial' 
+               : sub.sourceType === 'afiliado' ? 'Afiliado' 
+               : 'Orgânico',
+          // Novas colunas
+          eVenda,
+          eAssinatura,
+          eReembolso,
+          categoria,
+          statusAssinatura,
+        };
+      }) || [];
 
       const excelData: ExcelReportData = {
         periodo: { inicio: startDate, fim: endDate },
