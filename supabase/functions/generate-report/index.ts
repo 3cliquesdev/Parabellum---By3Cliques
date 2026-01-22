@@ -473,16 +473,25 @@ async function generateDealsReport(supabase: any, filters: any) {
     let statusAssinatura = '';
     if (kiwifyEvent?.payload) {
       const payload = kiwifyEvent.payload;
+      
+      // Primeiro tentar status da assinatura
       const subscriptionStatus = payload?.Subscription?.status;
       
-      if (subscriptionStatus) {
+      // Se não tiver, usar order_status como fallback (para vendas avulsas)
+      const orderStatus = payload?.order_status;
+      
+      const statusFinal = subscriptionStatus || orderStatus;
+      
+      if (statusFinal) {
         const statusMap: Record<string, string> = {
           'active': 'Ativa',
           'canceled': 'Cancelada',
           'ended': 'Encerrada',
-          'waiting_payment': 'Aguardando Pagamento'
+          'waiting_payment': 'Aguardando Pagamento',
+          'failed': 'Falhou',
+          'paid': 'Pago'
         };
-        statusAssinatura = statusMap[subscriptionStatus] || subscriptionStatus;
+        statusAssinatura = statusMap[statusFinal] || statusFinal;
       }
     }
     
