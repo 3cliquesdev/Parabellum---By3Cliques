@@ -1,14 +1,40 @@
 import { useState } from "react";
-import { FileSpreadsheet, TrendingUp, Users, MessageSquare, DollarSign, Target, Clock } from "lucide-react";
+import { FileSpreadsheet, TrendingUp, Users, MessageSquare, DollarSign, Target, Clock, BarChart3, RefreshCw } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import ReportCard from "@/components/ReportCard";
 import ReportFilterPanel from "@/components/ReportFilterPanel";
+import { AnalyticsReportPanel } from "@/components/reports/AnalyticsReportPanel";
 
 export default function Reports() {
   const [selectedReport, setSelectedReport] = useState<any>(null);
 
   const reportCategories = [
+    {
+      id: 'dashboard',
+      name: '📊 Dashboard',
+      icon: BarChart3,
+      reports: [
+        {
+          id: 'analytics_sales',
+          name: 'Vendas & Assinaturas',
+          description: 'Métricas consolidadas de conversão, receita e funil de vendas',
+          icon: TrendingUp,
+        },
+        {
+          id: 'analytics_churn',
+          name: 'Churn & Reembolsos',
+          description: 'Análise de cancelamentos, reembolsos e taxa de retenção',
+          icon: RefreshCw,
+        },
+        {
+          id: 'analytics_performance',
+          name: 'Performance da Equipe',
+          description: 'Métricas de produtividade por vendedor e consultor',
+          icon: Target,
+        },
+      ],
+    },
     {
       id: 'support',
       name: '🎧 Atendimento',
@@ -148,8 +174,8 @@ export default function Reports() {
         </p>
       </div>
 
-      <Tabs defaultValue="support" className="space-y-6">
-        <TabsList className="grid grid-cols-5 w-full max-w-3xl">
+      <Tabs defaultValue="dashboard" className="space-y-6">
+        <TabsList className="grid grid-cols-6 w-full max-w-4xl">
           {reportCategories.map((category) => (
             <TabsTrigger key={category.id} value={category.id}>
               {category.name}
@@ -172,13 +198,19 @@ export default function Reports() {
         ))}
       </Tabs>
 
-      {selectedReport && (
+      {selectedReport && selectedReport.id.startsWith('analytics_') ? (
+        <AnalyticsReportPanel
+          report={selectedReport}
+          open={!!selectedReport}
+          onOpenChange={(open) => !open && setSelectedReport(null)}
+        />
+      ) : selectedReport ? (
         <ReportFilterPanel
           report={selectedReport}
           open={!!selectedReport}
           onOpenChange={(open) => !open && setSelectedReport(null)}
         />
-      )}
+      ) : null}
     </div>
   );
 }
