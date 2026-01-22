@@ -2,6 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Users, ShoppingCart, CreditCard, Package, RefreshCcw, Info } from "lucide-react";
 import { SubscriptionMetrics } from "@/hooks/useKiwifySubscriptions";
+import { LeadsBreakdown } from "@/hooks/useLeadsBreakdown";
+import { SalesBreakdown } from "@/hooks/useSalesBreakdown";
 import {
   Tooltip,
   TooltipContent,
@@ -12,12 +14,14 @@ import {
 interface ConversionFunnelWidgetProps {
   leadMetrics?: {
     totalCreated: number;
+    breakdown?: LeadsBreakdown;
   };
   subscriptionData?: SubscriptionMetrics;
+  salesBreakdown?: SalesBreakdown;
   isLoading: boolean;
 }
 
-export function ConversionFunnelWidget({ leadMetrics, subscriptionData, isLoading }: ConversionFunnelWidgetProps) {
+export function ConversionFunnelWidget({ leadMetrics, subscriptionData, salesBreakdown, isLoading }: ConversionFunnelWidgetProps) {
   if (isLoading) {
     return (
       <Card>
@@ -40,9 +44,18 @@ export function ConversionFunnelWidget({ leadMetrics, subscriptionData, isLoadin
 
   // Métricas do período - FLUXO (vendas ocorridas no período)
   const totalLeads = leadMetrics?.totalCreated || 0;
+  const leadsComercial = leadMetrics?.breakdown?.comercial || 0;
+  const leadsOrganico = leadMetrics?.breakdown?.automatico || 0;
+  
   const vendasBrutas = subscriptionData?.vendasBrutas || 0;
   const vendasLiquidas = subscriptionData?.vendasLiquidas || 0;
   const totalReembolsos = subscriptionData?.reembolsos?.length || 0;
+  
+  // Breakdown de vendas ganhas
+  const vendasComercial = salesBreakdown?.comercial || 0;
+  const vendasAutomatico = salesBreakdown?.automatico || 0;
+  const vendasNovas = salesBreakdown?.novas || 0;
+  const vendasRecorrencias = salesBreakdown?.recorrencias || 0;
   
   // Clientes únicos no período
   const clientesUnicos = subscriptionData?.totalAssinaturas || 0;
@@ -76,7 +89,10 @@ export function ConversionFunnelWidget({ leadMetrics, subscriptionData, isLoadin
       color: "bg-blue-500",
       textColor: "text-blue-600",
       bgLight: "bg-blue-50",
-      tooltip: "Total de leads criados no período selecionado (deals no CRM).",
+      subtext: leadsComercial > 0 || leadsOrganico > 0 
+        ? `${leadsComercial} comercial | ${leadsOrganico} orgânico`
+        : undefined,
+      tooltip: "Total de leads criados no período. Comercial = com vendedor atribuído.",
     },
     {
       label: "Vendas Brutas",
@@ -86,7 +102,10 @@ export function ConversionFunnelWidget({ leadMetrics, subscriptionData, isLoadin
       textColor: "text-green-600",
       bgLight: "bg-green-50",
       conversionRate: leadsToSalesRate,
-      tooltip: `Pedidos aprovados no período. Líquidas (após reembolsos): ${vendasLiquidas.toLocaleString("pt-BR")}.`,
+      subtext: vendasComercial > 0 || vendasNovas > 0
+        ? `${vendasNovas} novas | ${vendasRecorrencias} renov. | ${vendasComercial} com.`
+        : undefined,
+      tooltip: `Pedidos aprovados. Líquidas: ${vendasLiquidas.toLocaleString("pt-BR")}. Comercial = vendedor atribuído.`,
     },
     {
       label: "Clientes Únicos",
@@ -162,7 +181,7 @@ export function ConversionFunnelWidget({ leadMetrics, subscriptionData, isLoadin
                         </div>
                       )}
                       {stage.subtext && (
-                        <div className="text-xs text-muted-foreground mt-1">
+                        <div className="text-[10px] md:text-xs text-muted-foreground mt-1 leading-tight">
                           {stage.subtext}
                         </div>
                       )}

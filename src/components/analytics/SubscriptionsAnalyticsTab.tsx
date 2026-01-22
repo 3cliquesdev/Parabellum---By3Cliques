@@ -1,5 +1,7 @@
 import { useKiwifySubscriptions, SubscriptionMetrics } from "@/hooks/useKiwifySubscriptions";
 import { useDealsCounts } from "@/hooks/useDealsCounts";
+import { useLeadsBreakdown } from "@/hooks/useLeadsBreakdown";
+import { useSalesBreakdown } from "@/hooks/useSalesBreakdown";
 import { FileDown, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -27,6 +29,10 @@ export function SubscriptionsAnalyticsTab({ startDate, endDate }: SubscriptionsA
   // Data hooks - USANDO A MESMA FONTE DO MENU /subscriptions
   const { data: subscriptionData, isLoading: subscriptionLoading, error: subscriptionError, isRefetching: subscriptionRefetching } = useKiwifySubscriptions(startDate, endDate);
   const { data: dealsCounts, isLoading: dealsLoading, error: dealsError, isRefetching: dealsRefetching } = useDealsCounts(startDate, endDate);
+  
+  // Breakdown de leads e vendas para o funil expandido
+  const { data: leadsBreakdown } = useLeadsBreakdown(startDate, endDate);
+  const { data: salesBreakdown } = useSalesBreakdown(startDate, endDate);
   
   // PDF Export
   const { exportToPDF, isExporting } = useExportPDF();
@@ -101,8 +107,12 @@ export function SubscriptionsAnalyticsTab({ startDate, endDate }: SubscriptionsA
       <div id="subscriptions-dashboard" className="space-y-6 bg-background">
         {/* ROW 1: Conversion Funnel (Full Width) */}
         <ConversionFunnelWidget
-          leadMetrics={{ totalCreated: dealsCounts?.totalCreated || 0 }}
+          leadMetrics={{ 
+            totalCreated: dealsCounts?.totalCreated || 0,
+            breakdown: leadsBreakdown 
+          }}
           subscriptionData={subscriptionData}
+          salesBreakdown={salesBreakdown}
           isLoading={isLoading}
         />
 

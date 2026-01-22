@@ -13,6 +13,8 @@
 import { useKiwifySubscriptions } from "@/hooks/useKiwifySubscriptions";
 import { useDealsCounts } from "@/hooks/useDealsCounts";
 import { useSalesByRep } from "@/hooks/useSalesByRep";
+import { useLeadsBreakdown } from "@/hooks/useLeadsBreakdown";
+import { useSalesBreakdown } from "@/hooks/useSalesBreakdown";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Wifi } from "lucide-react";
 import { DateRange } from "react-day-picker";
@@ -76,6 +78,10 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
   
   // Dados do Time Comercial para exportação Excel
   const { data: salesByRepData } = useSalesByRep(startDate, endDate);
+  
+  // Breakdown de leads e vendas para o funil expandido
+  const { data: leadsBreakdown } = useLeadsBreakdown(startDate, endDate);
+  const { data: salesBreakdown } = useSalesBreakdown(startDate, endDate);
   
   // Detectar erro de conexão (ambos hooks falhando)
   const hasConnectionError = !!(subscriptionError || dealsError);
@@ -490,8 +496,12 @@ export function SalesSubscriptionsTab({ startDate, endDate }: SalesSubscriptions
 
         {/* 0. Funil de Conversão Completo (210 vendas, 9 reembolsos, novos/recorrentes) */}
         <ConversionFunnelWidget 
-          leadMetrics={{ totalCreated: dealsCounts?.totalCreated || 0 }}
+          leadMetrics={{ 
+            totalCreated: dealsCounts?.totalCreated || 0,
+            breakdown: leadsBreakdown 
+          }}
           subscriptionData={subscriptionData}
+          salesBreakdown={salesBreakdown}
           isLoading={isLoading}
         />
 
