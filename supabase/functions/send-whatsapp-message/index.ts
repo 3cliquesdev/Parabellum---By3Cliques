@@ -11,11 +11,15 @@ interface SendWhatsAppRequest {
   instance_id: string;
   phone_number?: string;   // Fallback (pode ser nulo)
   whatsapp_id?: string;    // ✅ PRIORIDADE - JID original (@lid, @s.whatsapp.net)
-  message: string;
+  message?: string;        // Opcional se enviando apenas mídia
   delay?: number;
   conversation_id?: string; // Para vincular à conversa na fila
   priority?: number;       // 1-10 (1 = urgente, default = 5)
   use_queue?: boolean;     // Se true, usa fila. Default = true para rate limiting
+  // 🆕 Suporte a Mídia
+  media_url?: string;      // URL pública do arquivo (signed URL do storage)
+  media_type?: 'image' | 'audio' | 'video' | 'document';
+  media_filename?: string; // Nome do arquivo para documentos
 }
 
 serve(async (req) => {
@@ -38,18 +42,24 @@ serve(async (req) => {
       phone: body.phone_number,
       whatsapp_id: body.whatsapp_id,
       delay: body.delay,
+      has_media: !!body.media_url,
+      media_type: body.media_type,
     });
 
-    // Validação básica
-    if (!body.instance_id || (!body.phone_number && !body.whatsapp_id) || !body.message) {
+    // Validação básica - agora aceita mídia sem mensagem de texto
+    const hasContent = body.message || body.media_url;
+    if (!body.instance_id || (!body.phone_number && !body.whatsapp_id) || !hasContent) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields (instance_id, phone_number or whatsapp_id, message)' }),
+        JSON.stringify({ error: 'Missing required fields (instance_id, phone_number or whatsapp_id, message or media_url)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    // 🆕 Se for envio de mídia, desabilitar fila para envio direto (mais rápido)
+    const isMediaMessage = !!body.media_url && !!body.media_type;
 
-    // 🆕 FASE 6: Usar fila para rate limiting (default = true)
-    const useQueue = body.use_queue !== false;
+    // 🆕 FASE 6: Usar fila para rate limiting (default = true, mas mídia vai direto)
+    const useQueue = !isMediaMessage && body.use_queue !== false;
     
     // Buscar instância
     const { data: instance, error: instanceError } = await supabase
@@ -434,13 +444,95 @@ serve(async (req) => {
     // Reusar cleanNumber já definido acima para envio direto (fallback ou use_queue=false)
     console.log('[send-whatsapp-message] Clean number for Evolution API (direct send):', cleanNumber);
 
-    // 🚀 ENVIO: Evolution API v2.2.2 - Formato Exato
+    // 🆕 FASE 8: Verificar se é envio de MÍDIA
+    if (isMediaMessage) {
+      console.log('[send-whatsapp-message] 📸 Enviando MÍDIA via Evolution API...');
+      
+      // Mapear tipo de mídia para endpoint Evolution API
+      const endpointMap: Record<string, string> = {
+        image: 'sendImage',
+        audio: 'sendWhatsAppAudio', // Endpoint específico para áudio ptt (voz)
+        video: 'sendVideo',
+        document: 'sendDocument',
+      };
+      
+      const endpoint = endpointMap[body.media_type!] || 'sendDocument';
+      const evolutionMediaUrl = `${instance.api_url}/message/${endpoint}/${instance.instance_name}`;
+      
+      console.log('[send-whatsapp-message] 📤 Media endpoint:', {
+        endpoint,
+        url: evolutionMediaUrl,
+        media_type: body.media_type,
+        has_caption: !!body.message,
+      });
+
+      // Payload base para mídia
+      const mediaPayload: Record<string, unknown> = {
+        number: cleanNumber,
+        delay: body.delay || 1200,
+      };
+
+      // Configurar payload baseado no tipo
+      if (body.media_type === 'audio') {
+        // Para áudio, usar sendWhatsAppAudio (envia como PTT - mensagem de voz)
+        mediaPayload.audio = body.media_url;
+        // Não há caption para áudio
+      } else if (body.media_type === 'image') {
+        mediaPayload.media = body.media_url;
+        if (body.message) mediaPayload.caption = body.message;
+      } else if (body.media_type === 'video') {
+        mediaPayload.media = body.media_url;
+        if (body.message) mediaPayload.caption = body.message;
+      } else {
+        // Document
+        mediaPayload.media = body.media_url;
+        if (body.message) mediaPayload.caption = body.message;
+        if (body.media_filename) mediaPayload.fileName = body.media_filename;
+      }
+
+      console.log('[send-whatsapp-message] 📦 Media payload:', JSON.stringify(mediaPayload, null, 2));
+
+      const mediaResponse = await fetch(evolutionMediaUrl, {
+        method: 'POST',
+        headers: {
+          'apikey': instance.api_token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(mediaPayload),
+      });
+
+      const mediaResponseData = await mediaResponse.json();
+
+      if (!mediaResponse.ok) {
+        console.error('[send-whatsapp-message] ❌ Media send failed:', mediaResponseData);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Failed to send media via Evolution API',
+            details: mediaResponseData 
+          }),
+          { status: mediaResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('[send-whatsapp-message] ✅ Media sent successfully:', mediaResponseData);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          media_sent: true,
+          evolution_response: mediaResponseData,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 🚀 ENVIO: Evolution API v2.2.2 - Formato Exato (apenas texto)
     const evolutionUrl = `${instance.api_url}/message/sendText/${instance.instance_name}`;
     console.log('[send-whatsapp-message] 📡 Sending to Evolution API v2.2.2:', evolutionUrl);
 
     const evolutionPayload = {
       number: cleanNumber, // ✅ APENAS DÍGITOS: "5511999998888"
-      text: body.message,
+      text: body.message || '',
       delay: body.delay || 1200,
       linkPreview: false
     };
