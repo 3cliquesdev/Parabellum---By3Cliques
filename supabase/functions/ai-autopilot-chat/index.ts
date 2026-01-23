@@ -562,6 +562,12 @@ serve(async (req) => {
     let responseChannel = 'web_chat';
     let contact: any = null;
     let department: string | null = null;
+    
+    // 🆕 Chat Flow: variáveis para persona/KB específicas do fluxo
+    let flowPersonaId: string | null = null;
+    let flowKbCategories: string[] | null = null;
+    let flowContextPrompt: string | null = null;
+    let flowFallbackMessage: string | null = null;
 
     // 🚨 FASE 3: Fallback Gracioso - Try-catch interno para capturar falhas da IA
     try {
@@ -1329,40 +1335,160 @@ Como posso ajudar você hoje?`;
     
     console.log(`[ai-autopilot-chat] Processando mensagem para conversa ${conversationId}...`);
 
+    // ============================================================
+    // 🆕 Chat Flow: Verificar se há fluxo ativo e extrair configurações
+    // ============================================================
+    try {
+      console.log('[ai-autopilot-chat] 🔄 Verificando Chat Flow ativo...');
+      
+      const { data: flowResult, error: flowError } = await supabaseClient.functions.invoke(
+        'process-chat-flow',
+        { body: { conversationId, userMessage: customerMessage } }
+      );
+      
+      if (!flowError && flowResult) {
+        console.log('[ai-autopilot-chat] 📋 Resultado do Chat Flow:', {
+          useAI: flowResult.useAI,
+          hasPersonaId: !!flowResult.personaId,
+          hasKbCategories: !!flowResult.kbCategories,
+          flowStarted: flowResult.flowStarted,
+          flowCompleted: flowResult.flowCompleted
+        });
+        
+        // Se o fluxo retornou uma resposta determinística (não precisa de IA)
+        if (flowResult.useAI === false && flowResult.response) {
+          console.log('[ai-autopilot-chat] ✅ Fluxo determinístico - usando resposta do flow');
+          
+          // Salvar resposta do fluxo
+          const { data: flowMsgData } = await supabaseClient
+            .from("messages")
+            .insert({
+              conversation_id: conversationId,
+              content: flowResult.response,
+              sender_type: "user",
+              is_ai_generated: true,
+              channel: responseChannel,
+            })
+            .select('id')
+            .single();
+          
+          // Atualizar last_message_at
+          await supabaseClient
+            .from("conversations")
+            .update({ last_message_at: new Date().toISOString() })
+            .eq("id", conversationId);
+          
+          // Se WhatsApp, enviar via Evolution API
+          if (responseChannel === 'whatsapp' && flowMsgData && contact?.phone) {
+            const whatsappInstance = await getWhatsAppInstanceForConversation(
+              supabaseClient, 
+              conversationId, 
+              conversation.whatsapp_instance_id
+            );
+
+            if (whatsappInstance) {
+              await supabaseClient.functions.invoke('send-whatsapp-message', {
+                body: {
+                  instance_id: whatsappInstance.id,
+                  phone_number: contact.phone,
+                  whatsapp_id: contact.whatsapp_id,
+                  message: flowResult.response,
+                },
+              });
+            }
+          }
+          
+          // Retornar resposta do fluxo
+          return new Response(
+            JSON.stringify({
+              response: flowResult.response,
+              messageId: flowMsgData?.id,
+              source: 'chat_flow',
+              flowId: flowResult.flowId,
+              options: flowResult.options,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Se o fluxo precisa de IA, popular variáveis para uso posterior
+        if (flowResult.useAI === true) {
+          flowPersonaId = flowResult.personaId || null;
+          flowKbCategories = flowResult.kbCategories || null;
+          flowContextPrompt = flowResult.contextPrompt || null;
+          flowFallbackMessage = flowResult.fallbackMessage || null;
+          
+          console.log('[ai-autopilot-chat] 🎯 Chat Flow definiu configurações para IA:', {
+            personaId: flowPersonaId,
+            kbCategories: flowKbCategories,
+            hasContextPrompt: !!flowContextPrompt
+          });
+        }
+      }
+    } catch (flowError) {
+      console.error('[ai-autopilot-chat] ⚠️ Erro ao processar Chat Flow (continuando sem fluxo):', flowError);
+    }
+
     // 2. Buscar persona baseado em routing rules (canal + departamento)
-    const { data: routingRules, error: rulesError } = await supabaseClient
-      .from('ai_routing_rules')
-      .select(`
-        *,
-        ai_personas!inner(id, name, role, system_prompt, temperature, max_tokens, knowledge_base_paths, is_active, use_priority_instructions, data_access)
-      `)
-      .eq('channel', responseChannel)
-      .eq('is_active', true)
-      .order('priority', { ascending: false });
-
-    if (rulesError) {
-      console.error('[ai-autopilot-chat] Erro ao buscar routing rules:', rulesError);
-    }
-
-    // Filtrar regra que combina canal + departamento (se existir)
-    let selectedRule = routingRules?.find(rule => rule.department === department);
+    // 🆕 OU usar persona específica do Chat Flow (se flowPersonaId estiver definido)
+    let persona: any = null;
     
-    // Fallback: regra só com canal (department null)
-    if (!selectedRule) {
-      selectedRule = routingRules?.find(rule => rule.department === null);
+    if (flowPersonaId) {
+      // 🆕 Chat Flow: Buscar persona específica definida no nó ai_response
+      console.log('[ai-autopilot-chat] 🎯 Usando persona do Chat Flow:', flowPersonaId);
+      
+      const { data: flowPersona, error: personaError } = await supabaseClient
+        .from('ai_personas')
+        .select('id, name, role, system_prompt, temperature, max_tokens, knowledge_base_paths, is_active, use_priority_instructions, data_access')
+        .eq('id', flowPersonaId)
+        .eq('is_active', true)
+        .single();
+      
+      if (!personaError && flowPersona) {
+        persona = flowPersona;
+        console.log(`[ai-autopilot-chat] ✅ Persona do fluxo carregada: ${persona.name}`);
+      } else {
+        console.warn('[ai-autopilot-chat] ⚠️ Persona do fluxo não encontrada, usando routing rules');
+      }
     }
+    
+    // Fallback: usar routing rules se não tem persona do fluxo
+    if (!persona) {
+      const { data: routingRules, error: rulesError } = await supabaseClient
+        .from('ai_routing_rules')
+        .select(`
+          *,
+          ai_personas!inner(id, name, role, system_prompt, temperature, max_tokens, knowledge_base_paths, is_active, use_priority_instructions, data_access)
+        `)
+        .eq('channel', responseChannel)
+        .eq('is_active', true)
+        .order('priority', { ascending: false });
 
-    if (!selectedRule || !selectedRule.ai_personas) {
-      console.error('[ai-autopilot-chat] Nenhuma persona configurada para este canal/departamento');
-      return new Response(JSON.stringify({ 
-        error: 'Nenhuma persona configurada para este canal/departamento' 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      if (rulesError) {
+        console.error('[ai-autopilot-chat] Erro ao buscar routing rules:', rulesError);
+      }
+
+      // Filtrar regra que combina canal + departamento (se existir)
+      let selectedRule = routingRules?.find(rule => rule.department === department);
+      
+      // Fallback: regra só com canal (department null)
+      if (!selectedRule) {
+        selectedRule = routingRules?.find(rule => rule.department === null);
+      }
+
+      if (!selectedRule || !selectedRule.ai_personas) {
+        console.error('[ai-autopilot-chat] Nenhuma persona configurada para este canal/departamento');
+        return new Response(JSON.stringify({ 
+          error: 'Nenhuma persona configurada para este canal/departamento' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      persona = selectedRule.ai_personas as any;
     }
-
-    const persona = selectedRule.ai_personas as any;
+    
     console.log(`[ai-autopilot-chat] Persona selecionada: ${persona.name} (${persona.id})`);
     console.log('[ai-autopilot-chat] 🔐 Data Access Config:', persona.data_access);
     
@@ -1552,16 +1678,37 @@ Responda APENAS: skip ou search`
         console.log('[ai-autopilot-chat] 🚫 Persona NÃO tem acesso à base de conhecimento - pulando busca');
         knowledgeArticles = [];
       } else {
-        // FASE 1: Verificar se persona tem categorias específicas configuradas
-        const personaCategories = persona.knowledge_base_paths || [];
-        const hasPersonaCategories = personaCategories.length > 0;
+        // FASE 1: Verificar categorias específicas configuradas
+        // 🆕 Chat Flow: priorizar categorias do fluxo sobre as da persona
+        let activeKbCategories: string[] = [];
+        let categorySource = 'ALL (sem filtro)';
+        
+        const flowCats = flowKbCategories as string[] | null;
+        const personaCats = persona.knowledge_base_paths as string[] | null;
+        
+        if (flowCats && Array.isArray(flowCats) && flowCats.length > 0) {
+          // Categorias definidas no nó ai_response do Chat Flow
+          activeKbCategories = flowCats;
+          categorySource = `Chat Flow (${flowCats.length} categorias)`;
+        } else if (personaCats && Array.isArray(personaCats) && personaCats.length > 0) {
+          // Fallback: categorias da persona
+          activeKbCategories = personaCats;
+          categorySource = `Persona (${personaCats.length} categorias)`;
+        }
+        
+        const hasPersonaCategories = activeKbCategories.length > 0;
       
-      console.log('[ai-autopilot-chat] 📂 Persona categories:', {
-        persona_id: persona.id,
-        persona_name: persona.name,
-        allowed_categories: hasPersonaCategories ? personaCategories : 'ALL (sem filtro)',
-        category_filter_applied: hasPersonaCategories
-      });
+        console.log('[ai-autopilot-chat] 📂 KB Categories:', {
+          persona_id: persona.id,
+          persona_name: persona.name,
+          flow_categories: flowKbCategories,
+          persona_categories: persona.knowledge_base_paths,
+          active_categories: hasPersonaCategories ? activeKbCategories : 'ALL',
+          category_source: categorySource
+        });
+        
+        // 🆕 Alias para compatibilidade com código existente
+        const personaCategories = activeKbCategories;
       
       try {
         // FASE 5: Query Expansion + Semantic Search Múltiplo
