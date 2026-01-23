@@ -22,7 +22,7 @@ import { useBulkArchiveTickets } from "@/hooks/useBulkArchiveTickets";
 import { TicketFilterPopover, TicketFilters, defaultTicketFilters } from "@/components/support/TicketFilterPopover";
 import { useSavedTicketFilters } from "@/hooks/useSavedTicketFilters";
 import { SaveTicketFilterDialog } from "@/components/support/SaveTicketFilterDialog";
-
+import { useActiveTicketStatuses } from "@/hooks/useTicketStatuses";
 
 type MobileView = 'list' | 'details';
 
@@ -50,6 +50,13 @@ export default function Support() {
   const { getViewersForTicket, setViewingTicket } = useTicketsPresence();
   const bulkArchive = useBulkArchiveTickets();
   const { data: savedFilters } = useSavedTicketFilters();
+  const { data: activeStatuses } = useActiveTicketStatuses();
+  
+  // Dynamic active status names (non-archived) for default filtering
+  const activeStatusNames = useMemo(() => 
+    activeStatuses?.filter(s => !s.is_archived_status).map(s => s.name) || ['open', 'in_progress', 'waiting_customer'],
+    [activeStatuses]
+  );
 
   // Apply saved filter when selected
   useEffect(() => {
@@ -95,35 +102,41 @@ export default function Support() {
       search: debouncedFilters.search || searchTerm,
     };
 
+    // Check if it's a dynamic status from the database
+    const isDynamicStatus = activeStatuses?.some(s => s.name === sidebarFilter);
+    
     switch (sidebarFilter) {
       case 'my_open':
         return { 
           assignedFilter: 'mine' as const,
-          advancedFilters: { ...baseFilters, status: baseFilters.status.length > 0 ? baseFilters.status : ['open', 'in_progress', 'waiting_customer', 'returned'] }
+          advancedFilters: { ...baseFilters, status: baseFilters.status.length > 0 ? baseFilters.status : activeStatusNames }
         };
       case 'created_by_me':
         return { 
           assignedFilter: 'created_by_me' as const,
-          advancedFilters: { ...baseFilters, status: baseFilters.status.length > 0 ? baseFilters.status : ['open', 'in_progress', 'waiting_customer', 'returned'] }
+          advancedFilters: { ...baseFilters, status: baseFilters.status.length > 0 ? baseFilters.status : activeStatusNames }
         };
       case 'unassigned':
         return { assignedFilter: 'unassigned' as const, advancedFilters: baseFilters };
       case 'sla_expired':
         return { advancedFilters: { ...baseFilters, slaExpired: true } };
       case 'no_tags':
-        return { advancedFilters: { ...baseFilters, noTags: true, status: baseFilters.status.length > 0 ? baseFilters.status : ['open', 'in_progress', 'waiting_customer', 'returned'] } };
+        return { advancedFilters: { ...baseFilters, noTags: true, status: baseFilters.status.length > 0 ? baseFilters.status : activeStatusNames } };
       case 'archived':
-        return { advancedFilters: { ...baseFilters, status: ['resolved', 'closed'] } };
-      case 'open':
-      case 'in_progress':
-      case 'waiting_customer':
-      case 'resolved':
-      case 'closed':
-      case 'returned':
-        return { advancedFilters: { ...baseFilters, status: [sidebarFilter] } };
+        // Get archived status names dynamically
+        const archivedStatusNames = activeStatuses?.filter(s => s.is_archived_status).map(s => s.name) || ['resolved', 'closed'];
+        return { advancedFilters: { ...baseFilters, status: archivedStatusNames } };
       case 'all':
-        return { advancedFilters: { ...baseFilters, status: baseFilters.status.length > 0 ? baseFilters.status : ['open', 'in_progress', 'waiting_customer', 'returned'] } };
+        return { advancedFilters: { ...baseFilters, status: baseFilters.status.length > 0 ? baseFilters.status : activeStatusNames } };
       default:
+        // Handle dynamic status from database
+        if (isDynamicStatus) {
+          return { advancedFilters: { ...baseFilters, status: [sidebarFilter] } };
+        }
+        // Handle saved filters (saved:xxx)
+        if (sidebarFilter.startsWith('saved:')) {
+          return { advancedFilters: baseFilters };
+        }
         return { advancedFilters: baseFilters };
     }
   };
