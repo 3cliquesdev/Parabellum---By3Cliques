@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { TicketFilters } from "@/components/support/TicketFilterPopover";
 
-type TicketStatus = 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed' | 'returned' | 'loja_bloqueada' | 'loja_concluida';
+type TicketStatus = 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed' | 'returned' | 'loja_bloqueada' | 'loja_concluida' | 'pending_approval' | 'approved';
 
 export function useTickets(
   statusFilter?: TicketStatus, 

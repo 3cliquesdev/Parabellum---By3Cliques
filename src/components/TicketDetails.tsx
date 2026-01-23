@@ -187,7 +187,7 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
   // Sistema de Aprovação Gerencial
   const isPendingApproval = ticket.status === 'pending_approval';
   const canRequestApproval = isFinancialAgent && isFinancialTicket && !isPendingApproval && ticket.status !== 'resolved' && ticket.status !== 'closed';
-  const canApprove = (isFinancialManager || isManager || isAdmin) && isFinancialTicket;
+  const canApprove = (isFinancialManager || isAdmin) && isFinancialTicket;
 
   const handleRequestApproval = () => {
     requestApproval.mutate(ticket.id);
