@@ -189,8 +189,11 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const canSubmit = customerId && subject.trim() && (isWithdrawal || uploadedAttachment) && !createTicket.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
+      <DialogContent 
+        className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Criar Novo Ticket</DialogTitle>
           <DialogDescription>
@@ -381,7 +384,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover z-[9999]">
                   <SelectItem value="low">Baixa</SelectItem>
                   <SelectItem value="medium">Média</SelectItem>
                   <SelectItem value="high">Alta</SelectItem>
@@ -430,7 +433,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                   <SelectTrigger>
                     <SelectValue placeholder={categories.length === 0 ? "Carregando..." : "Selecione"} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-popover z-[9999]">
                     {categories.length > 0 ? (
                       categories.map((cat) => (
                         <SelectItem key={cat.id} value={cat.name}>
@@ -456,7 +459,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover z-[9999]">
                   <SelectItem value="none">Nenhum</SelectItem>
                   {activeDepartments.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
@@ -473,7 +476,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover z-[9999]">
                   <SelectItem value="none">Fila de Espera</SelectItem>
                   {supportUsers.map((user) => (
                     <SelectItem key={user.id} value={user.id}>

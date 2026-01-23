@@ -40,6 +40,17 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      onPointerDownOutside={(e) => {
+        // Permitir cliques em portals (como Select, Popover, Combobox)
+        const target = e.target as HTMLElement;
+        if (
+          target.closest('[role="listbox"]') || 
+          target.closest('[data-radix-popper-content-wrapper]') ||
+          target.closest('[data-radix-select-content]')
+        ) {
+          e.preventDefault();
+        }
+      }}
       className={cn(
         "fixed left-[50%] top-[50%] z-modal grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-elevated duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-lg max-h-[90vh] overflow-y-auto scrollbar-thin",
         className,
