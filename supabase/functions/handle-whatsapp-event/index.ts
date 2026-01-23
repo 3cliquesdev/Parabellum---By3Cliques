@@ -518,6 +518,83 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     throw new Error('Failed to get or create contact');
   }
 
+  // ============================================================
+  // 🔍 PRÉ-VERIFICAÇÃO CSAT - ANTES de reabrir conversa
+  // Se cliente está respondendo avaliação, processar e manter conversa FECHADA
+  // ============================================================
+  const { data: csatConversation } = await supabase
+    .from('conversations')
+    .select('id, awaiting_rating, status')
+    .eq('contact_id', contactId)
+    .eq('awaiting_rating', true)
+    .eq('status', 'closed')
+    .order('closed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (csatConversation && csatConversation.awaiting_rating) {
+    const csatRating = extractRating(messageText);
+    
+    if (csatRating !== null) {
+      console.log(`[handle-whatsapp-event] ⭐ CSAT PRE-CHECK: Rating ${csatRating} detected BEFORE reopen`);
+      
+      // Salvar rating na tabela conversation_ratings
+      const { error: ratingError } = await supabase
+        .from('conversation_ratings')
+        .insert({
+          conversation_id: csatConversation.id,
+          rating: csatRating,
+          channel: 'whatsapp',
+          feedback_text: messageText,
+        });
+      
+      if (ratingError) {
+        console.error('[handle-whatsapp-event] Error saving CSAT rating:', ratingError);
+      } else {
+        console.log('[handle-whatsapp-event] ✅ CSAT rating saved successfully');
+        
+        // Limpar flag awaiting_rating - MANTER status = 'closed'
+        await supabase
+          .from('conversations')
+          .update({ awaiting_rating: false })
+          .eq('id', csatConversation.id);
+        
+        // Enviar agradecimento baseado no rating
+        let thankYouMessage = '';
+        if (csatRating >= 4) {
+          thankYouMessage = `🎉 Obrigado pela avaliação de ${csatRating} estrela${csatRating > 1 ? 's' : ''}!\n\nFicamos muito felizes em ter ajudado. Conte sempre conosco! 💚`;
+        } else if (csatRating === 3) {
+          thankYouMessage = `👍 Obrigado pela sua avaliação!\n\nEstamos sempre buscando melhorar. Se tiver sugestões, fique à vontade para compartilhar!`;
+        } else {
+          thankYouMessage = `🙏 Agradecemos seu feedback.\n\nLamentamos que sua experiência não tenha sido ideal. Vamos trabalhar para melhorar!`;
+        }
+        
+        await sendWhatsAppMessage(
+          supabase,
+          instance,
+          phoneForDatabase,
+          jidForSending,
+          thankYouMessage
+        );
+        
+        // Inserir mensagem do cliente (a avaliação) - sem reabrir conversa
+        await supabase.from('messages').insert({
+          conversation_id: csatConversation.id,
+          content: `⭐ Avaliação: ${csatRating}/5`,
+          sender_type: 'contact',
+          sender_id: null,
+          channel: 'whatsapp',
+        });
+      }
+      
+      console.log('[handle-whatsapp-event] ✅ CSAT processed - conversation stays CLOSED');
+      return; // ⚠️ CRÍTICO: Sair aqui para NÃO reabrir conversa
+    }
+  }
+  // ============================================================
+  // FIM PRÉ-VERIFICAÇÃO CSAT
+  // ============================================================
+
   // 2. Buscar ou criar conversa usando RPC function
   const { data: conversationData, error: conversationError } = await supabase.rpc(
     'get_or_create_conversation',
