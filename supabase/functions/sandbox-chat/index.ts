@@ -122,7 +122,7 @@ Responda APENAS: skip ou search`
             { role: 'user', content: lastUserMessage }
           ],
           temperature: 0.1,
-          max_tokens: 10
+          max_completion_tokens: 10
         };
 
         let intentResponse;
@@ -369,7 +369,7 @@ Você está conversando com um cliente identificado. Use essas informações par
           model: "gpt-4o-mini",
           messages: aiMessages,
           temperature: persona.temperature || 0.7,
-          max_tokens: persona.max_tokens || 500,
+          max_completion_tokens: persona.max_tokens || 500,
         };
 
         if (tools.length > 0) {
@@ -403,7 +403,7 @@ Você está conversando com um cliente identificado. Use essas informações par
         model: configuredModel,
         messages: aiMessages,
         temperature: persona.temperature || 0.7,
-        max_tokens: persona.max_tokens || 500,
+        max_completion_tokens: persona.max_tokens || 500,
       };
 
       if (tools.length > 0) {
