@@ -178,13 +178,15 @@ export default function Settings() {
             icon={Headphones}
             iconColor="text-blue-500"
           >
-            <SettingsCard
-              icon={GitBranch}
-              iconBgColor="bg-indigo-500"
-              title="Fluxos de Chat"
-              description="Automação visual"
-              onClick={() => navigate('/settings/chat-flows')}
-            />
+            {hasPermission("settings.chat_flows") && (
+              <SettingsCard
+                icon={GitBranch}
+                iconBgColor="bg-indigo-500"
+                title="Fluxos de Chat"
+                description="Automação visual"
+                onClick={() => navigate('/settings/chat-flows')}
+              />
+            )}
             <SettingsCard
               icon={CircleDot}
               iconBgColor="bg-blue-500"

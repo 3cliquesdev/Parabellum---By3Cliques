@@ -243,7 +243,7 @@ const App = () => {
               <Route path="/settings/security" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SecuritySettingsPage /></Layout></ProtectedRoute>} />
               <Route path="/settings/database" element={<ProtectedRoute requiredPermission="settings.view"><Layout><DatabaseSettingsPage /></Layout></ProtectedRoute>} />
               <Route path="/settings/integrations-central" element={<ProtectedRoute requiredPermission="settings.integrations"><Layout><IntegrationsCentralPage /></Layout></ProtectedRoute>} />
-              <Route path="/settings/chat-flows" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ChatFlows /></Layout></ProtectedRoute>} />
+              <Route path="/settings/chat-flows" element={<ProtectedRoute requiredPermission="settings.chat_flows"><Layout><ChatFlows /></Layout></ProtectedRoute>} />
               
               {/* Catch-all route - must be last */}
               <Route path="*" element={<NotFound />} />
