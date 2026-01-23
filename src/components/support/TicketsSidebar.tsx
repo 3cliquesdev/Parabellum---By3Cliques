@@ -15,6 +15,7 @@ import {
   Trash2,
   Pin,
   FileEdit,
+  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -167,6 +168,44 @@ export function TicketsSidebar({ selectedFilter, onFilterChange }: TicketsSideba
           </p>
           <div className="space-y-1">
             {activeStatuses.map(status => renderStatusItem(status))}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="px-3 py-2">
+          <div className="border-t border-border" />
+        </div>
+
+        {/* Financial Section */}
+        <div className="px-3 pb-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-3">
+            Financeiro
+          </p>
+          <div className="space-y-1">
+            <button
+              onClick={() => onFilterChange('financial_pending')}
+              className={cn(
+                "w-full flex items-center justify-between px-3 py-2 text-sm rounded-md transition-colors text-left",
+                selectedFilter === 'financial_pending'
+                  ? "bg-primary/10 text-primary font-medium" 
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-4 h-4" />
+                <span>Aguardando Aprovação</span>
+              </div>
+              <span
+                className={cn(
+                  "text-xs font-medium px-2 py-0.5 rounded-full min-w-[24px] text-center",
+                  typeof getCount('financial_pending') === 'number' && (getCount('financial_pending') as number) > 0
+                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {getCount('financial_pending')}
+              </span>
+            </button>
           </div>
         </div>
 
