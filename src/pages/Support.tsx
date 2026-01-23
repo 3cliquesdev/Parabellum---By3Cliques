@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTickets } from "@/hooks/useTickets";
 import { TicketsTable } from "@/components/support/TicketsTable";
 import { TicketsSidebar, type SidebarFilter } from "@/components/support/TicketsSidebar";
@@ -30,17 +30,52 @@ const TICKETS_PER_PAGE = 20;
 
 export default function Support() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read initial values from URL
+  const initialSidebarFilter = (searchParams.get('filter') as SidebarFilter) || 'all';
+  const initialAdvancedFilters = useMemo(() => {
+    const filtersParam = searchParams.get('filters');
+    if (filtersParam) {
+      try {
+        return { ...defaultTicketFilters, ...JSON.parse(filtersParam) };
+      } catch {
+        return defaultTicketFilters;
+      }
+    }
+    return defaultTicketFilters;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-  const [sidebarFilter, setSidebarFilter] = useState<SidebarFilter>('all');
+  const [sidebarFilter, setSidebarFilter] = useState<SidebarFilter>(initialSidebarFilter);
   const [mobileView, setMobileView] = useState<MobileView>('list');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [moveToProjectOpen, setMoveToProjectOpen] = useState(false);
-  const [advancedFilters, setAdvancedFilters] = useState<TicketFilters>(defaultTicketFilters);
+  const [advancedFilters, setAdvancedFilters] = useState<TicketFilters>(initialAdvancedFilters);
   const [bulkTransferOpen, setBulkTransferOpen] = useState(false);
   const [saveFilterOpen, setSaveFilterOpen] = useState(false);
+
+  // Sync filters to URL whenever they change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    
+    if (sidebarFilter !== 'all') {
+      params.set('filter', sidebarFilter);
+    }
+    
+    // Only save advancedFilters if different from default
+    const hasAdvancedFilters = JSON.stringify(advancedFilters) !== JSON.stringify(defaultTicketFilters);
+    if (hasAdvancedFilters) {
+      params.set('filters', JSON.stringify(advancedFilters));
+    }
+    
+    // Update URL without adding to history (replace)
+    setSearchParams(params, { replace: true });
+  }, [sidebarFilter, advancedFilters, setSearchParams]);
   
   // Debounce search to avoid querying on every keystroke
   const debouncedSearch = useDebouncedValue(advancedFilters.search, 500);
