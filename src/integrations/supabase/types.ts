@@ -7661,7 +7661,7 @@ export type Database = {
         }
         Returns: {
           conversation_id: string
-          existed: boolean
+          is_existing: boolean
           was_reopened: boolean
         }[]
       }
