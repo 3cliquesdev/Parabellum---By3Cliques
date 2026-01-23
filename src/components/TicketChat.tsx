@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ import { SafeHTML } from "@/components/SafeHTML";
 import { ChannelBadge } from "@/components/ChannelBadge";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Tipo para anexos de comentário
 interface CommentAttachment {
@@ -51,6 +52,38 @@ export function TicketChat({ ticketId, channel = 'platform' }: TicketChatProps) 
   const { data: comments = [] } = useTicketComments(ticketId);
   const createComment = useCreateComment();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Realtime subscription para novos comentários
+  useEffect(() => {
+    if (!ticketId) return;
+
+    const realtimeChannel = supabase
+      .channel(`ticket-comments:${ticketId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'ticket_comments',
+          filter: `ticket_id=eq.${ticketId}`,
+        },
+        (payload) => {
+          console.log('[TicketChat] Novo comentário recebido via realtime:', payload);
+          // Invalida a query para refetch com dados enriquecidos
+          queryClient.invalidateQueries({ 
+            queryKey: ['ticket-comments', ticketId] 
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log(`[TicketChat] Realtime status for ${ticketId}:`, status);
+      });
+
+    return () => {
+      supabase.removeChannel(realtimeChannel);
+    };
+  }, [ticketId, queryClient]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
