@@ -998,6 +998,170 @@ Como posso ajudar você hoje?`;
     }
     
     // ============================================================
+    // 🎯 TRIAGEM INTELIGENTE: Detectar escolha de menu (1, 2, pedidos, sistema)
+    // ============================================================
+    const conversationMetadataForMenu = conversation.customer_metadata || {};
+    const isAwaitingMenuChoice = conversationMetadataForMenu.awaiting_menu_choice === true;
+    
+    // Regex para detectar escolha do menu
+    const menuChoiceRegex = /^(1|2|pedido[s]?|sistema|suporte\s*(pedido|sistema)?)[\s!.]*$/i;
+    const menuChoice = customerMessage.trim().match(menuChoiceRegex);
+    
+    // IDs dos departamentos de triagem
+    const DEPT_SUPORTE_PEDIDOS = '2dd0ee5c-fd20-44be-94ad-f83f1be1c4e9';
+    const DEPT_SUPORTE_SISTEMA = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4';
+    const DEPT_COMERCIAL = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+    
+    // Se cliente IDENTIFICADO está escolhendo departamento do menu
+    if (menuChoice && contact.email && isAwaitingMenuChoice) {
+      const choice = menuChoice[1].toLowerCase();
+      const isPedidos = choice === '1' || choice.includes('pedido');
+      const isSistema = choice === '2' || choice.includes('sistema');
+      
+      if (isPedidos || isSistema) {
+        const targetDeptId = isPedidos ? DEPT_SUPORTE_PEDIDOS : DEPT_SUPORTE_SISTEMA;
+        const targetDeptName = isPedidos ? 'Suporte Pedidos' : 'Suporte Sistema';
+        
+        console.log(`[ai-autopilot-chat] 🎯 TRIAGEM: Cliente escolheu ${targetDeptName}`, {
+          choice: choice,
+          department_id: targetDeptId,
+          contact_email: contact.email
+        });
+        
+        // Atualizar departamento da conversa e limpar flag de menu
+        await supabaseClient.from('conversations')
+          .update({ 
+            department: targetDeptId,
+            customer_metadata: {
+              ...conversationMetadataForMenu,
+              awaiting_menu_choice: false,
+              department_selected: targetDeptName,
+              department_selected_at: new Date().toISOString()
+            }
+          })
+          .eq('id', conversationId);
+        
+        // Buscar template de confirmação
+        const templateKey = isPedidos ? 'direcionado_suporte_pedidos' : 'direcionado_suporte_sistema';
+        let confirmMessage = await getMessageTemplate(supabaseClient, templateKey, {});
+        
+        if (!confirmMessage) {
+          confirmMessage = isPedidos 
+            ? 'Entendi! Estou te direcionando para o time de **Suporte de Pedidos**. 📦\n\nComo posso ajudar com seu pedido?'
+            : 'Entendi! Estou te direcionando para o time de **Suporte Técnico**. 💻\n\nQual é sua dúvida ou problema?';
+        }
+        
+        // Salvar mensagem de confirmação
+        const { data: savedMsg } = await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: confirmMessage,
+          sender_type: 'user',
+          is_ai_generated: true,
+          channel: responseChannel
+        }).select().single();
+        
+        // Atualizar last_message_at
+        await supabaseClient.from('conversations')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', conversationId);
+        
+        // Enviar via WhatsApp se necessário
+        if (responseChannel === 'whatsapp' && contact?.phone) {
+          const whatsappInstance = await getWhatsAppInstanceForConversation(
+            supabaseClient, 
+            conversationId, 
+            conversation.whatsapp_instance_id
+          );
+          
+          if (whatsappInstance) {
+            await supabaseClient.functions.invoke('send-whatsapp-message', {
+              body: {
+                instance_id: whatsappInstance.id,
+                phone_number: contact.phone,
+                whatsapp_id: contact.whatsapp_id,
+                message: confirmMessage
+              }
+            });
+          }
+        }
+        
+        // Registrar nota interna
+        await supabaseClient.from('interactions').insert({
+          customer_id: contact.id,
+          type: 'internal_note',
+          content: `🎯 **Triagem Inteligente** - Cliente escolheu: ${targetDeptName}`,
+          channel: responseChannel
+        });
+        
+        // RETURN EARLY - Triagem concluída
+        return new Response(JSON.stringify({
+          status: 'triage_complete',
+          message: confirmMessage,
+          department: targetDeptName,
+          department_id: targetDeptId,
+          messageId: savedMsg?.id,
+          debug: {
+            reason: 'menu_choice_processed',
+            choice: choice,
+            bypassed_ai: true
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    
+    // Se cliente está aguardando escolha mas enviou outra coisa, lembrar do menu
+    if (isAwaitingMenuChoice && !menuChoice && contact.email) {
+      const reminderTemplate = await getMessageTemplate(supabaseClient, 'aguardando_escolha_departamento', {});
+      const reminderMessage = reminderTemplate || 'Por favor, escolha uma das opções:\n\n**1** - Pedidos (entregas, rastreio, trocas)\n**2** - Sistema (acesso, dúvidas técnicas)';
+      
+      console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Cliente ainda não escolheu - enviando lembrete');
+      
+      // Salvar lembrete
+      const { data: savedMsg } = await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: reminderMessage,
+        sender_type: 'user',
+        is_ai_generated: true,
+        channel: responseChannel
+      }).select().single();
+      
+      // Enviar via WhatsApp se necessário
+      if (responseChannel === 'whatsapp' && contact?.phone) {
+        const whatsappInstance = await getWhatsAppInstanceForConversation(
+          supabaseClient, 
+          conversationId, 
+          conversation.whatsapp_instance_id
+        );
+        
+        if (whatsappInstance) {
+          await supabaseClient.functions.invoke('send-whatsapp-message', {
+            body: {
+              instance_id: whatsappInstance.id,
+              phone_number: contact.phone,
+              whatsapp_id: contact.whatsapp_id,
+              message: reminderMessage
+            }
+          });
+        }
+      }
+      
+      // RETURN EARLY - Lembrete enviado
+      return new Response(JSON.stringify({
+        status: 'awaiting_menu_choice',
+        message: reminderMessage,
+        messageId: savedMsg?.id,
+        debug: {
+          reason: 'menu_reminder_sent',
+          bypassed_ai: true
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // ============================================================
     // 🔍 DETECÇÃO AUTOMÁTICA DE EMAIL NA MENSAGEM
     // Se cliente SEM email envia uma mensagem contendo email válido,
     // processamos automaticamente como identificação
@@ -1029,30 +1193,80 @@ Como posso ajudar você hoje?`;
           const maskedEmailResponse = maskEmail(emailInMessage);
           let autoResponse = '';
           
-          if (verifyResult.found && verifyResult.otp_sent) {
-            autoResponse = `Encontrei seu cadastro! 🎉
-
-Enviei um código de **6 dígitos** para **${maskedEmailResponse}**.
-
-Por favor, **digite o código** que você recebeu para continuar.`;
-          } else if (!verifyResult.found) {
-            autoResponse = `Não encontrei o email **${maskedEmailResponse}** na nossa base de clientes.
-
-Poderia confirmar se esse email está correto?
-- Se estiver correto, digite **"sim"** para prosseguir
-- Se digitou errado, por favor envie o email correto`;
+          if (verifyResult.found) {
+            // 🎯 TRIAGEM: Email encontrado = Cliente identificado (SEM OTP) → Menu de departamentos
+            console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email encontrado - mostrando menu de departamentos');
             
-            // Marcar na metadata que estamos aguardando confirmação de email não encontrado
-            await supabaseClient
-              .from('conversations')
+            // Buscar template de confirmação com menu
+            let foundMessage = await getMessageTemplate(
+              supabaseClient,
+              'confirmacao_email_encontrado',
+              { contact_name: verifyResult.customer_name || contact.first_name || 'cliente' }
+            );
+            
+            if (!foundMessage) {
+              foundMessage = `Encontrei seu cadastro, ${verifyResult.customer_name || contact.first_name || 'cliente'}! 🎉\n\nAgora me diz: precisa de ajuda com:\n**1** - Pedidos\n**2** - Sistema`;
+            }
+            
+            // Atualizar contato com email e marcar para escolha do menu
+            await supabaseClient.from('contacts')
+              .update({ 
+                email: emailInMessage.toLowerCase().trim(),
+                status: 'customer'
+              })
+              .eq('id', contact.id);
+            
+            // Marcar que estamos aguardando escolha do menu
+            await supabaseClient.from('conversations')
               .update({
                 customer_metadata: {
                   ...(conversation.customer_metadata || {}),
-                  awaiting_email_confirmation: true,
-                  pending_email: emailInMessage.toLowerCase().trim()
+                  awaiting_menu_choice: true,
+                  email_verified_at: new Date().toISOString()
                 }
               })
               .eq('id', conversationId);
+            
+            autoResponse = foundMessage;
+          } else if (!verifyResult.found) {
+            // 🎯 TRIAGEM: Email não encontrado = Lead → Rotear para Comercial
+            console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email não encontrado - roteando para Comercial');
+            
+            const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+            
+            // Buscar template de lead direcionado
+            let leadMessage = await getMessageTemplate(supabaseClient, 'lead_direcionado_comercial', {});
+            if (!leadMessage) {
+              leadMessage = 'Obrigado! Como você ainda não é nosso cliente, vou te direcionar para nosso time Comercial que poderá te ajudar. 🤝\n\nAguarde um momento que logo um de nossos consultores irá te atender!';
+            }
+            
+            // Atualizar conversa: departamento = Comercial, ai_mode = waiting_human
+            await supabaseClient.from('conversations')
+              .update({ 
+                department: DEPT_COMERCIAL_ID,
+                ai_mode: 'waiting_human',
+                customer_metadata: {
+                  ...(conversation.customer_metadata || {}),
+                  lead_email_checked: emailInMessage.toLowerCase().trim(),
+                  lead_routed_to_comercial_at: new Date().toISOString()
+                }
+              })
+              .eq('id', conversationId);
+            
+            // Rotear para agente comercial
+            await supabaseClient.functions.invoke('route-conversation', {
+              body: { conversationId, department_id: DEPT_COMERCIAL_ID }
+            });
+            
+            // Registrar nota interna
+            await supabaseClient.from('interactions').insert({
+              customer_id: contact.id,
+              type: 'internal_note',
+              content: `🎯 **Lead Novo - Roteado para Comercial**\n\nEmail informado: ${maskedEmailResponse}\nMotivo: Email não encontrado na base de clientes`,
+              channel: responseChannel
+            });
+            
+            autoResponse = leadMessage;
           } else {
             // Fallback: email processado mas sem ação clara
             autoResponse = `Obrigado! Estou verificando seu email **${maskedEmailResponse}**...`;
@@ -1906,62 +2120,42 @@ Responda APENAS: skip ou search`
     });
     
     if (intentType === 'skip' && !isFinancialContext && isFirstMessageOfSession) {
-      // CASO 1: Cliente conhecido (tem email OU validado Kiwify OU status=customer) = saudação personalizada direta
+      // CASO 1: Cliente conhecido (tem email OU validado Kiwify OU status=customer) = MENU DE TRIAGEM
       if (isValidatedCustomer) {
-        console.log('[ai-autopilot-chat] 🎯 BYPASS DA IA - Saudação direta para cliente conhecido', {
+        console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Enviando menu de departamentos para cliente conhecido', {
           hasEmail: contactHasEmail,
           isKiwifyValidated: isKiwifyValidated,
           isCustomerInDatabase: isCustomerInDatabase
         });
         
-        // Saudação diferenciada por tipo de identificação
-        let directGreeting: string;
-        let greetingReason: string;
+        // Buscar template do menu de suporte
+        let menuMessage = await getMessageTemplate(
+          supabaseClient,
+          'menu_suporte_cliente',
+          { contact_name: contactName || 'cliente' }
+        );
         
-        if (contactHasEmail) {
-          // Cliente com email - saudação padrão
-          directGreeting = await getMessageTemplate(
-            supabaseClient,
-            'saudacao_cliente_conhecido',
-            { contact_name: contactName || '' }
-          ) || `Olá ${contactName}! Bem-vindo(a) de volta! Como posso te ajudar hoje?`;
-          greetingReason = 'known_customer_greeting_bypass';
-        } else if (isKiwifyValidated) {
-          // Cliente Kiwify identificado pelo telefone
-          directGreeting = await getMessageTemplate(
-            supabaseClient,
-            'saudacao_cliente_kiwify',
-            { contact_name: contactName || '' }
-          ) || `Olá ${contactName}! 🎉\n\nIdentifiquei você automaticamente pelo seu número de WhatsApp.\n\nComo posso te ajudar hoje?`;
-          greetingReason = 'kiwify_customer_greeting_bypass';
-        } else if (isCustomerInDatabase) {
-          // 🆕 Cliente identificado pela base de contatos (status = customer)
-          directGreeting = await getMessageTemplate(
-            supabaseClient,
-            'saudacao_cliente_base',
-            { contact_name: contactName || '' }
-          ) || `Olá, ${contactName}! Que bom ter você de volta! Como posso te ajudar hoje?`;
-          greetingReason = 'database_customer_greeting_bypass';
-        } else if (isPhoneVerified) {
-          // 🆕 Cliente identificado pelo telefone (sem email) - saudação sem pedir email
-          directGreeting = await getMessageTemplate(
-            supabaseClient,
-            'saudacao_cliente_telefone',
-            { contact_name: contactName || '' }
-          ) || `Olá, ${contactName}! Bem-vindo(a)! Como posso te ajudar hoje?`;
-          greetingReason = 'phone_verified_customer_bypass';
-        } else {
-          // Fallback (não deveria chegar aqui)
-          directGreeting = `Olá ${contactName}! Como posso te ajudar hoje?`;
-          greetingReason = 'fallback_greeting';
+        if (!menuMessage) {
+          menuMessage = `Olá, ${contactName || 'cliente'}! 👋 Que bom ter você de volta!\n\nComo posso te ajudar hoje?\n\n**1** - Pedidos (entregas, rastreio, trocas)\n**2** - Sistema (acesso, dúvidas técnicas)`;
         }
         
-        // Salvar mensagem da IA
+        // Marcar que estamos aguardando escolha do menu
+        await supabaseClient.from('conversations')
+          .update({
+            customer_metadata: {
+              ...(conversation.customer_metadata || {}),
+              awaiting_menu_choice: true,
+              menu_sent_at: new Date().toISOString()
+            }
+          })
+          .eq('id', conversationId);
+        
+        // Salvar mensagem do menu
         const { data: savedMsg } = await supabaseClient
           .from('messages')
           .insert({
             conversation_id: conversationId,
-            content: directGreeting,
+            content: menuMessage,
             sender_type: 'user',
             is_ai_generated: true,
             channel: responseChannel
@@ -1983,18 +2177,19 @@ Responda APENAS: skip ou search`
                 instance_id: whatsappInstance.id,
                 phone_number: contact.phone,
                 whatsapp_id: contact.whatsapp_id,
-                message: directGreeting
+                message: menuMessage
               }
             });
           }
         }
         
         return new Response(JSON.stringify({
-          response: directGreeting,
+          response: menuMessage,
           messageId: savedMsg?.id,
           directGreeting: true,
+          awaitingMenuChoice: true,
           debug: { 
-            reason: greetingReason,
+            reason: 'triage_menu_sent',
             customer_name: contactName,
             isKiwifyValidated: isKiwifyValidated,
             isCustomerInDatabase: isCustomerInDatabase,
