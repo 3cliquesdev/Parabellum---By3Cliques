@@ -1857,7 +1857,89 @@ Responda APENAS: skip ou search`
     // Antes: só fazia handoff se knowledgeArticles.length === 0 (bug - ignorava artigos irrelevantes)
     const isSimpleGreeting = /^(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|ok|tá|ta|sim|não|nao)[\s!?.,]*$/i.test(customerMessage.trim());
     
-    if (confidenceResult.action === 'handoff' && !isSimpleGreeting) {
+    // 🆕 Detectar mensagens genéricas de "quero atendimento" (NÃO fazer handoff imediato)
+    const isGenericContactRequest = /^(ol[aá]|oi|bom dia|boa tarde|boa noite)?[,!.\s]*(vim|cheguei|estou|preciso|quero|gostaria|queria|buscando|procurando).{0,50}(atendimento|ajuda|suporte|falar|contato|informação|informações|saber|conhecer|entender)/i.test(customerMessage.trim());
+    
+    // Buscar contagem de mensagens do cliente para determinar se é início de conversa
+    const { count: customerMessagesCount } = await supabaseClient
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('conversation_id', conversationId)
+      .eq('sender_type', 'contact');
+    
+    const isEarlyConversation = (customerMessagesCount || 0) <= 2;
+    
+    // 🆕 CONDIÇÃO EXPANDIDA: Não fazer handoff se for saudação OU contato genérico no início da conversa
+    const shouldSkipHandoff = isSimpleGreeting || (isGenericContactRequest && isEarlyConversation);
+    
+    console.log('[ai-autopilot-chat] 🔍 Handoff check:', {
+      isSimpleGreeting,
+      isGenericContactRequest,
+      isEarlyConversation,
+      customerMessagesCount,
+      shouldSkipHandoff,
+      confidenceAction: confidenceResult.action
+    });
+    
+    // 🆕 Responder com boas-vindas para mensagens de contato inicial (antes do handoff)
+    if (isGenericContactRequest && isEarlyConversation && confidenceResult.action === 'handoff') {
+      console.log('[ai-autopilot-chat] 👋 Mensagem de primeiro contato genérico detectada - respondendo com boas-vindas');
+      
+      // Usar template do banco ou fallback
+      let welcomeMessage = await getMessageTemplate(
+        supabaseClient,
+        'primeiro_contato_boas_vindas',
+        { contact_name: contactName || '' }
+      );
+      
+      if (!welcomeMessage) {
+        const firstName = contactName ? contactName.split(' ')[0] : '';
+        welcomeMessage = `Olá${firstName ? `, ${firstName}` : ''}! 👋\n\nFicamos felizes com seu contato! Em que posso te ajudar hoje?`;
+      }
+      
+      // Salvar mensagem
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: welcomeMessage,
+        sender_type: 'user',
+        is_ai_generated: true,
+        channel: responseChannel
+      });
+      
+      // 📤 ENVIAR PARA WHATSAPP (se for canal WhatsApp)
+      if (responseChannel === 'whatsapp' && contact?.phone) {
+        const whatsappInstance = await getWhatsAppInstanceForConversation(
+          supabaseClient, 
+          conversationId, 
+          conversation.whatsapp_instance_id
+        );
+        
+        if (whatsappInstance) {
+          console.log('[ai-autopilot-chat] 📤 Enviando boas-vindas via WhatsApp');
+          await supabaseClient.functions.invoke('send-whatsapp-message', {
+            body: {
+              instance_id: whatsappInstance.id,
+              phone_number: contact.phone,
+              whatsapp_id: contact.whatsapp_id,
+              message: welcomeMessage,
+              conversation_id: conversationId,
+              use_queue: true
+            }
+          });
+        }
+      }
+      
+      return new Response(JSON.stringify({
+        status: 'success',
+        message: welcomeMessage,
+        type: 'welcome_greeting',
+        reason: 'Generic contact request on early conversation - greeting instead of handoff'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    if (confidenceResult.action === 'handoff' && !shouldSkipHandoff) {
       console.log('[ai-autopilot-chat] 🚨 LOW CONFIDENCE HANDOFF - Score:', confidenceResult.score);
       
       // Atualizar ai_mode para waiting_human
