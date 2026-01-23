@@ -58,9 +58,15 @@ interface MyTicketDetailProps {
 const statusConfig: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
   open: { label: "Aberto", icon: <AlertCircle className="w-4 h-4" />, className: "text-blue-500" },
   in_progress: { label: "Em Andamento", icon: <Clock className="w-4 h-4" />, className: "text-yellow-500" },
+  waiting_customer: { label: "Aguardando Cliente", icon: <AlertCircle className="w-4 h-4" />, className: "text-yellow-500" },
   pending: { label: "Pendente", icon: <Clock className="w-4 h-4" />, className: "text-orange-500" },
+  pending_approval: { label: "Aguard. Aprovação", icon: <Clock className="w-4 h-4" />, className: "text-yellow-600" },
   resolved: { label: "Resolvido", icon: <CheckCircle2 className="w-4 h-4" />, className: "text-green-500" },
   closed: { label: "Fechado", icon: <CheckCircle2 className="w-4 h-4" />, className: "text-muted-foreground" },
+  returned: { label: "Devolvido", icon: <AlertCircle className="w-4 h-4" />, className: "text-orange-500" },
+  loja_bloqueada: { label: "Loja Bloqueada", icon: <AlertCircle className="w-4 h-4" />, className: "text-red-500" },
+  loja_concluida: { label: "Loja Concluída", icon: <CheckCircle2 className="w-4 h-4" />, className: "text-green-500" },
+  approved: { label: "Aprovado", icon: <CheckCircle2 className="w-4 h-4" />, className: "text-blue-600" },
 };
 
 const priorityLabels: Record<string, string> = {
