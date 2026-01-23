@@ -17,18 +17,18 @@ export function useTicketApproval() {
   return useMutation({
     mutationFn: async ({ ticket_id, approved, rejection_reason }: ApprovalData) => {
       const updateData: any = {
-        status: approved ? 'resolved' : 'in_progress',
         approved_by: user?.id,
         approved_at: new Date().toISOString(),
       };
 
-      if (!approved && rejection_reason) {
-        updateData.rejection_reason = rejection_reason;
-        updateData.assigned_to = null; // Devolve para o suporte
-      }
-
       if (approved) {
+        updateData.status = 'resolved';
         updateData.resolved_at = new Date().toISOString();
+      } else {
+        // Rejeitado: volta para in_progress para correção
+        updateData.status = 'in_progress';
+        updateData.rejection_reason = rejection_reason;
+        updateData.assigned_to = null; // Devolve para a fila geral
       }
 
       const { data, error } = await supabase

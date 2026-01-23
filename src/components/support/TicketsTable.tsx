@@ -9,6 +9,7 @@ import { Clock, AlertCircle, CheckCircle, UserPen, AlertTriangle, Eye, Tag } fro
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ApprovalStatusBadge } from "@/components/ApprovalStatusBadge";
 
 interface ViewingInfo {
   user_id: string;
@@ -22,11 +23,14 @@ interface Ticket {
   subject: string;
   description: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  status: 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed' | 'returned' | 'loja_bloqueada' | 'loja_concluida';
+  status: 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed' | 'returned' | 'loja_bloqueada' | 'loja_concluida' | 'pending_approval';
   created_at: string;
   due_date: string | null;
   created_by?: string | null;
   assigned_to?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  rejection_reason?: string | null;
   customer: {
     id?: string;
     first_name: string;
@@ -65,20 +69,28 @@ interface TicketsTableProps {
   getViewersForTicket?: (ticketId: string) => ViewingInfo[];
 }
 
-const statusConfig = {
+const statusConfig: Record<string, { icon: typeof Clock; color: string; bg: string }> = {
   open: { icon: Clock, color: "text-blue-500", bg: "bg-blue-500" },
   in_progress: { icon: Clock, color: "text-primary", bg: "bg-primary" },
   waiting_customer: { icon: AlertCircle, color: "text-yellow-500", bg: "bg-yellow-500" },
   resolved: { icon: CheckCircle, color: "text-green-500", bg: "bg-green-500" },
   closed: { icon: CheckCircle, color: "text-muted-foreground", bg: "bg-muted-foreground" },
+  pending_approval: { icon: Clock, color: "text-yellow-600", bg: "bg-yellow-500" },
+  returned: { icon: AlertCircle, color: "text-orange-500", bg: "bg-orange-500" },
+  loja_bloqueada: { icon: AlertCircle, color: "text-red-500", bg: "bg-red-500" },
+  loja_concluida: { icon: CheckCircle, color: "text-green-500", bg: "bg-green-500" },
 };
 
-const statusLabels = {
+const statusLabels: Record<string, string> = {
   open: 'Novo',
   in_progress: 'Em Análise',
   waiting_customer: 'Aguardando',
   resolved: 'Resolvido',
   closed: 'Fechado',
+  pending_approval: 'Aguard. Aprovação',
+  returned: 'Devolvido',
+  loja_bloqueada: 'Loja Bloqueada',
+  loja_concluida: 'Loja Concluída',
 };
 
 // Helper to get creator name from created_by_user (can be array or object)
@@ -238,6 +250,14 @@ export function TicketsTable({
                   <span className="text-sm font-medium truncate text-foreground">
                     {ticket.subject}
                   </span>
+                  {/* Approval Status Badge */}
+                  <ApprovalStatusBadge
+                    status={ticket.status}
+                    approvedBy={ticket.approved_by}
+                    approvedAt={ticket.approved_at}
+                    rejectionReason={ticket.rejection_reason}
+                    size="sm"
+                  />
                   {/* No tags indicator */}
                   {!ticketIdsWithTags.has(ticket.id) && !['resolved', 'closed'].includes(ticket.status) && (
                     <TooltipProvider>

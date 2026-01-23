@@ -63,25 +63,29 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence, tick
     );
   };
 
-  // Só mostra para tickets em progresso ou aguardando aprovação
+  // Só mostra para tickets em pending_approval ou em progresso (caso legado)
   if (ticketStatus === 'resolved' || ticketStatus === 'closed') {
     return null;
   }
 
+  const isPendingApproval = ticketStatus === 'pending_approval';
+
   return (
     <>
-      <Card className="border-2 border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20">
+      <Card className={`border-2 ${isPendingApproval ? 'border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20' : 'border-muted bg-muted/20'}`}>
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-yellow-500/10">
-              <AlertTriangle className="w-6 h-6 text-yellow-600 dark:text-yellow-500" />
+            <div className={`p-3 rounded-lg ${isPendingApproval ? 'bg-yellow-500/10' : 'bg-muted'}`}>
+              <AlertTriangle className={`w-6 h-6 ${isPendingApproval ? 'text-yellow-600 dark:text-yellow-500' : 'text-muted-foreground'}`} />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-yellow-900 dark:text-yellow-100">
-                ⚖️ Aprovação Financeira Pendente
+              <h3 className={`font-semibold ${isPendingApproval ? 'text-yellow-900 dark:text-yellow-100' : 'text-foreground'}`}>
+                ⚖️ {isPendingApproval ? 'Aprovação Gerencial Pendente' : 'Aprovação Financeira'}
               </h3>
-              <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                Este ticket aguarda sua decisão para aprovar ou rejeitar o reembolso.
+              <p className={`text-sm ${isPendingApproval ? 'text-yellow-700 dark:text-yellow-300' : 'text-muted-foreground'}`}>
+                {isPendingApproval 
+                  ? 'Este ticket aguarda sua decisão para aprovar ou rejeitar o reembolso.'
+                  : 'Ticket financeiro disponível para revisão.'}
               </p>
             </div>
             <div className="flex gap-2">

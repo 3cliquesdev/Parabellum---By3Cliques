@@ -18,15 +18,17 @@ import { TicketTimeline } from "@/components/TicketTimeline";
 import { TicketTagsCard } from "@/components/TicketTagsCard";
 import { RemovedAttachmentsHistory } from "@/components/RemovedAttachmentsHistory";
 import { useTicketPresence } from "@/hooks/useTicketPresence";
+import { ApprovalStatusBadge } from "@/components/ApprovalStatusBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, Clock, CheckCircle, Sparkles, Copy, ArrowRight, Users, GitMerge, ExternalLink, User, FileText } from "lucide-react";
+import { AlertCircle, Clock, CheckCircle, Sparkles, Copy, ArrowRight, Users, GitMerge, ExternalLink, User, FileText, Send } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useUsers } from "@/hooks/useUsers";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
+import { useRequestApproval } from "@/hooks/useRequestApproval";
 import { Link } from "react-router-dom";
 import ReactMarkdown from 'react-markdown';
 import { supabase } from "@/integrations/supabase/client";
@@ -71,7 +73,8 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
   const updateTicket = useUpdateTicket();
   const { data: users = [] } = useUsers();
   const smartReply = useSmartReply();
-  const { isFinancialManager, isSupportAgent, isAdmin } = useUserRole();
+  const requestApproval = useRequestApproval();
+  const { isFinancialManager, isFinancialAgent, isSupportAgent, isAdmin, isManager } = useUserRole();
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -180,6 +183,15 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
   const isFinancialTicket = ticket.category === 'financeiro' || ticket.description?.toLowerCase().includes('reembolso');
   const hasEvidence = attachments.length > 0;
   const canTransferToFinancial = isSupportAgent && isFinancialTicket && ticket.status !== 'resolved' && ticket.status !== 'closed';
+  
+  // Sistema de Aprovação Gerencial
+  const isPendingApproval = ticket.status === 'pending_approval';
+  const canRequestApproval = isFinancialAgent && isFinancialTicket && !isPendingApproval && ticket.status !== 'resolved' && ticket.status !== 'closed';
+  const canApprove = (isFinancialManager || isManager || isAdmin) && isFinancialTicket;
+
+  const handleRequestApproval = () => {
+    requestApproval.mutate(ticket.id);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -249,7 +261,39 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
             )}
           </div>
           
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 items-center">
+            {/* Badge de Status de Aprovação */}
+            <ApprovalStatusBadge
+              status={ticket.status}
+              approvedBy={ticket.approved_by}
+              approvedAt={ticket.approved_at}
+              rejectionReason={ticket.rejection_reason}
+              size="sm"
+            />
+
+            {/* Botão Solicitar Aprovação Gerencial (para financial_agent) */}
+            {canRequestApproval && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRequestApproval}
+                      disabled={requestApproval.isPending}
+                      className="h-8 px-2 text-yellow-600 border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950"
+                    >
+                      <Send className="w-4 h-4 mr-1" />
+                      {requestApproval.isPending ? "Enviando..." : "Solicitar Aprovação"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Enviar para aprovação gerencial antes de processar reembolso</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
             {/* Botão Mesclar Ticket */}
             {!ticket.merged_to_ticket_id && (ticket.status === 'open' || ticket.status === 'in_progress') && (
               <Button
@@ -420,8 +464,8 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
           readonly={false}
         />
 
-        {/* Financial Approval Bar (só para financial_manager) */}
-        {isFinancialManager && isFinancialTicket && (
+        {/* Financial Approval Bar (para gerentes: financial_manager, manager, admin) */}
+        {canApprove && isPendingApproval && (
           <FinancialApprovalBar 
             ticketId={ticket.id}
             ticketStatus={ticket.status}
