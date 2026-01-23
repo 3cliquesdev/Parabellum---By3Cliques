@@ -29,6 +29,11 @@ const statusLabels: Record<string, string> = {
   waiting_customer: 'Aguardando Cliente',
   resolved: 'Resolvido',
   closed: 'Fechado',
+  pending_approval: 'Aguard. Aprovação',
+  returned: 'Devolvido',
+  loja_bloqueada: 'Loja Bloqueada',
+  loja_concluida: 'Loja Concluída',
+  approved: 'Aprovado',
 };
 
 const priorityLabels: Record<string, string> = {

@@ -43,6 +43,11 @@ const fallbackStatusConfig: Record<string, { label: string; color: string }> = {
   waiting_customer: { label: "Aguardando Cliente", color: "#EAB308" },
   resolved: { label: "Resolvido", color: "#22C55E" },
   closed: { label: "Fechado", color: "#6B7280" },
+  pending_approval: { label: "Aguard. Aprovação", color: "#CA8A04" },
+  returned: { label: "Devolvido", color: "#F97316" },
+  loja_bloqueada: { label: "Loja Bloqueada", color: "#EF4444" },
+  loja_concluida: { label: "Loja Concluída", color: "#22C55E" },
+  approved: { label: "Aprovado", color: "#2563EB" },
 };
 
 export function TicketCard({ ticket, onClick, isSelected, viewers = [] }: TicketCardProps) {
