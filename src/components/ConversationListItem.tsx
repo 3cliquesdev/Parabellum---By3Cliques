@@ -4,13 +4,14 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ChannelIcon } from "@/components/ChannelIcon";
 import { SentimentBadge } from "@/components/SentimentBadge";
-import { Star } from "lucide-react";
+import { Star, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow, differenceInMinutes, differenceInHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 import { useSentimentAnalysis, type Sentiment } from "@/hooks/useSentimentAnalysis";
 import { supabase } from "@/integrations/supabase/client";
+import { useWhatsAppInstances } from "@/hooks/useWhatsAppInstances";
 type Contact = Tables<"contacts"> & {
   organizations: Tables<"organizations"> | null;
 };
@@ -126,6 +127,15 @@ function ConversationListItemComponent({
   unreadCount = 0,
   style
 }: ConversationListItemProps) {
+  // Buscar status das instâncias WhatsApp para indicar offline
+  const { data: whatsappInstances } = useWhatsAppInstances();
+  
+  // Verificar se a instância da conversa está offline
+  const instanceStatus = conversation.whatsapp_instance_id && whatsappInstances
+    ? whatsappInstances.find(i => i.id === conversation.whatsapp_instance_id)?.status
+    : null;
+  const isInstanceOffline = instanceStatus === 'disconnected' || instanceStatus === 'error';
+  
   // ✅ Query simples SEM realtime subscription - evita 50+ canais desnecessários
   const { data: messages } = useQuery({
     queryKey: ["messages-sentiment", conversation.id],
@@ -307,6 +317,18 @@ function ConversationListItemComponent({
           {conversation.channel === 'whatsapp' && !conversation.contacts?.email && (
             <Badge variant="warning" className="text-[10px] px-1.5 py-0 h-5">
               ⚠️
+            </Badge>
+          )}
+          
+          {/* 🔌 Indicador de instância WhatsApp offline */}
+          {conversation.channel === 'whatsapp' && isInstanceOffline && (
+            <Badge 
+              variant="outline" 
+              className="text-[10px] px-1.5 py-0 h-5 border-yellow-500 text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 gap-0.5"
+              title="Instância WhatsApp desconectada - mensagens podem não ser entregues"
+            >
+              <WifiOff className="h-2.5 w-2.5" />
+              Offline
             </Badge>
           )}
         </div>
