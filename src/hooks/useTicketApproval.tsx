@@ -22,8 +22,9 @@ export function useTicketApproval() {
       };
 
       if (approved) {
-        updateData.status = 'resolved';
-        updateData.resolved_at = new Date().toISOString();
+        // Status intermediário: aprovado para pagamento, mas não resolvido
+        updateData.status = 'approved';
+        // NÃO define resolved_at - será definido quando concluir o reembolso
       } else {
         // Rejeitado: volta para in_progress para correção
         updateData.status = 'in_progress';
@@ -48,7 +49,7 @@ export function useTicketApproval() {
 
       // Criar comentário de aprovação/rejeição
       const commentContent = approved 
-        ? "✅ Reembolso APROVADO pelo time financeiro."
+        ? "✅ Reembolso APROVADO pelo financeiro. Aguardando execução do pagamento."
         : `❌ Reembolso REJEITADO: ${rejection_reason}`;
 
       await supabase
@@ -69,7 +70,7 @@ export function useTicketApproval() {
       toast({
         title: variables.approved ? "✅ Reembolso Aprovado" : "❌ Reembolso Rejeitado",
         description: variables.approved 
-          ? "O cliente será notificado sobre a aprovação."
+          ? "Execute o pagamento e marque como concluído."
           : "O ticket foi devolvido ao suporte com observações.",
       });
     },

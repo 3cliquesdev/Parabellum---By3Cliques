@@ -12,8 +12,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { CheckCircle, XCircle, AlertTriangle, Banknote, Loader2 } from "lucide-react";
 import { useTicketApproval } from "@/hooks/useTicketApproval";
+import { useUpdateTicket } from "@/hooks/useUpdateTicket";
 
 interface FinancialApprovalBarProps {
   ticketId: string;
@@ -29,8 +30,10 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence, tick
   const canApprove = hasEvidence || !requiresEvidence;
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
-  const { mutate: approveTicket, isPending } = useTicketApproval();
+  const { mutate: approveTicket, isPending: isApproving } = useTicketApproval();
+  const updateTicket = useUpdateTicket();
 
   const handleApprove = () => {
     approveTicket(
@@ -63,13 +66,94 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence, tick
     );
   };
 
-  // Só mostra para tickets em pending_approval ou em progresso (caso legado)
+  const handleComplete = () => {
+    updateTicket.mutate(
+      { id: ticketId, updates: { status: 'resolved' } },
+      {
+        onSuccess: () => {
+          setCompleteDialogOpen(false);
+        },
+      }
+    );
+  };
+
+  // Não mostra para tickets resolvidos ou fechados
   if (ticketStatus === 'resolved' || ticketStatus === 'closed') {
     return null;
   }
 
   const isPendingApproval = ticketStatus === 'pending_approval';
+  const isApproved = ticketStatus === 'approved';
 
+  // Estado 2: Já aprovado - aguardando execução do pagamento
+  if (isApproved) {
+    return (
+      <>
+        <Card className="border-2 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-blue-500/10">
+                <Banknote className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-blue-900 dark:text-blue-100">
+                  💰 Reembolso Aprovado - Aguardando Pagamento
+                </h3>
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  Execute o pagamento e clique em "Concluir" para finalizar o ticket.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setCompleteDialogOpen(true)}
+                disabled={updateTicket.isPending}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {updateTicket.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                )}
+                Concluir Reembolso
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Complete Dialog */}
+        <AlertDialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-blue-600" />
+                Confirmar Conclusão do Reembolso
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Você está confirmando que o pagamento foi <strong>executado</strong>. Esta ação:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Marcará o ticket como <strong>Resolvido</strong></li>
+                  <li>Notificará o cliente sobre a conclusão</li>
+                  <li><strong>Esta ação não pode ser desfeita</strong></li>
+                </ul>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleComplete}
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={updateTicket.isPending}
+              >
+                {updateTicket.isPending ? "Concluindo..." : "Confirmar Conclusão"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
+    );
+  }
+
+  // Estado 1: Aguardando aprovação
   return (
     <>
       <Card className={`border-2 ${isPendingApproval ? 'border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20' : 'border-muted bg-muted/20'}`}>
@@ -93,7 +177,7 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence, tick
                 variant="outline"
                 size="sm"
                 onClick={() => setRejectDialogOpen(true)}
-                disabled={isPending}
+                disabled={isApproving}
                 className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
               >
                 <XCircle className="w-4 h-4 mr-2" />
@@ -102,11 +186,11 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence, tick
               <Button
                 size="sm"
                 onClick={() => setApproveDialogOpen(true)}
-                disabled={isPending || !canApprove}
+                disabled={isApproving || !canApprove}
                 className="bg-green-600 hover:bg-green-700"
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
-                Aprovar e Pagar
+                Aprovar Reembolso
               </Button>
             </div>
           </div>
@@ -133,9 +217,9 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence, tick
             <AlertDialogDescription>
               Você está prestes a <strong>aprovar</strong> este reembolso. Esta ação:
               <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Marcará o ticket como <strong>Resolvido</strong></li>
+                <li>Marcará o ticket como <strong>Aprovado</strong> para pagamento</li>
                 <li>Registrará sua aprovação no histórico</li>
-                <li>Notificará o cliente sobre a aprovação</li>
+                <li>Após o pagamento, você poderá marcar como Concluído</li>
                 <li><strong>Esta ação não pode ser desfeita</strong></li>
               </ul>
             </AlertDialogDescription>
@@ -145,9 +229,9 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence, tick
             <AlertDialogAction 
               onClick={handleApprove}
               className="bg-green-600 hover:bg-green-700"
-              disabled={isPending}
+              disabled={isApproving}
             >
-              {isPending ? "Aprovando..." : "Confirmar Aprovação"}
+              {isApproving ? "Aprovando..." : "Confirmar Aprovação"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -179,9 +263,9 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence, tick
             <AlertDialogAction 
               onClick={handleReject}
               className="bg-red-600 hover:bg-red-700"
-              disabled={isPending || !rejectionReason.trim()}
+              disabled={isApproving || !rejectionReason.trim()}
             >
-              {isPending ? "Rejeitando..." : "Confirmar Rejeição"}
+              {isApproving ? "Rejeitando..." : "Confirmar Rejeição"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
