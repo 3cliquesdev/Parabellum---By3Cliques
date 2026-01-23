@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface MediaAttachment {
@@ -20,16 +20,72 @@ interface MediaUrlResult {
   size?: number;
   waveformData?: any;
   durationSeconds?: number;
+  error?: string;
+  retryCount?: number;
+}
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY_BASE = 1000; // 1 second
+
+/**
+ * Helper: Fetch URL with exponential backoff retry
+ */
+async function fetchUrlWithRetry(
+  attachmentId: string,
+  attempt: number = 1
+): Promise<MediaUrlResult | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      `get-media-url?attachmentId=${attachmentId}&expiresIn=3600`,
+      { method: 'GET' }
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (!data?.success || !data?.attachment?.url) {
+      throw new Error(data?.error || 'No URL returned');
+    }
+
+    return {
+      id: attachmentId,
+      url: data.attachment.url,
+      mimeType: data.attachment.mimeType,
+      filename: data.attachment.filename,
+      size: data.attachment.size,
+      waveformData: data.attachment.waveformData,
+      durationSeconds: data.attachment.durationSeconds,
+    };
+  } catch (err) {
+    console.warn(`[useMediaUrls] Attempt ${attempt}/${MAX_RETRIES} failed for ${attachmentId}:`, err);
+    
+    if (attempt < MAX_RETRIES) {
+      // Exponential backoff: 1s, 2s, 3s
+      await new Promise(r => setTimeout(r, RETRY_DELAY_BASE * attempt));
+      return fetchUrlWithRetry(attachmentId, attempt + 1);
+    }
+    
+    // All retries exhausted - return error result
+    return {
+      id: attachmentId,
+      url: '',
+      mimeType: '',
+      error: err instanceof Error ? err.message : 'Failed to load media',
+      retryCount: attempt,
+    };
+  }
 }
 
 /**
  * Hook para carregar signed URLs para múltiplos media attachments
- * Usa cache para evitar requisições repetidas
+ * Com retry automático e tratamento de erros
  */
 export function useMediaUrls(attachments: MediaAttachment[]) {
   const [urls, setUrls] = useState<Map<string, MediaUrlResult>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const loadedIdsRef = useRef<Set<string>>(new Set());
+  const retryQueueRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const loadUrls = async () => {
@@ -38,7 +94,8 @@ export function useMediaUrls(attachments: MediaAttachment[]) {
         a.id && 
         a.storage_bucket && 
         a.storage_path && 
-        !loadedIdsRef.current.has(a.id)
+        !loadedIdsRef.current.has(a.id) &&
+        !retryQueueRef.current.has(a.id)
       );
       
       if (missing.length === 0) return;
@@ -47,61 +104,37 @@ export function useMediaUrls(attachments: MediaAttachment[]) {
       console.log('[useMediaUrls] Loading signed URLs for:', missing.length, 'attachments');
 
       try {
-        // Carregar todas URLs em paralelo
+        // Marcar como em processamento
+        missing.forEach(a => loadedIdsRef.current.add(a.id));
+
+        // Carregar todas URLs em paralelo com retry
         const results = await Promise.all(
-          missing.map(async (att) => {
-            try {
-              // Marcar como em processamento para evitar duplicatas
-              loadedIdsRef.current.add(att.id);
-
-              const { data, error } = await supabase.functions.invoke(
-                `get-media-url?attachmentId=${att.id}&expiresIn=3600`,
-                { method: 'GET' }
-              );
-
-              if (error) {
-                console.error('[useMediaUrls] Error for', att.id, ':', error);
-                loadedIdsRef.current.delete(att.id); // Permitir retry
-                return null;
-              }
-
-              if (!data?.success || !data?.attachment?.url) {
-                console.warn('[useMediaUrls] No URL for', att.id);
-                loadedIdsRef.current.delete(att.id); // Permitir retry
-                return null;
-              }
-
-              return {
-                id: att.id,
-                url: data.attachment.url,
-                mimeType: data.attachment.mimeType || att.mime_type,
-                filename: data.attachment.filename || att.original_filename,
-                size: data.attachment.size || att.file_size,
-                waveformData: data.attachment.waveformData || att.waveform_data,
-                durationSeconds: data.attachment.durationSeconds || att.duration_seconds,
-              } as MediaUrlResult;
-            } catch (err) {
-              console.error('[useMediaUrls] Exception for', att.id, ':', err);
-              loadedIdsRef.current.delete(att.id); // Permitir retry
-              return null;
-            }
-          })
+          missing.map(att => fetchUrlWithRetry(att.id))
         );
 
-        // Atualizar cache com resultados válidos
+        // Atualizar cache com resultados
         setUrls(prev => {
           const next = new Map(prev);
           results.forEach(r => {
             if (r) {
               next.set(r.id, r);
+              
+              // Se teve erro, remover de loaded para permitir retry manual
+              if (r.error) {
+                loadedIdsRef.current.delete(r.id);
+              }
             }
           });
           return next;
         });
 
-        console.log('[useMediaUrls] Loaded', results.filter(r => r).length, 'URLs successfully');
+        const successCount = results.filter(r => r && !r.error).length;
+        const errorCount = results.filter(r => r?.error).length;
+        console.log(`[useMediaUrls] Loaded ${successCount} URLs, ${errorCount} errors`);
       } catch (err) {
         console.error('[useMediaUrls] Batch error:', err);
+        // Reset loaded IDs on batch error
+        missing.forEach(a => loadedIdsRef.current.delete(a.id));
       } finally {
         setIsLoading(false);
       }
@@ -111,65 +144,111 @@ export function useMediaUrls(attachments: MediaAttachment[]) {
   }, [attachments]);
 
   // Função helper para obter URL por ID
-  const getUrl = (attachmentId: string): MediaUrlResult | undefined => {
+  const getUrl = useCallback((attachmentId: string): MediaUrlResult | undefined => {
     return urls.get(attachmentId);
-  };
+  }, [urls]);
 
-  return { urls, isLoading, getUrl };
+  // Função para retry manual de um attachment específico
+  const retryLoad = useCallback(async (attachmentId: string) => {
+    console.log('[useMediaUrls] Manual retry for:', attachmentId);
+    
+    // Marcar como retrying
+    retryQueueRef.current.add(attachmentId);
+    
+    // Atualizar para mostrar loading
+    setUrls(prev => {
+      const next = new Map(prev);
+      const existing = next.get(attachmentId);
+      if (existing) {
+        next.set(attachmentId, { ...existing, error: undefined });
+      }
+      return next;
+    });
+    
+    setIsLoading(true);
+    
+    try {
+      const result = await fetchUrlWithRetry(attachmentId, 1);
+      
+      setUrls(prev => {
+        const next = new Map(prev);
+        if (result) {
+          next.set(attachmentId, result);
+          
+          if (!result.error) {
+            loadedIdsRef.current.add(attachmentId);
+          }
+        }
+        return next;
+      });
+    } finally {
+      retryQueueRef.current.delete(attachmentId);
+      setIsLoading(false);
+    }
+  }, []);
+
+  return { urls, isLoading, getUrl, retryLoad };
 }
 
 /**
  * Hook simples para obter signed URL de um único attachment
+ * Com retry automático
  */
 export function useMediaUrl(attachmentId: string | null) {
   const [result, setResult] = useState<MediaUrlResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadUrl = useCallback(async () => {
     if (!attachmentId) {
       setResult(null);
       return;
     }
 
-    const loadUrl = async () => {
-      setIsLoading(true);
-      setError(null);
+    setIsLoading(true);
+    setError(null);
 
-      try {
-        const { data, error: fnError } = await supabase.functions.invoke(
-          `get-media-url?attachmentId=${attachmentId}&expiresIn=3600`,
-          { method: 'GET' }
-        );
-
-        if (fnError) {
-          throw new Error(fnError.message);
-        }
-
-        if (!data?.success) {
-          throw new Error(data?.error || 'Failed to get URL');
-        }
-
-        setResult({
-          id: attachmentId,
-          url: data.attachment.url,
-          mimeType: data.attachment.mimeType,
-          filename: data.attachment.filename,
-          size: data.attachment.size,
-          waveformData: data.attachment.waveformData,
-          durationSeconds: data.attachment.durationSeconds,
-        });
-      } catch (err) {
-        console.error('[useMediaUrl] Error:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
-        setResult(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadUrl();
+    const urlResult = await fetchUrlWithRetry(attachmentId);
+    
+    if (urlResult?.error) {
+      setError(urlResult.error);
+      setResult(null);
+    } else if (urlResult) {
+      setResult(urlResult);
+    }
+    
+    setIsLoading(false);
   }, [attachmentId]);
 
-  return { result, isLoading, error };
+  useEffect(() => {
+    loadUrl();
+  }, [loadUrl]);
+
+  const retry = useCallback(() => {
+    loadUrl();
+  }, [loadUrl]);
+
+  return { result, isLoading, error, retry };
+}
+
+/**
+ * Helper para obter URL fresca para envio (não usar cache)
+ */
+export async function getFreshMediaUrl(attachmentId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      `get-media-url?attachmentId=${attachmentId}&expiresIn=3600`,
+      { method: 'GET' }
+    );
+
+    if (error || !data?.success) {
+      console.error('[getFreshMediaUrl] Error:', error || data?.error);
+      return null;
+    }
+
+    return data.attachment.url;
+  } catch (err) {
+    console.error('[getFreshMediaUrl] Exception:', err);
+    return null;
+  }
 }

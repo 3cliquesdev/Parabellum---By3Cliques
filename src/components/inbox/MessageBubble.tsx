@@ -1,12 +1,13 @@
 import { format } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot } from "lucide-react";
+import { Bot, AlertCircle, RefreshCw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SafeHTML } from "@/components/SafeHTML";
 import { MessageStatusIndicator } from "@/components/MessageStatusIndicator";
 import { AIDebugTooltip } from "@/components/AIDebugTooltip";
 import { ChannelIcon } from "@/components/ChannelIcon";
 import { MediaPreview } from "./MediaPreview";
+import { Button } from "@/components/ui/button";
 
 interface MessageSender {
   id: string;
@@ -19,10 +20,13 @@ interface MediaAttachment {
   id: string;
   url: string;
   mimeType: string;
-  filename: string;
+  filename?: string;
   size?: number;
   waveformData?: number[];
   durationSeconds?: number;
+  error?: string;
+  isLoading?: boolean;
+  onRetry?: () => void;
 }
 
 interface MessageBubbleProps {
@@ -146,30 +150,60 @@ export function MessageBubble({
           {attachments.length > 0 && (
             <div className="space-y-2 mb-2">
               {attachments.map((attachment) => {
-                // ✅ Detectar mídia pendente de download
-                const isPending = !attachment.url || attachment.url === '';
-                
-                if (isPending) {
+                // Estado de erro com retry
+                if (attachment.error) {
+                  return (
+                    <div 
+                      key={attachment.id}
+                      className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-lg border border-destructive/30"
+                    >
+                      <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="text-xs font-medium text-destructive truncate">
+                          Falha ao carregar mídia
+                        </span>
+                        <span className="text-[10px] text-destructive/70 truncate">
+                          {attachment.filename || 'Arquivo'}
+                        </span>
+                      </div>
+                      {attachment.onRetry && (
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={attachment.onRetry}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                          Tentar
+                        </Button>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Estado de loading
+                if (attachment.isLoading || (!attachment.url && !attachment.error)) {
                   return (
                     <div 
                       key={attachment.id}
                       className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30"
                     >
-                      <div className="w-8 h-8 rounded bg-muted flex items-center justify-center animate-pulse">
-                        <span className="text-muted-foreground text-xs">⏳</span>
+                      <div className="w-8 h-8 rounded bg-muted flex items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       </div>
                       <div className="flex flex-col">
                         <span className="text-xs font-medium text-muted-foreground">
-                          Mídia pendente
+                          Carregando mídia...
                         </span>
-                        <span className="text-[10px] text-muted-foreground/70">
-                          Download em andamento...
+                        <span className="text-[10px] text-muted-foreground/70 truncate max-w-[150px]">
+                          {attachment.filename || 'Arquivo'}
                         </span>
                       </div>
                     </div>
                   );
                 }
                 
+                // Mídia carregada com sucesso
                 return (
                   <MediaPreview
                     key={attachment.id}
