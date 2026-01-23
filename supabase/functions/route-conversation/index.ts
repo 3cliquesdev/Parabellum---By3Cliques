@@ -296,12 +296,21 @@ serve(async (req) => {
         required_skill: requiredSkillName || 'none'
       });
 
+      // Buscar ai_mode atual ANTES de atualizar
+      const currentAiMode = conversation.ai_mode;
+
+      // Se está em waiting_human, MANTER assim até agente responder
+      // Só mudar para copilot se estava em autopilot ou outro estado
+      const newAiMode = currentAiMode === 'waiting_human' 
+        ? 'waiting_human'  // Manter silêncio até agente responder
+        : 'copilot';        // Normal: ativar modo assistente
+
       // Atribuir ao agente com menos carga - COM VERIFICAÇÃO DE SUCESSO
       const { error: updateError } = await supabase
         .from('conversations')
         .update({ 
           assigned_to: selectedAgent.id,
-          ai_mode: 'copilot',
+          ai_mode: newAiMode,
           last_message_at: new Date().toISOString()
         })
         .eq('id', conversationId);
@@ -311,7 +320,7 @@ serve(async (req) => {
         throw new Error(`Falha ao atribuir conversa: ${updateError.message}`);
       }
 
-      console.log('[route-conversation] ✅ ai_mode mudado para copilot com sucesso');
+      console.log(`[route-conversation] ✅ ai_mode: ${currentAiMode} → ${newAiMode}`);
 
       // Inserir mensagem de sistema
       await supabase
