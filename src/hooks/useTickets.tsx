@@ -8,7 +8,7 @@ type TicketStatus = 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | '
 
 export function useTickets(
   statusFilter?: TicketStatus, 
-  assignedFilter?: 'mine' | 'unassigned' | 'all' | 'created_by_me', 
+  assignedFilter?: 'mine' | 'unassigned' | 'all' | 'created_by_me' | 'my_involved', 
   agentFilter?: string,
   advancedFilters?: TicketFilters
 ) {
@@ -73,6 +73,19 @@ export function useTickets(
 
       // CRITICAL: Access control based on role
       // RLS policies handle the actual security, this is for query optimization
+      
+      // Special filter: "my_involved" - tickets where user participated (created, assigned, or commented)
+      let involvedTicketIds: string[] | null = null;
+      if (assignedFilter === 'my_involved') {
+        // Fetch ticket IDs where user has commented
+        const { data: commentedTickets } = await supabase
+          .from("ticket_comments")
+          .select("ticket_id")
+          .eq("created_by", user.id);
+        
+        involvedTicketIds = [...new Set(commentedTickets?.map(c => c.ticket_id) || [])];
+      }
+      
       if (canSeeAllTickets) {
         // Manager/admin logic: can see all
         if (assignedFilter === 'mine') {
@@ -81,6 +94,9 @@ export function useTickets(
           query = query.is("assigned_to", null);
         } else if (assignedFilter === 'created_by_me') {
           query = query.eq("created_by", user.id);
+        } else if (assignedFilter === 'my_involved' && involvedTicketIds) {
+          // Tickets where user: created OR is assigned OR commented
+          query = query.or(`created_by.eq.${user.id},assigned_to.eq.${user.id},id.in.(${involvedTicketIds.join(',')})`);
         }
         // "all" for managers = no filter (see everything)
       } else if (isUser) {
@@ -91,6 +107,8 @@ export function useTickets(
         // RLS handles this, but we optimize the query
         if (assignedFilter === 'created_by_me') {
           query = query.eq("created_by", user.id);
+        } else if (assignedFilter === 'my_involved' && involvedTicketIds) {
+          query = query.or(`created_by.eq.${user.id},assigned_to.eq.${user.id},id.in.(${involvedTicketIds.join(',')})`);
         }
         // For other filters, let RLS handle it (consultant policy filters by consultant_id)
       } else if (isFinancialAgent || isSupportAgent || isEcommerceAnalyst) {
@@ -101,6 +119,8 @@ export function useTickets(
           query = query.is("assigned_to", null);
         } else if (assignedFilter === 'created_by_me') {
           query = query.eq("created_by", user.id);
+        } else if (assignedFilter === 'my_involved' && involvedTicketIds) {
+          query = query.or(`created_by.eq.${user.id},assigned_to.eq.${user.id},id.in.(${involvedTicketIds.join(',')})`);
         } else {
           // "all" means: assigned to self, unassigned, OR created by self
           query = query.or(`assigned_to.eq.${user.id},assigned_to.is.null,created_by.eq.${user.id}`);
