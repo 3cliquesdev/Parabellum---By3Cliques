@@ -58,20 +58,30 @@ const priorityLabels = {
   urgent: 'Urgente',
 };
 
-const statusIcons = {
+const statusIcons: Record<string, React.ReactNode> = {
   open: <Clock className="w-4 h-4" />,
   in_progress: <Clock className="w-4 h-4 text-blue-500" />,
   waiting_customer: <AlertCircle className="w-4 h-4 text-yellow-500" />,
   resolved: <CheckCircle className="w-4 h-4 text-green-500" />,
   closed: <CheckCircle className="w-4 h-4 text-muted-foreground" />,
+  pending_approval: <Clock className="w-4 h-4 text-yellow-600" />,
+  returned: <AlertCircle className="w-4 h-4 text-orange-500" />,
+  loja_bloqueada: <AlertCircle className="w-4 h-4 text-red-500" />,
+  loja_concluida: <CheckCircle className="w-4 h-4 text-green-500" />,
+  approved: <CheckCircle className="w-4 h-4 text-blue-600" />,
 };
 
-const statusLabels = {
+const statusLabels: Record<string, string> = {
   open: 'Aberto',
   in_progress: 'Em Análise',
   waiting_customer: 'Aguardando Cliente',
   resolved: 'Resolvido',
   closed: 'Fechado',
+  pending_approval: 'Aguard. Aprovação',
+  returned: 'Devolvido',
+  loja_bloqueada: 'Loja Bloqueada',
+  loja_concluida: 'Loja Concluída',
+  approved: 'Aprovado',
 };
 
 export function TicketsList({ tickets, selectedTicketId, onSelectTicket }: TicketsListProps) {

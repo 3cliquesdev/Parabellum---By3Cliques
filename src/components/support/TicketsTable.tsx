@@ -69,6 +69,8 @@ interface TicketsTableProps {
   getViewersForTicket?: (ticketId: string) => ViewingInfo[];
 }
 
+const defaultStatusConfig = { icon: Clock, color: "text-muted-foreground", bg: "bg-muted-foreground" };
+
 const statusConfig: Record<string, { icon: typeof Clock; color: string; bg: string }> = {
   open: { icon: Clock, color: "text-blue-500", bg: "bg-blue-500" },
   in_progress: { icon: Clock, color: "text-primary", bg: "bg-primary" },
@@ -79,6 +81,7 @@ const statusConfig: Record<string, { icon: typeof Clock; color: string; bg: stri
   returned: { icon: AlertCircle, color: "text-orange-500", bg: "bg-orange-500" },
   loja_bloqueada: { icon: AlertCircle, color: "text-red-500", bg: "bg-red-500" },
   loja_concluida: { icon: CheckCircle, color: "text-green-500", bg: "bg-green-500" },
+  approved: { icon: CheckCircle, color: "text-blue-600", bg: "bg-blue-500" },
 };
 
 const statusLabels: Record<string, string> = {
@@ -91,6 +94,7 @@ const statusLabels: Record<string, string> = {
   returned: 'Devolvido',
   loja_bloqueada: 'Loja Bloqueada',
   loja_concluida: 'Loja Concluída',
+  approved: 'Aprovado',
 };
 
 // Helper to get creator name from created_by_user (can be array or object)
@@ -197,7 +201,8 @@ export function TicketsTable({
       <ScrollArea className="flex-1">
         <div className="divide-y divide-border">
           {tickets.map((ticket) => {
-            const StatusIcon = statusConfig[ticket.status].icon;
+            const statusEntry = statusConfig[ticket.status] || defaultStatusConfig;
+            const StatusIcon = statusEntry.icon;
             const isSelected = selectedTicketId === ticket.id;
             const isChecked = selectedTicketIds.includes(ticket.id);
             const slaExpired = isSlaExpired(ticket.due_date, ticket.status);
@@ -236,7 +241,7 @@ export function TicketsTable({
 
                 {/* Protocol + Status */}
                 <div className="flex items-center gap-2">
-                  <div className={cn("w-2 h-2 rounded-full flex-shrink-0", statusConfig[ticket.status].bg)} />
+                  <div className={cn("w-2 h-2 rounded-full flex-shrink-0", statusEntry.bg)} />
                   {slaExpired && (
                     <AlertTriangle className="w-3 h-3 text-destructive flex-shrink-0" />
                   )}
