@@ -66,8 +66,17 @@ export function useTickets(
         `)
         .order("created_at", { ascending: false });
 
-      // Filtro por status (legacy)
-      if (statusFilter) {
+      // Filtro especial: financial_pending (tickets financeiros aguardando aprovação)
+      const isFinancialPendingFilter = statusFilter === 'financial_pending' as any;
+      
+      if (isFinancialPendingFilter) {
+        // Tickets financeiros (categoria ou keywords) + não aprovados + não arquivados
+        query = query
+          .or('category.eq.financeiro,subject.ilike.%saque%,subject.ilike.%reembolso%')
+          .is('approved_by', null)
+          .not('status', 'in', '("resolved","closed")');
+      } else if (statusFilter) {
+        // Filtro por status normal (legacy)
         query = query.eq("status", statusFilter);
       }
 
