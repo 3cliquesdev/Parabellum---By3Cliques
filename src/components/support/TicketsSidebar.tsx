@@ -40,6 +40,7 @@ const mainFilters: FilterItem[] = [
   { key: 'all', label: 'Todos os tickets', icon: <Inbox className="w-4 h-4" />, countKey: 'total' },
   { key: 'my_open', label: 'Meus tickets abertos', icon: <User className="w-4 h-4" />, countKey: 'my_open' },
   { key: 'created_by_me', label: 'Tickets que criei', icon: <FileEdit className="w-4 h-4" />, countKey: 'created_by_me' },
+  { key: 'my_involved', label: 'Participei', icon: <User className="w-4 h-4" />, countKey: 'my_involved' },
   { key: 'unassigned', label: 'Não atribuídos', icon: <FolderOpen className="w-4 h-4" />, countKey: 'unassigned' },
   { key: 'sla_expired', label: 'SLA vencido', icon: <AlertTriangle className="w-4 h-4" />, countKey: 'sla_expired', variant: 'danger' },
   { key: 'no_tags', label: 'Sem tag', icon: <Tag className="w-4 h-4" />, countKey: 'no_tags', variant: 'warning' },

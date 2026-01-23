@@ -50,6 +50,14 @@ export function useTicketCounts() {
       
       const ticketIdsWithTags = new Set(ticketTagsData?.map(tt => tt.ticket_id) || []);
 
+      // Fetch ticket IDs where user has commented (for "my_involved" count)
+      const { data: commentedTickets } = await supabase
+        .from("ticket_comments")
+        .select("ticket_id")
+        .eq("created_by", user.id);
+      
+      const ticketIdsUserCommented = new Set(commentedTickets?.map(c => c.ticket_id) || []);
+
       // Optimize query based on role (RLS handles security, this is for performance)
       if (!canSeeAllTickets) {
         if (isUser) {
@@ -71,6 +79,7 @@ export function useTicketCounts() {
         total: 0,
         my_open: 0,
         created_by_me: 0,
+        my_involved: 0,
         unassigned: 0,
         sla_expired: 0,
         archived: 0,
@@ -113,6 +122,15 @@ export function useTicketCounts() {
         // Tickets que o usuário criou (para acompanhamento)
         if (ticket.created_by === user.id && !isArchived) {
           counts.created_by_me++;
+        }
+
+        // Tickets que o usuário participou (criou, foi atribuído, ou comentou)
+        const userInvolved = 
+          ticket.created_by === user.id || 
+          ticket.assigned_to === user.id || 
+          ticketIdsUserCommented.has(ticket.id);
+        if (userInvolved && !isArchived) {
+          counts.my_involved++;
         }
 
         // Unassigned (apenas ativos)
