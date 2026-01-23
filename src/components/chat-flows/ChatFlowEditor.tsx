@@ -24,7 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   MessageSquare, User, Mail, Phone, CreditCard, ListChecks, 
   MessageCircle, GitBranch, Sparkles, UserPlus, CheckCircle,
-  Save, X, Trash2, Plus, Play
+  Save, X, Trash2, Plus, Play, Bot, BookOpen
 } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -46,6 +46,7 @@ import {
 } from "./nodes";
 import { cn } from "@/lib/utils";
 import { TransferPropertiesPanel } from "./TransferPropertiesPanel";
+import { AIResponsePropertiesPanel } from "./AIResponsePropertiesPanel";
 
 // Tipos de nós para chat flows
 export const chatFlowNodeTypes = {
@@ -537,25 +538,10 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
 
               {/* IA Response */}
               {selectedNode.type === "ai_response" && (
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Contexto para IA</Label>
-                    <Textarea
-                      value={selectedNode.data.context_prompt || ""}
-                      onChange={(e) => updateNodeData("context_prompt", e.target.value)}
-                      placeholder="Instruções adicionais para a IA..."
-                      rows={3}
-                      className="resize-none"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <Label className="text-xs">Usar base de conhecimento</Label>
-                    <Switch
-                      checked={selectedNode.data.use_knowledge_base !== false}
-                      onCheckedChange={(checked) => updateNodeData("use_knowledge_base", checked)}
-                    />
-                  </div>
-                </div>
+                <AIResponsePropertiesPanel
+                  selectedNode={selectedNode}
+                  updateNodeData={updateNodeData}
+                />
               )}
 
               {/* Transfer */}

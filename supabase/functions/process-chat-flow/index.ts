@@ -308,12 +308,18 @@ serve(async (req) => {
           })
           .eq('id', activeState.id);
 
+        // 🆕 Retornar personaId e kbCategories do nó para uso no ai-autopilot-chat
         return new Response(
           JSON.stringify({
             useAI: true,
             contextPrompt: nextNode.data?.context_prompt,
             useKnowledgeBase: nextNode.data?.use_knowledge_base !== false,
             collectedData,
+            // Novos campos para seleção específica de persona e KB
+            personaId: nextNode.data?.persona_id || null,
+            personaName: nextNode.data?.persona_name || null,
+            kbCategories: nextNode.data?.kb_categories || null,
+            fallbackMessage: nextNode.data?.fallback_message || null,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
