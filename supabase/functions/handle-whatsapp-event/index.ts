@@ -923,12 +923,36 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     console.warn('[handle-whatsapp-event] ⚠️ Validação Kiwify falhou (não crítico):', kiwifyErr);
   }
 
-  // Buscar estado atual da conversa
+  // Buscar estado atual da conversa (incluindo instância atual para detectar swap)
   const { data: currentConv } = await supabase
     .from('conversations')
-    .select('ai_mode, assigned_to, department')
+    .select('ai_mode, assigned_to, department, whatsapp_instance_id')
     .eq('id', conversationId)
     .single();
+
+  // 🔄 Detectar e logar troca de instância WhatsApp
+  const previousInstanceId = currentConv?.whatsapp_instance_id;
+  const isInstanceSwap = previousInstanceId && previousInstanceId !== instance.id;
+  
+  if (isInstanceSwap) {
+    console.log('[handle-whatsapp-event] 🔄 INSTÂNCIA TROCADA:', {
+      antiga: previousInstanceId,
+      nova: instance.id,
+      conversationId: conversationId,
+      contactId: contactId
+    });
+    
+    // Registrar troca de instância no histórico (mensagem interna)
+    await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      content: `📱 Conexão WhatsApp atualizada para nova instância`,
+      sender_type: 'system',
+      is_internal: true,
+      channel: 'whatsapp'
+    });
+    
+    console.log('[handle-whatsapp-event] ✅ Mensagem de troca de instância registrada no histórico');
+  }
 
   const updateData: any = {
     whatsapp_instance_id: instance.id,
