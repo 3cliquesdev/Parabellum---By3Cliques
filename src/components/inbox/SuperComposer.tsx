@@ -11,6 +11,7 @@ import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useSendMessage } from "@/hooks/useMessages";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { getFreshMediaUrl } from "@/hooks/useMediaUrls";
 import {
   Send,
   StickyNote,
@@ -19,8 +20,12 @@ import {
   Paperclip,
   Mic,
   X,
+  RefreshCw,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 
 export type MessageMode = "public" | "internal";
 
@@ -33,6 +38,8 @@ interface PendingAttachment {
     mimeType: string;
     filename: string;
   };
+  error?: string;
+  isRetrying?: boolean;
 }
 
 export interface SuperComposerProps {
@@ -72,7 +79,19 @@ export function SuperComposer({
                   mimeType: media.mimeType,
                   filename: media.filename,
                 },
+                error: undefined,
+                isRetrying: false,
               }
+            : att
+        )
+      );
+    },
+    onError: (error, filename) => {
+      console.error('[SuperComposer] Upload error for', filename, ':', error);
+      setPendingAttachments((prev) =>
+        prev.map((att) =>
+          att.file.name === filename
+            ? { ...att, error: error, isRetrying: false }
             : att
         )
       );
@@ -113,6 +132,20 @@ export function SuperComposer({
     });
   };
 
+  const handleRetryUpload = async (index: number) => {
+    const attachment = pendingAttachments[index];
+    if (!attachment) return;
+
+    // Marcar como retrying
+    setPendingAttachments((prev) =>
+      prev.map((att, i) =>
+        i === index ? { ...att, isRetrying: true, error: undefined } : att
+      )
+    );
+
+    await upload(attachment.file);
+  };
+
   const handleAudioComplete = async (audioFile: File) => {
     setIsRecordingAudio(false);
     setPendingAttachments((prev) => [...prev, { file: audioFile }]);
@@ -130,6 +163,17 @@ export function SuperComposer({
   const handleSend = async () => {
     const hasContent = message.trim() || pendingAttachments.some((a) => a.uploadedMedia);
     if (!hasContent || !conversationId) return;
+
+    // Verificar se há anexos com erro
+    const hasErrors = pendingAttachments.some(a => a.error);
+    if (hasErrors) {
+      toast({
+        title: "Erro nos anexos",
+        description: "Alguns anexos falharam. Remova ou tente novamente antes de enviar.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const isInternal = messageMode === "internal";
     const messageContent = message.trim();
@@ -158,15 +202,29 @@ export function SuperComposer({
         try {
           // Se tem anexos, enviar primeiro como mídia
           if (uploadedAttachments.length > 0) {
-            for (const att of uploadedAttachments) {
+            for (let i = 0; i < uploadedAttachments.length; i++) {
+              const att = uploadedAttachments[i];
               console.log('[SuperComposer] Enviando mídia WhatsApp:', att.mimeType);
+              
+              // ✅ OBTER URL FRESCA antes de enviar (evita URL expirada)
+              const freshUrl = await getFreshMediaUrl(att.id);
+              
+              if (!freshUrl) {
+                console.error('[SuperComposer] Falha ao obter URL fresca para:', att.id);
+                toast({
+                  title: "Erro ao enviar mídia",
+                  description: `Não foi possível preparar ${att.filename} para envio.`,
+                  variant: "destructive",
+                });
+                continue; // Pular este anexo
+              }
               
               const { error: mediaError } = await supabase.functions.invoke('send-whatsapp-message', {
                 body: {
                   instance_id: whatsappInstanceId,
                   phone_number: contactPhone,
-                  message: messageContent, // Caption apenas no primeiro
-                  media_url: att.url,
+                  message: i === 0 ? messageContent : '', // Caption apenas no primeiro
+                  media_url: freshUrl, // ✅ Usar URL fresca
                   media_type: detectMediaType(att.mimeType),
                   media_filename: att.filename,
                   delay: 1000,
@@ -254,9 +312,10 @@ export function SuperComposer({
 
   const isInternal = messageMode === "internal";
   const hasAttachments = pendingAttachments.length > 0;
-  const allUploaded = pendingAttachments.every((a) => a.uploadedMedia);
+  const hasErrors = pendingAttachments.some(a => a.error);
+  const allUploaded = pendingAttachments.every((a) => a.uploadedMedia || a.error);
   const isSending = sendMessage.isPending;
-  const canSend = (message.trim() || (hasAttachments && allUploaded)) && !isUploading;
+  const canSend = (message.trim() || (hasAttachments && allUploaded && !hasErrors)) && !isUploading;
 
   return (
     <div className="flex-none bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-t border-slate-200 dark:border-zinc-800">
@@ -306,7 +365,13 @@ export function SuperComposer({
                 key={index}
                 className="relative group rounded-lg border border-border overflow-hidden"
               >
-                {att.preview ? (
+                {/* Estado de erro */}
+                {att.error ? (
+                  <div className="h-16 w-20 flex flex-col items-center justify-center bg-destructive/10 p-2">
+                    <AlertCircle className="h-4 w-4 text-destructive mb-1" />
+                    <span className="text-[10px] text-destructive text-center truncate w-full">Erro</span>
+                  </div>
+                ) : att.preview ? (
                   <img
                     src={att.preview}
                     alt={att.file.name}
@@ -319,12 +384,31 @@ export function SuperComposer({
                 )}
                 
                 {/* Upload Progress Overlay */}
-                {!att.uploadedMedia && (
+                {!att.uploadedMedia && !att.error && !att.isRetrying && (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                     <div className="text-white text-xs font-medium">
                       {Math.round(progress?.percentage || 0)}%
                     </div>
                   </div>
+                )}
+
+                {/* Retrying Overlay */}
+                {att.isRetrying && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <Loader2 className="h-5 w-5 text-white animate-spin" />
+                  </div>
+                )}
+
+                {/* Retry Button (for errors) */}
+                {att.error && !att.isRetrying && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute bottom-0.5 left-0.5 h-6 w-6 bg-white/90 hover:bg-white"
+                    onClick={() => handleRetryUpload(index)}
+                  >
+                    <RefreshCw className="h-3 w-3 text-destructive" />
+                  </Button>
                 )}
 
                 {/* Remove Button */}

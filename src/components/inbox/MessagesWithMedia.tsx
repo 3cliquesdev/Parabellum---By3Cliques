@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { InternalNoteMessage } from "@/components/InternalNoteMessage";
 import { useMediaUrls } from "@/hooks/useMediaUrls";
@@ -80,7 +80,12 @@ export function MessagesWithMedia({
   }, [messages]);
 
   // Carregar signed URLs para todos os attachments
-  const { urls: mediaUrls, isLoading: mediaLoading, getUrl } = useMediaUrls(allAttachments);
+  const { urls: mediaUrls, isLoading: mediaLoading, getUrl, retryLoad } = useMediaUrls(allAttachments);
+
+  // Função de retry wrapper
+  const handleRetry = useCallback((attachmentId: string) => {
+    retryLoad(attachmentId);
+  }, [retryLoad]);
 
   return (
     <div className="space-y-4">
@@ -101,11 +106,15 @@ export function MessagesWithMedia({
           // Ignore parse errors
         }
 
-        // Mapear attachments com signed URLs
+        // Mapear attachments COM estados de erro/loading (não filtrar!)
         const attachments = (message.media_attachments || [])
           .filter(a => a.status === 'ready' && a.storage_bucket && a.storage_path)
           .map(a => {
             const urlResult = getUrl(a.id);
+            const hasError = urlResult?.error;
+            const hasUrl = urlResult?.url;
+            const isLoadingUrl = !urlResult && mediaLoading;
+            
             return {
               id: a.id,
               url: urlResult?.url || '',
@@ -114,10 +123,11 @@ export function MessagesWithMedia({
               size: urlResult?.size || a.file_size,
               waveformData: urlResult?.waveformData || a.waveform_data,
               durationSeconds: urlResult?.durationSeconds || a.duration_seconds,
-              isLoading: !urlResult && mediaLoading,
+              error: hasError ? urlResult.error : undefined,
+              isLoading: isLoadingUrl || (!hasUrl && !hasError),
+              onRetry: hasError ? () => handleRetry(a.id) : undefined,
             };
-          })
-          .filter(a => a.url); // Só mostrar attachments com URL carregada
+          });
 
         // Renderizar notas internas com estilo especial
         if (isInternalNote) {
@@ -157,10 +167,10 @@ export function MessagesWithMedia({
               job_title: message.sender.job_title || null,
             } : null}
             contactInitials={`${contact?.first_name?.[0] || ''}${contact?.last_name?.[0] || ''}`}
-          channel={conversation.channel}
-          showChannel={false}
-          status={message.status as "sending" | "sent" | "delivered" | "failed" | undefined}
-          usedArticles={usedArticles}
+            channel={conversation.channel}
+            showChannel={false}
+            status={message.status as "sending" | "sent" | "delivered" | "failed" | undefined}
+            usedArticles={usedArticles}
             isAdmin={isAdmin}
             isManager={isManager}
             attachments={attachments}

@@ -21,7 +21,7 @@ interface UseMediaUploadOptions {
   conversationId: string;
   messageId?: string;
   onSuccess?: (media: UploadedMedia) => void;
-  onError?: (error: Error) => void;
+  onError?: (error: string, filename: string) => void;
 }
 
 export function useMediaUpload(options: UseMediaUploadOptions) {
@@ -101,7 +101,7 @@ export function useMediaUpload(options: UseMediaUploadOptions) {
         variant: "destructive",
       });
       
-      onError?.(error instanceof Error ? error : new Error(errorMessage));
+      onError?.(errorMessage, file.name);
       return null;
     } finally {
       setIsUploading(false);

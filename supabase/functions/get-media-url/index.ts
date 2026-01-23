@@ -7,6 +7,54 @@ const corsHeaders = {
   'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges',
 };
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 500; // 500ms
+
+/**
+ * Helper: Generate signed URL with retry
+ */
+async function createSignedUrlWithRetry(
+  supabase: any,
+  bucket: string,
+  path: string,
+  expiresIn: number,
+  attachmentId: string
+): Promise<{ url: string | null; error: string | null }> {
+  let lastError: string | null = null;
+  
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`[get-media-url] Attempt ${attempt}/${MAX_RETRIES} for ${attachmentId}`);
+      
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(path, expiresIn);
+
+      if (error) {
+        lastError = error.message;
+        console.warn(`[get-media-url] Attempt ${attempt} failed:`, error.message);
+        
+        if (attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY * attempt));
+          continue;
+        }
+      } else if (data?.signedUrl) {
+        console.log(`[get-media-url] ✅ Success on attempt ${attempt}`);
+        return { url: data.signedUrl, error: null };
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : 'Unknown error';
+      console.warn(`[get-media-url] Exception on attempt ${attempt}:`, lastError);
+      
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY * attempt));
+      }
+    }
+  }
+  
+  return { url: null, error: lastError || 'Failed to generate URL after retries' };
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -21,8 +69,9 @@ serve(async (req) => {
     // Get auth header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.warn('[get-media-url] Missing authorization header');
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
+        JSON.stringify({ success: false, error: 'Missing authorization header', retriable: false }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -34,9 +83,9 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     
     if (userError || !user) {
-      console.error('Auth error:', userError);
+      console.error('[get-media-url] Auth error:', userError);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ success: false, error: 'Unauthorized', retriable: false }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -48,10 +97,12 @@ serve(async (req) => {
 
     if (!attachmentId) {
       return new Response(
-        JSON.stringify({ error: 'attachmentId is required' }),
+        JSON.stringify({ success: false, error: 'attachmentId is required', retriable: false }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log(`[get-media-url] Request for attachment: ${attachmentId}, expiresIn: ${expiresIn}`);
 
     // Validate expiresIn (max 24 hours)
     const validExpiresIn = Math.min(Math.max(expiresIn, 60), 86400);
@@ -76,10 +127,19 @@ serve(async (req) => {
       .single();
 
     if (attachmentError || !attachment) {
-      console.error('Attachment not found:', attachmentError);
+      console.error('[get-media-url] Attachment not found:', attachmentError);
       return new Response(
-        JSON.stringify({ error: 'Attachment not found' }),
+        JSON.stringify({ success: false, error: 'Attachment not found', retriable: false }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify storage path exists
+    if (!attachment.storage_path || !attachment.storage_bucket) {
+      console.error('[get-media-url] Attachment missing storage info:', attachmentId);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Attachment has no storage path', retriable: false }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -91,8 +151,9 @@ serve(async (req) => {
       .single();
 
     if (convError || !conversation) {
+      console.error('[get-media-url] Conversation not found:', convError);
       return new Response(
-        JSON.stringify({ error: 'Conversation not found' }),
+        JSON.stringify({ success: false, error: 'Conversation not found', retriable: false }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -109,11 +170,13 @@ serve(async (req) => {
       roles.includes('admin') ||
       roles.includes('manager') ||
       roles.includes('support_manager') ||
-      roles.includes('general_manager');
+      roles.includes('general_manager') ||
+      roles.includes('agent'); // Allow agents to view media
 
     if (!hasAccess) {
+      console.warn('[get-media-url] Access denied for user:', user.id);
       return new Response(
-        JSON.stringify({ error: 'Access denied to this attachment' }),
+        JSON.stringify({ success: false, error: 'Access denied to this attachment', retriable: false }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -121,20 +184,28 @@ serve(async (req) => {
     // Use transcoded path if available, otherwise original
     const storagePath = attachment.transcoded_path || attachment.storage_path;
 
-    // Generate signed URL
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-      .from(attachment.storage_bucket)
-      .createSignedUrl(storagePath, validExpiresIn);
+    // Generate signed URL with retry
+    const { url: signedUrl, error: signedUrlError } = await createSignedUrlWithRetry(
+      supabase,
+      attachment.storage_bucket,
+      storagePath,
+      validExpiresIn,
+      attachmentId
+    );
 
-    if (signedUrlError) {
-      console.error('Failed to generate signed URL:', signedUrlError);
+    if (signedUrlError || !signedUrl) {
+      console.error('[get-media-url] Failed to generate signed URL:', signedUrlError);
       return new Response(
-        JSON.stringify({ error: 'Failed to generate URL' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          success: false, 
+          error: signedUrlError || 'Failed to generate URL',
+          retriable: true // Client can retry
+        }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`✅ Generated signed URL for attachment ${attachmentId}, expires in ${validExpiresIn}s`);
+    console.log(`[get-media-url] ✅ Generated signed URL for ${attachmentId}, expires in ${validExpiresIn}s`);
 
     return new Response(
       JSON.stringify({
@@ -145,7 +216,7 @@ serve(async (req) => {
           mimeType: attachment.mime_type,
           size: attachment.file_size,
           status: attachment.status,
-          url: signedUrlData.signedUrl,
+          url: signedUrl,
           expiresIn: validExpiresIn,
           waveformData: attachment.waveform_data,
           durationSeconds: attachment.duration_seconds,
@@ -162,10 +233,15 @@ serve(async (req) => {
     );
 
   } catch (error: unknown) {
-    console.error('❌ Get media URL error:', error);
+    console.error('[get-media-url] ❌ Unexpected error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: errorMessage }),
+      JSON.stringify({ 
+        success: false, 
+        error: 'Internal server error', 
+        details: errorMessage,
+        retriable: true 
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
