@@ -260,8 +260,16 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, isSaving }: ChatFl
   const removeOption = (idx: number) => {
     if (!selectedNode) return;
     const options = [...(selectedNode.data.options || [])];
+    const removedOption = options[idx];
     options.splice(idx, 1);
     updateNodeData('options', options);
+    
+    // Remover edges conectadas ao handle dessa opção
+    if (removedOption?.id) {
+      setEdges((eds) => eds.filter(
+        (e) => !(e.source === selectedNode.id && e.sourceHandle === removedOption.id)
+      ));
+    }
   };
 
   const updateOption = (idx: number, field: string, value: string) => {
