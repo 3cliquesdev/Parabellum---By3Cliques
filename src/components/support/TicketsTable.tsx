@@ -22,7 +22,7 @@ interface Ticket {
   subject: string;
   description: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  status: 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed';
+  status: 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed' | 'returned' | 'loja_bloqueada' | 'loja_concluida';
   created_at: string;
   due_date: string | null;
   created_by?: string | null;

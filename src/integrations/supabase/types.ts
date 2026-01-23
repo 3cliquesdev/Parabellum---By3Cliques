@@ -7870,6 +7870,9 @@ export type Database = {
         | "waiting_customer"
         | "resolved"
         | "closed"
+        | "returned"
+        | "loja_bloqueada"
+        | "loja_concluida"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -8111,6 +8114,9 @@ export const Constants = {
         "waiting_customer",
         "resolved",
         "closed",
+        "returned",
+        "loja_bloqueada",
+        "loja_concluida",
       ],
     },
   },
