@@ -426,6 +426,7 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
             ticketId={ticket.id}
             ticketStatus={ticket.status}
             hasEvidence={hasEvidence}
+            ticketCategory={ticket.category}
           />
         )}
 

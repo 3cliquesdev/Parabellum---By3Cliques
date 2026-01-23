@@ -19,9 +19,14 @@ interface FinancialApprovalBarProps {
   ticketId: string;
   ticketStatus: string;
   hasEvidence: boolean;
+  ticketCategory?: string;
 }
 
-export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence }: FinancialApprovalBarProps) {
+export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence, ticketCategory }: FinancialApprovalBarProps) {
+  // Saques não exigem evidência para aprovação
+  const isWithdrawal = ticketCategory === 'saque' || ticketCategory === 'saque_carteira';
+  const requiresEvidence = !isWithdrawal;
+  const canApprove = hasEvidence || !requiresEvidence;
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -93,7 +98,7 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence }: Fi
               <Button
                 size="sm"
                 onClick={() => setApproveDialogOpen(true)}
-                disabled={isPending || !hasEvidence}
+                disabled={isPending || !canApprove}
                 className="bg-green-600 hover:bg-green-700"
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
@@ -102,7 +107,7 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence }: Fi
             </div>
           </div>
 
-          {!hasEvidence && (
+          {!canApprove && (
             <div className="mt-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
               <p className="text-sm text-red-600 dark:text-red-400">
                 ⚠️ <strong>Atenção:</strong> Este ticket não possui evidências anexadas. 

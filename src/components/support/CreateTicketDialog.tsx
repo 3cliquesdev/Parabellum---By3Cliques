@@ -148,10 +148,15 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
     setShowNewCategory(false);
   };
 
+  // Saque não exige evidência
+  const isWithdrawal = category === 'saque' || category === 'saque_carteira';
+  const requiresEvidence = !isWithdrawal;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!subject.trim() || !customerId || !uploadedAttachment) return;
+    if (!subject.trim() || !customerId) return;
+    if (requiresEvidence && !uploadedAttachment) return;
 
     await createTicket.mutateAsync({
       subject: subject.trim(),
@@ -181,7 +186,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
   const activeDepartments = departments?.filter((d) => d.is_active) || [];
 
-  const canSubmit = customerId && subject.trim() && uploadedAttachment && !createTicket.isPending;
+  const canSubmit = customerId && subject.trim() && (isWithdrawal || uploadedAttachment) && !createTicket.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -272,11 +277,15 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
             />
           </div>
 
-          {/* Anexo Obrigatório - Evidência */}
+          {/* Anexo - Evidência (opcional para saques) */}
           <div className="space-y-2">
             <Label className="flex items-center gap-1">
-              Evidência (Print/Foto) *
-              <span className="text-xs text-destructive font-normal">(obrigatório)</span>
+              Evidência (Print/Foto) {requiresEvidence && '*'}
+              {requiresEvidence ? (
+                <span className="text-xs text-destructive font-normal">(obrigatório)</span>
+              ) : (
+                <span className="text-xs text-muted-foreground font-normal">(opcional para saques)</span>
+              )}
             </Label>
             
             {!attachmentFile ? (
