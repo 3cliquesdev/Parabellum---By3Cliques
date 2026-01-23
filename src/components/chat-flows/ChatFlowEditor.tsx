@@ -45,6 +45,7 @@ import {
   ChatFlowConditionNode,
 } from "./nodes";
 import { cn } from "@/lib/utils";
+import { TransferPropertiesPanel } from "./TransferPropertiesPanel";
 
 // Tipos de nós para chat flows
 export const chatFlowNodeTypes = {
@@ -543,22 +544,10 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, isSaving }: ChatFl
 
               {/* Transfer */}
               {selectedNode.type === "transfer" && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Tipo de transferência</Label>
-                  <Select
-                    value={selectedNode.data.transfer_type || "department"}
-                    onValueChange={(v) => updateNodeData("transfer_type", v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="department">Departamento</SelectItem>
-                      <SelectItem value="queue">Fila de atendimento</SelectItem>
-                      <SelectItem value="agent">Agente específico</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <TransferPropertiesPanel
+                  selectedNode={selectedNode}
+                  updateNodeData={updateNodeData}
+                />
               )}
 
               {/* End action */}
