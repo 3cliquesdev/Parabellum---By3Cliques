@@ -125,8 +125,87 @@ function evaluateCondition(condition: any, collectedData: Record<string, any>, u
       } catch {
         return false;
       }
+    case "is_true":
+      return fieldValue === true || fieldValue === "true";
+    case "is_false":
+      return fieldValue === false || fieldValue === "false";
     default:
       return false;
+  }
+}
+
+// Handler para nó fetch_order
+async function handleFetchOrderNode(
+  node: any, 
+  collectedData: Record<string, any>, 
+  lastMessage: string
+): Promise<Record<string, any>> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  
+  // Obter valor a buscar: da variável configurada ou da última mensagem
+  const sourceVariable = node.data?.source_variable;
+  const searchValue = sourceVariable && collectedData[sourceVariable] 
+    ? collectedData[sourceVariable] 
+    : lastMessage;
+
+  console.log('[process-chat-flow] 📦 Fetch order:', { searchValue, sourceVariable });
+
+  try {
+    // Chamar fetch-tracking edge function
+    const trackingResponse = await fetch(`${supabaseUrl}/functions/v1/fetch-tracking`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ 
+        tracking_codes: [searchValue.trim()],
+        search_type: node.data?.search_type || 'auto'
+      }),
+    });
+
+    const result = await trackingResponse.json();
+    console.log('[process-chat-flow] 📦 Tracking result:', result);
+
+    // Mapear nomes das variáveis configuradas ou usar defaults
+    const foundKey = node.data?.save_found_as || 'order_found';
+    const statusKey = node.data?.save_status_as || 'order_status';
+    const packedAtKey = node.data?.save_packed_at_as || 'packed_at_formatted';
+
+    // Atualizar dados coletados com resultado
+    const updatedData = { ...collectedData };
+    updatedData[foundKey] = result.found > 0;
+    
+    if (result.found > 0 && result.data) {
+      const orderData = Object.values(result.data).find((v: any) => v !== null) as any;
+      if (orderData) {
+        updatedData[statusKey] = orderData.status || 'UNKNOWN';
+        updatedData[packedAtKey] = orderData.packed_at_formatted || 'N/A';
+        updatedData.order_box_number = orderData.box_number;
+        updatedData.order_platform = orderData.platform;
+        updatedData.order_packed_at = orderData.packed_at;
+        updatedData.order_is_packed = orderData.is_packed;
+      }
+    } else {
+      updatedData[statusKey] = null;
+      updatedData[packedAtKey] = null;
+      updatedData.order_box_number = null;
+      updatedData.order_platform = null;
+      updatedData.order_packed_at = null;
+      updatedData.order_is_packed = false;
+    }
+
+    return updatedData;
+  } catch (error) {
+    console.error('[process-chat-flow] ❌ Error fetching order:', error);
+    // Em caso de erro, retornar como não encontrado
+    const foundKey = node.data?.save_found_as || 'order_found';
+    return {
+      ...collectedData,
+      [foundKey]: false,
+      order_error: error instanceof Error ? error.message : 'Erro desconhecido',
+    };
   }
 }
 
@@ -188,7 +267,7 @@ serve(async (req) => {
         );
       }
 
-      const collectedData = (activeState.collected_data || {}) as Record<string, any>;
+      let collectedData = (activeState.collected_data || {}) as Record<string, any>;
       
       // Validar resposta baseado no tipo de nó
       let validationType = 'text';
@@ -240,6 +319,53 @@ serve(async (req) => {
       }
 
       nextNode = findNextNode(flowDef, currentNode, path);
+
+      // 🆕 Handler especial para fetch_order
+      if (nextNode?.type === 'fetch_order') {
+        console.log('[process-chat-flow] 📦 Processing fetch_order node');
+        
+        // Executar busca de pedido
+        collectedData = await handleFetchOrderNode(nextNode, collectedData, userMessage);
+        
+        // Atualizar estado com dados coletados
+        await supabaseClient
+          .from('chat_flow_states')
+          .update({
+            collected_data: collectedData,
+            current_node_id: nextNode.id,
+          })
+          .eq('id', activeState.id);
+
+        // Avançar para o próximo nó após fetch_order (automático)
+        const nodeAfterFetch = findNextNode(flowDef, nextNode);
+        
+        if (nodeAfterFetch) {
+          // Se próximo é condição, avaliar automaticamente
+          if (nodeAfterFetch.type === 'condition') {
+            const conditionResult = evaluateCondition(nodeAfterFetch.data, collectedData, userMessage);
+            const conditionPath = conditionResult ? 'true' : 'false';
+            nextNode = findNextNode(flowDef, nodeAfterFetch, conditionPath);
+            
+            // Atualizar estado para após a condição
+            await supabaseClient
+              .from('chat_flow_states')
+              .update({
+                collected_data: collectedData,
+                current_node_id: nextNode?.id || nodeAfterFetch.id,
+              })
+              .eq('id', activeState.id);
+          } else {
+            nextNode = nodeAfterFetch;
+            await supabaseClient
+              .from('chat_flow_states')
+              .update({
+                collected_data: collectedData,
+                current_node_id: nextNode.id,
+              })
+              .eq('id', activeState.id);
+          }
+        }
+      }
 
       // Se não há próximo nó ou é um nó de fim
       if (!nextNode || nextNode.type === 'end') {

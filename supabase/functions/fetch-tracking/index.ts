@@ -12,6 +12,35 @@ interface TrackingResult {
   status: string | null;
   created_at: Date | null;
   updated_at: Date | null;
+  packed_at: Date | null;
+  packed_at_formatted: string | null;
+  is_packed: boolean;
+}
+
+// Detectar tipo de código automaticamente
+function detectSearchType(code: string): 'tracking' | 'order_id' {
+  const upperCode = code.toUpperCase().trim();
+  // Códigos de rastreio geralmente começam com BR, LP, ou similares
+  if (upperCode.startsWith('BR') || upperCode.startsWith('LP') || upperCode.startsWith('LB')) {
+    return 'tracking';
+  }
+  return 'order_id';
+}
+
+// Formatar data para exibição
+function formatDate(date: Date | null): string | null {
+  if (!date) return null;
+  try {
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} às ${hours}:${minutes}`;
+  } catch {
+    return null;
+  }
 }
 
 serve(async (req) => {
@@ -21,7 +50,7 @@ serve(async (req) => {
   }
 
   try {
-    const { tracking_code, tracking_codes } = await req.json();
+    const { tracking_code, tracking_codes, search_type } = await req.json();
     
     // Support single or multiple tracking codes
     const codes: string[] = tracking_codes || (tracking_code ? [tracking_code] : []);
@@ -33,7 +62,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('[fetch-tracking] 🔍 Buscando rastreios:', codes);
+    console.log('[fetch-tracking] 🔍 Buscando rastreios:', codes, 'search_type:', search_type);
 
     // Get MySQL credentials from secrets
     const mysqlHost = Deno.env.get('MYSQL_HOST');
@@ -84,16 +113,22 @@ serve(async (req) => {
       trackingData[code] = null;
     }
     
-    // Fill in found results
+    // Fill in found results with enhanced data
     if (results && Array.isArray(results)) {
       for (const row of results) {
         const boxNumber = row.box_number as string;
+        const createdAt = row.created_at as Date | null;
+        
         trackingData[boxNumber] = {
           box_number: boxNumber,
           platform: row.platform as string | null,
           status: row.status as string | null,
-          created_at: row.created_at as Date | null,
+          created_at: createdAt,
           updated_at: row.updated_at as Date | null,
+          // Novos campos para horário de embalagem
+          packed_at: createdAt, // created_at = horário de embalagem
+          packed_at_formatted: formatDate(createdAt),
+          is_packed: !!createdAt, // Se tem created_at, foi embalado
         };
       }
     }

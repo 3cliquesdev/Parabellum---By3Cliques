@@ -24,7 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   MessageSquare, User, Mail, Phone, CreditCard, ListChecks, 
   MessageCircle, GitBranch, Sparkles, UserPlus, CheckCircle,
-  Save, X, Trash2, Plus, Play, Bot, BookOpen
+  Save, X, Trash2, Plus, Play, Bot, BookOpen, Package
 } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -43,10 +43,12 @@ import {
   EndNode,
   AIResponseNode,
   ChatFlowConditionNode,
+  FetchOrderNode,
 } from "./nodes";
 import { cn } from "@/lib/utils";
 import { TransferPropertiesPanel } from "./TransferPropertiesPanel";
 import { AIResponsePropertiesPanel } from "./AIResponsePropertiesPanel";
+import { FetchOrderPropertiesPanel } from "./FetchOrderPropertiesPanel";
 
 // Tipos de nós para chat flows
 export const chatFlowNodeTypes = {
@@ -61,6 +63,7 @@ export const chatFlowNodeTypes = {
   ai_response: AIResponseNode,
   transfer: TransferNode,
   end: EndNode,
+  fetch_order: FetchOrderNode,
 };
 
 const edgeTypes = {
@@ -80,6 +83,7 @@ const blockColors: Record<string, string> = {
   ai_response: "bg-pink-500",
   transfer: "bg-orange-500",
   end: "bg-emerald-500",
+  fetch_order: "bg-teal-500",
 };
 
 // Cores do MiniMap
@@ -96,6 +100,7 @@ const miniMapColors: Record<string, string> = {
   transfer: '#f97316',
   end: '#10b981',
   start: '#3b82f6',
+  fetch_order: '#14b8a6',
 };
 
 interface ChatFlowEditorProps {
@@ -173,6 +178,14 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
       ai_response: { label: "Resposta IA", context_prompt: "", use_knowledge_base: true, fallback_message: "" },
       transfer: { label: "Transferir", message: "Transferindo para atendimento humano...", transfer_type: "department" },
       end: { label: "Fim", message: "Obrigado pelo contato!", end_action: "none" },
+      fetch_order: { 
+        label: "Buscar Pedido", 
+        search_type: "auto", 
+        source_variable: "", 
+        save_found_as: "order_found",
+        save_status_as: "order_status",
+        save_packed_at_as: "packed_at_formatted"
+      },
     };
     return defaults[type] || { label: `Novo ${type}` };
   };
@@ -334,6 +347,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
               <div className="grid grid-cols-2 gap-2">
                 <DraggableBlock type="condition" icon={GitBranch} label="Condição" color={blockColors.condition} />
                 <DraggableBlock type="ai_response" icon={Sparkles} label="IA" color={blockColors.ai_response} />
+                <DraggableBlock type="fetch_order" icon={Package} label="Pedido" color={blockColors.fetch_order} />
               </div>
             </div>
 
@@ -571,6 +585,14 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                     </SelectContent>
                   </Select>
                 </div>
+              )}
+
+              {/* Fetch Order */}
+              {selectedNode.type === "fetch_order" && (
+                <FetchOrderPropertiesPanel
+                  selectedNode={selectedNode}
+                  updateNodeData={updateNodeData}
+                />
               )}
             </div>
           </ScrollArea>

@@ -9,3 +9,4 @@ export { TransferNode } from "./TransferNode";
 export { EndNode } from "./EndNode";
 export { AIResponseNode } from "./AIResponseNode";
 export { ChatFlowConditionNode } from "./ConditionNode";
+export { FetchOrderNode } from "./FetchOrderNode";

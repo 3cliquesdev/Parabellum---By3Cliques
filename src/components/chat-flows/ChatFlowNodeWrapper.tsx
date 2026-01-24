@@ -14,7 +14,8 @@ export type ChatFlowNodeType =
   | 'condition'
   | 'ai_response'
   | 'transfer'
-  | 'end';
+  | 'end'
+  | 'fetch_order';
 
 interface ChatFlowNodeWrapperProps {
   type: ChatFlowNodeType;
@@ -73,6 +74,10 @@ const typeColors: Record<ChatFlowNodeType, { header: string; border: string }> =
   end: {
     header: 'bg-emerald-600 dark:bg-emerald-700',
     border: 'border-emerald-400 dark:border-emerald-600',
+  },
+  fetch_order: {
+    header: 'bg-teal-600 dark:bg-teal-700',
+    border: 'border-teal-400 dark:border-teal-600',
   },
 };
 
