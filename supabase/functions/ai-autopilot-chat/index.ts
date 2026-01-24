@@ -4212,6 +4212,9 @@ Sobre qual pedido você gostaria de saber mais?`;
                         tracking_code: code,
                         platform: trackingInfo.platform,
                         status: trackingInfo.status,
+                        packed_at: trackingInfo.packed_at,
+                        packed_at_formatted: trackingInfo.packed_at_formatted,
+                        is_packed: trackingInfo.is_packed,
                         external_updated_at: trackingInfo.updated_at
                       });
                     }
@@ -4232,17 +4235,19 @@ Sobre qual pedido você gostaria de saber mais?`;
             if (codesFound.length > 0) {
               const foundFormatted = trackingResults.map(t => {
                 const platform = t.platform || 'Transportadora';
-                const updated = t.external_updated_at 
-                  ? new Date(t.external_updated_at).toLocaleDateString('pt-BR', { 
-                      day: '2-digit', month: '2-digit', year: 'numeric', 
-                      hour: '2-digit', minute: '2-digit' 
-                    })
-                  : 'Recentemente';
+                // Usar packed_at_formatted (horário de embalagem) que vem do fetch-tracking
+                const packedAt = t.packed_at_formatted 
+                  || (t.packed_at 
+                      ? new Date(t.packed_at).toLocaleDateString('pt-BR', { 
+                          day: '2-digit', month: '2-digit', year: 'numeric', 
+                          hour: '2-digit', minute: '2-digit' 
+                        })
+                      : 'Recentemente');
 
                 return `**${t.tracking_code}**
-Status: Pedido embalado e enviado!
-Transportadora: ${platform}
-Saída do galpão: ${updated}`;
+📦 Embalado em: ${packedAt}
+🚚 Transportadora: ${platform}
+✅ Status: Pedido pronto e em transporte!`;
               }).join('\n\n');
 
               if (codesFound.length === 1) {
