@@ -1,132 +1,209 @@
 
 
-## Plano: Corrigir Erro do Enum sender_type ("agent" invalido)
+## Plano: Corrigir Envio de Mensagens da IA via Meta WhatsApp API
 
 ### Problema Identificado
 
-As conversas nao podem ser transferidas e mensagens de agentes nao estao sendo salvas porque o codigo esta usando `sender_type: 'agent'` que **nao existe no banco de dados**.
+A IA está gerando respostas corretamente mas **não consegue enviá-las** porque a função `ai-autopilot-chat` está hardcoded para usar a **Evolution API** (descontinuada), enquanto as conversas agora usam a **Meta WhatsApp Cloud API**.
 
-**Enum valido no banco:**
-- `user` - mensagens de usuarios/agentes do sistema
-- `contact` - mensagens de clientes
-- `system` - mensagens do sistema/IA
-
-**O que o codigo esta tentando usar:**
-- `agent` (INVALIDO - causa erro de INSERT)
-
-**Logs de erro recentes:**
+**Logs de erro:**
 ```
-invalid input value for enum sender_type: "agent"
+❌ Nenhuma instância WhatsApp disponível
 ```
 
-Isso afeta:
-1. Envio de mensagens pelo agente via WhatsApp
-2. Registro de mensagens da IA
-3. Sincronizacao de historico
-4. Funcionamento geral do chat (mensagens nao sao salvas)
+**Causa raiz:**
+1. Conversas têm `whatsapp_provider: 'meta'` e `whatsapp_meta_instance_id: d9fafe12-...`
+2. Mas `getWhatsAppInstanceForConversation()` só busca na tabela `whatsapp_instances` (Evolution)
+3. Todas as instâncias Evolution estão `disconnected` ou `qr_pending`
+4. Resultado: função retorna `null`, mensagem não é enviada
 
 ---
 
-### Arquivos a Corrigir
+### Solucao Proposta
 
-| Arquivo | Linha | Problema | Correcao |
-|---------|-------|----------|----------|
-| `supabase/functions/send-meta-whatsapp/index.ts` | 242 | `sender_type: "agent"` | `sender_type: "user"` |
-| `supabase/functions/ai-autopilot-chat/index.ts` | 5025 | `sender_type: 'agent'` | `sender_type: 'user'` |
-| `supabase/functions/sync-whatsapp-history/index.ts` | 306 | `'agent' : 'customer'` | `'user' : 'contact'` |
-| `src/hooks/useAutoHandoff.tsx` | 9 | Type definition com `'agent'` | `'user'` |
-| `src/hooks/useTakeControl.tsx` | 144 | Type assertion com `'agent'` | `'user'` |
+Modificar a funcao `ai-autopilot-chat` para **rotear dinamicamente** entre Meta API e Evolution API baseado no campo `whatsapp_provider` da conversa.
 
 ---
 
-### Detalhes das Correcoes
+### Arquivos a Modificar
 
-**1. send-meta-whatsapp/index.ts (linha 242)**
+| Arquivo | Alteracao |
+|---------|-----------|
+| `supabase/functions/ai-autopilot-chat/index.ts` | Adicionar suporte ao Meta WhatsApp API |
+
+---
+
+### Implementacao Detalhada
+
+**1. Atualizar funcao `getWhatsAppInstanceForConversation` para suportar Meta:**
+
 ```typescript
-// ANTES
-sender_type: "agent",
-
-// DEPOIS  
-sender_type: "user",
+// Nova assinatura com suporte ao provider
+async function getWhatsAppInstanceForConversation(
+  supabaseClient: any,
+  conversationId: string,
+  conversationWhatsappInstanceId: string | null,
+  whatsappProvider: string | null = 'evolution',
+  whatsappMetaInstanceId: string | null = null
+): Promise<{ instance: any; provider: 'meta' | 'evolution' } | null> {
+  
+  // 1. Se é Meta provider, buscar na tabela whatsapp_meta_instances
+  if (whatsappProvider === 'meta' && whatsappMetaInstanceId) {
+    const { data: metaInstance } = await supabaseClient
+      .from('whatsapp_meta_instances')
+      .select('*')
+      .eq('id', whatsappMetaInstanceId)
+      .single();
+    
+    if (metaInstance && metaInstance.status === 'active') {
+      console.log('[getWhatsAppInstance] ✅ Usando instância META:', {
+        instanceId: metaInstance.id,
+        phoneNumberId: metaInstance.phone_number_id,
+        name: metaInstance.name
+      });
+      return { instance: metaInstance, provider: 'meta' };
+    }
+  }
+  
+  // 2. Fallback para Meta se provider é meta mas instância vinculada não existe
+  if (whatsappProvider === 'meta') {
+    const { data: fallbackMeta } = await supabaseClient
+      .from('whatsapp_meta_instances')
+      .select('*')
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle();
+    
+    if (fallbackMeta) {
+      console.log('[getWhatsAppInstance] 🔄 Usando instância META FALLBACK:', fallbackMeta.id);
+      return { instance: fallbackMeta, provider: 'meta' };
+    }
+  }
+  
+  // 3. Evolution API (código existente para retrocompatibilidade)
+  // ... manter lógica atual ...
+}
 ```
 
-**2. ai-autopilot-chat/index.ts (linha 5025)**
-```typescript
-// ANTES
-sender_type: 'agent',
+**2. Modificar a logica de envio (linha 4844-4900) para usar o provider correto:**
 
-// DEPOIS
-sender_type: 'user',
+```typescript
+// Obter instância com suporte a ambos providers
+const whatsappResult = await getWhatsAppInstanceForConversation(
+  supabaseClient, 
+  conversationId, 
+  conversation.whatsapp_instance_id,
+  conversation.whatsapp_provider,        // NOVO: passar provider
+  conversation.whatsapp_meta_instance_id // NOVO: passar meta instance id
+);
+
+if (!whatsappResult) {
+  console.error('[ai-autopilot-chat] ⚠️ NENHUMA instância WhatsApp disponível');
+  // ... tratamento de erro existente ...
+}
+
+const { instance: whatsappInstance, provider } = whatsappResult;
+
+// Enviar baseado no provider
+if (provider === 'meta') {
+  console.log('[ai-autopilot-chat] 📤 Invocando send-meta-whatsapp:', {
+    instanceId: whatsappInstance.id,
+    phoneNumberId: whatsappInstance.phone_number_id,
+    phoneNumber: contact.phone
+  });
+
+  const { data: metaResponse, error: metaError } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
+    body: {
+      instance_id: whatsappInstance.id,
+      phone_number: contact.phone?.replace(/\D/g, ''),
+      message: assistantMessage,
+      conversation_id: conversationId
+    },
+  });
+
+  if (metaError) throw metaError;
+  
+  console.log('[ai-autopilot-chat] ✅ Resposta enviada via Meta WhatsApp API');
+} else {
+  // Manter código Evolution existente
+  console.log('[ai-autopilot-chat] 📤 Invocando send-whatsapp-message (Evolution)');
+  // ... código Evolution atual ...
+}
 ```
 
-**3. sync-whatsapp-history/index.ts (linha 306)**
+**3. Atualizar busca da conversa para incluir campos Meta:**
+
+Na linha 566, adicionar campos na query:
 ```typescript
-// ANTES
-sender_type: msgKey.fromMe ? 'agent' : 'customer',
-
-// DEPOIS
-sender_type: msgKey.fromMe ? 'user' : 'contact',
-```
-
-**4. useAutoHandoff.tsx (linha 9)**
-```typescript
-// ANTES
-sender_type: 'customer' | 'agent' | 'system';
-
-// DEPOIS
-sender_type: 'user' | 'contact' | 'system';
-```
-
-**5. useTakeControl.tsx (linha 144)**
-```typescript
-// ANTES
-sender_type: m.sender_type as 'customer' | 'agent' | 'system'
-
-// DEPOIS
-sender_type: m.sender_type as 'user' | 'contact' | 'system'
+.select(`
+  *,
+  whatsapp_provider,
+  whatsapp_meta_instance_id,
+  contacts!inner (...)
+`)
 ```
 
 ---
 
-### Por que usar "user" em vez de criar "agent"?
+### Fluxo Apos Correcao
 
-1. **Semantica correta:** No contexto do sistema, "user" representa qualquer usuario autenticado da plataforma (agentes, gerentes, etc.)
-2. **Consistencia:** O enum ja existe e e usado em outras partes do sistema
-3. **Menos risco:** Alterar o enum no banco poderia causar problemas em dados existentes
-4. **Performance:** Nao precisa de migracao de banco de dados
-
----
-
-### Impacto Esperado
-
-Apos a correcao:
-- Mensagens enviadas por agentes serao salvas corretamente
-- Transferencias de conversa funcionarao (o registro de interacao sera criado)
-- Sincronizacao de historico do WhatsApp funcionara
-- Logs de erro `invalid input value for enum sender_type: "agent"` desaparecerao
-
----
-
-### Secao Tecnica
-
-**Enum atual no banco (pg_enum):**
-```sql
-SELECT enumlabel FROM pg_enum WHERE enumtypid = 'sender_type'::regtype;
--- Resultado: user, contact, system
+```
+Cliente envia mensagem WhatsApp
+          ↓
+meta-whatsapp-webhook salva mensagem
+          ↓
+          ↓ trigger autopilot
+          ↓
+ai-autopilot-chat:
+  1. Verifica ai_mode = 'autopilot' ✅
+  2. Gera resposta com IA ✅
+  3. Detecta whatsapp_provider = 'meta' ← NOVO
+  4. Busca instância em whatsapp_meta_instances ← NOVO
+  5. Chama send-meta-whatsapp ← NOVO
+          ↓
+Mensagem enviada ao cliente ✅
 ```
 
-**Edge Functions que precisam de redeploy:**
-1. `send-meta-whatsapp`
-2. `ai-autopilot-chat`
-3. `sync-whatsapp-history`
+---
 
-**Hooks frontend que precisam de atualizacao:**
-1. `useAutoHandoff.tsx`
-2. `useTakeControl.tsx`
+### Pontos de Teste
 
-**Validacao pos-correcao:**
-- Testar envio de mensagem pelo agente via WhatsApp
-- Verificar se mensagem aparece no historico
-- Testar transferencia de conversa entre agentes
-- Monitorar logs do Postgres para confirmar ausencia de erros de enum
+1. Enviar mensagem de cliente via WhatsApp
+2. Verificar se IA responde
+3. Verificar logs: `✅ Resposta enviada via Meta WhatsApp API`
+4. Confirmar mensagem recebida no WhatsApp do cliente
+
+---
+
+### Secao Tecnica Detalhada
+
+**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
+
+**Linhas afetadas:**
+- 97-144: Funcao `getWhatsAppInstanceForConversation`
+- 566-584: Query da conversa
+- 4844-4900: Logica de envio
+
+**Mudancas na query da conversa (linha 570):**
+```diff
+  .select(`
+    *,
++   whatsapp_provider,
++   whatsapp_meta_instance_id,
+    contacts!inner (
+      id, first_name, last_name, email, phone, whatsapp_id, company, status, document, kiwify_validated, kiwify_validated_at
+    )
+  `)
+```
+
+**Nova estrutura de retorno do helper:**
+```typescript
+interface WhatsAppInstanceResult {
+  instance: any;
+  provider: 'meta' | 'evolution';
+}
+```
+
+**Edge Function a fazer redeploy:**
+- `ai-autopilot-chat`
 
