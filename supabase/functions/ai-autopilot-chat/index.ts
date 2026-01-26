@@ -2118,22 +2118,96 @@ Responda APENAS: skip ou search`
     if (confidenceResult.action === 'handoff' && !shouldSkipHandoff) {
       console.log('[ai-autopilot-chat] 🚨 LOW CONFIDENCE HANDOFF - Score:', confidenceResult.score);
       
-      // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente → Comercial
-      const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated;
+      // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente → PEDIR EMAIL PRIMEIRO
+      const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated && !isPhoneVerified;
       const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
       const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
-      
-      // Determinar departamento de destino
-      const handoffDepartment = isLeadWithoutEmail ? DEPT_COMERCIAL_ID : (confidenceResult.department || DEPT_SUPORTE_ID);
       
       console.log('[ai-autopilot-chat] 🎯 Handoff department decision:', {
         isLeadWithoutEmail,
         contactHasEmail,
         isCustomerInDatabase,
-        contactStatus: contact.status,
-        handoffDepartment: isLeadWithoutEmail ? 'COMERCIAL' : 'SUPORTE',
-        departmentId: handoffDepartment
+        isPhoneVerified,
+        contactStatus: contact.status
       });
+      
+      // 🆕 NOVA LÓGICA: Lead sem email → NÃO fazer handoff, pedir email primeiro
+      if (isLeadWithoutEmail) {
+        console.log('[ai-autopilot-chat] 🔐 LEAD SEM EMAIL - Bloqueando handoff, pedindo email primeiro');
+        
+        // Usar template do banco ou fallback
+        let askEmailMessage = await getMessageTemplate(
+          supabaseClient,
+          'identity_wall_ask_email',
+          { contact_name: contactName || '' }
+        );
+        
+        if (!askEmailMessage) {
+          const firstName = contactName ? contactName.split(' ')[0] : '';
+          askEmailMessage = `Olá${firstName ? `, ${firstName}` : ''}! 👋\n\nPara garantir um atendimento personalizado e seguro, preciso que você me informe seu email.`;
+        }
+        
+        // Salvar mensagem pedindo email
+        await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: askEmailMessage,
+          sender_type: 'user',
+          is_ai_generated: true,
+          channel: responseChannel
+        });
+        
+        // Enviar via WhatsApp se for o canal
+        if (responseChannel === 'whatsapp' && contact?.phone) {
+          const whatsappInstance = await getWhatsAppInstanceForConversation(
+            supabaseClient, 
+            conversationId, 
+            conversation.whatsapp_instance_id
+          );
+          
+          if (whatsappInstance) {
+            console.log('[ai-autopilot-chat] 📤 Enviando pedido de email via WhatsApp');
+            await supabaseClient.functions.invoke('send-whatsapp-message', {
+              body: {
+                instance_id: whatsappInstance.id,
+                phone_number: contact.phone,
+                whatsapp_id: contact.whatsapp_id,
+                message: askEmailMessage,
+                conversation_id: conversationId,
+                use_queue: true
+              }
+            });
+          }
+        }
+        
+        // Atualizar metadata para rastrear que estamos aguardando email
+        await supabaseClient.from('conversations')
+          .update({
+            customer_metadata: {
+              ...(conversation.customer_metadata || {}),
+              awaiting_email_for_handoff: true,
+              handoff_blocked_at: new Date().toISOString(),
+              handoff_blocked_reason: 'low_confidence_lead_without_email'
+            }
+          })
+          .eq('id', conversationId);
+        
+        console.log('[ai-autopilot-chat] ✅ Handoff bloqueado - aguardando email do lead');
+        
+        // RETORNAR SEM FAZER HANDOFF - Aguardar email
+        return new Response(JSON.stringify({
+          status: 'awaiting_email',
+          message: askEmailMessage,
+          reason: 'Lead sem email - solicitando identificacao antes do handoff',
+          confidence_score: confidenceResult.score
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // ✅ Cliente identificado → Continuar com handoff normal para Suporte
+      const handoffDepartment = confidenceResult.department || DEPT_SUPORTE_ID;
+      
+      console.log('[ai-autopilot-chat] ✅ Cliente identificado - handoff para Suporte');
       
       // 🛡️ Atualizar ai_mode para waiting_human E marcar timestamp anti-race-condition
       const handoffTimestamp = new Date().toISOString();
@@ -2142,15 +2216,8 @@ Responda APENAS: skip ou search`
         .update({ 
           ai_mode: 'waiting_human',
           last_message_at: handoffTimestamp,
-          handoff_executed_at: handoffTimestamp, // 🆕 Anti-race-condition flag
-          department: handoffDepartment, // 🆕 Definir departamento correto
-          customer_metadata: {
-            ...(conversation.customer_metadata || {}),
-            ...(isLeadWithoutEmail && {
-              lead_routed_to_comercial_reason: 'low_confidence_handoff',
-              lead_routed_at: handoffTimestamp
-            })
-          }
+          handoff_executed_at: handoffTimestamp,
+          department: handoffDepartment
         })
         .eq('id', conversationId);
       
@@ -2164,13 +2231,8 @@ Responda APENAS: skip ou search`
         }
       });
       
-      // 🆕 Mensagem diferenciada para leads vs clientes
-      let handoffMessage: string;
-      if (isLeadWithoutEmail) {
-        handoffMessage = `Obrigado pelo contato! Para melhor te atender, vou te direcionar para nosso time Comercial. 🤝\n\nAguarde um momento que logo um de nossos consultores irá te atender!`;
-      } else {
-        handoffMessage = `Olá ${contactName}! Para te ajudar melhor com essa questão, vou te conectar com um de nossos especialistas. Um momento, por favor.`;
-      }
+      // Mensagem para cliente identificado
+      const handoffMessage = `Olá ${contactName}! Para te ajudar melhor com essa questão, vou te conectar com um de nossos especialistas. Um momento, por favor.`;
       
       // Salvar mensagem
       await supabaseClient.from('messages').insert({
@@ -2218,18 +2280,18 @@ Responda APENAS: skip ou search`
 
 **Score:** ${(confidenceResult.score * 100).toFixed(0)}%
 **Motivo:** ${confidenceResult.reason}
-**Departamento:** ${isLeadWithoutEmail ? '🛒 Comercial (Lead sem identificação)' : '🎧 Suporte'}
+**Departamento:** 🎧 Suporte (Cliente identificado)
 **Pergunta do Cliente:** "${customerMessage}"
 
-**Ação:** ${isLeadWithoutEmail ? 'Lead novo roteado para equipe Comercial.' : 'IA não tinha informações suficientes na base de conhecimento para responder com segurança.'}`,
+**Ação:** IA não tinha informações suficientes na base de conhecimento para responder com segurança.`,
         channel: responseChannel,
         metadata: {
           source: 'ai_confidence_handoff',
           confidence_score: confidenceResult.score,
           confidence_action: confidenceResult.action,
           confidence_reason: confidenceResult.reason,
-          is_lead_without_email: isLeadWithoutEmail,
-          routed_to_department: isLeadWithoutEmail ? 'comercial' : 'suporte'
+          is_lead_without_email: false,
+          routed_to_department: 'suporte'
         }
       });
       
@@ -2240,7 +2302,7 @@ Responda APENAS: skip ou search`
         reason: confidenceResult.reason,
         score: confidenceResult.score,
         routed_to: routeResult?.assigned_to || null,
-        department: isLeadWithoutEmail ? 'comercial' : 'suporte'
+        department: 'suporte'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
