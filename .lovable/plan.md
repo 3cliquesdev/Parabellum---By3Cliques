@@ -1,167 +1,132 @@
 
-## Plano: Corrigir Matching de Triggers no Chat Flow
+
+## Plano: Corrigir Erro do Enum sender_type ("agent" invalido)
 
 ### Problema Identificado
 
-O fluxo "Fluxo de Carnaval" não está sendo disparado mesmo com a mensagem correta porque:
+As conversas nao podem ser transferidas e mensagens de agentes nao estao sendo salvas porque o codigo esta usando `sender_type: 'agent'` que **nao existe no banco de dados**.
 
-**1. Diferença no texto:**
-- **Trigger configurado:** `"Olá vim pelo email e gostaria de saber da promoção de pré carnaval"`
-- **Mensagem enviada:** `"vim pelo email e gostaria de saber da promoção de pré carnaval"` (sem "Olá")
+**Enum valido no banco:**
+- `user` - mensagens de usuarios/agentes do sistema
+- `contact` - mensagens de clientes
+- `system` - mensagens do sistema/IA
 
-**2. Lógica de matching restritiva:**
-```javascript
-// Linha 509 do process-chat-flow
-messageLower.includes(trigger.toLowerCase())
+**O que o codigo esta tentando usar:**
+- `agent` (INVALIDO - causa erro de INSERT)
+
+**Logs de erro recentes:**
 ```
-Esta lógica exige que a mensagem do usuário **contenha o trigger INTEIRO**, ou seja, se o trigger tem "Olá" no início e a mensagem não tem, não há match.
-
-**3. Aspa extra na mensagem:**
-A mensagem recebida tem uma aspa (`"`) no final: `vim pelo email e gostaria de saber da promoção de pré carnaval"`. Isso pode indicar problema na interface de envio, mas não impacta o matching se a lógica for corrigida.
-
----
-
-### Solução Proposta
-
-Melhorar a lógica de matching para ser **bidirecional e mais flexível**:
-
-1. **Match direto:** Mensagem contém trigger (atual)
-2. **Match reverso:** Trigger contém mensagem (novo)
-3. **Match por palavras-chave:** Dividir trigger em palavras e verificar se X% estão na mensagem
-
----
-
-### Código Atual vs Proposto
-
-**Atual (linha 508-512):**
-```javascript
-for (const trigger of allTriggers) {
-  if (messageLower.includes(trigger.toLowerCase())) {
-    matchedFlow = flow;
-    break;
-  }
-}
+invalid input value for enum sender_type: "agent"
 ```
 
-**Proposto:**
-```javascript
-for (const trigger of allTriggers) {
-  const triggerLower = trigger.toLowerCase().trim();
-  
-  // Match 1: Mensagem contém o trigger inteiro
-  if (messageLower.includes(triggerLower)) {
-    matchedFlow = flow;
-    break;
-  }
-  
-  // Match 2: Trigger contém a mensagem (usuário escreveu parte do trigger)
-  if (triggerLower.includes(messageLower) && messageLower.length >= 10) {
-    matchedFlow = flow;
-    break;
-  }
-  
-  // Match 3: Verificar palavras-chave significativas
-  const triggerWords = triggerLower
-    .split(/\s+/)
-    .filter(w => w.length > 3); // Ignorar palavras curtas como "e", "de", "da"
-  
-  const matchedWords = triggerWords.filter(word => messageLower.includes(word));
-  const matchRatio = matchedWords.length / triggerWords.length;
-  
-  // Se 70%+ das palavras significativas do trigger estão na mensagem
-  if (matchRatio >= 0.7 && matchedWords.length >= 3) {
-    matchedFlow = flow;
-    break;
-  }
-}
-```
+Isso afeta:
+1. Envio de mensagens pelo agente via WhatsApp
+2. Registro de mensagens da IA
+3. Sincronizacao de historico
+4. Funcionamento geral do chat (mensagens nao sao salvas)
 
 ---
 
-### Exemplo de Match
+### Arquivos a Corrigir
 
-| Trigger | Mensagem | Match Atual | Match Novo |
-|---------|----------|-------------|------------|
-| `Olá vim pelo email e gostaria de saber da promoção de pré carnaval` | `vim pelo email e gostaria de saber da promoção de pré carnaval` | ❌ | ✅ (70%+ palavras) |
-| `carnaval` | `quero saber sobre carnaval` | ✅ | ✅ |
-| `promoção carnaval` | `vim ver a promoção de carnaval` | ✅ | ✅ |
-
----
-
-### Alternativa Simples (Recomendada)
-
-Ao invés de modificar a lógica de matching, uma solução mais simples e segura seria:
-
-**Adicionar keywords mais curtas no fluxo** via interface:
-- `carnaval`
-- `promoção`  
-- `vim pelo email`
-
-Isso mantém a lógica atual funcionando e dá controle ao administrador.
-
-**Porém**, para resolver o problema sem exigir alteração manual do usuário, a modificação no código é necessária.
+| Arquivo | Linha | Problema | Correcao |
+|---------|-------|----------|----------|
+| `supabase/functions/send-meta-whatsapp/index.ts` | 242 | `sender_type: "agent"` | `sender_type: "user"` |
+| `supabase/functions/ai-autopilot-chat/index.ts` | 5025 | `sender_type: 'agent'` | `sender_type: 'user'` |
+| `supabase/functions/sync-whatsapp-history/index.ts` | 306 | `'agent' : 'customer'` | `'user' : 'contact'` |
+| `src/hooks/useAutoHandoff.tsx` | 9 | Type definition com `'agent'` | `'user'` |
+| `src/hooks/useTakeControl.tsx` | 144 | Type assertion com `'agent'` | `'user'` |
 
 ---
 
-### Arquivos a Modificar
+### Detalhes das Correcoes
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/process-chat-flow/index.ts` | Melhorar lógica de matching de triggers (linhas 508-515) |
-
----
-
-### Seção Técnica
-
-**Arquivo:** `supabase/functions/process-chat-flow/index.ts`
-
-**Linhas afetadas:** 503-515
-
-**Nova implementação com match flexível:**
+**1. send-meta-whatsapp/index.ts (linha 242)**
 ```typescript
-// Função auxiliar para normalizar texto
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-    .replace(/[^\w\s]/g, '') // Remove pontuação
-    .trim();
-}
+// ANTES
+sender_type: "agent",
 
-// Na lógica de matching (linha 503+)
-for (const flow of flows) {
-  const keywords = flow.trigger_keywords || [];
-  const triggers = flow.triggers || [];
-  const allTriggers = [...keywords, ...triggers];
-
-  for (const trigger of allTriggers) {
-    const triggerNorm = normalizeText(trigger);
-    const messageNorm = normalizeText(userMessage);
-    
-    // Match 1: Inclusão direta (qualquer direção)
-    if (messageNorm.includes(triggerNorm) || triggerNorm.includes(messageNorm)) {
-      matchedFlow = flow;
-      break;
-    }
-    
-    // Match 2: Similaridade por palavras (para triggers longos)
-    if (triggerNorm.length > 20) {
-      const triggerWords = triggerNorm.split(/\s+/).filter(w => w.length > 3);
-      const matchedWords = triggerWords.filter(w => messageNorm.includes(w));
-      
-      if (triggerWords.length > 0 && (matchedWords.length / triggerWords.length) >= 0.6) {
-        matchedFlow = flow;
-        break;
-      }
-    }
-  }
-  if (matchedFlow) break;
-}
+// DEPOIS  
+sender_type: "user",
 ```
 
-**Por que essa abordagem:**
-1. **Normalização:** Remove acentos e pontuação para evitar falhas por caracteres especiais
-2. **Bidirecional:** Aceita tanto "mensagem contém trigger" quanto "trigger contém mensagem"
-3. **Fuzzy matching:** Para triggers longos, aceita 60%+ de palavras correspondentes
-4. **Retrocompatível:** Triggers curtos como "carnaval" continuam funcionando normalmente
+**2. ai-autopilot-chat/index.ts (linha 5025)**
+```typescript
+// ANTES
+sender_type: 'agent',
+
+// DEPOIS
+sender_type: 'user',
+```
+
+**3. sync-whatsapp-history/index.ts (linha 306)**
+```typescript
+// ANTES
+sender_type: msgKey.fromMe ? 'agent' : 'customer',
+
+// DEPOIS
+sender_type: msgKey.fromMe ? 'user' : 'contact',
+```
+
+**4. useAutoHandoff.tsx (linha 9)**
+```typescript
+// ANTES
+sender_type: 'customer' | 'agent' | 'system';
+
+// DEPOIS
+sender_type: 'user' | 'contact' | 'system';
+```
+
+**5. useTakeControl.tsx (linha 144)**
+```typescript
+// ANTES
+sender_type: m.sender_type as 'customer' | 'agent' | 'system'
+
+// DEPOIS
+sender_type: m.sender_type as 'user' | 'contact' | 'system'
+```
+
+---
+
+### Por que usar "user" em vez de criar "agent"?
+
+1. **Semantica correta:** No contexto do sistema, "user" representa qualquer usuario autenticado da plataforma (agentes, gerentes, etc.)
+2. **Consistencia:** O enum ja existe e e usado em outras partes do sistema
+3. **Menos risco:** Alterar o enum no banco poderia causar problemas em dados existentes
+4. **Performance:** Nao precisa de migracao de banco de dados
+
+---
+
+### Impacto Esperado
+
+Apos a correcao:
+- Mensagens enviadas por agentes serao salvas corretamente
+- Transferencias de conversa funcionarao (o registro de interacao sera criado)
+- Sincronizacao de historico do WhatsApp funcionara
+- Logs de erro `invalid input value for enum sender_type: "agent"` desaparecerao
+
+---
+
+### Secao Tecnica
+
+**Enum atual no banco (pg_enum):**
+```sql
+SELECT enumlabel FROM pg_enum WHERE enumtypid = 'sender_type'::regtype;
+-- Resultado: user, contact, system
+```
+
+**Edge Functions que precisam de redeploy:**
+1. `send-meta-whatsapp`
+2. `ai-autopilot-chat`
+3. `sync-whatsapp-history`
+
+**Hooks frontend que precisam de atualizacao:**
+1. `useAutoHandoff.tsx`
+2. `useTakeControl.tsx`
+
+**Validacao pos-correcao:**
+- Testar envio de mensagem pelo agente via WhatsApp
+- Verificar se mensagem aparece no historico
+- Testar transferencia de conversa entre agentes
+- Monitorar logs do Postgres para confirmar ausencia de erros de enum
+
