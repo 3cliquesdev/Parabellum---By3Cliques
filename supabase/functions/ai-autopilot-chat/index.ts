@@ -1206,6 +1206,17 @@ Como posso ajudar você hoje?`;
     const conversationMetadataForMenu = conversation.customer_metadata || {};
     const isAwaitingMenuChoice = conversationMetadataForMenu.awaiting_menu_choice === true;
     
+    // 🆕 FASE 1: Contador de lembretes para evitar loop infinito
+    const menuReminderCount = (conversationMetadataForMenu.menu_reminder_count as number) || 0;
+    const MAX_MENU_REMINDERS = 3; // Máximo de lembretes antes de pular triagem
+    
+    // 🆕 FASE 2: Detectar se mensagem tem intenção clara (pular triagem)
+    const hasSpecificIntent = customerMessage.length > 30 || 
+      /promo[çc][ãa]o|oferta|desconto|pre[çc]o|quanto custa|comprar|pre.?carnaval|email|indicac|parceria|revenda|orcamento|orçamento|catalogo|catálogo|tabela|atacado|representante/i.test(customerMessage);
+    
+    // 🆕 FASE 3: Verificar se é referência contextual (veio de campanha/email)
+    const isFromCampaign = /vim (pelo|por|do) (email|link|site|campanha|instagram|face|whats)|indicac|parceria|representante/i.test(customerMessage);
+    
     // Regex para detectar escolha do menu
     const menuChoiceRegex = /^(1|2|pedido[s]?|sistema|suporte\s*(pedido|sistema)?)[\s!.]*$/i;
     const menuChoice = customerMessage.trim().match(menuChoiceRegex);
@@ -1315,55 +1326,115 @@ Como posso ajudar você hoje?`;
       }
     }
     
-    // Se cliente está aguardando escolha mas enviou outra coisa, lembrar do menu
+    // Se cliente está aguardando escolha mas enviou outra coisa
     if (isAwaitingMenuChoice && !menuChoice && contact.email) {
-      const reminderTemplate = await getMessageTemplate(supabaseClient, 'aguardando_escolha_departamento', {});
-      const reminderMessage = reminderTemplate || 'Por favor, escolha uma das opções:\n\n**1** - Pedidos (entregas, rastreio, trocas)\n**2** - Sistema (acesso, dúvidas técnicas)';
       
-      console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Cliente ainda não escolheu - enviando lembrete');
-      
-      // Salvar lembrete
-      const { data: savedMsg } = await supabaseClient.from('messages').insert({
-        conversation_id: conversationId,
-        content: reminderMessage,
-        sender_type: 'user',
-        is_ai_generated: true,
-        channel: responseChannel
-      }).select().single();
-      
-      // Enviar via WhatsApp se necessário (Meta ou Evolution)
-      if (responseChannel === 'whatsapp' && contact?.phone) {
-        const whatsappResult = await getWhatsAppInstanceForConversation(
-          supabaseClient, 
-          conversationId, 
-          conversation.whatsapp_instance_id,
-          conversation
-        );
+      // 🆕 ESCAPE 1: Se mensagem tem intenção clara ou veio de campanha, pular triagem
+      if (hasSpecificIntent || isFromCampaign) {
+        console.log('[ai-autopilot-chat] 🎯 BYPASS TRIAGEM: Detectada intenção específica', {
+          hasSpecificIntent,
+          isFromCampaign,
+          messagePreview: customerMessage.substring(0, 50)
+        });
         
-        if (whatsappResult) {
-          await sendWhatsAppMessage(
-            supabaseClient,
-            whatsappResult,
-            contact.phone,
-            reminderMessage,
-            conversationId,
-            contact.whatsapp_id
-          );
-        }
+        // Limpar flag e continuar processamento normal
+        await supabaseClient.from('conversations')
+          .update({
+            customer_metadata: {
+              ...conversationMetadataForMenu,
+              awaiting_menu_choice: false,
+              menu_reminder_count: 0,
+              triage_bypassed: true,
+              triage_bypass_reason: hasSpecificIntent ? 'specific_intent' : 'campaign_reference'
+            }
+          })
+          .eq('id', conversationId);
+        
+        // NÃO fazer return - deixar continuar para processamento da IA
+        console.log('[ai-autopilot-chat] 🎯 Continuando para processamento da IA...');
       }
-      
-      // RETURN EARLY - Lembrete enviado
-      return new Response(JSON.stringify({
-        status: 'awaiting_menu_choice',
-        message: reminderMessage,
-        messageId: savedMsg?.id,
-        debug: {
-          reason: 'menu_reminder_sent',
-          bypassed_ai: true
+      // 🆕 ESCAPE 2: Se já enviou muitos lembretes, parar e processar com IA
+      else if (menuReminderCount >= MAX_MENU_REMINDERS) {
+        console.log('[ai-autopilot-chat] 🎯 BYPASS TRIAGEM: Limite de lembretes atingido (' + menuReminderCount + '/' + MAX_MENU_REMINDERS + ')');
+        
+        // Limpar flag e encaminhar para IA
+        await supabaseClient.from('conversations')
+          .update({
+            customer_metadata: {
+              ...conversationMetadataForMenu,
+              awaiting_menu_choice: false,
+              menu_reminder_count: 0,
+              triage_bypassed: true,
+              triage_bypass_reason: 'max_reminders_exceeded'
+            }
+          })
+          .eq('id', conversationId);
+        
+        // NÃO fazer return - deixar continuar para processamento da IA
+        console.log('[ai-autopilot-chat] 🎯 Continuando para processamento da IA após limite de lembretes...');
+      }
+      // COMPORTAMENTO ORIGINAL: Enviar lembrete (com contador)
+      else {
+        // Incrementar contador de lembretes
+        await supabaseClient.from('conversations')
+          .update({
+            customer_metadata: {
+              ...conversationMetadataForMenu,
+              menu_reminder_count: menuReminderCount + 1
+            }
+          })
+          .eq('id', conversationId);
+        
+        const reminderTemplate = await getMessageTemplate(supabaseClient, 'aguardando_escolha_departamento', {});
+        const reminderMessage = reminderTemplate || 'Por favor, escolha uma das opções:\n\n**1** - Pedidos (entregas, rastreio, trocas)\n**2** - Sistema (acesso, dúvidas técnicas)';
+        
+        console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Lembrete ' + (menuReminderCount + 1) + '/' + MAX_MENU_REMINDERS);
+        
+        // Salvar lembrete
+        const { data: savedMsg } = await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: reminderMessage,
+          sender_type: 'user',
+          is_ai_generated: true,
+          channel: responseChannel
+        }).select().single();
+        
+        // Enviar via WhatsApp se necessário (Meta ou Evolution)
+        if (responseChannel === 'whatsapp' && contact?.phone) {
+          const whatsappResult = await getWhatsAppInstanceForConversation(
+            supabaseClient, 
+            conversationId, 
+            conversation.whatsapp_instance_id,
+            conversation
+          );
+          
+          if (whatsappResult) {
+            await sendWhatsAppMessage(
+              supabaseClient,
+              whatsappResult,
+              contact.phone,
+              reminderMessage,
+              conversationId,
+              contact.whatsapp_id
+            );
+          }
         }
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+        
+        // RETURN EARLY - Lembrete enviado
+        return new Response(JSON.stringify({
+          status: 'awaiting_menu_choice',
+          message: reminderMessage,
+          reminder_count: menuReminderCount + 1,
+          max_reminders: MAX_MENU_REMINDERS,
+          messageId: savedMsg?.id,
+          debug: {
+            reason: 'menu_reminder_sent',
+            bypassed_ai: true
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
     
     // ============================================================
