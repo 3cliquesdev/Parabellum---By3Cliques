@@ -132,79 +132,36 @@ export function useAvailabilityStatus() {
     };
   }, [user, queryClient]);
 
-  // Auto-set to online on mount + heartbeat + distribute pending conversations
+  // Initialize heartbeat only - NO automatic status changes
+  // Status changes are ONLY made by user/admin explicit actions
   useEffect(() => {
     if (!user || isInitializedRef.current) return;
     
     isInitializedRef.current = true;
     
-    // Verificar status atual antes de mudar para online
-    const setOnlineAndDistribute = async () => {
-      console.log("[useAvailabilityStatus] Checking current status on mount...");
+    const initializeHeartbeat = async () => {
+      console.log("[useAvailabilityStatus] Initializing - NOT changing status automatically");
+      console.log("[useAvailabilityStatus] Status changes are USER/ADMIN decisions only");
       
-      // 1. Buscar status atual do usuário
-      const { data: currentProfile } = await supabase
-        .from("profiles")
-        .select("availability_status")
-        .eq("id", user.id)
-        .maybeSingle();
-      
-      const currentStatus = currentProfile?.availability_status;
-      console.log(`[useAvailabilityStatus] Current status: ${currentStatus}`);
-      
-      // 2. Só definir como "online" se estava "offline" ou sem status
-      // Se estava "busy", manter o status escolhido pelo usuário
-      const shouldSetOnline = currentStatus === 'offline' || !currentStatus;
-      
-      if (shouldSetOnline) {
-        console.log("[useAvailabilityStatus] User was offline, setting to online");
-        await supabase
-          .from("profiles")
-          .update({ 
-            availability_status: "online",
-            last_status_change: new Date().toISOString(),
-          })
-          .eq("id", user.id);
-        
-        queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
-        
-        // 3. Distribuir conversas apenas se ficou online
-        console.log("[useAvailabilityStatus] Triggering conversation distribution...");
-        
-        try {
-          const { data, error } = await supabase.functions.invoke('distribute-pending-conversations', {
-            body: { agentId: user.id, maxConversations: 5 }
-          });
-          
-          if (error) {
-            console.error("[useAvailabilityStatus] Distribution error:", error);
-          } else if (data?.distributed > 0) {
-            console.log(`[useAvailabilityStatus] ✅ ${data.distributed} conversas distribuídas`);
-            toast({
-              title: "📥 Novas conversas atribuídas",
-              description: `Você recebeu ${data.distributed} conversa(s) que estavam aguardando atendimento.`,
-            });
-          } else {
-            console.log("[useAvailabilityStatus] Nenhuma conversa pendente para distribuir");
-          }
-        } catch (err) {
-          console.error("[useAvailabilityStatus] Distribution failed:", err);
-        }
-      } else {
-        console.log(`[useAvailabilityStatus] Keeping current status: ${currentStatus} (respecting user choice)`);
-        // Apenas atualizar o heartbeat para indicar atividade
+      // APENAS enviar heartbeat para indicar atividade
+      // NÃO mudar o status para "online" - isso é decisão do usuário/admin
+      try {
         await supabase
           .from("profiles")
           .update({ 
             last_status_change: new Date().toISOString(),
           })
           .eq("id", user.id);
+        
+        console.log("[useAvailabilityStatus] Heartbeat initialized (status unchanged)");
+      } catch (err) {
+        console.error("[useAvailabilityStatus] Initial heartbeat failed:", err);
       }
     };
     
-    setOnlineAndDistribute();
+    initializeHeartbeat();
     
-    // Iniciar heartbeat
+    // Iniciar heartbeat periódico para evitar timeout por inatividade
     heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
     
     return () => {
@@ -212,46 +169,27 @@ export function useAvailabilityStatus() {
         clearInterval(heartbeatRef.current);
       }
     };
-  }, [user, queryClient, sendHeartbeat, toast]);
+  }, [user, sendHeartbeat]);
 
-  // Handle page visibility changes
+  // Handle page visibility changes - ONLY send heartbeat, NO status changes
   useEffect(() => {
     if (!user) return;
     
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        console.log("[useAvailabilityStatus] Tab visible - checking current status...");
+        console.log("[useAvailabilityStatus] Tab visible - sending heartbeat only (no auto-online)");
         
-        // Buscar status atual antes de mudar
-        const { data: currentProfile } = await supabase
-          .from("profiles")
-          .select("availability_status")
-          .eq("id", user.id)
-          .maybeSingle();
-        
-        const currentStatus = currentProfile?.availability_status;
-        
-        // Só voltar para online se estava offline
-        // Se estava "busy", respeitar a escolha do usuário
-        if (currentStatus === 'offline') {
-          console.log("[useAvailabilityStatus] Tab visible + was offline - setting online");
-          await supabase
-            .from("profiles")
-            .update({ 
-              availability_status: "online",
-              last_status_change: new Date().toISOString(),
-            })
-            .eq("id", user.id);
-          queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
-        } else {
-          console.log(`[useAvailabilityStatus] Tab visible - keeping ${currentStatus}`);
-          // Apenas enviar heartbeat para indicar atividade
+        // APENAS enviar heartbeat - NÃO mudar status automaticamente
+        // O status só muda por decisão explícita do usuário ou admin
+        try {
           await supabase
             .from("profiles")
             .update({ 
               last_status_change: new Date().toISOString(),
             })
             .eq("id", user.id);
+        } catch (err) {
+          console.error("[useAvailabilityStatus] Visibility heartbeat failed:", err);
         }
       }
     };
@@ -261,34 +199,13 @@ export function useAvailabilityStatus() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user, queryClient]);
-
-  // Tentar marcar offline ao fechar - backup (principal é o CRON check-inactive-users)
-  useEffect(() => {
-    if (!user) return;
-
-    const handleBeforeUnload = async () => {
-      // Tenta marcar offline - pode não completar mas o CRON vai pegar
-      try {
-        await supabase
-          .from("profiles")
-          .update({ 
-            availability_status: "offline",
-            last_status_change: new Date().toISOString(),
-          })
-          .eq("id", user.id);
-        console.log("[useAvailabilityStatus] Marked offline on unload");
-      } catch (err) {
-        console.log("[useAvailabilityStatus] Unload offline failed - CRON will handle");
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
   }, [user]);
+
+  // REMOVIDO: Auto-offline ao fechar navegador
+  // O status NÃO deve mudar automaticamente ao fechar o navegador
+  // Se o usuário quiser ficar offline, ele deve clicar explicitamente
+  // O CRON check-inactive-users vai marcar como offline após 5min sem heartbeat
+  // Isso evita que o status mude sozinho e respeita a decisão do usuário
 
   return {
     status,
