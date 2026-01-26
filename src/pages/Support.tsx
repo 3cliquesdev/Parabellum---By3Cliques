@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTickets } from "@/hooks/useTickets";
@@ -33,68 +33,50 @@ export default function Support() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Read initial values from URL or sessionStorage
-  const getInitialFilters = useCallback(() => {
-    // First check URL params
+  // Read initial values from URL only (sessionStorage restored via useEffect)
+  const getInitialFromUrl = () => {
     const filterFromUrl = searchParams.get('filter') as SidebarFilter;
     const filtersFromUrl = searchParams.get('filters');
     
     if (filterFromUrl || filtersFromUrl) {
-      let advancedFilters = defaultTicketFilters;
+      let advFilters = defaultTicketFilters;
       if (filtersFromUrl) {
         try {
-          advancedFilters = { ...defaultTicketFilters, ...JSON.parse(filtersFromUrl) };
+          advFilters = { ...defaultTicketFilters, ...JSON.parse(filtersFromUrl) };
         } catch {
-          advancedFilters = defaultTicketFilters;
+          advFilters = defaultTicketFilters;
         }
       }
       return {
         sidebarFilter: filterFromUrl || 'all',
-        advancedFilters,
-        searchTerm: '',
-        currentPage: 1,
+        advancedFilters: advFilters,
+        fromUrl: true,
       };
     }
-    
-    // Then check sessionStorage
-    const savedFilters = sessionStorage.getItem(TICKET_FILTERS_STORAGE_KEY);
-    if (savedFilters) {
-      try {
-        const parsed = JSON.parse(savedFilters);
-        sessionStorage.removeItem(TICKET_FILTERS_STORAGE_KEY);
-        return {
-          sidebarFilter: parsed.sidebarFilter || 'all',
-          advancedFilters: parsed.advancedFilters || defaultTicketFilters,
-          searchTerm: parsed.searchTerm || '',
-          currentPage: parsed.currentPage || 1,
-        };
-      } catch {
-        sessionStorage.removeItem(TICKET_FILTERS_STORAGE_KEY);
-      }
-    }
-    
     return {
       sidebarFilter: 'all' as SidebarFilter,
       advancedFilters: defaultTicketFilters,
-      searchTerm: '',
-      currentPage: 1,
+      fromUrl: false,
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  
-  const initialFilters = useMemo(() => getInitialFilters(), [getInitialFilters]);
+  };
+
+  // Only run once on mount
+  const [initialFromUrl] = useState(getInitialFromUrl);
 
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-  const [sidebarFilter, setSidebarFilter] = useState<SidebarFilter>(initialFilters.sidebarFilter);
+  const [sidebarFilter, setSidebarFilter] = useState<SidebarFilter>(initialFromUrl.sidebarFilter);
   const [mobileView, setMobileView] = useState<MobileView>('list');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(initialFilters.searchTerm);
-  const [currentPage, setCurrentPage] = useState(initialFilters.currentPage);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [moveToProjectOpen, setMoveToProjectOpen] = useState(false);
-  const [advancedFilters, setAdvancedFilters] = useState<TicketFilters>(initialFilters.advancedFilters);
+  const [advancedFilters, setAdvancedFilters] = useState<TicketFilters>(initialFromUrl.advancedFilters);
   const [bulkTransferOpen, setBulkTransferOpen] = useState(false);
   const [saveFilterOpen, setSaveFilterOpen] = useState(false);
+  
+  // Flag to control restoration - starts as true if came from URL (skip restoration)
+  const [restoredFromSession, setRestoredFromSession] = useState(initialFromUrl.fromUrl);
   
   // Function to save filters to sessionStorage before navigating
   const saveFiltersToSession = useCallback(() => {
@@ -107,23 +89,43 @@ export default function Support() {
     sessionStorage.setItem(TICKET_FILTERS_STORAGE_KEY, JSON.stringify(filtersState));
   }, [sidebarFilter, advancedFilters, searchTerm, currentPage]);
 
-  // Sync filters to URL whenever they change
+  // Restore filters from sessionStorage (once, only if not from URL)
   useEffect(() => {
+    if (restoredFromSession) return;
+    
+    const saved = sessionStorage.getItem(TICKET_FILTERS_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setSidebarFilter(parsed.sidebarFilter || 'all');
+        setAdvancedFilters(parsed.advancedFilters || defaultTicketFilters);
+        setSearchTerm(parsed.searchTerm || '');
+        setCurrentPage(parsed.currentPage || 1);
+      } catch (e) {
+        console.error('Failed to restore ticket filters:', e);
+      }
+      sessionStorage.removeItem(TICKET_FILTERS_STORAGE_KEY);
+    }
+    setRestoredFromSession(true);
+  }, [restoredFromSession]);
+
+  // Sync filters to URL (only after restoration is complete)
+  useEffect(() => {
+    if (!restoredFromSession) return;
+    
     const params = new URLSearchParams();
     
     if (sidebarFilter !== 'all') {
       params.set('filter', sidebarFilter);
     }
     
-    // Only save advancedFilters if different from default
     const hasAdvancedFilters = JSON.stringify(advancedFilters) !== JSON.stringify(defaultTicketFilters);
     if (hasAdvancedFilters) {
       params.set('filters', JSON.stringify(advancedFilters));
     }
     
-    // Update URL without adding to history (replace)
     setSearchParams(params, { replace: true });
-  }, [sidebarFilter, advancedFilters, setSearchParams]);
+  }, [sidebarFilter, advancedFilters, setSearchParams, restoredFromSession]);
   
   // Debounce search to avoid querying on every keystroke
   const debouncedSearch = useDebouncedValue(advancedFilters.search, 500);
