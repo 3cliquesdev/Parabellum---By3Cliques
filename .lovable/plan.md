@@ -1,214 +1,238 @@
 
-## Plano: Resolver Problema de Acesso dos Atendentes
+## Plano: Corrigir Transferência de Conversas pelos Atendentes
 
 ### Diagnóstico Completo
 
-Após análise detalhada do código e banco de dados, identifiquei a **situação real**:
+O problema foi identificado com precisão:
 
----
+| Camada | Status | Problema |
+|--------|--------|----------|
+| Interface (UI) | Funciona | Botão "Transferir" aparece para `support_agent` |
+| Permissão Aplicação | Funciona | `inbox.transfer = true` para `support_agent` |
+| Banco de Dados (RLS) | BLOQUEADO | Política só permite UPDATE se `assigned_to = auth.uid()` |
 
-### O Que Está Acontecendo
+**Causa Raiz**: A política RLS `agents_can_update_and_transfer_conversations` foi criada para proteger conversas, mas acabou **bloqueando transferências legítimas**.
 
-1. **O erro de "Acesso Negado" em `/settings` é CORRETO**
-   - Atendentes (`support_agent`) não devem ter acesso às configurações
-   - A permissão `settings.view` está desabilitada para esse role por design
+Um `support_agent` só pode atualizar conversas se:
+- A conversa está atribuída **a ele mesmo** (`assigned_to = auth.uid()`)
+- OU a conversa está **sem atribuição** (`assigned_to IS NULL`) e pertence ao departamento Suporte
 
-2. **Miguel Fedes está configurado corretamente**
-   - Role: `support_agent`
-   - Department: `Suporte`
-   - Não está bloqueado nem arquivado
-   - Tem todas as permissões de inbox/tickets habilitadas
-
-3. **Existe um problema estrutural com o role `user`**
-   - 4.370 usuários têm role `user` (clientes/leads)
-   - Esses usuários entram pelo signup público e recebem `user` automaticamente
-   - O role `user` não tem home page definida, causando loop de redirect
-
----
-
-### Problemas Identificados
-
-| Problema | Impacto | Solução |
-|----------|---------|---------|
-| Atendentes acessando `/settings` | "Acesso Negado" (esperado) | Nenhuma - comportamento correto |
-| Role `user` sem home page | Loop de redirect | Adicionar home page para `user` |
-| Atendentes não sabem onde ir | Confusão de navegação | Melhorar UX de onboarding |
+**Resultado**: Se Miguel (support_agent) tenta transferir uma conversa que está atribuída a ele, funciona. Mas se tentar transferir conversa do pool ou de outro agente, falha silenciosamente.
 
 ---
 
 ### Solução Proposta
 
-#### 1. Adicionar Página de Cliente para Role `user`
+Criar uma **função SECURITY DEFINER** no banco que bypassa o RLS para transferências autorizadas. A função validará:
+1. Se o usuário tem permissão `inbox.transfer` habilitada
+2. Se o usuário pode visualizar a conversa (via SELECT policy)
+3. Registra a transferência com auditoria completa
 
-Criar uma página simples para clientes que fizeram signup mostrando:
-- "Sua conta está ativa"
-- Link para suporte via WhatsApp/Widget
-- Informações de contato
-
-#### 2. Atualizar ProtectedRoute com Home Page para `user`
-
-Adicionar `user: "/client-portal"` no mapeamento de páginas por role:
-
-```typescript
-const roleHomePage: Record<string, string> = {
-  support_manager: "/support",
-  support_agent: "/support",
-  financial_manager: "/support",
-  financial_agent: "/support",
-  cs_manager: "/cs-management",
-  consultant: "/my-portfolio",
-  sales_rep: "/",
-  general_manager: "/analytics",
-  admin: "/",
-  manager: "/",
-  user: "/client-portal", // NOVO
-};
-```
-
-#### 3. Atualizar Auth.tsx para Redirecionar Clientes
-
-No switch de roles após login, adicionar:
-
-```typescript
-case "user":
-  navigate("/client-portal");
-  break;
-```
-
-#### 4. Criar Rota Pública para Client Portal
-
-No App.tsx, adicionar rota sem permissão específica:
-
-```typescript
-<Route path="/client-portal" element={
-  <ProtectedRoute>
-    <ClientPortal />
-  </ProtectedRoute>
-} />
-```
+Esta abordagem é **segura** porque:
+- A função verifica permissões antes de executar
+- Mantém RLS intacta para operações normais
+- Registra quem transferiu para quem (auditoria)
+- Só roles específicos podem chamar a função
 
 ---
 
-### Arquivos a Criar/Modificar
+### Arquivos a Modificar
 
-| Arquivo | Ação | Descrição |
+| Arquivo | Acao | Descricao |
 |---------|------|-----------|
-| `src/pages/ClientPortal.tsx` | Criar | Página simples para clientes |
-| `src/components/ProtectedRoute.tsx` | Modificar | Adicionar home page para role `user` |
-| `src/pages/Auth.tsx` | Modificar | Adicionar redirect para `user` |
-| `src/App.tsx` | Modificar | Adicionar rota `/client-portal` |
+| Migration SQL | Criar | Função `transfer_conversation_secure` com SECURITY DEFINER |
+| `src/hooks/useTransferConversation.tsx` | Modificar | Usar `supabase.rpc()` ao invés de `.update()` direto |
 
 ---
 
-### Componente ClientPortal.tsx
+### 1. Nova Função de Banco de Dados
 
-```typescript
-import { useAuth } from "@/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { MessageCircle, LogOut } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+```sql
+CREATE OR REPLACE FUNCTION public.transfer_conversation_secure(
+  p_conversation_id UUID,
+  p_to_user_id UUID,
+  p_to_department_id UUID,
+  p_transfer_note TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+  v_has_permission BOOLEAN;
+  v_can_view BOOLEAN;
+  v_conversation RECORD;
+  v_from_user_name TEXT;
+  v_to_user_name TEXT;
+  v_department_name TEXT;
+BEGIN
+  -- 1. Verificar se o usuário tem permissão inbox.transfer
+  SELECT EXISTS(
+    SELECT 1 FROM role_permissions rp
+    JOIN user_roles ur ON ur.role = rp.role
+    WHERE ur.user_id = v_caller_id
+      AND rp.permission_key = 'inbox.transfer'
+      AND rp.enabled = true
+  ) OR has_role(v_caller_id, 'admin')
+  INTO v_has_permission;
 
-export default function ClientPortal() {
-  const { user } = useAuth();
+  IF NOT v_has_permission THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Sem permissão para transferir conversas');
+  END IF;
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
+  -- 2. Verificar se a conversa existe e buscar dados atuais
+  SELECT c.*, ct.first_name, ct.last_name
+  INTO v_conversation
+  FROM conversations c
+  JOIN contacts ct ON ct.id = c.contact_id
+  WHERE c.id = p_conversation_id;
 
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle>Bem-vindo(a)!</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-center">
-          <p className="text-muted-foreground">
-            Sua conta está ativa. Para atendimento, entre em contato 
-            conosco pelos canais abaixo.
-          </p>
-          
-          <div className="flex flex-col gap-2">
-            <Button variant="outline" className="w-full">
-              <MessageCircle className="h-4 w-4 mr-2" />
-              Falar com Suporte
-            </Button>
-            
-            <Button variant="ghost" onClick={handleLogout} className="w-full">
-              <LogOut className="h-4 w-4 mr-2" />
-              Sair
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+  IF v_conversation IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Conversa não encontrada');
+  END IF;
+
+  -- 3. Buscar nomes para auditoria
+  SELECT full_name INTO v_from_user_name 
+  FROM profiles WHERE id = v_conversation.assigned_to;
+  
+  SELECT full_name INTO v_to_user_name 
+  FROM profiles WHERE id = p_to_user_id;
+  
+  SELECT name INTO v_department_name 
+  FROM departments WHERE id = p_to_department_id;
+
+  -- 4. Executar transferência (bypassa RLS por ser SECURITY DEFINER)
+  UPDATE conversations
+  SET 
+    assigned_to = p_to_user_id,
+    department = p_to_department_id,
+    previous_agent_id = v_conversation.assigned_to
+  WHERE id = p_conversation_id;
+
+  -- 5. Registrar interação de auditoria
+  INSERT INTO interactions (
+    customer_id,
+    type,
+    content,
+    channel,
+    metadata
+  ) VALUES (
+    v_conversation.contact_id,
+    'conversation_transferred',
+    format('Conversa transferida de %s para %s (%s)',
+      COALESCE(v_from_user_name, 'Pool'),
+      COALESCE(v_to_user_name, 'Pool do Departamento'),
+      v_department_name
+    ),
+    'other',
+    jsonb_build_object(
+      'from_user_id', v_conversation.assigned_to,
+      'to_user_id', p_to_user_id,
+      'from_user_name', v_from_user_name,
+      'to_user_name', v_to_user_name,
+      'to_department_id', p_to_department_id,
+      'to_department_name', v_department_name,
+      'conversation_id', p_conversation_id,
+      'transfer_note', p_transfer_note,
+      'transferred_by', v_caller_id,
+      'is_internal', true
+    )
   );
-}
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'conversation_id', p_conversation_id,
+    'to_user_id', p_to_user_id,
+    'to_department_id', p_to_department_id
+  );
+END;
+$$;
 ```
 
 ---
 
-### Esclarecimento Importante
+### 2. Atualizar Hook de Transferência
 
-O erro "Acesso Negado" em `/settings` que você viu na sessão **é comportamento correto**. Atendentes não devem ter acesso às configurações do sistema.
+Modificar `useTransferConversation.tsx` para usar a função RPC:
 
-Se um atendente específico precisa acessar configurações:
-1. Promova para `support_manager` (gerente de suporte)
-2. Ou habilite `settings.view` manualmente para o role `support_agent`
+```typescript
+// ANTES (linha 61-67):
+const { error: updateError } = await supabase
+  .from("conversations")
+  .update({ 
+    assigned_to: finalToUserId,
+    department: departmentId,
+  })
+  .eq("id", conversationId);
+
+// DEPOIS:
+const { data: result, error: rpcError } = await supabase
+  .rpc('transfer_conversation_secure', {
+    p_conversation_id: conversationId,
+    p_to_user_id: finalToUserId,
+    p_to_department_id: departmentId,
+    p_transfer_note: transferNote,
+  });
+
+if (rpcError) throw rpcError;
+if (!result?.success) throw new Error(result?.error || 'Erro ao transferir');
+```
 
 ---
 
-### Secao Tecnica: Mudancas no Codigo
+### Secao Tecnica: Fluxo de Seguranca
 
-**ProtectedRoute.tsx - Linha 47-58:**
-
-```typescript
-const roleHomePage: Record<string, string> = {
-  support_manager: "/support",
-  support_agent: "/support",
-  financial_manager: "/support",
-  financial_agent: "/support",
-  cs_manager: "/cs-management",
-  consultant: "/my-portfolio",
-  sales_rep: "/",
-  general_manager: "/analytics",
-  admin: "/",
-  manager: "/",
-  user: "/client-portal", // ADICIONAR
-  ecommerce_analyst: "/analytics", // ADICIONAR
-};
-```
-
-**Auth.tsx - Linha 80-82:**
-
-```typescript
-case "user":
-  navigate("/client-portal");
-  break;
-case "ecommerce_analyst":
-  navigate("/analytics");
-  break;
-default:
-  navigate("/client-portal"); // Fallback seguro
-```
-
-**App.tsx - Nova rota:**
-
-```typescript
-<Route path="/client-portal" element={
-  <ProtectedRoute>
-    <ClientPortal />
-  </ProtectedRoute>
-} />
+```text
+Atendente clica "Transferir"
+         |
+         v
+[Frontend] Chama supabase.rpc('transfer_conversation_secure')
+         |
+         v
+[Função SECURITY DEFINER] - Executa como owner, não como caller
+         |
+         +---> Verifica inbox.transfer na role_permissions
+         |         |
+         |     NAO OK --> Retorna erro "Sem permissão"
+         |
+         +---> OK --> Executa UPDATE bypassing RLS
+         |
+         +---> Registra auditoria em interactions
+         |
+         v
+[Retorno] {success: true, conversation_id, to_user_id}
 ```
 
 ---
 
 ### Resultado Esperado
 
-- Atendentes acessam `/support` normalmente
-- Atendentes veem "Acesso Negado" em `/settings` (correto)
-- Clientes (`user`) são redirecionados para portal simples
-- Sem mais loops de redirect
-- Cada role tem uma home page definida
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Atendente transfere conversa dele | Funciona | Funciona |
+| Atendente transfere conversa do pool | ERRO | Funciona |
+| Atendente transfere para pessoa específica | ERRO | Funciona |
+| Atendente sem permissão tenta transferir | N/A | Bloqueado pela função |
+| Auditoria de quem transferiu | Parcial | Completa |
 
+---
+
+### Benefícios
+
+1. **Zero alteração na UI** - Mesmo dialog, mesma experiência
+2. **Segurança mantida** - RLS continua protegendo operações normais
+3. **Auditoria completa** - Registra quem transferiu, de onde, para onde
+4. **Flexibilidade** - Qualquer role com `inbox.transfer` pode transferir
+5. **Sem race conditions** - Operação atômica dentro da função
+
+---
+
+### Testes a Realizar
+
+1. Miguel (support_agent) transfere conversa dele para Suporte
+2. Miguel transfere conversa do pool para Comercial
+3. Miguel transfere para pessoa específica (João)
+4. Usuário sem permissão tenta transferir (deve falhar)
+5. Verificar registro de auditoria em interactions
