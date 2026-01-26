@@ -64,14 +64,42 @@ async function verifyMetaSignature(
   signature: string | null,
   appSecret: string | null
 ): Promise<boolean> {
-  // ⚠️ TEMPORÁRIO: Validação desabilitada para testar fluxo completo
-  // TODO: Reativar após confirmar que mensagens chegam corretamente
-  console.warn("[meta-whatsapp-webhook] ⚠️ SECURITY: Signature validation TEMPORARILY DISABLED for testing");
-  console.log("[meta-whatsapp-webhook] 🔍 DEBUG - Received signature:", signature?.slice(0, 40) + "...");
-  console.log("[meta-whatsapp-webhook] 🔍 DEBUG - App Secret configured:", appSecret ? `yes (${appSecret.length} chars, starts: ${appSecret.slice(0, 4)}...)` : "no");
-  console.log("[meta-whatsapp-webhook] 🔍 DEBUG - Body length:", body.length);
-  
-  return true; // BYPASS temporário
+  if (!signature || !appSecret) {
+    console.warn("[meta-whatsapp-webhook] ⚠️ Missing signature or app secret");
+    return false;
+  }
+
+  // Limpar espaços acidentais do secret
+  const cleanSecret = appSecret.trim();
+  const expectedSig = signature.replace("sha256=", "");
+
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(cleanSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
+    const calculatedSig = Array.from(new Uint8Array(signatureBuffer))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    const isValid = calculatedSig === expectedSig;
+    console.log("[meta-whatsapp-webhook] 🔐 HMAC validation:", isValid ? "✅ VALID" : "❌ INVALID");
+    
+    if (!isValid) {
+      console.log("[meta-whatsapp-webhook] Expected:", expectedSig.slice(0, 16) + "...");
+      console.log("[meta-whatsapp-webhook] Calculated:", calculatedSig.slice(0, 16) + "...");
+    }
+    
+    return isValid;
+  } catch (err) {
+    console.error("[meta-whatsapp-webhook] ❌ HMAC validation error:", err);
+    return false;
+  }
 }
 
 serve(async (req) => {
@@ -268,12 +296,11 @@ serve(async (req) => {
                 continue;
               }
 
-              // Buscar ou criar conversa
+              // Buscar conversa existente (QUALQUER provider) - priorizar aberta
               let { data: conversation } = await supabase
                 .from("conversations")
-                .select("id, ai_mode, status, assigned_to, awaiting_rating")
+                .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider")
                 .eq("contact_id", contact.id)
-                .eq("whatsapp_provider", "meta")
                 .neq("status", "closed")
                 .order("created_at", { ascending: false })
                 .limit(1)
@@ -291,22 +318,27 @@ serve(async (req) => {
                     whatsapp_provider: "meta",
                     whatsapp_meta_instance_id: instance.id,
                   })
-                  .select("id, ai_mode, status, assigned_to, awaiting_rating")
+                  .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider")
                   .single();
 
                 conversation = newConv;
                 console.log("[meta-whatsapp-webhook] 💬 New conversation created:", conversation?.id);
               } else {
-                // Atualizar instância se diferente
-                if (conversation) {
-                  await supabase
-                    .from("conversations")
-                    .update({ 
-                      whatsapp_meta_instance_id: instance.id,
-                      last_message_at: new Date().toISOString()
-                    })
-                    .eq("id", conversation.id);
+                // Migrar de Evolution para Meta se necessário
+                if (conversation.whatsapp_provider !== "meta") {
+                  console.log("[meta-whatsapp-webhook] 🔄 Migrando conversa de", conversation.whatsapp_provider, "para Meta");
                 }
+                await supabase
+                  .from("conversations")
+                  .update({ 
+                    whatsapp_provider: "meta",
+                    whatsapp_meta_instance_id: instance.id,
+                    whatsapp_instance_id: null, // Limpar referência Evolution
+                    last_message_at: new Date().toISOString(),
+                    status: "open" // Reabrir se estava fechada
+                  })
+                  .eq("id", conversation.id);
+                console.log("[meta-whatsapp-webhook] 💬 Conversation updated to Meta provider:", conversation.id);
               }
 
               if (!conversation) {
@@ -333,6 +365,33 @@ serve(async (req) => {
                 console.error("[meta-whatsapp-webhook] ❌ Error saving message:", msgError);
               } else {
                 console.log("[meta-whatsapp-webhook] ✅ Message saved:", savedMessage?.id);
+
+                // Trigger download de mídia se houver mediaId
+                if (mediaId && savedMessage?.id) {
+                  console.log("[meta-whatsapp-webhook] 📥 Triggering media download...");
+                  fetch(
+                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/download-meta-media`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                      },
+                      body: JSON.stringify({
+                        meta_media_id: mediaId,
+                        message_id: savedMessage.id,
+                        media_type: mediaType,
+                        instance_id: instance.id,
+                      }),
+                    }
+                  ).then(res => {
+                    if (res.ok) {
+                      console.log("[meta-whatsapp-webhook] ✅ Media download triggered");
+                    } else {
+                      res.text().then(txt => console.error("[meta-whatsapp-webhook] ❌ Media download failed:", txt));
+                    }
+                  }).catch(err => console.error("[meta-whatsapp-webhook] ❌ Media download error:", err));
+                }
               }
 
               // Trigger AI Autopilot se ativo
