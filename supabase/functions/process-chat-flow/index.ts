@@ -529,9 +529,10 @@ serve(async (req) => {
         }
         
         // Match 2: Trigger contém a mensagem (usuário escreveu parte do trigger)
-        // Só aplica se a mensagem tem ao menos 10 caracteres para evitar falsos positivos
-        if (triggerNorm.includes(messageNorm) && messageNorm.length >= 10) {
-          console.log('[process-chat-flow] ✅ Match reverso (trigger contém msg):', trigger);
+        // 🆕 CORREÇÃO: Só aplica se o TRIGGER é curto (keyword < 30 chars)
+        // Isso evita que "Olá" faça match com trigger longo "Olá vim pelo email..."
+        if (triggerNorm.length < 30 && triggerNorm.includes(messageNorm) && messageNorm.length >= 10) {
+          console.log('[process-chat-flow] ✅ Match reverso (keyword curto contém msg):', trigger);
           matchedFlow = flow;
           break;
         }
