@@ -1,36 +1,14 @@
 
-## Plano de Correção: IA Deve Pedir Email e Direcionar Lead para Comercial
+## Plano de Correção: Status "Ocupado" Sendo Sobrescrito
 
-### Problema Identificado
+### Problema
+O hook `useAvailabilityStatus` força o status para "online" em dois momentos, ignorando se o usuário escolheu manualmente ficar "ocupado":
+1. Ao montar o componente (inicialização)
+2. Ao voltar para a aba do navegador
 
-O fluxo atual da IA tem um bug crítico no **handoff automático por baixa confiança**:
+### Solução
 
-1. Quando a IA não encontra resposta adequada na KB, ela executa handoff para `suporte_n1` por padrão
-2. Isso acontece **MESMO** quando o contato é um **lead sem email verificado**
-3. O correto seria: **Lead não identificado → Comercial** (não Suporte)
-
-### Evidências nos Logs
-
-```text
-[ai-autopilot-chat] 🔐 Identity Wall Check: {
-  hasEmail: false,
-  isCustomerInDatabase: false,
-  contactStatus: "lead"
-}
-
-[ai-autopilot-chat] 🎯 CONFIDENCE SCORE: {
-  score: "22%",
-  action: "handoff",
-  department: "suporte_n1"  ← ERRO: Deveria ser "comercial" para leads
-}
-
-[route-conversation] 🔄 Mapped slug "suporte_n1" -> "Suporte"
-[route-conversation] ✅ Assigning to: Caroline (support_agent)  ← ERRO
-```
-
-### Solução Proposta
-
-Modificar a lógica de handoff para verificar se o contato é um lead não identificado e, nesse caso, direcionar para o departamento Comercial.
+Modificar a lógica para **respeitar o status "busy"** - só forçar "online" se o usuário estava "offline".
 
 ---
 
@@ -38,158 +16,122 @@ Modificar a lógica de handoff para verificar se o contato é um lead não ident
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/ai-autopilot-chat/index.ts` | Adicionar verificação de lead no handoff automático |
-| `src/lib/ai/confidence-score.ts` | Aceitar parâmetro de contexto do cliente para definir departamento |
+| `src/hooks/useAvailabilityStatus.tsx` | Verificar status atual antes de forçar "online" |
 
 ---
 
 ### Implementação Detalhada
 
-#### 1. Modificar o Fallback Detector (ai-autopilot-chat)
-
-**Localização:** Linhas ~4420-4445
+#### 1. Modificar a Inicialização (Linhas 136-180)
 
 **Antes:**
 ```typescript
-if (isFallbackResponse) {
-  console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO - Executando handoff REAL');
-  
-  // 1. MUDAR O MODO para waiting_human
-  await supabaseClient.from('conversations')
-    .update({ ai_mode: 'waiting_human', ... })
-    .eq('id', conversationId);
-  
-  // 2. CHAMAR O ROTEADOR (sem departamento específico)
-  const { data: routeResult } = await supabaseClient.functions.invoke('route-conversation', {
-    body: { conversationId }  // ← BUG: Não passa departamento
-  });
-}
+const setOnlineAndDistribute = async () => {
+  // Força online sem verificar status atual
+  await supabase
+    .from("profiles")
+    .update({ 
+      availability_status: "online",
+      ...
+    })
+    .eq("id", user.id);
 ```
 
 **Depois:**
 ```typescript
-if (isFallbackResponse) {
-  console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO - Executando handoff REAL');
+const setOnlineAndDistribute = async () => {
+  // 1. Primeiro, buscar o status atual do usuário
+  const { data: currentProfile } = await supabase
+    .from("profiles")
+    .select("availability_status")
+    .eq("id", user.id)
+    .single();
   
-  // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email verificado → Comercial
-  const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && contact.status === 'lead';
-  const handoffDepartment = isLeadWithoutEmail ? 'comercial' : confidenceResult.recommended_dept || 'suporte_n1';
+  const currentStatus = currentProfile?.availability_status;
   
-  console.log('[ai-autopilot-chat] 🎯 Handoff department decision:', {
-    isLeadWithoutEmail,
-    contactHasEmail,
-    contactStatus: contact.status,
-    handoffDepartment
-  });
-  
-  // 1. MUDAR O MODO para waiting_human + definir departamento
-  const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-  
-  await supabaseClient.from('conversations')
-    .update({ 
-      ai_mode: 'waiting_human',
-      handoff_executed_at: handoffTimestamp,
-      needs_human_review: true,
-      // 🆕 Se for lead, já definir departamento Comercial
-      ...(isLeadWithoutEmail && { department: DEPT_COMERCIAL_ID })
-    })
-    .eq('id', conversationId);
-  
-  // 2. CHAMAR O ROTEADOR COM DEPARTAMENTO CORRETO
-  const { data: routeResult } = await supabaseClient.functions.invoke('route-conversation', {
-    body: { 
-      conversationId,
-      // 🆕 Passar departamento explícito para leads
-      ...(isLeadWithoutEmail && { department_id: DEPT_COMERCIAL_ID })
-    }
-  });
-  
-  // 🆕 Mensagem diferenciada para leads
-  if (isLeadWithoutEmail && routeResult?.assigned) {
-    assistantMessage = 'Obrigado pelo seu interesse! Vou te direcionar para nosso time Comercial que poderá te apresentar nossas soluções. 🤝\n\nAguarde um momento que logo um de nossos consultores irá te atender!';
-  }
-}
-```
-
-#### 2. Modificar o Handoff por LOW CONFIDENCE
-
-**Localização:** Linhas ~3180-3250 (onde usa `confidenceResult.action === 'handoff'`)
-
-Adicionar a mesma lógica de verificação de lead antes de executar o handoff:
-
-```typescript
-// 🆕 ANTES do handoff por baixa confiança
-if (confidenceResult.action === 'handoff') {
-  const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase;
-  
-  // Se for lead → rotear para comercial, NÃO para suporte_n1
-  if (isLeadWithoutEmail) {
-    console.log('[ai-autopilot-chat] 🎯 LOW CONFIDENCE + LEAD = Roteando para COMERCIAL');
-    
-    const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-    
-    // Atualizar conversa para Comercial + waiting_human
-    await supabaseClient.from('conversations')
+  // 2. Só definir como "online" se estava "offline"
+  // Se estava "busy", manter o status escolhido pelo usuário
+  if (currentStatus === 'offline' || !currentStatus) {
+    console.log("[useAvailabilityStatus] User was offline, setting to online");
+    await supabase
+      .from("profiles")
       .update({ 
-        department: DEPT_COMERCIAL_ID,
-        ai_mode: 'waiting_human',
-        customer_metadata: {
-          ...conversation.customer_metadata,
-          lead_routed_to_comercial_reason: 'low_confidence_handoff',
-          lead_routed_at: new Date().toISOString()
-        }
+        availability_status: "online",
+        last_status_change: new Date().toISOString(),
       })
-      .eq('id', conversationId);
+      .eq("id", user.id);
     
-    // Rotear para agente comercial
-    await supabaseClient.functions.invoke('route-conversation', {
-      body: { conversationId, department_id: DEPT_COMERCIAL_ID }
-    });
-    
-    // Mensagem para o lead
-    assistantMessage = 'Obrigado pelo contato! Para melhor te atender, vou te direcionar para nosso time Comercial. 🤝\n\nAguarde um momento!';
-    
-    // RETURN EARLY - não continuar processamento normal
-    // ... salvar mensagem e retornar
+    queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
+  } else {
+    console.log(`[useAvailabilityStatus] Keeping current status: ${currentStatus}`);
+    // Apenas atualizar o heartbeat para indicar atividade
+    await supabase
+      .from("profiles")
+      .update({ 
+        last_status_change: new Date().toISOString(),
+      })
+      .eq("id", user.id);
   }
-}
+  
+  // 3. Distribuir conversas apenas se ficou online
+  if (currentStatus === 'offline' || !currentStatus) {
+    // ... lógica de distribuição existente
+  }
+};
 ```
 
-#### 3. Atualizar o `confidence-score.ts` para Aceitar Contexto
+#### 2. Modificar o Handler de Visibilidade (Linhas 193-215)
 
-Modificar a função para aceitar informações do cliente e retornar o departamento apropriado:
-
+**Antes:**
 ```typescript
-export interface ConfidenceContext {
-  isLead?: boolean;
-  hasEmail?: boolean;
-  isFinancialRequest?: boolean;
-}
+const handleVisibilityChange = async () => {
+  if (document.visibilityState === 'visible') {
+    // Força online ao voltar para a aba
+    await supabase
+      .from("profiles")
+      .update({ 
+        availability_status: "online",
+        ...
+      })
+```
 
-export function calculateConfidenceScore(
-  query: string,
-  documents: RetrievedDocument[],
-  context?: ConfidenceContext  // 🆕 Parâmetro opcional
-): ConfidenceResult {
-  // ... lógica existente ...
-  
-  // 🆕 Definir departamento baseado no contexto
-  let recommended_dept = 'suporte_n1';
-  
-  if (context?.isLead && !context?.hasEmail) {
-    recommended_dept = 'comercial';
-  } else if (context?.isFinancialRequest) {
-    recommended_dept = 'financeiro';
+**Depois:**
+```typescript
+const handleVisibilityChange = async () => {
+  if (document.visibilityState === 'visible') {
+    // Buscar status atual
+    const { data: currentProfile } = await supabase
+      .from("profiles")
+      .select("availability_status")
+      .eq("id", user.id)
+      .single();
+    
+    const currentStatus = currentProfile?.availability_status;
+    
+    // Só voltar para online se estava offline
+    // Se estava "busy", respeitar a escolha do usuário
+    if (currentStatus === 'offline') {
+      console.log("[useAvailabilityStatus] Tab visible + was offline - setting online");
+      await supabase
+        .from("profiles")
+        .update({ 
+          availability_status: "online",
+          last_status_change: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+      queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
+    } else {
+      console.log(`[useAvailabilityStatus] Tab visible - keeping ${currentStatus}`);
+      // Apenas enviar heartbeat para indicar atividade
+      await supabase
+        .from("profiles")
+        .update({ 
+          last_status_change: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+    }
   }
-  
-  return {
-    score,
-    action,
-    reason,
-    recommended_dept,  // 🆕 Agora considera contexto
-    // ...
-  };
-}
+};
 ```
 
 ---
@@ -197,65 +139,53 @@ export function calculateConfidenceScore(
 ### Fluxo Corrigido
 
 ```text
-[Cliente envia mensagem]
-         |
-         v
-  Identity Wall Check:
-    - hasEmail: false
-    - isCustomerInDatabase: false
-    - contactStatus: "lead"
-         |
-         v
-  IA processa e calcula confiança:
-    - score: 22%
-    - action: "handoff"
-         |
-         v
-  🆕 NOVA VERIFICAÇÃO:
-    - isLeadWithoutEmail? SIM
-         |
-         v
-  🆕 Handoff para COMERCIAL (não Suporte):
-    - department: 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c'
-    - ai_mode: 'waiting_human'
-         |
-         v
-  route-conversation:
-    - department_id: Comercial
-    - Assigned to: Agente Comercial (sales_rep)
-         |
-         v
-  [Lead na fila do Comercial!]
+[Usuário está BUSY]
+        |
+        v
+[Troca de aba ou página re-renderiza]
+        |
+        v
+[Hook verifica status atual]
+        |
+        v
+   Status = "busy"?
+     /        \
+   SIM        NÃO (offline)
+    |            |
+    v            v
+  MANTER      MUDAR para
+  "busy"      "online"
+    |            |
+    v            v
+[Apenas       [Set online +
+heartbeat]    distribuir]
 ```
 
 ---
 
-### Benefícios da Correção
+### Benefícios
 
-- Leads sem email são direcionados automaticamente para o Comercial
-- Clientes identificados continuam sendo roteados para Suporte adequado
-- Handoff manual via tool (`request_human_agent`) já tem a trava de identidade
-- Mensagem diferenciada para leads (tom mais comercial)
+- Status "ocupado" é respeitado mesmo após trocar de aba
+- Status "ocupado" é mantido após re-renderizações
+- Heartbeat continua funcionando para evitar timeout por inatividade
+- Distribuição de conversas só ocorre quando realmente fica online
 - Logs detalhados para debug
 
 ---
 
 ### Seção Técnica
 
-**Constante do Departamento Comercial:**
+**Lógica de Decisão:**
 ```typescript
-const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+// Só forçar online se estava offline
+const shouldSetOnline = currentStatus === 'offline' || !currentStatus;
 ```
 
-**Verificação de Lead:**
-```typescript
-const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && (contact.status === 'lead' || !contact.status);
-```
+**Importante:** O heartbeat (`last_status_change`) deve continuar sendo enviado mesmo quando "busy" para evitar que o CRON `check-inactive-users` marque o usuário como offline por inatividade.
 
-**Pontos de Modificação:**
-1. `supabase/functions/ai-autopilot-chat/index.ts` linhas ~4420-4475 (Fallback Detector)
-2. `supabase/functions/ai-autopilot-chat/index.ts` linhas ~3180-3250 (Low Confidence Handoff)
-3. `src/lib/ai/confidence-score.ts` linhas ~140-200 (Adicionar contexto opcional)
+**Arquivo a modificar:**
+- `src/hooks/useAvailabilityStatus.tsx`
 
-**Deploy necessário:**
-- Edge Function `ai-autopilot-chat`
+**Linhas específicas:**
+- 136-180 (inicialização)
+- 193-215 (visibilidade da tab)
