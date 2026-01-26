@@ -8027,6 +8027,15 @@ export type Database = {
           title: string
         }[]
       }
+      transfer_conversation_secure: {
+        Args: {
+          p_conversation_id: string
+          p_to_department_id: string
+          p_to_user_id: string
+          p_transfer_note?: string
+        }
+        Returns: Json
+      }
       update_article_embedding: {
         Args: { article_id: string; new_embedding: string }
         Returns: undefined

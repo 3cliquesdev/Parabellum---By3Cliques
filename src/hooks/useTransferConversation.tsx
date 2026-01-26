@@ -57,40 +57,29 @@ export function useTransferConversation() {
         }
       }
 
-      // Atualizar assigned_to E department na conversa
-      const { error: updateError } = await supabase
-        .from("conversations")
-        .update({ 
-          assigned_to: finalToUserId,
-          department: departmentId,
-        })
-        .eq("id", conversationId);
-
-      if (updateError) throw updateError;
-
-      // Registrar interação de transferência com nota interna
-      const { error: interactionError } = await supabase
-        .from("interactions")
-        .insert({
-          customer_id: contactId,
-          type: "conversation_transferred",
-          content: `🔄 Conversa transferida de ${fromUserName} para ${finalToUserName} (${departmentName})${autoDistribute ? " [Distribuição Automática]" : ""}`,
-          channel: "other",
-          metadata: {
-            from_user_id: fromUserId,
-            to_user_id: finalToUserId,
-            from_user_name: fromUserName,
-            to_user_name: finalToUserName,
-            to_department_id: departmentId,
-            to_department_name: departmentName,
-            conversation_id: conversationId,
-            transfer_note: transferNote,
-            is_internal: true,
-            auto_distributed: autoDistribute,
-          },
+      // Usar função SECURITY DEFINER para transferir (bypassa RLS com validação)
+      const { data: result, error: rpcError } = await supabase
+        .rpc('transfer_conversation_secure', {
+          p_conversation_id: conversationId,
+          p_to_user_id: finalToUserId,
+          p_to_department_id: departmentId,
+          p_transfer_note: transferNote || null,
         });
 
-      if (interactionError) throw interactionError;
+      if (rpcError) {
+        console.error("[useTransferConversation] RPC error:", rpcError);
+        throw rpcError;
+      }
+
+      // Cast result to expected type
+      const transferResult = result as { success: boolean; error?: string } | null;
+
+      if (!transferResult?.success) {
+        console.error("[useTransferConversation] Transfer failed:", transferResult?.error);
+        throw new Error(transferResult?.error || 'Erro ao transferir conversa');
+      }
+
+      console.log("[useTransferConversation] Transferência realizada com sucesso:", transferResult);
 
       return { conversationId, toUserId: finalToUserId, departmentId };
     },
