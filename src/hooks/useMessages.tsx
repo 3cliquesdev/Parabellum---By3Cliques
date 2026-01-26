@@ -88,10 +88,12 @@ export function useMessages(conversationId: string | null) {
                 }
                 
                 // Substituir mensagem temporária pela real
+                // Usa timestamp range para matching mais preciso (5 segundos)
                 const tempIndex = old.findIndex(m => 
                   m.id?.startsWith('temp-') && 
                   m.content === newMessage.content &&
-                  m.sender_id === newMessage.sender_id
+                  m.sender_id === newMessage.sender_id &&
+                  Math.abs(new Date(m.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 5000
                 );
                 
                 if (tempIndex !== -1) {

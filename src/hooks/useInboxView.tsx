@@ -160,16 +160,18 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
     result = result.filter(item => item.department === filters.department);
   }
 
-  // Search filter
+  // Search filter - case-insensitive em todos os campos
   if (filters.search) {
-    const searchLower = filters.search.toLowerCase();
-    result = result.filter(item => 
-      item.contact_name?.toLowerCase().includes(searchLower) ||
-      item.contact_email?.toLowerCase().includes(searchLower) ||
-      item.contact_phone?.includes(filters.search) ||
-      item.conversation_id.toLowerCase().includes(searchLower) ||
-      item.last_snippet?.toLowerCase().includes(searchLower)
-    );
+    const searchLower = filters.search.toLowerCase().trim();
+    if (searchLower) {
+      result = result.filter(item => 
+        item.contact_name?.toLowerCase().includes(searchLower) ||
+        item.contact_email?.toLowerCase().includes(searchLower) ||
+        item.contact_phone?.toLowerCase().includes(searchLower) ||
+        item.conversation_id.toLowerCase().includes(searchLower) ||
+        item.last_snippet?.toLowerCase().includes(searchLower)
+      );
+    }
   }
 
   return result;

@@ -277,7 +277,8 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
   const { data: agentStats } = useAgentConversations();
 
   const [groupsOpen, setGroupsOpen] = useState(true);
-  const [tagsOpen, setTagsOpen] = useState(false);
+  // Auto-abrir tags se há muitas (mais de 5)
+  const [tagsOpen, setTagsOpen] = useState((tags?.length || 0) > 5);
   const [agentsOpen, setAgentsOpen] = useState(true);
   const [tagSearch, setTagSearch] = useState("");
   const [redistributeAgent, setRedistributeAgent] = useState<{ id: string; name: string } | null>(null);
@@ -471,23 +472,34 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
               <div className="flex items-center gap-2">
                 <Tag className="h-3.5 w-3.5" />
                 Tags
+                {(tags?.length || 0) > 5 && (
+                  <span className="text-[10px] text-muted-foreground font-normal normal-case">
+                    ({tags?.length})
+                  </span>
+                )}
               </div>
-              <ChevronDown className={cn("h-4 w-4 transition-transform", tagsOpen && "rotate-180")} />
+              <div className="flex items-center gap-2">
+                {/* Mostrar ícone de busca inline quando colapsado */}
+                {!tagsOpen && (tags?.length || 0) > 5 && (
+                  <Search className="h-3 w-3 text-muted-foreground" />
+                )}
+                <ChevronDown className={cn("h-4 w-4 transition-transform", tagsOpen && "rotate-180")} />
+              </div>
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 mt-1">
-              {tagsOpen && (
-                <div className="px-3 mb-2">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar tag..."
-                      value={tagSearch}
-                      onChange={(e) => setTagSearch(e.target.value)}
-                      className="h-7 text-xs pl-7"
-                    />
-                  </div>
+              {/* Campo de busca sempre visível quando aberto */}
+              <div className="px-3 mb-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar tag..."
+                    value={tagSearch}
+                    onChange={(e) => setTagSearch(e.target.value)}
+                    className="h-7 text-xs pl-7"
+                    autoFocus={tagsOpen && (tags?.length || 0) > 10}
+                  />
                 </div>
-              )}
+              </div>
               {filteredTags.slice(0, 10).map((tag) => {
                 const tagCount = counts.byTag.find(t => t.id === tag.id)?.count || 0;
                 const isActive = currentTag === tag.id;

@@ -30,7 +30,9 @@ export function AudioPlayer({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1.0);
   const maxRetries = 3;
+  const SPEED_OPTIONS = [1.0, 1.25, 1.5, 2.0];
 
   // Generate fake waveform if none provided
   const waveform = waveformData || Array.from({ length: 50 }, () => Math.random() * 0.8 + 0.2);
@@ -150,6 +152,18 @@ export function AudioPlayer({
     setIsMuted(!isMuted);
   }, [isMuted]);
 
+  const cycleSpeed = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    
+    const currentIndex = SPEED_OPTIONS.indexOf(playbackRate);
+    const nextIndex = (currentIndex + 1) % SPEED_OPTIONS.length;
+    const newRate = SPEED_OPTIONS[nextIndex];
+    
+    audio.playbackRate = newRate;
+    setPlaybackRate(newRate);
+  }, [playbackRate, SPEED_OPTIONS]);
+
   const handleSeek = useCallback((value: number[]) => {
     const audio = audioRef.current;
     if (!audio || !duration) return;
@@ -258,6 +272,18 @@ export function AudioPlayer({
           <span>{formatTime(duration)}</span>
         </div>
       </div>
+
+      {/* Speed Control */}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={cycleSpeed}
+        className={cn("shrink-0 px-2 font-mono text-xs", compact ? "h-7" : "h-8")}
+        aria-label="Playback speed"
+        title="Alterar velocidade de reprodução"
+      >
+        {playbackRate}x
+      </Button>
 
       {/* Volume Toggle */}
       {!compact && (

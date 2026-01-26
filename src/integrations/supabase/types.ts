@@ -4528,6 +4528,7 @@ export type Database = {
           is_read: boolean | null
           message_type: string | null
           metadata: Json | null
+          quoted_message_id: string | null
           sender_id: string | null
           sender_type: Database["public"]["Enums"]["sender_type"]
           status: Database["public"]["Enums"]["message_status"] | null
@@ -4547,6 +4548,7 @@ export type Database = {
           is_read?: boolean | null
           message_type?: string | null
           metadata?: Json | null
+          quoted_message_id?: string | null
           sender_id?: string | null
           sender_type: Database["public"]["Enums"]["sender_type"]
           status?: Database["public"]["Enums"]["message_status"] | null
@@ -4566,6 +4568,7 @@ export type Database = {
           is_read?: boolean | null
           message_type?: string | null
           metadata?: Json | null
+          quoted_message_id?: string | null
           sender_id?: string | null
           sender_type?: Database["public"]["Enums"]["sender_type"]
           status?: Database["public"]["Enums"]["message_status"] | null
@@ -4576,6 +4579,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_quoted_message_id_fkey"
+            columns: ["quoted_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
           {
