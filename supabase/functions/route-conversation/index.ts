@@ -9,6 +9,7 @@ const corsHeaders = {
 interface RouteConversationRequest {
   conversationId: string;
   priority?: number;
+  department_id?: string;  // Slug do departamento (ex: "comercial", "suporte_n1")
   aiAnalysis?: {
     category?: string;
     intent?: string;
@@ -36,6 +37,38 @@ const SKILL_MAPPING: Record<string, string> = {
   'english': 'Inglês',
 };
 
+// 🆕 Mapeamento de slug de departamento -> nome do departamento no banco
+const DEPARTMENT_SLUG_MAPPING: Record<string, string> = {
+  'comercial': 'Comercial',
+  'vendas': 'Comercial',
+  'sales': 'Comercial',
+  'suporte_n1': 'Suporte',
+  'suporte': 'Suporte',
+  'support': 'Suporte',
+  'tecnico': 'Suporte',
+  'technical': 'Suporte',
+  'financeiro': 'Financeiro',
+  'financial': 'Financeiro',
+  'finance': 'Financeiro',
+  'logistica': 'Operacional',
+  'logistics': 'Operacional',
+  'operacional': 'Operacional',
+  'operations': 'Operacional',
+  'juridico': 'Suporte', // Fallback para suporte quando não há dept jurídico
+};
+
+// 🆕 Mapeamento de nome de departamento -> roles permitidos
+const DEPARTMENT_ROLE_MAPPING: Record<string, string[]> = {
+  'Comercial': ['sales_rep'],
+  'Vendas': ['sales_rep'],
+  'Suporte': ['support_agent'],
+  'Suporte Pedidos': ['support_agent'],
+  'Suporte Sistema': ['support_agent'],
+  'Financeiro': ['financial_agent', 'support_agent'],
+  'Operacional': ['support_agent'],
+  'Customer Success': ['support_agent', 'consultant'],
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -47,9 +80,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, priority = 0, aiAnalysis } = await req.json() as RouteConversationRequest;
+    const { conversationId, priority = 0, department_id, aiAnalysis } = await req.json() as RouteConversationRequest;
 
-    console.log(`[route-conversation] 🔄 Processing conversation: ${conversationId}, priority: ${priority}, AI category: ${aiAnalysis?.category}`);
+    console.log(`[route-conversation] 🔄 Processing conversation: ${conversationId}`);
+    console.log(`[route-conversation] 📌 Params: priority=${priority}, department_id=${department_id}, AI category=${aiAnalysis?.category}`);
 
     // 1. Buscar dados da conversa e contato
     console.log('[route-conversation] 📊 Fetching conversation data...');
@@ -72,6 +106,10 @@ serve(async (req) => {
           support_channel_id,
           phone,
           whatsapp_id
+        ),
+        departments:department (
+          id,
+          name
         )
       `)
       .eq('id', conversationId)
@@ -80,6 +118,7 @@ serve(async (req) => {
     console.log('[route-conversation] 📥 Conversation data:', { 
       found: !!conversation, 
       department: conversation?.department,
+      departmentName: (conversation?.departments as any)?.name,
       error: convError?.message 
     });
 
@@ -110,43 +149,92 @@ serve(async (req) => {
       );
     }
 
-    // 2. REMOVIDO: STICKY AGENT (Consultor da Carteira)
+    // 🆕 2. RESOLVER DEPARTAMENTO A PARTIR DO department_id
+    let resolvedDepartmentId = conversation.department;
+    let resolvedDepartmentName = (conversation.departments as any)?.name || null;
+    
+    if (department_id && !conversation.department) {
+      console.log(`[route-conversation] 🏷️ Resolving department from slug: "${department_id}"`);
+      
+      const deptSlug = department_id.toLowerCase();
+      const deptName = DEPARTMENT_SLUG_MAPPING[deptSlug];
+      
+      if (deptName) {
+        console.log(`[route-conversation] 🔄 Mapped slug "${deptSlug}" -> "${deptName}"`);
+        
+        // Buscar UUID do departamento no banco
+        const { data: dept, error: deptError } = await supabase
+          .from('departments')
+          .select('id, name')
+          .ilike('name', deptName)
+          .maybeSingle();
+        
+        if (dept && !deptError) {
+          console.log(`[route-conversation] ✅ Found department: ${dept.name} (${dept.id})`);
+          
+          // Atualizar conversa com o departamento ANTES de rotear
+          const { error: updateDeptError } = await supabase
+            .from('conversations')
+            .update({ department: dept.id })
+            .eq('id', conversationId);
+          
+          if (updateDeptError) {
+            console.error('[route-conversation] ⚠️ Failed to update conversation department:', updateDeptError.message);
+          } else {
+            console.log(`[route-conversation] ✅ Conversation department updated to: ${dept.name}`);
+            resolvedDepartmentId = dept.id;
+            resolvedDepartmentName = dept.name;
+          }
+        } else {
+          console.log(`[route-conversation] ⚠️ Department not found for name: "${deptName}"`);
+        }
+      } else {
+        console.log(`[route-conversation] ⚠️ No mapping found for slug: "${deptSlug}"`);
+      }
+    }
+
+    // REMOVIDO: STICKY AGENT (Consultor da Carteira)
     // Consultores NÃO recebem conversas automaticamente - apenas via transferência manual
-    // O consultant_id serve apenas como referência de carteira
     if (contact?.consultant_id) {
       console.log('[route-conversation] ℹ️ Contato tem consultor vinculado:', contact.consultant_id);
       console.log('[route-conversation] ℹ️ Consultores não recebem conversas automáticas - seguindo para distribuição normal');
     }
 
-    // 3. PRIORIDADE 2: SKILL-BASED ROUTING (Agentes com Skill Específica + Canal)
+    // 🆕 3. DETERMINAR ROLES PERMITIDOS PARA O DEPARTAMENTO
+    const allowedRoles = resolvedDepartmentName 
+      ? (DEPARTMENT_ROLE_MAPPING[resolvedDepartmentName] || ['support_agent'])
+      : ['support_agent'];
+    
+    console.log(`[route-conversation] 🎯 Department: ${resolvedDepartmentName || 'none'} -> Allowed roles: [${allowedRoles.join(', ')}]`);
+
+    // 4. PRIORIDADE 2: SKILL-BASED ROUTING (Agentes com Skill Específica + Canal)
     let onlineAgents: any[] = [];
     let routingStrategy = 'load_balancing';
     let requiredSkillName: string | null = null;
     
-    // 3.1 Identificar skill necessária baseada na análise da IA
+    // 4.1 Identificar skill necessária baseada na análise da IA
     const aiCategory = aiAnalysis?.category?.toLowerCase();
     requiredSkillName = aiCategory ? SKILL_MAPPING[aiCategory] : null;
 
-    // 3.2 Identificar canal da conversa (herdado do contato)
+    // 4.2 Identificar canal da conversa (herdado do contato)
     const supportChannelId = conversation.support_channel_id || contact?.support_channel_id;
     console.log('[route-conversation] 📡 Support channel:', supportChannelId || 'none');
     
     if (requiredSkillName) {
       console.log(`[route-conversation] 🎯 Skill-based routing: Looking for agents with skill "${requiredSkillName}"`);
       
-      // FASE 1: Query em 2 etapas - Sem JOIN FK
-      // 1. Buscar user_ids de support_agents
-      const { data: supportAgentIds } = await supabase
+      // 🆕 Buscar agentes com os roles permitidos para o departamento
+      const { data: roleAgentIds } = await supabase
         .from('user_roles')
         .select('user_id')
-        .eq('role', 'support_agent');
+        .in('role', allowedRoles);
       
-      if (!supportAgentIds || supportAgentIds.length === 0) {
-        console.log('[route-conversation] ❌ Nenhum support_agent encontrado nos roles');
+      if (!roleAgentIds || roleAgentIds.length === 0) {
+        console.log(`[route-conversation] ❌ Nenhum agente encontrado com roles: [${allowedRoles.join(', ')}]`);
         onlineAgents = [];
       } else {
-        // 2. Buscar agentes online COM a skill específica
-        const agentUserIds = supportAgentIds.map(r => r.user_id);
+        // Buscar agentes online COM a skill específica
+        const agentUserIds = roleAgentIds.map(r => r.user_id);
         
         const { data: skilledAgents } = await supabase
           .from('profiles')
@@ -178,48 +266,43 @@ serve(async (req) => {
         // Filtrar por canal de atendimento
         const agentsWithChannel = agentsWithSkill.filter(agent => {
           const channels = agent.agent_support_channels || [];
-          // Se agente não tem nenhum canal, atende todos
           if (channels.length === 0) return true;
-          // Se conversa não tem canal, qualquer agente pode atender
           if (!supportChannelId) return true;
-          // Senão, verificar se agente atende o canal específico
           return channels.some((ac: any) => ac.channel_id === supportChannelId);
         });
         
-        // Filtrar por departamento se houver
-        if (conversation.department && agentsWithChannel.length > 0) {
-          onlineAgents = agentsWithChannel.filter(a => a.department === conversation.department);
+        // 🆕 Filtrar por departamento se houver
+        if (resolvedDepartmentId && agentsWithChannel.length > 0) {
+          onlineAgents = agentsWithChannel.filter(a => a.department === resolvedDepartmentId);
         } else {
           onlineAgents = agentsWithChannel;
         }
         
         if (onlineAgents.length > 0) {
           routingStrategy = 'skill_based';
-          console.log(`[route-conversation] ✅ Found ${onlineAgents.length} agents with skill "${requiredSkillName}"`);
+          console.log(`[route-conversation] ✅ Found ${onlineAgents.length} agents with skill "${requiredSkillName}" and roles [${allowedRoles.join(', ')}]`);
         } else {
           console.log(`[route-conversation] ⚠️ No agents found with skill "${requiredSkillName}", falling back to generic`);
         }
       }
     }
     
-    // 3.2 FALLBACK: Se não encontrou agentes com skill, busca agentes genéricos
+    // 5. FALLBACK: Se não encontrou agentes com skill, busca agentes genéricos com roles permitidos
     if (onlineAgents.length === 0) {
-      console.log('[route-conversation] 🔍 Searching for generic support agents (load balancing)');
-      console.log('[route-conversation] 📌 Department filter:', conversation.department || 'none');
+      console.log('[route-conversation] 🔍 Searching for agents with roles:', allowedRoles.join(', '));
+      console.log('[route-conversation] 📌 Department filter:', resolvedDepartmentId || 'none');
       
-      // FASE 1: Query em 2 etapas - Sem JOIN FK
-      // 1. Buscar user_ids de support_agents
-      const { data: genericSupportIds } = await supabase
+      // 🆕 Buscar user_ids dos roles permitidos
+      const { data: genericRoleIds } = await supabase
         .from('user_roles')
         .select('user_id')
-        .eq('role', 'support_agent');
+        .in('role', allowedRoles);
       
       let genericAgents: any[] = [];
       let agentsError = null;
       
-      if (genericSupportIds && genericSupportIds.length > 0) {
-        // 2. Buscar profiles desses users
-        const genericAgentUserIds = genericSupportIds.map(r => r.user_id);
+      if (genericRoleIds && genericRoleIds.length > 0) {
+        const genericAgentUserIds = genericRoleIds.map(r => r.user_id);
         
         let agentsQuery = supabase
           .from('profiles')
@@ -233,9 +316,9 @@ serve(async (req) => {
           .eq('availability_status', 'online')
           .in('id', genericAgentUserIds);
 
-        // Filtrar por departamento se houver
-        if (conversation.department) {
-          agentsQuery = agentsQuery.eq('department', conversation.department);
+        // 🆕 Filtrar por departamento se houver
+        if (resolvedDepartmentId) {
+          agentsQuery = agentsQuery.eq('department', resolvedDepartmentId);
         }
 
         const result = await agentsQuery;
@@ -245,17 +328,16 @@ serve(async (req) => {
         // Filtrar por canal de atendimento
         genericAgents = allGenericAgents.filter(agent => {
           const channels = agent.agent_support_channels || [];
-          // Se agente não tem nenhum canal, atende todos
           if (channels.length === 0) return true;
-          // Se conversa não tem canal, qualquer agente pode atender
           if (!supportChannelId) return true;
-          // Senão, verificar se agente atende o canal específico
           return channels.some((ac: any) => ac.channel_id === supportChannelId);
         });
       }
       
       console.log('[route-conversation] 📊 Generic agents query result:', { 
         found_count: genericAgents?.length || 0,
+        roles_searched: allowedRoles,
+        department_filter: resolvedDepartmentName || 'none',
         error: agentsError?.message 
       });
       
@@ -289,23 +371,24 @@ serve(async (req) => {
       agentLoads.sort((a, b) => a.open_conversations - b.open_conversations);
       const selectedAgent = agentLoads[0];
 
-      console.log(`[route-conversation] ✅ ${routingStrategy === 'skill_based' ? 'SKILL-BASED ROUTING' : 'LOAD BALANCING'} - Assigning to:`, {
+      console.log(`[route-conversation] ✅ ${routingStrategy === 'skill_based' ? 'SKILL-BASED ROUTING' : 'DEPARTMENT-BASED LOAD BALANCING'} - Assigning to:`, {
         agent: selectedAgent.full_name,
         current_load: selectedAgent.open_conversations,
         routing_strategy: routingStrategy,
-        required_skill: requiredSkillName || 'none'
+        required_skill: requiredSkillName || 'none',
+        department: resolvedDepartmentName || 'none',
+        allowed_roles: allowedRoles
       });
 
       // Buscar ai_mode atual ANTES de atualizar
       const currentAiMode = conversation.ai_mode;
 
       // Se está em waiting_human, MANTER assim até agente responder
-      // Só mudar para copilot se estava em autopilot ou outro estado
       const newAiMode = currentAiMode === 'waiting_human' 
-        ? 'waiting_human'  // Manter silêncio até agente responder
-        : 'copilot';        // Normal: ativar modo assistente
+        ? 'waiting_human'
+        : 'copilot';
 
-      // Atribuir ao agente com menos carga - COM VERIFICAÇÃO DE SUCESSO
+      // Atribuir ao agente com menos carga
       const { error: updateError } = await supabase
         .from('conversations')
         .update({ 
@@ -316,7 +399,7 @@ serve(async (req) => {
         .eq('id', conversationId);
 
       if (updateError) {
-        console.error('[route-conversation] ❌ ERRO ao atualizar ai_mode:', updateError);
+        console.error('[route-conversation] ❌ ERRO ao atualizar conversa:', updateError);
         throw new Error(`Falha ao atribuir conversa: ${updateError.message}`);
       }
 
@@ -340,14 +423,16 @@ serve(async (req) => {
           assignment_type: routingStrategy,
           current_load: selectedAgent.open_conversations,
           required_skill: requiredSkillName || null,
+          department: resolvedDepartmentName || null,
           message: `Conversa atribuída a ${selectedAgent.full_name}${requiredSkillName ? ` (Skill: ${requiredSkillName})` : ''}`
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 4. FALLBACK: FILA DE ESPERA (Ninguém online)
+    // 6. FALLBACK: FILA DE ESPERA (Ninguém online)
     console.log('[route-conversation] ⚠️ NO AGENTS AVAILABLE - Adding to queue');
+    console.log('[route-conversation] 📌 Searched for roles:', allowedRoles.join(', '), 'in department:', resolvedDepartmentName || 'any');
 
     // Adicionar à fila de espera
     await supabase
@@ -360,8 +445,6 @@ serve(async (req) => {
         onConflict: 'conversation_id'
       });
 
-    // 🆕 NÃO enviar mensagem automática - a decisão é do chamador (ai-autopilot-chat)
-    // Isso permite que a IA continue atendendo quando ninguém está online
     console.log('[route-conversation] ℹ️ Conversa adicionada à fila - sem mensagem automática');
 
     // Verificar posição na fila
@@ -378,7 +461,9 @@ serve(async (req) => {
         assigned_to: null,
         assignment_type: 'queued',
         queue_position: queuePosition || 1,
-        no_agents_available: true,  // 🆕 Flag para o chamador saber que não há agentes
+        no_agents_available: true,
+        department: resolvedDepartmentName || null,
+        searched_roles: allowedRoles,
         message: 'Conversa adicionada à fila de espera - nenhum agente disponível'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
