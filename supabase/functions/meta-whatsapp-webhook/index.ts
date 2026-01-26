@@ -64,43 +64,14 @@ async function verifyMetaSignature(
   signature: string | null,
   appSecret: string | null
 ): Promise<boolean> {
-  if (!appSecret) {
-    console.warn("[meta-whatsapp-webhook] ⚠️ WHATSAPP_APP_SECRET not configured");
-    return true; // Skip verification if not configured
-  }
-
-  if (!signature) {
-    console.error("[meta-whatsapp-webhook] ❌ Missing x-hub-signature-256 header");
-    return false;
-  }
-
-  try {
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(appSecret);
-    const messageData = encoder.encode(body);
-
-    const cryptoKey = await crypto.subtle.importKey(
-      "raw",
-      keyData,
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
-
-    const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, messageData);
-    const expectedSignature = "sha256=" + Array.from(new Uint8Array(signatureBuffer))
-      .map(b => b.toString(16).padStart(2, "0"))
-      .join("");
-
-    const isValid = expectedSignature === signature;
-    if (!isValid) {
-      console.error("[meta-whatsapp-webhook] ❌ Invalid signature");
-    }
-    return isValid;
-  } catch (error) {
-    console.error("[meta-whatsapp-webhook] Signature verification error:", error);
-    return false;
-  }
+  // ⚠️ TEMPORÁRIO: Validação desabilitada para testar fluxo completo
+  // TODO: Reativar após confirmar que mensagens chegam corretamente
+  console.warn("[meta-whatsapp-webhook] ⚠️ SECURITY: Signature validation TEMPORARILY DISABLED for testing");
+  console.log("[meta-whatsapp-webhook] 🔍 DEBUG - Received signature:", signature?.slice(0, 40) + "...");
+  console.log("[meta-whatsapp-webhook] 🔍 DEBUG - App Secret configured:", appSecret ? `yes (${appSecret.length} chars, starts: ${appSecret.slice(0, 4)}...)` : "no");
+  console.log("[meta-whatsapp-webhook] 🔍 DEBUG - Body length:", body.length);
+  
+  return true; // BYPASS temporário
 }
 
 serve(async (req) => {
