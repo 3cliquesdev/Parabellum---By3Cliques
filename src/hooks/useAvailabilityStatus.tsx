@@ -138,42 +138,67 @@ export function useAvailabilityStatus() {
     
     isInitializedRef.current = true;
     
-    // Definir como online ao carregar e distribuir conversas pendentes
+    // Verificar status atual antes de mudar para online
     const setOnlineAndDistribute = async () => {
-      console.log("[useAvailabilityStatus] Setting user online on mount");
+      console.log("[useAvailabilityStatus] Checking current status on mount...");
       
-      // 1. Definir como online
-      await supabase
+      // 1. Buscar status atual do usuário
+      const { data: currentProfile } = await supabase
         .from("profiles")
-        .update({ 
-          availability_status: "online",
-          last_status_change: new Date().toISOString(),
-        })
-        .eq("id", user.id);
+        .select("availability_status")
+        .eq("id", user.id)
+        .maybeSingle();
       
-      queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
+      const currentStatus = currentProfile?.availability_status;
+      console.log(`[useAvailabilityStatus] Current status: ${currentStatus}`);
       
-      // 2. Chamar edge function para distribuir conversas pendentes
-      console.log("[useAvailabilityStatus] Triggering conversation distribution...");
+      // 2. Só definir como "online" se estava "offline" ou sem status
+      // Se estava "busy", manter o status escolhido pelo usuário
+      const shouldSetOnline = currentStatus === 'offline' || !currentStatus;
       
-      try {
-        const { data, error } = await supabase.functions.invoke('distribute-pending-conversations', {
-          body: { agentId: user.id, maxConversations: 5 }
-        });
+      if (shouldSetOnline) {
+        console.log("[useAvailabilityStatus] User was offline, setting to online");
+        await supabase
+          .from("profiles")
+          .update({ 
+            availability_status: "online",
+            last_status_change: new Date().toISOString(),
+          })
+          .eq("id", user.id);
         
-        if (error) {
-          console.error("[useAvailabilityStatus] Distribution error:", error);
-        } else if (data?.distributed > 0) {
-          console.log(`[useAvailabilityStatus] ✅ ${data.distributed} conversas distribuídas`);
-          toast({
-            title: "📥 Novas conversas atribuídas",
-            description: `Você recebeu ${data.distributed} conversa(s) que estavam aguardando atendimento.`,
+        queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
+        
+        // 3. Distribuir conversas apenas se ficou online
+        console.log("[useAvailabilityStatus] Triggering conversation distribution...");
+        
+        try {
+          const { data, error } = await supabase.functions.invoke('distribute-pending-conversations', {
+            body: { agentId: user.id, maxConversations: 5 }
           });
-        } else {
-          console.log("[useAvailabilityStatus] Nenhuma conversa pendente para distribuir");
+          
+          if (error) {
+            console.error("[useAvailabilityStatus] Distribution error:", error);
+          } else if (data?.distributed > 0) {
+            console.log(`[useAvailabilityStatus] ✅ ${data.distributed} conversas distribuídas`);
+            toast({
+              title: "📥 Novas conversas atribuídas",
+              description: `Você recebeu ${data.distributed} conversa(s) que estavam aguardando atendimento.`,
+            });
+          } else {
+            console.log("[useAvailabilityStatus] Nenhuma conversa pendente para distribuir");
+          }
+        } catch (err) {
+          console.error("[useAvailabilityStatus] Distribution failed:", err);
         }
-      } catch (err) {
-        console.error("[useAvailabilityStatus] Distribution failed:", err);
+      } else {
+        console.log(`[useAvailabilityStatus] Keeping current status: ${currentStatus} (respecting user choice)`);
+        // Apenas atualizar o heartbeat para indicar atividade
+        await supabase
+          .from("profiles")
+          .update({ 
+            last_status_change: new Date().toISOString(),
+          })
+          .eq("id", user.id);
       }
     };
     
@@ -195,15 +220,39 @@ export function useAvailabilityStatus() {
     
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        console.log("[useAvailabilityStatus] Tab visible - setting online");
-        await supabase
+        console.log("[useAvailabilityStatus] Tab visible - checking current status...");
+        
+        // Buscar status atual antes de mudar
+        const { data: currentProfile } = await supabase
           .from("profiles")
-          .update({ 
-            availability_status: "online",
-            last_status_change: new Date().toISOString(),
-          })
-          .eq("id", user.id);
-        queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
+          .select("availability_status")
+          .eq("id", user.id)
+          .maybeSingle();
+        
+        const currentStatus = currentProfile?.availability_status;
+        
+        // Só voltar para online se estava offline
+        // Se estava "busy", respeitar a escolha do usuário
+        if (currentStatus === 'offline') {
+          console.log("[useAvailabilityStatus] Tab visible + was offline - setting online");
+          await supabase
+            .from("profiles")
+            .update({ 
+              availability_status: "online",
+              last_status_change: new Date().toISOString(),
+            })
+            .eq("id", user.id);
+          queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
+        } else {
+          console.log(`[useAvailabilityStatus] Tab visible - keeping ${currentStatus}`);
+          // Apenas enviar heartbeat para indicar atividade
+          await supabase
+            .from("profiles")
+            .update({ 
+              last_status_change: new Date().toISOString(),
+            })
+            .eq("id", user.id);
+        }
       }
     };
     
