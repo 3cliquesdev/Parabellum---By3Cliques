@@ -290,3 +290,6 @@ verify_jwt = false
 
 [functions.verify-meta-whatsapp-code]
 verify_jwt = true
+
+[functions.diagnose-meta-whatsapp]
+verify_jwt = true
