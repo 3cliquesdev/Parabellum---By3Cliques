@@ -34,6 +34,14 @@ export interface ConfidenceInput {
   intent?: string;
 }
 
+// 🆕 Contexto opcional para roteamento inteligente de leads
+export interface ConfidenceContext {
+  isLead?: boolean;
+  hasEmail?: boolean;
+  isCustomerInDatabase?: boolean;
+  isFinancialRequest?: boolean;
+}
+
 // Palavras-chave para detecção de conflitos
 const CONFLICT_INDICATORS = [
   'porém', 'entretanto', 'contudo', 'no entanto',
@@ -127,8 +135,10 @@ export function checkImmediateHandoff(query: string): { triggered: boolean; dept
 
 /**
  * Calcula o SCORE de confiança
+ * @param input - Query e documentos recuperados
+ * @param context - Contexto opcional do cliente para roteamento inteligente
  */
-export function calculateConfidenceScore(input: ConfidenceInput): ConfidenceResult {
+export function calculateConfidenceScore(input: ConfidenceInput, context?: ConfidenceContext): ConfidenceResult {
   const { query, documents } = input;
 
   // Verificar gatilhos de handoff imediato
@@ -196,6 +206,24 @@ export function calculateConfidenceScore(input: ConfidenceInput): ConfidenceResu
     }
   }
 
+  // 🆕 Definir departamento baseado no contexto do cliente
+  let recommended_dept: string | undefined = undefined;
+  
+  if (action === 'handoff') {
+    // 🎯 REGRA PRINCIPAL: Lead sem email → Comercial
+    const isLeadWithoutEmail = context && 
+      (context.isLead === true || !context.isCustomerInDatabase) && 
+      !context.hasEmail;
+    
+    if (isLeadWithoutEmail) {
+      recommended_dept = 'comercial';
+    } else if (context?.isFinancialRequest) {
+      recommended_dept = 'financeiro';
+    } else {
+      recommended_dept = pickDepartment(query);
+    }
+  }
+
   return {
     score,
     conf_retrieval,
@@ -204,7 +232,7 @@ export function calculateConfidenceScore(input: ConfidenceInput): ConfidenceResu
     action,
     reason,
     retrieved_docs: documents.map(d => d.id),
-    recommended_dept: action === 'handoff' ? pickDepartment(query) : undefined
+    recommended_dept
   };
 }
 

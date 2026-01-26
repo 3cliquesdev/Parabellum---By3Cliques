@@ -2118,6 +2118,23 @@ Responda APENAS: skip ou search`
     if (confidenceResult.action === 'handoff' && !shouldSkipHandoff) {
       console.log('[ai-autopilot-chat] 🚨 LOW CONFIDENCE HANDOFF - Score:', confidenceResult.score);
       
+      // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente → Comercial
+      const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated;
+      const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+      const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      
+      // Determinar departamento de destino
+      const handoffDepartment = isLeadWithoutEmail ? DEPT_COMERCIAL_ID : (confidenceResult.department || DEPT_SUPORTE_ID);
+      
+      console.log('[ai-autopilot-chat] 🎯 Handoff department decision:', {
+        isLeadWithoutEmail,
+        contactHasEmail,
+        isCustomerInDatabase,
+        contactStatus: contact.status,
+        handoffDepartment: isLeadWithoutEmail ? 'COMERCIAL' : 'SUPORTE',
+        departmentId: handoffDepartment
+      });
+      
       // 🛡️ Atualizar ai_mode para waiting_human E marcar timestamp anti-race-condition
       const handoffTimestamp = new Date().toISOString();
       await supabaseClient
@@ -2125,19 +2142,35 @@ Responda APENAS: skip ou search`
         .update({ 
           ai_mode: 'waiting_human',
           last_message_at: handoffTimestamp,
-          handoff_executed_at: handoffTimestamp // 🆕 Anti-race-condition flag
+          handoff_executed_at: handoffTimestamp, // 🆕 Anti-race-condition flag
+          department: handoffDepartment, // 🆕 Definir departamento correto
+          customer_metadata: {
+            ...(conversation.customer_metadata || {}),
+            ...(isLeadWithoutEmail && {
+              lead_routed_to_comercial_reason: 'low_confidence_handoff',
+              lead_routed_at: handoffTimestamp
+            })
+          }
         })
         .eq('id', conversationId);
       
       console.log('[ai-autopilot-chat] ✅ Handoff marcado com timestamp:', handoffTimestamp);
       
-      // Rotear para agente
+      // Rotear para agente COM DEPARTAMENTO EXPLÍCITO
       const { data: routeResult } = await supabaseClient.functions.invoke('route-conversation', {
-        body: { conversationId, department_id: confidenceResult.department }
+        body: { 
+          conversationId, 
+          department_id: handoffDepartment 
+        }
       });
       
-      // Mensagem de transição
-      const handoffMessage = `Olá ${contactName}! Para te ajudar melhor com essa questão, vou te conectar com um de nossos especialistas. Um momento, por favor.`;
+      // 🆕 Mensagem diferenciada para leads vs clientes
+      let handoffMessage: string;
+      if (isLeadWithoutEmail) {
+        handoffMessage = `Obrigado pelo contato! Para melhor te atender, vou te direcionar para nosso time Comercial. 🤝\n\nAguarde um momento que logo um de nossos consultores irá te atender!`;
+      } else {
+        handoffMessage = `Olá ${contactName}! Para te ajudar melhor com essa questão, vou te conectar com um de nossos especialistas. Um momento, por favor.`;
+      }
       
       // Salvar mensagem
       await supabaseClient.from('messages').insert({
@@ -2185,16 +2218,18 @@ Responda APENAS: skip ou search`
 
 **Score:** ${(confidenceResult.score * 100).toFixed(0)}%
 **Motivo:** ${confidenceResult.reason}
-**Departamento Sugerido:** ${confidenceResult.department || 'Suporte N1'}
+**Departamento:** ${isLeadWithoutEmail ? '🛒 Comercial (Lead sem identificação)' : '🎧 Suporte'}
 **Pergunta do Cliente:** "${customerMessage}"
 
-**Ação:** IA não tinha informações suficientes na base de conhecimento para responder com segurança.`,
+**Ação:** ${isLeadWithoutEmail ? 'Lead novo roteado para equipe Comercial.' : 'IA não tinha informações suficientes na base de conhecimento para responder com segurança.'}`,
         channel: responseChannel,
         metadata: {
           source: 'ai_confidence_handoff',
           confidence_score: confidenceResult.score,
           confidence_action: confidenceResult.action,
-          confidence_reason: confidenceResult.reason
+          confidence_reason: confidenceResult.reason,
+          is_lead_without_email: isLeadWithoutEmail,
+          routed_to_department: isLeadWithoutEmail ? 'comercial' : 'suporte'
         }
       });
       
@@ -2204,7 +2239,8 @@ Responda APENAS: skip ou search`
         message: handoffMessage,
         reason: confidenceResult.reason,
         score: confidenceResult.score,
-        routed_to: routeResult?.assigned_to || null
+        routed_to: routeResult?.assigned_to || null,
+        department: isLeadWithoutEmail ? 'comercial' : 'suporte'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -4427,27 +4463,60 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
       // 🛡️ ANTI-RACE-CONDITION: Marcar handoff executado PRIMEIRO
       const handoffTimestamp = new Date().toISOString();
       
-      // 1. MUDAR O MODO para waiting_human (NÃO copilot!) e marcar timestamp
+      // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente → Comercial
+      const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated;
+      const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+      const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      
+      // Determinar departamento de destino
+      const handoffDepartment = isLeadWithoutEmail ? DEPT_COMERCIAL_ID : DEPT_SUPORTE_ID;
+      
+      console.log('[ai-autopilot-chat] 🎯 Fallback department decision:', {
+        isLeadWithoutEmail,
+        contactHasEmail,
+        isCustomerInDatabase,
+        contactStatus: contact.status,
+        handoffDepartment: isLeadWithoutEmail ? 'COMERCIAL' : 'SUPORTE',
+        departmentId: handoffDepartment
+      });
+      
+      // 1. MUDAR O MODO para waiting_human (NÃO copilot!) e marcar timestamp + departamento
       await supabaseClient
         .from('conversations')
         .update({ 
           ai_mode: 'waiting_human', // 🆕 waiting_human para ficar na fila até agente responder
           handoff_executed_at: handoffTimestamp, // 🆕 Anti-race-condition flag
-          needs_human_review: true
+          needs_human_review: true,
+          department: handoffDepartment, // 🆕 Definir departamento correto (Comercial para leads)
+          customer_metadata: {
+            ...(conversation.customer_metadata || {}),
+            ...(isLeadWithoutEmail && {
+              lead_routed_to_comercial_reason: 'fallback_handoff',
+              lead_routed_at: handoffTimestamp
+            })
+          }
         })
         .eq('id', conversationId);
       
       console.log('[ai-autopilot-chat] ✅ ai_mode mudado para waiting_human, handoff_executed_at:', handoffTimestamp);
       
-      // 2. CHAMAR O ROTEADOR (Buscar agente disponível)
+      // 2. CHAMAR O ROTEADOR COM DEPARTAMENTO EXPLÍCITO
       const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
-        body: { conversationId }
+        body: { 
+          conversationId,
+          department_id: handoffDepartment // 🆕 Passar departamento explícito
+        }
       });
       
       if (routeError) {
         console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
       } else {
         console.log('[ai-autopilot-chat] ✅ Conversa roteada:', routeResult);
+        
+        // 🆕 Mensagem diferenciada para leads
+        if (isLeadWithoutEmail && routeResult?.assigned) {
+          assistantMessage = 'Obrigado pelo seu interesse! Vou te direcionar para nosso time Comercial que poderá te apresentar nossas soluções. 🤝\n\nAguarde um momento que logo um de nossos consultores irá te atender!';
+        }
         
         // 🆕 Se ninguém online, MANTER waiting_human - cliente fica na fila aguardando
         if (routeResult?.no_agents_available) {
@@ -4462,12 +4531,18 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             })
             .eq('id', conversationId);
           
-          // Mensagem informando que está na fila
-          assistantMessage = `Vou te conectar com um de nossos especialistas! 
+          // Mensagem diferenciada para leads vs clientes
+          if (isLeadWithoutEmail) {
+            assistantMessage = `Obrigado pelo contato! Nosso time Comercial está ocupado no momento, mas você está na fila e será atendido em breve. 🤝
+
+⏰ Horário de atendimento: Segunda a Sexta, das 09h às 18h.`;
+          } else {
+            assistantMessage = `Vou te conectar com um de nossos especialistas! 
 
 Nossa equipe está ocupada no momento, mas você está na fila e será atendido assim que um atendente ficar disponível. 
 
 ⏰ Horário de atendimento: Segunda a Sexta, das 09h às 18h.`;
+          }
           
           console.log('[ai-autopilot-chat] ✅ Cliente mantido em waiting_human - na fila para atendimento');
         }
@@ -4539,12 +4614,14 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       await supabaseClient.from('interactions').insert({
         customer_id: contact.id,
         type: 'internal_note',
-        content: `🤖→👤 **Handoff Automático Executado**\n\n**Pergunta do Cliente:** "${customerMessage}"\n**Motivo:** IA não encontrou resposta adequada na base de conhecimento.\n**Ação:** Conversa transferida para atendimento humano.${isFinancialRequest ? '\n**Ticket Financeiro:** Criado automaticamente' : ''}`,
+        content: `🤖→👤 **Handoff Automático Executado**\n\n**Pergunta do Cliente:** "${customerMessage}"\n**Motivo:** IA não encontrou resposta adequada na base de conhecimento.\n**Departamento:** ${isLeadWithoutEmail ? '🛒 Comercial (Lead sem identificação)' : '🎧 Suporte'}\n**Ação:** ${isLeadWithoutEmail ? 'Lead novo roteado para equipe Comercial.' : 'Conversa transferida para atendimento humano.'}${isFinancialRequest ? '\n**Ticket Financeiro:** Criado automaticamente' : ''}`,
         channel: responseChannel,
         metadata: {
           source: 'ai_autopilot_handoff',
           fallback_phrase_detected: true,
           is_financial: isFinancialRequest,
+          is_lead_without_email: isLeadWithoutEmail,
+          routed_to_department: isLeadWithoutEmail ? 'comercial' : 'suporte',
           original_message: customerMessage
         }
       });
