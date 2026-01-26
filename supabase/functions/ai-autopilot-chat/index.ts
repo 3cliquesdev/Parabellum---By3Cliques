@@ -1201,7 +1201,155 @@ Como posso ajudar você hoje?`;
     }
     
     // ============================================================
-    // 🎯 TRIAGEM INTELIGENTE: Detectar escolha de menu (1, 2, pedidos, sistema)
+    // 🆕 PRIORIDADE 1: CHAT FLOW - Verificar ANTES da triagem
+    // ============================================================
+    let flowProcessedEarly = false;
+    let flowPersonaId: string | null = null;
+    let flowKbCategories: string[] | null = null;
+    let flowContextPrompt: string | null = null;
+    let flowFallbackMessage: string | null = null;
+    
+    try {
+      console.log('[ai-autopilot-chat] 🔄 [PRIORIDADE] Verificando Chat Flow ANTES da triagem...');
+      
+      const { data: flowResult, error: flowError } = await supabaseClient.functions.invoke(
+        'process-chat-flow',
+        { body: { conversationId, userMessage: customerMessage } }
+      );
+      
+      if (!flowError && flowResult) {
+        console.log('[ai-autopilot-chat] 📋 Resultado do Chat Flow (early check):', {
+          useAI: flowResult.useAI,
+          hasResponse: !!flowResult.response,
+          flowStarted: flowResult.flowStarted,
+          transfer: flowResult.transfer
+        });
+        
+        // Se o fluxo retornou uma resposta determinística (não precisa de IA)
+        if (flowResult.useAI === false && flowResult.response) {
+          console.log('[ai-autopilot-chat] ✅ Chat Flow MATCH - Ignorando triagem!');
+          flowProcessedEarly = true;
+          
+          // 🆕 TRANSFER NODE: Se é uma transferência, executar handoff real
+          if (flowResult.transfer === true && flowResult.departmentId) {
+            console.log('[ai-autopilot-chat] 🔀 TRANSFER NODE - Executando handoff real para departamento:', flowResult.departmentId);
+            
+            const handoffTimestamp = new Date().toISOString();
+            
+            const { error: handoffUpdateError } = await supabaseClient
+              .from('conversations')
+              .update({ 
+                ai_mode: 'waiting_human',
+                handoff_executed_at: handoffTimestamp,
+                needs_human_review: true,
+                department: flowResult.departmentId,
+              })
+              .eq('id', conversationId);
+            
+            if (handoffUpdateError) {
+              console.error('[ai-autopilot-chat] ❌ Erro ao marcar handoff:', handoffUpdateError);
+            } else {
+              console.log('[ai-autopilot-chat] ✅ Conversa marcada como waiting_human com department:', flowResult.departmentId);
+            }
+            
+            // Chamar route-conversation para distribuir para agentes
+            try {
+              const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
+                body: { 
+                  conversationId,
+                  targetDepartmentId: flowResult.departmentId
+                }
+              });
+              
+              if (routeError) {
+                console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
+              } else {
+                console.log('[ai-autopilot-chat] ✅ Conversa roteada com sucesso:', routeResult);
+              }
+            } catch (routeErr) {
+              console.error('[ai-autopilot-chat] ❌ Exceção ao chamar route-conversation:', routeErr);
+            }
+          }
+          
+          // Salvar resposta do fluxo
+          const { data: flowMsgData } = await supabaseClient
+            .from("messages")
+            .insert({
+              conversation_id: conversationId,
+              content: flowResult.response,
+              sender_type: "user",
+              is_ai_generated: true,
+              channel: responseChannel,
+            })
+            .select('id')
+            .single();
+          
+          // Atualizar last_message_at
+          await supabaseClient
+            .from("conversations")
+            .update({ last_message_at: new Date().toISOString() })
+            .eq("id", conversationId);
+          
+          // Se WhatsApp, enviar via API correta
+          if (responseChannel === 'whatsapp' && flowMsgData && contact?.phone) {
+            const whatsappResult = await getWhatsAppInstanceForConversation(
+              supabaseClient, 
+              conversationId, 
+              conversation.whatsapp_instance_id,
+              conversation
+            );
+
+            if (whatsappResult) {
+              await sendWhatsAppMessage(
+                supabaseClient,
+                whatsappResult,
+                contact.phone,
+                flowResult.response,
+                conversationId,
+                contact.whatsapp_id
+              );
+            }
+          }
+          
+          // Retornar resposta do fluxo - BYPASS TOTAL DA TRIAGEM
+          return new Response(
+            JSON.stringify({
+              response: flowResult.response,
+              messageId: flowMsgData?.id,
+              source: 'chat_flow_early',
+              flowId: flowResult.flowId,
+              options: flowResult.options,
+              transfer: flowResult.transfer || false,
+              departmentId: flowResult.departmentId || null,
+              debug: {
+                reason: 'chat_flow_priority_match',
+                bypassed_triage: true
+              }
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Se o fluxo precisa de IA, popular variáveis para uso posterior
+        if (flowResult.useAI === true) {
+          flowPersonaId = flowResult.personaId || null;
+          flowKbCategories = flowResult.kbCategories || null;
+          flowContextPrompt = flowResult.contextPrompt || null;
+          flowFallbackMessage = flowResult.fallbackMessage || null;
+          
+          console.log('[ai-autopilot-chat] 🎯 Chat Flow definiu configurações para IA (early):', {
+            personaId: flowPersonaId,
+            kbCategories: flowKbCategories,
+            hasContextPrompt: !!flowContextPrompt
+          });
+        }
+      }
+    } catch (flowError) {
+      console.error('[ai-autopilot-chat] ⚠️ Erro ao processar Chat Flow (early check):', flowError);
+    }
+    
+    // ============================================================
+    // 🎯 TRIAGEM INTELIGENTE: Só executa se Chat Flow não processou
     // ============================================================
     const conversationMetadataForMenu = conversation.customer_metadata || {};
     const isAwaitingMenuChoice = conversationMetadataForMenu.awaiting_menu_choice === true;
@@ -1607,143 +1755,9 @@ Como posso ajudar você hoje?`;
     console.log(`[ai-autopilot-chat] Processando mensagem para conversa ${conversationId}...`);
 
     // ============================================================
-    // 🆕 Chat Flow: Verificar se há fluxo ativo e extrair configurações
+    // 🆕 Chat Flow já foi verificado ANTES da triagem (linhas ~1203)
+    // As variáveis flowPersonaId, flowKbCategories, etc. já estão populadas
     // ============================================================
-    try {
-      console.log('[ai-autopilot-chat] 🔄 Verificando Chat Flow ativo...');
-      
-      const { data: flowResult, error: flowError } = await supabaseClient.functions.invoke(
-        'process-chat-flow',
-        { body: { conversationId, userMessage: customerMessage } }
-      );
-      
-      if (!flowError && flowResult) {
-        console.log('[ai-autopilot-chat] 📋 Resultado do Chat Flow:', {
-          useAI: flowResult.useAI,
-          hasPersonaId: !!flowResult.personaId,
-          hasKbCategories: !!flowResult.kbCategories,
-          flowStarted: flowResult.flowStarted,
-          flowCompleted: flowResult.flowCompleted
-        });
-        
-        // Se o fluxo retornou uma resposta determinística (não precisa de IA)
-        if (flowResult.useAI === false && flowResult.response) {
-          console.log('[ai-autopilot-chat] ✅ Fluxo determinístico - usando resposta do flow');
-          
-          // 🆕 TRANSFER NODE: Se é uma transferência, executar handoff real
-          if (flowResult.transfer === true && flowResult.departmentId) {
-            console.log('[ai-autopilot-chat] 🔀 TRANSFER NODE - Executando handoff real para departamento:', flowResult.departmentId);
-            
-            // 1. Marcar handoff com timestamp para anti-race-condition
-            const handoffTimestamp = new Date().toISOString();
-            
-            const { error: handoffUpdateError } = await supabaseClient
-              .from('conversations')
-              .update({ 
-                ai_mode: 'waiting_human',
-                handoff_executed_at: handoffTimestamp,
-                needs_human_review: true,
-                department: flowResult.departmentId,
-              })
-              .eq('id', conversationId);
-            
-            if (handoffUpdateError) {
-              console.error('[ai-autopilot-chat] ❌ Erro ao marcar handoff:', handoffUpdateError);
-            } else {
-              console.log('[ai-autopilot-chat] ✅ Conversa marcada como waiting_human com department:', flowResult.departmentId);
-            }
-            
-            // 2. Chamar route-conversation para distribuir para agentes
-            try {
-              const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
-                body: { 
-                  conversationId,
-                  targetDepartmentId: flowResult.departmentId
-                }
-              });
-              
-              if (routeError) {
-                console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
-              } else {
-                console.log('[ai-autopilot-chat] ✅ Conversa roteada com sucesso:', routeResult);
-              }
-            } catch (routeErr) {
-              console.error('[ai-autopilot-chat] ❌ Exceção ao chamar route-conversation:', routeErr);
-            }
-          }
-          
-          // Salvar resposta do fluxo
-          const { data: flowMsgData } = await supabaseClient
-            .from("messages")
-            .insert({
-              conversation_id: conversationId,
-              content: flowResult.response,
-              sender_type: "user",
-              is_ai_generated: true,
-              channel: responseChannel,
-            })
-            .select('id')
-            .single();
-          
-          // Atualizar last_message_at
-          await supabaseClient
-            .from("conversations")
-            .update({ last_message_at: new Date().toISOString() })
-            .eq("id", conversationId);
-          
-          // Se WhatsApp, enviar via API correta (Meta ou Evolution)
-          if (responseChannel === 'whatsapp' && flowMsgData && contact?.phone) {
-            const whatsappResult = await getWhatsAppInstanceForConversation(
-              supabaseClient, 
-              conversationId, 
-              conversation.whatsapp_instance_id,
-              conversation
-            );
-
-            if (whatsappResult) {
-              await sendWhatsAppMessage(
-                supabaseClient,
-                whatsappResult,
-                contact.phone,
-                flowResult.response,
-                conversationId,
-                contact.whatsapp_id
-              );
-            }
-          }
-          
-          // Retornar resposta do fluxo
-          return new Response(
-            JSON.stringify({
-              response: flowResult.response,
-              messageId: flowMsgData?.id,
-              source: 'chat_flow',
-              flowId: flowResult.flowId,
-              options: flowResult.options,
-              transfer: flowResult.transfer || false,
-              departmentId: flowResult.departmentId || null,
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
-        // Se o fluxo precisa de IA, popular variáveis para uso posterior
-        if (flowResult.useAI === true) {
-          flowPersonaId = flowResult.personaId || null;
-          flowKbCategories = flowResult.kbCategories || null;
-          flowContextPrompt = flowResult.contextPrompt || null;
-          flowFallbackMessage = flowResult.fallbackMessage || null;
-          
-          console.log('[ai-autopilot-chat] 🎯 Chat Flow definiu configurações para IA:', {
-            personaId: flowPersonaId,
-            kbCategories: flowKbCategories,
-            hasContextPrompt: !!flowContextPrompt
-          });
-        }
-      }
-    } catch (flowError) {
-      console.error('[ai-autopilot-chat] ⚠️ Erro ao processar Chat Flow (continuando sem fluxo):', flowError);
-    }
 
     // 2. Buscar persona baseado em routing rules (canal + departamento)
     // 🆕 OU usar persona específica do Chat Flow (se flowPersonaId estiver definido)
