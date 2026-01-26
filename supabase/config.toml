@@ -281,3 +281,6 @@ verify_jwt = true
 
 [functions.register-meta-whatsapp]
 verify_jwt = true
+
+[functions.subscribe-meta-whatsapp-app]
+verify_jwt = true
