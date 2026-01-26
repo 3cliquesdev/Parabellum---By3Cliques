@@ -7,9 +7,6 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 type Message = Tables<"messages">;
 type MessageInsert = TablesInsert<"messages">;
 
-// Debounce global para invalidação de conversations (evita spam)
-let conversationsInvalidateTimeout: ReturnType<typeof setTimeout> | null = null;
-
 export function useMessages(conversationId: string | null) {
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -148,23 +145,35 @@ export function useMessages(conversationId: string | null) {
             }
           }
           
-          // Debounce para atualizar sidebar (evita spam de re-renders)
-          // Reduzido de 300ms para 100ms para maior responsividade
-          if (conversationsInvalidateTimeout) {
-            clearTimeout(conversationsInvalidateTimeout);
+          // ✨ MERGE OTIMISTA NO INBOX - Sem refetch, atualiza cache diretamente
+          // Isso elimina o delay de 100-500ms causado pelo invalidateQueries
+          if (payload.eventType === 'INSERT') {
+            // Atualizar snippet inline em TODAS as query keys de inbox-view
+            queryClient.setQueriesData<any[]>(
+              { queryKey: ["inbox-view"], exact: false },
+              (prev = []) => {
+                const updated = prev.map(item => 
+                  item.conversation_id === conversationId 
+                    ? { 
+                        ...item, 
+                        last_snippet: newMessage.content?.slice(0, 100) || '',
+                        last_message_at: newMessage.created_at,
+                        last_sender_type: newMessage.sender_type,
+                        last_channel: newMessage.channel || 'web_chat',
+                        unread_count: newMessage.sender_type === 'contact' 
+                          ? (item.unread_count || 0) + 1 
+                          : item.unread_count,
+                        updated_at: newMessage.created_at,
+                      } 
+                    : item
+                );
+                // Ordenar por updated_at DESC para mover a conversa pro topo
+                return updated.sort((a, b) => 
+                  new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+                );
+              }
+            );
           }
-          conversationsInvalidateTimeout = setTimeout(() => {
-            queryClient.invalidateQueries({ 
-              queryKey: ["conversations"],
-              refetchType: 'active'
-            });
-            queryClient.invalidateQueries({ 
-              queryKey: ["conversation", conversationId],
-              refetchType: 'active'
-            });
-            // REMOVIDO: invalidação de inbox-view - já é atualizado via seu próprio canal realtime
-            // Isso evita conflitos entre canais e melhora a performance
-          }, 100);
         }
       )
       .subscribe((status) => {
@@ -269,19 +278,10 @@ export function useSendMessage() {
       });
     },
 
-    // ✅ NÃO fazer invalidateQueries de messages - realtime já atualiza
-    // Apenas atualizar conversations para sidebar
-    onSettled: (_data, _error, variables) => {
-      // Debounce para evitar múltiplos updates
-      if (conversationsInvalidateTimeout) {
-        clearTimeout(conversationsInvalidateTimeout);
-      }
-      conversationsInvalidateTimeout = setTimeout(() => {
-        queryClient.invalidateQueries({ 
-          queryKey: ["conversations"],
-          refetchType: 'active'
-        });
-      }, 200);
+    // ✅ NÃO fazer invalidateQueries - realtime com merge otimista já atualiza tudo
+    onSettled: () => {
+      // Nada a fazer - mensagens são atualizadas via realtime
+      // Inbox é atualizado via setQueriesData no handler de realtime
     },
   });
 }

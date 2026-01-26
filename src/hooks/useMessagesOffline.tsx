@@ -40,30 +40,9 @@ export function useMessagesOffline(
     refetchOnReconnect: true,
   });
 
-  // Realtime subscription usando o client correto
-  useEffect(() => {
-    if (!conversationId) return;
-
-    const channel = client
-      .channel(`messages-${conversationId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      client.removeChannel(channel);
-    };
-  }, [conversationId, queryClient, client]);
+  // REMOVIDO: Realtime subscription duplicada
+  // useMessages.tsx já escuta a mesma tabela - evitar canais redundantes
+  // O canal de useMessages já faz merge otimista no cache
 
   // Revalidar ao voltar online
   useEffect(() => {
