@@ -91,56 +91,127 @@ function maskPhone(phone: string | null | undefined): string {
 }
 
 // ============================================================
-// 🔒 HELPER: Seleção de Instância WhatsApp
+// 🔒 HELPER: Seleção de Instância WhatsApp (Multi-Provider)
+// Suporta tanto Meta WhatsApp Cloud API quanto Evolution API
 // SEMPRE prioriza a instância vinculada à conversa
 // ============================================================
-async function getWhatsAppInstanceForConversation(
+interface WhatsAppInstanceResult {
+  instance: any;
+  provider: 'meta' | 'evolution';
+}
+
+async function getWhatsAppInstanceWithProvider(
   supabaseClient: any,
   conversationId: string,
-  conversationWhatsappInstanceId: string | null
-): Promise<any | null> {
-  // 1. Se a conversa tem instância vinculada, usar ela
+  conversationWhatsappInstanceId: string | null,
+  whatsappProvider: string | null = 'evolution',
+  whatsappMetaInstanceId: string | null = null
+): Promise<WhatsAppInstanceResult | null> {
+  
+  // ========== META WHATSAPP CLOUD API ==========
+  // 1. Se é Meta provider, buscar na tabela whatsapp_meta_instances
+  if (whatsappProvider === 'meta' && whatsappMetaInstanceId) {
+    const { data: metaInstance } = await supabaseClient
+      .from('whatsapp_meta_instances')
+      .select('*')
+      .eq('id', whatsappMetaInstanceId)
+      .maybeSingle();
+    
+    if (metaInstance && metaInstance.status === 'active') {
+      console.log('[getWhatsAppInstance] ✅ Usando instância META:', {
+        instanceId: metaInstance.id,
+        phoneNumberId: metaInstance.phone_number_id,
+        name: metaInstance.name,
+        status: metaInstance.status
+      });
+      return { instance: metaInstance, provider: 'meta' };
+    } else {
+      console.warn('[getWhatsAppInstance] ⚠️ Instância META vinculada não encontrada ou inativa:', whatsappMetaInstanceId);
+    }
+  }
+  
+  // 2. Fallback para Meta se provider é meta mas instância vinculada não existe
+  if (whatsappProvider === 'meta') {
+    const { data: fallbackMeta } = await supabaseClient
+      .from('whatsapp_meta_instances')
+      .select('*')
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle();
+    
+    if (fallbackMeta) {
+      console.log('[getWhatsAppInstance] 🔄 Usando instância META FALLBACK:', {
+        instanceId: fallbackMeta.id,
+        phoneNumberId: fallbackMeta.phone_number_id,
+        name: fallbackMeta.name
+      });
+      return { instance: fallbackMeta, provider: 'meta' };
+    }
+    
+    console.error('[getWhatsAppInstance] ❌ Nenhuma instância Meta WhatsApp disponível');
+    return null;
+  }
+  
+  // ========== EVOLUTION API (Legacy) ==========
+  // 3. Se a conversa tem instância Evolution vinculada, usar ela
   if (conversationWhatsappInstanceId) {
     const { data: linkedInstance } = await supabaseClient
       .from('whatsapp_instances')
       .select('*')
       .eq('id', conversationWhatsappInstanceId)
-      .single();
+      .maybeSingle();
     
     if (linkedInstance) {
-      console.log('[getWhatsAppInstance] ✅ Usando instância VINCULADA:', {
+      console.log('[getWhatsAppInstance] ✅ Usando instância Evolution VINCULADA:', {
         instanceId: linkedInstance.id,
         instanceName: linkedInstance.instance_name,
         phoneNumber: linkedInstance.phone_number,
         status: linkedInstance.status
       });
-      return linkedInstance;
+      return { instance: linkedInstance, provider: 'evolution' };
     } else {
-      console.warn('[getWhatsAppInstance] ⚠️ Instância vinculada não encontrada:', conversationWhatsappInstanceId);
+      console.warn('[getWhatsAppInstance] ⚠️ Instância Evolution vinculada não encontrada:', conversationWhatsappInstanceId);
     }
   }
   
-  // 2. Fallback: buscar instância conectada APENAS se não houver vinculada
-  console.warn('[getWhatsAppInstance] ⚠️ Conversa', conversationId, 'sem instância vinculada - usando fallback');
+  // 4. Fallback Evolution: buscar instância conectada APENAS se não houver vinculada
+  console.warn('[getWhatsAppInstance] ⚠️ Conversa', conversationId, 'sem instância vinculada - usando fallback Evolution');
   const { data: fallbackInstance } = await supabaseClient
     .from('whatsapp_instances')
     .select('*')
     .eq('status', 'connected')
-    .order('created_at', { ascending: true }) // Ordenar para consistência
+    .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
   
   if (fallbackInstance) {
-    console.log('[getWhatsAppInstance] 🔄 Usando instância FALLBACK:', {
+    console.log('[getWhatsAppInstance] 🔄 Usando instância Evolution FALLBACK:', {
       instanceId: fallbackInstance.id,
       instanceName: fallbackInstance.instance_name,
       phoneNumber: fallbackInstance.phone_number
     });
-  } else {
-    console.error('[getWhatsAppInstance] ❌ Nenhuma instância WhatsApp disponível');
+    return { instance: fallbackInstance, provider: 'evolution' };
   }
   
-  return fallbackInstance;
+  console.error('[getWhatsAppInstance] ❌ Nenhuma instância WhatsApp disponível');
+  return null;
+}
+
+// 🔄 LEGACY WRAPPER: Mantém compatibilidade com código existente
+// Retorna apenas a instância (sem provider) para chamadas legacy
+async function getWhatsAppInstanceForConversation(
+  supabaseClient: any,
+  conversationId: string,
+  conversationWhatsappInstanceId: string | null
+): Promise<any | null> {
+  const result = await getWhatsAppInstanceWithProvider(
+    supabaseClient,
+    conversationId,
+    conversationWhatsappInstanceId,
+    'evolution', // Default para Evolution no código legacy
+    null
+  );
+  return result?.instance || null;
 }
 
 // ============================================================
@@ -4832,25 +4903,29 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       }
     }
     
-    // 8. Se WhatsApp, enviar via Evolution API e atualizar status
+    // 8. Se WhatsApp, enviar via Meta ou Evolution API e atualizar status
     else if (responseChannel === 'whatsapp' && contact.phone && messageId) {
       console.log('[ai-autopilot-chat] 📱 Tentando enviar WhatsApp:', {
         contactPhone: contact.phone,
         contactWhatsappId: contact.whatsapp_id,
         messageId,
-        conversationWhatsappInstanceId: conversation.whatsapp_instance_id
+        whatsappProvider: conversation.whatsapp_provider,
+        whatsappMetaInstanceId: conversation.whatsapp_meta_instance_id,
+        whatsappEvolutionInstanceId: conversation.whatsapp_instance_id
       });
 
       try {
-        // 🔒 USAR HELPER UNIFICADO
-        const whatsappInstance = await getWhatsAppInstanceForConversation(
+        // 🔒 USAR HELPER MULTI-PROVIDER
+        const whatsappResult = await getWhatsAppInstanceWithProvider(
           supabaseClient, 
           conversationId, 
-          conversation.whatsapp_instance_id
+          conversation.whatsapp_instance_id,
+          conversation.whatsapp_provider,
+          conversation.whatsapp_meta_instance_id
         );
         
         // Validar se instância foi encontrada
-        if (!whatsappInstance) {
+        if (!whatsappResult) {
           console.error('[ai-autopilot-chat] ⚠️ NENHUMA instância WhatsApp disponível');
           
           // Salvar mensagem como 'failed' com motivo
@@ -4865,39 +4940,72 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           throw new Error('Nenhuma instância WhatsApp disponível');
         }
         
-        // Log de aviso se instância não está conectada
-        if (whatsappInstance.status !== 'connected') {
-          console.warn('[ai-autopilot-chat] ⚠️ Tentando enviar com instância não-conectada:', whatsappInstance.status);
+        const { instance: whatsappInstance, provider } = whatsappResult;
+        
+        // ========== META WHATSAPP CLOUD API ==========
+        if (provider === 'meta') {
+          console.log('[ai-autopilot-chat] 📤 Invocando send-meta-whatsapp:', {
+            instanceId: whatsappInstance.id,
+            phoneNumberId: whatsappInstance.phone_number_id,
+            phoneNumber: contact.phone
+          });
+
+          const { data: metaResponse, error: metaError } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
+            body: {
+              instance_id: whatsappInstance.id,
+              phone_number: contact.phone?.replace(/\D/g, ''),
+              message: assistantMessage,
+              conversation_id: conversationId
+            },
+          });
+
+          if (metaError) {
+            throw metaError;
+          }
+
+          // SUCCESS: Update message status to 'sent'
+          await supabaseClient
+            .from('messages')
+            .update({ status: 'sent' })
+            .eq('id', messageId);
+
+          console.log('[ai-autopilot-chat] ✅ Resposta enviada via Meta WhatsApp API');
         }
+        // ========== EVOLUTION API (Legacy) ==========
+        else {
+          // Log de aviso se instância não está conectada
+          if (whatsappInstance.status !== 'connected') {
+            console.warn('[ai-autopilot-chat] ⚠️ Tentando enviar com instância Evolution não-conectada:', whatsappInstance.status);
+          }
 
-        // FASE 4: Enviar mensagem via Evolution API
-        console.log('[ai-autopilot-chat] 📤 Invocando send-whatsapp-message:', {
-          instanceId: whatsappInstance.id,
-          instanceStatus: whatsappInstance.status,
-          phoneNumber: contact.phone,
-          whatsappId: contact.whatsapp_id
-        });
+          console.log('[ai-autopilot-chat] 📤 Invocando send-whatsapp-message (Evolution):', {
+            instanceId: whatsappInstance.id,
+            instanceStatus: whatsappInstance.status,
+            phoneNumber: contact.phone,
+            whatsappId: contact.whatsapp_id
+          });
 
-        const { data: whatsappResponse, error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
-          body: {
-            instance_id: whatsappInstance.id,
-            phone_number: contact.phone,
-            whatsapp_id: contact.whatsapp_id,
-            message: assistantMessage,
-          },
-        });
+          const { data: whatsappResponse, error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
+            body: {
+              instance_id: whatsappInstance.id,
+              phone_number: contact.phone,
+              whatsapp_id: contact.whatsapp_id,
+              message: assistantMessage,
+            },
+          });
 
-        if (whatsappError) {
-          throw whatsappError;
+          if (whatsappError) {
+            throw whatsappError;
+          }
+
+          // SUCCESS: Update message status to 'sent'
+          await supabaseClient
+            .from('messages')
+            .update({ status: 'sent' })
+            .eq('id', messageId);
+
+          console.log('[ai-autopilot-chat] ✅ Resposta enviada via Evolution API');
         }
-
-        // SUCCESS: Update message status to 'sent'
-        await supabaseClient
-          .from('messages')
-          .update({ status: 'sent' })
-          .eq('id', messageId);
-
-        console.log('[ai-autopilot-chat] ✅ Saldo OK - Resposta Gerada via Evolution API');
       } catch (whatsappError) {
         console.error('[ai-autopilot-chat] ❌ WhatsApp send failed:', whatsappError);
         
