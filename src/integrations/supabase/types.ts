@@ -4521,11 +4521,13 @@ export type Database = {
           conversation_id: string
           created_at: string
           delivery_error: string | null
+          external_id: string | null
           id: string
           is_ai_generated: boolean | null
           is_internal: boolean | null
           is_read: boolean | null
           message_type: string | null
+          metadata: Json | null
           sender_id: string | null
           sender_type: Database["public"]["Enums"]["sender_type"]
           status: Database["public"]["Enums"]["message_status"] | null
@@ -4538,11 +4540,13 @@ export type Database = {
           conversation_id: string
           created_at?: string
           delivery_error?: string | null
+          external_id?: string | null
           id?: string
           is_ai_generated?: boolean | null
           is_internal?: boolean | null
           is_read?: boolean | null
           message_type?: string | null
+          metadata?: Json | null
           sender_id?: string | null
           sender_type: Database["public"]["Enums"]["sender_type"]
           status?: Database["public"]["Enums"]["message_status"] | null
@@ -4555,11 +4559,13 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           delivery_error?: string | null
+          external_id?: string | null
           id?: string
           is_ai_generated?: boolean | null
           is_internal?: boolean | null
           is_read?: boolean | null
           message_type?: string | null
+          metadata?: Json | null
           sender_id?: string | null
           sender_type?: Database["public"]["Enums"]["sender_type"]
           status?: Database["public"]["Enums"]["message_status"] | null
