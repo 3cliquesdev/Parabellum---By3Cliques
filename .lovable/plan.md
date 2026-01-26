@@ -1,101 +1,71 @@
 
 
-## Plano: Diagnostico e Correcao do WABA ID
+## Plano: Atualizar Token e Corrigir WABA ID
 
 ### Problema Identificado
 
-O webhook esta recebendo eventos do `phone_number_id: 123456123` (numero de teste) em vez do `phone_number_id: 874402319099270` (producao).
+O WABA ID armazenado no banco (`197667164287951`) esta incorreto - falta o digito "3" no final. O ID correto visivel na screenshot e `1976671642879513`.
 
-A causa raiz: o **Access Token armazenado nao tem permissao** para o WABA ID `197667164287951` que esta no banco. Isso indica que:
-- O WABA ID esta incorreto, OU
-- O token foi gerado para outro App/WABA
+### Acoes a Executar
 
-### Arquitetura do Meta (3 Camadas)
+1. **Atualizar Token no Banco**
+   - Salvar o novo token fornecido na tabela `whatsapp_meta_instances`
+   - Instancia: `d9fafe12-2cfa-4876-9d1a-c46d2c8fe25e`
 
-```text
-+-------------------------------------------+
-|  CAMADA 3: Meta App                       |
-|  (Configuracao do Webhook URL)            |
-|  "Para onde enviar os webhooks?"          |
-+-------------------------------------------+
-           ^
-           | Precisa SUBSCRIPTION via API
-           |
-+-------------------------------------------+
-|  CAMADA 2: WABA (WhatsApp Business Acc)   |
-|  (Container dos numeros de telefone)      |
-|  "Qual App deve receber os eventos?"      |
-+-------------------------------------------+
-           ^
-           |
-+-------------------------------------------+
-|  CAMADA 1: Phone Number                   |
-|  (Onde as mensagens chegam)               |
-|  ID: 874402319099270                      |
-+-------------------------------------------+
-```
+2. **Corrigir WABA ID**
+   - Alterar `business_account_id` de `197667164287951` para `1976671642879513`
 
-### Solucao Proposta
+3. **Executar Diagnostico**
+   - Chamar `diagnose-meta-whatsapp` para verificar:
+     - Token tem `whatsapp_business_messaging` 
+     - Token tem acesso ao WABA correto
+     - granular_scopes contem target_ids
 
-1. **Criar Edge Function de Diagnostico** (`diagnose-meta-whatsapp`)
-   - Consulta `GET /v21.0/{phone_number_id}?fields=whatsapp_business_account` para descobrir o WABA correto
-   - Verifica permissoes do token
-   - Lista Apps subscritos ao WABA
-   - Retorna diagnostico completo
-
-2. **Atualizar o WABA ID no Banco** (se necessario)
-   - Se o WABA retornado pela API for diferente do armazenado, atualizar a tabela `whatsapp_meta_instances`
-
-3. **Chamar subscription correta**
-   - Apos corrigir o WABA ID, chamar `subscribe-meta-whatsapp-app` novamente
+4. **Subscrever App ao WABA**
+   - Se diagnostico OK, chamar `subscribe-meta-whatsapp-app`
+   - Isso registrara o webhook URL no WABA de producao
 
 ### Detalhes Tecnicos
 
-**Nova Edge Function: `diagnose-meta-whatsapp/index.ts`**
+**SQL de Atualizacao:**
+```sql
+UPDATE whatsapp_meta_instances 
+SET 
+  access_token = 'NOVO_TOKEN',
+  business_account_id = '1976671642879513',
+  updated_at = now()
+WHERE id = 'd9fafe12-2cfa-4876-9d1a-c46d2c8fe25e';
+```
 
-```typescript
-// Endpoints a serem consultados:
-// 1. GET /v21.0/{phone_number_id}?fields=whatsapp_business_account,display_phone_number,verified_name
-// 2. GET /v21.0/{waba_id}/subscribed_apps
-// 3. GET /v21.0/{waba_id}/phone_numbers
-
-// Retorno esperado:
+**Verificacao Esperada do Diagnostico:**
+```json
 {
-  phone_number: {
-    id: "874402319099270",
-    display: "+55 11 93771-2061",
-    verified_name: "Nexxo AI"
-  },
-  waba: {
-    id: "WABA_ID_CORRETO",  // Pode ser diferente de 197667164287951
-    name: "3Cliques" 
-  },
-  subscribed_apps: [...],
-  issues: [
-    "WABA ID no banco (197667164287951) diferente do retornado pela API (XXX)"
+  "token_valid": true,
+  "permissions": ["whatsapp_business_management", "whatsapp_business_messaging"],
+  "granular_scopes": [
+    {
+      "scope": "whatsapp_business_messaging",
+      "target_ids": ["1976671642879513"]
+    }
   ],
-  fix_needed: true,
-  correct_waba_id: "XXX"
+  "waba": {
+    "id": "1976671642879513",
+    "name": "3Cliques"
+  },
+  "fix_needed": false
 }
 ```
 
-**Atualizacao no Banco (se necessario)**
-- Query: `UPDATE whatsapp_meta_instances SET business_account_id = 'WABA_CORRETO' WHERE id = 'd9fafe12-...'`
+### Sequencia de Execucao
 
-**Re-subscription**
-- Chamar `subscribe-meta-whatsapp-app` com o WABA ID correto
+1. Executar UPDATE com token + WABA ID corrigido
+2. Chamar `diagnose-meta-whatsapp` para validar
+3. Se OK, chamar `subscribe-meta-whatsapp-app`
+4. Testar envio/recebimento de mensagem
 
-### Sequencia de Implementacao
+### Resultado Esperado
 
-1. Criar e deployar `diagnose-meta-whatsapp`
-2. Executar diagnostico para descobrir WABA correto
-3. Corrigir `business_account_id` no banco se necessario
-4. Chamar `subscribe-meta-whatsapp-app`
-5. Testar recebimento de mensagens
-
-### Beneficios
-
-- Descoberta automatica do WABA correto via API (sem depender do dashboard)
-- Diagnostico completo para troubleshooting futuro
-- Correcao sem necessidade de acesso manual ao Meta Dashboard
+- Webhook passara a receber eventos do phone_number_id `874402319099270` (producao)
+- Mensagens enviadas e recebidas funcionarao corretamente
+- Sistema totalmente integrado com a API oficial do Meta
 
