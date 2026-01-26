@@ -61,7 +61,7 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
     .from("inbox_view")
     .select("*")
     .order("updated_at", { ascending: false })
-    .limit(200);
+    .limit(500); // Aumentado de 200 para 500 para evitar perda de conversas ao atualizar
 
   // Aplicar filtros de role no nível do banco
   if (role && userId && !hasFullInboxAccess(role)) {
@@ -195,6 +195,14 @@ export function useInboxView(filters?: InboxFilters) {
   const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role);
   const queryClient = useQueryClient();
   const lastSeenRef = useRef<string | null>(null);
+  
+  // Refs estáveis para evitar resubscrição do realtime a cada render
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const roleRef = useRef(role);
+  roleRef.current = role;
+  const departmentIdsRef = useRef(departmentIds);
+  departmentIdsRef.current = departmentIds;
 
   // Memoizar opções de fetch para evitar recriações desnecessárias
   const fetchOptions = useMemo(() => ({
@@ -202,6 +210,10 @@ export function useInboxView(filters?: InboxFilters) {
     role,
     departmentIds,
   }), [user?.id, role, departmentIds]);
+
+  // Ref estável para fetchOptions (usado no realtime)
+  const fetchOptionsRef = useRef(fetchOptions);
+  fetchOptionsRef.current = fetchOptions;
 
   const query = useQuery({
     queryKey: [...QUERY_KEY, user?.id, role, departmentIds, filters],
@@ -236,7 +248,10 @@ export function useInboxView(filters?: InboxFilters) {
   });
 
   // Realtime subscription com merge incremental e catch-up
+  // CORRIGIDO: Dependências estáveis para evitar resubscrição excessiva
   useEffect(() => {
+    if (!user?.id) return;
+    
     console.log("[Realtime] Setting up inbox_view subscription with incremental merge...");
     
     const channel = supabase
@@ -254,14 +269,19 @@ export function useInboxView(filters?: InboxFilters) {
           const row = (payload.new || payload.old) as InboxViewItem;
           if (!row?.conversation_id) return;
 
+          // Usar refs para valores atuais (sem recriar canal)
+          const currentRole = roleRef.current;
+          const currentDeptIds = departmentIdsRef.current;
+          const currentFilters = filtersRef.current;
+
           // Verificar se a conversa deve ser visível para este role/departamento
-          const shouldShow = hasFullInboxAccess(role) || 
+          const shouldShow = hasFullInboxAccess(currentRole) || 
             row.assigned_to === user?.id ||
-            (row.assigned_to === null && departmentIds?.includes(row.department || ""));
+            (row.assigned_to === null && currentDeptIds?.includes(row.department || ""));
 
           // Merge incremental no cache
           queryClient.setQueryData<InboxViewItem[]>(
-            [...QUERY_KEY, user?.id, role, departmentIds, filters],
+            [...QUERY_KEY, user?.id, currentRole, currentDeptIds, currentFilters],
             (prev = []) => {
               if (payload.eventType === "DELETE" || !shouldShow) {
                 return prev.filter(item => item.conversation_id !== row.conversation_id);
@@ -285,12 +305,13 @@ export function useInboxView(filters?: InboxFilters) {
           try {
             const catchUpData = await fetchInboxData({ 
               cursor: lastSeenRef.current,
-              ...fetchOptions 
+              ...fetchOptionsRef.current 
             });
             if (catchUpData.length > 0) {
               console.log("[Realtime] Catch-up found", catchUpData.length, "new records");
+              const currentFilters = filtersRef.current;
               queryClient.setQueryData<InboxViewItem[]>(
-                [...QUERY_KEY, user?.id, role, departmentIds, filters],
+                [...QUERY_KEY, user?.id, roleRef.current, departmentIdsRef.current, currentFilters],
                 (prev = []) => mergeInboxItems(prev, catchUpData)
               );
               lastSeenRef.current = catchUpData[0].updated_at;
@@ -305,17 +326,18 @@ export function useInboxView(filters?: InboxFilters) {
       console.log("[Realtime] Removing inbox_view channel");
       supabase.removeChannel(channel);
     };
-  }, [queryClient, user?.id, role, departmentIds, filters, fetchOptions]);
+  }, [queryClient, user?.id]); // APENAS user?.id como dependência - refs mantêm valores atuais
 
   // Visibility change listener - refetch quando aba volta ao foco
+  // CORRIGIDO: Usar refs para evitar resubscrição excessiva
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && lastSeenRef.current) {
         console.log("[Visibility] Tab became visible, running catch-up...");
-        fetchInboxData({ cursor: lastSeenRef.current, ...fetchOptions }).then(data => {
+        fetchInboxData({ cursor: lastSeenRef.current, ...fetchOptionsRef.current }).then(data => {
           if (data.length > 0) {
             queryClient.setQueryData<InboxViewItem[]>(
-              [...QUERY_KEY, user?.id, role, departmentIds, filters],
+              [...QUERY_KEY, user?.id, roleRef.current, departmentIdsRef.current, filtersRef.current],
               (prev = []) => mergeInboxItems(prev, data)
             );
             lastSeenRef.current = data[0].updated_at;
@@ -326,17 +348,18 @@ export function useInboxView(filters?: InboxFilters) {
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [queryClient, user?.id, role, departmentIds, filters, fetchOptions]);
+  }, [queryClient, user?.id]); // APENAS user?.id como dependência
 
   // Função para resetar unread count ao abrir conversa
+  // CORRIGIDO: Usar refs para evitar recriação desnecessária
   const resetUnreadCount = useCallback(async (conversationId: string) => {
     try {
       await supabase.rpc("reset_inbox_unread_count", {
         p_conversation_id: conversationId,
       });
-      // Atualização otimista no cache
+      // Atualização otimista no cache usando refs
       queryClient.setQueryData<InboxViewItem[]>(
-        [...QUERY_KEY, user?.id, role, departmentIds, filters],
+        [...QUERY_KEY, user?.id, roleRef.current, departmentIdsRef.current, filtersRef.current],
         (prev = []) => prev.map(item => 
           item.conversation_id === conversationId 
             ? { ...item, unread_count: 0 } 
@@ -346,7 +369,7 @@ export function useInboxView(filters?: InboxFilters) {
     } catch (error) {
       console.error("Failed to reset unread count:", error);
     }
-  }, [queryClient, user?.id, role, departmentIds, filters]);
+  }, [queryClient, user?.id]);
 
   return {
     ...query,

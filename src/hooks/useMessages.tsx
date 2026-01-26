@@ -160,10 +160,8 @@ export function useMessages(conversationId: string | null) {
               queryKey: ["conversation", conversationId],
               refetchType: 'active'
             });
-            queryClient.invalidateQueries({ 
-              queryKey: ["inbox-view"],
-              refetchType: 'active'
-            });
+            // REMOVIDO: invalidação de inbox-view - já é atualizado via seu próprio canal realtime
+            // Isso evita conflitos entre canais e melhora a performance
           }, 100);
         }
       )

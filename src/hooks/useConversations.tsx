@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,8 +46,17 @@ export function useConversations(filters?: ConversationFilters) {
   const queryClient = useQueryClient();
   const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role);
 
+  // Refs estáveis para evitar resubscrição do realtime a cada render
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const roleRef = useRef(role);
+  roleRef.current = role;
+
   // Realtime subscription for conversations - otimizado para máxima velocidade
+  // CORRIGIDO: Usar refs para evitar resubscrição excessiva
   useEffect(() => {
+    if (!user?.id) return;
+    
     const channel = supabase
       .channel("conversations-realtime-v2")
       .on(
@@ -74,8 +83,9 @@ export function useConversations(filters?: ConversationFilters) {
           
           if (newConv && !error) {
             // Adicionar diretamente ao cache sem invalidar (mais rápido)
+            // Usar refs para valores atuais
             queryClient.setQueryData(
-              ["conversations", user?.id, role, filters],
+              ["conversations", user?.id, roleRef.current, filtersRef.current],
               (old: Conversation[] | undefined) => {
                 if (!old) return [newConv];
                 // Verificar se já existe para evitar duplicação
@@ -126,7 +136,7 @@ export function useConversations(filters?: ConversationFilters) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient, user?.id, role, filters]);
+  }, [queryClient, user?.id]); // APENAS user?.id como dependência - refs mantêm valores atuais
 
   return useQuery({
     queryKey: ["conversations", user?.id, role, filters],
