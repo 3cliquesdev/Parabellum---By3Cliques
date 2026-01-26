@@ -287,3 +287,6 @@ verify_jwt = true
 
 [functions.download-meta-media]
 verify_jwt = false
+
+[functions.verify-meta-whatsapp-code]
+verify_jwt = true
