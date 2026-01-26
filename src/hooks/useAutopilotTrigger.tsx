@@ -14,7 +14,7 @@ export function useAutopilotTrigger(conversationId: string | null) {
   
   // ✅ OTIMIZAÇÃO: Cache do ai_mode para evitar query repetida
   const aiModeCache = useRef<{ mode: string | null; fetchedAt: number } | null>(null);
-  const AI_MODE_CACHE_TTL = 60000; // 1 minuto de cache
+  const AI_MODE_CACHE_TTL = 10000; // 10 segundos de cache (reduced from 60s to prevent stale mode issues)
 
   useEffect(() => {
     if (!conversationId) return;

@@ -75,11 +75,15 @@ serve(async (req) => {
     // FORA DO HORÁRIO: Buscar conversas abertas com agente atribuído
     console.log('[redistribute-after-hours] 🌙 Fora do horário - redistribuindo conversas para pool geral...');
 
+    // Only redistribute conversations that were NOT manually assumed by agents
+    // 'copilot' and 'disabled' modes indicate agent manually took control
     const { data: activeConversations, error: convError } = await supabaseClient
       .from('conversations')
       .select('id, assigned_to, ai_mode, contact_id')
       .in('status', ['open', 'pending'])
-      .not('assigned_to', 'is', null);
+      .not('assigned_to', 'is', null)
+      .neq('ai_mode', 'copilot')   // Preserve copilot (agent assumed)
+      .neq('ai_mode', 'disabled'); // Preserve disabled (agent disabled AI)
 
     if (convError) {
       console.error('[redistribute-after-hours] Erro ao buscar conversas:', convError);

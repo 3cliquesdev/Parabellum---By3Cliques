@@ -158,14 +158,24 @@ serve(async (req) => {
           redistributed++;
           console.log(`[go-offline-manual] 🔄 Conversation ${conv.id} → ${targetAgent.full_name}`);
         } else {
-          // Nenhum agente online: mover para pool da IA
+          // Nenhum agente online: verificar ai_mode antes de decidir destino
+          // Se conversa estava em copilot/disabled, manter na fila humana
+          const shouldKeepInHumanQueue = conv.channel === 'whatsapp' || 
+            (await supabaseAdmin
+              .from("conversations")
+              .select("ai_mode")
+              .eq("id", conv.id)
+              .single()
+              .then(res => res.data?.ai_mode === 'copilot' || res.data?.ai_mode === 'disabled'));
+          
           await supabaseAdmin
             .from("conversations")
             .update({ 
               status: "pending",
               assigned_to: null,
               previous_agent_id: agentId,
-              ai_mode: "autopilot",
+              // Preserve copilot conversations for human queue, don't give to AI
+              ai_mode: shouldKeepInHumanQueue ? "waiting_human" : "autopilot",
               closed_at: null,
               closed_by: null,
             })
