@@ -7808,6 +7808,13 @@ export type Database = {
           subject: string
         }[]
       }
+      fix_leads_that_are_kiwify_customers: {
+        Args: never
+        Returns: {
+          contacts_updated: number
+          conversations_updated: number
+        }[]
+      }
       generate_session_token: { Args: never; Returns: string }
       get_ai_usage_metrics: {
         Args: { p_end_date: string; p_start_date: string; p_user_id?: string }

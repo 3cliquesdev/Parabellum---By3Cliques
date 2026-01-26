@@ -1,5 +1,8 @@
 project_id = "zaeozfdjhrmblfaxsyuu"
 
+[functions.fix-leads-kiwify]
+verify_jwt = true
+
 [functions.import-kiwify-contacts]
 verify_jwt = true
 
