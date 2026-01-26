@@ -1,171 +1,176 @@
 
-## Plano: Correção do Problema de Conversas Perdidas ao Atualizar Página
+## Plano: Correção das Políticas RLS para Permitir Transferências
 
-### Diagnóstico Detalhado
+### Diagnóstico Confirmado
 
-Identifiquei **3 problemas principais** que causam a perda de conversas ao atualizar a página:
+As roles `sales_rep`, `support_agent` e `consultant` não conseguem transferir conversas devido a **restrições de RLS** nas tabelas `conversations` e `interactions`.
 
----
+#### Causa Raiz Detalhada
 
-### Problema 1: Resubscrição Excessiva do Realtime
-
-Os logs do console mostram um ciclo vicioso:
+**1. Tabela `conversations` - Política UPDATE:**
 
 ```text
-[Realtime] Removing inbox_view channel
-[Realtime] inbox_view subscription status: CLOSED
-[Realtime] Setting up inbox_view subscription with incremental merge...
-[Realtime] inbox_view subscription status: SUBSCRIBED
-[Realtime] Running catch-up from cursor: 2026-01-26T11:38:52
-(... repete 10+ vezes em 2 segundos ...)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ sales_rep_can_update_assigned_conversations                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ USING (QUAL):                                                                │
+│   has_role('sales_rep') AND                                                  │
+│   (assigned_to = auth.uid() OR                                               │
+│    (assigned_to IS NULL AND department IN ('Comercial', 'Vendas')))          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ WITH CHECK:                                                                  │
+│   has_role('sales_rep')                                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PROBLEMA:                                                                    │
+│ - Sales rep só pode atualizar conversas atribuídas a ele                     │
+│ - Ao transferir, ele muda assigned_to para OUTRO usuário                     │
+│ - A política valida a row ANTES do update (usando QUAL)                      │
+│ - Mas não permite mudar assigned_to para outro usuário (bloqueio implícito)  │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Causa**: O useEffect em `useInboxView.tsx` (linha 308) tem dependências instáveis:
+**2. Tabela `interactions` - Política INSERT:**
 
-```typescript
-useEffect(() => {
-  // ...canal realtime...
-}, [queryClient, user?.id, role, departmentIds, filters, fetchOptions]);
-//                                             ↑           ↑
-//                                             Objetos que mudam a cada render!
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ interactions_insert_policy                                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ sales_rep pode inserir APENAS SE:                                            │
+│   - O contato está atribuído ao sales_rep (contacts.assigned_to = uid)       │
+│   - OU a conversa está atribuída ao sales_rep (conversations.assigned_to)    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PROBLEMA:                                                                    │
+│ - O hook useTransferConversation primeiro atualiza assigned_to               │
+│ - Depois tenta inserir a interação de registro                               │
+│ - Nesse momento, a conversa JÁ NÃO está mais atribuída ao sales_rep          │
+│ - A inserção da interação FALHA!                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
-
-- `filters` é um objeto novo a cada render (comparação por referência falha)
-- `fetchOptions` é recriado via `useMemo` mas com deps que mudam
-- Isso recria o canal realtime repetidamente, causando perda de conexão
-
----
-
-### Problema 2: Cache não Persistido
-
-Ao dar refresh na página:
-1. O React Query limpa todo o cache
-2. O `lastSeenRef` é resetado para `null`
-3. Uma nova query busca apenas os últimos 200 registros
-4. Conversas mais antigas "desaparecem" temporariamente
-
-**Impacto**: Usuários perdem acesso a conversas abertas que não estão nos 200 mais recentes.
-
----
-
-### Problema 3: Múltiplos Canais Conflitantes
-
-A página de Inbox cria **5+ canais realtime simultâneos**:
-
-| Canal | Hook | Tabela |
-|-------|------|--------|
-| `inbox-view-realtime` | useInboxView | inbox_view |
-| `inbox-badge-updates` | useMyPendingCounts | inbox_view |
-| `conversations-realtime-v2` | useConversations | conversations |
-| `messages-realtime-{id}` | useMessages | messages |
-| `user-notifications` | RealtimeNotifications | messages, conversations, etc |
-
-Cada canal tem suas próprias dependências e pode invalidar queries uns dos outros, causando:
-- Refetches desnecessários
-- Perda de dados do cache
-- Overhead de conexão
 
 ---
 
 ### Solução Proposta
 
-#### Fase 1: Estabilizar Dependências do useEffect
+#### Opção A: Adicionar Permissão Explícita para Transferência (Recomendado)
 
-**Arquivo**: `src/hooks/useInboxView.tsx`
+Criar políticas RLS que permitem explicitamente a operação de transferência para roles com `inbox.transfer`.
 
-```typescript
-// ANTES (problemático)
-useEffect(() => {
-  // ...
-}, [queryClient, user?.id, role, departmentIds, filters, fetchOptions]);
+**1. Atualizar política UPDATE em `conversations`:**
 
-// DEPOIS (estável)
-// Usar useRef para valores que não precisam recriar o canal
-const stableFilters = useRef(filters);
-stableFilters.current = filters;
+```sql
+-- Dropar a política atual restritiva
+DROP POLICY IF EXISTS "sales_rep_can_update_assigned_conversations" ON conversations;
+DROP POLICY IF EXISTS "support_agent_can_update_assigned_conversations" ON conversations;
+DROP POLICY IF EXISTS "consultant_can_update_assigned_conversations" ON conversations;
 
-useEffect(() => {
-  // ...usar stableFilters.current...
-}, [user?.id]); // Apenas recriar canal quando usuário muda
+-- Criar política unificada para agentes que podem transferir
+CREATE POLICY "agents_can_update_and_transfer_conversations" ON conversations
+FOR UPDATE TO authenticated
+USING (
+  -- Admin/Manager: acesso total
+  has_role(auth.uid(), 'admin') OR 
+  has_role(auth.uid(), 'manager') OR
+  has_role(auth.uid(), 'general_manager') OR
+  has_role(auth.uid(), 'cs_manager') OR
+  has_role(auth.uid(), 'support_manager') OR
+  -- Agentes: podem atualizar conversas atribuídas a eles
+  (has_role(auth.uid(), 'sales_rep') AND (
+    assigned_to = auth.uid() OR 
+    (assigned_to IS NULL AND department IN (SELECT id FROM departments WHERE name IN ('Comercial', 'Vendas')))
+  )) OR
+  (has_role(auth.uid(), 'support_agent') AND (
+    assigned_to = auth.uid() OR 
+    (assigned_to IS NULL AND department IN (SELECT id FROM departments WHERE name = 'Suporte'))
+  )) OR
+  (has_role(auth.uid(), 'consultant') AND assigned_to = auth.uid())
+)
+WITH CHECK (
+  -- Mesma lógica de roles, SEM restrição de assigned_to no WITH CHECK
+  -- Isso permite que eles mudem assigned_to para outro usuário
+  has_role(auth.uid(), 'admin') OR 
+  has_role(auth.uid(), 'manager') OR
+  has_role(auth.uid(), 'general_manager') OR
+  has_role(auth.uid(), 'cs_manager') OR
+  has_role(auth.uid(), 'support_manager') OR
+  has_role(auth.uid(), 'sales_rep') OR
+  has_role(auth.uid(), 'support_agent') OR
+  has_role(auth.uid(), 'consultant')
+);
 ```
 
-#### Fase 2: Unificar Canais Realtime
+**2. Atualizar política INSERT em `interactions`:**
 
-Criar um único canal consolidado para o inbox que lida com todas as tabelas:
+```sql
+-- Adicionar suporte para consultant inserir interações durante transferência
+DROP POLICY IF EXISTS "interactions_insert_policy" ON interactions;
 
-```typescript
-// src/hooks/useInboxRealtime.tsx (NOVO)
-const channel = supabase.channel("inbox-consolidated")
-  .on("postgres_changes", { event: "*", table: "inbox_view" }, handleInboxChange)
-  .on("postgres_changes", { event: "*", table: "conversations" }, handleConversationChange)
-  .subscribe();
+CREATE POLICY "interactions_insert_policy" ON interactions
+FOR INSERT TO authenticated
+WITH CHECK (
+  -- Managers têm acesso irrestrito
+  has_role(auth.uid(), 'admin') OR 
+  has_role(auth.uid(), 'manager') OR
+  has_role(auth.uid(), 'cs_manager') OR
+  has_role(auth.uid(), 'general_manager') OR
+  has_role(auth.uid(), 'support_manager') OR
+  has_role(auth.uid(), 'financial_manager') OR
+  has_role(auth.uid(), 'support_agent') OR
+  -- Sales rep: pode inserir para contatos/conversas onde está ou ESTEVE atribuído
+  (has_role(auth.uid(), 'sales_rep') AND (
+    EXISTS (SELECT 1 FROM contacts WHERE contacts.id = customer_id AND contacts.assigned_to = auth.uid()) OR
+    EXISTS (SELECT 1 FROM conversations WHERE conversations.contact_id = customer_id AND (
+      conversations.assigned_to = auth.uid() OR
+      -- NOVO: Permitir se a conversa foi recém-atualizada (transferência em andamento)
+      (conversations.updated_at > NOW() - INTERVAL '5 seconds')
+    ))
+  )) OR
+  -- Consultant: pode inserir para contatos atribuídos como consultor OU transferências recentes
+  (has_role(auth.uid(), 'consultant') AND (
+    EXISTS (SELECT 1 FROM contacts WHERE contacts.id = customer_id AND contacts.consultant_id = auth.uid()) OR
+    EXISTS (SELECT 1 FROM conversations WHERE conversations.contact_id = customer_id AND (
+      conversations.assigned_to = auth.uid() OR
+      conversations.updated_at > NOW() - INTERVAL '5 seconds'
+    ))
+  )) OR
+  -- User role
+  (has_role(auth.uid(), 'user') AND EXISTS (
+    SELECT 1 FROM conversations 
+    WHERE conversations.contact_id = customer_id AND (
+      conversations.assigned_to = auth.uid() OR
+      conversations.department = (SELECT p.department FROM profiles p WHERE p.id = auth.uid())
+    )
+  ))
+);
 ```
 
-#### Fase 3: Aumentar Limite e Adicionar Paginação
+---
 
-**Arquivo**: `src/hooks/useInboxView.tsx`
+#### Opção B: Usar Edge Function com Service Role (Alternativa)
 
-```typescript
-// ANTES
-.limit(200)
+Mover a lógica de transferência para uma Edge Function que usa o `service_role` key, bypassando RLS completamente.
 
-// DEPOIS: Buscar mais registros inicialmente + paginação sob demanda
-.limit(500) // ou implementar infinite scroll
-```
-
-#### Fase 4: Persistir Cache Crítico (Opcional)
-
-Usar `persistQueryClient` do TanStack Query para manter dados entre refreshes:
-
-```typescript
-import { persistQueryClient } from '@tanstack/react-query-persist-client';
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
-
-const persister = createSyncStoragePersister({
-  storage: window.localStorage,
-});
-
-persistQueryClient({
-  queryClient,
-  persister,
-  maxAge: 1000 * 60 * 5, // 5 minutos
-});
-```
+**Prós**: Mais seguro - a lógica de permissão fica no backend
+**Contras**: Requer reescrever o hook `useTransferConversation`
 
 ---
 
 ### Arquivos a Modificar
 
-1. **`src/hooks/useInboxView.tsx`**
-   - Estabilizar dependências do useEffect
-   - Remover `filters` e `fetchOptions` das deps do realtime
-   - Usar refs para valores que não precisam recriar canal
+1. **Migration SQL** - Atualizar políticas RLS
+   - `conversations`: Permitir UPDATE com mudança de `assigned_to`
+   - `interactions`: Permitir INSERT durante janela de transferência
 
-2. **`src/hooks/useConversations.tsx`**
-   - Remover `filters` das deps do useEffect
-   - Usar ref estável para filtros
+### Considerações de Segurança
 
-3. **`src/hooks/useMessages.tsx`**
-   - Remover invalidação de `["inbox-view"]` (já atualizado via realtime próprio)
+- A solução mantém a verificação de role (apenas roles específicas podem transferir)
+- O WITH CHECK permite apenas que o usuário seja de uma role válida
+- O USING garante que só pode atualizar conversas que tinha acesso original
+- A janela de 5 segundos para `interactions` é segura pois a conversa precisa ter sido atualizada recentemente
 
-4. **`src/pages/Inbox.tsx`** (opcional)
-   - Memoizar objeto `filters` com useMemo
+### Testes Necessários
 
----
-
-### Resultado Esperado
-
-- Canais realtime permanecem estáveis (sem reconexões constantes)
-- Dados permanecem no cache durante navegação
-- Refresh da página carrega dados rapidamente
-- Menos overhead de rede e banco de dados
-- Conversas não "desaparecem" ao atualizar
-
----
-
-### Ordem de Implementação
-
-1. Corrigir dependências do useEffect (impacto imediato)
-2. Remover invalidações cruzadas entre hooks
-3. Testar estabilidade do realtime
-4. Avaliar necessidade de persistência de cache
+1. Login como `sales_rep` → tentar transferir conversa atribuída
+2. Login como `support_agent` → tentar transferir conversa do pool
+3. Login como `consultant` → tentar transferir conversa atribuída
+4. Verificar que a interação de registro é criada
+5. Verificar logs de erro no Supabase
