@@ -58,8 +58,9 @@ serve(async (req) => {
     // 🆕 Se for envio de mídia, desabilitar fila para envio direto (mais rápido)
     const isMediaMessage = !!body.media_url && !!body.media_type;
 
-    // 🆕 FASE 6: Usar fila para rate limiting (default = true, mas mídia vai direto)
-    const useQueue = !isMediaMessage && body.use_queue !== false;
+    // 🔧 BUG FIX: Fila é OPT-IN (use_queue: true), não OPT-OUT
+    // Mensagens manuais vão direto, fila só para automação (IA, bots, mass send)
+    const useQueue = body.use_queue === true && !isMediaMessage;
     
     // Buscar instância
     const { data: instance, error: instanceError } = await supabase

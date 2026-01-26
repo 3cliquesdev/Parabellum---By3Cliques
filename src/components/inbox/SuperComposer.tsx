@@ -318,6 +318,7 @@ export function SuperComposer({
                   media_type: detectMediaType(att.mimeType),
                   media_filename: att.filename,
                   delay: 1000,
+                  use_queue: false, // 🔧 Envio direto para mídia também
                 }
               });
 
@@ -333,6 +334,7 @@ export function SuperComposer({
                 phone_number: contactPhone,
                 message: messageContent,
                 delay: 1000,
+                use_queue: false, // 🔧 Envio direto - evita race condition com mensagens antigas na fila
               }
             });
 
