@@ -1,14 +1,24 @@
 
-## Plano de Correção: Status "Ocupado" Sendo Sobrescrito
+## Plano de Correção: Status Só Muda Por Decisão do Usuário/Admin
 
-### Problema
-O hook `useAvailabilityStatus` força o status para "online" em dois momentos, ignorando se o usuário escolheu manualmente ficar "ocupado":
-1. Ao montar o componente (inicialização)
-2. Ao voltar para a aba do navegador
+### Problema Atual
 
-### Solução
+O sistema está forçando o status para "online" automaticamente em várias situações:
 
-Modificar a lógica para **respeitar o status "busy"** - só forçar "online" se o usuário estava "offline".
+| Local | Problema |
+|-------|----------|
+| `useAvailabilityStatus.tsx` (linha 159-167) | Ao montar o componente, se status é "offline", força para "online" |
+| `useAvailabilityStatus.tsx` (linha 236-244) | Ao voltar na aba, se status é "offline", força para "online" |
+| `useAvailabilityStatus.tsx` (linha 270-280) | Ao fechar o navegador, força para "offline" |
+| `check-inactive-users` (linha 58-65) | CRON força "offline" após 5min de inatividade |
+
+Isso cria um ciclo: CRON coloca "offline" por inatividade, usuário volta na aba, hook força "online".
+
+### Regras Solicitadas
+
+1. **Sem auto-mudança**: Sistema NUNCA muda Online/Busy/Offline sozinho
+2. **Busy pode virar Offline**: Permitido apenas se o CRON detectar inatividade (heartbeat expirado)
+3. **Apenas usuário/admin muda status**: Qualquer mudança é explícita via UI
 
 ---
 
@@ -16,176 +26,165 @@ Modificar a lógica para **respeitar o status "busy"** - só forçar "online" se
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useAvailabilityStatus.tsx` | Verificar status atual antes de forçar "online" |
+| `src/hooks/useAvailabilityStatus.tsx` | Remover TODA lógica de auto-set para "online" |
+| `supabase/functions/check-inactive-users/index.ts` | Manter (pois Busy pode virar Offline por inatividade) |
 
 ---
 
 ### Implementação Detalhada
 
-#### 1. Modificar a Inicialização (Linhas 136-180)
+#### 1. Remover Auto-Set para Online no Mount (Linhas 136-215)
 
 **Antes:**
 ```typescript
 const setOnlineAndDistribute = async () => {
-  // Força online sem verificar status atual
-  await supabase
-    .from("profiles")
-    .update({ 
-      availability_status: "online",
-      ...
-    })
-    .eq("id", user.id);
-```
-
-**Depois:**
-```typescript
-const setOnlineAndDistribute = async () => {
-  // 1. Primeiro, buscar o status atual do usuário
-  const { data: currentProfile } = await supabase
-    .from("profiles")
-    .select("availability_status")
-    .eq("id", user.id)
-    .single();
+  const { data: currentProfile } = await supabase...
+  const shouldSetOnline = currentStatus === 'offline' || !currentStatus;
   
-  const currentStatus = currentProfile?.availability_status;
-  
-  // 2. Só definir como "online" se estava "offline"
-  // Se estava "busy", manter o status escolhido pelo usuário
-  if (currentStatus === 'offline' || !currentStatus) {
-    console.log("[useAvailabilityStatus] User was offline, setting to online");
-    await supabase
-      .from("profiles")
-      .update({ 
-        availability_status: "online",
-        last_status_change: new Date().toISOString(),
-      })
-      .eq("id", user.id);
-    
-    queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
+  if (shouldSetOnline) {
+    await supabase.from("profiles").update({ availability_status: "online" })...
+    // Distribuir conversas...
   } else {
-    console.log(`[useAvailabilityStatus] Keeping current status: ${currentStatus}`);
-    // Apenas atualizar o heartbeat para indicar atividade
-    await supabase
-      .from("profiles")
-      .update({ 
-        last_status_change: new Date().toISOString(),
-      })
-      .eq("id", user.id);
-  }
-  
-  // 3. Distribuir conversas apenas se ficou online
-  if (currentStatus === 'offline' || !currentStatus) {
-    // ... lógica de distribuição existente
+    // Apenas heartbeat
   }
 };
 ```
 
-#### 2. Modificar o Handler de Visibilidade (Linhas 193-215)
+**Depois:**
+```typescript
+const initializeHeartbeat = async () => {
+  console.log("[useAvailabilityStatus] Initializing - NOT changing status automatically");
+  
+  // APENAS enviar heartbeat para indicar atividade
+  // NÃO mudar o status para "online" - isso é decisão do usuário
+  await supabase
+    .from("profiles")
+    .update({ 
+      last_status_change: new Date().toISOString(),
+    })
+    .eq("id", user.id);
+  
+  console.log("[useAvailabilityStatus] Heartbeat initialized (status unchanged)");
+};
+
+initializeHeartbeat();
+```
+
+#### 2. Remover Auto-Set para Online no Visibility Change (Linhas 217-264)
 
 **Antes:**
 ```typescript
 const handleVisibilityChange = async () => {
   if (document.visibilityState === 'visible') {
-    // Força online ao voltar para a aba
-    await supabase
-      .from("profiles")
-      .update({ 
-        availability_status: "online",
-        ...
-      })
-```
-
-**Depois:**
-```typescript
-const handleVisibilityChange = async () => {
-  if (document.visibilityState === 'visible') {
-    // Buscar status atual
-    const { data: currentProfile } = await supabase
-      .from("profiles")
-      .select("availability_status")
-      .eq("id", user.id)
-      .single();
+    const currentStatus = ...;
     
-    const currentStatus = currentProfile?.availability_status;
-    
-    // Só voltar para online se estava offline
-    // Se estava "busy", respeitar a escolha do usuário
     if (currentStatus === 'offline') {
-      console.log("[useAvailabilityStatus] Tab visible + was offline - setting online");
-      await supabase
-        .from("profiles")
-        .update({ 
-          availability_status: "online",
-          last_status_change: new Date().toISOString(),
-        })
-        .eq("id", user.id);
-      queryClient.invalidateQueries({ queryKey: ["availability-status", user.id] });
+      await supabase.from("profiles").update({ availability_status: "online" })...
     } else {
-      console.log(`[useAvailabilityStatus] Tab visible - keeping ${currentStatus}`);
-      // Apenas enviar heartbeat para indicar atividade
-      await supabase
-        .from("profiles")
-        .update({ 
-          last_status_change: new Date().toISOString(),
-        })
-        .eq("id", user.id);
+      // Apenas heartbeat
     }
   }
 };
 ```
+
+**Depois:**
+```typescript
+const handleVisibilityChange = async () => {
+  if (document.visibilityState === 'visible') {
+    console.log("[useAvailabilityStatus] Tab visible - only sending heartbeat (no auto-online)");
+    
+    // APENAS enviar heartbeat - NÃO mudar status automaticamente
+    await supabase
+      .from("profiles")
+      .update({ 
+        last_status_change: new Date().toISOString(),
+      })
+      .eq("id", user.id);
+  }
+};
+```
+
+#### 3. Remover Auto-Offline no Unload (Linhas 266-291)
+
+**Antes:**
+```typescript
+const handleBeforeUnload = async () => {
+  await supabase.from("profiles").update({ availability_status: "offline" })...
+};
+```
+
+**Depois:**
+```typescript
+// REMOVER COMPLETAMENTE este efeito
+// O status não deve mudar automaticamente ao fechar o navegador
+// Se o usuário quiser ficar offline, ele deve clicar explicitamente
+// O CRON check-inactive-users vai marcar como offline após 5min sem heartbeat
+```
+
+#### 4. Manter CRON check-inactive-users (Sem Alteração)
+
+O CRON que marca usuários inativos como "offline" **deve ser mantido**, pois:
+- Você confirmou que "Busy pode virar Offline" por inatividade
+- Isso é um safety net para quando atendentes esquecem de se marcar offline
+- A diferença é que usamos `manual_offline: false` para distinguir de offline manual
 
 ---
 
 ### Fluxo Corrigido
 
 ```text
-[Usuário está BUSY]
+[Usuário abre o app]
         |
         v
-[Troca de aba ou página re-renderiza]
+  Hook monta → Apenas heartbeat (status NÃO muda)
         |
         v
-[Hook verifica status atual]
+  [Status permanece como estava no DB]
+  (se estava Busy → continua Busy)
+  (se estava Offline → continua Offline)
         |
         v
-   Status = "busy"?
-     /        \
-   SIM        NÃO (offline)
-    |            |
-    v            v
-  MANTER      MUDAR para
-  "busy"      "online"
-    |            |
-    v            v
-[Apenas       [Set online +
-heartbeat]    distribuir]
+  [Usuário quer receber chats]
+        |
+        v
+  Clica em "Online" → updateStatus("online")
+        |
+        v
+  [Agora sim está Online!]
 ```
 
 ---
 
-### Benefícios
+### Resumo das Mudanças
 
-- Status "ocupado" é respeitado mesmo após trocar de aba
-- Status "ocupado" é mantido após re-renderizações
-- Heartbeat continua funcionando para evitar timeout por inatividade
-- Distribuição de conversas só ocorre quando realmente fica online
-- Logs detalhados para debug
+| Comportamento | Antes | Depois |
+|---------------|-------|--------|
+| Abrir o app quando estava Offline | Força Online | Mantém Offline |
+| Abrir o app quando estava Busy | Mantém Busy | Mantém Busy |
+| Voltar para a aba | Força Online se estava Offline | Apenas heartbeat |
+| Fechar o navegador | Força Offline | Nada (CRON cuida) |
+| 5min sem atividade | CRON força Offline | CRON força Offline |
+| Usuário clica "Online" | Muda para Online | Muda para Online |
+| Usuário clica "Ocupado" | Muda para Busy | Muda para Busy |
+| Admin muda status | Muda status | Muda status |
 
 ---
 
 ### Seção Técnica
 
-**Lógica de Decisão:**
-```typescript
-// Só forçar online se estava offline
-const shouldSetOnline = currentStatus === 'offline' || !currentStatus;
-```
-
-**Importante:** O heartbeat (`last_status_change`) deve continuar sendo enviado mesmo quando "busy" para evitar que o CRON `check-inactive-users` marque o usuário como offline por inatividade.
-
-**Arquivo a modificar:**
+**Arquivo principal:**
 - `src/hooks/useAvailabilityStatus.tsx`
 
-**Linhas específicas:**
-- 136-180 (inicialização)
-- 193-215 (visibilidade da tab)
+**Mudanças específicas:**
+1. Linhas 136-215: Substituir `setOnlineAndDistribute` por `initializeHeartbeat` (só heartbeat)
+2. Linhas 217-264: Remover lógica de auto-online no visibility change
+3. Linhas 266-291: Remover completamente o `beforeunload` handler
+
+**Edge Functions:**
+- `check-inactive-users`: Manter como está (Busy → Offline por inatividade)
+- `go-offline-manual`: Manter como está (offline explícito com redistribuição)
+
+**Comportamento do Heartbeat:**
+- Continua enviando a cada 2 minutos para indicar atividade
+- Se heartbeat não for enviado por 5min, CRON marca como Offline
+- Isso é desejável para evitar atendentes "fantasmas" que fecharam o navegador
