@@ -1,158 +1,171 @@
 
+## Plano: Correção do Problema de Conversas Perdidas ao Atualizar Página
 
-## Plano: Correção do Bug de Handoff que Não Transfere
+### Diagnóstico Detalhado
 
-### Diagnóstico
+Identifiquei **3 problemas principais** que causam a perda de conversas ao atualizar a página:
 
-Analisei detalhadamente o fluxo de handoff e identifiquei a causa raiz do problema relatado: **"bot avisa mas não transfere"**.
+---
 
-#### Evidências Encontradas
+### Problema 1: Resubscrição Excessiva do Realtime
 
-1. **No banco de dados** - Conversa `71d2d010-bbdb-45f5-b518-9859fb9652e5`:
-   - Última mensagem: "vou te conectar com um de nossos especialistas"
-   - ai_mode: `autopilot` (deveria ser `waiting_human`)
-   - assigned_to: `null` (deveria ter um agente)
-
-2. **Nos logs do route-conversation**:
-   - 11:25:34: "Processing conversation: 71d2d010..."
-   - 11:25:35: "ai_mode: waiting_human → waiting_human"
-   - 11:25:35: "Assigning to: Camila de Farias"
-   - **Atribuição foi feita com sucesso!**
-
-3. **Problema**: O estado foi REVERTIDO após a atribuição bem-sucedida
-
-### Causa Raiz
-
-Existe uma **condição de corrida (race condition)** entre dois fluxos de handoff no `ai-autopilot-chat`:
+Os logs do console mostram um ciclo vicioso:
 
 ```text
-FLUXO 1: LOW CONFIDENCE HANDOFF (Linha ~2089)
-+------------------------------------------+
-| 1. Atualiza ai_mode → waiting_human      |
-| 2. Chama route-conversation              |
-| 3. Salva mensagem de handoff             |
-| 4. RETORNA                               |
-+------------------------------------------+
-
-FLUXO 2: FALLBACK DETECTOR (Linha ~4391)
-+------------------------------------------+
-| 1. Detecta frase de handoff na mensagem  |
-| 2. Atualiza ai_mode → copilot            |
-| 3. Chama route-conversation NOVAMENTE    |
-| 4. Se no_agents_available:               |
-|    - REVERTE ai_mode → autopilot         |
-|    - assigned_to → NULL                  |
-+------------------------------------------+
+[Realtime] Removing inbox_view channel
+[Realtime] inbox_view subscription status: CLOSED
+[Realtime] Setting up inbox_view subscription with incremental merge...
+[Realtime] inbox_view subscription status: SUBSCRIBED
+[Realtime] Running catch-up from cursor: 2026-01-26T11:38:52
+(... repete 10+ vezes em 2 segundos ...)
 ```
 
-**O Bug Específico:**
-- O Fluxo 1 (Low Confidence) retorna com sucesso após handoff
-- MAS outra instância/chamada do ai-autopilot-chat pode ser disparada
-- O Fluxo 2 (Fallback Detector) detecta a mensagem de handoff salva
-- Se nesse momento os agentes ficaram offline (ou há timing issue), reverte tudo
+**Causa**: O useEffect em `useInboxView.tsx` (linha 308) tem dependências instáveis:
+
+```typescript
+useEffect(() => {
+  // ...canal realtime...
+}, [queryClient, user?.id, role, departmentIds, filters, fetchOptions]);
+//                                             ↑           ↑
+//                                             Objetos que mudam a cada render!
+```
+
+- `filters` é um objeto novo a cada render (comparação por referência falha)
+- `fetchOptions` é recriado via `useMemo` mas com deps que mudam
+- Isso recria o canal realtime repetidamente, causando perda de conexão
+
+---
+
+### Problema 2: Cache não Persistido
+
+Ao dar refresh na página:
+1. O React Query limpa todo o cache
+2. O `lastSeenRef` é resetado para `null`
+3. Uma nova query busca apenas os últimos 200 registros
+4. Conversas mais antigas "desaparecem" temporariamente
+
+**Impacto**: Usuários perdem acesso a conversas abertas que não estão nos 200 mais recentes.
+
+---
+
+### Problema 3: Múltiplos Canais Conflitantes
+
+A página de Inbox cria **5+ canais realtime simultâneos**:
+
+| Canal | Hook | Tabela |
+|-------|------|--------|
+| `inbox-view-realtime` | useInboxView | inbox_view |
+| `inbox-badge-updates` | useMyPendingCounts | inbox_view |
+| `conversations-realtime-v2` | useConversations | conversations |
+| `messages-realtime-{id}` | useMessages | messages |
+| `user-notifications` | RealtimeNotifications | messages, conversations, etc |
+
+Cada canal tem suas próprias dependências e pode invalidar queries uns dos outros, causando:
+- Refetches desnecessários
+- Perda de dados do cache
+- Overhead de conexão
+
+---
 
 ### Solução Proposta
 
-#### 1. Adicionar Flag de Handoff Executado
+#### Fase 1: Estabilizar Dependências do useEffect
 
-Marcar na conversa que um handoff já foi executado para evitar processamento duplicado:
-
-```sql
--- Adicionar coluna se não existir
-ALTER TABLE conversations ADD COLUMN IF NOT EXISTS 
-  handoff_executed_at TIMESTAMP WITH TIME ZONE;
-```
-
-#### 2. Modificar ai-autopilot-chat
-
-**Verificação Anti-Duplicata no Início:**
-```typescript
-// NO INÍCIO DA FUNÇÃO - Antes de qualquer processamento
-const { data: convCheck } = await supabaseClient
-  .from('conversations')
-  .select('ai_mode, handoff_executed_at')
-  .eq('id', conversationId)
-  .single();
-
-// Se handoff foi executado nos últimos 30 segundos, ignorar
-const handoffAge = convCheck?.handoff_executed_at 
-  ? Date.now() - new Date(convCheck.handoff_executed_at).getTime()
-  : Infinity;
-
-if (convCheck?.ai_mode !== 'autopilot' && handoffAge < 30000) {
-  console.log('[ai-autopilot-chat] ⏸️ Handoff recente detectado - ignorando');
-  return new Response(JSON.stringify({
-    status: 'skipped',
-    reason: 'recent_handoff'
-  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-}
-```
-
-**Marcar Timestamp no Handoff:**
-```typescript
-// QUANDO HANDOFF É EXECUTADO (em ambos os fluxos)
-await supabaseClient
-  .from('conversations')
-  .update({ 
-    ai_mode: 'waiting_human',
-    handoff_executed_at: new Date().toISOString() // NOVO
-  })
-  .eq('id', conversationId);
-```
-
-#### 3. Remover Reversão Automática para Autopilot
-
-A lógica que reverte para `autopilot` quando não há agentes (linhas 4412-4423) é problemática. Em vez de reverter, deve:
+**Arquivo**: `src/hooks/useInboxView.tsx`
 
 ```typescript
-// ANTES (problemático):
-if (routeResult?.no_agents_available) {
-  await supabaseClient.from('conversations').update({ 
-    ai_mode: 'autopilot',  // ❌ REVERTE!
-    needs_human_review: true
-  }).eq('id', conversationId);
-}
+// ANTES (problemático)
+useEffect(() => {
+  // ...
+}, [queryClient, user?.id, role, departmentIds, filters, fetchOptions]);
 
-// DEPOIS (correto):
-if (routeResult?.no_agents_available) {
-  // Manter waiting_human - cliente aguarda na fila
-  await supabaseClient.from('conversations').update({ 
-    ai_mode: 'waiting_human',  // ✅ MANTÉM
-    needs_human_review: true,
-    queue_priority: 1  // Alta prioridade na fila
-  }).eq('id', conversationId);
-  
-  // Mensagem diferente para o cliente
-  assistantMessage = 'Vou te conectar com um especialista! ' +
-    'Nossa equipe está ocupada no momento, mas você está na fila ' +
-    'e será atendido em breve.';
-}
+// DEPOIS (estável)
+// Usar useRef para valores que não precisam recriar o canal
+const stableFilters = useRef(filters);
+stableFilters.current = filters;
+
+useEffect(() => {
+  // ...usar stableFilters.current...
+}, [user?.id]); // Apenas recriar canal quando usuário muda
 ```
 
-### Implementação
+#### Fase 2: Unificar Canais Realtime
 
-#### Arquivos a Modificar
+Criar um único canal consolidado para o inbox que lida com todas as tabelas:
 
-1. **supabase/functions/ai-autopilot-chat/index.ts**
-   - Adicionar verificação anti-duplicata no início
-   - Remover reversão para autopilot quando sem agentes
-   - Marcar timestamp de handoff
+```typescript
+// src/hooks/useInboxRealtime.tsx (NOVO)
+const channel = supabase.channel("inbox-consolidated")
+  .on("postgres_changes", { event: "*", table: "inbox_view" }, handleInboxChange)
+  .on("postgres_changes", { event: "*", table: "conversations" }, handleConversationChange)
+  .subscribe();
+```
 
-2. **Migration SQL**
-   - Adicionar coluna `handoff_executed_at` em `conversations`
+#### Fase 3: Aumentar Limite e Adicionar Paginação
+
+**Arquivo**: `src/hooks/useInboxView.tsx`
+
+```typescript
+// ANTES
+.limit(200)
+
+// DEPOIS: Buscar mais registros inicialmente + paginação sob demanda
+.limit(500) // ou implementar infinite scroll
+```
+
+#### Fase 4: Persistir Cache Crítico (Opcional)
+
+Usar `persistQueryClient` do TanStack Query para manter dados entre refreshes:
+
+```typescript
+import { persistQueryClient } from '@tanstack/react-query-persist-client';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+});
+
+persistQueryClient({
+  queryClient,
+  persister,
+  maxAge: 1000 * 60 * 5, // 5 minutos
+});
+```
+
+---
+
+### Arquivos a Modificar
+
+1. **`src/hooks/useInboxView.tsx`**
+   - Estabilizar dependências do useEffect
+   - Remover `filters` e `fetchOptions` das deps do realtime
+   - Usar refs para valores que não precisam recriar canal
+
+2. **`src/hooks/useConversations.tsx`**
+   - Remover `filters` das deps do useEffect
+   - Usar ref estável para filtros
+
+3. **`src/hooks/useMessages.tsx`**
+   - Remover invalidação de `["inbox-view"]` (já atualizado via realtime próprio)
+
+4. **`src/pages/Inbox.tsx`** (opcional)
+   - Memoizar objeto `filters` com useMemo
+
+---
 
 ### Resultado Esperado
 
-- Handoffs serão persistentes e não serão revertidos
-- Conversas aguardarão na fila `waiting_human` até um agente responder
-- Mensagem de "vou te conectar" será cumprida de fato
-- Flag `needs_human_review` garante prioridade quando agentes ficarem online
+- Canais realtime permanecem estáveis (sem reconexões constantes)
+- Dados permanecem no cache durante navegação
+- Refresh da página carrega dados rapidamente
+- Menos overhead de rede e banco de dados
+- Conversas não "desaparecem" ao atualizar
 
-### Testes Recomendados
+---
 
-1. Enviar mensagem que dispare handoff por baixa confiança
-2. Verificar que `ai_mode` permanece `waiting_human`
-3. Verificar que `assigned_to` está preenchido (ou conversa está na fila)
-4. Enviar nova mensagem do cliente - deve ser ignorada pela IA
-5. Agente responder - `ai_mode` muda para `copilot`
+### Ordem de Implementação
 
+1. Corrigir dependências do useEffect (impacto imediato)
+2. Remover invalidações cruzadas entre hooks
+3. Testar estabilidade do realtime
+4. Avaliar necessidade de persistência de cache
