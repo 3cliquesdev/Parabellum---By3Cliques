@@ -39,12 +39,15 @@ import {
   Mail,
   Layers,
   Eye,
+  Power,
+  PowerOff,
 } from "lucide-react";
 import {
   useEmailTemplatesV2,
   useDeleteEmailTemplateV2,
   useDuplicateEmailTemplateV2,
   useTemplateMetrics,
+  useToggleEmailTemplateV2Status,
 } from "@/hooks/useEmailBuilderV2";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -58,6 +61,7 @@ export function EmailTemplatesV2List({ onCreateNew }: EmailTemplatesV2ListProps)
   const { data: templates, isLoading } = useEmailTemplatesV2();
   const deleteMutation = useDeleteEmailTemplateV2();
   const duplicateMutation = useDuplicateEmailTemplateV2();
+  const toggleStatusMutation = useToggleEmailTemplateV2Status();
   
   const [search, setSearch] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -65,6 +69,10 @@ export function EmailTemplatesV2List({ onCreateNew }: EmailTemplatesV2ListProps)
 
   const handleDuplicate = (id: string) => {
     duplicateMutation.mutate(id);
+  };
+
+  const handleToggleStatus = (id: string, currentStatus: boolean) => {
+    toggleStatusMutation.mutate({ id, is_active: !currentStatus });
   };
 
   const filteredTemplates = templates?.filter(
@@ -157,7 +165,9 @@ export function EmailTemplatesV2List({ onCreateNew }: EmailTemplatesV2ListProps)
               onEdit={() => navigate(`/email-templates/v2/builder/${template.id}`)}
               onDelete={() => handleDelete(template.id)}
               onDuplicate={() => handleDuplicate(template.id)}
+              onToggleStatus={() => handleToggleStatus(template.id, template.is_active ?? false)}
               isDuplicating={duplicateMutation.isPending}
+              isTogglingStatus={toggleStatusMutation.isPending}
               getCategoryColor={getCategoryColor}
             />
           ))}
@@ -205,7 +215,9 @@ interface TemplateCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onToggleStatus: () => void;
   isDuplicating: boolean;
+  isTogglingStatus: boolean;
   getCategoryColor: (category: string | null) => string;
 }
 
@@ -214,7 +226,9 @@ function TemplateCard({
   onEdit,
   onDelete,
   onDuplicate,
+  onToggleStatus,
   isDuplicating,
+  isTogglingStatus,
   getCategoryColor,
 }: TemplateCardProps) {
   const { data: metrics } = useTemplateMetrics(template.id);
@@ -252,6 +266,20 @@ function TemplateCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onToggleStatus} disabled={isTogglingStatus}>
+                {template.is_active ? (
+                  <>
+                    <PowerOff className="h-4 w-4 mr-2" />
+                    {isTogglingStatus ? "Desativando..." : "Desativar"}
+                  </>
+                ) : (
+                  <>
+                    <Power className="h-4 w-4 mr-2 text-green-500" />
+                    {isTogglingStatus ? "Ativando..." : "Ativar"}
+                  </>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={onEdit}>
                 <Pencil className="h-4 w-4 mr-2" />
                 Editar

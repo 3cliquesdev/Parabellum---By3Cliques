@@ -129,6 +129,38 @@ export function useUpdateEmailTemplateV2() {
   });
 }
 
+export function useToggleEmailTemplateV2Status() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const { data, error } = await supabase
+        .from("email_templates_v2")
+        .update({ is_active })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as EmailTemplateV2;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["email-templates-v2"] });
+      queryClient.invalidateQueries({ queryKey: ["email-template-v2", data.id] });
+      toast({ 
+        title: data.is_active ? "Template ativado!" : "Template desativado!",
+        description: data.is_active 
+          ? "O template está pronto para uso" 
+          : "O template não será usado em automações"
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao alterar status", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useDeleteEmailTemplateV2() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
