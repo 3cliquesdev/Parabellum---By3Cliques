@@ -1,105 +1,167 @@
 
-
-## Plano: Corrigir Acesso de Gerentes às Tags de Conversa
+## Plano: Corrigir Matching de Triggers no Chat Flow
 
 ### Problema Identificado
 
-O Danilo Pereira (role: `support_manager`) está recebendo erro ao tentar adicionar tags em conversas.
+O fluxo "Fluxo de Carnaval" não está sendo disparado mesmo com a mensagem correta porque:
 
-**Causa Raiz:** A política RLS `admin_manager_can_manage_conversation_tags` na tabela `conversation_tags` só permite:
-- `admin`
-- `manager`
+**1. Diferença no texto:**
+- **Trigger configurado:** `"Olá vim pelo email e gostaria de saber da promoção de pré carnaval"`
+- **Mensagem enviada:** `"vim pelo email e gostaria de saber da promoção de pré carnaval"` (sem "Olá")
 
-Mas **NÃO inclui** os roles de gerência:
-- `support_manager` (Danilo)
-- `general_manager`
-- `cs_manager`
-- `financial_manager`
+**2. Lógica de matching restritiva:**
+```javascript
+// Linha 509 do process-chat-flow
+messageLower.includes(trigger.toLowerCase())
+```
+Esta lógica exige que a mensagem do usuário **contenha o trigger INTEIRO**, ou seja, se o trigger tem "Olá" no início e a mensagem não tem, não há match.
 
-**Nota:** As políticas da tabela `tags` (criar/editar tags) já estão corretas e incluem todos os gerentes. O problema é apenas na tabela `conversation_tags` (associar tags a conversas).
-
----
-
-### Solução
-
-Atualizar a política RLS da tabela `conversation_tags` para incluir todos os roles de gerência.
+**3. Aspa extra na mensagem:**
+A mensagem recebida tem uma aspa (`"`) no final: `vim pelo email e gostaria de saber da promoção de pré carnaval"`. Isso pode indicar problema na interface de envio, mas não impacta o matching se a lógica for corrigida.
 
 ---
 
-### Migração SQL
+### Solução Proposta
 
-```sql
--- Remover política antiga restritiva
-DROP POLICY IF EXISTS "admin_manager_can_manage_conversation_tags" ON public.conversation_tags;
+Melhorar a lógica de matching para ser **bidirecional e mais flexível**:
 
--- Criar nova política incluindo todos os roles de gerência
-CREATE POLICY "admin_manager_can_manage_conversation_tags"
-ON public.conversation_tags
-FOR ALL
-USING (
-  has_role(auth.uid(), 'admin'::app_role) OR 
-  has_role(auth.uid(), 'manager'::app_role) OR
-  has_role(auth.uid(), 'general_manager'::app_role) OR
-  has_role(auth.uid(), 'support_manager'::app_role) OR
-  has_role(auth.uid(), 'cs_manager'::app_role) OR
-  has_role(auth.uid(), 'financial_manager'::app_role)
-)
-WITH CHECK (
-  has_role(auth.uid(), 'admin'::app_role) OR 
-  has_role(auth.uid(), 'manager'::app_role) OR
-  has_role(auth.uid(), 'general_manager'::app_role) OR
-  has_role(auth.uid(), 'support_manager'::app_role) OR
-  has_role(auth.uid(), 'cs_manager'::app_role) OR
-  has_role(auth.uid(), 'financial_manager'::app_role)
-);
+1. **Match direto:** Mensagem contém trigger (atual)
+2. **Match reverso:** Trigger contém mensagem (novo)
+3. **Match por palavras-chave:** Dividir trigger em palavras e verificar se X% estão na mensagem
+
+---
+
+### Código Atual vs Proposto
+
+**Atual (linha 508-512):**
+```javascript
+for (const trigger of allTriggers) {
+  if (messageLower.includes(trigger.toLowerCase())) {
+    matchedFlow = flow;
+    break;
+  }
+}
+```
+
+**Proposto:**
+```javascript
+for (const trigger of allTriggers) {
+  const triggerLower = trigger.toLowerCase().trim();
+  
+  // Match 1: Mensagem contém o trigger inteiro
+  if (messageLower.includes(triggerLower)) {
+    matchedFlow = flow;
+    break;
+  }
+  
+  // Match 2: Trigger contém a mensagem (usuário escreveu parte do trigger)
+  if (triggerLower.includes(messageLower) && messageLower.length >= 10) {
+    matchedFlow = flow;
+    break;
+  }
+  
+  // Match 3: Verificar palavras-chave significativas
+  const triggerWords = triggerLower
+    .split(/\s+/)
+    .filter(w => w.length > 3); // Ignorar palavras curtas como "e", "de", "da"
+  
+  const matchedWords = triggerWords.filter(word => messageLower.includes(word));
+  const matchRatio = matchedWords.length / triggerWords.length;
+  
+  // Se 70%+ das palavras significativas do trigger estão na mensagem
+  if (matchRatio >= 0.7 && matchedWords.length >= 3) {
+    matchedFlow = flow;
+    break;
+  }
+}
 ```
 
 ---
 
-### Roles Afetados
+### Exemplo de Match
 
-| Role | Antes | Depois |
-|------|-------|--------|
-| admin | ✅ | ✅ |
-| manager | ✅ | ✅ |
-| general_manager | ❌ | ✅ |
-| support_manager | ❌ | ✅ |
-| cs_manager | ❌ | ✅ |
-| financial_manager | ❌ | ✅ |
-| sales_rep | ✅ (outra política) | ✅ |
-| support_agent | ✅ (outra política) | ✅ |
+| Trigger | Mensagem | Match Atual | Match Novo |
+|---------|----------|-------------|------------|
+| `Olá vim pelo email e gostaria de saber da promoção de pré carnaval` | `vim pelo email e gostaria de saber da promoção de pré carnaval` | ❌ | ✅ (70%+ palavras) |
+| `carnaval` | `quero saber sobre carnaval` | ✅ | ✅ |
+| `promoção carnaval` | `vim ver a promoção de carnaval` | ✅ | ✅ |
 
 ---
 
-### Impacto
+### Alternativa Simples (Recomendada)
 
-- **Danilo Pereira** (support_manager) poderá adicionar/remover tags de conversas
-- Outros gerentes também terão acesso
-- Nenhuma alteração no frontend necessária
-- Este é um problema **apenas para gerentes** - agentes e vendedores já funcionam por outras políticas
+Ao invés de modificar a lógica de matching, uma solução mais simples e segura seria:
+
+**Adicionar keywords mais curtas no fluxo** via interface:
+- `carnaval`
+- `promoção`  
+- `vim pelo email`
+
+Isso mantém a lógica atual funcionando e dá controle ao administrador.
+
+**Porém**, para resolver o problema sem exigir alteração manual do usuário, a modificação no código é necessária.
 
 ---
 
-### Seção Tecnica
+### Arquivos a Modificar
 
-**Tabela afetada:** `public.conversation_tags`
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/process-chat-flow/index.ts` | Melhorar lógica de matching de triggers (linhas 508-515) |
 
-**Política atual:**
-```sql
-has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'manager'::app_role)
+---
+
+### Seção Técnica
+
+**Arquivo:** `supabase/functions/process-chat-flow/index.ts`
+
+**Linhas afetadas:** 503-515
+
+**Nova implementação com match flexível:**
+```typescript
+// Função auxiliar para normalizar texto
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[^\w\s]/g, '') // Remove pontuação
+    .trim();
+}
+
+// Na lógica de matching (linha 503+)
+for (const flow of flows) {
+  const keywords = flow.trigger_keywords || [];
+  const triggers = flow.triggers || [];
+  const allTriggers = [...keywords, ...triggers];
+
+  for (const trigger of allTriggers) {
+    const triggerNorm = normalizeText(trigger);
+    const messageNorm = normalizeText(userMessage);
+    
+    // Match 1: Inclusão direta (qualquer direção)
+    if (messageNorm.includes(triggerNorm) || triggerNorm.includes(messageNorm)) {
+      matchedFlow = flow;
+      break;
+    }
+    
+    // Match 2: Similaridade por palavras (para triggers longos)
+    if (triggerNorm.length > 20) {
+      const triggerWords = triggerNorm.split(/\s+/).filter(w => w.length > 3);
+      const matchedWords = triggerWords.filter(w => messageNorm.includes(w));
+      
+      if (triggerWords.length > 0 && (matchedWords.length / triggerWords.length) >= 0.6) {
+        matchedFlow = flow;
+        break;
+      }
+    }
+  }
+  if (matchedFlow) break;
+}
 ```
 
-**Nova política:**
-```sql
-has_role(auth.uid(), 'admin'::app_role) OR 
-has_role(auth.uid(), 'manager'::app_role) OR
-has_role(auth.uid(), 'general_manager'::app_role) OR
-has_role(auth.uid(), 'support_manager'::app_role) OR
-has_role(auth.uid(), 'cs_manager'::app_role) OR
-has_role(auth.uid(), 'financial_manager'::app_role)
-```
-
-**Usuario afetado:**
-- Nome: Danilo Pereira
-- Role: `support_manager`
-
+**Por que essa abordagem:**
+1. **Normalização:** Remove acentos e pontuação para evitar falhas por caracteres especiais
+2. **Bidirecional:** Aceita tanto "mensagem contém trigger" quanto "trigger contém mensagem"
+3. **Fuzzy matching:** Para triggers longos, aceita 60%+ de palavras correspondentes
+4. **Retrocompatível:** Triggers curtos como "carnaval" continuam funcionando normalmente
