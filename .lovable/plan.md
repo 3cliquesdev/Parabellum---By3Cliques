@@ -1,178 +1,158 @@
 
 
-## Plano: Script de Limpeza de Contatos Duplicados
+## Plano: Correção do Bug de Handoff que Não Transfere
 
-### Diagnostico
+### Diagnóstico
 
-Analise do banco identificou:
+Analisei detalhadamente o fluxo de handoff e identifiquei a causa raiz do problema relatado: **"bot avisa mas não transfere"**.
 
-- **129 grupos de telefones duplicados** (mesmo telefone com 2+ contatos)
-- **20+ tabelas** referenciam `contact_id` que precisam ser migradas
-- Maior impacto: 407 mensagens no telefone 11969656723 (ja mesclado)
-- Contatos duplicados vieram principalmente da importacao Kiwify e diferentes canais (Evolution vs Meta)
+#### Evidências Encontradas
 
-### Tabelas Afetadas
+1. **No banco de dados** - Conversa `71d2d010-bbdb-45f5-b518-9859fb9652e5`:
+   - Última mensagem: "vou te conectar com um de nossos especialistas"
+   - ai_mode: `autopilot` (deveria ser `waiting_human`)
+   - assigned_to: `null` (deveria ter um agente)
 
-Todas as referencias a `contact_id` que precisam ser migradas antes de deletar contatos duplicados:
+2. **Nos logs do route-conversation**:
+   - 11:25:34: "Processing conversation: 71d2d010..."
+   - 11:25:35: "ai_mode: waiting_human → waiting_human"
+   - 11:25:35: "Assigning to: Camila de Farias"
+   - **Atribuição foi feita com sucesso!**
 
-| Tabela | Coluna |
-|--------|--------|
-| conversations | contact_id |
-| messages | (via conversation_id) |
-| activities | contact_id |
-| deals | contact_id |
-| form_submissions | contact_id |
-| email_sends | contact_id |
-| cadence_enrollments | contact_id |
-| cadence_tasks | contact_id |
-| customer_journey_steps | contact_id |
-| playbook_executions | contact_id |
-| playbook_goals | contact_id |
-| ai_quality_logs | contact_id |
-| ai_failure_logs | contact_id |
-| instagram_messages | contact_id |
-| instagram_comments | contact_id |
-| internal_requests | contact_id |
-| lead_distribution_logs | contact_id |
-| onboarding_submissions | contact_id |
-| quotes | contact_id |
-| project_boards | contact_id |
-| project_cards | contact_id |
-| inbox_view | contact_id |
+3. **Problema**: O estado foi REVERTIDO após a atribuição bem-sucedida
 
-### Estrategia de Mesclagem
+### Causa Raiz
+
+Existe uma **condição de corrida (race condition)** entre dois fluxos de handoff no `ai-autopilot-chat`:
 
 ```text
-Para cada grupo de contatos duplicados:
-+-------------------+
-| Identificar grupo |
-| por normalized_phone|
-+--------+----------+
-         |
-         v
-+-------------------+
-| Selecionar MASTER |
-| (mais antigo,     |
-|  mais completo)   |
-+--------+----------+
-         |
-         v
-+-------------------+
-| Migrar referencias|
-| de todas tabelas  |
-| para MASTER       |
-+--------+----------+
-         |
-         v
-+-------------------+
-| Deletar duplicados|
-| (manter MASTER)   |
-+-------------------+
+FLUXO 1: LOW CONFIDENCE HANDOFF (Linha ~2089)
++------------------------------------------+
+| 1. Atualiza ai_mode → waiting_human      |
+| 2. Chama route-conversation              |
+| 3. Salva mensagem de handoff             |
+| 4. RETORNA                               |
++------------------------------------------+
+
+FLUXO 2: FALLBACK DETECTOR (Linha ~4391)
++------------------------------------------+
+| 1. Detecta frase de handoff na mensagem  |
+| 2. Atualiza ai_mode → copilot            |
+| 3. Chama route-conversation NOVAMENTE    |
+| 4. Se no_agents_available:               |
+|    - REVERTE ai_mode → autopilot         |
+|    - assigned_to → NULL                  |
++------------------------------------------+
 ```
 
-### Criterios para Contato Master
+**O Bug Específico:**
+- O Fluxo 1 (Low Confidence) retorna com sucesso após handoff
+- MAS outra instância/chamada do ai-autopilot-chat pode ser disparada
+- O Fluxo 2 (Fallback Detector) detecta a mensagem de handoff salva
+- Se nesse momento os agentes ficaram offline (ou há timing issue), reverte tudo
 
-1. **Prioridade 1**: Contato mais antigo (`created_at`)
-2. **Prioridade 2**: Contato com mais dados preenchidos (email, nome completo, etc.)
-3. **Prioridade 3**: Contato com conversas abertas
+### Solução Proposta
 
-### Implementacao
+#### 1. Adicionar Flag de Handoff Executado
 
-#### 1. Criar Function SQL `merge_duplicate_contacts`
-
-Funcao que recebe um array de `contact_ids` e mescla todos no primeiro (master):
+Marcar na conversa que um handoff já foi executado para evitar processamento duplicado:
 
 ```sql
-CREATE OR REPLACE FUNCTION merge_duplicate_contacts(
-  p_master_id UUID,
-  p_duplicate_ids UUID[]
-) RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_dup_id UUID;
-  v_result JSONB := '{}';
-  v_migrated INT := 0;
-BEGIN
-  -- Para cada ID duplicado
-  FOREACH v_dup_id IN ARRAY p_duplicate_ids
-  LOOP
-    -- Migrar conversas
-    UPDATE conversations SET contact_id = p_master_id WHERE contact_id = v_dup_id;
-    -- Migrar activities
-    UPDATE activities SET contact_id = p_master_id WHERE contact_id = v_dup_id;
-    -- ... (demais tabelas)
-    
-    -- Deletar contato duplicado
-    DELETE FROM contacts WHERE id = v_dup_id;
-    v_migrated := v_migrated + 1;
-  END LOOP;
+-- Adicionar coluna se não existir
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS 
+  handoff_executed_at TIMESTAMP WITH TIME ZONE;
+```
+
+#### 2. Modificar ai-autopilot-chat
+
+**Verificação Anti-Duplicata no Início:**
+```typescript
+// NO INÍCIO DA FUNÇÃO - Antes de qualquer processamento
+const { data: convCheck } = await supabaseClient
+  .from('conversations')
+  .select('ai_mode, handoff_executed_at')
+  .eq('id', conversationId)
+  .single();
+
+// Se handoff foi executado nos últimos 30 segundos, ignorar
+const handoffAge = convCheck?.handoff_executed_at 
+  ? Date.now() - new Date(convCheck.handoff_executed_at).getTime()
+  : Infinity;
+
+if (convCheck?.ai_mode !== 'autopilot' && handoffAge < 30000) {
+  console.log('[ai-autopilot-chat] ⏸️ Handoff recente detectado - ignorando');
+  return new Response(JSON.stringify({
+    status: 'skipped',
+    reason: 'recent_handoff'
+  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+}
+```
+
+**Marcar Timestamp no Handoff:**
+```typescript
+// QUANDO HANDOFF É EXECUTADO (em ambos os fluxos)
+await supabaseClient
+  .from('conversations')
+  .update({ 
+    ai_mode: 'waiting_human',
+    handoff_executed_at: new Date().toISOString() // NOVO
+  })
+  .eq('id', conversationId);
+```
+
+#### 3. Remover Reversão Automática para Autopilot
+
+A lógica que reverte para `autopilot` quando não há agentes (linhas 4412-4423) é problemática. Em vez de reverter, deve:
+
+```typescript
+// ANTES (problemático):
+if (routeResult?.no_agents_available) {
+  await supabaseClient.from('conversations').update({ 
+    ai_mode: 'autopilot',  // ❌ REVERTE!
+    needs_human_review: true
+  }).eq('id', conversationId);
+}
+
+// DEPOIS (correto):
+if (routeResult?.no_agents_available) {
+  // Manter waiting_human - cliente aguarda na fila
+  await supabaseClient.from('conversations').update({ 
+    ai_mode: 'waiting_human',  // ✅ MANTÉM
+    needs_human_review: true,
+    queue_priority: 1  // Alta prioridade na fila
+  }).eq('id', conversationId);
   
-  RETURN jsonb_build_object('merged', v_migrated, 'master', p_master_id);
-END;
-$$;
+  // Mensagem diferente para o cliente
+  assistantMessage = 'Vou te conectar com um especialista! ' +
+    'Nossa equipe está ocupada no momento, mas você está na fila ' +
+    'e será atendido em breve.';
+}
 ```
 
-#### 2. Criar Script de Execucao em Batch
+### Implementação
 
-Para evitar timeouts, processar em lotes de 10 grupos por vez:
+#### Arquivos a Modificar
 
-```sql
-WITH duplicate_groups AS (
-  SELECT 
-    RIGHT(REGEXP_REPLACE(COALESCE(phone,whatsapp_id,''),'[^0-9]','','g'),11) as norm_phone,
-    array_agg(id ORDER BY created_at) as contact_ids
-  FROM contacts
-  WHERE (phone IS NOT NULL OR whatsapp_id IS NOT NULL)
-  GROUP BY 1
-  HAVING COUNT(*) > 1
-  LIMIT 10
-)
-SELECT merge_duplicate_contacts(
-  contact_ids[1],  -- master = mais antigo
-  contact_ids[2:]  -- duplicados
-)
-FROM duplicate_groups;
-```
+1. **supabase/functions/ai-autopilot-chat/index.ts**
+   - Adicionar verificação anti-duplicata no início
+   - Remover reversão para autopilot quando sem agentes
+   - Marcar timestamp de handoff
 
-#### 3. Tratar inbox_view
-
-A tabela `inbox_view` precisa ser sincronizada apos a mesclagem:
-
-```sql
--- Deletar entradas orfas do inbox_view
-DELETE FROM inbox_view 
-WHERE contact_id NOT IN (SELECT id FROM contacts);
-
--- Ou reconstruir via trigger existente
-```
-
-### Tarefas de Implementacao
-
-1. **Criar migration** com a funcao `merge_duplicate_contacts`
-2. **Executar limpeza** via SQL em batches (pode levar varios minutos)
-3. **Validar resultados** - contar contatos restantes e verificar integridade
-4. **Atualizar inbox_view** para refletir as mudancas
-
-### Seguranca
-
-- Script roda com `SECURITY DEFINER` para bypassar RLS
-- Backup antes de executar (recomendado)
-- Execucao em horario de baixo uso
-- Logs de cada operacao para auditoria
+2. **Migration SQL**
+   - Adicionar coluna `handoff_executed_at` em `conversations`
 
 ### Resultado Esperado
 
-- **Antes**: ~129 grupos duplicados + contatos orfaos
-- **Depois**: 1 contato por telefone, historico unificado
-- Todas as mensagens Evolution + Meta no mesmo thread
-- inbox_view atualizado automaticamente
+- Handoffs serão persistentes e não serão revertidos
+- Conversas aguardarão na fila `waiting_human` até um agente responder
+- Mensagem de "vou te conectar" será cumprida de fato
+- Flag `needs_human_review` garante prioridade quando agentes ficarem online
 
-### Proximos Passos
+### Testes Recomendados
 
-Apos aprovacao, vou:
-1. Criar a migration com a funcao de mesclagem
-2. Executar o script de limpeza em batches
-3. Reportar resultados da limpeza
+1. Enviar mensagem que dispare handoff por baixa confiança
+2. Verificar que `ai_mode` permanece `waiting_human`
+3. Verificar que `assigned_to` está preenchido (ou conversa está na fila)
+4. Enviar nova mensagem do cliente - deve ser ignorada pela IA
+5. Agente responder - `ai_mode` muda para `copilot`
 
