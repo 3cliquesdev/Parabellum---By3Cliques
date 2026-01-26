@@ -10,6 +10,7 @@ interface RouteConversationRequest {
   conversationId: string;
   priority?: number;
   department_id?: string;  // Slug do departamento (ex: "comercial", "suporte_n1")
+  targetDepartmentId?: string;  // 🆕 UUID direto do departamento (usado pelo Transfer Node)
   aiAnalysis?: {
     category?: string;
     intent?: string;
@@ -80,10 +81,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, priority = 0, department_id, aiAnalysis } = await req.json() as RouteConversationRequest;
+    const { conversationId, priority = 0, department_id, targetDepartmentId, aiAnalysis } = await req.json() as RouteConversationRequest;
 
     console.log(`[route-conversation] 🔄 Processing conversation: ${conversationId}`);
-    console.log(`[route-conversation] 📌 Params: priority=${priority}, department_id=${department_id}, AI category=${aiAnalysis?.category}`);
+    console.log(`[route-conversation] 📌 Params: priority=${priority}, department_id=${department_id}, targetDepartmentId=${targetDepartmentId}, AI category=${aiAnalysis?.category}`);
 
     // 1. Buscar dados da conversa e contato
     console.log('[route-conversation] 📊 Fetching conversation data...');
@@ -149,11 +150,43 @@ serve(async (req) => {
       );
     }
 
-    // 🆕 2. RESOLVER DEPARTAMENTO A PARTIR DO department_id
+    // 🆕 2. RESOLVER DEPARTAMENTO A PARTIR DO department_id OU targetDepartmentId
     let resolvedDepartmentId = conversation.department;
     let resolvedDepartmentName = (conversation.departments as any)?.name || null;
     
-    if (department_id && !conversation.department) {
+    // 🆕 PRIORIDADE 1: targetDepartmentId (UUID direto do Transfer Node)
+    if (targetDepartmentId && !conversation.department) {
+      console.log(`[route-conversation] 🎯 Using targetDepartmentId (UUID): "${targetDepartmentId}"`);
+      
+      // Buscar departamento pelo UUID
+      const { data: targetDept, error: targetDeptError } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('id', targetDepartmentId)
+        .maybeSingle();
+      
+      if (targetDept && !targetDeptError) {
+        console.log(`[route-conversation] ✅ Found department by UUID: ${targetDept.name} (${targetDept.id})`);
+        
+        // Atualizar conversa com o departamento ANTES de rotear
+        const { error: updateDeptError } = await supabase
+          .from('conversations')
+          .update({ department: targetDept.id })
+          .eq('id', conversationId);
+        
+        if (updateDeptError) {
+          console.error('[route-conversation] ⚠️ Failed to update conversation department:', updateDeptError.message);
+        } else {
+          console.log(`[route-conversation] ✅ Conversation department updated to: ${targetDept.name}`);
+          resolvedDepartmentId = targetDept.id;
+          resolvedDepartmentName = targetDept.name;
+        }
+      } else {
+        console.log(`[route-conversation] ⚠️ Department not found for UUID: "${targetDepartmentId}"`);
+      }
+    }
+    // PRIORIDADE 2: department_id (slug)
+    else if (department_id && !conversation.department) {
       console.log(`[route-conversation] 🏷️ Resolving department from slug: "${department_id}"`);
       
       const deptSlug = department_id.toLowerCase();

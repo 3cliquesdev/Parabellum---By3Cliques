@@ -1388,6 +1388,48 @@ Como posso ajudar você hoje?`;
         if (flowResult.useAI === false && flowResult.response) {
           console.log('[ai-autopilot-chat] ✅ Fluxo determinístico - usando resposta do flow');
           
+          // 🆕 TRANSFER NODE: Se é uma transferência, executar handoff real
+          if (flowResult.transfer === true && flowResult.departmentId) {
+            console.log('[ai-autopilot-chat] 🔀 TRANSFER NODE - Executando handoff real para departamento:', flowResult.departmentId);
+            
+            // 1. Marcar handoff com timestamp para anti-race-condition
+            const handoffTimestamp = new Date().toISOString();
+            
+            const { error: handoffUpdateError } = await supabaseClient
+              .from('conversations')
+              .update({ 
+                ai_mode: 'waiting_human',
+                handoff_executed_at: handoffTimestamp,
+                needs_human_review: true,
+                department: flowResult.departmentId,
+              })
+              .eq('id', conversationId);
+            
+            if (handoffUpdateError) {
+              console.error('[ai-autopilot-chat] ❌ Erro ao marcar handoff:', handoffUpdateError);
+            } else {
+              console.log('[ai-autopilot-chat] ✅ Conversa marcada como waiting_human com department:', flowResult.departmentId);
+            }
+            
+            // 2. Chamar route-conversation para distribuir para agentes
+            try {
+              const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
+                body: { 
+                  conversationId,
+                  targetDepartmentId: flowResult.departmentId
+                }
+              });
+              
+              if (routeError) {
+                console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
+              } else {
+                console.log('[ai-autopilot-chat] ✅ Conversa roteada com sucesso:', routeResult);
+              }
+            } catch (routeErr) {
+              console.error('[ai-autopilot-chat] ❌ Exceção ao chamar route-conversation:', routeErr);
+            }
+          }
+          
           // Salvar resposta do fluxo
           const { data: flowMsgData } = await supabaseClient
             .from("messages")
@@ -1435,6 +1477,8 @@ Como posso ajudar você hoje?`;
               source: 'chat_flow',
               flowId: flowResult.flowId,
               options: flowResult.options,
+              transfer: flowResult.transfer || false,
+              departmentId: flowResult.departmentId || null,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
