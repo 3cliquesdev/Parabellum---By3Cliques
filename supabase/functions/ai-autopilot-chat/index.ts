@@ -399,6 +399,24 @@ const SCORE_DIRECT = 0.95;   // Antes: 0.90 - Só responde direto com ALTA certe
 const SCORE_CAUTIOUS = 0.85; // Antes: 0.80 - Margem maior para resposta cautelosa
 const SCORE_MINIMUM = 0.70;  // Novo: Abaixo disso, SEMPRE handoff
 
+// 🆕 Thresholds do MODO RAG ESTRITO (Anti-Alucinação)
+const STRICT_SCORE_MINIMUM = 0.85;   // Abaixo disso, SEMPRE handoff no modo estrito
+const STRICT_SIMILARITY_THRESHOLD = 0.80; // Artigos com menos de 80% são ignorados
+
+// 🆕 Indicadores de incerteza/alucinação para validação pós-resposta
+const HALLUCINATION_INDICATORS = [
+  'não tenho certeza',
+  'acredito que',
+  'provavelmente',
+  'geralmente',
+  'pode ser que',
+  'talvez',
+  'é possível que',
+  'me parece que',
+  'suponho que',
+  'imagino que'
+];
+
 // Indicadores de conflito
 const CONFLICT_INDICATORS = ['porém', 'entretanto', 'no entanto', 'diferente', 'contrário', 'atualizado', 'novo', 'antigo'];
 
@@ -1962,6 +1980,145 @@ Como posso ajudar você hoje?`;
       
       return await fallbackResponse.json();
     }
+    
+    // ============================================================
+    // 🎯 MODO RAG ESTRITO - OpenAI GPT-4o Exclusivo (Anti-Alucinação)
+    // ============================================================
+    // Quando ativo: usa APENAS OpenAI GPT-4o, sem fallback, com thresholds rígidos
+    // Cita fontes explicitamente e recusa responder quando não tem informação
+    // ============================================================
+    interface StrictRAGResult {
+      shouldHandoff: boolean;
+      reason: string | null;
+      response: string | null;
+      citedArticles?: string[];
+    }
+    
+    async function callStrictRAG(
+      supabaseClient: any,
+      customerMessage: string,
+      knowledgeArticles: any[],
+      contactName: string,
+      openaiApiKey: string
+    ): Promise<StrictRAGResult> {
+      console.log('[callStrictRAG] 🎯 Iniciando RAG Estrito com GPT-4o');
+      
+      // Filtrar apenas artigos com alta confiança (≥80%)
+      const highConfidenceArticles = knowledgeArticles.filter(
+        (a: any) => (a.similarity || 0) >= STRICT_SIMILARITY_THRESHOLD
+      );
+      
+      console.log('[callStrictRAG] 📊 Artigos filtrados:', {
+        total: knowledgeArticles.length,
+        highConfidence: highConfidenceArticles.length,
+        threshold: STRICT_SIMILARITY_THRESHOLD
+      });
+      
+      // Se não houver artigos de alta confiança, handoff imediato
+      if (highConfidenceArticles.length === 0) {
+        return {
+          shouldHandoff: true,
+          reason: 'Nenhum artigo com confiança >= 80% na base de conhecimento',
+          response: null
+        };
+      }
+      
+      // Prompt enxuto e focado para RAG estrito
+      const strictPrompt = `Você é um assistente de suporte que APENAS responde com base nos documentos fornecidos.
+
+REGRAS ABSOLUTAS:
+1. NUNCA invente informações que não estejam nos documentos abaixo
+2. Se a resposta não estiver nos documentos, diga EXATAMENTE: "Não encontrei essa informação na base de conhecimento. Posso te conectar com um especialista?"
+3. Sempre cite a fonte: "De acordo com [título do artigo]..."
+4. Mantenha respostas concisas (máximo 150 palavras)
+5. Seja direto e objetivo
+
+DOCUMENTOS DISPONÍVEIS:
+${highConfidenceArticles.map((a: any) => `### ${a.title} (${((a.similarity || 0) * 100).toFixed(0)}% relevância)
+${a.content}`).join('\n\n---\n\n')}`;
+
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o', // Modelo mais preciso (não gpt-4o-mini)
+            messages: [
+              { role: 'system', content: strictPrompt },
+              { role: 'user', content: `${contactName}: ${customerMessage}` }
+            ],
+            temperature: 0.3, // Baixa criatividade = alta fidelidade à KB
+            max_tokens: 400
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[callStrictRAG] ❌ OpenAI GPT-4o falhou:', response.status, errorText);
+          throw new Error(`OpenAI strict RAG failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const aiMessage = data.choices?.[0]?.message?.content || '';
+        
+        console.log('[callStrictRAG] 📝 Resposta GPT-4o recebida:', aiMessage.substring(0, 100) + '...');
+        
+        // Validação pós-geração: detectar indicadores de incerteza/alucinação
+        const hasUncertainty = HALLUCINATION_INDICATORS.some(
+          indicator => aiMessage.toLowerCase().includes(indicator)
+        );
+        
+        if (hasUncertainty) {
+          console.log('[callStrictRAG] ⚠️ Incerteza detectada na resposta - forçando handoff');
+          return {
+            shouldHandoff: true,
+            reason: 'IA expressou incerteza na resposta gerada',
+            response: aiMessage
+          };
+        }
+        
+        // Verificar se a IA indicou que não encontrou informação
+        const notFoundPatterns = [
+          'não encontrei essa informação',
+          'não encontrei na base',
+          'não tenho essa informação',
+          'posso te conectar com um especialista'
+        ];
+        
+        const notFoundInKB = notFoundPatterns.some(
+          pattern => aiMessage.toLowerCase().includes(pattern)
+        );
+        
+        if (notFoundInKB) {
+          console.log('[callStrictRAG] 📭 IA indicou que não encontrou informação - handoff');
+          return {
+            shouldHandoff: true,
+            reason: 'Informação não encontrada na base de conhecimento (IA reconheceu)',
+            response: aiMessage
+          };
+        }
+        
+        console.log('[callStrictRAG] ✅ Resposta validada com sucesso');
+        return {
+          shouldHandoff: false,
+          reason: null,
+          response: aiMessage,
+          citedArticles: highConfidenceArticles.map((a: any) => a.title)
+        };
+        
+      } catch (error) {
+        console.error('[callStrictRAG] ❌ Erro no RAG estrito:', error);
+        // Em modo estrito, erro = handoff (não fallback para outro modelo)
+        return {
+          shouldHandoff: true,
+          reason: `Erro no processamento RAG: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+          response: null
+        };
+      }
+    }
 
     // FASE 1 & 2: Classificar intenção com lógica invertida (skip vs search)
     console.log('[ai-autopilot-chat] Classificando intenção da mensagem...');
@@ -2307,6 +2464,196 @@ Responda APENAS: skip ou search`
     
     // ============================================================
     // 🎯 SISTEMA ANTI-ALUCINAÇÃO - VERIFICAÇÃO DE CONFIANÇA
+    // ============================================================
+    
+    // 🆕 Buscar configuração do modo RAG estrito
+    let isStrictRAGMode = false;
+    try {
+      const { data: strictModeConfig } = await supabaseClient
+        .from('system_configurations')
+        .select('value')
+        .eq('key', 'ai_strict_rag_mode')
+        .maybeSingle();
+      
+      isStrictRAGMode = strictModeConfig?.value === 'true';
+      console.log('[ai-autopilot-chat] 🎯 Modo RAG Estrito:', isStrictRAGMode ? 'ATIVADO' : 'desativado');
+    } catch (configError) {
+      console.warn('[ai-autopilot-chat] ⚠️ Erro ao buscar config strict mode:', configError);
+    }
+    
+    // ============================================================
+    // 🆕 MODO RAG ESTRITO - Processamento exclusivo com GPT-4o
+    // ============================================================
+    if (isStrictRAGMode && OPENAI_API_KEY && knowledgeArticles.length > 0) {
+      console.log('[ai-autopilot-chat] 🎯 STRICT RAG MODE ATIVO - Usando GPT-4o exclusivo');
+      
+      const strictResult = await callStrictRAG(
+        supabaseClient,
+        customerMessage,
+        knowledgeArticles,
+        contactName,
+        OPENAI_API_KEY
+      );
+      
+      if (strictResult.shouldHandoff) {
+        console.log('[ai-autopilot-chat] 🚨 STRICT RAG: Handoff necessário -', strictResult.reason);
+        
+        // Executar handoff
+        const handoffTimestamp = new Date().toISOString();
+        await supabaseClient
+          .from('conversations')
+          .update({ 
+            ai_mode: 'waiting_human',
+            handoff_executed_at: handoffTimestamp,
+            needs_human_review: true
+          })
+          .eq('id', conversationId);
+        
+        // Rotear para agente humano
+        await supabaseClient.functions.invoke('route-conversation', {
+          body: { conversationId }
+        });
+        
+        // Mensagem padronizada de handoff para modo estrito
+        const strictHandoffMessage = `Olá ${contactName}! Para te ajudar da melhor forma com essa questão específica, vou te conectar com um de nossos especialistas.\n\nUm momento, por favor.`;
+        
+        // Salvar mensagem
+        await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: strictHandoffMessage,
+          sender_type: 'user',
+          is_ai_generated: true,
+          channel: responseChannel
+        });
+        
+        // Enviar via WhatsApp se necessário
+        if (responseChannel === 'whatsapp' && contact?.phone) {
+          const whatsappResult = await getWhatsAppInstanceForConversation(
+            supabaseClient, 
+            conversationId, 
+            conversation.whatsapp_instance_id,
+            conversation
+          );
+          
+          if (whatsappResult) {
+            await sendWhatsAppMessage(
+              supabaseClient,
+              whatsappResult,
+              contact.phone,
+              strictHandoffMessage,
+              conversationId,
+              contact.whatsapp_id,
+              true
+            );
+          }
+        }
+        
+        // Registrar nota interna
+        await supabaseClient.from('interactions').insert({
+          customer_id: contact.id,
+          type: 'internal_note',
+          content: `🎯 **Handoff via Modo RAG Estrito**\n\n**Motivo:** ${strictResult.reason}\n**Pergunta:** "${customerMessage}"\n\nModo anti-alucinação ativo - handoff executado por falta de informação confiável na KB.`,
+          channel: responseChannel
+        });
+        
+        // Log de qualidade
+        await supabaseClient.from('ai_quality_logs').insert({
+          conversation_id: conversationId,
+          contact_id: contact.id,
+          customer_message: customerMessage,
+          ai_response: strictResult.response,
+          action_taken: 'handoff',
+          handoff_reason: strictResult.reason,
+          confidence_score: 0,
+          articles_count: knowledgeArticles.length
+        });
+        
+        return new Response(JSON.stringify({
+          status: 'strict_rag_handoff',
+          message: strictHandoffMessage,
+          reason: strictResult.reason,
+          strict_mode: true
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // Resposta validada - enviar ao cliente
+      console.log('[ai-autopilot-chat] ✅ STRICT RAG: Resposta validada com fontes citadas');
+      
+      const strictResponse = strictResult.response!;
+      
+      // Salvar mensagem da IA
+      const { data: strictMsgData } = await supabaseClient
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          content: strictResponse,
+          sender_type: 'user',
+          is_ai_generated: true,
+          channel: responseChannel
+        })
+        .select('id')
+        .single();
+      
+      // Atualizar last_message_at
+      await supabaseClient
+        .from('conversations')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', conversationId);
+      
+      // Enviar via WhatsApp se necessário
+      if (responseChannel === 'whatsapp' && contact?.phone && strictMsgData) {
+        const whatsappResult = await getWhatsAppInstanceForConversation(
+          supabaseClient, 
+          conversationId, 
+          conversation.whatsapp_instance_id,
+          conversation
+        );
+        
+        if (whatsappResult) {
+          const sendResult = await sendWhatsAppMessage(
+            supabaseClient,
+            whatsappResult,
+            contact.phone,
+            strictResponse,
+            conversationId,
+            contact.whatsapp_id
+          );
+          
+          if (sendResult.success) {
+            await supabaseClient
+              .from('messages')
+              .update({ status: 'sent' })
+              .eq('id', strictMsgData.id);
+          }
+        }
+      }
+      
+      // Log de qualidade para resposta bem-sucedida
+      await supabaseClient.from('ai_quality_logs').insert({
+        conversation_id: conversationId,
+        contact_id: contact.id,
+        customer_message: customerMessage,
+        ai_response: strictResponse,
+        action_taken: 'direct_response',
+        confidence_score: 1, // Alto score por ter passado validação
+        articles_count: knowledgeArticles.length,
+        articles_used: strictResult.citedArticles
+      });
+      
+      return new Response(JSON.stringify({
+        status: 'success',
+        message: strictResponse,
+        strict_mode: true,
+        cited_articles: strictResult.citedArticles
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // ============================================================
+    // FLUXO PADRÃO (modo estrito desativado ou sem artigos)
     // ============================================================
     const confidenceResult = calculateConfidenceScore(
       customerMessage,
