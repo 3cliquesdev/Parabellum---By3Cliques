@@ -278,3 +278,6 @@ verify_jwt = false
 
 [functions.send-meta-whatsapp]
 verify_jwt = true
+
+[functions.register-meta-whatsapp]
+verify_jwt = true
