@@ -1,150 +1,84 @@
 
-## Plano: Corrigir Nó "Transferir" do Chat Flow
+## Plano: Corrigir Acesso de Gerentes aos Fluxos de Chat
 
-### Problemas Identificados
+### Problema Raiz
 
-**Problema 1 - Trigger muito restritivo:**
-O fluxo "Fluxo de Carnaval" tem a keyword:
-```
-"Olá vim pelo email e gostaria de saber da promoção de pré carnaval"
-```
-A lógica usa `includes()` - a mensagem do usuário precisa conter essa frase **inteira**. Se você enviar só "oi" ou "promoção carnaval", não dispara.
+A política RLS da tabela `chat_flows` foi criada com apenas 2 roles:
+- `admin`
+- `manager`
 
-**Problema 2 - Transferência NÃO É EXECUTADA (principal):**
-Quando o `process-chat-flow` retorna:
-```json
-{
-  "useAI": false,
-  "response": "Transferindo para um atendente...",
-  "transfer": true,
-  "departmentId": "f446e202-bdc3-4bb3-aeda-8c0aa04ee53c"
-}
-```
-O `ai-autopilot-chat` apenas salva a mensagem, mas **NUNCA chama `route-conversation`** para realmente fazer a transferência!
+Mas a permissão `settings.chat_flows` no frontend está habilitada para:
+- `admin` ✅
+- `manager` ✅
+- `general_manager` ✅
+- `support_manager` ✅
+
+**Resultado:** O Danilo Pereira (role: `support_manager`) passa pelo frontend mas é bloqueado pelo banco de dados.
 
 ---
 
 ### Solução
 
-#### 1. Adicionar Lógica de Transferência no ai-autopilot-chat
-
-Modificar `supabase/functions/ai-autopilot-chat/index.ts` para tratar `flowResult.transfer === true`:
-
-```typescript
-// Após linha ~1388 no bloco que trata flowResult.useAI === false
-if (flowResult.useAI === false && flowResult.response) {
-  console.log('[ai-autopilot-chat] ✅ Fluxo determinístico - usando resposta do flow');
-  
-  // 🆕 NOVO: Se é uma transferência, executar handoff real
-  if (flowResult.transfer === true && flowResult.departmentId) {
-    console.log('[ai-autopilot-chat] 🔀 TRANSFER NODE - Executando handoff real para:', flowResult.departmentId);
-    
-    // 1. Marcar handoff com timestamp para anti-race-condition
-    const handoffTimestamp = new Date().toISOString();
-    
-    await supabaseClient
-      .from('conversations')
-      .update({ 
-        ai_mode: 'waiting_human',
-        handoff_executed_at: handoffTimestamp,
-        needs_human_review: true,
-        department: flowResult.departmentId, // 🆕 Definir departamento direto
-      })
-      .eq('id', conversationId);
-    
-    console.log('[ai-autopilot-chat] ✅ Conversa marcada como waiting_human');
-    
-    // 2. Chamar route-conversation para distribuir
-    await supabaseClient.functions.invoke('route-conversation', {
-      body: { 
-        conversationId,
-        targetDepartmentId: flowResult.departmentId // 🆕 Enviar departamento destino
-      }
-    });
-    
-    console.log('[ai-autopilot-chat] ✅ Conversa roteada para departamento:', flowResult.departmentId);
-  }
-  
-  // Resto do código existente (salvar mensagem, enviar WhatsApp, etc.)
-  // ...
-}
-```
-
-#### 2. Atualizar route-conversation para Aceitar Departamento
-
-Verificar se `route-conversation` aceita o parâmetro `targetDepartmentId` e o usa para definir o departamento correto antes de distribuir.
+Atualizar a política RLS da tabela `chat_flows` para incluir todos os roles que têm a permissão habilitada.
 
 ---
 
-### Arquivos a Modificar
+### Migração SQL a Executar
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/ai-autopilot-chat/index.ts` | Adicionar lógica para executar `route-conversation` quando `flowResult.transfer === true` |
-| `supabase/functions/route-conversation/index.ts` | Verificar se aceita `targetDepartmentId` (provavelmente já aceita) |
+```sql
+-- Remover política antiga restritiva
+DROP POLICY IF EXISTS "Admins and managers can manage chat flows" ON public.chat_flows;
 
----
-
-### Fluxo Após Correção
-
-```text
-[Usuário envia mensagem que dispara fluxo]
-        |
-        v
-[ai-autopilot-chat chama process-chat-flow]
-        |
-        v
-[process-chat-flow encontra nó Transfer]
-        |
-        v
-[Retorna: { transfer: true, departmentId: "Comercial" }]
-        |
-        v
-[ai-autopilot-chat DETECTA transfer === true] 🆕
-        |
-        v
-[Atualiza conversa: ai_mode = 'waiting_human', department = departmentId]
-        |
-        v
-[Chama route-conversation para distribuir]
-        |
-        v
-[Envia mensagem "Transferindo para atendimento humano..."]
-        |
-        v
-[Conversa aparece no departamento correto para agentes]
+-- Criar nova política incluindo todos os roles de gerência
+CREATE POLICY "Admins and managers can manage chat flows"
+ON public.chat_flows
+FOR ALL
+USING (
+  EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = auth.uid()
+    AND role IN ('admin', 'manager', 'general_manager', 'support_manager')
+  )
+);
 ```
 
 ---
 
-### Sobre as Keywords do Fluxo
+### Roles Afetados
 
-O fluxo "Fluxo de Carnaval" só será disparado se a mensagem do usuário **contiver** a frase:
-```
-"Olá vim pelo email e gostaria de saber da promoção de pré carnaval"
-```
+| Role | Antes | Depois |
+|------|-------|--------|
+| admin | ✅ | ✅ |
+| manager | ✅ | ✅ |
+| general_manager | ❌ | ✅ |
+| support_manager | ❌ | ✅ |
 
-Para testar, você pode:
-1. Editar o fluxo e adicionar keywords mais simples (ex: "carnaval", "promoção")
-2. Ou enviar a mensagem exata que está configurada
+---
+
+### Impacto
+
+- **Danilo Pereira** (support_manager) poderá ver e editar fluxos de chat
+- Outros gerentes com `general_manager` também terão acesso
+- Nenhuma alteração no frontend necessária
 
 ---
 
 ### Seção Técnica
 
-**Linhas a modificar:**
-- `supabase/functions/ai-autopilot-chat/index.ts` linhas ~1388-1440 (bloco de resposta determinística)
+**Tabela afetada:** `public.chat_flows`
 
-**Lógica de match atual (process-chat-flow.ts:508-512):**
-```typescript
-for (const trigger of allTriggers) {
-  if (messageLower.includes(trigger.toLowerCase())) {
-    matchedFlow = flow;
-    break;
-  }
-}
+**Política atual (linha 43-52 da migração original):**
+```sql
+role IN ('admin', 'manager')
 ```
-Isso significa que "oi vim pelo email" **não** dispararia o fluxo, mas "vim pelo email e gostaria de saber da promoção de pré carnaval" **sim**.
 
-**Departamento do nó Transfer:**
-- Comercial: `f446e202-bdc3-4bb3-aeda-8c0aa04ee53c`
+**Nova política:**
+```sql
+role IN ('admin', 'manager', 'general_manager', 'support_manager')
+```
+
+**Usuário específico:**
+- ID: `2bca2fa4-862d-4ed2-bc60-0aff386c50bd`
+- Email: `danilo.pereira@3cliques.net`
+- Role: `support_manager`
+
