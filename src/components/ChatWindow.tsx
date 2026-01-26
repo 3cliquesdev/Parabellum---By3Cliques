@@ -535,6 +535,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                   conversationId={conversation.id}
                   isDisabled={conversation.status === "closed"}
                   whatsappInstanceId={conversation.whatsapp_instance_id}
+                  whatsappMetaInstanceId={conversation.whatsapp_meta_instance_id}
+                  whatsappProvider={conversation.whatsapp_provider}
                   contactPhone={contact?.phone || contact?.whatsapp_id}
                 />
               )}

@@ -46,6 +46,8 @@ export interface SuperComposerProps {
   conversationId: string;
   isDisabled?: boolean;
   whatsappInstanceId?: string | null;
+  whatsappMetaInstanceId?: string | null;
+  whatsappProvider?: string | null;
   contactPhone?: string | null;
 }
 
@@ -53,6 +55,8 @@ export function SuperComposer({
   conversationId,
   isDisabled = false,
   whatsappInstanceId,
+  whatsappMetaInstanceId,
+  whatsappProvider,
   contactPhone,
 }: SuperComposerProps) {
   const [message, setMessage] = useState("");
@@ -152,8 +156,16 @@ export function SuperComposer({
     await upload(audioFile);
   };
 
-  // Helper para detectar tipo de mídia
+  // Helper para detectar tipo de mídia (Evolution API)
   const detectMediaType = (mimeType: string): 'image' | 'audio' | 'video' | 'document' => {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('audio/')) return 'audio';
+    if (mimeType.startsWith('video/')) return 'video';
+    return 'document';
+  };
+
+  // Helper para detectar tipo de mídia (Meta API)
+  const detectMetaMediaType = (mimeType: string): 'image' | 'audio' | 'video' | 'document' | 'sticker' => {
     if (mimeType.startsWith('image/')) return 'image';
     if (mimeType.startsWith('audio/')) return 'audio';
     if (mimeType.startsWith('video/')) return 'video';
@@ -197,16 +209,17 @@ export function SuperComposer({
           is_internal: true,
         });
         sentMessageId = result?.id || null;
-      } else if (whatsappInstanceId && contactPhone) {
-        // WhatsApp - send to Evolution API first
+      } else if (whatsappProvider === 'meta' && whatsappMetaInstanceId && contactPhone) {
+        // Meta WhatsApp Cloud API
         try {
-          // Se tem anexos, enviar primeiro como mídia
+          console.log('[SuperComposer] Enviando via Meta WhatsApp Cloud API');
+          
           if (uploadedAttachments.length > 0) {
+            // Enviar mídia via Meta API
             for (let i = 0; i < uploadedAttachments.length; i++) {
               const att = uploadedAttachments[i];
-              console.log('[SuperComposer] Enviando mídia WhatsApp:', att.mimeType);
+              console.log('[SuperComposer] Enviando mídia Meta WhatsApp:', att.mimeType);
               
-              // ✅ OBTER URL FRESCA antes de enviar (evita URL expirada)
               const freshUrl = await getFreshMediaUrl(att.id);
               
               if (!freshUrl) {
@@ -216,15 +229,92 @@ export function SuperComposer({
                   description: `Não foi possível preparar ${att.filename} para envio.`,
                   variant: "destructive",
                 });
-                continue; // Pular este anexo
+                continue;
+              }
+              
+              const { error: metaMediaError } = await supabase.functions.invoke('send-meta-whatsapp', {
+                body: {
+                  instance_id: whatsappMetaInstanceId,
+                  phone_number: contactPhone,
+                  message: i === 0 ? messageContent : '',
+                  media: {
+                    type: detectMetaMediaType(att.mimeType),
+                    url: freshUrl,
+                    caption: i === 0 ? messageContent : undefined,
+                    filename: att.filename,
+                  },
+                  conversation_id: conversationId,
+                }
+              });
+
+              if (metaMediaError) {
+                throw new Error(metaMediaError.message || 'Failed to send Meta WhatsApp media');
+              }
+            }
+          } else if (messageContent) {
+            // Apenas texto
+            const { error: metaError } = await supabase.functions.invoke('send-meta-whatsapp', {
+              body: {
+                instance_id: whatsappMetaInstanceId,
+                phone_number: contactPhone,
+                message: messageContent,
+                conversation_id: conversationId,
+              }
+            });
+
+            if (metaError) {
+              throw new Error(metaError.message || 'Failed to send Meta WhatsApp message');
+            }
+          }
+
+          const result = await sendMessage.mutateAsync({
+            conversation_id: conversationId,
+            content: messageContent || (uploadedAttachments.length > 0 ? '📎 Mídia enviada' : ''),
+            sender_type: "user",
+            sender_id: user?.id || null,
+            status: 'sent',
+          });
+          sentMessageId = result?.id || null;
+        } catch (error) {
+          console.error('[SuperComposer] Meta WhatsApp send failed:', error);
+          
+          const result = await sendMessage.mutateAsync({
+            conversation_id: conversationId,
+            content: messageContent || '📎 Mídia',
+            sender_type: "user",
+            sender_id: user?.id || null,
+            status: 'failed',
+            delivery_error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          sentMessageId = result?.id || null;
+        }
+      } else if (whatsappInstanceId && contactPhone) {
+        // Evolution API (legacy)
+        try {
+          // Se tem anexos, enviar primeiro como mídia
+          if (uploadedAttachments.length > 0) {
+            for (let i = 0; i < uploadedAttachments.length; i++) {
+              const att = uploadedAttachments[i];
+              console.log('[SuperComposer] Enviando mídia WhatsApp (Evolution):', att.mimeType);
+              
+              const freshUrl = await getFreshMediaUrl(att.id);
+              
+              if (!freshUrl) {
+                console.error('[SuperComposer] Falha ao obter URL fresca para:', att.id);
+                toast({
+                  title: "Erro ao enviar mídia",
+                  description: `Não foi possível preparar ${att.filename} para envio.`,
+                  variant: "destructive",
+                });
+                continue;
               }
               
               const { error: mediaError } = await supabase.functions.invoke('send-whatsapp-message', {
                 body: {
                   instance_id: whatsappInstanceId,
                   phone_number: contactPhone,
-                  message: i === 0 ? messageContent : '', // Caption apenas no primeiro
-                  media_url: freshUrl, // ✅ Usar URL fresca
+                  message: i === 0 ? messageContent : '',
+                  media_url: freshUrl,
                   media_type: detectMediaType(att.mimeType),
                   media_filename: att.filename,
                   delay: 1000,
@@ -260,7 +350,7 @@ export function SuperComposer({
           });
           sentMessageId = result?.id || null;
         } catch (error) {
-          console.error('[SuperComposer] WhatsApp send failed:', error);
+          console.error('[SuperComposer] WhatsApp (Evolution) send failed:', error);
           
           const result = await sendMessage.mutateAsync({
             conversation_id: conversationId,
