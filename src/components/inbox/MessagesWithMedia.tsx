@@ -18,6 +18,7 @@ interface Message {
   is_ai_generated: boolean;
   is_internal: boolean;
   attachment_url?: string | null;
+  attachment_type?: string | null;
   status?: string;
   sender?: {
     id: string;
@@ -45,6 +46,34 @@ interface MessagesWithMediaProps {
   isAdmin: boolean;
   isManager: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement>;
+}
+
+// Helper: Extrair MIME type do attachment_type
+function getMimeFromType(attachmentType?: string | null): string {
+  switch (attachmentType) {
+    case 'image':
+      return 'image/jpeg';
+    case 'audio':
+      return 'audio/ogg';
+    case 'video':
+      return 'video/mp4';
+    case 'document':
+      return 'application/pdf';
+    case 'sticker':
+      return 'image/webp';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+// Helper: Extrair filename de URL
+function extractFilename(url: string): string {
+  try {
+    const pathname = new URL(url).pathname;
+    return pathname.split('/').pop() || 'media';
+  } catch {
+    return 'media';
+  }
 }
 
 export function MessagesWithMedia({
@@ -107,7 +136,7 @@ export function MessagesWithMedia({
         }
 
         // Mapear attachments COM estados de erro/loading (não filtrar!)
-        const attachments = (message.media_attachments || [])
+        let attachments = (message.media_attachments || [])
           .filter(a => a.status === 'ready' && a.storage_bucket && a.storage_path)
           .map(a => {
             const urlResult = getUrl(a.id);
@@ -128,6 +157,31 @@ export function MessagesWithMedia({
               onRetry: hasError ? () => handleRetry(a.id) : undefined,
             };
           });
+
+        // FALLBACK: Se não tem media_attachments mas tem attachment_url direto
+        // Isso cobre mídias Meta que falharam ao criar registro ou mídias antigas
+        if (attachments.length === 0 && message.attachment_url && !isAI) {
+          // Verificar se é uma URL válida (não é JSON de metadata AI)
+          const isValidUrl = message.attachment_url.startsWith('http');
+          if (isValidUrl) {
+            // Detectar tipo de mídia pela URL ou attachment_type
+            const mimeType = getMimeFromType((message as any).attachment_type);
+            const filename = extractFilename(message.attachment_url);
+            
+            attachments = [{
+              id: `fallback-${message.id}`,
+              url: message.attachment_url,
+              mimeType,
+              filename,
+              size: undefined,
+              waveformData: undefined,
+              durationSeconds: undefined,
+              error: undefined,
+              isLoading: false,
+              onRetry: undefined,
+            }];
+          }
+        }
 
         // Renderizar notas internas com estilo especial
         if (isInternalNote) {

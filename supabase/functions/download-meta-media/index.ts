@@ -139,16 +139,17 @@ serve(async (req) => {
     const publicUrl = publicUrlData.publicUrl;
     console.log("[download-meta-media] ✅ Uploaded to:", publicUrl);
 
-    // Step 4: Create media_attachments record
+    // Step 4: Create media_attachments record with correct column names
     const { data: attachment, error: attachmentError } = await supabase
       .from("media_attachments")
       .insert({
         message_id: message_id,
-        file_name: fileName,
-        file_type: mimeType,
+        original_filename: fileName,
+        mime_type: mimeType,
         file_size: fileBuffer.byteLength,
         storage_path: storagePath,
-        url: publicUrl,
+        storage_bucket: 'chat-media',
+        status: 'ready',
       })
       .select("id")
       .single();

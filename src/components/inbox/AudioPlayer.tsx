@@ -29,6 +29,8 @@ export function AudioPlayer({
   const [isMuted, setIsMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
 
   // Generate fake waveform if none provided
   const waveform = waveformData || Array.from({ length: 50 }, () => Math.random() * 0.8 + 0.2);
@@ -89,9 +91,25 @@ export function AudioPlayer({
       setCurrentTime(0);
     };
 
-    const handleError = () => {
-      setError("Erro ao carregar áudio");
-      setIsLoading(false);
+    const handleError = (e: Event) => {
+      console.error("[AudioPlayer] Error loading audio:", url, e);
+      
+      // Retry logic for transient errors
+      if (retryCount < maxRetries) {
+        console.log(`[AudioPlayer] Retrying... (${retryCount + 1}/${maxRetries})`);
+        setRetryCount(prev => prev + 1);
+        // Force reload by resetting src
+        setTimeout(() => {
+          if (audio) {
+            audio.src = '';
+            audio.src = url;
+            audio.load();
+          }
+        }, 1000 * (retryCount + 1)); // Exponential backoff
+      } else {
+        setError("Erro ao carregar áudio");
+        setIsLoading(false);
+      }
     };
 
     const handleCanPlay = () => {
@@ -149,6 +167,18 @@ export function AudioPlayer({
     document.body.removeChild(link);
   }, [url, filename]);
 
+  const handleManualRetry = useCallback(() => {
+    setError(null);
+    setIsLoading(true);
+    setRetryCount(0);
+    const audio = audioRef.current;
+    if (audio) {
+      audio.src = '';
+      audio.src = url;
+      audio.load();
+    }
+  }, [url]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -157,8 +187,16 @@ export function AudioPlayer({
 
   if (error) {
     return (
-      <div className={cn("flex items-center gap-2 text-sm text-destructive", className)}>
-        <span>⚠️ {error}</span>
+      <div className={cn("flex items-center gap-2 p-3 rounded-xl bg-background/50 border border-destructive/30", className)}>
+        <span className="text-sm text-destructive">⚠️ {error}</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleManualRetry}
+          className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+        >
+          Tentar novamente
+        </Button>
       </div>
     );
   }
