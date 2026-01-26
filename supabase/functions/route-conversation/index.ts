@@ -240,6 +240,40 @@ serve(async (req) => {
     
     console.log(`[route-conversation] 🎯 Department: ${resolvedDepartmentName || 'none'} -> Allowed roles: [${allowedRoles.join(', ')}]`);
 
+    // 🆕 3.1. BUSCAR TIMES VINCULADOS AO CANAL (team_channels)
+    const supportChannelId = conversation.support_channel_id || contact?.support_channel_id;
+    console.log('[route-conversation] 📡 Support channel:', supportChannelId || 'none');
+    
+    let priorityTeamMemberIds: string[] = [];
+    
+    if (supportChannelId) {
+      console.log('[route-conversation] 🔍 Looking for teams linked to this channel...');
+      
+      // Buscar times vinculados a este canal
+      const { data: teamChannels, error: tcError } = await supabase
+        .from('team_channels')
+        .select('team_id')
+        .eq('channel_id', supportChannelId);
+      
+      if (!tcError && teamChannels && teamChannels.length > 0) {
+        const teamIds = teamChannels.map(tc => tc.team_id);
+        console.log(`[route-conversation] ✅ Found ${teamIds.length} teams linked to channel`);
+        
+        // Buscar membros desses times
+        const { data: teamMembers, error: tmError } = await supabase
+          .from('team_members')
+          .select('user_id')
+          .in('team_id', teamIds);
+        
+        if (!tmError && teamMembers) {
+          priorityTeamMemberIds = teamMembers.map(tm => tm.user_id);
+          console.log(`[route-conversation] 👥 Priority agents from teams: ${priorityTeamMemberIds.length}`);
+        }
+      } else {
+        console.log('[route-conversation] ℹ️ No teams linked to this channel');
+      }
+    }
+
     // 4. PRIORIDADE 2: SKILL-BASED ROUTING (Agentes com Skill Específica + Canal)
     let onlineAgents: any[] = [];
     let routingStrategy = 'load_balancing';
@@ -248,10 +282,6 @@ serve(async (req) => {
     // 4.1 Identificar skill necessária baseada na análise da IA
     const aiCategory = aiAnalysis?.category?.toLowerCase();
     requiredSkillName = aiCategory ? SKILL_MAPPING[aiCategory] : null;
-
-    // 4.2 Identificar canal da conversa (herdado do contato)
-    const supportChannelId = conversation.support_channel_id || contact?.support_channel_id;
-    console.log('[route-conversation] 📡 Support channel:', supportChannelId || 'none');
     
     if (requiredSkillName) {
       console.log(`[route-conversation] 🎯 Skill-based routing: Looking for agents with skill "${requiredSkillName}"`);
@@ -267,7 +297,16 @@ serve(async (req) => {
         onlineAgents = [];
       } else {
         // Buscar agentes online COM a skill específica
-        const agentUserIds = roleAgentIds.map(r => r.user_id);
+        let agentUserIds = roleAgentIds.map(r => r.user_id);
+        
+        // 🆕 Se temos membros de times prioritários, filtrar por eles primeiro
+        if (priorityTeamMemberIds.length > 0) {
+          const priorityInRoles = agentUserIds.filter(id => priorityTeamMemberIds.includes(id));
+          if (priorityInRoles.length > 0) {
+            console.log(`[route-conversation] 🎯 Filtering to ${priorityInRoles.length} priority team members`);
+            agentUserIds = priorityInRoles;
+          }
+        }
         
         const { data: skilledAgents } = await supabase
           .from('profiles')
@@ -312,7 +351,7 @@ serve(async (req) => {
         }
         
         if (onlineAgents.length > 0) {
-          routingStrategy = 'skill_based';
+          routingStrategy = priorityTeamMemberIds.length > 0 ? 'team_channel_based' : 'skill_based';
           console.log(`[route-conversation] ✅ Found ${onlineAgents.length} agents with skill "${requiredSkillName}" and roles [${allowedRoles.join(', ')}]`);
         } else {
           console.log(`[route-conversation] ⚠️ No agents found with skill "${requiredSkillName}", falling back to generic`);
@@ -324,6 +363,7 @@ serve(async (req) => {
     if (onlineAgents.length === 0) {
       console.log('[route-conversation] 🔍 Searching for agents with roles:', allowedRoles.join(', '));
       console.log('[route-conversation] 📌 Department filter:', resolvedDepartmentId || 'none');
+      console.log('[route-conversation] 👥 Priority team members:', priorityTeamMemberIds.length);
       
       // 🆕 Buscar user_ids dos roles permitidos
       const { data: genericRoleIds } = await supabase
@@ -335,7 +375,17 @@ serve(async (req) => {
       let agentsError = null;
       
       if (genericRoleIds && genericRoleIds.length > 0) {
-        const genericAgentUserIds = genericRoleIds.map(r => r.user_id);
+        let genericAgentUserIds = genericRoleIds.map(r => r.user_id);
+        
+        // 🆕 Se temos membros de times prioritários, filtrar por eles primeiro
+        if (priorityTeamMemberIds.length > 0) {
+          const priorityInRoles = genericAgentUserIds.filter(id => priorityTeamMemberIds.includes(id));
+          if (priorityInRoles.length > 0) {
+            console.log(`[route-conversation] 🎯 Filtering to ${priorityInRoles.length} priority team members`);
+            genericAgentUserIds = priorityInRoles;
+            routingStrategy = 'team_channel_based';
+          }
+        }
         
         let agentsQuery = supabase
           .from('profiles')
@@ -371,6 +421,7 @@ serve(async (req) => {
         found_count: genericAgents?.length || 0,
         roles_searched: allowedRoles,
         department_filter: resolvedDepartmentName || 'none',
+        priority_team_members: priorityTeamMemberIds.length,
         error: agentsError?.message 
       });
       

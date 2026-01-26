@@ -6923,6 +6923,42 @@ export type Database = {
         }
         Relationships: []
       }
+      team_channels: {
+        Row: {
+          channel_id: string
+          created_at: string | null
+          id: string
+          team_id: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string | null
+          id?: string
+          team_id: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string | null
+          id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_channels_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "support_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_channels_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_members: {
         Row: {
           id: string
@@ -6955,6 +6991,51 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_settings: {
+        Row: {
+          auto_assign: boolean | null
+          created_at: string | null
+          department_id: string | null
+          id: string
+          max_concurrent_chats: number | null
+          team_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          auto_assign?: boolean | null
+          created_at?: string | null
+          department_id?: string | null
+          id?: string
+          max_concurrent_chats?: number | null
+          team_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          auto_assign?: boolean | null
+          created_at?: string | null
+          department_id?: string | null
+          id?: string
+          max_concurrent_chats?: number | null
+          team_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_settings_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_settings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: true
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
