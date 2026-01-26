@@ -1,0 +1,99 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { hasFullInboxAccess } from "@/hooks/useDepartmentsByRole";
+
+// Mapeamento de roles para departamentos permitidos (por nome)
+const ROLE_DEPARTMENT_MAP: Record<string, string[]> = {
+  sales_rep: ["Comercial", "Vendas", "Sales"],
+  support_agent: ["Suporte", "Support", "Atendimento"],
+  financial_agent: ["Financeiro", "Finance", "Financial"],
+  consultant: [], // Consultant pode assumir qualquer conversa atribuída a ele
+};
+
+interface CanTakeControlResult {
+  canTake: boolean;
+  reason?: string;
+  isLoading: boolean;
+}
+
+/**
+ * Hook para verificar se o usuário pode assumir uma conversa específica
+ * Usado para desabilitar/ocultar o botão "Assumir" quando não permitido
+ * 
+ * Regras:
+ * - admin, manager, general_manager, support_manager, cs_manager: podem assumir qualquer conversa
+ * - sales_rep: só pode assumir conversas do departamento Comercial/Vendas
+ * - support_agent: só pode assumir conversas do departamento Suporte
+ * - financial_agent: só pode assumir conversas do departamento Financeiro
+ */
+export function useCanTakeControl(conversationDepartmentId: string | null): CanTakeControlResult {
+  const { user } = useAuth();
+  
+  const { data, isLoading } = useQuery({
+    queryKey: ['can-take-control', user?.id, conversationDepartmentId],
+    queryFn: async (): Promise<{ canTake: boolean; reason?: string }> => {
+      if (!user?.id) return { canTake: false, reason: 'Não autenticado' };
+      
+      // Buscar role do usuário
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      const userRole = roleData?.role || null;
+      
+      // Roles com acesso total sempre podem assumir
+      if (!userRole || hasFullInboxAccess(userRole)) {
+        return { canTake: true };
+      }
+      
+      // Se conversa não tem departamento, permitir
+      if (!conversationDepartmentId) {
+        return { canTake: true };
+      }
+      
+      // Buscar nome do departamento da conversa
+      const { data: dept } = await supabase
+        .from('departments')
+        .select('name')
+        .eq('id', conversationDepartmentId)
+        .maybeSingle();
+      
+      const conversationDeptName = dept?.name || null;
+      
+      if (!conversationDeptName) {
+        return { canTake: true };
+      }
+      
+      const allowedDepartments = ROLE_DEPARTMENT_MAP[userRole];
+      
+      if (!allowedDepartments || allowedDepartments.length === 0) {
+        // Role não tem restrições de departamento específicas
+        return { canTake: true };
+      }
+      
+      const isAllowed = allowedDepartments.some(
+        d => d.toLowerCase() === conversationDeptName.toLowerCase()
+      );
+      
+      if (!isAllowed) {
+        return { 
+          canTake: false, 
+          reason: `Você só pode assumir conversas do departamento ${allowedDepartments.join(' ou ')}`
+        };
+      }
+      
+      return { canTake: true };
+    },
+    enabled: !!user?.id,
+    staleTime: 60 * 1000, // Cache por 1 minuto
+  });
+  
+  return {
+    canTake: data?.canTake ?? true,
+    reason: data?.reason,
+    isLoading,
+  };
+}

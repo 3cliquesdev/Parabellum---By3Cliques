@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAIMode } from "@/hooks/useAIMode";
 import { useActivePersona } from "@/hooks/useActivePersona";
 import { useTakeControl } from "@/hooks/useTakeControl";
+import { useCanTakeControl } from "@/hooks/useCanTakeControl";
 import { useReturnToAutopilot } from "@/hooks/useReturnToAutopilot";
 import { useAutopilotTrigger } from "@/hooks/useAutopilotTrigger";
 import TransferConversationDialog from "@/components/TransferConversationDialog";
@@ -84,6 +85,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const takeControl = useTakeControl();
   const returnToAutopilot = useReturnToAutopilot();
   
+  // Verificar se pode assumir esta conversa (baseado no departamento)
+  const { canTake: canTakeControl, reason: cantTakeReason } = useCanTakeControl(conversation?.department || null);
   // Buscar ticket relacionado para mostrar ticket_number
   const { data: relatedTicket } = useQuery({
     queryKey: ['related-ticket', conversation?.related_ticket_id],
@@ -365,7 +368,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                     variant="default"
                     size="sm"
                     onClick={() => setConfirmTakeControlOpen(true)}
-                    disabled={takeControl.isPending}
+                    disabled={takeControl.isPending || !canTakeControl}
+                    title={!canTakeControl ? cantTakeReason : undefined}
                     className="h-7 gap-1 px-2"
                   >
                     <Hand className="h-3.5 w-3.5" />
