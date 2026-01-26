@@ -21,9 +21,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye, HelpCircle, Plus, Trash2, Play, FileText, Shuffle, AlertCircle } from "lucide-react";
+import { Mail, Clock, CheckSquare, Phone, Save, X, GitBranch, UserCheck, Eye, HelpCircle, Plus, Trash2, Play, FileText, Shuffle, AlertCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -75,6 +75,8 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [previewNode, setPreviewNode] = useState<Node | null>(null);
   const [simulatorOpen, setSimulatorOpen] = useState(false);
+  const [showSaveWarningDialog, setShowSaveWarningDialog] = useState(false);
+  const [pendingNodesWithoutTemplate, setPendingNodesWithoutTemplate] = useState<Node[]>([]);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { data: emailTemplates } = useEmailTemplates();
@@ -214,15 +216,18 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
     );
 
     if (emailNodesWithoutTemplate.length > 0) {
-      toast.error(
-        `${emailNodesWithoutTemplate.length} node(s) de email sem template configurado`,
-        {
-          description: `Configure: ${emailNodesWithoutTemplate.map(n => n.data.label).join(", ")}`
-        }
-      );
+      // Mostrar diálogo de confirmação
+      setPendingNodesWithoutTemplate(emailNodesWithoutTemplate);
+      setShowSaveWarningDialog(true);
       return;
     }
 
+    onSave({ nodes, edges });
+  };
+
+  const handleConfirmSaveWithWarnings = () => {
+    setShowSaveWarningDialog(false);
+    setPendingNodesWithoutTemplate([]);
     onSave({ nodes, edges });
   };
 
@@ -978,6 +983,50 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
         onClose={() => setSimulatorOpen(false)}
       />
     )}
+
+    {/* Diálogo de confirmação para salvar com nodes sem template */}
+    <Dialog open={showSaveWarningDialog} onOpenChange={setShowSaveWarningDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-amber-600">
+            <AlertTriangle className="h-5 w-5" />
+            Nodes sem template configurado
+          </DialogTitle>
+          <DialogDescription>
+            Você tem {pendingNodesWithoutTemplate.length} node(s) de email sem template configurado.
+            Esses emails não serão enviados durante a execução do playbook.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-2 py-4">
+          <p className="text-sm font-medium text-muted-foreground">Nodes não configurados:</p>
+          <ul className="space-y-1">
+            {pendingNodesWithoutTemplate.map((node) => (
+              <li key={node.id} className="flex items-center gap-2 text-sm p-2 bg-amber-50 dark:bg-amber-950/20 rounded border border-amber-200 dark:border-amber-800">
+                <Mail className="h-4 w-4 text-amber-600" />
+                {node.data.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <DialogFooter className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowSaveWarningDialog(false)}
+          >
+            Voltar e configurar
+          </Button>
+          <Button
+            variant="default"
+            className="bg-amber-600 hover:bg-amber-700"
+            onClick={handleConfirmSaveWithWarnings}
+          >
+            Salvar assim mesmo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
