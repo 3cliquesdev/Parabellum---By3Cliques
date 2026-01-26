@@ -1,329 +1,249 @@
 
-## Plano: Agente RAG Robusto com OpenAI (Anti-Alucinação)
 
-### Diagnóstico do Sistema Atual
+## Plano: Corrigir Delay no Realtime das Conversas
 
-O Autopilot atual tem várias camadas de proteção, mas ainda alucina porque:
+### Diagnóstico do Problema
 
-1. **Modelo fraco**: Usa `gpt-4o-mini` que é rápido mas menos preciso
-2. **Threshold baixo**: Score de confiança mínimo é 0.70 (muitas respostas passam)
-3. **Prompt muito longo**: O system prompt tem ~3500 tokens com muitas instruções conflitantes
-4. **Fallback para Gemini**: Se OpenAI falhar, usa Gemini que tem comportamento diferente
-5. **Query Expansion genérica**: Expande queries mas não valida relevância
+Após análise detalhada do sistema, identifiquei **5 causas principais** para o delay nas mensagens:
 
 ---
 
-### Solução: Agente RAG Estrito com OpenAI GPT-4o
+### 1. **Problema: `invalidateQueries` ao invés de merge direto**
 
-Criar um modo "RAG Estrito" que:
-- Usa **exclusivamente OpenAI GPT-4o** (modelo mais preciso)
-- Exige **score mínimo de 0.85** para responder
-- Usa **prompt enxuto** focado em fidelidade à KB
-- **Cita fontes** explicitamente
-- **Recusa responder** quando não encontra informação
+**Localização:** `useMessages.tsx` linha 157-167
+
+Quando uma mensagem chega via realtime, o sistema faz `invalidateQueries` para `conversations`, o que força um **refetch completo** da lista de conversas. Isso causa:
+- Requisição HTTP adicional ao banco
+- Latência de rede (100-500ms)
+- Re-render de toda a lista
+
+**Solução:** Fazer merge otimista direto no cache ao invés de invalidar.
 
 ---
 
-### Arquitetura Proposta
+### 2. **Problema: Múltiplos canais realtime redundantes**
+
+O sistema mantém **vários canais simultâneos** escutando as mesmas tabelas:
+- `useMessages` → escuta `messages`
+- `useMessagesOffline` → escuta `messages` (duplicado)
+- `useConversations` → escuta `conversations`
+- `useInboxView` → escuta `inbox_view`
+
+Cada canal adiciona overhead e pode causar race conditions.
+
+**Solução:** Consolidar em um único canal por contexto.
+
+---
+
+### 3. **Problema: Debounce de 100ms na atualização do sidebar**
+
+**Localização:** `useMessages.tsx` linha 151-167
+
+```typescript
+conversationsInvalidateTimeout = setTimeout(() => {
+  queryClient.invalidateQueries({ queryKey: ["conversations"] });
+}, 100);
+```
+
+Embora 100ms pareça rápido, isso adiciona latência desnecessária quando combinado com o refetch.
+
+**Solução:** Remover debounce e fazer update inline.
+
+---
+
+### 4. **Problema: Query inicial usa `staleTime: 5000`**
+
+**Localização:** `useInboxView.tsx` linha 245
+
+```typescript
+staleTime: 5000, // 5 segundos
+```
+
+O React Query considera os dados "frescos" por 5 segundos, o que pode ignorar atualizações intermediárias.
+
+**Solução:** Reduzir para 1000ms ou usar `staleTime: 0` para mensagens críticas.
+
+---
+
+### 5. **Problema: Trigger de `inbox_view` executa query pesada**
+
+Os triggers do banco que atualizam `inbox_view` fazem queries adicionais (ex: buscar último snippet, contar unread), o que adiciona latência no lado do banco antes de emitir o evento realtime.
+
+**Solução:** Otimizar triggers para serem mais leves ou usar NOTIFY/LISTEN customizado.
+
+---
+
+## Mudanças Propostas
+
+### Arquivos a Modificar
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/hooks/useMessages.tsx` | Substituir invalidateQueries por merge otimista inline |
+| `src/hooks/useInboxView.tsx` | Reduzir staleTime e otimizar merge |
+| `src/hooks/useMessagesOffline.tsx` | Remover duplicação - usar apenas useMessages |
+| Migration SQL | Otimizar trigger de inbox_view |
+
+---
+
+### Implementação Técnica
+
+#### 1. Otimizar `useMessages.tsx` - Remover invalidação redundante
+
+**Antes:**
+```typescript
+conversationsInvalidateTimeout = setTimeout(() => {
+  queryClient.invalidateQueries({ queryKey: ["conversations"] });
+  queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
+}, 100);
+```
+
+**Depois:**
+```typescript
+// Atualizar snippet inline no inbox_view cache
+queryClient.setQueryData(
+  ["inbox-view", user?.id, role, departmentIds, filters],
+  (prev: InboxViewItem[] = []) => {
+    return prev.map(item => 
+      item.conversation_id === conversationId 
+        ? { 
+            ...item, 
+            last_snippet: newMessage.content?.slice(0, 100),
+            last_message_at: newMessage.created_at,
+            last_sender_type: newMessage.sender_type,
+            updated_at: newMessage.created_at,
+          } 
+        : item
+    ).sort((a, b) => 
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+  }
+);
+```
+
+#### 2. Reduzir staleTime em `useInboxView.tsx`
+
+**Antes:**
+```typescript
+staleTime: 5000,
+refetchInterval: 30000,
+```
+
+**Depois:**
+```typescript
+staleTime: 1000, // Reduzir para 1 segundo
+refetchInterval: 15000, // Fallback mais frequente
+```
+
+#### 3. Adicionar canal realtime direto para mensagens no inbox
+
+Criar subscription dedicada que atualiza o snippet instantaneamente:
+
+```typescript
+// Em useInboxView.tsx - adicionar subscription de messages
+const messagesChannel = supabase
+  .channel("inbox-messages-realtime")
+  .on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "messages",
+    },
+    (payload) => {
+      const newMsg = payload.new as Message;
+      // Update inline do snippet sem esperar o trigger de inbox_view
+      queryClient.setQueryData<InboxViewItem[]>(
+        [...QUERY_KEY, user?.id, role, departmentIds, filters],
+        (prev = []) => prev.map(item => 
+          item.conversation_id === newMsg.conversation_id 
+            ? { 
+                ...item, 
+                last_snippet: newMsg.content?.slice(0, 100),
+                last_message_at: newMsg.created_at,
+                last_sender_type: newMsg.sender_type,
+                unread_count: (item.unread_count || 0) + (newMsg.sender_type === 'contact' ? 1 : 0),
+                updated_at: new Date().toISOString(),
+              } 
+            : item
+        ).sort((a, b) => 
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        )
+      );
+    }
+  )
+  .subscribe();
+```
+
+#### 4. Otimizar trigger do banco
+
+Criar trigger mais leve que apenas atualiza campos essenciais:
+
+```sql
+-- Trigger otimizado para inbox_view
+CREATE OR REPLACE FUNCTION public.update_inbox_view_on_message_fast()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  -- Update mínimo: só campos essenciais
+  UPDATE inbox_view SET
+    last_message_at = NEW.created_at,
+    last_snippet = LEFT(NEW.content, 100),
+    last_sender_type = NEW.sender_type,
+    last_channel = NEW.channel,
+    unread_count = CASE 
+      WHEN NEW.sender_type = 'contact' 
+      THEN unread_count + 1 
+      ELSE unread_count 
+    END,
+    updated_at = now()
+  WHERE conversation_id = NEW.conversation_id;
+  
+  RETURN NEW;
+END;
+$$;
+```
+
+---
+
+## Fluxo Otimizado
 
 ```text
-Cliente envia mensagem
-         |
-         v
-[Query Embedding] OpenAI text-embedding-3-small
-         |
-         v
-[Semantic Search] match_knowledge_articles (threshold 0.75)
-         |
-         v
-[Score de Confiança] similarity >= 0.85?
-         |
-    +----+----+
-    |         |
-   SIM       NÃO
-    |         |
-    v         v
-[RAG GPT-4o]  [Handoff + Mensagem padrão]
-    |
-    v
-[Resposta com citação de fonte]
+1. Mensagem chega do WhatsApp/Widget
+   |
+2. INSERT em messages → Trigger NOTIFICA inbox_view
+   |
+   +--→ [Parallel] Frontend recebe via Realtime
+   |         |
+   |         +--→ setQueryData INLINE (0ms delay)
+   |         |
+   |         +--→ UI atualiza INSTANTANEAMENTE
+   |
+3. Trigger atualiza inbox_view → Segundo evento Realtime
+   |
+   +--→ [Parallel] Frontend recebe UPDATE de inbox_view
+             |
+             +--→ Merge com dados já atualizados (noop)
 ```
 
 ---
 
-### Mudanças no Código
+## Resultado Esperado
 
-**1. Nova configuração no banco: `ai_strict_rag_mode`**
-
-Permite ativar/desativar o modo estrito por instância ou globalmente.
-
-**2. Modificar `callAIWithFallback` para modo estrito**
-
-Quando `strict_rag_mode` está ativo:
-- Usar SEMPRE `gpt-4o` (não `gpt-4o-mini`)
-- NÃO fazer fallback para Lovable/Gemini
-- Retornar erro se OpenAI falhar (ao invés de alucinação)
-
-**3. Novo prompt de sistema RAG estrito**
-
-Prompt enxuto e focado:
-
-```
-Você é um assistente de suporte que APENAS responde com base nos documentos fornecidos.
-
-REGRAS ABSOLUTAS:
-1. NUNCA invente informações que não estejam nos documentos abaixo
-2. Se a resposta não estiver nos documentos, diga: "Não encontrei essa informação na base de conhecimento. Posso te conectar com um especialista?"
-3. Sempre cite a fonte: "De acordo com [título do artigo]..."
-4. Mantenha respostas concisas (máximo 150 palavras)
-
-DOCUMENTOS:
-{knowledge_articles}
-
-PERGUNTA DO CLIENTE:
-{customer_message}
-```
-
-**4. Aumentar thresholds de confiança**
-
-```typescript
-// Modo Estrito
-const STRICT_SCORE_DIRECT = 0.90;    // Só responde com 90%+ de match
-const STRICT_SCORE_MINIMUM = 0.85;   // Abaixo disso, SEMPRE handoff
-const STRICT_SIMILARITY_THRESHOLD = 0.80; // Artigos com menos de 80% são ignorados
-```
-
-**5. Validação de resposta pós-geração**
-
-Checar se a resposta da IA contém frases de incerteza (definidas no código atual) e forçar handoff se detectar:
-
-```typescript
-const HALLUCINATION_INDICATORS = [
-  'não tenho certeza',
-  'acredito que',
-  'provavelmente',
-  'geralmente',
-  'pode ser que',
-  'talvez'
-];
-
-// Se detectar indicador, forçar handoff
-if (HALLUCINATION_INDICATORS.some(h => aiResponse.toLowerCase().includes(h))) {
-  return triggerHandoff('uncertainty_detected');
-}
-```
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Tempo para mensagem aparecer | 500-2000ms | < 100ms |
+| Tempo para snippet atualizar | 1000-3000ms | < 200ms |
+| Requisições HTTP por mensagem | 2-3 | 0 (apenas realtime) |
+| Re-renders | Lista inteira | Apenas item afetado |
 
 ---
 
-### Interface para Ativar Modo Estrito
+## Testes a Realizar
 
-Adicionar toggle na página de Configurações de IA (`/settings/ai`):
+1. Enviar mensagem de outro dispositivo → verificar aparece em < 100ms
+2. Receber mensagem de cliente → verificar snippet atualiza imediatamente
+3. Múltiplas mensagens em sequência → verificar sem flickering
+4. Reconexão após perda de rede → verificar catch-up funciona
 
-```
-+------------------------------------------+
-| Modo RAG Estrito                    [ON] |
-+------------------------------------------+
-| Usa exclusivamente OpenAI GPT-4o         |
-| Exige 85%+ de confiança para responder   |
-| Nunca inventa informações                |
-| Cita fontes explicitamente               |
-+------------------------------------------+
-```
-
----
-
-### Arquivos a Criar/Modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `supabase/functions/ai-autopilot-chat/index.ts` | Modificar | Adicionar lógica de modo estrito |
-| `src/pages/AISettingsPage.tsx` | Modificar | Adicionar toggle de modo estrito |
-| `src/hooks/useStrictRAGMode.tsx` | Criar | Hook para gerenciar configuração |
-| Migration SQL | Criar | Adicionar coluna `strict_rag_mode` em system_configurations |
-
----
-
-### Implementação Técnica Detalhada
-
-**1. Nova função `callStrictRAG` (substitui `callAIWithFallback` quando ativo):**
-
-```typescript
-async function callStrictRAG(
-  supabaseClient: any,
-  customerMessage: string,
-  knowledgeArticles: RetrievedDocument[],
-  contactName: string
-) {
-  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-  
-  if (!OPENAI_API_KEY) {
-    throw new Error('STRICT_RAG requer OPENAI_API_KEY');
-  }
-  
-  // Verificar se temos artigos suficientes
-  const highConfidenceArticles = knowledgeArticles.filter(a => a.similarity >= 0.80);
-  
-  if (highConfidenceArticles.length === 0) {
-    return {
-      shouldHandoff: true,
-      reason: 'Nenhum artigo com confiança >= 80%',
-      response: null
-    };
-  }
-  
-  // Prompt enxuto e focado
-  const strictPrompt = `Você é um assistente de suporte. Responda APENAS com base nos documentos abaixo.
-
-REGRAS:
-1. NÃO invente informações
-2. Se não souber, diga: "Não encontrei essa informação. Posso te conectar com um especialista?"
-3. Cite a fonte: "De acordo com [título]..."
-4. Máximo 150 palavras
-
-DOCUMENTOS:
-${highConfidenceArticles.map(a => `### ${a.title}\n${a.content}`).join('\n\n---\n\n')}`;
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o', // Modelo mais preciso
-      messages: [
-        { role: 'system', content: strictPrompt },
-        { role: 'user', content: `${contactName}: ${customerMessage}` }
-      ],
-      temperature: 0.3, // Baixa criatividade = mais fidelidade
-      max_tokens: 400
-    }),
-  });
-  
-  if (!response.ok) {
-    throw new Error(`OpenAI strict RAG failed: ${response.status}`);
-  }
-  
-  const data = await response.json();
-  const aiMessage = data.choices[0].message.content;
-  
-  // Validação pós-geração: detectar incerteza
-  const uncertaintyPhrases = ['não tenho certeza', 'acredito que', 'provavelmente', 'pode ser'];
-  const hasUncertainty = uncertaintyPhrases.some(p => aiMessage.toLowerCase().includes(p));
-  
-  if (hasUncertainty) {
-    return {
-      shouldHandoff: true,
-      reason: 'IA expressou incerteza na resposta',
-      response: aiMessage
-    };
-  }
-  
-  return {
-    shouldHandoff: false,
-    reason: null,
-    response: aiMessage,
-    citedArticles: highConfidenceArticles.map(a => a.title)
-  };
-}
-```
-
-**2. Integração no fluxo principal:**
-
-```typescript
-// No início do processamento (após buscar artigos)
-const strictMode = await getSystemConfig(supabaseClient, 'ai_strict_rag_mode');
-
-if (strictMode === 'true') {
-  const ragResult = await callStrictRAG(
-    supabaseClient,
-    customerMessage,
-    knowledgeArticles,
-    contactName
-  );
-  
-  if (ragResult.shouldHandoff) {
-    // Fazer handoff com mensagem padronizada
-    return handleStrictHandoff(ragResult.reason, contactName);
-  }
-  
-  // Enviar resposta citando fontes
-  return sendResponse(ragResult.response, ragResult.citedArticles);
-}
-
-// Caso contrário, continua com fluxo atual (comportamento legado)
-```
-
-**3. Toggle na interface:**
-
-```tsx
-// Em AISettingsPage.tsx
-<Card>
-  <CardHeader>
-    <CardTitle>Modo RAG Estrito</CardTitle>
-    <CardDescription>
-      Usa exclusivamente OpenAI GPT-4o com alta precisão
-    </CardDescription>
-  </CardHeader>
-  <CardContent>
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="font-medium">
-          {isStrictMode ? 'Ativado' : 'Desativado'}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {isStrictMode 
-            ? 'IA só responde com 85%+ de confiança, nunca alucina' 
-            : 'Modo padrão com fallback para Gemini'}
-        </p>
-      </div>
-      <Switch 
-        checked={isStrictMode} 
-        onCheckedChange={toggleStrictMode}
-      />
-    </div>
-  </CardContent>
-</Card>
-```
-
----
-
-### Comparativo: Antes vs Depois
-
-| Aspecto | Antes (Atual) | Depois (Modo Estrito) |
-|---------|---------------|----------------------|
-| Modelo | gpt-4o-mini | gpt-4o |
-| Fallback | Gemini | Nenhum (erro) |
-| Threshold | 0.70 | 0.85 |
-| Temperatura | 0.7 | 0.3 |
-| Prompt | ~3500 tokens | ~500 tokens |
-| Citação de fonte | Não | Sim |
-| Validação pós-resposta | Não | Sim |
-
----
-
-### Benefícios
-
-- **Zero alucinações**: IA só responde quando tem certeza
-- **Transparência**: Cita fontes explicitamente
-- **Consistência**: Apenas OpenAI, sem mistura de modelos
-- **Controle**: Toggle para ativar/desativar por instância
-- **Custo controlado**: GPT-4o é mais caro mas mais preciso
-
----
-
-### Considerações de Custo
-
-GPT-4o custa ~3x mais que gpt-4o-mini, mas:
-- Menos handoffs desnecessários (IA resolve mais casos corretamente)
-- Menor tempo de atendimento humano
-- Maior satisfação do cliente
-
----
-
-### Próximos Passos Pós-Implementação
-
-1. **Monitorar métricas**: Taxa de handoff, tempo de resposta, satisfação
-2. **Ajustar thresholds**: Se muito conservador, baixar para 0.80
-3. **Expandir KB**: Adicionar mais artigos para cobrir casos comuns
-4. **Feedback loop**: Marcar respostas corretas/incorretas para ajuste fino
