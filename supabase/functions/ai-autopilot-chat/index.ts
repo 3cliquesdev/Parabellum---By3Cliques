@@ -5022,7 +5022,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           .insert({
             conversation_id: conversationId,
             content: "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano!",
-            sender_type: 'agent',
+            sender_type: 'user',
             sender_id: null,
             is_ai_generated: true,
             channel: responseChannel

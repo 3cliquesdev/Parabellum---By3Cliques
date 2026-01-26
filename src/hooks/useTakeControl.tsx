@@ -141,7 +141,7 @@ export function useTakeControl() {
       if (messages && messages.length > 0) {
         const lastMessages = messages.reverse().map(m => ({
           content: m.content,
-          sender_type: m.sender_type as 'customer' | 'agent' | 'system',
+          sender_type: m.sender_type as 'user' | 'contact' | 'system',
           created_at: m.created_at
         }));
 

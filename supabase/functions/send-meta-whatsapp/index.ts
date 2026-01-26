@@ -239,7 +239,7 @@ serve(async (req) => {
       await supabase.from("messages").insert({
         conversation_id: body.conversation_id,
         content: messageContent,
-        sender_type: "agent",
+        sender_type: "user",
         external_id: messageId,
         metadata: {
           whatsapp_provider: "meta",

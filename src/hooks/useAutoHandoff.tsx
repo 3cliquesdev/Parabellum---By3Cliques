@@ -6,7 +6,7 @@ interface AutoHandoffParams {
   conversationId: string;
   lastMessages: Array<{
     content: string;
-    sender_type: 'customer' | 'agent' | 'system';
+    sender_type: 'user' | 'contact' | 'system';
     created_at: string;
   }>;
 }

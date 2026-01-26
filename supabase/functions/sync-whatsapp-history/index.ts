@@ -303,7 +303,7 @@ serve(async (req: Request) => {
             .insert({
               conversation_id: conversationId,
               content: content,
-              sender_type: msgKey.fromMe ? 'agent' : 'customer',
+              sender_type: msgKey.fromMe ? 'user' : 'contact',
               external_id: externalId,
               created_at: timestamp,
             });
