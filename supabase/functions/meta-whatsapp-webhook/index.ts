@@ -314,21 +314,17 @@ serve(async (req) => {
                 continue;
               }
 
-              // Inserir mensagem
+              // Inserir mensagem (sem external_id - coluna não existe)
               const { data: savedMessage, error: msgError } = await supabase
                 .from("messages")
                 .insert({
                   conversation_id: conversation.id,
                   content: messageContent,
                   sender_type: "contact",
-                  external_id: msg.id,
-                  metadata: {
-                    whatsapp_provider: "meta",
-                    message_type: msg.type,
-                    media_id: mediaId,
-                    phone_number_id: phoneNumberId,
-                    timestamp: msg.timestamp,
-                  },
+                  channel: "whatsapp",
+                  message_type: mediaType || "text",
+                  attachment_url: mediaId ? `meta:${mediaId}` : null,
+                  attachment_type: mediaType || null,
                 })
                 .select("id")
                 .single();
@@ -353,8 +349,8 @@ serve(async (req) => {
                         Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                       },
                       body: JSON.stringify({
-                        conversation_id: conversation.id,
-                        message: messageContent,
+                        conversationId: conversation.id,      // camelCase para ai-autopilot-chat
+                        customerMessage: messageContent,       // nome correto do parâmetro
                         contact_id: contact.id,
                         whatsapp_provider: "meta",
                         whatsapp_meta_instance_id: instance.id,
