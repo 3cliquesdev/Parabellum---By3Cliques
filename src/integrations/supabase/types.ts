@@ -7866,6 +7866,10 @@ export type Database = {
           title: string
         }[]
       }
+      merge_duplicate_contacts: {
+        Args: { p_duplicate_ids: string[]; p_master_id: string }
+        Returns: Json
+      }
       normalize_phone: { Args: { phone: string }; Returns: string }
       reset_inbox_unread_count: {
         Args: { p_conversation_id: string }
