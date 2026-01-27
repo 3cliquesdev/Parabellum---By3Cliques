@@ -868,6 +868,27 @@ serve(async (req) => {
       contact = conversation.contacts as any;
       department = conversation.department || null;
 
+      // 🛡️ VERIFICAÇÃO GLOBAL: Checar se a IA está habilitada globalmente
+      const { data: globalConfig } = await supabaseClient
+        .from('system_configurations')
+        .select('value')
+        .eq('key', 'ai_global_enabled')
+        .single();
+      
+      const isAIGloballyEnabled = globalConfig?.value === 'true' || globalConfig?.value === true;
+      
+      if (!isAIGloballyEnabled) {
+        console.log('[ai-autopilot-chat] 🚫 IA DESLIGADA GLOBALMENTE - IGNORANDO');
+        return new Response(
+          JSON.stringify({ 
+            skipped: true, 
+            reason: 'AI globally disabled',
+            ai_global_enabled: false
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // 🛡️ VERIFICAÇÃO DEFENSIVA: Não processar se não está em autopilot
       if (conversation.ai_mode !== 'autopilot') {
         console.log('[ai-autopilot-chat] ⚠️ Conversa não está em autopilot. ai_mode:', conversation.ai_mode, '- IGNORANDO');
