@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Play, Loader2, Settings2 } from "lucide-react";
+import { ArrowLeft, Play, Loader2, Settings2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatFlowEditor } from "@/components/chat-flows/ChatFlowEditor";
 import { ChatFlowSimulator } from "@/components/chat-flows/ChatFlowSimulator";
@@ -12,10 +12,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useQueryClient } from "@tanstack/react-query";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function ChatFlowEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: flow, isLoading } = useChatFlow(id || null);
   const updateFlow = useUpdateChatFlow();
   const [simulatorOpen, setSimulatorOpen] = useState(false);
@@ -77,7 +80,11 @@ export default function ChatFlowEditorPage() {
         triggers,
       },
       {
-        onSuccess: () => setSettingsOpen(false),
+        onSuccess: () => {
+          setSettingsOpen(false);
+          // Força atualização dos dados do flow na UI
+          queryClient.invalidateQueries({ queryKey: ["chat-flow", id] });
+        },
       }
     );
   };
@@ -116,24 +123,17 @@ export default function ChatFlowEditorPage() {
       {/* Header fixo */}
       <div className="h-14 border-b bg-card flex items-center justify-between px-4 shrink-0 relative z-50">
         <div className="flex items-center gap-3">
-          <Button 
-            type="button"
-            variant="ghost" 
-            size="icon" 
+          <a
+            href="/settings/chat-flows"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              try {
-                navigate("/settings/chat-flows");
-              } catch {
-                window.location.href = "/settings/chat-flows";
-              }
+              navigate("/settings/chat-flows");
             }}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="hover:bg-muted relative z-[100]"
+            className="inline-flex items-center justify-center h-9 w-9 rounded-md hover:bg-muted relative z-[100]"
           >
             <ArrowLeft className="h-5 w-5" />
-          </Button>
+          </a>
           <div className="border-l pl-3">
             <div className="flex items-center gap-2">
               <h1 className="font-semibold">{flow.name}</h1>
@@ -144,7 +144,22 @@ export default function ChatFlowEditorPage() {
             <p className="text-xs text-muted-foreground">Editor de Fluxo Visual</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Badge de gatilhos configurados */}
+          {((flow.trigger_keywords?.length || 0) > 0 || (flow.triggers?.length || 0) > 0) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="secondary" className="text-xs cursor-help">
+                  {flow.trigger_keywords?.length || 0} gatilhos
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <p className="text-xs">
+                  Este fluxo será ativado automaticamente quando o cliente enviar mensagens com essas palavras-chave.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           <Button 
             variant="outline" 
             size="sm" 
@@ -161,7 +176,7 @@ export default function ChatFlowEditorPage() {
             onClick={handleOpenSettings}
           >
             <Settings2 className="h-4 w-4 mr-2" />
-            Palavras‑chave
+            Palavras-chave
           </Button>
         </div>
       </div>
@@ -191,15 +206,26 @@ export default function ChatFlowEditorPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Gatilhos do fluxo</DialogTitle>
-            <DialogDescription>
-              “Palavras‑chave” são termos que disparam o fluxo quando aparecem na mensagem.
-              “Início” é apenas o nó inicial do desenho do fluxo (ponto de entrada) e não é um gatilho.
+            <DialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  <strong className="text-foreground">Como funciona:</strong> Quando um cliente envia uma mensagem contendo 
+                  essas palavras-chave, este fluxo será ativado automaticamente pelo chatbot IA.
+                </p>
+                <div className="flex items-start gap-2 p-2 bg-muted/50 rounded-md">
+                  <Info className="h-4 w-4 mt-0.5 text-primary" />
+                  <div className="text-xs">
+                    <p><strong>Palavras-chave:</strong> Termos curtos (ex: "carnaval", "promoção")</p>
+                    <p><strong>Frases exatas:</strong> Mensagens longas para match mais preciso</p>
+                  </div>
+                </div>
+              </div>
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="keywords">Palavras‑chave (separadas por vírgula)</Label>
+              <Label htmlFor="keywords">Palavras-chave (separadas por vírgula)</Label>
               <Input
                 id="keywords"
                 value={keywordsText}
