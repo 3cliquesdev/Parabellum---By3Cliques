@@ -91,6 +91,78 @@ function maskPhone(phone: string | null | undefined): string {
 }
 
 // ============================================================
+// 🆕 EXTRATOR DE EMAIL TOLERANTE (WhatsApp-safe)
+// Reconhece emails mesmo quando quebrados por newline/espaços
+// ============================================================
+interface EmailExtractionResult {
+  found: boolean;
+  email: string | null;
+  source: 'original' | 'compact' | null;
+  debugInfo: {
+    originalText: string;
+    compactText: string;
+    originalMatch: string | null;
+    compactMatch: string | null;
+  };
+}
+
+function extractEmailTolerant(text: string): EmailExtractionResult {
+  // Regex robusto para email
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi;
+  
+  // 1. Tentar extrair do texto original
+  const originalMatch = text.match(emailRegex);
+  if (originalMatch && originalMatch[0]) {
+    console.log('[extractEmailTolerant] ✅ Email encontrado no texto ORIGINAL:', originalMatch[0]);
+    return {
+      found: true,
+      email: originalMatch[0].toLowerCase(),
+      source: 'original',
+      debugInfo: {
+        originalText: text.substring(0, 100),
+        compactText: '',
+        originalMatch: originalMatch[0],
+        compactMatch: null
+      }
+    };
+  }
+  
+  // 2. Se não encontrou, tentar com texto COMPACTADO (remove espaços, newlines, tabs)
+  const compactText = text.replace(/[\s\n\r\t]+/g, '');
+  const compactMatch = compactText.match(emailRegex);
+  
+  if (compactMatch && compactMatch[0]) {
+    console.log('[extractEmailTolerant] ✅ Email encontrado no texto COMPACTADO:', compactMatch[0]);
+    console.log('[extractEmailTolerant] 📝 Texto original tinha quebras:', text.substring(0, 100));
+    return {
+      found: true,
+      email: compactMatch[0].toLowerCase(),
+      source: 'compact',
+      debugInfo: {
+        originalText: text.substring(0, 100),
+        compactText: compactText.substring(0, 100),
+        originalMatch: null,
+        compactMatch: compactMatch[0]
+      }
+    };
+  }
+  
+  // 3. Nenhum email encontrado
+  console.log('[extractEmailTolerant] ❌ Nenhum email encontrado no texto:', text.substring(0, 100));
+  return {
+    found: false,
+    email: null,
+    source: null,
+    debugInfo: {
+      originalText: text.substring(0, 100),
+      compactText: compactText.substring(0, 100),
+      originalMatch: null,
+      compactMatch: null
+    }
+  };
+}
+
+// ============================================================
 // 🔒 HELPER: Seleção de Instância WhatsApp (Multi-Provider)
 // Suporta tanto Meta WhatsApp Cloud API quanto Evolution API
 // SEMPRE prioriza a instância vinculada à conversa
@@ -828,6 +900,321 @@ serve(async (req) => {
           );
         }
       }
+
+      // ============================================================
+      // 🆕 PRIORIDADE ABSOLUTA: ESTADO awaiting_email_for_handoff
+      // Se está aguardando email, processar ANTES de qualquer outro fluxo
+      // ============================================================
+      const customerMetadata = conversation.customer_metadata || {};
+      const isAwaitingEmailForHandoff = customerMetadata.awaiting_email_for_handoff === true;
+      const handoffBlockedAt = customerMetadata.handoff_blocked_at ? new Date(customerMetadata.handoff_blocked_at).getTime() : 0;
+      
+      if (isAwaitingEmailForHandoff) {
+        console.log('[ai-autopilot-chat] 📧 ESTADO: awaiting_email_for_handoff ATIVO - processando email prioritariamente');
+        
+        // Tentar extrair email com extrator tolerante
+        const emailExtraction = extractEmailTolerant(customerMessage);
+        
+        console.log('[ai-autopilot-chat] 📧 Resultado da extração tolerante:', {
+          found: emailExtraction.found,
+          email: emailExtraction.email,
+          source: emailExtraction.source,
+          debug: emailExtraction.debugInfo
+        });
+        
+        if (!emailExtraction.found) {
+          // ❌ Email NÃO encontrado - verificar anti-spam (não repetir mensagem muito rápido)
+          const timeSinceHandoffBlocked = Date.now() - handoffBlockedAt;
+          const ANTI_SPAM_WINDOW_MS = 30000; // 30 segundos
+          
+          if (timeSinceHandoffBlocked < ANTI_SPAM_WINDOW_MS) {
+            console.log('[ai-autopilot-chat] 🛡️ Anti-spam: mensagem de email enviada há', Math.round(timeSinceHandoffBlocked/1000), 's - não repetindo');
+            
+            // Enviar mensagem mais curta de correção de formato
+            const formatHintMessage = '📧 Por favor, envie seu email em uma única linha (sem espaços ou quebras). Exemplo: seuemail@dominio.com';
+            
+            await supabaseClient.from('messages').insert({
+              conversation_id: conversationId,
+              content: formatHintMessage,
+              sender_type: 'user',
+              is_ai_generated: true,
+              channel: responseChannel
+            });
+            
+            // Enviar via WhatsApp se necessário
+            if (responseChannel === 'whatsapp' && contact?.phone) {
+              const whatsappResult = await getWhatsAppInstanceForConversation(
+                supabaseClient, 
+                conversationId, 
+                conversation.whatsapp_instance_id,
+                conversation
+              );
+              
+              if (whatsappResult) {
+                await sendWhatsAppMessage(
+                  supabaseClient,
+                  whatsappResult,
+                  contact.phone,
+                  formatHintMessage,
+                  conversationId,
+                  contact.whatsapp_id
+                );
+              }
+            }
+            
+            return new Response(JSON.stringify({
+              status: 'awaiting_email',
+              message: formatHintMessage,
+              reason: 'Email não detectado na mensagem - pedindo formato correto',
+              anti_spam_active: true
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+          
+          // Fora da janela anti-spam, mas ainda sem email válido
+          console.log('[ai-autopilot-chat] ❌ Email não encontrado e fora da janela anti-spam');
+          
+          const askEmailAgainMessage = '📧 Não consegui identificar seu email. Por favor, envie apenas o email em uma linha (ex: seunome@email.com)';
+          
+          // Atualizar timestamp para anti-spam
+          await supabaseClient.from('conversations')
+            .update({
+              customer_metadata: {
+                ...customerMetadata,
+                handoff_blocked_at: new Date().toISOString()
+              }
+            })
+            .eq('id', conversationId);
+          
+          await supabaseClient.from('messages').insert({
+            conversation_id: conversationId,
+            content: askEmailAgainMessage,
+            sender_type: 'user',
+            is_ai_generated: true,
+            channel: responseChannel
+          });
+          
+          // Enviar via WhatsApp se necessário
+          if (responseChannel === 'whatsapp' && contact?.phone) {
+            const whatsappResult = await getWhatsAppInstanceForConversation(
+              supabaseClient, 
+              conversationId, 
+              conversation.whatsapp_instance_id,
+              conversation
+            );
+            
+            if (whatsappResult) {
+              await sendWhatsAppMessage(
+                supabaseClient,
+                whatsappResult,
+                contact.phone,
+                askEmailAgainMessage,
+                conversationId,
+                contact.whatsapp_id
+              );
+            }
+          }
+          
+          return new Response(JSON.stringify({
+            status: 'awaiting_email',
+            message: askEmailAgainMessage,
+            reason: 'Email não detectado - solicitando novamente'
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        
+        // ✅ Email ENCONTRADO! Processar verificação
+        const detectedEmail = emailExtraction.email!;
+        console.log('[ai-autopilot-chat] ✅ EMAIL DETECTADO:', detectedEmail, '(via', emailExtraction.source, ')');
+        
+        // Chamar verify-customer-email para verificar se é cliente existente
+        try {
+          const { data: verifyResult, error: verifyError } = await supabaseClient.functions.invoke(
+            'verify-customer-email',
+            { body: { email: detectedEmail, contact_id: contact.id } }
+          );
+          
+          console.log('[ai-autopilot-chat] 📧 Resultado verify-customer-email:', {
+            error: verifyError,
+            found: verifyResult?.found,
+            customer: verifyResult?.customer?.email
+          });
+          
+          // Limpar estado awaiting_email_for_handoff SEMPRE (evita loop)
+          const updatedMetadata = { ...customerMetadata };
+          delete updatedMetadata.awaiting_email_for_handoff;
+          delete updatedMetadata.handoff_blocked_at;
+          delete updatedMetadata.handoff_blocked_reason;
+          
+          // Atualizar contato com email
+          await supabaseClient.from('contacts')
+            .update({ email: detectedEmail })
+            .eq('id', contact.id);
+          
+          console.log('[ai-autopilot-chat] ✅ Email salvo no contato e metadata limpo');
+          
+          const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+          const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+          
+          if (!verifyError && verifyResult?.found) {
+            // CLIENTE EXISTENTE - Ir para Suporte
+            console.log('[ai-autopilot-chat] ✅ Cliente ENCONTRADO no banco - direcionando para Suporte');
+            
+            // Atualizar conversa: limpar metadata + mover para Suporte + status customer
+            await supabaseClient.from('conversations')
+              .update({
+                customer_metadata: updatedMetadata,
+                department: DEPT_SUPORTE_ID
+              })
+              .eq('id', conversationId);
+            
+            await supabaseClient.from('contacts')
+              .update({ status: 'customer', email: detectedEmail })
+              .eq('id', contact.id);
+            
+            const customerName = verifyResult.customer?.name?.split(' ')[0] || contact.first_name || '';
+            const successMessage = `Ótimo, ${customerName}! ✅\n\nIdentifiquei você em nosso sistema. Como posso ajudar hoje?`;
+            
+            await supabaseClient.from('messages').insert({
+              conversation_id: conversationId,
+              content: successMessage,
+              sender_type: 'user',
+              is_ai_generated: true,
+              channel: responseChannel
+            });
+            
+            // Enviar via WhatsApp se necessário
+            if (responseChannel === 'whatsapp' && contact?.phone) {
+              const whatsappResult = await getWhatsAppInstanceForConversation(
+                supabaseClient, 
+                conversationId, 
+                conversation.whatsapp_instance_id,
+                conversation
+              );
+              
+              if (whatsappResult) {
+                await sendWhatsAppMessage(
+                  supabaseClient,
+                  whatsappResult,
+                  contact.phone,
+                  successMessage,
+                  conversationId,
+                  contact.whatsapp_id
+                );
+              }
+            }
+            
+            return new Response(JSON.stringify({
+              status: 'email_verified_customer',
+              message: successMessage,
+              email: detectedEmail,
+              department: 'suporte',
+              extraction_source: emailExtraction.source
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+            
+          } else {
+            // LEAD NOVO - Encaminhar para Comercial com handoff
+            console.log('[ai-autopilot-chat] 🆕 Email NÃO encontrado no banco - Lead novo, encaminhando para Comercial');
+            
+            const handoffTimestamp = new Date().toISOString();
+            
+            // Atualizar conversa: limpar metadata + mover para Comercial + waiting_human
+            await supabaseClient.from('conversations')
+              .update({
+                customer_metadata: updatedMetadata,
+                department: DEPT_COMERCIAL_ID,
+                ai_mode: 'waiting_human',
+                handoff_executed_at: handoffTimestamp,
+                needs_human_review: true
+              })
+              .eq('id', conversationId);
+            
+            // Rotear para agente comercial
+            await supabaseClient.functions.invoke('route-conversation', {
+              body: { conversationId, department_id: DEPT_COMERCIAL_ID }
+            });
+            
+            const leadHandoffMessage = `Obrigado! 📝\n\nRegistramos seu contato (${detectedEmail}). Um de nossos consultores vai entrar em contato em breve para te ajudar.\n\nAguarde um momento, por favor.`;
+            
+            await supabaseClient.from('messages').insert({
+              conversation_id: conversationId,
+              content: leadHandoffMessage,
+              sender_type: 'user',
+              is_ai_generated: true,
+              channel: responseChannel
+            });
+            
+            // Enviar via WhatsApp se necessário
+            if (responseChannel === 'whatsapp' && contact?.phone) {
+              const whatsappResult = await getWhatsAppInstanceForConversation(
+                supabaseClient, 
+                conversationId, 
+                conversation.whatsapp_instance_id,
+                conversation
+              );
+              
+              if (whatsappResult) {
+                await sendWhatsAppMessage(
+                  supabaseClient,
+                  whatsappResult,
+                  contact.phone,
+                  leadHandoffMessage,
+                  conversationId,
+                  contact.whatsapp_id
+                );
+              }
+            }
+            
+            // Registrar nota interna
+            await supabaseClient.from('interactions').insert({
+              customer_id: contact.id,
+              type: 'internal_note',
+              content: `📧 **Lead Identificado via Email**\n\n**Email:** ${detectedEmail}\n**Extração:** ${emailExtraction.source}\n**Ação:** Encaminhado para Comercial`,
+              channel: responseChannel
+            });
+            
+            return new Response(JSON.stringify({
+              status: 'email_verified_lead',
+              message: leadHandoffMessage,
+              email: detectedEmail,
+              department: 'comercial',
+              handoff: true,
+              extraction_source: emailExtraction.source
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+          
+        } catch (verifyErr) {
+          console.error('[ai-autopilot-chat] ❌ Erro ao verificar email:', verifyErr);
+          
+          // Em caso de erro, limpar estado e continuar processamento normal
+          const updatedMetadata = { ...customerMetadata };
+          delete updatedMetadata.awaiting_email_for_handoff;
+          
+          await supabaseClient.from('conversations')
+            .update({ customer_metadata: updatedMetadata })
+            .eq('id', conversationId);
+          
+          // Salvar email mesmo com erro na verificação
+          await supabaseClient.from('contacts')
+            .update({ email: detectedEmail })
+            .eq('id', contact.id);
+          
+          // Atualizar objeto local
+          contact.email = detectedEmail;
+          
+          console.log('[ai-autopilot-chat] ⚠️ Erro na verificação mas email salvo - continuando fluxo normal');
+          // NÃO retornar, deixar continuar para processamento normal
+        }
+      }
+      // ============================================================
+      // FIM DO PROCESSAMENTO PRIORITÁRIO DE EMAIL
+      // ============================================================
 
       // FASE 4: Buscar canal da ÚLTIMA mensagem do cliente (não da conversa)
       const { data: lastCustomerMessage } = await supabaseClient
@@ -2800,10 +3187,39 @@ Responda APENAS: skip ou search`
       });
       
       // 🆕 NOVA LÓGICA: Lead sem email → NÃO fazer handoff, pedir email primeiro
+      // 🛡️ ANTI-LOOP: Verificar se já está aguardando email
       if (isLeadWithoutEmail) {
-        console.log('[ai-autopilot-chat] 🔐 LEAD SEM EMAIL - Bloqueando handoff, pedindo email primeiro');
+        const existingMetadata = conversation.customer_metadata || {};
+        const alreadyAwaitingEmail = existingMetadata.awaiting_email_for_handoff === true;
+        const existingHandoffBlockedAt = existingMetadata.handoff_blocked_at ? new Date(existingMetadata.handoff_blocked_at).getTime() : 0;
+        const timeSinceBlocked = Date.now() - existingHandoffBlockedAt;
+        const ANTI_SPAM_WINDOW_MS = 60000; // 60 segundos
         
-        // Usar template do banco ou fallback
+        console.log('[ai-autopilot-chat] 🔐 LEAD SEM EMAIL - Verificando estado:', {
+          alreadyAwaitingEmail,
+          timeSinceBlocked: Math.round(timeSinceBlocked / 1000) + 's',
+          antiSpamActive: alreadyAwaitingEmail && timeSinceBlocked < ANTI_SPAM_WINDOW_MS
+        });
+        
+        // 🛡️ ANTI-SPAM: Se já pediu email recentemente, NÃO repetir a mesma mensagem
+        if (alreadyAwaitingEmail && timeSinceBlocked < ANTI_SPAM_WINDOW_MS) {
+          console.log('[ai-autopilot-chat] 🛡️ Anti-spam ativo - não repetindo pedido de email');
+          
+          // Apenas retornar status sem enviar nova mensagem
+          return new Response(JSON.stringify({
+            status: 'awaiting_email',
+            message: null,
+            reason: 'Anti-spam: pedido de email já enviado recentemente',
+            anti_spam_active: true,
+            time_since_blocked: Math.round(timeSinceBlocked / 1000)
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        
+        console.log('[ai-autopilot-chat] 📧 Pedindo email pela primeira vez (ou após janela anti-spam)');
+        
+        // Usar template do banco ou fallback - 🆕 Adicionar instrução sobre formato
         let askEmailMessage = await getMessageTemplate(
           supabaseClient,
           'identity_wall_ask_email',
@@ -2812,7 +3228,7 @@ Responda APENAS: skip ou search`
         
         if (!askEmailMessage) {
           const firstName = contactName ? contactName.split(' ')[0] : '';
-          askEmailMessage = `Olá${firstName ? `, ${firstName}` : ''}! 👋\n\nPara garantir um atendimento personalizado e seguro, preciso que você me informe seu email.`;
+          askEmailMessage = `Olá${firstName ? `, ${firstName}` : ''}! 👋\n\nPara garantir um atendimento personalizado e seguro, preciso que você me informe seu email.\n\n📧 *Envie apenas o email em uma linha (ex: seunome@email.com)*`;
         }
         
         // Salvar mensagem pedindo email
