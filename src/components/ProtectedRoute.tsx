@@ -16,11 +16,13 @@ interface ProtectedRouteProps {
 export default function ProtectedRoute({ children, allowedRoles, requiredPermission }: ProtectedRouteProps) {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
-  const { hasPermission, loading: permLoading } = useRolePermissions();
+  const { hasPermission, permissions, loading: permLoading } = useRolePermissions();
   const location = useLocation();
 
   // Loading state - include permission loading when using requiredPermission
-  const isLoading = authLoading || roleLoading || (requiredPermission && permLoading);
+  // Also check if permissions object exists (prevents race conditions)
+  const permissionsReady = !requiredPermission || (permissions !== undefined && !permLoading);
+  const isLoading = authLoading || roleLoading || !permissionsReady;
 
   if (isLoading) {
     return (
