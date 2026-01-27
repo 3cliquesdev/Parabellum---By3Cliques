@@ -1,223 +1,475 @@
 
+## Plano: Liberar Acesso Total para cs_manager (Marco Cruz)
 
-## Plano: Corrigir 3 Problemas do Sistema de Chat Flows
+### Diagnostico Completo
 
-### Diagnostico
+Identifiquei **Marco Cruz** como o usuario com role `cs_manager`:
+- **User ID**: ce6150bb-c88b-4fc1-bce2-f09b4f51ef1d
+- **Role**: cs_manager
 
-| # | Problema | Causa Raiz | Impacto |
-|---|----------|-----------|---------|
-| 1 | Navegacao travada no editor | ChatFlowEditorPage nao tem Layout wrapper + ReactFlow captura cliques | Usuario fica "preso" no editor |
-| 2 | Duplicar fluxo nao existe | Funcionalidade nunca foi implementada | Usuario precisa recriar fluxos do zero |
-| 3 | Toggle ativar/desativar nao funciona | Politica RLS sem WITH CHECK para UPDATE | UPDATE silenciosamente falha |
+### Tabelas que JA Permitem cs_manager (OK)
 
----
+| Tabela | Status |
+|--------|--------|
+| chat_flows | OK - cs_manager incluido |
+| onboarding_playbooks | OK - cs_manager incluido |
+| email_templates | OK - cs_manager incluido |
+| email_templates_v2 | OK - cs_manager incluido |
+| email_branding | OK - cs_manager incluido |
+| email_senders | OK - cs_manager incluido |
+| email_layout_library | OK - cs_manager incluido |
+| email_template_blocks | OK - cs_manager incluido |
+| email_template_translations | OK - cs_manager incluido |
+| email_template_variants | OK - cs_manager incluido |
+| email_tracking_events | OK - cs_manager pode visualizar |
+| playbook_executions | OK - cs_manager pode ver e atualizar |
+| playbook_execution_queue | OK - cs_manager pode visualizar |
 
-### Parte 1: Corrigir Navegacao no Editor
+### Tabelas que BLOQUEIAM cs_manager (CORRIGIR)
 
-**Problema:** A rota `/settings/chat-flows/:id/edit` nao esta envolta em `<Layout>`, diferente das outras rotas de settings.
-
-**Arquivo:** `src/App.tsx` (linha 254)
-
-**Antes:**
-```tsx
-<Route path="/settings/chat-flows/:id/edit" element={<ProtectedRoute requiredPermission="settings.chat_flows"><ChatFlowEditorPage /></ProtectedRoute>} />
-```
-
-**Depois:**
-```tsx
-<Route path="/settings/chat-flows/:id/edit" element={<ProtectedRoute requiredPermission="settings.chat_flows"><Layout fullHeight><ChatFlowEditorPage /></Layout></ProtectedRoute>} />
-```
-
-**OU** (opcao mais simples - manter fullscreen mas melhorar o botao de voltar):
-
-Manter a pagina fullscreen (como um editor profissional) mas garantir que o botao de voltar funcione:
-
-**Arquivo:** `src/pages/ChatFlowEditorPage.tsx`
-
-Adicionar `type="button"` e usar `window.location.href` como fallback:
-
-```tsx
-<Button 
-  type="button"
-  variant="ghost" 
-  size="icon" 
-  onClick={(e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Fallback para garantir navegacao
-    try {
-      navigate("/settings/chat-flows");
-    } catch {
-      window.location.href = "/settings/chat-flows";
-    }
-  }}
-  onMouseDown={(e) => e.stopPropagation()}
-  className="hover:bg-muted z-[100]"
->
-```
-
-**Recomendacao:** Manter editor fullscreen (melhor UX para drag-drop) e corrigir o botao.
+| Tabela | Problema | Acoes Bloqueadas |
+|--------|----------|-----------------|
+| ai_message_templates | Apenas admin/manager | INSERT, UPDATE, DELETE |
+| ai_personas | Apenas admin/manager | INSERT, UPDATE, DELETE |
+| ai_tools | Apenas admin/manager | INSERT, UPDATE, DELETE |
+| ai_persona_tools | Apenas admin/manager | INSERT, UPDATE, DELETE |
+| ai_routing_rules | Apenas admin/manager | INSERT, UPDATE, DELETE |
+| ai_scenario_configs | Apenas admin/manager | ALL |
+| ai_training_examples | Apenas admin/manager | ALL |
+| cadence_templates | Apenas admin | ALL |
+| automations | Apenas admin/manager | ALL |
+| email_block_conditions | Apenas admin/manager/gm | ALL |
+| email_events | Apenas admin/manager/gm | SELECT |
+| email_sends | Apenas admin/manager/gm/fm | SELECT |
+| email_variable_definitions | Apenas admin | ALL |
 
 ---
 
-### Parte 2: Adicionar Funcionalidade de Duplicar Fluxo
+### Migration SQL para Corrigir
 
-**2.1 Criar hook useDuplicateChatFlow**
-
-**Arquivo:** `src/hooks/useChatFlows.tsx`
-
-Adicionar novo hook apos `useToggleChatFlowActive`:
-
-```typescript
-export function useDuplicateChatFlow() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async (flow: ChatFlow) => {
-      const { data: user } = await supabase.auth.getUser();
-      
-      const { data: result, error } = await supabase
-        .from("chat_flows")
-        .insert({
-          name: `${flow.name} (Copia)`,
-          description: flow.description,
-          triggers: flow.triggers,
-          trigger_keywords: flow.trigger_keywords,
-          department_id: flow.department_id,
-          support_channel_id: flow.support_channel_id,
-          flow_definition: flow.flow_definition,
-          is_active: false, // Sempre inativo ao duplicar
-          priority: flow.priority,
-          created_by: user.user?.id,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return result;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["chat-flows"] });
-      toast({
-        title: "Fluxo duplicado",
-        description: "O fluxo foi duplicado com sucesso. Ele foi criado como inativo.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Erro ao duplicar fluxo",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-}
-```
-
-**2.2 Adicionar botao na UI**
-
-**Arquivo:** `src/pages/ChatFlows.tsx`
-
-Importar hook e icone:
-```tsx
-import { Copy } from "lucide-react";
-import { useDuplicateChatFlow } from "@/hooks/useChatFlows";
-```
-
-Instanciar hook:
-```tsx
-const duplicateFlow = useDuplicateChatFlow();
-```
-
-Adicionar item no dropdown (apos "Editar"):
-```tsx
-<DropdownMenuItem onClick={() => duplicateFlow.mutate(flow)}>
-  <Copy className="h-4 w-4 mr-2" />
-  Duplicar
-</DropdownMenuItem>
-```
-
----
-
-### Parte 3: Corrigir Toggle Ativar/Desativar (RLS)
-
-**Problema:** A politica RLS atual tem `WITH CHECK` como `nil`, o que significa que UPDATE pode falhar silenciosamente.
-
-**Arquivo:** Nova migration SQL
+Criar migration com DROP e CREATE de todas as policies necessarias:
 
 ```sql
--- Dropar e recriar politica com WITH CHECK
-DROP POLICY IF EXISTS "Admins and managers can manage chat flows" ON chat_flows;
+-- =====================================================
+-- 1. ai_message_templates
+-- =====================================================
+DROP POLICY IF EXISTS "admin_manager_can_delete_ai_message_templates" ON ai_message_templates;
+DROP POLICY IF EXISTS "admin_manager_can_insert_ai_message_templates" ON ai_message_templates;
+DROP POLICY IF EXISTS "admin_manager_can_update_ai_message_templates" ON ai_message_templates;
 
-CREATE POLICY "Admins and managers can manage chat flows"
-ON chat_flows
-FOR ALL
-TO public
+CREATE POLICY "managers_can_delete_ai_message_templates"
+ON ai_message_templates FOR DELETE TO public
 USING (
-  EXISTS (
-    SELECT 1 FROM user_roles
-    WHERE user_roles.user_id = auth.uid()
-    AND user_roles.role IN ('admin', 'manager', 'general_manager', 'support_manager', 'cs_manager', 'financial_manager')
-  )
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+CREATE POLICY "managers_can_insert_ai_message_templates"
+ON ai_message_templates FOR INSERT TO public
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+CREATE POLICY "managers_can_update_ai_message_templates"
+ON ai_message_templates FOR UPDATE TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
 )
 WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM user_roles
-    WHERE user_roles.user_id = auth.uid()
-    AND user_roles.role IN ('admin', 'manager', 'general_manager', 'support_manager', 'cs_manager', 'financial_manager')
-  )
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 2. ai_personas
+-- =====================================================
+DROP POLICY IF EXISTS "admins_managers_can_delete_personas" ON ai_personas;
+DROP POLICY IF EXISTS "admins_managers_can_insert_personas" ON ai_personas;
+DROP POLICY IF EXISTS "admins_managers_can_update_personas" ON ai_personas;
+
+CREATE POLICY "managers_can_delete_personas"
+ON ai_personas FOR DELETE TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+CREATE POLICY "managers_can_insert_personas"
+ON ai_personas FOR INSERT TO public
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+CREATE POLICY "managers_can_update_personas"
+ON ai_personas FOR UPDATE TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 3. ai_tools
+-- =====================================================
+DROP POLICY IF EXISTS "admins_managers_can_delete_tools" ON ai_tools;
+DROP POLICY IF EXISTS "admins_managers_can_insert_tools" ON ai_tools;
+DROP POLICY IF EXISTS "admins_managers_can_update_tools" ON ai_tools;
+
+CREATE POLICY "managers_can_delete_tools"
+ON ai_tools FOR DELETE TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+CREATE POLICY "managers_can_insert_tools"
+ON ai_tools FOR INSERT TO public
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+CREATE POLICY "managers_can_update_tools"
+ON ai_tools FOR UPDATE TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 4. ai_persona_tools
+-- =====================================================
+DROP POLICY IF EXISTS "admins_managers_can_delete_persona_tools" ON ai_persona_tools;
+DROP POLICY IF EXISTS "admins_managers_can_insert_persona_tools" ON ai_persona_tools;
+DROP POLICY IF EXISTS "admins_managers_can_update_persona_tools" ON ai_persona_tools;
+
+CREATE POLICY "managers_can_delete_persona_tools"
+ON ai_persona_tools FOR DELETE TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+CREATE POLICY "managers_can_insert_persona_tools"
+ON ai_persona_tools FOR INSERT TO public
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+CREATE POLICY "managers_can_update_persona_tools"
+ON ai_persona_tools FOR UPDATE TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 5. ai_routing_rules
+-- =====================================================
+DROP POLICY IF EXISTS "admins_managers_can_delete_routing_rules" ON ai_routing_rules;
+DROP POLICY IF EXISTS "admins_managers_can_insert_routing_rules" ON ai_routing_rules;
+DROP POLICY IF EXISTS "admins_managers_can_update_routing_rules" ON ai_routing_rules;
+
+CREATE POLICY "managers_can_delete_routing_rules"
+ON ai_routing_rules FOR DELETE TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+CREATE POLICY "managers_can_insert_routing_rules"
+ON ai_routing_rules FOR INSERT TO public
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+CREATE POLICY "managers_can_update_routing_rules"
+ON ai_routing_rules FOR UPDATE TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 6. ai_scenario_configs
+-- =====================================================
+DROP POLICY IF EXISTS "Admin e Manager podem gerenciar cenários" ON ai_scenario_configs;
+
+CREATE POLICY "managers_can_manage_scenarios"
+ON ai_scenario_configs FOR ALL TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 7. ai_training_examples
+-- =====================================================
+DROP POLICY IF EXISTS "Admin e Manager podem gerenciar exemplos de treinamento" ON ai_training_examples;
+
+CREATE POLICY "managers_can_manage_training_examples"
+ON ai_training_examples FOR ALL TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 8. cadence_templates
+-- =====================================================
+DROP POLICY IF EXISTS "Admins can manage cadence templates" ON cadence_templates;
+
+CREATE POLICY "managers_can_manage_cadence_templates"
+ON cadence_templates FOR ALL TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 9. automations
+-- =====================================================
+DROP POLICY IF EXISTS "admins_managers_can_manage_automations" ON automations;
+
+CREATE POLICY "managers_can_manage_automations"
+ON automations FOR ALL TO authenticated
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 10. email_block_conditions
+-- =====================================================
+DROP POLICY IF EXISTS "admin_manager_full_access_conditions" ON email_block_conditions;
+
+CREATE POLICY "managers_full_access_conditions"
+ON email_block_conditions FOR ALL TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 11. email_events (apenas SELECT)
+-- =====================================================
+DROP POLICY IF EXISTS "admin_manager_view_all_events" ON email_events;
+
+CREATE POLICY "managers_view_all_events"
+ON email_events FOR SELECT TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+);
+
+-- =====================================================
+-- 12. email_sends (apenas SELECT)
+-- =====================================================
+DROP POLICY IF EXISTS "admin_manager_view_all_sends" ON email_sends;
+
+CREATE POLICY "managers_view_all_sends"
+ON email_sends FOR SELECT TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role) OR
+  has_role(auth.uid(), 'financial_manager'::app_role)
+);
+
+-- =====================================================
+-- 13. email_variable_definitions
+-- =====================================================
+DROP POLICY IF EXISTS "admin_manage_variables" ON email_variable_definitions;
+
+CREATE POLICY "managers_manage_variables"
+ON email_variable_definitions FOR ALL TO public
+USING (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) OR 
+  has_role(auth.uid(), 'manager'::app_role) OR
+  has_role(auth.uid(), 'cs_manager'::app_role) OR
+  has_role(auth.uid(), 'general_manager'::app_role) OR
+  has_role(auth.uid(), 'support_manager'::app_role)
 );
 ```
 
-**Nota:** Tambem adicionei `cs_manager` e `financial_manager` para consistencia com outras politicas do sistema.
-
 ---
 
-### Arquivos a Modificar
+### Resumo das Alteracoes
 
-| Arquivo | Acao | Descricao |
-|---------|------|-----------|
-| `src/pages/ChatFlowEditorPage.tsx` | Modificar | Melhorar botao de voltar com fallbacks |
-| `src/hooks/useChatFlows.tsx` | Modificar | Adicionar hook useDuplicateChatFlow |
-| `src/pages/ChatFlows.tsx` | Modificar | Adicionar botao de duplicar no dropdown |
-| Migration SQL | Criar | Corrigir RLS policy com WITH CHECK |
+| Tabela | Antes | Depois |
+|--------|-------|--------|
+| ai_message_templates | admin, manager | + cs_manager, gm, sm |
+| ai_personas | admin, manager | + cs_manager, gm, sm |
+| ai_tools | admin, manager | + cs_manager, gm, sm |
+| ai_persona_tools | admin, manager | + cs_manager, gm, sm |
+| ai_routing_rules | admin, manager | + cs_manager, gm, sm |
+| ai_scenario_configs | admin, manager | + cs_manager, gm, sm |
+| ai_training_examples | admin, manager | + cs_manager, gm, sm |
+| cadence_templates | admin only | + manager, cs_manager, gm, sm |
+| automations | admin, manager | + cs_manager, gm, sm |
+| email_block_conditions | admin, manager, gm | + cs_manager, sm |
+| email_events | admin, manager, gm | + cs_manager, sm |
+| email_sends | admin, manager, gm, fm | + cs_manager, sm |
+| email_variable_definitions | admin only | + manager, cs_manager, gm, sm |
 
----
-
-### Ordem de Implementacao
-
-1. Corrigir RLS policy (migration SQL)
-2. Criar hook useDuplicateChatFlow
-3. Adicionar botao Duplicar na UI
-4. Melhorar botao de voltar no editor
-
----
-
-### Secao Tecnica: Detalhes Adicionais
-
-**Por que o botao de voltar pode nao funcionar:**
-
-O ReactFlow usa event listeners globais para drag-drop e interacao com o canvas. Quando o usuario clica no botao de voltar, o evento pode ser capturado pelo ReactFlow antes de chegar no handler do botao.
-
-Solucoes implementadas:
-1. `e.preventDefault()` + `e.stopPropagation()` - ja existe
-2. Adicionar `onMouseDown={(e) => e.stopPropagation()}` - capturar evento mais cedo
-3. Usar `type="button"` explicitamente
-4. Aumentar z-index para `z-[100]` no botao
-5. Fallback com `window.location.href` caso navigate falhe
-
-**Por que o toggle pode falhar silenciosamente:**
-
-Sem `WITH CHECK`, o Postgres permite a operacao mas nao aplica a mudanca se a politica USING nao for satisfeita no momento do UPDATE. Isso causa um "update silencioso" onde a query retorna sucesso mas nenhuma linha e afetada.
+**Legenda:**
+- gm = general_manager
+- sm = support_manager
+- fm = financial_manager
 
 ---
 
 ### Resultado Esperado
 
-| Problema | Antes | Depois |
-|----------|-------|--------|
-| Navegacao no editor | Botao de voltar nao responde | Funciona com multiplos fallbacks |
-| Duplicar fluxo | Nao existe | Botao "Duplicar" no menu de opcoes |
-| Toggle ativar/desativar | Falha silenciosamente | Funciona corretamente com RLS correto |
+Apos a migration, Marco Cruz (cs_manager) tera acesso total para:
 
+1. **Emails**: Criar, editar, excluir templates, branding, senders
+2. **AI**: Gerenciar personas, tools, routing rules, cenarios, exemplos de treinamento
+3. **Playbooks**: Criar, editar, executar playbooks (ja funciona)
+4. **Chat Flows**: Criar, editar, ativar/desativar fluxos (ja funciona)
+5. **Automacoes**: Criar e gerenciar automacoes
+6. **Cadencias**: Gerenciar templates de cadencia
+
+Todos os gerentes (cs_manager, general_manager, support_manager, financial_manager) terao permissoes equivalentes para gestao de conteudo.
