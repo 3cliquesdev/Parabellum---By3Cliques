@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, ShoppingCart, Package, GraduationCap, Database, Wrench, ExternalLink } from "lucide-react";
+import { BookOpen, ShoppingCart, Package, GraduationCap, Database, Wrench, ExternalLink, FileSpreadsheet } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useKnowledgeStats } from "@/hooks/useKnowledgeStats";
 import { useKiwifyStats } from "@/hooks/useKiwifyStats";
@@ -36,9 +36,19 @@ const KNOWLEDGE_SOURCES: KnowledgeSource[] = [
     icon: ShoppingCart,
     database: "Supabase: contacts + deals",
     tool: "check_order_status",
-    description: "Dados de compra, valores, status de venda",
+    description: "Clientes com vendas e dados financeiros",
     link: "/settings/kiwify",
     color: "text-orange-500",
+  },
+  {
+    id: "csv_import",
+    name: "Importação de Planilha",
+    icon: FileSpreadsheet,
+    database: "Supabase: contacts (source=csv_import)",
+    tool: "Busca por documento/email",
+    description: "Clientes importados manualmente via CSV/Excel",
+    link: "/customers",
+    color: "text-green-500",
   },
   {
     id: "tracking",

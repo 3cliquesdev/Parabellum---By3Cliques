@@ -12,6 +12,7 @@ export interface ChatFlow {
   support_channel_id: string | null;
   flow_definition: { nodes: any[]; edges: any[] };
   is_active: boolean;
+  is_master_flow: boolean;
   priority: number;
   created_by: string | null;
   created_at: string;
