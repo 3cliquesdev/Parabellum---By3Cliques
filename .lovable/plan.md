@@ -1,159 +1,159 @@
 
 
-## Plano: Corrigir Envio de Midia para Clientes (WhatsApp)
+## Plano: Corrigir Nome do Fluxo + Botao de Iniciar Fluxo Manual
 
-### Problema Identificado
+### Problema 1: Editar Nome do Fluxo
 
-Quando voces enviam foto, video ou audio, o cliente **nao recebe**. Isso acontece porque:
+**Situacao atual**: O nome do fluxo so pode ser definido na criacao. Depois disso, nao ha como editar.
 
-1. A midia que voces fazem upload vai para o bucket `chat-attachments` (PRIVADO)
-2. O sistema gera uma **signed URL** (URL temporaria do Supabase) 
-3. Essa URL e enviada para a API do Meta WhatsApp
-4. O Meta tenta baixar a midia dessa URL, mas **falha** porque:
-   - O Meta nao consegue acessar signed URLs de storage privado de forma confiavel
-   - Signed URLs podem ter problemas com redirecionamentos ou headers especiais
+**Solucao**: Adicionar campo de nome no Dialog de Palavras-chave (que ja existe) e tornar o nome no header clicavel para editar.
 
-**Prova nos dados:**
+---
+
+### Alteracoes para Renomear Fluxo
+
+#### Arquivo: `src/pages/ChatFlowEditorPage.tsx`
+
+**Mudanca 1**: Adicionar estado para o nome do fluxo
+```typescript
+const [flowName, setFlowName] = useState("");
+
+// Inicializar quando flow carregar
+useEffect(() => {
+  if (flow) {
+    setFlowName(flow.name);
+    setKeywordsText((flow.trigger_keywords || []).join(", "));
+    setTriggersText((flow.triggers || []).join("\n"));
+  }
+}, [flow]);
 ```
-chat-attachments: public = false  ← Voces enviam para ca
-chat-media:       public = true   ← Clientes enviam para ca (funciona)
+
+**Mudanca 2**: Adicionar input de nome no Dialog de Configuracoes (linha 226)
+```tsx
+<div className="space-y-2">
+  <Label htmlFor="flowName">Nome do fluxo *</Label>
+  <Input
+    id="flowName"
+    value={flowName}
+    onChange={(e) => setFlowName(e.target.value)}
+    placeholder="Nome do fluxo"
+  />
+</div>
+```
+
+**Mudanca 3**: Atualizar handleSaveSettings para incluir nome
+```typescript
+updateFlow.mutate({
+  id,
+  name: flowName,  // ADICIONAR
+  trigger_keywords,
+  triggers,
+});
+```
+
+**Mudanca 4**: Tornar o nome clicavel no header (linha 139)
+```tsx
+<h1 
+  className="font-semibold cursor-pointer hover:text-primary"
+  onClick={handleOpenSettings}
+>
+  {flow.name}
+</h1>
 ```
 
 ---
 
-### Solucao Proposta
+### Problema 2: Iniciar Fluxo Manualmente (Sem IA)
 
-Ao inves de enviar a URL do Supabase para o Meta, vamos fazer **upload da midia diretamente para o Meta** usando a [Media API](https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media). O Meta retorna um `media_id` que podemos usar para enviar a mensagem.
+**Situacao atual**: Fluxos so sao ativados quando a IA detecta as palavras-chave na mensagem do cliente.
 
-**Fluxo Corrigido:**
-```text
-Usuario faz upload no chat
-        │
-        ▼
-    upload-chat-media
-   (salva no Supabase)
-        │
-        ▼
-   send-meta-whatsapp
-        │
-        ├─► Se media.url: Fazer upload para Meta primeiro
-        │       │
-        │       ▼
-        │   POST /v18.0/{phone_number_id}/media
-        │       │
-        │       ▼
-        │   Obter media_id do Meta
-        │
-        ▼
-   Enviar mensagem com media_id (nao URL)
-        │
-        ▼
-   Cliente recebe no WhatsApp ✅
-```
+**Solucao**: Adicionar um botao no ChatWindow (similar ao botao de templates) que lista os fluxos disponiveis e permite iniciar manualmente.
 
 ---
 
-### Alteracoes Tecnicas
+### Alteracoes para Iniciar Fluxo Manual
 
-#### Arquivo: `supabase/functions/send-meta-whatsapp/index.ts`
+#### Arquivo 1: `src/components/ChatWindow.tsx`
 
-**Adicionar funcao de upload para Meta:**
+**Adicionar botao de fluxos** ao lado do botao de templates existente no toolbar de envio de mensagem.
 
-```typescript
-async function uploadMediaToMeta(
-  phoneNumberId: string,
-  accessToken: string,
-  mediaUrl: string,
-  mimeType: string
-): Promise<string> {
-  // 1. Baixar arquivo da URL do Supabase
-  const mediaResponse = await fetch(mediaUrl);
-  if (!mediaResponse.ok) {
-    throw new Error(`Failed to download media: ${mediaResponse.status}`);
-  }
-  const mediaBlob = await mediaResponse.blob();
-  
-  // 2. Fazer upload para Meta
-  const formData = new FormData();
-  formData.append('file', mediaBlob, 'media');
-  formData.append('messaging_product', 'whatsapp');
-  formData.append('type', mimeType);
-  
-  const uploadResponse = await fetch(
-    `https://graph.facebook.com/v18.0/${phoneNumberId}/media`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` },
-      body: formData,
-    }
-  );
-  
-  if (!uploadResponse.ok) {
-    const error = await uploadResponse.text();
-    throw new Error(`Meta media upload failed: ${error}`);
-  }
-  
-  const { id: mediaId } = await uploadResponse.json();
-  return mediaId;
-}
+```tsx
+import { Workflow } from "lucide-react";
+import { FlowPickerButton } from "./FlowPickerButton"; // Novo componente
+
+// No toolbar de acoes:
+<FlowPickerButton 
+  conversationId={activeConversationId}
+  customerId={customerData?.id}
+/>
 ```
 
-**Modificar logica de envio de midia (linhas 193-221):**
+#### Arquivo 2: `src/components/FlowPickerButton.tsx` (NOVO)
 
-```typescript
-// Media Message (MODIFICADO)
-else if (body.media) {
-  let mediaPayload: Record<string, unknown> = {};
+**Componente que lista fluxos ativos e inicia manualmente:**
 
-  // Se tem URL, fazer upload para Meta primeiro
-  if (body.media.url) {
-    console.log("[send-meta-whatsapp] 📤 Uploading media to Meta first...");
-    const mediaId = await uploadMediaToMeta(
-      instance.phone_number_id,
-      instance.access_token,
-      body.media.url,
-      getMimeTypeFromMediaType(body.media.type) // helper function
-    );
-    console.log("[send-meta-whatsapp] ✅ Media uploaded to Meta:", mediaId);
-    mediaPayload.id = mediaId;
-  } else if (body.media.media_id) {
-    mediaPayload.id = body.media.media_id;
-  } else {
-    return new Response(
-      JSON.stringify({ error: "Media requires url or media_id" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
-  // Adicionar caption e filename
-  if (body.media.caption && ["image", "video", "document"].includes(body.media.type)) {
-    mediaPayload.caption = body.media.caption;
-  }
-  if (body.media.filename && body.media.type === "document") {
-    mediaPayload.filename = body.media.filename;
-  }
-
-  result = await sendToMetaApi(instance.phone_number_id, instance.access_token, {
-    recipient_type: "individual",
-    to: toNumber,
-    type: body.media.type,
-    [body.media.type]: mediaPayload,
-  });
-}
-```
-
-**Helper para MIME types:**
-
-```typescript
-function getMimeTypeFromMediaType(type: string): string {
-  const mimeTypes: Record<string, string> = {
-    image: 'image/jpeg',
-    audio: 'audio/ogg',
-    video: 'video/mp4',
-    document: 'application/pdf',
-    sticker: 'image/webp',
+```tsx
+export function FlowPickerButton({ conversationId, customerId }) {
+  const { data: flows } = useChatFlows();
+  const activeFlows = flows?.filter(f => f.is_active) || [];
+  
+  const handleStartFlow = async (flowId: string) => {
+    // Chamar edge function para iniciar o fluxo
+    await supabase.functions.invoke("process-chat-flow", {
+      body: {
+        conversation_id: conversationId,
+        customer_id: customerId,
+        flow_id: flowId,
+        manual_trigger: true, // Flag para indicar que foi iniciado manualmente
+      }
+    });
+    toast.success("Fluxo iniciado!");
   };
-  return mimeTypes[type] || 'application/octet-stream';
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" disabled={activeFlows.length === 0}>
+          <Workflow className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuLabel>Iniciar Fluxo</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {activeFlows.map((flow) => (
+          <DropdownMenuItem 
+            key={flow.id} 
+            onClick={() => handleStartFlow(flow.id)}
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            {flow.name}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+```
+
+#### Arquivo 3: `supabase/functions/process-chat-flow/index.ts`
+
+**Adicionar suporte para trigger manual:**
+
+Na funcao principal, adicionar verificacao de `manual_trigger`:
+
+```typescript
+// Se for trigger manual, pular verificacao de palavras-chave
+if (body.manual_trigger && body.flow_id) {
+  const { data: flow } = await supabaseClient
+    .from("chat_flows")
+    .select("*")
+    .eq("id", body.flow_id)
+    .single();
+    
+  if (flow && flow.is_active) {
+    // Iniciar o fluxo diretamente
+    return startFlowExecution(flow, body.conversation_id, body.customer_id);
+  }
 }
 ```
 
@@ -163,22 +163,38 @@ function getMimeTypeFromMediaType(type: string): string {
 
 | Arquivo | Tipo | Descricao |
 |---------|------|-----------|
-| `supabase/functions/send-meta-whatsapp/index.ts` | Edicao | Adicionar upload para Meta antes de enviar midia |
+| `src/pages/ChatFlowEditorPage.tsx` | Edicao | Adicionar campo nome no dialog, nome clicavel no header |
+| `src/components/FlowPickerButton.tsx` | Novo | Botao dropdown para iniciar fluxo manualmente |
+| `src/components/ChatWindow.tsx` | Edicao | Adicionar FlowPickerButton no toolbar |
+| `supabase/functions/process-chat-flow/index.ts` | Edicao | Suporte para trigger manual |
 
-### Fluxo Apos Correcao
+---
 
-1. Agente seleciona foto/video/audio
-2. Upload vai para Supabase (bucket privado - OK)
-3. Signed URL e gerada
-4. `send-meta-whatsapp` BAIXA a midia da signed URL
-5. `send-meta-whatsapp` FAZ UPLOAD para Meta (retorna `media_id`)
-6. Mensagem e enviada com `media_id` (nao URL)
-7. Cliente recebe a midia no WhatsApp
+### Fluxo do Agente Apos Implementacao
+
+```text
+Agente no chat com cliente
+        |
+        v
+Clica no botao [Workflow] no toolbar
+        |
+        v
+Lista de fluxos ativos aparece
+        |
+        v
+Seleciona "Coleta Pre-Carnaval"
+        |
+        v
+Sistema inicia o fluxo automaticamente
+        |
+        v
+Cliente recebe a primeira mensagem do fluxo
+```
 
 ### Garantias
 
-- **Nao quebra nada existente**: O bucket continua privado (seguranca)
-- **Compatibilidade**: Se ja tiver `media_id`, usa direto
-- **Logs detalhados**: Cada etapa sera logada para debug
-- **Retry automatico**: Se upload falhar, erro claro no toast
+- Nao quebra fluxos existentes (deteccao por IA continua funcionando)
+- Agente tem controle total para iniciar qualquer fluxo
+- Nome do fluxo pode ser editado a qualquer momento
+- Compatibilidade total com o sistema atual
 
