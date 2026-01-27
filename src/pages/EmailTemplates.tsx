@@ -23,9 +23,10 @@ import {
   Eye,
   Sparkles,
   Layers,
+  Copy,
 } from "lucide-react";
 import { EmailTemplateDialog } from "@/components/EmailTemplateDialog";
-import { useEmailTemplates } from "@/hooks/useEmailTemplates";
+import { useEmailTemplates, useDuplicateEmailTemplate } from "@/hooks/useEmailTemplates";
 import { useDeleteEmailTemplate } from "@/hooks/useDeleteEmailTemplate";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import type { Tables } from "@/integrations/supabase/types";
@@ -54,6 +55,7 @@ export default function EmailTemplates() {
   const { hasPermission, loading: permLoading } = useRolePermissions();
   const { data: templates, isLoading } = useEmailTemplates();
   const deleteMutation = useDeleteEmailTemplate();
+  const duplicateMutation = useDuplicateEmailTemplate();
 
   const [activeTab, setActiveTab] = useState("v2");
   const [createV2DialogOpen, setCreateV2DialogOpen] = useState(false);
@@ -269,7 +271,7 @@ export default function EmailTemplates() {
                     size="sm"
                     variant="outline"
                     onClick={() => handleEdit(template)}
-                    className="gap-2 hover:bg-yellow-500/10 hover:text-yellow-500 hover:border-yellow-500/50"
+                    className="gap-2 hover:bg-accent hover:text-accent-foreground"
                     title="Editar metadados"
                   >
                     <Pencil className="h-4 w-4" />
@@ -277,8 +279,18 @@ export default function EmailTemplates() {
                   <Button
                     size="sm"
                     variant="outline"
+                    onClick={() => duplicateMutation.mutate(template.id)}
+                    disabled={duplicateMutation.isPending}
+                    className="gap-2"
+                    title="Duplicar template"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
                     onClick={() => handleDelete(template.id)}
-                    className="gap-2 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50"
+                    className="gap-2 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

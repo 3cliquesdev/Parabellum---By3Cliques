@@ -133,19 +133,19 @@ export default function ChatFlowEditorPage() {
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Header fixo */}
-      <div className="h-14 border-b bg-card flex items-center justify-between px-4 shrink-0 relative z-50">
+      <div className="h-14 border-b bg-card flex items-center justify-between px-4 shrink-0 relative z-[9999]" style={{ pointerEvents: 'auto' }}>
         <div className="flex items-center gap-3">
-          <a
-            href="/settings/chat-flows"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              navigate("/settings/chat-flows");
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 relative z-[9999]"
+            onClick={() => {
+              window.location.href = "/settings/chat-flows";
             }}
-            className="inline-flex items-center justify-center h-9 w-9 rounded-md hover:bg-muted relative z-[100]"
           >
             <ArrowLeft className="h-5 w-5" />
-          </a>
+          </Button>
           <div className="border-l pl-3">
             <div className="flex items-center gap-2">
               <button 
