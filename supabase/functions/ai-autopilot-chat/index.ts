@@ -15,10 +15,10 @@ async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
       .eq('key', 'ai_default_model')
       .maybeSingle();
     
-    return data?.value || 'google/gemini-2.5-flash';
+    return data?.value || 'openai/gpt-5-mini';
   } catch (error) {
     console.error('[ai-autopilot-chat] Error fetching AI model config:', error);
-    return 'google/gemini-2.5-flash';
+    return 'openai/gpt-5-mini';
   }
 }
 
@@ -489,19 +489,27 @@ function checkImmediateHandoff(query: string): { triggered: boolean; dept?: stri
   return { triggered: false };
 }
 
-// Helper: Determinar departamento por keywords
+// Helper: Determinar departamento por keywords (OTIMIZADO com regex e prioridade)
 function pickDepartment(question: string): string {
-  const q = question.toLowerCase();
-  const deptKeywords: Record<string, string[]> = {
-    financeiro: ['pix', 'reembolso', 'estorno', 'comissão', 'boleto', 'fatura', 'saque', 'pagamento'],
-    tecnico: ['erro', 'bug', 'login', 'acesso', 'integração', 'api', 'token', 'não funciona'],
-    comercial: ['preço', 'proposta', 'plano', 'upgrade', 'desconto', 'assinatura'],
-    logistica: ['envio', 'prazo', 'entrega', 'coleta', 'rastreio', 'transportadora']
-  };
+  // Normalizar: lowercase + remover acentos para matching consistente
+  const q = question.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   
-  for (const [dept, keywords] of Object.entries(deptKeywords)) {
-    if (keywords.some(k => q.includes(k))) return dept;
+  // Ordem de prioridade: Financeiro > Tecnico > Comercial > Logistica > Suporte
+  const rules: Array<{ dept: string; patterns: RegExp }> = [
+    { dept: 'financeiro', patterns: /saque|sacar|pix|reembolso|estorno|comiss[aã]o|dinheiro|pagamento|carteira|transfer[eê]ncia|boleto|fatura|cobran[cç]a|saldo|recarga|devolu[cç][aã]o|devolver|cancelamento|cancelar/ },
+    { dept: 'tecnico', patterns: /erro|bug|login|senha|acesso|n[aã]o funciona|travou|caiu|site fora|api|integra[cç][aã]o|token|sistema|nao funciona|num funciona|tela branca|pagina nao carrega/ },
+    { dept: 'comercial', patterns: /pre[cç]o|proposta|plano|quanto custa|comprar|assinar|desconto|trial|teste|orcamento|catalogo|tabela|upgrade|downgrade|mudar plano|conhecer|demonstra[cç][aã]o|demo/ },
+    { dept: 'logistica', patterns: /envio|entrega|rastreio|transportadora|correios|prazo|encomenda|coleta|endereco|cep|frete/ },
+  ];
+  
+  for (const rule of rules) {
+    if (rule.patterns.test(q)) {
+      console.log(`[pickDepartment] Departamento detectado: ${rule.dept} (match na query: "${question.slice(0, 50)}...")`);
+      return rule.dept;
+    }
   }
+  
+  console.log(`[pickDepartment] Nenhum departamento específico detectado, usando suporte_n1`);
   return 'suporte_n1';
 }
 
