@@ -10,6 +10,7 @@ import { AudioRecorder } from "./AudioRecorder";
 import { FlowPickerButton } from "./FlowPickerButton";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useSendMessage } from "@/hooks/useMessages";
+import { useSendMessageInstant } from "@/hooks/useSendMessageInstant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getFreshMediaUrl } from "@/hooks/useMediaUrls";
@@ -69,6 +70,7 @@ export function SuperComposer({
   
   const { user } = useAuth();
   const sendMessage = useSendMessage();
+  const { sendInstant } = useSendMessageInstant();
 
   const { upload, isUploading, progress } = useMediaUpload({
     conversationId,
@@ -372,15 +374,15 @@ export function SuperComposer({
           sentMessageId = result?.id || null;
         }
       } else {
-        // Web chat - save directly
-        const result = await sendMessage.mutateAsync({
-          conversation_id: conversationId,
+        // Web chat - INSTANT send (fire-and-forget)
+        // Não aguarda persistência - mensagem aparece IMEDIATAMENTE
+        sentMessageId = sendInstant({
+          conversationId,
           content: messageContent || (uploadedAttachments.length > 0 ? '📎 Anexo' : ''),
-          sender_type: "user",
-          sender_id: user?.id || null,
-          status: 'sent',
+          isInternal: false,
+          channel: 'web_chat',
         });
-        sentMessageId = result?.id || null;
+        // Input limpa imediatamente - não bloqueia!
       }
 
       // 🔗 VINCULAR ANEXOS À MENSAGEM
