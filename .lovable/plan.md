@@ -1,200 +1,159 @@
 
+## Plano: Departamentos Hierarquicos (Suporte > Suporte Pedidos)
 
-## Plano: Corrigir Nome do Fluxo + Botao de Iniciar Fluxo Manual
+### Situacao Atual
 
-### Problema 1: Editar Nome do Fluxo
+Atualmente, os departamentos sao uma lista plana:
+- Comercial
+- Customer Success
+- Financeiro
+- Marketing
+- Operacional
+- **Suporte** ← Departamento principal
+- **Suporte Pedidos** ← Subdepartamento
+- **Suporte Sistema** ← Subdepartamento
 
-**Situacao atual**: O nome do fluxo so pode ser definido na criacao. Depois disso, nao ha como editar.
-
-**Solucao**: Adicionar campo de nome no Dialog de Palavras-chave (que ja existe) e tornar o nome no header clicavel para editar.
+Todos aparecem no mesmo nivel no Select, sem indicacao de hierarquia.
 
 ---
 
-### Alteracoes para Renomear Fluxo
+### Solucao Proposta
 
-#### Arquivo: `src/pages/ChatFlowEditorPage.tsx`
+Adicionar campo `parent_id` na tabela `departments` para criar estrutura hierarquica. Na UI, agrupar subdepartamentos abaixo do departamento pai.
 
-**Mudanca 1**: Adicionar estado para o nome do fluxo
+---
+
+### Alteracoes no Banco de Dados
+
+**Migration: Adicionar campo parent_id**
+
+```sql
+-- Adicionar coluna parent_id para hierarquia
+ALTER TABLE departments 
+ADD COLUMN parent_id uuid REFERENCES departments(id) ON DELETE SET NULL;
+
+-- Atualizar Suporte Pedidos para ser filho de Suporte
+UPDATE departments 
+SET parent_id = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a'
+WHERE id = '2dd0ee5c-fd20-44be-94ad-f83f1be1c4e9';
+
+-- Atualizar Suporte Sistema para ser filho de Suporte
+UPDATE departments 
+SET parent_id = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a'
+WHERE id = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4';
+```
+
+---
+
+### Alteracoes na Interface
+
+**Arquivo 1: `src/hooks/useDepartments.tsx`**
+
+Atualizar interface para incluir `parent_id`:
+
 ```typescript
-const [flowName, setFlowName] = useState("");
-
-// Inicializar quando flow carregar
-useEffect(() => {
-  if (flow) {
-    setFlowName(flow.name);
-    setKeywordsText((flow.trigger_keywords || []).join(", "));
-    setTriggersText((flow.triggers || []).join("\n"));
-  }
-}, [flow]);
-```
-
-**Mudanca 2**: Adicionar input de nome no Dialog de Configuracoes (linha 226)
-```tsx
-<div className="space-y-2">
-  <Label htmlFor="flowName">Nome do fluxo *</Label>
-  <Input
-    id="flowName"
-    value={flowName}
-    onChange={(e) => setFlowName(e.target.value)}
-    placeholder="Nome do fluxo"
-  />
-</div>
-```
-
-**Mudanca 3**: Atualizar handleSaveSettings para incluir nome
-```typescript
-updateFlow.mutate({
-  id,
-  name: flowName,  // ADICIONAR
-  trigger_keywords,
-  triggers,
-});
-```
-
-**Mudanca 4**: Tornar o nome clicavel no header (linha 139)
-```tsx
-<h1 
-  className="font-semibold cursor-pointer hover:text-primary"
-  onClick={handleOpenSettings}
->
-  {flow.name}
-</h1>
-```
-
----
-
-### Problema 2: Iniciar Fluxo Manualmente (Sem IA)
-
-**Situacao atual**: Fluxos so sao ativados quando a IA detecta as palavras-chave na mensagem do cliente.
-
-**Solucao**: Adicionar um botao no ChatWindow (similar ao botao de templates) que lista os fluxos disponiveis e permite iniciar manualmente.
-
----
-
-### Alteracoes para Iniciar Fluxo Manual
-
-#### Arquivo 1: `src/components/ChatWindow.tsx`
-
-**Adicionar botao de fluxos** ao lado do botao de templates existente no toolbar de envio de mensagem.
-
-```tsx
-import { Workflow } from "lucide-react";
-import { FlowPickerButton } from "./FlowPickerButton"; // Novo componente
-
-// No toolbar de acoes:
-<FlowPickerButton 
-  conversationId={activeConversationId}
-  customerId={customerData?.id}
-/>
-```
-
-#### Arquivo 2: `src/components/FlowPickerButton.tsx` (NOVO)
-
-**Componente que lista fluxos ativos e inicia manualmente:**
-
-```tsx
-export function FlowPickerButton({ conversationId, customerId }) {
-  const { data: flows } = useChatFlows();
-  const activeFlows = flows?.filter(f => f.is_active) || [];
-  
-  const handleStartFlow = async (flowId: string) => {
-    // Chamar edge function para iniciar o fluxo
-    await supabase.functions.invoke("process-chat-flow", {
-      body: {
-        conversation_id: conversationId,
-        customer_id: customerId,
-        flow_id: flowId,
-        manual_trigger: true, // Flag para indicar que foi iniciado manualmente
-      }
-    });
-    toast.success("Fluxo iniciado!");
-  };
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" disabled={activeFlows.length === 0}>
-          <Workflow className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuLabel>Iniciar Fluxo</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {activeFlows.map((flow) => (
-          <DropdownMenuItem 
-            key={flow.id} 
-            onClick={() => handleStartFlow(flow.id)}
-          >
-            <MessageSquare className="h-4 w-4 mr-2" />
-            {flow.name}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+export interface Department {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  is_active: boolean;
+  whatsapp_number?: string | null;
+  parent_id?: string | null;  // NOVO
+  created_at: string;
+  updated_at: string;
 }
 ```
 
-#### Arquivo 3: `supabase/functions/process-chat-flow/index.ts`
+---
 
-**Adicionar suporte para trigger manual:**
+**Arquivo 2: `src/components/UserDialog.tsx`**
 
-Na funcao principal, adicionar verificacao de `manual_trigger`:
+Refatorar o Select de departamento para mostrar hierarquia com grupos:
 
-```typescript
-// Se for trigger manual, pular verificacao de palavras-chave
-if (body.manual_trigger && body.flow_id) {
-  const { data: flow } = await supabaseClient
-    .from("chat_flows")
-    .select("*")
-    .eq("id", body.flow_id)
-    .single();
+```tsx
+<SelectContent className="rounded-xl">
+  {/* Departamentos principais (sem parent_id) */}
+  {departments?.filter(d => d.is_active && !d.parent_id).map((dept) => {
+    // Buscar subdepartamentos
+    const children = departments?.filter(
+      child => child.is_active && child.parent_id === dept.id
+    );
     
-  if (flow && flow.is_active) {
-    // Iniciar o fluxo diretamente
-    return startFlowExecution(flow, body.conversation_id, body.customer_id);
-  }
-}
+    return (
+      <Fragment key={dept.id}>
+        {/* Departamento pai */}
+        <SelectItem value={dept.id} className="py-3">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-4 h-4 rounded-full"
+              style={{ backgroundColor: dept.color }}
+            />
+            <span className="font-medium">{dept.name}</span>
+          </div>
+        </SelectItem>
+        
+        {/* Subdepartamentos com indentacao */}
+        {children?.map((child) => (
+          <SelectItem key={child.id} value={child.id} className="py-3 pl-8">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: child.color }}
+              />
+              <span className="text-sm">{child.name}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </Fragment>
+    );
+  })}
+</SelectContent>
 ```
 
 ---
 
-### Resumo das Alteracoes
+### Visual Esperado
+
+```text
+┌────────────────────────────────────┐
+│ Departamento                    ▼  │
+├────────────────────────────────────┤
+│ ● Comercial                        │
+│ ● Customer Success                 │
+│ ● Financeiro                       │
+│ ● Marketing                        │
+│ ● Operacional                      │
+│ ● Suporte                          │  ← Pode selecionar o pai
+│    ○ Suporte Pedidos               │  ← Ou um específico
+│    ○ Suporte Sistema               │
+└────────────────────────────────────┘
+```
+
+---
+
+### Comportamento
+
+1. **Selecionar "Suporte"**: Usuario vai para o pool geral de suporte
+2. **Selecionar "Suporte Pedidos"**: Usuario vai para o grupo especializado em pedidos
+3. **Roteamento mantido**: O sistema de roteamento continua funcionando normalmente (usa o `department_id` direto)
+
+---
+
+### Arquivos a Modificar
 
 | Arquivo | Tipo | Descricao |
 |---------|------|-----------|
-| `src/pages/ChatFlowEditorPage.tsx` | Edicao | Adicionar campo nome no dialog, nome clicavel no header |
-| `src/components/FlowPickerButton.tsx` | Novo | Botao dropdown para iniciar fluxo manualmente |
-| `src/components/ChatWindow.tsx` | Edicao | Adicionar FlowPickerButton no toolbar |
-| `supabase/functions/process-chat-flow/index.ts` | Edicao | Suporte para trigger manual |
+| Migration SQL | Novo | Adicionar `parent_id` e atualizar registros existentes |
+| `src/hooks/useDepartments.tsx` | Edicao | Adicionar `parent_id` na interface |
+| `src/components/UserDialog.tsx` | Edicao | Mostrar hierarquia no Select |
+| `src/integrations/supabase/types.ts` | Automatico | Sera atualizado apos migration |
 
 ---
 
-### Fluxo do Agente Apos Implementacao
+### Beneficios
 
-```text
-Agente no chat com cliente
-        |
-        v
-Clica no botao [Workflow] no toolbar
-        |
-        v
-Lista de fluxos ativos aparece
-        |
-        v
-Seleciona "Coleta Pre-Carnaval"
-        |
-        v
-Sistema inicia o fluxo automaticamente
-        |
-        v
-Cliente recebe a primeira mensagem do fluxo
-```
-
-### Garantias
-
-- Nao quebra fluxos existentes (deteccao por IA continua funcionando)
-- Agente tem controle total para iniciar qualquer fluxo
-- Nome do fluxo pode ser editado a qualquer momento
-- Compatibilidade total com o sistema atual
-
+- **Organizacao visual**: Fica claro que Suporte Pedidos e Suporte Sistema sao subgrupos
+- **Flexibilidade**: Pode criar hierarquias para outros departamentos no futuro (Comercial > Comercial Internacional)
+- **Retrocompativel**: Departamentos sem `parent_id` continuam funcionando normalmente
+- **Sem quebra**: O roteamento, transferencias e filtros continuam usando o `department_id` diretamente
