@@ -7,6 +7,7 @@ import { SlashCommandMenu } from "@/components/SlashCommandMenu";
 import { MacrosPopover } from "@/components/MacrosPopover";
 import { FileDropZone } from "./FileDropZone";
 import { AudioRecorder } from "./AudioRecorder";
+import { FlowPickerButton } from "./FlowPickerButton";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useSendMessage } from "@/hooks/useMessages";
 import { useAuth } from "@/hooks/useAuth";
@@ -529,6 +530,12 @@ export function SuperComposer({
             />
           ) : (
             <>
+              {/* Flow Picker Button */}
+              <FlowPickerButton
+                conversationId={conversationId}
+                disabled={isDisabled || isSending}
+              />
+
               {/* Macros Button */}
               <MacrosPopover
                 onSelectMacro={handleMacroSelect}

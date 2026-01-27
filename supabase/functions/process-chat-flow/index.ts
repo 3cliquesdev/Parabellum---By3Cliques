@@ -220,7 +220,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { conversationId, userMessage } = await req.json();
+    const body = await req.json();
+    const { conversationId, userMessage, flowId, manualTrigger } = body;
     
     if (!conversationId) {
       return new Response(
@@ -229,7 +230,98 @@ serve(async (req) => {
       );
     }
 
-    console.log('[process-chat-flow] Processing:', { conversationId, userMessage: userMessage?.slice(0, 50) });
+    console.log('[process-chat-flow] Processing:', { 
+      conversationId, 
+      userMessage: userMessage?.slice(0, 50),
+      manualTrigger: !!manualTrigger,
+      flowId 
+    });
+
+    // 🆕 TRIGGER MANUAL: Iniciar fluxo específico diretamente
+    if (manualTrigger && flowId) {
+      console.log('[process-chat-flow] 🚀 Manual trigger for flow:', flowId);
+      
+      const { data: flow, error: flowError } = await supabaseClient
+        .from('chat_flows')
+        .select('*')
+        .eq('id', flowId)
+        .single();
+
+      if (flowError || !flow) {
+        console.error('[process-chat-flow] Flow not found:', flowError);
+        return new Response(
+          JSON.stringify({ error: "Fluxo não encontrado", useAI: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+        );
+      }
+
+      if (!flow.is_active) {
+        return new Response(
+          JSON.stringify({ error: "Fluxo está inativo", useAI: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+
+      // Cancelar qualquer fluxo ativo anterior
+      await supabaseClient
+        .from('chat_flow_states')
+        .update({ status: 'cancelled' })
+        .eq('conversation_id', conversationId)
+        .eq('status', 'active');
+
+      // Iniciar o fluxo
+      const flowDef = flow.flow_definition as any;
+      if (!flowDef?.nodes?.length) {
+        return new Response(
+          JSON.stringify({ error: "Fluxo sem nós definidos", useAI: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+
+      // Encontrar primeiro nó
+      const targetIds = new Set((flowDef.edges || []).map((e: any) => e.target));
+      const startNode = flowDef.nodes.find((n: any) => !targetIds.has(n.id)) || flowDef.nodes[0];
+
+      // Criar estado do fluxo
+      const { data: newState, error: createError } = await supabaseClient
+        .from('chat_flow_states')
+        .insert({
+          conversation_id: conversationId,
+          flow_id: flow.id,
+          current_node_id: startNode.id,
+          collected_data: {},
+          status: 'active',
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('[process-chat-flow] Error creating state:', createError);
+        return new Response(
+          JSON.stringify({ error: "Erro ao iniciar fluxo", useAI: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      console.log('[process-chat-flow] ✅ Manual flow started:', newState.id);
+
+      const startMessage = startNode.data?.message || "";
+      const options = startNode.type === 'ask_options' 
+        ? (startNode.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value }))
+        : null;
+
+      return new Response(
+        JSON.stringify({
+          useAI: false,
+          response: startMessage,
+          options,
+          flowId: flow.id,
+          flowStarted: true,
+          manualTrigger: true,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // 1. Verificar se existe estado ativo para esta conversa
     const { data: activeState, error: stateError } = await supabaseClient

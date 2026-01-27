@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Play, Loader2, Settings2, Info } from "lucide-react";
+import { ArrowLeft, Play, Loader2, Settings2, Info, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatFlowEditor } from "@/components/chat-flows/ChatFlowEditor";
 import { ChatFlowSimulator } from "@/components/chat-flows/ChatFlowSimulator";
@@ -24,8 +24,18 @@ export default function ChatFlowEditorPage() {
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [currentFlowState, setCurrentFlowState] = useState<{ nodes: Node[]; edges: Edge[] } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [flowName, setFlowName] = useState("");
   const [keywordsText, setKeywordsText] = useState("");
   const [triggersText, setTriggersText] = useState("");
+
+  // Sincronizar estado quando flow carregar
+  useEffect(() => {
+    if (flow) {
+      setFlowName(flow.name);
+      setKeywordsText((flow.trigger_keywords || []).join(", "));
+      setTriggersText((flow.triggers || []).join("\n"));
+    }
+  }, [flow]);
 
   const handleSave = (flowDef: { nodes: Node[]; edges: Edge[] }) => {
     if (!id) return;
@@ -53,15 +63,17 @@ export default function ChatFlowEditorPage() {
   };
 
   const handleOpenSettings = () => {
-    const kws = (flow?.trigger_keywords || []).join(", ");
-    const trgs = (flow?.triggers || []).join("\n");
-    setKeywordsText(kws);
-    setTriggersText(trgs);
+    // Estado já sincronizado pelo useEffect
     setSettingsOpen(true);
   };
 
   const handleSaveSettings = () => {
     if (!id) return;
+
+    const trimmedName = flowName.trim();
+    if (!trimmedName) {
+      return; // Nome é obrigatório
+    }
 
     const trigger_keywords = keywordsText
       .split(",")
@@ -76,13 +88,13 @@ export default function ChatFlowEditorPage() {
     updateFlow.mutate(
       {
         id,
+        name: trimmedName,
         trigger_keywords,
         triggers,
       },
       {
         onSuccess: () => {
           setSettingsOpen(false);
-          // Força atualização dos dados do flow na UI
           queryClient.invalidateQueries({ queryKey: ["chat-flow", id] });
         },
       }
@@ -136,7 +148,15 @@ export default function ChatFlowEditorPage() {
           </a>
           <div className="border-l pl-3">
             <div className="flex items-center gap-2">
-              <h1 className="font-semibold">{flow.name}</h1>
+              <button 
+                type="button"
+                className="font-semibold cursor-pointer hover:text-primary transition-colors flex items-center gap-1.5 group"
+                onClick={handleOpenSettings}
+                title="Clique para editar nome e configurações"
+              >
+                {flow.name}
+                <Pencil className="h-3.5 w-3.5 opacity-0 group-hover:opacity-70 transition-opacity" />
+              </button>
               <Badge variant={flow.is_active ? "default" : "secondary"} className="text-xs">
                 {flow.is_active ? "Ativo" : "Inativo"}
               </Badge>
@@ -224,6 +244,16 @@ export default function ChatFlowEditorPage() {
           </DialogHeader>
 
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="flowName">Nome do fluxo *</Label>
+              <Input
+                id="flowName"
+                value={flowName}
+                onChange={(e) => setFlowName(e.target.value)}
+                placeholder="Ex: Promoção Pré-Carnaval"
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="keywords">Palavras-chave (separadas por vírgula)</Label>
               <Input
