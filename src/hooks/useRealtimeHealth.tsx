@@ -8,48 +8,40 @@ export function useRealtimeHealth() {
   const queryClient = useQueryClient();
   const reconnectAttempts = useRef(0);
   const lastVisibilityChange = useRef<number>(Date.now());
+  const healthChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // Forçar reconexão de todos os canais
+  // Forçar refetch de dados - SEM destruir canais!
   const forceReconnect = useCallback(async () => {
-    console.log('[RealtimeHealth] Forcing reconnection of all channels...');
+    console.log('[RealtimeHealth] Forcing data refresh (NOT removing channels)...');
     
-    try {
-      // Remover todos os canais existentes
-      const channels = supabase.getChannels();
-      for (const channel of channels) {
-        await supabase.removeChannel(channel);
-      }
-      
-      // Invalidar queries críticas para forçar refetch
-      queryClient.invalidateQueries({ queryKey: ['inbox-view'] });
-      queryClient.invalidateQueries({ queryKey: ['messages'] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      
-      console.log('[RealtimeHealth] All channels removed, queries invalidated');
-      reconnectAttempts.current = 0;
-    } catch (e) {
-      console.error('[RealtimeHealth] Force reconnect error:', e);
-      reconnectAttempts.current++;
-    }
+    // Apenas invalidar queries para refetch
+    // NAO remover canais - cada hook gerencia o seu próprio canal
+    queryClient.invalidateQueries({ queryKey: ['inbox-view'] });
+    queryClient.invalidateQueries({ queryKey: ['messages'] });
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    
+    reconnectAttempts.current = 0;
   }, [queryClient]);
 
-  // Monitorar conexão com canal de health check
+  // Monitorar conexão com canal próprio de health check
   useEffect(() => {
     let pingInterval: NodeJS.Timeout;
-    let healthChannel: ReturnType<typeof supabase.channel>;
 
     const setupHealthCheck = () => {
-      healthChannel = supabase
-        .channel('realtime-health-check', {
-          config: {
-            presence: { key: 'health' },
-          },
-        })
-        .on('system', { event: '*' }, (payload) => {
-          console.log('[RealtimeHealth] System event:', payload);
+      // Remover apenas o canal de health anterior se existir
+      if (healthChannelRef.current) {
+        supabase.removeChannel(healthChannelRef.current);
+        healthChannelRef.current = null;
+      }
+
+      const channel = supabase
+        .channel('realtime-health-check')
+        .on('presence', { event: 'sync' }, () => {
+          setIsConnected(true);
+          setLastPing(new Date());
         })
         .subscribe((status, err) => {
-          console.log('[RealtimeHealth] Subscription status:', status, err);
+          console.log('[RealtimeHealth] Health channel status:', status, err);
           
           if (status === 'SUBSCRIBED') {
             setIsConnected(true);
@@ -57,60 +49,58 @@ export function useRealtimeHealth() {
             reconnectAttempts.current = 0;
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
             setIsConnected(false);
-            
-            // Tentar reconectar após delay exponencial
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
-            console.log(`[RealtimeHealth] Will retry in ${delay}ms`);
-            
-            setTimeout(() => {
-              reconnectAttempts.current++;
-              forceReconnect();
-            }, delay);
           }
         });
+
+      healthChannelRef.current = channel;
     };
 
     setupHealthCheck();
 
-    // Ping periódico para verificar se conexão está viva
+    // Ping periódico - verifica APENAS o status geral, sem destruir canais
     pingInterval = setInterval(() => {
       const channels = supabase.getChannels();
-      const healthCh = channels.find(c => c.topic === 'realtime:realtime-health-check');
+      const joinedChannels = channels.filter(c => c.state === 'joined');
       
-      if (!healthCh || healthCh.state !== 'joined') {
-        console.log('[RealtimeHealth] Health channel not joined, status:', healthCh?.state);
+      console.log('[RealtimeHealth] Periodic check:', {
+        totalChannels: channels.length,
+        joinedChannels: joinedChannels.length,
+        channelNames: channels.map(c => ({ topic: c.topic, state: c.state }))
+      });
+      
+      if (joinedChannels.length === 0 && channels.length > 0) {
+        console.log('[RealtimeHealth] No joined channels, may have connectivity issue');
         setIsConnected(false);
         
-        // Se perdeu conexão, forçar reconexão
+        // Apenas recriar o canal de health - NAO todos os canais
         if (reconnectAttempts.current < 5) {
-          forceReconnect();
+          reconnectAttempts.current++;
+          setupHealthCheck();
         }
-      } else {
+      } else if (joinedChannels.length > 0) {
         setIsConnected(true);
         setLastPing(new Date());
       }
-    }, 30000); // Verificar a cada 30s
+    }, 30000);
 
     return () => {
       clearInterval(pingInterval);
-      if (healthChannel) {
-        supabase.removeChannel(healthChannel);
+      if (healthChannelRef.current) {
+        supabase.removeChannel(healthChannelRef.current);
+        healthChannelRef.current = null;
       }
     };
-  }, [forceReconnect]);
+  }, []); // Sem dependências - roda apenas uma vez
 
-  // Reconectar quando tab volta ao foco após tempo inativo
+  // Reconectar quando tab volta ao foco
   useEffect(() => {
     const handleVisibility = async () => {
       if (document.visibilityState === 'visible') {
         const timeSinceLastChange = Date.now() - lastVisibilityChange.current;
         
-        // Se ficou mais de 2 minutos em background, forçar refresh
+        // Se ficou mais de 2 minutos em background, forçar refresh de dados
         if (timeSinceLastChange > 120000) {
-          console.log('[RealtimeHealth] Tab visible after long background, forcing refresh');
-          await forceReconnect();
-        } else if (!isConnected) {
-          console.log('[RealtimeHealth] Tab visible but disconnected, forcing refresh');
+          console.log('[RealtimeHealth] Tab visible after long background, refreshing data');
           await forceReconnect();
         }
       }
@@ -118,9 +108,8 @@ export function useRealtimeHealth() {
       lastVisibilityChange.current = Date.now();
     };
 
-    // Também reconectar quando internet volta
     const handleOnline = () => {
-      console.log('[RealtimeHealth] Browser came online, forcing reconnect');
+      console.log('[RealtimeHealth] Browser came online, refreshing data');
       forceReconnect();
     };
 
@@ -131,7 +120,7 @@ export function useRealtimeHealth() {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('online', handleOnline);
     };
-  }, [isConnected, forceReconnect]);
+  }, [forceReconnect]);
 
   return { isConnected, lastPing, forceReconnect };
 }
