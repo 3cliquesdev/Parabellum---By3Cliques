@@ -1,91 +1,69 @@
 
-## Plano: Corrigir Permissão da Thaynara e Tornar Nota Opcional
 
-### Problemas Identificados
+## Plano: Corrigir Erro "profiles.email does not exist"
 
-#### 1. Thaynara não consegue transferir conversas
-**Causa raiz:** A usuária "THAYNARA MARIANA SILVA" tem a role `user`, e a permissão `inbox.transfer` está **desabilitada** para essa role.
+### Problema Identificado
 
-| Role | inbox.transfer |
-|------|----------------|
-| `admin` | Habilitado |
-| `manager` | Habilitado |
-| `sales_rep` | Habilitado |
-| `support_agent` | Habilitado |
-| `user` | **DESABILITADO** |
+A edge function `send-admin-alert` está falhando porque tenta acessar uma coluna `email` na tabela `profiles`, mas essa coluna **não existe**. Os emails dos usuários estão armazenados na tabela `auth.users`, que é gerenciada pelo sistema de autenticação.
 
-**Observação:** Existe outra Thaynara (`Thaynara da Silva`) com role `sales_rep` que consegue transferir normalmente.
-
-#### 2. Nota de transferência é obrigatória
-No componente `TransferConversationDialog.tsx`:
-- Linha 65: `if (!selectedDepartmentId || !transferNote.trim()) return;`
-- Linha 270: `disabled={!selectedDepartmentId || !transferNote.trim() || ...}`
-
-Isso impede a transferência se a nota estiver vazia.
-
----
-
-### Solução Proposta
-
-#### Correção 1: Habilitar permissão para role `user`
-
-Atualizar a permissão `inbox.transfer` para `enabled = true` na role `user` via SQL:
-
-```sql
-UPDATE role_permissions 
-SET enabled = true, updated_at = now()
-WHERE permission_key = 'inbox.transfer' AND role = 'user';
+**Erro no log do banco:**
+```
+ERROR: column profiles.email does not exist
 ```
 
-**OU (melhor opção):** Alterar a role da Thaynara de `user` para `sales_rep` ou `support_agent`, já que ela está no departamento Comercial e deveria ter as permissões adequadas.
-
-#### Correção 2: Tornar nota de transferência opcional
-
-Modificar `TransferConversationDialog.tsx`:
-
-**Antes:**
-```tsx
-// Linha 65
-if (!selectedDepartmentId || !transferNote.trim()) return;
-
-// Linha 270
-disabled={!selectedDepartmentId || !transferNote.trim() || transferMutation.isPending}
+**Código problemático (linha 31):**
+```typescript
+.select('user_id, profiles!inner(email, full_name)')
 ```
 
-**Depois:**
-```tsx
-// Linha 65
-if (!selectedDepartmentId) return;
+### Impacto
 
-// Linha 270
-disabled={!selectedDepartmentId || transferMutation.isPending}
+Esta função é chamada por várias edge functions críticas:
+- `ai-autopilot-chat` - quando a IA falha
+- `handle-whatsapp-event` - quando WhatsApp desconecta
+- `check-whatsapp-status` - verificação de status do WhatsApp
+
+Quando qualquer uma dessas situações ocorre, o erro se propaga e pode afetar a experiência do usuário.
+
+### Solução
+
+Modificar a edge function `send-admin-alert` para buscar o email dos administradores corretamente usando a API Admin do Supabase Auth.
+
+**Arquivo a modificar:** `supabase/functions/send-admin-alert/index.ts`
+
+**Lógica corrigida:**
+
+```typescript
+// 1. Buscar user_ids dos admins
+const { data: adminRoles, error: rolesError } = await supabaseClient
+  .from('user_roles')
+  .select('user_id, profiles!inner(full_name)')
+  .eq('role', 'admin');
+
+// 2. Para cada admin, buscar email via Auth Admin API
+for (const adminRole of adminRoles) {
+  const { data: { user }, error } = await supabaseClient.auth.admin.getUserById(adminRole.user_id);
+  const adminEmail = user?.email;
+  const adminName = adminRole.profiles.full_name;
+  // ... enviar email
+}
 ```
 
-E atualizar o label do campo para remover o asterisco de obrigatório:
-```tsx
-// Linha 238
-<Label htmlFor="transferNote">Nota de Transferência</Label>
-```
+### Detalhes Técnicos
 
----
-
-### Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/TransferConversationDialog.tsx` | Remover obrigatoriedade da nota |
-| SQL (role_permissions) | Habilitar `inbox.transfer` para role `user` |
-
----
+| Item | Antes | Depois |
+|------|-------|--------|
+| Query | `profiles!inner(email, full_name)` | `profiles!inner(full_name)` |
+| Obter email | `admin.profiles.email` (não existe) | `auth.admin.getUserById()` |
+| Client usado | Service Role | Service Role (obrigatório para admin API) |
 
 ### Benefícios
 
-1. **Thaynara conseguirá transferir**: Após habilitar a permissão
-2. **Fluxo mais ágil**: Transferências rápidas sem necessidade de justificativa
-3. **Nota continua disponível**: Agentes podem adicionar contexto se desejarem, mas não é bloqueante
+1. **Erro corrigido**: A query não falhará mais
+2. **Alertas funcionando**: Admins receberão notificações de falhas da IA
+3. **Estabilidade**: Outras edge functions que dependem desta também funcionarão
 
----
+### Resultado Esperado
 
-### Observação
+Após a correção, quando a IA falhar ou o WhatsApp desconectar, os administradores receberão emails de alerta corretamente, e os erros de banco de dados não afetarão mais a experiência dos usuários como a Thaynara.
 
-Recomendo verificar se a role `user` deveria realmente ter acesso ao inbox e transferências. Se sim, a solução é habilitar a permissão. Se não, a Thaynara deveria ter a role `sales_rep` já que está no departamento Comercial.
