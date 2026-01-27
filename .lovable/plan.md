@@ -1,168 +1,170 @@
 
 
-## Plano: Resolver Problema de Envio/Recebimento de Mensagens WhatsApp
+## Plano: Otimizar Velocidade de Mensagens na Versao Publicada
 
 ### Diagnostico do Problema
 
-Apos analise completa dos logs e banco de dados, identifiquei a causa raiz:
+Analisei os logs, codigo e arquitetura do sistema. Identifiquei as causas da diferenca de velocidade:
 
-| Camada | Status | Detalhes |
-|--------|--------|----------|
-| Webhook de Recebimento | SEM LOGS | Nenhum log do `meta-whatsapp-webhook` detectado - mensagens NAO estao chegando |
-| Envio de Mensagens | ERRO | `API access blocked` (OAuthException code 200) |
-| Token de Acesso | EXPIRADO/INVALIDO | O `access_token` na tabela `whatsapp_meta_instances` foi bloqueado |
-| Banco de Dados | OK | Mensagens estao sendo salvas localmente |
+| Fator | Preview | Producao | Impacto |
+|-------|---------|----------|---------|
+| Edge Functions Cold Start | Quente (uso continuo) | Frios (inatividade) | +500ms a +3s por funcao |
+| Supabase Realtime | Mesma conexao | Reconexao frequente | +200ms a +1s |
+| AI Autopilot Processing | Mesmo fluxo | Mesmo fluxo | ~5-11s (normal) |
+| Cascata de funcoes | 3 funcoes em serie | 3 funcoes em serie | Acumulativo |
 
-**Erro exato do log (21:19:11 UTC):**
-```json
-{"error":{"message":"API access blocked.","type":"OAuthException","code":200}}
-```
+**Causa Principal**: No preview, voce esta constantemente usando o app, mantendo as Edge Functions "quentes". Na producao, apos minutos de inatividade, as funcoes entram em "cold start" e precisam ser inicializadas novamente a cada requisicao.
 
 ---
 
-### Causa Raiz: Token Meta Invalido
+### Arquitetura Atual (Lenta)
 
-O erro `API access blocked` com `OAuthException` significa que:
+```text
+Mensagem WhatsApp Recebida
+         |
+         v
+[meta-whatsapp-webhook] - Cold Start: 30-60ms (OK)
+         |
+         v
+INSERT mensagem no banco
+         |
+         v
+[ai-autopilot-chat] - Cold Start: 500-1500ms (LENTO)
+         |
+         v
+Processa IA (5-11s normal)
+         |
+         v
+[send-meta-whatsapp] - Cold Start: 300-800ms (LENTO)
+         |
+         v
+Mensagem enviada
+```
 
-1. **Token expirado**: Tokens temporarios do Meta expiram em 60 dias
-2. **Token revogado**: O app pode ter sido desativado ou o token removido
-3. **Permissoes insuficientes**: O token nao tem a permissao `whatsapp_business_messaging`
-4. **App em Sandbox**: O app esta em modo de desenvolvimento e nao foi aprovado para producao
-
-O token atual armazenado comeca com `EAAVqGZAS4CxYBQ...` e foi registrado em 26/01/2026.
+**Total com cold starts**: 6-14 segundos
+**Total sem cold starts**: 5-11 segundos
 
 ---
 
-### Solucao Necessaria (Acao Manual do Usuario)
+### Solucoes Propostas
 
-O problema **nao pode ser resolvido por codigo** - requer acao manual no Meta Business Suite:
+#### Solucao 1: Implementar Keep-Alive para Edge Functions (Rapida)
 
-#### Passo 1: Gerar Novo Token Permanente
+Criar uma Edge Function CRON que "aquece" as funcoes criticas a cada 5 minutos:
 
-1. Acesse [Meta Business Suite](https://business.facebook.com/settings/system-users)
-2. Selecione o **System User** vinculado ao app WhatsApp
-3. Clique em **Generate new token**
-4. Selecione o app e marque as permissoes:
-   - `whatsapp_business_messaging`
-   - `whatsapp_business_management`
-5. Defina expiracao como **Never** (permanente)
-6. Copie o novo token
+**Arquivo novo**: `supabase/functions/keep-alive/index.ts`
 
-#### Passo 2: Atualizar no Banco de Dados
+Esta funcao fara chamadas leves para:
+- `meta-whatsapp-webhook` (GET para verificacao)
+- `ai-autopilot-chat` (POST com body vazio - retorna rapido)
+- `send-meta-whatsapp` (POST com validacao minima)
 
-O novo token precisa ser atualizado na tabela `whatsapp_meta_instances`:
-
-```sql
-UPDATE whatsapp_meta_instances 
-SET access_token = 'NOVO_TOKEN_AQUI',
-    updated_at = now()
-WHERE id = 'd9fafe12-2cfa-4876-9d1a-c46d2c8fe25e';
-```
+**Configuracao CRON**: `*/5 * * * *` (a cada 5 minutos)
 
 ---
 
-### Melhorias de Codigo (Implementacao Proposta)
+#### Solucao 2: Otimizar Realtime no Frontend (Media)
 
-Para evitar que isso aconteca novamente sem aviso, vou implementar:
+Atualizar `useInboxView.tsx` para:
+1. Usar `refetchInterval: 10000` ao inves de 15000 (mais responsivo)
+2. Adicionar reconexao automatica mais agressiva
+3. Implementar heartbeat para manter conexao Realtime ativa
 
-#### 1. Criar Tela de Gerenciamento de Instancias Meta
+**Arquivo**: `src/hooks/useInboxView.tsx`
 
-Arquivo novo: `src/pages/WhatsAppMetaSettings.tsx`
+---
 
-- Listar instancias Meta ativas
-- Permitir atualizar `access_token` via UI
-- Mostrar status de conexao (testando a API)
-- Exibir data de expiracao do token (se disponivel)
+#### Solucao 3: Pre-aquecer Conexoes de IA (Media)
 
-#### 2. Adicionar Rota no App
+No `ai-autopilot-chat`, fazer lazy initialization do cliente OpenAI/Google no cold start, mas manter um "ping" de validacao rapida.
 
-Arquivo: `src/App.tsx`
+**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
 
-```typescript
-<Route path="/settings/whatsapp-meta" element={
-  <ProtectedRoute requiredPermission="settings.view">
-    <WhatsAppMetaSettings />
-  </ProtectedRoute>
-} />
-```
+---
 
-#### 3. Criar Funcao de Diagnostico Rapido
+#### Solucao 4: Resposta Imediata + Processamento Assincrono (Avancada)
 
-Arquivo: `supabase/functions/diagnose-meta-whatsapp/index.ts` (ja existe)
+Modificar `meta-whatsapp-webhook` para:
+1. Responder 200 OK ao Meta imediatamente
+2. Processar mensagem em background (fire-and-forget)
+3. AI processa enquanto webhook ja encerrou
 
-Adicionar endpoint que testa o token e retorna:
-- Token valido/invalido
-- Permissoes disponiveis
-- Data de expiracao
-- Status do numero
-
-#### 4. Adicionar Link no Menu de Configuracoes
-
-Arquivo: `src/components/settings/SettingsSidebar.tsx`
-
-Adicionar item "WhatsApp Meta API" no menu lateral.
+**Arquivo**: `supabase/functions/meta-whatsapp-webhook/index.ts`
 
 ---
 
 ### Arquivos a Criar/Modificar
 
-| Arquivo | Acao | Descricao |
-|---------|------|-----------|
-| `src/pages/WhatsAppMetaSettings.tsx` | Criar | Tela de gerenciamento de instancias Meta |
-| `src/App.tsx` | Modificar | Adicionar rota `/settings/whatsapp-meta` |
-| `src/components/settings/SettingsSidebar.tsx` | Modificar | Adicionar link no menu |
-| `src/hooks/useWhatsAppMetaInstances.tsx` | Criar | Hook para CRUD de instancias |
+| Arquivo | Acao | Prioridade |
+|---------|------|------------|
+| `supabase/functions/keep-alive/index.ts` | Criar | ALTA |
+| `supabase/config.toml` | Modificar (adicionar CRON) | ALTA |
+| `src/hooks/useInboxView.tsx` | Modificar | MEDIA |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Modificar | MEDIA |
+| `supabase/functions/meta-whatsapp-webhook/index.ts` | Modificar | BAIXA |
 
 ---
 
-### Componente WhatsAppMetaSettings (Preview)
+### Detalhes Tecnicos
+
+#### Keep-Alive Edge Function
 
 ```typescript
-// Principais funcionalidades:
-- Lista de instancias Meta cadastradas
-- Botao "Testar Conexao" que chama diagnose-meta-whatsapp
-- Campo para atualizar access_token (com mascara de seguranca)
-- Indicador visual: Verde (OK) / Vermelho (Token Invalido)
-- Instrucoes de como gerar novo token
+// supabase/functions/keep-alive/index.ts
+serve(async (req) => {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  
+  // Aquecer funcoes criticas em paralelo
+  const warmups = await Promise.allSettled([
+    // 1. meta-whatsapp-webhook (GET = verificacao)
+    fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-webhook?hub.mode=warmup`),
+    
+    // 2. ai-autopilot-chat (POST com flag warmup)
+    fetch(`${supabaseUrl}/functions/v1/ai-autopilot-chat`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ warmup: true })
+    }),
+    
+    // 3. send-meta-whatsapp (POST com flag warmup)
+    fetch(`${supabaseUrl}/functions/v1/send-meta-whatsapp`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ warmup: true })
+    }),
+  ]);
+  
+  return new Response(JSON.stringify({ warmed: warmups.length }));
+});
 ```
 
----
+#### Modificacao em ai-autopilot-chat
 
-### Fluxo Apos Implementacao
+Adicionar no inicio da funcao serve():
 
-```text
-1. Admin acessa /settings/whatsapp-meta
-         |
-2. Ve status VERMELHO (token invalido)
-         |
-3. Clica "Atualizar Token"
-         |
-4. Cola novo token do Meta Business Suite
-         |
-5. Sistema testa automaticamente
-         |
-6. Status muda para VERDE
-         |
-7. Mensagens voltam a funcionar
+```typescript
+// Handler de warmup rapido (sem processamento)
+if (req.method === 'POST') {
+  const body = await req.json().catch(() => ({}));
+  if (body.warmup) {
+    console.log('[ai-autopilot-chat] Warmup ping received');
+    return new Response(JSON.stringify({ status: 'warm' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
 ```
 
----
+#### CRON no config.toml
 
-### Acao Imediata Necessaria
+```toml
+[functions.keep-alive]
+verify_jwt = false
 
-**IMPORTANTE**: Antes de eu implementar a interface, voce precisa:
-
-1. Acessar o Meta Business Suite
-2. Gerar um novo **System User Access Token** permanente
-3. Me informar o novo token para eu atualizar no banco
-
-Ou, se preferir atualizar voce mesmo via SQL, use:
-
-```sql
-UPDATE whatsapp_meta_instances 
-SET access_token = 'SEU_NOVO_TOKEN_AQUI',
-    updated_at = now()
-WHERE name = 'Nexxo AI - Meta Oficial';
+[functions.keep-alive.cron]
+schedule = "*/5 * * * *"
+region = "us-east-1"
 ```
 
 ---
@@ -171,8 +173,16 @@ WHERE name = 'Nexxo AI - Meta Oficial';
 
 | Metrica | Antes | Depois |
 |---------|-------|--------|
-| Envio de mensagens | FALHA (API blocked) | OK |
-| Recebimento de mensagens | Sem logs | OK |
-| Gestao de tokens | Apenas via SQL | Via interface UI |
-| Alerta de token expirado | Nenhum | Indicador visual |
+| Cold start acumulado | 1-3 segundos | ~100ms |
+| Tempo total de resposta | 6-14 segundos | 5-12 segundos |
+| Consistencia | Variavel | Estavel |
+| Custo adicional | N/A | ~8640 invocacoes/mes (minimo) |
+
+---
+
+### Implementacao em Fases
+
+**Fase 1 (Imediata)**: Keep-alive CRON + handlers de warmup
+**Fase 2 (Proxima)**: Otimizar Realtime no frontend
+**Fase 3 (Futura)**: Processamento assincrono no webhook
 
