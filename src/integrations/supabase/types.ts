@@ -1333,6 +1333,7 @@ export type Database = {
           flow_definition: Json
           id: string
           is_active: boolean | null
+          is_master_flow: boolean | null
           name: string
           priority: number | null
           support_channel_id: string | null
@@ -1348,6 +1349,7 @@ export type Database = {
           flow_definition?: Json
           id?: string
           is_active?: boolean | null
+          is_master_flow?: boolean | null
           name: string
           priority?: number | null
           support_channel_id?: string | null
@@ -1363,6 +1365,7 @@ export type Database = {
           flow_definition?: Json
           id?: string
           is_active?: boolean | null
+          is_master_flow?: boolean | null
           name?: string
           priority?: number | null
           support_channel_id?: string | null
@@ -5292,6 +5295,7 @@ export type Database = {
           blocked_at: string | null
           blocked_by: string | null
           created_at: string | null
+          default_persona_id: string | null
           department: string | null
           full_name: string
           id: string
@@ -5315,6 +5319,7 @@ export type Database = {
           blocked_at?: string | null
           blocked_by?: string | null
           created_at?: string | null
+          default_persona_id?: string | null
           department?: string | null
           full_name: string
           id: string
@@ -5338,6 +5343,7 @@ export type Database = {
           blocked_at?: string | null
           blocked_by?: string | null
           created_at?: string | null
+          default_persona_id?: string | null
           department?: string | null
           full_name?: string
           id?: string
@@ -5353,6 +5359,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_default_persona_id_fkey"
+            columns: ["default_persona_id"]
+            isOneToOne: false
+            referencedRelation: "ai_personas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_department_id_fkey"
             columns: ["department"]
