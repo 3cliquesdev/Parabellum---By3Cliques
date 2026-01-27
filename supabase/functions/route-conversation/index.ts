@@ -286,6 +286,22 @@ serve(async (req) => {
     if (requiredSkillName) {
       console.log(`[route-conversation] 🎯 Skill-based routing: Looking for agents with skill "${requiredSkillName}"`);
       
+      // 🆕 HIERARQUIA: Buscar parent_id do departamento para fallback (skill-based)
+      let skillParentDepartmentId: string | null = null;
+      
+      if (resolvedDepartmentId) {
+        const { data: skillDeptData } = await supabase
+          .from('departments')
+          .select('parent_id')
+          .eq('id', resolvedDepartmentId)
+          .maybeSingle();
+        
+        if (skillDeptData?.parent_id) {
+          skillParentDepartmentId = skillDeptData.parent_id;
+          console.log(`[route-conversation] 📂 Skill routing - Department has parent: ${skillParentDepartmentId}`);
+        }
+      }
+      
       // 🆕 Buscar agentes com os roles permitidos para o departamento
       const { data: roleAgentIds } = await supabase
         .from('user_roles')
@@ -343,9 +359,22 @@ serve(async (req) => {
           return channels.some((ac: any) => ac.channel_id === supportChannelId);
         });
         
-        // 🆕 Filtrar por departamento se houver
+        // 🆕 HIERARQUIA: Filtrar por departamento COM fallback para pai
         if (resolvedDepartmentId && agentsWithChannel.length > 0) {
-          onlineAgents = agentsWithChannel.filter(a => a.department === resolvedDepartmentId);
+          const skillDeptIds = [resolvedDepartmentId];
+          if (skillParentDepartmentId) {
+            skillDeptIds.push(skillParentDepartmentId);
+          }
+          onlineAgents = agentsWithChannel.filter(a => skillDeptIds.includes(a.department));
+          
+          // Ordenar: subdepartamento primeiro
+          if (skillParentDepartmentId && onlineAgents.length > 0) {
+            onlineAgents.sort((a, b) => {
+              if (a.department === resolvedDepartmentId && b.department !== resolvedDepartmentId) return -1;
+              if (b.department === resolvedDepartmentId && a.department !== resolvedDepartmentId) return 1;
+              return 0;
+            });
+          }
         } else {
           onlineAgents = agentsWithChannel;
         }
@@ -364,6 +393,22 @@ serve(async (req) => {
       console.log('[route-conversation] 🔍 Searching for agents with roles:', allowedRoles.join(', '));
       console.log('[route-conversation] 📌 Department filter:', resolvedDepartmentId || 'none');
       console.log('[route-conversation] 👥 Priority team members:', priorityTeamMemberIds.length);
+      
+      // 🆕 HIERARQUIA: Buscar parent_id do departamento para fallback
+      let parentDepartmentId: string | null = null;
+      
+      if (resolvedDepartmentId) {
+        const { data: deptData } = await supabase
+          .from('departments')
+          .select('parent_id')
+          .eq('id', resolvedDepartmentId)
+          .maybeSingle();
+        
+        if (deptData?.parent_id) {
+          parentDepartmentId = deptData.parent_id;
+          console.log(`[route-conversation] 📂 Department has parent: ${parentDepartmentId}`);
+        }
+      }
       
       // 🆕 Buscar user_ids dos roles permitidos
       const { data: genericRoleIds } = await supabase
@@ -399,9 +444,14 @@ serve(async (req) => {
           .eq('availability_status', 'online')
           .in('id', genericAgentUserIds);
 
-        // 🆕 Filtrar por departamento se houver
+        // 🆕 HIERARQUIA: Filtrar por departamento COM fallback para pai
         if (resolvedDepartmentId) {
-          agentsQuery = agentsQuery.eq('department', resolvedDepartmentId);
+          const deptIds = [resolvedDepartmentId];
+          if (parentDepartmentId) {
+            deptIds.push(parentDepartmentId);
+            console.log(`[route-conversation] 📂 Searching in departments: [${deptIds.join(', ')}] (including parent)`);
+          }
+          agentsQuery = agentsQuery.in('department', deptIds);
         }
 
         const result = await agentsQuery;
@@ -415,12 +465,24 @@ serve(async (req) => {
           if (!supportChannelId) return true;
           return channels.some((ac: any) => ac.channel_id === supportChannelId);
         });
+        
+        // 🆕 HIERARQUIA: Ordenar - agentes do subdepartamento primeiro, depois do pai
+        if (parentDepartmentId && genericAgents.length > 0) {
+          genericAgents.sort((a, b) => {
+            // Agentes do subdepartamento exato têm prioridade
+            if (a.department === resolvedDepartmentId && b.department !== resolvedDepartmentId) return -1;
+            if (b.department === resolvedDepartmentId && a.department !== resolvedDepartmentId) return 1;
+            return 0;
+          });
+          console.log(`[route-conversation] 📊 Sorted agents: subdept first, then parent`);
+        }
       }
       
       console.log('[route-conversation] 📊 Generic agents query result:', { 
         found_count: genericAgents?.length || 0,
         roles_searched: allowedRoles,
         department_filter: resolvedDepartmentName || 'none',
+        parent_department: parentDepartmentId || 'none',
         priority_team_members: priorityTeamMemberIds.length,
         error: agentsError?.message 
       });
