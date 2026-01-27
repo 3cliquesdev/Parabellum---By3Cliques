@@ -1,140 +1,115 @@
 
 
-## Plano: Corrigir Loop Destrutivo do Realtime Health
+## Plano: Simplificar Fluxo de Identificacao SEM Perder Funcionalidades
 
-### Diagnostico do Problema
+### Analise Comparativa
 
-Analisei os logs e o codigo. O problema e **critico e auto-causado**:
+Comparei seu codigo proposto com o sistema atual (5774 linhas):
 
-| Componente | Status | Problema |
-|------------|--------|----------|
-| `useRealtimeHealth.tsx` | QUEBRADO | Loop destrutivo que remove todos os canais a cada 30s |
-| Canais de mensagens | DESTRUIDOS | Sao removidos junto com o canal de health |
-| Cliente Supabase | SEM OPCOES | Nao tem configuracoes de realtime (heartbeat, timeout) |
+| Recurso | Seu Codigo | Sistema Atual | Veredicto |
+|---------|-----------|---------------|-----------|
+| Identificacao por telefone | SIM | SIM (via Kiwify) | Manter atual |
+| Pedido de email | SIM | SIM | Manter atual |
+| Verificacao de cliente na base | SIM | SIM + binding automatico | Manter atual |
+| OTP para operacoes financeiras | SIM | SIM (via send-financial-otp) | Manter atual |
+| Triagem por departamento | NAO | SIM (Comercial/Suporte/Sistema) | Manter atual |
+| Chat Flows | NAO | SIM | Manter atual |
+| Knowledge Base + RAG | NAO | SIM | Manter atual |
+| Modo Estrito Anti-Alucinacao | NAO | SIM | Manter atual |
+| Confidence Score | NAO | SIM | Manter atual |
+| Cache de respostas | NAO | SIM | Manter atual |
+| Suporte Meta + Evolution | NAO | SIM | Manter atual |
+| Rate limiting | NAO | SIM | Manter atual |
 
-**Causa Raiz**: O `useRealtimeHealth` verifica a cada 30 segundos se o canal de health esta "joined", mas:
-
-1. A verificacao usa `c.topic === 'realtime:realtime-health-check'` - mas o Supabase pode usar outro formato
-2. Quando detecta que nao esta "joined" (sempre falso), chama `forceReconnect()`
-3. `forceReconnect()` **REMOVE TODOS OS CANAIS** do Supabase, incluindo os canais de mensagens e inbox
-4. Isso mata as subscricoes de realtime que estavam funcionando
-5. Os hooks de `useMessages` e `useInboxView` precisam recriar seus canais
-6. 30 segundos depois, o ciclo repete
-
-**Logs comprovando o problema:**
-```text
-[RealtimeHealth] Health channel not joined, status: undefined
-[RealtimeHealth] Forcing reconnection of all channels...
-RealtimeNotifications consolidated subscription status: CLOSED  // <-- Canal destruido!
-[RealtimeHealth] All channels removed, queries invalidated
-```
+**Conclusao:** Seu codigo e um downgrade significativo - perderia 80% das funcionalidades. Mas a IDEIA esta correta: simplificar o fluxo de identificacao.
 
 ---
 
-### Fluxo Atual (Quebrado)
+### Problema Real Identificado
 
-```text
-useRealtimeHealth cria canal de health check
-         |
-         v
-[30 segundos]
-         |
-         v
-Ping verifica: channel.topic === 'realtime:realtime-health-check'
-         |
-         v
-Supabase usa outro formato de topic -> FALSE
-         |
-         v
-forceReconnect() chamado
-         |
-         v
-REMOVE TODOS OS CANAIS (incluindo messages, inbox_view)
-         |
-         v
-Canais de mensagens MORTOS
-         |
-         v
-Mensagens nao chegam em tempo real
-         |
-         v
-[30 segundos] -> Repete o ciclo
-```
+Olhando os logs, o problema nao e a arquitetura - e a **execucao**:
+
+1. **Modelo Gemini ruim**: `google/gemini-2.5-flash` responde de forma inconsistente
+2. **Transferencias para departamento errado**: A logica de `pickDepartment` e muito simples
+3. **Email nao pedido corretamente**: Fluxo de deteccao de lead funciona, mas as mensagens nao sao claras
 
 ---
 
-### Solucao Proposta
+### Solucao: Refatorar SEM Downgrade
 
-#### 1. Reescrever useRealtimeHealth.tsx
+Em vez de substituir 5774 linhas por 60 linhas (perdendo tudo), vamos:
 
-O hook precisa ser completamente refeito para:
+#### 1. Forcar OpenAI como Modelo Padrao
 
-1. NAO destruir todos os canais - apenas monitorar
-2. Usar metodo correto para verificar status do canal
-3. Recriar apenas o canal de health se necessario (nao todos)
-4. Invalidar queries sem destruir canais existentes
+Alterar o fallback de `google/gemini-2.5-flash` para `openai/gpt-5-mini`:
 
-**Arquivo**: `src/hooks/useRealtimeHealth.tsx`
+**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts` (linha 18)
 
 ```typescript
-// ANTES (QUEBRADO):
-const forceReconnect = useCallback(async () => {
-  // PROBLEMA: Remove TODOS os canais!
-  const channels = supabase.getChannels();
-  for (const channel of channels) {
-    await supabase.removeChannel(channel);
+// ANTES
+return data?.value || 'google/gemini-2.5-flash';
+
+// DEPOIS  
+return data?.value || 'openai/gpt-5-mini';
+```
+
+#### 2. Inserir Configuracao no Banco
+
+Migration SQL para garantir que OpenAI seja o padrao:
+
+```sql
+INSERT INTO system_configurations (key, value, description)
+VALUES ('ai_default_model', 'openai/gpt-5-mini', 'Modelo padrao para IA')
+ON CONFLICT (key) DO UPDATE SET value = 'openai/gpt-5-mini';
+```
+
+#### 3. Melhorar Mensagens de Identificacao
+
+Atualizar templates no banco `ai_message_templates`:
+
+```sql
+-- Template para pedir email (mais direto)
+INSERT INTO ai_message_templates (key, content, is_active)
+VALUES (
+  'identity_wall_ask_email',
+  'Para dar continuidade ao seu atendimento, por favor me informe o email utilizado em sua compra.',
+  true
+)
+ON CONFLICT (key) DO UPDATE SET content = EXCLUDED.content;
+```
+
+#### 4. Simplificar pickDepartment
+
+Melhorar a funcao de deteccao de departamento (linha 493-506):
+
+```typescript
+// DEPOIS - Mais preciso
+function pickDepartment(question: string): string {
+  const q = question.toLowerCase();
+  
+  // Financeiro - Prioridade alta (dinheiro envolvido)
+  if (/saque|pix|reembolso|estorno|comissão|dinheiro|pagamento|carteira|transferência/i.test(q)) {
+    return 'financeiro';
   }
-  // ...
-});
-
-// DEPOIS (CORRIGIDO):
-const forceReconnect = useCallback(async () => {
-  // Apenas invalida queries - NAO remove canais!
-  // Os hooks individuais gerenciam seus proprios canais
-  queryClient.invalidateQueries({ queryKey: ['inbox-view'] });
-  queryClient.invalidateQueries({ queryKey: ['messages'] });
-  queryClient.invalidateQueries({ queryKey: ['conversations'] });
-});
-```
-
----
-
-#### 2. Melhorar Verificacao de Status
-
-Usar o metodo correto para verificar se canais estao ativos:
-
-```typescript
-// ANTES (QUEBRADO):
-const healthCh = channels.find(c => c.topic === 'realtime:realtime-health-check');
-if (!healthCh || healthCh.state !== 'joined') {
-  // Sempre falso porque topic tem formato diferente
+  
+  // Tecnico - Problemas de sistema
+  if (/erro|bug|login|senha|acesso|não funciona|travou|caiu|site fora/i.test(q)) {
+    return 'tecnico';
+  }
+  
+  // Comercial - Vendas/Propostas (leads)
+  if (/preço|proposta|plano|quanto custa|comprar|assinar|desconto|trial|teste/i.test(q)) {
+    return 'comercial';
+  }
+  
+  // Logistica - Entregas
+  if (/envio|entrega|rastreio|transportadora|correios|prazo|encomenda/i.test(q)) {
+    return 'logistica';
+  }
+  
+  // Default: Suporte geral
+  return 'suporte_n1';
 }
-
-// DEPOIS (CORRIGIDO):
-// Usar o metodo oficial do Supabase
-const channels = supabase.getChannels();
-const anySubscribed = channels.some(c => c.state === 'joined');
-if (!anySubscribed && channels.length > 0) {
-  // Problema real de conexao
-}
-```
-
----
-
-#### 3. Adicionar Configuracoes de Realtime ao Cliente
-
-Criar um wrapper para o cliente Supabase com configuracoes de realtime, ja que nao podemos editar o arquivo auto-gerado.
-
-**Arquivo novo**: `src/lib/supabaseRealtime.ts`
-
-```typescript
-import { supabase } from "@/integrations/supabase/client";
-
-// Configurar opções de realtime diretamente no cliente
-supabase.realtime.setAuth(localStorage.getItem('sb-access-token') || '');
-
-// Heartbeat e reconexão são gerenciados pelo SDK automaticamente
-// Apenas precisamos garantir que não destruímos os canais
 ```
 
 ---
@@ -143,135 +118,43 @@ supabase.realtime.setAuth(localStorage.getItem('sb-access-token') || '');
 
 | Arquivo | Acao | Descricao |
 |---------|------|-----------|
-| `src/hooks/useRealtimeHealth.tsx` | Reescrever | Corrigir loop destrutivo, parar de remover canais |
-| `src/components/Layout.tsx` | Manter | Ja usa o hook corretamente |
-| `src/hooks/useMessages.tsx` | Verificar | Garantir que canal nao e afetado |
-| `src/hooks/useInboxView.tsx` | Verificar | Garantir que canal nao e afetado |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Modificar | Mudar fallback para OpenAI, melhorar pickDepartment |
+| Migration SQL | Criar | Inserir `ai_default_model = openai/gpt-5-mini` |
 
 ---
 
-### Secao Tecnica: Hook Corrigido
+### Secao Tecnica: Mudancas Especificas
+
+**1. Linha 18 - Fallback do modelo:**
 
 ```typescript
-// src/hooks/useRealtimeHealth.tsx - VERSAO CORRIGIDA
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+// src/functions/ai-autopilot-chat/index.ts linha 18
+// ANTES:
+return data?.value || 'google/gemini-2.5-flash';
 
-export function useRealtimeHealth() {
-  const [isConnected, setIsConnected] = useState(true);
-  const [lastPing, setLastPing] = useState<Date | null>(null);
-  const queryClient = useQueryClient();
-  const reconnectAttempts = useRef(0);
-  const lastVisibilityChange = useRef<number>(Date.now());
-  const healthChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+// DEPOIS:
+return data?.value || 'openai/gpt-5-mini';
+```
 
-  // Forçar refetch de dados - SEM destruir canais!
-  const forceReconnect = useCallback(async () => {
-    console.log('[RealtimeHealth] Forcing data refresh (NOT removing channels)...');
-    
-    // Apenas invalidar queries para refetch
-    // NAO remover canais - cada hook gerencia o seu
-    queryClient.invalidateQueries({ queryKey: ['inbox-view'] });
-    queryClient.invalidateQueries({ queryKey: ['messages'] });
-    queryClient.invalidateQueries({ queryKey: ['conversations'] });
-    
-    reconnectAttempts.current = 0;
-  }, [queryClient]);
+**2. Linhas 493-506 - pickDepartment melhorado:**
 
-  // Monitorar conexão com canal próprio de health check
-  useEffect(() => {
-    let pingInterval: NodeJS.Timeout;
-
-    const setupHealthCheck = () => {
-      // Remover canal anterior se existir
-      if (healthChannelRef.current) {
-        supabase.removeChannel(healthChannelRef.current);
-      }
-
-      const channel = supabase
-        .channel('realtime-health-check')
-        .on('presence', { event: 'sync' }, () => {
-          setIsConnected(true);
-          setLastPing(new Date());
-        })
-        .subscribe((status, err) => {
-          console.log('[RealtimeHealth] Health channel status:', status, err);
-          
-          if (status === 'SUBSCRIBED') {
-            setIsConnected(true);
-            setLastPing(new Date());
-            reconnectAttempts.current = 0;
-          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-            setIsConnected(false);
-          }
-        });
-
-      healthChannelRef.current = channel;
-    };
-
-    setupHealthCheck();
-
-    // Ping periódico - verifica APENAS o status geral, sem destruir canais
-    pingInterval = setInterval(() => {
-      const channels = supabase.getChannels();
-      const joinedChannels = channels.filter(c => c.state === 'joined');
-      
-      if (joinedChannels.length === 0 && channels.length > 0) {
-        console.log('[RealtimeHealth] No joined channels, may have connectivity issue');
-        setIsConnected(false);
-        
-        // Apenas recriar o canal de health - NAO todos os canais
-        if (reconnectAttempts.current < 5) {
-          reconnectAttempts.current++;
-          setupHealthCheck();
-        }
-      } else {
-        setIsConnected(true);
-        setLastPing(new Date());
-      }
-    }, 30000);
-
-    return () => {
-      clearInterval(pingInterval);
-      if (healthChannelRef.current) {
-        supabase.removeChannel(healthChannelRef.current);
-        healthChannelRef.current = null;
-      }
-    };
-  }, []); // Sem dependências - roda apenas uma vez
-
-  // Reconectar quando tab volta ao foco
-  useEffect(() => {
-    const handleVisibility = async () => {
-      if (document.visibilityState === 'visible') {
-        const timeSinceLastChange = Date.now() - lastVisibilityChange.current;
-        
-        // Se ficou mais de 2 minutos em background, forçar refresh de dados
-        if (timeSinceLastChange > 120000) {
-          console.log('[RealtimeHealth] Tab visible after long background, refreshing data');
-          await forceReconnect();
-        }
-      }
-      
-      lastVisibilityChange.current = Date.now();
-    };
-
-    const handleOnline = () => {
-      console.log('[RealtimeHealth] Browser came online, refreshing data');
-      forceReconnect();
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('online', handleOnline);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('online', handleOnline);
-    };
-  }, [forceReconnect]);
-
-  return { isConnected, lastPing, forceReconnect };
+```typescript
+function pickDepartment(question: string): string {
+  const q = question.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  // Ordem de prioridade: Financeiro > Tecnico > Comercial > Logistica > Suporte
+  const rules: Array<{ dept: string; patterns: RegExp }> = [
+    { dept: 'financeiro', patterns: /saque|pix|reembolso|estorno|comiss[aã]o|dinheiro|pagamento|carteira|transfer[eê]ncia|boleto|fatura|cobran[cç]a/ },
+    { dept: 'tecnico', patterns: /erro|bug|login|senha|acesso|n[aã]o funciona|travou|caiu|site fora|api|integra[cç][aã]o|token/ },
+    { dept: 'comercial', patterns: /pre[cç]o|proposta|plano|quanto custa|comprar|assinar|desconto|trial|teste|orcamento|catalogo|tabela/ },
+    { dept: 'logistica', patterns: /envio|entrega|rastreio|transportadora|correios|prazo|encomenda|coleta/ },
+  ];
+  
+  for (const rule of rules) {
+    if (rule.patterns.test(q)) return rule.dept;
+  }
+  
+  return 'suporte_n1';
 }
 ```
 
@@ -281,29 +164,29 @@ export function useRealtimeHealth() {
 
 | Metrica | Antes | Depois |
 |---------|-------|--------|
-| Canais de mensagens | Destruidos a cada 30s | Permanecem ativos |
-| Mensagens em tempo real | NAO funcionam | Funcionam |
-| Loop destrutivo | SIM | NAO |
-| Refetch de dados | Funciona | Funciona |
-| Reconexao apos background | Destruia canais | Apenas invalida queries |
+| Modelo AI padrao | Gemini (inconsistente) | OpenAI GPT-5-mini (estavel) |
+| Deteccao de departamento | Keyword simples | Regex com prioridade |
+| Mensagem de email | Generica | Direta e clara |
+| Funcionalidades existentes | 100% | 100% (sem downgrade) |
 
 ---
 
-### Teste de Validacao
+### Por que NAO Usar seu Codigo
 
-Apos implementar, os logs devem mostrar:
+Seu codigo proposto perderia:
 
-```text
-// ANTES (QUEBRADO):
-[RealtimeHealth] Health channel not joined, status: undefined
-[RealtimeHealth] Forcing reconnection of all channels...
-[RealtimeHealth] All channels removed  // <-- PROBLEMA!
+- Chat Flows (fluxos visuais)
+- Knowledge Base + RAG (respostas baseadas em artigos)
+- Modo Estrito Anti-Alucinacao
+- Confidence Score (decisao inteligente de handoff)
+- Cache de respostas (performance)
+- Suporte a Meta WhatsApp + Evolution
+- Rate limiting
+- Triagem por departamento
+- Few-shot learning (exemplos de treinamento)
+- Persona routing (diferentes personas por canal)
+- OTP via edge function separada (mais seguro)
+- Integracao Kiwify para auto-identificacao
 
-// DEPOIS (CORRIGIDO):
-[RealtimeHealth] Health channel status: SUBSCRIBED
-[Realtime] Message INSERT - updating snippet instantly: xxx
-[Realtime] inbox_view change: UPDATE
-```
-
-Os canais de `useMessages` e `useInboxView` continuarao ativos e recebendo eventos em tempo real.
+Todas essas funcionalidades levaram meses para desenvolver e estao funcionando. O problema e so o modelo AI e alguns prompts.
 
