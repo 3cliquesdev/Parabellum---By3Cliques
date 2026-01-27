@@ -128,6 +128,59 @@ export function useCreateEmailTemplate() {
   });
 }
 
+export function useDuplicateEmailTemplate() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (templateId: string) => {
+      // 1. Fetch original template
+      const { data: original, error: fetchError } = await supabase
+        .from("email_templates")
+        .select("*")
+        .eq("id", templateId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // 2. Create copy of template
+      const { data, error } = await supabase
+        .from("email_templates")
+        .insert({
+          name: `${original.name} (Cópia)`,
+          subject: original.subject,
+          html_body: original.html_body,
+          trigger_type: null, // Remove trigger to avoid conflicts
+          is_active: false, // Inactive by default
+          variables: original.variables,
+          design_json: original.design_json,
+          branding_id: original.branding_id,
+          department_id: original.department_id,
+          sender_id: original.sender_id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["email-templates"] });
+      toast({
+        title: "Template duplicado",
+        description: "Cópia do template criada com sucesso.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao duplicar template",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 export function useUpdateEmailTemplate() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
