@@ -25,10 +25,10 @@ serve(async (req) => {
       conversationId
     });
 
-    // Buscar emails dos admins
-    const { data: admins, error: adminError } = await supabaseClient
+    // Buscar user_ids dos admins (sem email, pois não existe na tabela profiles)
+    const { data: adminRoles, error: adminError } = await supabaseClient
       .from('user_roles')
-      .select('user_id, profiles!inner(email, full_name)')
+      .select('user_id, profiles!inner(full_name)')
       .eq('role', 'admin');
 
     if (adminError) {
@@ -36,7 +36,7 @@ serve(async (req) => {
       throw adminError;
     }
 
-    if (!admins || admins.length === 0) {
+    if (!adminRoles || adminRoles.length === 0) {
       console.warn('[send-admin-alert] ⚠️ Nenhum admin encontrado para notificar');
       return new Response(
         JSON.stringify({ success: false, error: 'No admins found' }),
@@ -50,10 +50,18 @@ serve(async (req) => {
       conversationLink = `https://${Deno.env.get('SUPABASE_URL')?.split('//')[1]?.split('.')[0]}.lovable.app/inbox?conversation=${conversationId}`;
     }
 
-    // Enviar email para cada admin
-    const emailPromises = admins.map(async (admin: any) => {
-      const adminEmail = admin.profiles.email;
-      const adminName = admin.profiles.full_name;
+    // Enviar email para cada admin - buscar email via Auth Admin API
+    const emailPromises = adminRoles.map(async (adminRole: any) => {
+      // Buscar email do usuário via Auth Admin API (requer Service Role)
+      const { data: userData, error: userError } = await supabaseClient.auth.admin.getUserById(adminRole.user_id);
+      
+      if (userError || !userData?.user?.email) {
+        console.error(`[send-admin-alert] ❌ Erro ao buscar email do admin ${adminRole.user_id}:`, userError);
+        return { success: false, user_id: adminRole.user_id, error: userError || 'No email found' };
+      }
+
+      const adminEmail = userData.user.email;
+      const adminName = adminRole.profiles?.full_name || 'Admin';
 
       const htmlBody = `
 <!DOCTYPE html>
@@ -124,13 +132,13 @@ serve(async (req) => {
     const results = await Promise.all(emailPromises);
     const successCount = results.filter(r => r.success).length;
 
-    console.log(`[send-admin-alert] 📧 Alertas enviados: ${successCount}/${admins.length}`);
+    console.log(`[send-admin-alert] 📧 Alertas enviados: ${successCount}/${adminRoles.length}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         notified: successCount,
-        total: admins.length,
+        total: adminRoles.length,
         results 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
