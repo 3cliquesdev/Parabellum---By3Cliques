@@ -1,164 +1,361 @@
 
-# Plano: Corrigir Duplicação de Mensagens e Delay no Envio
+# Plano: Refatorar Sistema de Chat Humano para Tempo Real (<200ms)
 
-## 🔍 Diagnóstico Confirmado
+## Diagnóstico Atual
 
-Após análise detalhada dos logs da edge function, banco de dados e código fonte, identifiquei **duas causas raiz**:
+### Fluxo Atual do Web Chat (Chat Humano)
 
-### Problema 1: Duplicação de Mensagens
-
-**Evidência no banco de dados** - mesma mensagem salva 2-3 vezes:
-| Timestamp | external_id | Origem |
-|-----------|-------------|--------|
-| 18:01:09.254 | null | SuperComposer.tsx (linha 271-278) |
-| 18:01:10.778 | wamid.xxx | send-meta-whatsapp (linha 344-354) |
-| 18:01:11.105 | null | SuperComposer tentando novamente? |
-
-**Causa técnica:**
-1. `SuperComposer.tsx` envia para Meta API via edge function
-2. Depois, SuperComposer também salva no banco via `sendMessage.mutateAsync()`
-3. MAS a edge function `send-meta-whatsapp` TAMBÉM salva no banco (linhas 337-354)
-4. Resultado: **mensagem duplicada**
-
-```typescript
-// SuperComposer.tsx - linha 257-278
-const { error: metaError } = await supabase.functions.invoke('send-meta-whatsapp', {
-  body: {
-    instance_id: whatsappMetaInstanceId,
-    phone_number: contactPhone,
-    message: messageContent,
-    conversation_id: conversationId, // ← Passa conversation_id
-  }
-});
-
-// DEPOIS também salva:
-const result = await sendMessage.mutateAsync({ ... }); // ← Duplicata!
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ FLUXO ATUAL - LATÊNCIA ALTA (~30 segundos)                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Usuário clica "Enviar"                                                      │
+│         │                                                                    │
+│         ▼                                                                    │
+│  ┌──────────────────────┐                                                    │
+│  │ onMutate (otimista)  │ ← Mensagem aparece com status "sending"           │
+│  │ (temp-id local)      │   ~10ms ✅                                         │
+│  └──────────────────────┘                                                    │
+│         │                                                                    │
+│         ▼                                                                    │
+│  ┌──────────────────────────────────────────────────────────────────┐       │
+│  │ mutationFn (SÍNCRONO - BLOQUEANTE)                               │       │
+│  │                                                                   │       │
+│  │  1. supabase.from("messages").insert() ← Network + DB ~500-2000ms│       │
+│  │                                                                   │       │
+│  │  2. supabase.from("conversations").update() ← Mais ~200-500ms    │       │
+│  │     (last_message_at)                                             │       │
+│  │                                                                   │       │
+│  └──────────────────────────────────────────────────────────────────┘       │
+│         │                                                                    │
+│         ▼                                                                    │
+│  ┌──────────────────────┐                                                    │
+│  │ Realtime dispara     │ ← Evento postgres_changes ~100-300ms após INSERT  │
+│  │ (substitui temp-id)  │                                                    │
+│  └──────────────────────┘                                                    │
+│         │                                                                    │
+│         ▼                                                                    │
+│  ┌──────────────────────┐                                                    │
+│  │ Triggers DB executam │ ← Múltiplos triggers podem adicionar ~1-5s       │
+│  │ (inbox_view, etc)    │                                                    │
+│  └──────────────────────┘                                                    │
+│                                                                              │
+│  TOTAL PERCEBIDO: 1-30 segundos (dependendo da carga do DB)                 │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-```typescript
-// send-meta-whatsapp - linha 337-354
-if (body.conversation_id && messageId) {
-  await supabase.from("messages").insert({ ... }); // ← Edge function salva também!
-}
-```
+### Problemas Identificados
 
-### Problema 2: Delay no Envio (5-12 segundos)
-
-**Causas identificadas:**
-1. **Cold start** da edge function (~1-3 segundos)
-2. **Upload de mídia** para Meta antes de enviar (download + upload = mais delay)
-3. **Optimistic update** não está funcionando corretamente devido à duplicação
+| Problema | Impacto | Causa Raiz |
+|----------|---------|------------|
+| `mutationFn` bloqueia UI | Input fica "travado" | Aguarda INSERT completar |
+| Update de `last_message_at` síncrono | +200-500ms | Operação secundária no caminho crítico |
+| Triggers pesados na tabela messages | +1-5s | `inbox_view` refresh, embeddings, etc |
+| Polling em background | Conflitos de cache | Múltiplas invalidateQueries |
 
 ---
 
-## 🛠️ Solução Proposta
+## Solução Proposta: Fire-and-Forget + Realtime
 
-### FASE 1: Eliminar Duplicação (CRÍTICO)
+### Novo Fluxo (Latência <200ms)
 
-**Arquivo:** `src/components/inbox/SuperComposer.tsx`
-
-Remover o `sendMessage.mutateAsync()` do fluxo Meta WhatsApp, já que a edge function já salva a mensagem.
-
-**Mudanças:**
-```typescript
-// ANTES (linhas 255-278):
-const { error: metaError } = await supabase.functions.invoke('send-meta-whatsapp', { ... });
-if (metaError) throw new Error(...);
-
-const result = await sendMessage.mutateAsync({ ... }); // ← REMOVER ISSO
-
-// DEPOIS:
-const { data: metaResponse, error: metaError } = await supabase.functions.invoke('send-meta-whatsapp', { ... });
-if (metaError) throw new Error(...);
-
-// Edge function já salvou a mensagem - não precisa salvar novamente
-sentMessageId = metaResponse?.message_id || null;
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ NOVO FLUXO - LATÊNCIA <200ms                                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Usuário clica "Enviar"                                                      │
+│         │                                                                    │
+│         ▼                                                                    │
+│  ┌────────────────────────────────────────────────────┐                     │
+│  │ OPTIMISTIC UPDATE (INSTANTÂNEO)                   │ ~5ms                │
+│  │                                                    │                     │
+│  │ 1. Gera UUID local (não temp-id)                  │                     │
+│  │ 2. Adiciona ao cache React Query                  │                     │
+│  │ 3. UI atualiza IMEDIATAMENTE                      │                     │
+│  │ 4. Limpa input                                    │                     │
+│  │ 5. RETORNA para o usuário (não aguarda DB)        │ ← CRÍTICO!          │
+│  │                                                    │                     │
+│  └────────────────────────────────────────────────────┘                     │
+│         │                                                                    │
+│         │  (Fire-and-Forget - Não bloqueia)                                  │
+│         ▼                                                                    │
+│  ┌────────────────────────────────────────────────────┐                     │
+│  │ BACKGROUND PERSISTENCE (Async)                    │                     │
+│  │                                                    │                     │
+│  │ Promise.resolve().then(async () => {              │                     │
+│  │   await supabase.from("messages").insert()        │                     │
+│  │   await updateLastMessageAt()                     │                     │
+│  │ })                                                │                     │
+│  │                                                    │                     │
+│  │ Erros são capturados e mostram toast              │                     │
+│  └────────────────────────────────────────────────────┘                     │
+│         │                                                                    │
+│         ▼                                                                    │
+│  ┌────────────────────────────────────────────────────┐                     │
+│  │ REALTIME (Confirmação)                            │                     │
+│  │                                                    │                     │
+│  │ Evento INSERT chega e atualiza:                   │                     │
+│  │ - status: "sending" → "sent"                      │                     │
+│  │ - Adiciona dados do servidor (sender profile)    │                     │
+│  │                                                    │                     │
+│  │ Detecção de duplicata por content+timestamp      │                     │
+│  └────────────────────────────────────────────────────┘                     │
+│                                                                              │
+│  TOTAL PERCEBIDO: <50ms (input limpa imediatamente)                         │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Mesma correção para o bloco de mídia (linhas 218-254)**
+---
 
-### FASE 2: Melhorar Optimistic Update
+## Implementação Detalhada
 
-**Arquivo:** `src/hooks/useMessages.tsx`
+### FASE 1: Novo Hook `useSendMessageInstant`
 
-Ajustar a lógica de detecção de duplicatas para usar `external_id` como identificador único:
+**Novo arquivo: `src/hooks/useSendMessageInstant.tsx`**
+
+Substituir a abordagem TanStack Query síncrona por fire-and-forget:
 
 ```typescript
-// Linha 82-101 - Adicionar verificação por external_id
+export function useSendMessageInstant() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { user } = useAuth();
+
+  const sendInstant = useCallback((params: {
+    conversationId: string;
+    content: string;
+    isInternal?: boolean;
+    attachments?: MediaAttachment[];
+  }) => {
+    // 1. INSTANTÂNEO: Gerar ID e adicionar ao cache
+    const localId = crypto.randomUUID();
+    const optimisticMessage = {
+      id: localId,
+      conversation_id: params.conversationId,
+      content: params.content,
+      sender_type: 'user',
+      sender_id: user?.id,
+      is_internal: params.isInternal || false,
+      status: 'sending',
+      created_at: new Date().toISOString(),
+      media_attachments: params.attachments || [],
+    };
+
+    // 2. Atualizar cache ANTES de qualquer operação async
+    queryClient.setQueryData(
+      ["messages", params.conversationId],
+      (old: any[] = []) => [...old, optimisticMessage]
+    );
+
+    // 3. Fire-and-Forget: Persistir em background
+    queueMicrotask(async () => {
+      try {
+        const { error } = await supabase
+          .from("messages")
+          .insert({
+            id: localId, // Usar mesmo ID para evitar duplicata no realtime
+            conversation_id: params.conversationId,
+            content: params.content,
+            sender_type: 'user',
+            sender_id: user?.id,
+            is_internal: params.isInternal || false,
+            channel: 'web_chat',
+          });
+
+        if (error) throw error;
+
+        // Update last_message_at (também em background)
+        supabase
+          .from("conversations")
+          .update({ last_message_at: new Date().toISOString() })
+          .eq("id", params.conversationId);
+
+      } catch (error) {
+        // Marcar como falhou no cache
+        queryClient.setQueryData(
+          ["messages", params.conversationId],
+          (old: any[] = []) => old.map(m => 
+            m.id === localId ? { ...m, status: 'failed' } : m
+          )
+        );
+        
+        toast({
+          title: "Erro ao enviar",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    });
+
+    return localId;
+  }, [queryClient, user, toast]);
+
+  return { sendInstant };
+}
+```
+
+### FASE 2: Atualizar SuperComposer para Web Chat
+
+**Arquivo: `src/components/inbox/SuperComposer.tsx`**
+
+Modificar o fluxo do Web Chat (linhas 374-384):
+
+```typescript
+// ANTES:
+} else {
+  // Web chat - save directly
+  const result = await sendMessage.mutateAsync({...}); // BLOQUEANTE!
+  sentMessageId = result?.id || null;
+}
+
+// DEPOIS:
+} else {
+  // Web chat - INSTANT send (fire-and-forget)
+  sentMessageId = sendInstant({
+    conversationId,
+    content: messageContent,
+    isInternal: false,
+  });
+  // Não aguarda! Input limpa imediatamente.
+}
+```
+
+### FASE 3: Melhorar Detecção de Duplicatas no Realtime
+
+**Arquivo: `src/hooks/useMessages.tsx`**
+
+Atualizar o handler de INSERT para usar UUID como identificador:
+
+```typescript
 if (payload.eventType === 'INSERT') {
   queryClient.setQueryData(
     ["messages", conversationId],
     (old: any[] = []) => {
-      // 1. Verificar por ID real
-      if (old.some(m => m.id === newMessage.id)) {
-        return old;
+      // 1. Verificar por ID real (agora usa UUID)
+      const existingIndex = old.findIndex(m => m.id === newMessage.id);
+      
+      if (existingIndex !== -1) {
+        // Mensagem já existe (fire-and-forget já adicionou)
+        // Apenas atualizar status para 'sent'
+        const updated = [...old];
+        updated[existingIndex] = { 
+          ...updated[existingIndex], 
+          ...newMessage, 
+          status: 'sent' 
+        };
+        return updated;
       }
       
-      // 2. Verificar por external_id (wamid)
-      if (newMessage.external_id && old.some(m => m.external_id === newMessage.external_id)) {
-        return old;
-      }
-      
-      // 3. Substituir temp por real (lógica existente)
-      // ...
+      // 2. Nova mensagem de outro usuário
+      return [...old, { ...newMessage, status: 'sent' }];
     }
   );
 }
 ```
 
-### FASE 3: Adicionar Flag para Evitar Duplo-Save
+### FASE 4: Otimizar ChatWindow (Componente Legacy)
 
-**Arquivo:** `supabase/functions/send-meta-whatsapp/index.ts`
+**Arquivo: `src/components/ChatWindow.tsx`**
 
-Adicionar parâmetro opcional `skip_db_save` para casos onde o chamador já vai salvar:
+Aplicar a mesma lógica fire-and-forget para o ChatWindow legado.
 
-```typescript
-interface SendMetaWhatsAppRequest {
-  // ... campos existentes
-  skip_db_save?: boolean; // Se true, não salva no banco (chamador irá salvar)
-}
+### FASE 5: Indicador Visual de Status
 
-// Linha 337-354 - Condicionar o save
-if (body.conversation_id && messageId && !body.skip_db_save) {
-  await supabase.from("messages").insert({ ... });
-}
+**Arquivo: `src/components/MessageStatusIndicator.tsx`**
+
+Já existe e suporta os status necessários. Apenas garantir que:
+- `sending` → Relógio animado
+- `sent` → Check único
+- `failed` → Ícone de erro com botão "Reenviar"
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração | Prioridade |
+|---------|-----------|------------|
+| `src/hooks/useSendMessageInstant.tsx` | **NOVO** - Hook fire-and-forget | CRÍTICA |
+| `src/components/inbox/SuperComposer.tsx` | Usar `useSendMessageInstant` para Web Chat | CRÍTICA |
+| `src/hooks/useMessages.tsx` | Melhorar merge otimista com UUID | ALTA |
+| `src/components/ChatWindow.tsx` | Aplicar fire-and-forget para legado | MÉDIA |
+| `src/hooks/useSendMessage.tsx` | Manter para backward compatibility | - |
+
+---
+
+## O que é Removido do Caminho Crítico
+
+| Operação | Antes | Depois |
+|----------|-------|--------|
+| `supabase.insert(messages)` | Síncrono (500-2000ms) | Background |
+| `supabase.update(conversations)` | Síncrono (200-500ms) | Background |
+| Triggers do banco | Bloqueavam resposta | Não afetam UI |
+| Validações pesadas | No caminho | Background |
+
+---
+
+## Fluxo Visual Final
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          CHAT HUMANO - TEMPO REAL                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   [Usuário digita mensagem]                                                  │
+│          │                                                                   │
+│          │ <5ms                                                              │
+│          ▼                                                                   │
+│   ┌──────────────────────────────────────────────────────────────────┐      │
+│   │ OPTIMISTIC UPDATE (INSTANTÂNEO)                                  │      │
+│   │                                                                   │      │
+│   │  • Gera UUID local                                               │      │
+│   │  • Adiciona ao cache com status="sending"                        │      │
+│   │  • Input limpa                                                   │      │
+│   │  • UI atualiza                                                   │      │
+│   │  ─────────────────────────────────────────────────────────────── │      │
+│   │  RETORNA AQUI! Usuário pode digitar próxima mensagem            │      │
+│   └──────────────────────────────────────────────────────────────────┘      │
+│          │                                                                   │
+│          │ Fire-and-Forget (não bloqueia)                                   │
+│          ▼                                                                   │
+│   ┌────────────────────────────┐                                            │
+│   │ BACKGROUND                 │                                            │
+│   │                            │                                            │
+│   │  supabase.insert()         │──────┐                                     │
+│   │  update last_message_at    │      │                                     │
+│   └────────────────────────────┘      │                                     │
+│                                        │                                     │
+│                                        ▼                                     │
+│   ┌────────────────────────────────────────────────────────────────┐        │
+│   │ REALTIME (Confirmação)                                          │        │
+│   │                                                                  │        │
+│   │  postgres_changes → Atualiza status para "sent"                 │        │
+│   │  (Merge otimista por UUID - sem duplicata)                      │        │
+│   └────────────────────────────────────────────────────────────────┘        │
+│                                                                              │
+│   TEMPO PERCEBIDO: <50ms                                                    │
+│   TEMPO REAL DE PERSISTÊNCIA: 500-2000ms (mas invisível ao usuário)         │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Porém, a solução mais limpa é **deixar a edge function salvar** (ela tem o external_id correto) e **não salvar no frontend**.
+---
+
+## Garantias de Não-Quebra
+
+1. **Backward Compatibility**: O hook `useSendMessage` original permanece para WhatsApp/Email
+2. **Fallback**: Se falhar, mensagem fica com status `failed` e usuário pode reenviar
+3. **Realtime Merge**: UUID como ID evita duplicatas mesmo com latência variável
+4. **Testes Incrementais**: Aplicar primeiro no Web Chat, depois expandir
 
 ---
 
-## 📋 Arquivos a Modificar
+## Resultado Esperado
 
-| Arquivo | Alteração | Impacto |
-|---------|-----------|---------|
-| `src/components/inbox/SuperComposer.tsx` | Remover `sendMessage.mutateAsync()` após envio Meta | **ELIMINA DUPLICAÇÃO** |
-| `src/hooks/useMessages.tsx` | Adicionar verificação por `external_id` | Prevenção extra |
-| `supabase/functions/send-meta-whatsapp/index.ts` | (Opcional) Adicionar flag `skip_db_save` | Flexibilidade |
-
----
-
-## 🎯 Resultado Esperado
-
-1. **Zero duplicação**: Cada mensagem enviada aparece apenas 1 vez
-2. **Delay reduzido**: Sem operação redundante de banco
-3. **Optimistic update correto**: Mensagem aparece imediatamente e é substituída pela versão real do realtime
-4. **Integridade**: Mensagens mantêm `external_id` (wamid) para tracking de delivery
-
----
-
-## ⚠️ Considerações de Segurança
-
-- O fluxo atual onde a edge function salva a mensagem é mais seguro pois:
-  - O `external_id` (wamid) é capturado corretamente
-  - O metadata inclui `whatsapp_provider: 'meta'`
-  - Garante que só salva SE a mensagem foi realmente enviada
-
----
-
-## 🧪 Testes Necessários
-
-1. Enviar mensagem de texto simples → verificar 1 única entrada no banco
-2. Enviar mídia (imagem/vídeo) → verificar 1 única entrada
-3. Testar realtime → mensagem deve aparecer sem duplicata na UI
-4. Verificar `external_id` preenchido corretamente
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Latência percebida | 1-30 segundos | <50ms |
+| Input liberado para digitar | Após DB confirmar | Imediatamente |
+| Status visual | Atrasado | Instantâneo ("enviando...") |
+| Persistência | Bloqueante | Background |
+| Confiabilidade | Igual | Igual (com fallback visual) |
