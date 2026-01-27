@@ -169,10 +169,28 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
     );
     
     // Update selectedNode state to reflect changes
-    setSelectedNode({
-      ...selectedNode,
-      data: { ...selectedNode.data, [field]: value }
-    });
+    setSelectedNode((prev) => prev ? {
+      ...prev,
+      data: { ...prev.data, [field]: value }
+    } : prev);
+  };
+
+  // Update multiple fields at once to avoid state sync issues
+  const updateNodeDataMultiple = (updates: Record<string, any>) => {
+    if (!selectedNode) return;
+
+    setNodes((nds) =>
+      nds.map((node) =>
+        node.id === selectedNode.id
+          ? { ...node, data: { ...node.data, ...updates } }
+          : node
+      )
+    );
+    
+    setSelectedNode((prev) => prev ? {
+      ...prev,
+      data: { ...prev.data, ...updates }
+    } : prev);
   };
 
   const addQuizOption = () => {
@@ -309,12 +327,13 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
                   <Select
                     value={selectedNode.data.template_id || ""}
                     onValueChange={(value) => {
-                      updateNodeData("template_id", value);
                       const template = emailTemplates?.find(t => t.id === value);
-                      if (template) {
-                        updateNodeData("subject", template.subject);
-                        updateNodeData("label", template.name);
-                      }
+                      // Update all fields at once to avoid state sync issues
+                      updateNodeDataMultiple({
+                        template_id: value,
+                        subject: template?.subject || "",
+                        label: template?.name || selectedNode.data.label
+                      });
                     }}
                   >
                     <SelectTrigger className={`bg-background text-foreground ${!selectedNode.data.template_id ? "border-destructive" : ""}`}>
