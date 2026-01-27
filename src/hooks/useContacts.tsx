@@ -100,6 +100,9 @@ export function useContacts(filters?: ContactFilters) {
         }
       }
 
+      // Aplicar limite para otimização de performance
+      query = query.limit(1000);
+
       const { data, error } = await query;
       if (error) throw error;
 

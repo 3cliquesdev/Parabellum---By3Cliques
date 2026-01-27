@@ -252,8 +252,8 @@ export function useConversations(filters?: ConversationFilters) {
     // Reduce stale time for faster updates
     staleTime: 3000, // Reduzido para maior responsividade
     refetchOnWindowFocus: true,
-    refetchInterval: 15000, // Polling mais agressivo: 15s para detectar falhas de realtime
-    refetchIntervalInBackground: true, // Continuar polling mesmo em background
+    refetchInterval: 60000, // Polling backup: 60s - realtime já cobre atualizações instantâneas
+    refetchIntervalInBackground: false, // Não precisa em background com realtime ativo
     enabled: !!user && !roleLoading && !deptLoading,
   });
 }

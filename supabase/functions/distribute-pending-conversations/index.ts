@@ -327,7 +327,7 @@ Deno.serve(async (req: Request) => {
         conversation_id: conv.id,
         content: `👤 ${agent.full_name} entrou na conversa e assumirá o atendimento.${waitInfo}`,
         sender_type: 'system',
-        channel: 'web_chat'
+        channel: 'chat' // Corrigido: usar valor válido do enum conversation_channel
       });
 
       conversationCountByAgent[agentId] = (conversationCountByAgent[agentId] || 0) + 1;

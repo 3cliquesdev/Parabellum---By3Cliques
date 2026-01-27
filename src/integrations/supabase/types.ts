@@ -8132,6 +8132,7 @@ export type Database = {
         | "meeting"
         | "form"
         | "other"
+        | "web_chat"
       conversation_channel: "whatsapp" | "email" | "web_chat"
       conversation_status: "open" | "closed"
       customer_status:
@@ -8373,6 +8374,7 @@ export const Constants = {
         "meeting",
         "form",
         "other",
+        "web_chat",
       ],
       conversation_channel: ["whatsapp", "email", "web_chat"],
       conversation_status: ["open", "closed"],

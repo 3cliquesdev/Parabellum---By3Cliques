@@ -64,8 +64,8 @@ export function useWhatsAppInstances() {
       if (error) throw error;
       return data;
     },
-    refetchInterval: 5000, // Reduzido para 5s para maior responsividade
-    staleTime: 2000, // Considerar dados stale após 2s
+    refetchInterval: 30000, // Reduzido para 30s - realtime já cobre atualizações instantâneas
+    staleTime: 10000, // Considerar dados stale após 10s
   });
 }
 
@@ -271,7 +271,7 @@ export function useWhatsAppAPIStatus(apiUrl: string, apiToken: string) {
         };
       }
     },
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 30000, // Reduzido para 30s
     retry: false,
   });
 }

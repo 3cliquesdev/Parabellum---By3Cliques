@@ -61,7 +61,7 @@ serve(async (req) => {
         conversation_id: record.conversation_id,
         content: '👤 Atendente humano assumiu a conversa. A IA está agora em modo assistente.',
         sender_type: 'system',
-        channel: 'web_chat'
+        channel: 'chat' // Corrigido: usar valor válido do enum conversation_channel
       });
       
       return new Response(JSON.stringify({ 

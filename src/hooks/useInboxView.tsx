@@ -245,7 +245,7 @@ export function useInboxView(filters?: InboxFilters) {
     staleTime: 1000, // Reduzido de 5000ms para 1000ms para maior responsividade
     refetchOnWindowFocus: true,
     refetchOnMount: true,
-    refetchInterval: 10000, // Polling agressivo: 10s para detectar falhas de realtime rapidamente
+    refetchInterval: 60000, // Polling backup: 60s - realtime já cobre atualizações instantâneas
     refetchIntervalInBackground: true, // Continuar polling mesmo em background
     enabled: !!user && !roleLoading && !deptLoading,
   });

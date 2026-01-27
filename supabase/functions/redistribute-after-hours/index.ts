@@ -126,7 +126,7 @@ serve(async (req) => {
         conversation_id: conv.id,
         content: '🌙 Estamos fora do horário de atendimento humano. A IA está disponível para ajudar até o próximo expediente.',
         sender_type: 'system',
-        channel: 'web_chat'
+        channel: 'chat' // Corrigido: usar valor válido do enum conversation_channel
       });
 
       // Adicionar à fila de espera
