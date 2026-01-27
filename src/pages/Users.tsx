@@ -19,6 +19,7 @@ import { BlockUserDialog } from "@/components/BlockUserDialog";
 import { ArchiveUserDialog } from "@/components/ArchiveUserDialog";
 import { RolePermissionsManager } from "@/components/users/RolePermissionsManager";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useNavigate } from "react-router-dom";
 import { useUsers } from "@/hooks/useUsers";
 import { useManageUserStatus } from "@/hooks/useManageUserStatus";
@@ -88,21 +89,26 @@ export default function Users() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { role, isAdmin, isGeneralManager, loading: roleLoading } = useUserRole();
+  const { hasPermission, loading: permLoading } = useRolePermissions();
   const { data: users, isLoading } = useUsers();
   const manageUserStatus = useManageUserStatus();
   const resendWelcomeEmail = useResendWelcomeEmail();
   const manageAvailability = useManageAvailabilityStatus();
 
-  // Redirect if not admin or general_manager - only after role is loaded and confirmed
+  // Redirect if user doesn't have permission to manage users
   useEffect(() => {
-    console.log("[Users] Checking access", { roleLoading, role, isAdmin, isGeneralManager });
+    // Wait for both role and permissions to load
+    if (roleLoading || permLoading) return;
     
-    // Only redirect if role is loaded AND user is confirmed not admin/general_manager
-    if (!roleLoading && role !== null && !isAdmin && !isGeneralManager) {
-      console.log("[Users] User is not admin/general_manager, redirecting to dashboard");
+    const canAccessUsers = hasPermission("settings.manage_users");
+    console.log("[Users] Checking access", { role, canAccessUsers, isAdmin });
+    
+    // Redirect if user doesn't have permission
+    if (!canAccessUsers) {
+      console.log("[Users] User lacks settings.manage_users permission, redirecting");
       navigate("/");
     }
-  }, [role, isAdmin, isGeneralManager, roleLoading, navigate]);
+  }, [role, roleLoading, permLoading, hasPermission, navigate]);
 
   const handleSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -162,7 +168,7 @@ export default function Users() {
     return true;
   });
 
-  if (roleLoading || isLoading) {
+  if (roleLoading || permLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
