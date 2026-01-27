@@ -192,3 +192,48 @@ export function useToggleChatFlowActive() {
     },
   });
 }
+
+export function useDuplicateChatFlow() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (flow: ChatFlow) => {
+      const { data: user } = await supabase.auth.getUser();
+      
+      const { data: result, error } = await supabase
+        .from("chat_flows")
+        .insert({
+          name: `${flow.name} (Cópia)`,
+          description: flow.description,
+          triggers: flow.triggers,
+          trigger_keywords: flow.trigger_keywords,
+          department_id: flow.department_id,
+          support_channel_id: flow.support_channel_id,
+          flow_definition: flow.flow_definition,
+          is_active: false, // Sempre inativo ao duplicar
+          priority: flow.priority,
+          created_by: user.user?.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-flows"] });
+      toast({
+        title: "Fluxo duplicado",
+        description: "O fluxo foi duplicado com sucesso. Ele foi criado como inativo.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao duplicar fluxo",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}

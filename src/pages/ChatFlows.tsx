@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Workflow, MoreHorizontal, Pencil, Trash2, ToggleLeft, ToggleRight, MessageSquare } from "lucide-react";
+import { Plus, Workflow, MoreHorizontal, Pencil, Trash2, ToggleLeft, ToggleRight, MessageSquare, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,7 @@ import {
   useCreateChatFlow, 
   useDeleteChatFlow, 
   useToggleChatFlowActive,
+  useDuplicateChatFlow,
   ChatFlow 
 } from "@/hooks/useChatFlows";
 import { format } from "date-fns";
@@ -48,6 +49,7 @@ export default function ChatFlows() {
   const createFlow = useCreateChatFlow();
   const deleteFlow = useDeleteChatFlow();
   const toggleActive = useToggleChatFlowActive();
+  const duplicateFlow = useDuplicateChatFlow();
 
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -152,6 +154,10 @@ export default function ChatFlows() {
                       <DropdownMenuItem onClick={() => handleEditFlow(flow)}>
                         <Pencil className="h-4 w-4 mr-2" />
                         Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => duplicateFlow.mutate(flow)}>
+                        <Copy className="h-4 w-4 mr-2" />
+                        Duplicar
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => toggleActive.mutate({ id: flow.id, is_active: !flow.is_active })}

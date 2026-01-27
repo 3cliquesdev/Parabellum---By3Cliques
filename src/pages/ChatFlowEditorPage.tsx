@@ -77,14 +77,20 @@ export default function ChatFlowEditorPage() {
       <div className="h-14 border-b bg-card flex items-center justify-between px-4 shrink-0 relative z-50">
         <div className="flex items-center gap-3">
           <Button 
+            type="button"
             variant="ghost" 
             size="icon" 
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              navigate("/settings/chat-flows");
+              try {
+                navigate("/settings/chat-flows");
+              } catch {
+                window.location.href = "/settings/chat-flows";
+              }
             }}
-            className="hover:bg-muted"
+            onMouseDown={(e) => e.stopPropagation()}
+            className="hover:bg-muted relative z-[100]"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
