@@ -428,7 +428,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
               <Building2 className="h-4 w-4 text-primary" />
               Departamento
             </Label>
-            <Select value={department || undefined} onValueChange={setDepartment} required>
+            <Select value={department} onValueChange={setDepartment}>
               <SelectTrigger className="h-14 rounded-xl border-2 hover:border-primary/40 transition-all">
                 <SelectValue placeholder="Selecione o departamento..." />
               </SelectTrigger>
