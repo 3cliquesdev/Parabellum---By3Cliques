@@ -1,222 +1,110 @@
 
+Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Plano: Corrigir 5 Problemas Identificados
+Você está certo em cobrar: do jeito que está, o Autopilot entra em loop pedindo e-mail e não “evolui” o estado. Pela imagem, o e-mail está chegando quebrado em linha (ex: `lucassantanapontes27@gma` + quebra + `il.com`). O código atual do Autopilot só reconhece e-mail com um regex simples em `customerMessage`, então quando o WhatsApp/cliente quebra a string, **o regex não encontra**, o contato continua “sem email”, e o handoff volta a cair no bloco `isLeadWithoutEmail` → pedindo e-mail de novo. Isso explica exatamente o comportamento.
 
-### Diagnostico Completo
+Abaixo está o plano para deixar isso 100% (sem downgrade), com proteção anti-loop e confirmação de que o e-mail foi processado.
 
-Analisei os logs e codigo detalhadamente. Encontrei os seguintes problemas:
-
-| # | Problema | Causa Raiz | Impacto |
-|---|----------|-----------|---------|
-| 1 | IA transferindo errado | Modo RAG Estrito ativo (85% threshold) | Handoff automatico quando KB nao tem resposta |
-| 2 | IA nao usando persona corretamente | Modo Estrito sobrescreve config | GPT-4o exclusivo ignora persona selecionada |
-| 3 | Chat Flow "pre carnaval" nao funciona | Match por substring "Ola" captura tudo | Qualquer mensagem com "Ola" ativa o fluxo errado |
-| 4 | Busca por nome no Inbox nao funciona | Logica de filtro OK mas dados podem estar nulos | Contatos sem nome cadastrado |
-| 5 | IA nao aprende das conversas | Nao existe sistema de aprendizado implementado | Precisa implementar feedback loop |
+## Objetivo
+1) Autopilot reconhecer e-mails mesmo quando vêm com quebras/espaços do WhatsApp.
+2) Quando a conversa estiver em “aguardando e-mail”, **não chamar o fluxo de handoff novamente** até processar (ou validar como inválido).
+3) Dar resposta determinística ao usuário após receber o e-mail (cliente encontrado → menu / lead → encaminha comercial), sem repetir a mesma pergunta.
+4) Adicionar logs claros para provar no log que “detectou e-mail / atualizou contato / marcou metadata”.
 
 ---
 
-### Evidencias dos Logs
+## Mudanças (backend function ai-autopilot-chat)
+Arquivo: `supabase/functions/ai-autopilot-chat/index.ts`
 
-**Chat Flow fazendo match ERRADO:**
-```text
-[process-chat-flow] userMessage: "Olá, vim pelo site e gostaria de atendimento"
-[process-chat-flow] Match direto (msg contém trigger): "Olá vim pelo email..."
-[process-chat-flow] Matched flow: Fluxo de Carnaval   <-- ERRADO!
-```
+### 1) Criar um extrator de e-mail “tolerante” (WhatsApp-safe)
+Implementar uma função utilitária local (no próprio arquivo) que:
+- Tente extrair e-mail do texto “como veio”
+- Se falhar, tente extrair do texto “compactado” (removendo espaços e quebras de linha)
 
-O problema: O trigger e "Olá vim pelo email e gostaria de saber da promoção de pré carnaval"
-Mas o matching faz `messageNorm.includes(triggerNorm)` - e a mensagem "Olá, vim pelo site" contem a substring "ola vim pelo" que esta no trigger.
+Exemplo de estratégia:
+- `originalMatch = original.match(emailRegex)`
+- `compact = original.replace(/\s+/g, '')`
+- `compactMatch = compact.match(emailRegex)`
+- Se encontrar no `compact`, usar esse valor
 
-**Modo RAG Estrito forcando handoff:**
-```text
-[ai-autopilot-chat] 🎯 STRICT RAG MODE ATIVO - Usando GPT-4o exclusivo
-[ai-autopilot-chat] Artigos filtrados: { total: 5, highConfidence: 0, threshold: 0.8 }
-[ai-autopilot-chat] 🚨 STRICT RAG: Handoff necessario - Nenhum artigo com confiança >= 80%
-```
+Importante: manter o regex atual, apenas trocar a origem do match para incluir o “compact”.
 
----
+### 2) Priorizar processamento de e-mail quando `awaiting_email_for_handoff === true`
+Hoje o Autopilot pode cair no low-confidence/handoff e pedir e-mail novamente.
+Ajuste:
+- Logo no começo do fluxo (antes de rodar decisão de confiança/handoff/LLM), checar:
+  - `conversation.customer_metadata?.awaiting_email_for_handoff === true`
+- Se estiver aguardando e-mail:
+  - Tentar extrair e-mail com o extrator tolerante
+  - Se **não encontrar** e-mail → responder **uma mensagem de “email inválido”** (ex: “Envie sem espaços/quebras”) e retornar early, sem entrar no handoff de novo
+  - Se **encontrar** e-mail → executar o mesmo caminho já existente (`verify-customer-email` + updates) e ao final:
+    - Limpar o estado `awaiting_email_for_handoff` do metadata (para não ficar preso)
+    - Retornar early (sem passar pelo LLM)
 
-### Parte 1: Desativar Modo RAG Estrito (Resolve Problemas 1 e 2)
+Isso garante que “aguardando e-mail” vira um estado determinístico: ou valida e segue, ou pede correção do formato.
 
-O modo RAG Estrito esta ativo no banco:
+### 3) Ao pedir e-mail, adicionar “anti-spam” (não reenviar igual sempre)
+Quando `isLeadWithoutEmail` for verdadeiro e o sistema for pedir e-mail:
+- Se `awaiting_email_for_handoff` já estiver `true` e `handoff_blocked_at` for recente (ex: < 60s), não repetir a mesma mensagem.
+- Em vez disso, pode apenas retornar status `awaiting_email` sem inserir nova mensagem duplicada (ou mandar uma variação curta “Ainda preciso do e-mail…”).
+Isso evita “rajada” de mensagens repetidas se o usuário mandar algo que não contém e-mail.
 
-```sql
-ai_strict_rag_mode = true
-```
+### 4) Logs de diagnóstico para fechar a conta
+Adicionar logs específicos:
+- Quando `awaiting_email_for_handoff` estiver ativo
+- Resultado da extração (original vs compact)
+- Resultado do `verify-customer-email`
+- Quando limpar `awaiting_email_for_handoff`
 
-**Opcao A - Desativar completamente (recomendado para agora):**
-
-Alterar no banco:
-```sql
-UPDATE system_configurations 
-SET value = 'false' 
-WHERE key = 'ai_strict_rag_mode';
-```
-
-Isso vai:
-- Restaurar uso do modelo configurado (OpenAI GPT-5-mini)
-- Restaurar a persona selecionada
-- Usar threshold normal de 70% ao inves de 85%
-- Parar de forcar handoff quando KB nao tem resposta perfeita
-
-**Opcao B - Ajustar thresholds (se quiser manter modo estrito):**
-
-Modificar constantes no codigo:
-```typescript
-// supabase/functions/ai-autopilot-chat/index.ts
-const STRICT_SCORE_MINIMUM = 0.70;  // Antes: 0.85
-const STRICT_SIMILARITY_THRESHOLD = 0.60;  // Antes: 0.80
-```
+Esses logs são essenciais para provar que “processou” e parar de repetir.
 
 ---
 
-### Parte 2: Corrigir Match de Chat Flow (Resolve Problema 3)
-
-**Problema:** O match direto verifica se a mensagem normalizada **contem** o trigger normalizado, mas isso causa falsos positivos quando o trigger e longo.
-
-**Arquivo:** `supabase/functions/process-chat-flow/index.ts` (linhas 524-528)
-
-```typescript
-// ANTES (PROBLEMATICO):
-if (messageNorm.includes(triggerNorm)) {
-  matchedFlow = flow;
-  break;
-}
-
-// DEPOIS (CORRIGIDO):
-// Para triggers longos (>30 chars), exigir match bidirecional
-if (triggerNorm.length < 30) {
-  // Keyword curto: match exato ou inclusao
-  if (messageNorm.includes(triggerNorm) || triggerNorm === messageNorm) {
-    matchedFlow = flow;
-    break;
-  }
-} else {
-  // Trigger longo: mensagem deve conter palavras-chave ESPECIFICAS
-  // "pre carnaval", "promocao" - nao apenas "ola vim pelo"
-  const essentialKeywords = triggerNorm.split(/\s+/).filter(w => 
-    w.length > 4 && !['pelo', 'email', 'site', 'gostaria', 'saber'].includes(w)
-  );
-  const matchedEssentials = essentialKeywords.filter(k => messageNorm.includes(k));
-  
-  // Exigir pelo menos 2 keywords essenciais
-  if (matchedEssentials.length >= 2) {
-    matchedFlow = flow;
-    break;
-  }
-}
-```
-
-**Alternativa mais simples - Adicionar keywords curtas ao fluxo:**
-
-Atualizar o trigger do "Fluxo de Carnaval" para incluir keywords especificas:
-
-```sql
-UPDATE chat_flows 
-SET trigger_keywords = '["pre carnaval", "promoção carnaval", "promoção pré-carnaval", "vim pelo email promocao"]'
-WHERE id = 'adb17db7-d0ba-48c1-b30d-90724353706e';
-```
+## (Opcional, mas recomendado) Ajuste no template de pedido de e-mail
+Como a dor é WhatsApp quebrar texto, o template pode orientar:
+- “Envie o e-mail em uma única linha, sem espaços”
+Isso não substitui a correção, mas reduz ocorrência.
 
 ---
 
-### Parte 3: Verificar Busca por Nome (Problema 4)
+## Verificação do bug do print (critério de aceite)
+Cenário real (igual ao print):
+1) IA pede e-mail
+2) Cliente envia: `lucassantanapontes27@gma` + quebra + `il.com`
+3) Sistema deve:
+   - Reconhecer via “compact”
+   - Atualizar contato / metadata
+   - Responder algo diferente de “me informe o email”:
+     - Se cliente encontrado: mensagem de confirmação + menu
+     - Se não encontrado: encaminhar comercial e mudar ai_mode / department conforme regra
 
-A logica de busca no `useInboxView.tsx` (linhas 164-175) esta correta:
-
-```typescript
-result = result.filter(item => 
-  item.contact_name?.toLowerCase().includes(searchLower) ||
-  item.contact_email?.toLowerCase().includes(searchLower) ||
-  item.contact_phone?.toLowerCase().includes(searchLower)
-);
-```
-
-**Possiveis causas:**
-1. `contact_name` pode estar NULL na view `inbox_view`
-2. A view pode nao estar sincronizada com a tabela `contacts`
-
-**Verificar:**
-```sql
--- Checar se contact_name esta populado
-SELECT conversation_id, contact_name, contact_email 
-FROM inbox_view 
-WHERE contact_name IS NULL 
-LIMIT 10;
-
--- Checar se filtro funciona
-SELECT conversation_id, contact_name 
-FROM inbox_view 
-WHERE contact_name ILIKE '%ronny%';
-```
+Se após isso ele voltar a pedir e-mail, o bug persiste.
 
 ---
 
-### Parte 4: Sistema de Aprendizado da IA (Problema 5)
-
-**Status atual:** A IA NAO aprende automaticamente das conversas.
-
-O sistema atual tem:
-- Few-shot examples manuais (`ai_training_examples`)
-- Knowledge Base estatica (`kb_articles`)
-- Cache de respostas (`ai_response_cache`)
-
-**Para implementar aprendizado real, seria necessario:**
-
-1. **Feedback Loop** - Agentes marcam respostas como "boa" ou "ruim"
-2. **Extracao de Conhecimento** - Extrair Q&A de conversas resolvidas
-3. **Fine-tuning** - Nao suportado pelo Lovable AI Gateway
-
-**Implementacao sugerida (NOVA FEATURE - nao vou implementar agora):**
-
-```typescript
-// Tabela: ai_conversation_learnings
-interface ConversationLearning {
-  id: string;
-  conversation_id: string;
-  customer_question: string;
-  agent_answer: string;
-  quality_score: number; // 1-5 dado pelo agente
-  extracted_at: Date;
-  promoted_to_kb: boolean; // Se foi transformado em artigo KB
-}
-```
+## Escopo adicional (seu item antigo do Inbox “buscar por nome”)
+Isso é um segundo problema e também é real:
+- `useInboxView` aplica busca corretamente, mas `Inbox.tsx` ainda renderiza `filteredConversations` vindo de `useConversations`, então a busca por nome pode “não pegar”.
+Depois que o e-mail loop estiver 100%, eu proponho (como upgrade separado) ligar a UI da lista ao `inboxItems` filtrado (isso também melhora realtime e WhatsApp).
 
 ---
 
-### Arquivos a Modificar
-
-| Arquivo | Acao | Descricao |
-|---------|------|-----------|
-| Migration SQL | Executar | `ai_strict_rag_mode = false` |
-| Migration SQL | Executar | Atualizar triggers do Fluxo Carnaval |
-| `supabase/functions/process-chat-flow/index.ts` | Modificar | Melhorar logica de match para triggers longos |
-
----
-
-### Ordem de Implementacao
-
-1. **Imediato (Migration SQL):**
-   - Desativar `ai_strict_rag_mode`
-   - Adicionar keywords curtas ao Fluxo Carnaval
-
-2. **Codigo:**
-   - Melhorar logica de match no `process-chat-flow`
-   - Adicionar log para diagnosticar busca por nome
-
-3. **Futuro (backlog):**
-   - Sistema de feedback/aprendizado
-   - Dashboard de qualidade de respostas
+## Testes que serão realizados (obrigatórios)
+No ambiente de preview, antes de entregar:
+1) Simular mensagem WhatsApp com e-mail normal (uma linha) → deve identificar.
+2) Simular mensagem WhatsApp com e-mail quebrado por newline (como no print) → deve identificar.
+3) Simular “awaiting_email_for_handoff” + mensagem sem e-mail (ex: “ok”) → deve responder “email inválido/mande email” sem duplicar spam e sem handoff.
+4) Garantir que continua funcionando:
+   - Chat flows
+   - Roteamento de departamento
+   - Menu pós-identificação
+   - Handoff manual bloqueado sem identificação (mantém segurança)
+5) Conferir logs do backend para ver extração e limpeza do estado.
 
 ---
 
-### Resultado Esperado
+## Entregáveis
+- Ajuste no `ai-autopilot-chat/index.ts` (extração tolerante + estado awaiting_email_for_handoff determinístico + anti-loop).
+- (Opcional) Ajuste no template `identity_wall_ask_email` para orientar formato no WhatsApp.
 
-| Problema | Antes | Depois |
-|----------|-------|--------|
-| IA transferindo errado | Threshold 85% forca handoff | Threshold normal 70%, responde mais |
-| Persona ignorada | GPT-4o exclusivo | Modelo configurado respeitado |
-| Chat Flow Carnaval | Match errado com qualquer "Ola" | Match apenas com keywords essenciais |
-| Busca por nome | Possivel falha | Diagnostico + correcao se necessario |
-| IA aprendendo | Nao implementado | Feature futura planejada |
-
+Risco de downgrade: baixo. As mudanças são aditivas e focadas em robustez do fluxo de identificação, preservando toda a arquitetura existente (RAG, flows, roteamento, etc.).
