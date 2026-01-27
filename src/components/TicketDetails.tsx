@@ -19,9 +19,10 @@ import { TicketTagsCard } from "@/components/TicketTagsCard";
 import { RemovedAttachmentsHistory } from "@/components/RemovedAttachmentsHistory";
 import { useTicketPresence } from "@/hooks/useTicketPresence";
 import { ApprovalStatusBadge } from "@/components/ApprovalStatusBadge";
+import { SLABadge } from "@/components/SLABadge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, Clock, CheckCircle, Sparkles, Copy, ArrowRight, Users, GitMerge, ExternalLink, User, FileText, Send } from "lucide-react";
+import { AlertCircle, Clock, CheckCircle, Sparkles, Copy, ArrowRight, Users, GitMerge, ExternalLink, User, FileText, Send, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -356,6 +357,24 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
           </Tooltip>
         </TooltipProvider>
         
+        {/* SLA Alert Banner - Prominent display for overdue tickets */}
+        {ticket.due_date && !['resolved', 'closed'].includes(ticket.status) && (
+          <div className="flex items-center gap-3">
+            <SLABadge 
+              dueDate={ticket.due_date} 
+              priority={ticket.priority as 'urgent' | 'high' | 'medium' | 'low'}
+              size="lg"
+              showIcon={true}
+            />
+            {new Date(ticket.due_date) < new Date() && (
+              <div className="flex items-center gap-1.5 text-xs text-destructive font-medium animate-pulse">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Ticket atrasado! Prazo expirado.</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Linha 3: Metadados compactos */}
         <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">

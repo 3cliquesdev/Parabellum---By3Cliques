@@ -1,13 +1,13 @@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronRight, Clock, User, Eye } from "lucide-react";
+import { ChevronRight, Clock, User, Eye, AlertTriangle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 import { useActiveTicketStatuses } from "@/hooks/useTicketStatuses";
 import { getStatusIcon } from "@/lib/ticketStatusIcons";
-
+import { SLABadge } from "@/components/SLABadge";
 interface ViewingInfo {
   user_id: string;
   full_name: string;
@@ -60,16 +60,25 @@ export function TicketCard({ ticket, onClick, isSelected, viewers = [] }: Ticket
   const statusColor = dynamicStatus?.color || fallbackStatusConfig[ticket.status]?.color || "#6B7280";
   const StatusIcon = dynamicStatus ? getStatusIcon(dynamicStatus.icon) : null;
 
+  // Check if SLA is expired (ticket not resolved/closed and past due date)
+  const isOverdue = ticket.due_date && 
+    !['resolved', 'closed'].includes(ticket.status) && 
+    new Date(ticket.due_date) < new Date();
+
   return (
     <div
       className={`flex flex-col gap-2 p-4 hover:bg-muted/50 transition-colors cursor-pointer ${
         isSelected ? "bg-primary/5 border-l-2 border-l-primary" : ""
-      } ${viewers.length > 0 ? "bg-primary/5" : ""}`}
+      } ${viewers.length > 0 ? "bg-primary/5" : ""} ${isOverdue ? "border-l-2 border-l-destructive bg-destructive/5" : ""}`}
       onClick={onClick}
     >
       {/* Header: Protocolo + Status + Viewers */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
+          {/* SLA Alert Icon */}
+          {isOverdue && (
+            <AlertTriangle className="w-4 h-4 text-destructive animate-pulse" />
+          )}
           <span className="font-mono text-sm text-muted-foreground">
             #{ticket.ticket_number || ticket.id.slice(0, 8)}
           </span>
@@ -101,6 +110,16 @@ export function TicketCard({ ticket, onClick, isSelected, viewers = [] }: Ticket
           {statusLabel}
         </Badge>
       </div>
+
+      {/* SLA Badge - Prominent display for overdue tickets */}
+      {ticket.due_date && !['resolved', 'closed'].includes(ticket.status) && (
+        <SLABadge 
+          dueDate={ticket.due_date} 
+          priority={ticket.priority as 'urgent' | 'high' | 'medium' | 'low'}
+          size="sm"
+          showIcon={true}
+        />
+      )}
 
       {/* Subject */}
       <p className="font-medium text-foreground line-clamp-2">{ticket.subject}</p>

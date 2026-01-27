@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ApprovalStatusBadge } from "@/components/ApprovalStatusBadge";
+import { SLABadge } from "@/components/SLABadge";
 
 interface ViewingInfo {
   user_id: string;
@@ -172,7 +173,7 @@ export function TicketsTable({
     <div className="h-full flex flex-col bg-card">
       {/* Table Header */}
       <div className="flex-none border-b border-border bg-muted/50">
-        <div className="grid grid-cols-[40px_110px_minmax(100px,1.2fr)_minmax(100px,0.8fr)_minmax(100px,0.8fr)_minmax(100px,0.8fr)_minmax(80px,0.6fr)_50px_70px_60px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="grid grid-cols-[40px_110px_minmax(100px,1.2fr)_minmax(80px,0.6fr)_minmax(100px,0.8fr)_minmax(100px,0.8fr)_minmax(80px,0.6fr)_50px_70px_60px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {onToggleSelectAll && (
             <div className="flex items-center justify-center">
               <Checkbox 
@@ -185,8 +186,8 @@ export function TicketsTable({
           {!onToggleSelectAll && <div />}
           <div>Protocolo</div>
           <div>Assunto</div>
+          <div>SLA</div>
           <div>Solicitante</div>
-          <div>Cliente</div>
           <div>Responsável</div>
           <div>Departamento</div>
           <div className="flex items-center justify-center">
@@ -219,11 +220,12 @@ export function TicketsTable({
                 key={ticket.id}
                 onClick={() => onSelectTicket(ticket.id)}
                 className={cn(
-                  "grid grid-cols-[40px_110px_minmax(100px,1.2fr)_minmax(100px,0.8fr)_minmax(100px,0.8fr)_minmax(100px,0.8fr)_minmax(80px,0.6fr)_50px_70px_60px] gap-2 px-3 py-3 cursor-pointer transition-colors items-center",
+                  "grid grid-cols-[40px_110px_minmax(100px,1.2fr)_minmax(80px,0.6fr)_minmax(100px,0.8fr)_minmax(100px,0.8fr)_minmax(80px,0.6fr)_50px_70px_60px] gap-2 px-3 py-3 cursor-pointer transition-colors items-center",
                   isSelected 
                     ? "bg-primary/5 border-l-2 border-primary" 
                     : "hover:bg-accent/50 border-l-2 border-transparent",
-                  viewers.length > 0 && "bg-primary/5"
+                  viewers.length > 0 && "bg-primary/5",
+                  slaExpired && "border-l-2 border-l-destructive bg-destructive/5"
                 )}
               >
                 {/* Checkbox */}
@@ -243,7 +245,7 @@ export function TicketsTable({
                 <div className="flex items-center gap-2">
                   <div className={cn("w-2 h-2 rounded-full flex-shrink-0", statusEntry.bg)} />
                   {slaExpired && (
-                    <AlertTriangle className="w-3 h-3 text-destructive flex-shrink-0" />
+                    <AlertTriangle className="w-3 h-3 text-destructive flex-shrink-0 animate-pulse" />
                   )}
                   <span className="text-xs font-mono text-muted-foreground whitespace-nowrap">
                     {ticket.ticket_number || `#${ticket.id.slice(0, 6)}`}
@@ -286,6 +288,20 @@ export function TicketsTable({
                   <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", priorityColors[ticket.priority])} />
                 </div>
 
+                {/* SLA Badge - New Column */}
+                <div className="flex items-center">
+                  {ticket.due_date && !['resolved', 'closed'].includes(ticket.status) ? (
+                    <SLABadge 
+                      dueDate={ticket.due_date} 
+                      priority={ticket.priority as 'urgent' | 'high' | 'medium' | 'low'}
+                      size="sm"
+                      showIcon={true}
+                    />
+                  ) : (
+                    <span className="text-xs text-muted-foreground/50">—</span>
+                  )}
+                </div>
+
                 {/* Solicitante (quem abriu) */}
                 <div className="text-sm text-muted-foreground truncate">
                   {isCreatedByAgent ? (
@@ -295,11 +311,6 @@ export function TicketsTable({
                       {ticket.customer?.first_name} {ticket.customer?.last_name}
                     </span>
                   )}
-                </div>
-
-                {/* Cliente (contato associado) */}
-                <div className="text-sm text-muted-foreground truncate">
-                  {ticket.customer?.first_name} {ticket.customer?.last_name}
                 </div>
 
                 {/* Responsável */}
