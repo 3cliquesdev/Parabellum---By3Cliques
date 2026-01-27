@@ -218,7 +218,27 @@ async function executeAddTag(automation: Automation, triggerData: any) {
     tag = newTag;
   }
 
-  // Buscar o contact_id do deal
+  // Buscar o conversation_id do contexto (se disponível) ou o contact_id do deal
+  const conversationId = triggerData.conversation_id;
+  
+  if (conversationId) {
+    // NOVO: Adicionar tag à CONVERSA (não ao contato)
+    const { error } = await supabase
+      .from('conversation_tags')
+      .insert({
+        conversation_id: conversationId,
+        tag_id: tag.id,
+      });
+
+    // Ignorar erro de duplicidade
+    if (error && !error.message.includes('duplicate')) {
+      throw error;
+    }
+
+    return { success: true, tag_added: tag_name, target: 'conversation' };
+  }
+
+  // Fallback para deals (que não têm conversation_id)
   const { data: deal } = await supabase
     .from('deals')
     .select('contact_id')
@@ -226,10 +246,10 @@ async function executeAddTag(automation: Automation, triggerData: any) {
     .single();
 
   if (!deal?.contact_id) {
-    return { success: false, message: 'Contact not found' };
+    return { success: false, message: 'Contact or conversation not found' };
   }
 
-  // Adicionar tag ao contato (se não existir)
+  // Fallback: Adicionar tag ao contato (apenas para deals)
   const { error } = await supabase
     .from('customer_tags')
     .insert({
@@ -242,7 +262,7 @@ async function executeAddTag(automation: Automation, triggerData: any) {
     throw error;
   }
 
-  return { success: true, tag_added: tag_name };
+  return { success: true, tag_added: tag_name, target: 'contact' };
 }
 
 async function executeSendNotification(automation: Automation, triggerData: any) {

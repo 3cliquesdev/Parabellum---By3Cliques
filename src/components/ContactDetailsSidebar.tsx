@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket } from "lucide-react";
+import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket, Tag } from "lucide-react";
 import ContactTagsSection from "./inbox/ContactTagsSection";
+import { ConversationTagsSection } from "./inbox/ConversationTagsSection";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useContactTickets } from "@/hooks/useContactTickets";
@@ -177,7 +178,18 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
 
             <Separator className="my-2" />
             
-            {/* Tags Section */}
+            {/* Tags desta Conversa - apenas para a sessão atual */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Tag className="h-3 w-3" />
+                <span>Tags desta Conversa</span>
+              </div>
+              <ConversationTagsSection conversationId={conversation.id} />
+            </div>
+
+            <Separator className="my-2" />
+            
+            {/* Tags Permanentes do Contato */}
             <ContactTagsSection contactId={contact.id} />
 
             <Separator className="my-2" />

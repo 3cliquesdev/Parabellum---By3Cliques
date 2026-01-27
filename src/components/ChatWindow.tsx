@@ -39,7 +39,8 @@ import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { SuperComposer } from "@/components/inbox/SuperComposer";
 import { MessageSkeleton } from "@/components/inbox/MessageSkeleton";
 import { MessagesWithMedia } from "@/components/inbox/MessagesWithMedia";
-import { useCustomerTags } from "@/hooks/useCustomerTags";
+// REMOVIDO: useCustomerTags - tags do contato não devem aparecer no header do chat
+// Tags da conversa são gerenciadas por ConversationTagsSection
 import { useMarkAsRead } from "@/hooks/useUnreadCount";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -101,8 +102,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
     },
     enabled: !!conversation?.related_ticket_id,
   });
-  // FASE 6: Tags do contato
-  const { data: customerTags = [] } = useCustomerTags(conversation?.contacts?.id || null);
+  // REMOVIDO: Tags do contato não devem aparecer no header do chat
+  // Cada conversa começa "limpa" - tags são por conversa, não por contato
   
   // FASE 4: Marcar como lido ao selecionar conversa
   const { markAsRead } = useMarkAsRead();
@@ -337,25 +338,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                     )}
                   </div>
                   
-                  {/* Tags em linha única */}
+                  {/* Tags da conversa - cada conversa começa limpa */}
                   <div className="flex items-center gap-1.5 mt-1 overflow-x-auto scrollbar-none">
-                    {customerTags.slice(0, 3).map((ct: any) => (
-                      <Badge 
-                        key={ct.id} 
-                        variant="outline" 
-                        className="text-[10px] px-1.5 py-0 h-4 shrink-0"
-                        style={{
-                          borderColor: ct.tags?.color || undefined,
-                          color: ct.tags?.color || undefined,
-                          backgroundColor: ct.tags?.color ? `${ct.tags.color}15` : undefined,
-                        }}
-                      >
-                        {ct.tags?.name}
-                      </Badge>
-                    ))}
-                    {customerTags.length > 3 && (
-                      <span className="text-[10px] text-muted-foreground shrink-0">+{customerTags.length - 3}</span>
-                    )}
                     <ConversationTagsSection conversationId={conversation.id} />
                   </div>
                 </div>

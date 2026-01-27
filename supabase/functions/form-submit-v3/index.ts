@@ -1404,18 +1404,41 @@ serve(async (req) => {
 
             case 'add_tag':
               if (actionConfig?.tag_id) {
-                const { data: existingTag } = await supabase
-                  .from('customer_tags')
-                  .select('id')
-                  .eq('customer_id', contactId)
-                  .eq('tag_id', actionConfig.tag_id)
-                  .single();
+                // NOVO: Adicionar tag à CONVERSA (não ao contato)
+                // Extrair conversation_id do session_metadata
+                const targetConversationId = session_metadata?.conversation_id;
                 
-                if (!existingTag) {
-                  await supabase.from('customer_tags').insert({
-                    customer_id: contactId,
-                    tag_id: actionConfig.tag_id,
-                  });
+                if (targetConversationId) {
+                  const { data: existingConvTag } = await supabase
+                    .from('conversation_tags')
+                    .select('id')
+                    .eq('conversation_id', targetConversationId)
+                    .eq('tag_id', actionConfig.tag_id)
+                    .maybeSingle();
+                  
+                  if (!existingConvTag) {
+                    await supabase.from('conversation_tags').insert({
+                      conversation_id: targetConversationId,
+                      tag_id: actionConfig.tag_id,
+                    });
+                    console.log(`[form-submit-v3] Tag added to conversation ${targetConversationId}`);
+                  }
+                } else {
+                  // Fallback para contato se não houver conversation_id
+                  const { data: existingTag } = await supabase
+                    .from('customer_tags')
+                    .select('id')
+                    .eq('customer_id', contactId)
+                    .eq('tag_id', actionConfig.tag_id)
+                    .maybeSingle();
+                  
+                  if (!existingTag) {
+                    await supabase.from('customer_tags').insert({
+                      customer_id: contactId,
+                      tag_id: actionConfig.tag_id,
+                    });
+                    console.log(`[form-submit-v3] Tag added to contact ${contactId} (fallback)`);
+                  }
                 }
               }
               break;

@@ -40,6 +40,7 @@ Deno.serve(async (req) => {
         channel,
         contact_id,
         whatsapp_instance_id,
+        created_at,
         contacts (
           id,
           first_name,
@@ -61,13 +62,34 @@ Deno.serve(async (req) => {
 
     console.log(`[close-conversation] Found conversation, channel: ${conversation.channel}`);
 
+    // FASE 4: Buscar tags da conversa ANTES de fechar
+    const { data: conversationTags } = await supabase
+      .from("conversation_tags")
+      .select(`
+        tag_id,
+        tags (
+          id,
+          name,
+          color
+        )
+      `)
+      .eq("conversation_id", conversationId);
+
+    const tagNames = conversationTags?.map((ct: any) => ct.tags?.name).filter(Boolean) || [];
+    console.log(`[close-conversation] Conversation tags: ${tagNames.join(", ") || "none"}`);
+
+    // Calcular duração da conversa
+    const startTime = new Date(conversation.created_at);
+    const endTime = new Date();
+    const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60));
+
     // Update conversation status to closed
     const { error: updateError } = await supabase
       .from("conversations")
       .update({
         status: "closed",
         closed_by: userId,
-        closed_at: new Date().toISOString(),
+        closed_at: endTime.toISOString(),
       })
       .eq("id", conversationId);
 
@@ -77,6 +99,41 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[close-conversation] Conversation marked as closed`);
+
+    // FASE 4: Registrar tags na timeline do contato
+    if (conversation.contact_id) {
+      const contact = conversation.contacts as unknown as { id: string; first_name: string; last_name: string } | null;
+      
+      // Criar conteúdo do registro na timeline
+      let timelineContent = `Conversa encerrada`;
+      if (tagNames.length > 0) {
+        timelineContent += `\nTags: ${tagNames.join(", ")}`;
+      }
+      timelineContent += `\nDuração: ${durationMinutes} minutos`;
+
+      const { error: interactionError } = await supabase
+        .from("interactions")
+        .insert({
+          customer_id: conversation.contact_id,
+          type: "note",
+          channel: conversation.channel === "whatsapp" ? "whatsapp" : 
+                   conversation.channel === "email" ? "email" : "phone",
+          content: timelineContent,
+          metadata: {
+            conversation_id: conversationId,
+            closed_by: userId,
+            duration_minutes: durationMinutes,
+            tags: tagNames,
+            auto_generated: true,
+          },
+        });
+
+      if (interactionError) {
+        console.error(`[close-conversation] Failed to create timeline entry: ${interactionError.message}`);
+      } else {
+        console.log(`[close-conversation] Timeline entry created with tags: ${tagNames.join(", ")}`);
+      }
+    }
 
     // Send CSAT via WhatsApp if requested and applicable
     if (sendCsat && conversation.channel === "whatsapp" && conversation.whatsapp_instance_id) {
@@ -149,7 +206,7 @@ _Responda apenas com o número._`;
     console.log(`[close-conversation] Completed successfully`);
 
     return new Response(
-      JSON.stringify({ success: true, conversationId }),
+      JSON.stringify({ success: true, conversationId, tags_recorded: tagNames }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
