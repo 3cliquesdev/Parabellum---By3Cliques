@@ -7799,6 +7799,14 @@ export type Database = {
       }
     }
     Functions: {
+      backfill_emails_from_messages: {
+        Args: never
+        Returns: {
+          contacts_updated: number
+          conversations_moved: number
+          emails_found: number
+        }[]
+      }
       batch_validate_kiwify_contacts: { Args: never; Returns: number }
       calculate_business_due_date: {
         Args: {

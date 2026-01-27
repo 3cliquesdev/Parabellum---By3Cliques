@@ -521,6 +521,28 @@ serve(async (req) => {
       for (const trigger of allTriggers) {
         const triggerNorm = normalizeText(trigger);
         
+        // Match 0: MATCH EXATO - Se a mensagem é igual ou quase igual ao trigger
+        // Isso resolve o caso "Olá vim pelo email e gostaria de saber da promoção de pré carnaval"
+        if (messageNorm === triggerNorm) {
+          console.log('[process-chat-flow] ✅ Match EXATO (100%):', trigger);
+          matchedFlow = flow;
+          break;
+        }
+        
+        // Match 0.5: ALTA SIMILARIDADE (90%+) - Para frases longas quase idênticas
+        if (triggerNorm.length > 40 && messageNorm.length > 30) {
+          const triggerWords = triggerNorm.split(/\s+/);
+          const messageWords = messageNorm.split(/\s+/);
+          const matchedCount = triggerWords.filter(w => messageWords.includes(w)).length;
+          const similarity = matchedCount / Math.max(triggerWords.length, messageWords.length);
+          
+          if (similarity >= 0.85) {
+            console.log('[process-chat-flow] ✅ Match ALTA SIMILARIDADE (', Math.round(similarity * 100), '%):', trigger);
+            matchedFlow = flow;
+            break;
+          }
+        }
+        
         // Match 1: Inclusão direta - mensagem contém o trigger
         // 🆕 CORREÇÃO: Para triggers longos (>30 chars), exigir keywords ESSENCIAIS
         if (triggerNorm.length < 30) {
@@ -533,9 +555,9 @@ serve(async (req) => {
         } else {
           // Trigger longo: exigir palavras essenciais específicas
           // Evita que "Olá vim pelo site" faça match com "Olá vim pelo email promocao carnaval"
-          const stopWords = ['ola', 'pelo', 'email', 'site', 'gostaria', 'saber', 'sobre', 'quero', 'como', 'para', 'que', 'vim'];
+          const stopWords = ['ola', 'pelo', 'email', 'site', 'gostaria', 'saber', 'sobre', 'quero', 'como', 'para', 'que', 'vim', 'da', 'de', 'do'];
           const essentialKeywords = triggerNorm.split(/\s+/).filter(w => 
-            w.length > 4 && !stopWords.includes(w)
+            w.length > 3 && !stopWords.includes(w)
           );
           const matchedEssentials = essentialKeywords.filter(k => messageNorm.includes(k));
           

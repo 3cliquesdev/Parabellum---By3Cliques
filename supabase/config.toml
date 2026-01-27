@@ -303,3 +303,9 @@ verify_jwt = true
 
 [functions.diagnose-meta-whatsapp]
 verify_jwt = true
+
+[functions.verify-customer-email]
+verify_jwt = false
+
+[functions.run-email-backfill]
+verify_jwt = true
