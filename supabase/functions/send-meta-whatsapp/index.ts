@@ -92,12 +92,23 @@ serve(async (req) => {
   }
 
   try {
+    // Handler de warmup rápido (sem processamento)
+    const bodyText = await req.text();
+    const body: SendMetaWhatsAppRequest & { warmup?: boolean } = bodyText ? JSON.parse(bodyText) : {};
+    
+    if (body.warmup) {
+      console.log('[send-meta-whatsapp] 🔥 Warmup ping received');
+      return new Response(
+        JSON.stringify({ status: 'warm', timestamp: new Date().toISOString() }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const body: SendMetaWhatsAppRequest = await req.json();
     console.log("[send-meta-whatsapp] 📥 Request:", {
       instance_id: body.instance_id,
       phone: body.phone_number,

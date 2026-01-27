@@ -718,12 +718,24 @@ serve(async (req) => {
   }
 
   try {
+    // Handler de warmup rápido (sem processamento de IA)
+    const bodyText = await req.text();
+    const parsedBody = bodyText ? JSON.parse(bodyText) : {};
+    
+    if (parsedBody.warmup) {
+      console.log('[ai-autopilot-chat] 🔥 Warmup ping received');
+      return new Response(
+        JSON.stringify({ status: 'warm', timestamp: new Date().toISOString() }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, customerMessage, maxHistory = 10, customer_context }: AutopilotChatRequest = await req.json();
+    const { conversationId, customerMessage, maxHistory = 10, customer_context }: AutopilotChatRequest = parsedBody;
     
     // Validação defensiva
     if (!conversationId || conversationId === 'undefined') {

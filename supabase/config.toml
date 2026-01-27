@@ -1,5 +1,12 @@
 project_id = "zaeozfdjhrmblfaxsyuu"
 
+[functions.keep-alive]
+verify_jwt = false
+
+[functions.keep-alive.cron]
+schedule = "*/5 * * * *"
+region = "us-east-1"
+
 [functions.fix-leads-kiwify]
 verify_jwt = true
 

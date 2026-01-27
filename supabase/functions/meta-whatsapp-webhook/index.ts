@@ -76,12 +76,21 @@ serve(async (req) => {
   const url = new URL(req.url);
 
   // ============================================
-  // GET: Webhook Verification (Meta Challenge)
+  // GET: Webhook Verification (Meta Challenge) + Warmup
   // ============================================
   if (req.method === "GET") {
     const mode = url.searchParams.get("hub.mode");
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
+
+    // Handler de warmup rápido
+    if (mode === "warmup") {
+      console.log("[meta-whatsapp-webhook] 🔥 Warmup ping received");
+      return new Response(
+        JSON.stringify({ status: "warm", timestamp: new Date().toISOString() }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     console.log("[meta-whatsapp-webhook] 🔐 Verification request:", { mode, token: token?.slice(0, 10) + "..." });
 
