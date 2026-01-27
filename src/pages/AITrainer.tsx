@@ -9,6 +9,9 @@ import { Brain, ArrowLeft, Settings, Sparkles, Zap, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AITrainerStatsWidget } from "@/components/settings/AITrainerStatsWidget";
+import { KnowledgeSourcesWidget } from "@/components/settings/KnowledgeSourcesWidget";
+import { PersonaDataAccessWidget } from "@/components/settings/PersonaDataAccessWidget";
+import { KnowledgeBrainStatus } from "@/components/KnowledgeBrainStatus";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 
 // Modelos disponíveis no Lovable AI
@@ -119,23 +122,32 @@ export default function AITrainer() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Brain className="h-6 w-6 text-primary" />
-            Agente de Treinamento Autônomo
+            Central de Conhecimento da IA
           </h1>
           <p className="text-muted-foreground">
-            IA que aprende automaticamente com atendimentos bem-sucedidos
+            Gerencie todas as fontes de dados que a IA utiliza para responder
           </p>
         </div>
       </div>
+
+      {/* Knowledge Brain Status (Overview Stats) */}
+      <KnowledgeBrainStatus />
+
+      {/* Knowledge Sources Widget */}
+      <KnowledgeSourcesWidget />
+
+      {/* Persona Data Access Widget */}
+      <PersonaDataAccessWidget />
 
       {/* Model Selection Card */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-primary" />
-            <CardTitle>Configuração do Modelo</CardTitle>
+            <CardTitle>Agente de Treinamento Autônomo</CardTitle>
           </div>
           <CardDescription>
-            Selecione qual modelo de IA será usado para extrair conhecimento dos atendimentos
+            IA que aprende automaticamente com atendimentos bem-sucedidos
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
