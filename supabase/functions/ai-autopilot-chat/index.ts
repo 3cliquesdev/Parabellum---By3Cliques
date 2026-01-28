@@ -945,6 +945,141 @@ serve(async (req) => {
       }
 
       // ============================================================
+      // 🔐 PRIORIDADE ABSOLUTA: ESTADO awaiting_otp
+      // Se há OTP pendente, validar de forma determinística (com/sem espaços)
+      // e NUNCA fazer handoff por código incorreto.
+      // ============================================================
+      {
+        const conversationMetadata = conversation.customer_metadata || {};
+        const otpDigitsOnly = (customerMessage || '').replace(/\D/g, '');
+        const hasAwaitingOTP = conversationMetadata.awaiting_otp === true;
+        const otpExpiresAt = conversationMetadata.otp_expires_at;
+        const hasRecentOTPPending = otpExpiresAt && new Date(otpExpiresAt) > new Date();
+        const hasOTPPendingContext = (hasAwaitingOTP || hasRecentOTPPending) && !!contact?.email;
+
+        if (hasOTPPendingContext && otpDigitsOnly.length > 0) {
+          const channelToUse = (conversation.channel as string) || responseChannel;
+
+          // Formato inválido (ex: 4 dígitos, 7 dígitos etc.)
+          if (otpDigitsOnly.length !== 6) {
+            const otpFormatResponse = `**Código inválido**\n\nO código deve ter **6 dígitos**.\n\nPor favor, envie apenas os 6 números (pode ser com ou sem espaços).\n\nDigite **"reenviar"** se precisar de um novo código.`;
+
+            const { data: savedMsg } = await supabaseClient
+              .from('messages')
+              .insert({
+                conversation_id: conversationId,
+                content: otpFormatResponse,
+                sender_type: 'user',
+                is_ai_generated: true,
+                channel: channelToUse
+              })
+              .select()
+              .single();
+
+            if (channelToUse === 'whatsapp' && contact?.phone) {
+              const whatsappResult = await getWhatsAppInstanceForConversation(
+                supabaseClient,
+                conversationId,
+                conversation.whatsapp_instance_id,
+                conversation
+              );
+              if (whatsappResult) {
+                await sendWhatsAppMessage(
+                  supabaseClient,
+                  whatsappResult,
+                  contact.phone,
+                  otpFormatResponse,
+                  conversationId,
+                  contact.whatsapp_id
+                );
+              }
+            }
+
+            return new Response(JSON.stringify({
+              response: otpFormatResponse,
+              messageId: savedMsg?.id,
+              otpValidated: false,
+              debug: { reason: 'otp_invalid_format_priority', digits_length: otpDigitsOnly.length, bypassed_ai: true }
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Formato ok: validar
+          try {
+            const { data: otpData, error: otpError } = await supabaseClient.functions.invoke('verify-code', {
+              body: { email: contact.email, code: otpDigitsOnly }
+            });
+            if (otpError) throw otpError;
+
+            const errorMessage = otpData?.error || 'O código não é válido. Verifique e tente novamente.';
+            const contactName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim();
+
+            const otpResponse = otpData?.success
+              ? `**Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada.\n\nAgora posso te ajudar com questões financeiras. Como posso te ajudar?`
+              : `**Código inválido**\n\n${errorMessage}\n\nDigite **"reenviar"** se precisar de um novo código.`;
+
+            if (otpData?.success) {
+              await supabaseClient
+                .from('conversations')
+                .update({
+                  customer_metadata: {
+                    ...conversationMetadata,
+                    awaiting_otp: false,
+                    otp_expires_at: null,
+                    last_otp_verified_at: new Date().toISOString()
+                  }
+                })
+                .eq('id', conversationId);
+            }
+
+            const { data: savedMsg } = await supabaseClient
+              .from('messages')
+              .insert({
+                conversation_id: conversationId,
+                content: otpResponse,
+                sender_type: 'user',
+                is_ai_generated: true,
+                channel: channelToUse
+              })
+              .select()
+              .single();
+
+            if (channelToUse === 'whatsapp' && contact?.phone) {
+              const whatsappResult = await getWhatsAppInstanceForConversation(
+                supabaseClient,
+                conversationId,
+                conversation.whatsapp_instance_id,
+                conversation
+              );
+              if (whatsappResult) {
+                await sendWhatsAppMessage(
+                  supabaseClient,
+                  whatsappResult,
+                  contact.phone,
+                  otpResponse,
+                  conversationId,
+                  contact.whatsapp_id
+                );
+              }
+            }
+
+            return new Response(JSON.stringify({
+              response: otpResponse,
+              messageId: savedMsg?.id,
+              otpValidated: otpData?.success || false,
+              debug: { reason: 'otp_priority_validation_bypass', otp_success: otpData?.success, bypassed_ai: true }
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          } catch (err) {
+            console.error('[ai-autopilot-chat] ❌ Erro ao validar OTP (prioridade):', err);
+            // Se falhar, segue o fluxo normal (mas não é esperado)
+          }
+        }
+      }
+
+      // ============================================================
       // 🆕 PRIORIDADE ABSOLUTA: ESTADO awaiting_email_for_handoff
       // Se está aguardando email, processar ANTES de qualquer outro fluxo
       // ============================================================
@@ -4053,7 +4188,10 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // 
     // Isso evita tratar códigos de devolução/rastreio como OTP
     // ============================================================
-    const isOTPCode = /^\d{6}$/.test(customerMessage.trim());
+    // Aceitar OTP com/sem espaços (ex: "6 5 3 6 6 7").
+    // A validação só ocorre quando houver contexto de OTP pendente.
+    const otpDigitsOnly = customerMessage.replace(/\D/g, '');
+    const isOTPCode = otpDigitsOnly.length === 6;
     const conversationMetadata = conversation.customer_metadata || {};
     
     // Verificar se há OTP pendente (flag explícita)
@@ -4076,8 +4214,59 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       has_recent_otp_pending: hasRecentOTPPending,
       has_first_contact_otp: hasFirstContactOTPPending,
       will_validate: shouldValidateOTP,
-      code_preview: customerMessage.trim().substring(0, 3) + '***'
+      code_preview: otpDigitsOnly.substring(0, 3) + '***'
     });
+
+    // Se existe contexto de OTP, mas o usuário enviou dígitos com tamanho inválido,
+    // responder determinístico e NÃO seguir para IA/handoff.
+    const hasOTPPendingContext = contactHasEmail && (hasAwaitingOTP || hasRecentOTPPending || hasFirstContactOTPPending);
+    if (!shouldValidateOTP && hasOTPPendingContext && otpDigitsOnly.length > 0 && otpDigitsOnly.length !== 6) {
+      const otpFormatResponse = `**Código inválido**\n\nO código deve ter **6 dígitos**.\n\nPor favor, envie apenas os 6 números (pode ser com ou sem espaços).\n\nDigite **"reenviar"** se precisar de um novo código.`;
+
+      const { data: savedMsg } = await supabaseClient
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          content: otpFormatResponse,
+          sender_type: 'user',
+          is_ai_generated: true,
+          channel: responseChannel
+        })
+        .select()
+        .single();
+
+      if (responseChannel === 'whatsapp' && contact?.phone) {
+        const whatsappResult = await getWhatsAppInstanceForConversation(
+          supabaseClient,
+          conversationId,
+          conversation.whatsapp_instance_id,
+          conversation
+        );
+        if (whatsappResult) {
+          await sendWhatsAppMessage(
+            supabaseClient,
+            whatsappResult,
+            contact.phone,
+            otpFormatResponse,
+            conversationId,
+            contact.whatsapp_id
+          );
+        }
+      }
+
+      return new Response(JSON.stringify({
+        response: otpFormatResponse,
+        messageId: savedMsg?.id,
+        otpValidated: false,
+        debug: {
+          reason: 'otp_invalid_format_bypass',
+          digits_length: otpDigitsOnly.length,
+          bypassed_ai: true
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
     
     if (shouldValidateOTP) {
       console.log('[ai-autopilot-chat] 🔐 DECISION POINT: AUTO_OTP_VALIDATION', {
@@ -4091,7 +4280,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         const { data: otpData, error: otpError } = await supabaseClient.functions.invoke('verify-code', {
           body: { 
             email: contactEmail,
-            code: customerMessage.trim()
+            code: otpDigitsOnly
           }
         });
         
