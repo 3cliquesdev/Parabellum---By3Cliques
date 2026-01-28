@@ -3198,6 +3198,29 @@ Responda APENAS: skip ou search`
     // Antes: só fazia handoff se knowledgeArticles.length === 0 (bug - ignorava artigos irrelevantes)
     const isSimpleGreeting = /^(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|ok|tá|ta|sim|não|nao)[\s!?.,]*$/i.test(customerMessage.trim());
     
+    // 🆕 BYPASS HANDOFF: Detectar se mensagem parece ser pedido/rastreio
+    // Se contém número de pedido ou código de rastreio, FORÇAR processamento com tools
+    const trackingPatterns = [
+      /\b\d{7,15}\b/, // Números de 7-15 dígitos (IDs de pedido)
+      /\b[A-Z]{2}\d{9,13}[A-Z]{0,2}\b/i, // Códigos de rastreio (BR123456789BR, LP...)
+      /\b(pedido|rastreio|rastrear|entrega|enviado|encomenda|codigo|código|tracking)\b/i, // Palavras-chave
+    ];
+    const looksLikeTrackingQuery = trackingPatterns.some(p => p.test(customerMessage));
+    
+    console.log('[ai-autopilot-chat] 🔍 Tracking query detection:', {
+      customerMessage: customerMessage.substring(0, 50),
+      looksLikeTrackingQuery,
+      canAccessTracking,
+      originalAction: confidenceResult.action
+    });
+    
+    // 🆕 Se parece ser consulta de rastreio E temos permissão de tracking, FORÇAR resposta (não handoff)
+    if (looksLikeTrackingQuery && canAccessTracking && confidenceResult.action === 'handoff') {
+      console.log('[ai-autopilot-chat] 🚚 BYPASS HANDOFF: Mensagem parece ser pedido/rastreio - forçando processamento com tools');
+      confidenceResult.action = 'cautious'; // Usar 'cautious' que permite resposta com tools
+      confidenceResult.reason = 'Detectado código de pedido/rastreio - tentando consultar via check_tracking tool';
+    }
+    
     // 🆕 Detectar mensagens genéricas de "quero atendimento" (NÃO fazer handoff imediato)
     const isGenericContactRequest = /^(ol[aá]|oi|bom dia|boa tarde|boa noite)?[,!.\s]*(vim|cheguei|estou|preciso|quero|gostaria|queria|buscando|procurando).{0,50}(atendimento|ajuda|suporte|falar|contato|informação|informações|saber|conhecer|entender)/i.test(customerMessage.trim());
     
