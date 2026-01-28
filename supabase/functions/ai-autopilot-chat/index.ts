@@ -466,14 +466,15 @@ interface ConfidenceResult {
   department?: string;
 }
 
-// Thresholds - FASE 6: Conservador para reduzir alucinações
-const SCORE_DIRECT = 0.95;   // Antes: 0.90 - Só responde direto com ALTA certeza
-const SCORE_CAUTIOUS = 0.85; // Antes: 0.80 - Margem maior para resposta cautelosa
-const SCORE_MINIMUM = 0.70;  // Novo: Abaixo disso, SEMPRE handoff
+// Thresholds - AJUSTADOS para usar artigos com 50%+ de similaridade
+// Antes estava muito alto (0.95/0.85) e rejeitava artigos válidos
+const SCORE_DIRECT = 0.75;   // Alta confiança - responde direto
+const SCORE_CAUTIOUS = 0.55; // Média confiança - responde com cautela (permite 60% similarity)
+const SCORE_MINIMUM = 0.40;  // Mínimo para tentar responder (abaixo = handoff)
 
-// 🆕 Thresholds do MODO RAG ESTRITO (Anti-Alucinação)
-const STRICT_SCORE_MINIMUM = 0.85;   // Abaixo disso, SEMPRE handoff no modo estrito
-const STRICT_SIMILARITY_THRESHOLD = 0.80; // Artigos com menos de 80% são ignorados
+// 🆕 Thresholds do MODO RAG ESTRITO (Anti-Alucinação) - mais conservador
+const STRICT_SCORE_MINIMUM = 0.70;   // Abaixo disso, SEMPRE handoff no modo estrito
+const STRICT_SIMILARITY_THRESHOLD = 0.65; // Artigos com menos de 65% são ignorados
 
 // 🆕 Indicadores de incerteza/alucinação para validação pós-resposta
 const HALLUCINATION_INDICATORS = [
@@ -647,10 +648,14 @@ function calculateConfidenceScore(query: string, documents: RetrievedDocument[])
     reason = `Alta confiança (${(score * 100).toFixed(0)}%) - Resposta direta`;
   } else if (score >= SCORE_CAUTIOUS) {
     action = 'cautious';
-    reason = `Confiança média (${(score * 100).toFixed(0)}%) - Resposta cautelosa`;
+    reason = `Confiança média (${(score * 100).toFixed(0)}%) - Resposta cautelosa com base na KB`;
+  } else if (score >= SCORE_MINIMUM) {
+    // 🆕 Novo nível: tenta responder mesmo com baixa confiança (40-55%)
+    action = 'cautious';
+    reason = `Baixa confiança (${(score * 100).toFixed(0)}%) - Tentando responder com artigos disponíveis`;
   } else {
     action = 'handoff';
-    reason = `Baixa confiança (${(score * 100).toFixed(0)}%) - Handoff recomendado`;
+    reason = `Muito baixa confiança (${(score * 100).toFixed(0)}%) - Handoff recomendado`;
   }
   
   return {
@@ -2705,8 +2710,8 @@ Responda APENAS: skip ou search`
                     'match_knowledge_articles',
                     {
                       query_embedding: queryEmbedding,
-                      match_threshold: 0.70, // Antes: 0.50 - Só retorna artigos realmente relevantes
-                      match_count: 3,        // Antes: 5 - Menos artigos, mais qualidade
+                      match_threshold: 0.50, // Reduzido de 0.70 - permite artigos com 50%+ de similaridade
+                      match_count: 5,        // Aumentado de 3 para 5 - mais artigos candidatos
                     }
                   );
 

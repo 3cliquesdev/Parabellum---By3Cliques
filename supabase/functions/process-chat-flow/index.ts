@@ -707,24 +707,103 @@ serve(async (req) => {
       if (masterFlow) {
         console.log('[process-chat-flow] 🎯 MASTER FLOW found:', masterFlow.name);
         
-        // Extrair configurações do primeiro nó AI do master flow (se existir)
+        // 🆕 CORREÇÃO: Executar o fluxo mestre como qualquer outro fluxo
+        // Antes: apenas retornava configs sem executar os nós
         const flowDef = masterFlow.flow_definition as any;
-        const aiNode = flowDef?.nodes?.find((n: any) => n.type === 'ai_response');
         
-        // Retornar configurações do master flow para uso no autopilot
+        if (!flowDef?.nodes?.length) {
+          console.log('[process-chat-flow] Master Flow vazio - usando IA padrão');
+          const aiNode = flowDef?.nodes?.find((n: any) => n.type === 'ai_response');
+          return new Response(
+            JSON.stringify({
+              useAI: true,
+              reason: "Master Flow has no nodes",
+              masterFlowId: masterFlow.id,
+              personaId: aiNode?.data?.persona_id || null,
+              kbCategories: aiNode?.data?.kb_categories || null,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Encontrar primeiro nó (sem edges apontando para ele)
+        const targetIds = new Set((flowDef.edges || []).map((e: any) => e.target));
+        const startNode = flowDef.nodes.find((n: any) => !targetIds.has(n.id)) || flowDef.nodes[0];
+        
+        console.log('[process-chat-flow] 🚀 Iniciando Master Flow - primeiro nó:', startNode.type, startNode.id);
+        
+        // Criar estado do fluxo para o master flow
+        const { data: newState, error: createError } = await supabaseClient
+          .from('chat_flow_states')
+          .insert({
+            conversation_id: conversationId,
+            flow_id: masterFlow.id,
+            current_node_id: startNode.id,
+            collected_data: {},
+            status: 'active',
+          })
+          .select()
+          .single();
+        
+        if (createError) {
+          console.error('[process-chat-flow] Error creating master flow state:', createError);
+          // Fallback: retornar configs para IA
+          const aiNode = flowDef?.nodes?.find((n: any) => n.type === 'ai_response');
+          return new Response(
+            JSON.stringify({
+              useAI: true,
+              reason: "Error creating master flow state - fallback to AI config",
+              masterFlowId: masterFlow.id,
+              personaId: aiNode?.data?.persona_id || null,
+              kbCategories: aiNode?.data?.kb_categories || null,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        console.log('[process-chat-flow] ✅ Master Flow started:', newState.id);
+        
+        // Se primeiro nó é AI, retornar useAI true com configs
+        if (startNode.type === 'ai_response') {
+          return new Response(
+            JSON.stringify({
+              useAI: true,
+              reason: "Master Flow started with AI node",
+              masterFlowId: masterFlow.id,
+              masterFlowName: masterFlow.name,
+              flowId: masterFlow.id,
+              flowStarted: true,
+              personaId: startNode.data?.persona_id || null,
+              kbCategories: startNode.data?.kb_categories || null,
+              contextPrompt: startNode.data?.context_prompt || null,
+              fallbackMessage: startNode.data?.fallback_message || null,
+              debug: {
+                source: 'master_flow',
+                startNodeType: startNode.type,
+                hasAiNode: true
+              }
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Se primeiro nó é mensagem, retornar mensagem
+        const startMessage = startNode.data?.message || "";
+        const options = startNode.type === 'ask_options' 
+          ? (startNode.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value }))
+          : null;
+        
         return new Response(
           JSON.stringify({
-            useAI: true,
-            reason: "Master Flow applied",
-            masterFlowId: masterFlow.id,
-            masterFlowName: masterFlow.name,
-            personaId: aiNode?.data?.persona_id || null,
-            kbCategories: aiNode?.data?.kb_categories || null,
-            contextPrompt: aiNode?.data?.context_prompt || null,
-            fallbackMessage: aiNode?.data?.fallback_message || null,
+            useAI: false,
+            response: startMessage,
+            options,
+            flowId: masterFlow.id,
+            flowStarted: true,
+            isMasterFlow: true,
             debug: {
               source: 'master_flow',
-              hasAiNode: !!aiNode
+              startNodeType: startNode.type
             }
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

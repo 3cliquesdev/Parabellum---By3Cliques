@@ -255,7 +255,7 @@ export function useInboxView(filters?: InboxFilters) {
   useEffect(() => {
     if (!user?.id) return;
     
-    console.log("[Realtime] Setting up inbox_view + messages subscription with instant update...");
+    console.log("[Realtime] Setting up inbox_view + messages + conversations subscription...");
     
     // Canal 1: inbox_view para status, assignment, etc
     const inboxChannel = supabase
@@ -346,6 +346,16 @@ export function useInboxView(filters?: InboxFilters) {
           queryClient.setQueriesData<InboxViewItem[]>(
             { queryKey: ["inbox-view"], exact: false },
             (prev = []) => {
+              // Verificar se a conversa já existe no cache
+              const existingIndex = prev.findIndex(item => item.conversation_id === newMsg.conversation_id);
+              
+              if (existingIndex === -1) {
+                // 🆕 NOVA CONVERSA - Fazer refetch para obter dados completos
+                console.log("[Realtime] Nova conversa detectada via mensagem - forçando refetch");
+                queryClient.invalidateQueries({ queryKey: ["inbox-view"], exact: false });
+                return prev;
+              }
+              
               const updated = prev.map(item => 
                 item.conversation_id === newMsg.conversation_id 
                   ? { 
@@ -373,10 +383,76 @@ export function useInboxView(filters?: InboxFilters) {
         console.log("[Realtime] messages subscription status:", status);
       });
 
+    // 🆕 Canal 3: conversations para detectar NOVAS conversas imediatamente
+    const conversationsChannel = supabase
+      .channel("inbox-conversations-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "conversations",
+        },
+        async (payload) => {
+          const newConv = payload.new as any;
+          if (!newConv?.id) return;
+          
+          console.log("[Realtime] NOVA conversa detectada:", newConv.id);
+          
+          // Fazer refetch para obter dados completos da inbox_view
+          // O invalidateQueries forçará um refetch automático
+          queryClient.invalidateQueries({ queryKey: ["inbox-view"], exact: false });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversations",
+        },
+        async (payload) => {
+          const updatedConv = payload.new as any;
+          if (!updatedConv?.id) return;
+          
+          console.log("[Realtime] Conversa atualizada:", updatedConv.id, {
+            status: updatedConv.status,
+            ai_mode: updatedConv.ai_mode,
+            assigned_to: updatedConv.assigned_to?.slice(0, 8)
+          });
+          
+          // Atualizar campos críticos inline no cache (sem refetch)
+          queryClient.setQueriesData<InboxViewItem[]>(
+            { queryKey: ["inbox-view"], exact: false },
+            (prev = []) => {
+              const updated = prev.map(item => 
+                item.conversation_id === updatedConv.id 
+                  ? { 
+                      ...item, 
+                      status: updatedConv.status,
+                      ai_mode: updatedConv.ai_mode,
+                      assigned_to: updatedConv.assigned_to,
+                      department: updatedConv.department,
+                      updated_at: updatedConv.last_message_at || new Date().toISOString(),
+                    } 
+                  : item
+              );
+              return updated.sort((a, b) => 
+                new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+              );
+            }
+          );
+        }
+      )
+      .subscribe((status) => {
+        console.log("[Realtime] conversations subscription status:", status);
+      });
+
     return () => {
-      console.log("[Realtime] Removing inbox_view + messages channels");
+      console.log("[Realtime] Removing inbox_view + messages + conversations channels");
       supabase.removeChannel(inboxChannel);
       supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(conversationsChannel);
     };
   }, [queryClient, user?.id]); // APENAS user?.id como dependência - refs mantêm valores atuais
 
