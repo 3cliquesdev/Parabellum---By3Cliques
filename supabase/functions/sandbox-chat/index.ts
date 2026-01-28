@@ -76,7 +76,7 @@ serve(async (req) => {
 
     console.log('[sandbox-chat] Persona loaded:', persona.name);
 
-    // 🎓 Buscar exemplos de treinamento (Few-Shot Learning)
+    // 🎓 Buscar exemplos de treinamento (Few-Shot Learning) - Tabela dedicada
     const { data: trainingExamples } = await supabase
       .from('ai_training_examples')
       .select('*')
@@ -84,7 +84,18 @@ serve(async (req) => {
       .eq('is_active', true)
       .limit(10);
 
-    console.log('[sandbox-chat] Training examples found:', trainingExamples?.length || 0);
+    console.log('[sandbox-chat] Training examples (ai_training_examples):', trainingExamples?.length || 0);
+
+    // 🎓 TAMBÉM buscar artigos de treinamento do Sandbox (salvos em knowledge_articles)
+    const { data: sandboxTrainingArticles } = await supabase
+      .from('knowledge_articles')
+      .select('id, title, content')
+      .eq('source', 'sandbox_training')
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    console.log('[sandbox-chat] Sandbox training articles (knowledge_articles):', sandboxTrainingArticles?.length || 0);
 
     // Build tools array from persona's linked tools
     const tools = persona.ai_persona_tools
@@ -174,14 +185,29 @@ Responda APENAS: skip ou search`
     }
 
     // FASE 1: Query Expansion + Knowledge Base Search
-    let knowledgeArticles: any[] = [];
-    const fewShotMessages = trainingExamples?.flatMap((example: any) => [
+    // Criar few-shot messages a partir de ai_training_examples
+    const fewShotFromExamples = trainingExamples?.flatMap((example: any) => [
       { role: 'user', content: example.input_text },
       { role: 'assistant', content: example.ideal_output }
     ]) || [];
 
-    console.log('[sandbox-chat] Few-shot messages prepared:', fewShotMessages.length);
+    // 🎓 Criar few-shot messages a partir de artigos de treinamento do Sandbox
+    // O título contém a pergunta ("Treinamento: [pergunta]") e o content contém a resposta correta
+    const fewShotFromSandbox = sandboxTrainingArticles?.flatMap((article: any) => {
+      // Extrair pergunta do título: "Treinamento: [pergunta...]" → "[pergunta...]"
+      const question = article.title.replace(/^Treinamento:\s*/i, '');
+      return [
+        { role: 'user', content: question },
+        { role: 'assistant', content: article.content }
+      ];
+    }) || [];
 
+    // Combinar ambas as fontes (limite de 10 pares no total)
+    const fewShotMessages = [...fewShotFromSandbox, ...fewShotFromExamples].slice(0, 20);
+
+    console.log('[sandbox-chat] Few-shot messages prepared:', fewShotMessages.length, '(sandbox:', fewShotFromSandbox.length, '+ examples:', fewShotFromExamples.length, ')');
+
+    let knowledgeArticles: any[] = [];
     let systemPrompt = persona.system_prompt;
     let semanticSearchUsed = false;
     let queriesExecuted: string[] = [];
