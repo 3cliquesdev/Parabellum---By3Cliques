@@ -669,20 +669,29 @@ serve(async (req) => {
         } else {
           // Trigger longo: exigir palavras essenciais específicas
           // Evita que "Olá vim pelo site" faça match com "Olá vim pelo email promocao carnaval"
-          const stopWords = ['ola', 'pelo', 'email', 'site', 'gostaria', 'saber', 'sobre', 'quero', 'como', 'para', 'que', 'vim', 'da', 'de', 'do'];
+          const stopWords = ['ola', 'pelo', 'email', 'site', 'gostaria', 'saber', 'sobre', 'quero', 'como', 'para', 'que', 'vim', 'da', 'de', 'do', 'pre', 'o', 'a', 'e', 'ou'];
           const essentialKeywords = triggerNorm.split(/\s+/).filter(w => 
             w.length > 3 && !stopWords.includes(w)
           );
-          const matchedEssentials = essentialKeywords.filter(k => messageNorm.includes(k));
+          
+          // 🆕 MELHORIA: Usar matching por palavra (não substring) para evitar falsos positivos
+          const messageWords = messageNorm.split(/\s+/);
+          const matchedEssentials = essentialKeywords.filter(keyword => 
+            // Match exato de palavra OU substring (para palavras compostas)
+            messageWords.includes(keyword) || messageNorm.includes(keyword)
+          );
           
           console.log('[process-chat-flow] Trigger longo check:', { 
             trigger: trigger.slice(0, 50), 
             essentials: essentialKeywords, 
+            messageWords: messageWords.slice(0, 15),
             matched: matchedEssentials 
           });
           
-          // Exigir pelo menos 2 keywords essenciais (ex: "promocao" + "carnaval")
-          if (matchedEssentials.length >= 2) {
+          // 🆕 MELHORIA: Se trigger tem 1 keyword essencial ou menos, aceitar 1 match
+          // Se trigger tem 2+ keywords essenciais, exigir pelo menos 1
+          const minMatches = essentialKeywords.length <= 1 ? 1 : 1;
+          if (matchedEssentials.length >= minMatches && essentialKeywords.length > 0) {
             console.log('[process-chat-flow] ✅ Match por keywords essenciais:', matchedEssentials);
             matchedFlow = flow;
             break;
