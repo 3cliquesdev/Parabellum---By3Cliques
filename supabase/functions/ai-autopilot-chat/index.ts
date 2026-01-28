@@ -3248,7 +3248,7 @@ Responda APENAS: skip ou search`
             const info = fetchResult.data[code];
             if (info) {
               codesFound.push(code);
-              const packedAt = info.packed_at_formatted || 'Recentemente';
+              const packedAt = info.express_time_formatted || 'Recentemente';
               const trackingNum = info.tracking_number || 'Aguardando código';
               const buyerName = info.buyer_name || '';
               const status = info.order_status_label || info.status || 'Em processamento';
