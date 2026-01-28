@@ -438,7 +438,8 @@ const FALLBACK_PHRASES = [
   'nao sei',
 ];
 
-// 🔐 BARREIRA FINANCEIRA UNIFICADA - Palavras que EXIGEM cliente identificado + OTP
+// 🔐 BARREIRA FINANCEIRA - Palavras que identificam contexto FINANCEIRO (sem OTP obrigatório)
+// Estas palavras detectam intenção financeira mas NÃO exigem OTP
 const FINANCIAL_BARRIER_KEYWORDS = [
   'saque',
   'sacar',
@@ -456,6 +457,26 @@ const FINANCIAL_BARRIER_KEYWORDS = [
   'devolução',
   'devolver',
   'meu dinheiro'
+];
+
+// 🔐 OPERAÇÕES QUE EXIGEM OTP OBRIGATÓRIO (APENAS SAQUE DE SALDO/CARTEIRA)
+// OTP é necessário APENAS quando cliente quer SACAR dinheiro da carteira
+// Cancelamentos, reembolsos de pedidos Kiwify NÃO precisam de OTP
+const OTP_REQUIRED_KEYWORDS = [
+  'saque',
+  'sacar',
+  'retirar saldo',
+  'retirar dinheiro',
+  'transferir saldo',
+  'transferir meu saldo',
+  'saque pix',
+  'saque via pix',
+  'saque carteira',
+  'sacar da carteira',
+  'sacar meu saldo',
+  'quero sacar',
+  'fazer saque',
+  'solicitar saque'
 ];
 
 // ============================================================
@@ -709,32 +730,62 @@ interface ConfidenceLog {
   timestamp: string;
 }
 
-// 🆕 Padrões de INTENÇÃO financeira (não keyword solta) - Usado globalmente
+// 🆕 Padrões de INTENÇÃO financeira (contexto geral) - NÃO exige OTP
 const FINANCIAL_ACTION_PATTERNS = [
-  // Padrões melhorados para capturar variações naturais
+  // Padrões de consulta (SEM OTP)
+  /ver\s+(meu\s+)?saldo/i,                            // "quero ver meu saldo"
+  /consultar\s+(meu\s+)?saldo/i,                      // "consultar saldo"
+  /quanto\s+tenho\s+(de\s+)?saldo/i,                  // "quanto tenho de saldo"
+  
+  // Padrões de problemas gerais (SEM OTP)
+  /cadê\s+(meu\s+saldo|meu\s+dinheiro|meu\s+pix)/i,
+  /não\s+(recebi|caiu|chegou)\s+(o\s+)?(pix|pagamento|saldo|dinheiro)/i,
+  /erro\s+(no|de)\s+pagamento/i,
+  /cobrar|cobraram\s+errado/i,
+];
+
+// 🔐 Padrões de SAQUE DE SALDO (EXIGE OTP) - Apenas movimentação de dinheiro da carteira
+const WITHDRAWAL_ACTION_PATTERNS = [
   /quero\s+(fazer\s+)?(um\s+)?saque/i,                // "quero fazer um saque", "quero saque"
   /preciso\s+(fazer\s+)?(um\s+)?saque/i,              // "preciso fazer um saque"
   /saque\s+(da\s+)?(minha\s+)?carteira/i,             // "saque da minha carteira"
   /fazer\s+(um\s+)?saque/i,                           // "fazer saque"
-  
-  // Padrões existentes mantidos
-  /quero\s+(sacar|reembolso|meu\s+dinheiro)/i,
-  /preciso\s+(sacar|de\s+reembolso|do\s+meu\s+dinheiro)/i,
-  /cadê\s+(meu\s+saldo|meu\s+dinheiro|meu\s+pix)/i,
-  /não\s+(recebi|caiu|chegou)\s+(o\s+)?(pix|pagamento|saldo|dinheiro)/i,
-  /devolver\s+(meu\s+)?dinheiro/i,
-  /estornar|estorno/i,
-  /erro\s+(no|de)\s+pagamento/i,
-  /quero\s+meu\s+dinheiro/i,
-  /cobrar|cobraram\s+errado/i,
-  
-  // Novos padrões para melhor cobertura
-  /ver\s+(meu\s+)?saldo/i,                            // "quero ver meu saldo"
-  /consultar\s+(meu\s+)?saldo/i,                      // "consultar saldo"
-  /quanto\s+tenho\s+(de\s+)?saldo/i,                  // "quanto tenho de saldo"
+  /quero\s+sacar/i,                                   // "quero sacar"
+  /preciso\s+sacar/i,                                 // "preciso sacar"
   /transferir\s+(meu\s+)?saldo/i,                     // "transferir meu saldo"
   /retirar\s+(meu\s+)?dinheiro/i,                     // "retirar meu dinheiro"
-  /pagar.*pix/i,                                       // "pagar via pix"
+  /retirar\s+(meu\s+)?saldo/i,                        // "retirar meu saldo"
+  /sacar\s+(meu\s+)?saldo/i,                          // "sacar meu saldo"
+  /sacar\s+(meu\s+)?dinheiro/i,                       // "sacar meu dinheiro"
+  /saque\s+pix/i,                                     // "saque pix"
+  /saque\s+via\s+pix/i,                               // "saque via pix"
+  /solicitar\s+saque/i,                               // "solicitar saque"
+  /pedir\s+saque/i,                                   // "pedir saque"
+];
+
+// 🆕 Padrões de REEMBOLSO DE PEDIDO (SEM OTP) - Devolução de pedido Kiwify
+// A IA explica o processo e só transfere se cliente insistir
+const REFUND_ACTION_PATTERNS = [
+  /quero\s+reembolso/i,                               // "quero reembolso"
+  /preciso\s+(de\s+)?reembolso/i,                     // "preciso de reembolso"
+  /devolver\s+(meu\s+)?dinheiro/i,                    // "devolver meu dinheiro"
+  /quero\s+meu\s+dinheiro\s+(de\s+)?volta/i,          // "quero meu dinheiro de volta"
+  /estornar/i,                                        // "estornar"
+  /estorno/i,                                         // "estorno"
+  /cancelar\s+(meu\s+)?pedido/i,                      // "cancelar meu pedido"
+  /devolução/i,                                       // "devolução"
+  /devolver\s+pedido/i,                               // "devolver pedido"
+];
+
+// 🆕 Padrões de CANCELAMENTO DE ASSINATURA (SEM OTP) - Kiwify
+const CANCELLATION_ACTION_PATTERNS = [
+  /cancelar\s+(minha\s+)?assinatura/i,                // "cancelar minha assinatura"
+  /cancelamento\s+(de\s+)?assinatura/i,               // "cancelamento de assinatura"
+  /quero\s+cancelar/i,                                // "quero cancelar"
+  /preciso\s+cancelar/i,                              // "preciso cancelar"
+  /encerrar\s+(minha\s+)?assinatura/i,                // "encerrar minha assinatura"
+  /parar\s+(de\s+)?pagar/i,                           // "parar de pagar"
+  /não\s+quero\s+mais\s+pagar/i,                      // "não quero mais pagar"
 ];
 
 // 🆕 Perguntas INFORMATIVAS - NÃO criar ticket - Usado globalmente
@@ -3910,10 +3961,40 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         ? 'Email não cadastrado - precisa se identificar primeiro'
         : null;
     
-    // 🚨 PORTEIRO FINANCEIRO - Exige OTP SEMPRE para transações financeiras
+    // 🚨 DETECÇÃO DE TIPO DE SOLICITAÇÃO FINANCEIRA
+    // Separamos em 3 categorias com tratamentos diferentes:
+    // 1. SAQUE DE SALDO → Exige OTP (segurança máxima)
+    // 2. REEMBOLSO DE PEDIDO → Sem OTP (explica processo)
+    // 3. CANCELAMENTO DE ASSINATURA → Sem OTP (processo Kiwify)
+    
     const isFinancialRequest = FINANCIAL_BARRIER_KEYWORDS.some(keyword =>
       customerMessage.toLowerCase().includes(keyword)
     );
+    
+    // 🔐 SAQUE DE SALDO - ÚNICA operação que EXIGE OTP
+    const isWithdrawalRequest = WITHDRAWAL_ACTION_PATTERNS.some(pattern =>
+      pattern.test(customerMessage)
+    ) || OTP_REQUIRED_KEYWORDS.some(keyword =>
+      customerMessage.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    // 📦 REEMBOLSO DE PEDIDO - Sem OTP, explica processo
+    const isRefundRequest = REFUND_ACTION_PATTERNS.some(pattern =>
+      pattern.test(customerMessage)
+    );
+    
+    // ❌ CANCELAMENTO DE ASSINATURA - Sem OTP, processo Kiwify
+    const isCancellationRequest = CANCELLATION_ACTION_PATTERNS.some(pattern =>
+      pattern.test(customerMessage)
+    );
+    
+    console.log('[ai-autopilot-chat] 🎯 FINANCIAL REQUEST DETECTION:', {
+      isFinancialRequest,
+      isWithdrawalRequest,    // ÚNICA que exige OTP
+      isRefundRequest,        // Sem OTP
+      isCancellationRequest,  // Sem OTP
+      message_preview: customerMessage.substring(0, 50)
+    });
 
     // Verificar se tem verificação OTP recente (1 HORA para operações financeiras)
     const { data: recentVerification } = await supabaseClient
@@ -3951,12 +4032,13 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // ============================================================
     // 🎯 DECISION MATRIX - Log unificado para debugging de fluxo
     // ============================================================
-    // 🆕 OTP apenas para contexto FINANCEIRO quando cliente NÃO tem email verificado
-    const needsOTPForFinancial = isFinancialRequest && !contactHasEmail && isValidatedCustomer;
+    // 🆕 OTP APENAS para SAQUE DE SALDO (isWithdrawalRequest)
+    // Reembolsos e cancelamentos NÃO precisam de OTP
+    const needsOTPForFinancial = isWithdrawalRequest && !contactHasEmail && isValidatedCustomer;
     const willAskForEmail = !isValidatedCustomer; // Só pede email se não for cliente conhecido
     const willSendOTP = contactHasEmail && !hasEverVerifiedOTP;
-    const willAskFinancialOTP = contactHasEmail && hasEverVerifiedOTP && isFinancialRequest && !hasRecentOTPVerification;
-    const willProcessNormally = isValidatedCustomer && !isFinancialRequest;
+    const willAskFinancialOTP = contactHasEmail && hasEverVerifiedOTP && isWithdrawalRequest && !hasRecentOTPVerification;
+    const willProcessNormally = isValidatedCustomer && !isWithdrawalRequest;
     
     console.log('[ai-autopilot-chat] 🎯 DECISION MATRIX:', {
       // Inputs
@@ -3966,6 +4048,9 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       hasEverVerifiedOTP,
       hasRecentOTPVerification,
       isFinancialRequest,
+      isWithdrawalRequest,    // 🆕 ÚNICA que exige OTP
+      isRefundRequest,        // 🆕 Sem OTP
+      isCancellationRequest,  // 🆕 Sem OTP
       // Outputs (decisions)
       willAskForEmail,
       willSendOTP,
@@ -3980,13 +4065,17 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     
     console.log('[ai-autopilot-chat] 🔍 FINANCIAL SECURITY CHECK:', {
       is_financial_request: isFinancialRequest,
+      is_withdrawal_request: isWithdrawalRequest,
+      is_refund_request: isRefundRequest,
+      is_cancellation_request: isCancellationRequest,
       has_recent_otp: hasRecentOTPVerification,
       otp_verified_at: recentVerification?.created_at || null,
       can_show_financial_data: hasRecentOTPVerification && isRealCustomer
     });
 
-    // BARREIRA FINANCEIRA: Pedido financeiro SEM verificação OTP recente
-    const financialBarrierActive = isFinancialRequest && !hasRecentOTPVerification;
+    // 🔐 BARREIRA OTP: APENAS para SAQUE DE SALDO sem verificação OTP recente
+    // Reembolsos e cancelamentos NÃO ativam barreira OTP
+    const financialBarrierActive = isWithdrawalRequest && !hasRecentOTPVerification;
 
     // Flag para mostrar dados sensíveis (só após OTP verificado + permissão da persona)
     const canShowFinancialData = hasRecentOTPVerification && isRealCustomer && canAccessFinancialData;
@@ -4388,12 +4477,15 @@ Digite **"reenviar"** se precisar de um novo código.`;
     // Se cliente já tem email E já verificou OTP alguma vez E NÃO é pedido financeiro:
     // → Atendimento NORMAL direto, SEM pedir OTP novamente
     // ============================================================
-    if (contactHasEmail && hasEverVerifiedOTP && !isFinancialRequest) {
+    // 🆕 GUARD CLAUSE atualizada: Bypass para atendimento normal SE não for SAQUE
+    if (contactHasEmail && hasEverVerifiedOTP && !isWithdrawalRequest) {
       console.log('[ai-autopilot-chat] ✅ GUARD CLAUSE: Cliente verificado - BYPASS Identity Wall', {
         contact_email: maskEmail(contactEmail),
         contact_name: contactName,
         has_ever_verified_otp: true,
-        is_financial_request: false,
+        is_withdrawal_request: false,
+        is_refund_request: isRefundRequest,
+        is_cancellation_request: isCancellationRequest,
         action: 'skip_identity_wall_go_to_normal_service'
       });
       
@@ -4402,27 +4494,29 @@ Digite **"reenviar"** se precisar de um novo código.`;
     }
     
     // ============================================================
-    // 🔐 OTP APENAS PARA QUESTÕES FINANCEIRAS
+    // 🔐 OTP APENAS PARA SAQUE DE SALDO/CARTEIRA
     // ============================================================
     // Regra simplificada:
-    // - Cliente pede algo FINANCEIRO (saque, reembolso, etc.) → OTP para segurança
-    // - Qualquer outra coisa → Conversa normal (sem OTP na entrada)
+    // - Cliente pede SAQUE de saldo → OTP para segurança
+    // - Cancelamento de assinatura Kiwify → Sem OTP
+    // - Reembolso de pedido → Sem OTP (explica processo)
+    // - Qualquer outra coisa → Conversa normal (sem OTP)
     // ============================================================
-    if (contactHasEmail && isFinancialRequest && !hasRecentOTPVerification) {
+    if (contactHasEmail && isWithdrawalRequest && !hasRecentOTPVerification) {
       const maskedEmail = maskEmail(contactEmail);
       
-      console.log('[ai-autopilot-chat] 🔐 OTP FINANCEIRO - Solicitação financeira detectada:', {
-        is_financial_request: isFinancialRequest,
+      console.log('[ai-autopilot-chat] 🔐 OTP SAQUE - Solicitação de saque detectada:', {
+        is_withdrawal_request: isWithdrawalRequest,
         has_recent_otp: hasRecentOTPVerification,
         contact_email: maskedEmail,
         message_preview: customerMessage.substring(0, 50)
       });
       
-      // Enviar OTP para verificação financeira
+      // Enviar OTP para verificação de saque
       try {
-        console.log('[ai-autopilot-chat] 🔐 DECISION POINT: FINANCIAL_OTP_BARRIER', {
-          is_financial_context: true,
-          has_ever_verified: true,
+        console.log('[ai-autopilot-chat] 🔐 DECISION POINT: WITHDRAWAL_OTP_BARRIER', {
+          is_withdrawal_context: true,
+          has_ever_verified: hasEverVerifiedOTP,
           has_recent_otp: false,
           will_send_otp: true,
           current_channel: responseChannel
@@ -4442,23 +4536,22 @@ Digite **"reenviar"** se precisar de um novo código.`;
               ...conversationMetadata,
               awaiting_otp: true,
               otp_expires_at: otpExpiresAt,
-              claimant_email: contactEmail
+              claimant_email: contactEmail,
+              otp_reason: 'withdrawal' // 🆕 Marcar motivo do OTP
             }
           })
           .eq('id', conversationId);
         
-        console.log('[ai-autopilot-chat] 🔐 OTP pendente marcado na metadata (financial barrier)');
+        console.log('[ai-autopilot-chat] 🔐 OTP pendente marcado na metadata (withdrawal barrier)');
         
         // BYPASS DIRETO - NÃO CHAMAR A IA
-        const directOTPResponse = `**Verificação de Segurança**
+        const directOTPResponse = `**Verificação de Segurança para Saque**
 
-Olá ${contactName}! Você é nosso cliente, mas questões financeiras são delicadas.
-
-Para sua segurança, vou confirmar que é você mesmo.
+Olá ${contactName}! Para saques da carteira, preciso confirmar sua identidade.
 
 Enviei um código de **6 dígitos** para **${maskedEmail}**.
 
-Por favor, **digite o código** que você recebeu para continuar.`;
+Por favor, **digite o código** que você recebeu para continuar com o saque.`;
 
         // Salvar mensagem no banco
         const { data: savedMsg } = await supabaseClient
@@ -4557,7 +4650,7 @@ Este cliente NÃO tem email cadastrado no sistema.
 5. **SE EMAIL ENCONTRADO NA BASE:**
    - Cumprimente o cliente pelo nome e pergunte como pode ajudar
    - NÃO precisa de OTP para atendimento normal (rastreio, dúvidas, etc.)
-   - OTP só será pedido se cliente solicitar operação FINANCEIRA (saque, reembolso)
+   - OTP só será pedido se cliente solicitar SAQUE DE SALDO
 
 **IMPORTANTE:** NÃO atenda dúvidas técnicas até o email ser verificado na base.`;
     } else if (isPhoneVerified && !contactHasEmail && !isKiwifyValidated) {
@@ -4565,7 +4658,7 @@ Este cliente NÃO tem email cadastrado no sistema.
       console.log('[ai-autopilot-chat] ✅ Cliente identificado por telefone - bypass Identity Wall');
     }
     
-    // PORTEIRO FINANCEIRO ATIVADO
+    // 🔐 PORTEIRO DE SAQUE ATIVADO (apenas para saque de saldo/carteira)
     if (financialBarrierActive) {
       // Verificar se cliente já foi identificado por email (novo fluxo)
       const hasEmailVerifiedInDb = conversation.customer_metadata?.email_verified_in_db === true;
@@ -4575,13 +4668,13 @@ Este cliente NÃO tem email cadastrado no sistema.
         const emailToUse = contactEmail || verifiedEmail;
         const maskedEmailForPrompt = emailToUse ? maskEmail(emailToUse) : 'seu email cadastrado';
         
-        // Cenário: Cliente identificado por email → Agora sim precisa OTP para financeiro
-        identityWallNote += `\n\n**=== PORTEIRO FINANCEIRO - VERIFICAÇÃO OTP OBRIGATÓRIA ===**
-O cliente pediu uma operação FINANCEIRA (${customerMessage}).
+        // Cenário: Cliente identificado por email → Precisa OTP para SAQUE
+        identityWallNote += `\n\n**=== PORTEIRO DE SAQUE - VERIFICAÇÃO OTP OBRIGATÓRIA ===**
+O cliente solicitou SAQUE DE SALDO (${customerMessage}).
 Email verificado: ${maskedEmailForPrompt}
 
 **RESPOSTA OBRIGATÓRIA:**
-"Para sua segurança, preciso confirmar sua identidade antes de prosseguir com operações financeiras. 
+"Para sua segurança, preciso confirmar sua identidade antes de prosseguir com o saque. 
 Vou enviar um código de verificação para ${maskedEmailForPrompt}."
 
 → Use a ferramenta send_financial_otp para disparar o OTP
@@ -4590,18 +4683,48 @@ Vou enviar um código de verificação para ${maskedEmailForPrompt}."
 → AGUARDE o cliente digitar o código de 6 dígitos`;
       } else {
         // Cenário: Não tem email → Pedir email primeiro
-        identityWallNote += `\n\n**=== PORTEIRO FINANCEIRO - IDENTIFICAÇÃO OBRIGATÓRIA ===**
-O cliente fez uma solicitação FINANCEIRA MAS NÃO ESTÁ IDENTIFICADO.
+        identityWallNote += `\n\n**=== PORTEIRO DE SAQUE - IDENTIFICAÇÃO OBRIGATÓRIA ===**
+O cliente solicitou SAQUE mas NÃO ESTÁ IDENTIFICADO.
 
 **RESPOSTA OBRIGATÓRIA:**
-"Para sua segurança, preciso validar seu cadastro antes de falar sobre valores. 
-Qual é o seu **email de compra**?"
+"Para sua segurança, preciso validar seu cadastro antes de prosseguir com o saque. 
+Qual é o seu **email de cadastro**?"
 
 → AGUARDE o cliente informar o email
 → NÃO fale de valores, prazos ou processos
 → NÃO crie ticket
 → PARE AQUI até identificação completa`;
       }
+    }
+    
+    // 🆕 HANDLER PARA REEMBOLSO (SEM OTP)
+    if (isRefundRequest && !isWithdrawalRequest) {
+      console.log('[ai-autopilot-chat] 📦 Detectado pedido de REEMBOLSO - sem OTP necessário');
+      
+      identityWallNote += `\n\n**=== REEMBOLSO DE PEDIDO (SEM OTP) ===**
+O cliente está perguntando sobre reembolso de um pedido Kiwify.
+
+**EXPLICAÇÃO A DAR:**
+- Reembolsos são processados automaticamente quando o pedido retorna ao galpão
+- O cliente NÃO precisa ficar cobrando, o processo é automático
+- Se o cliente INSISTIR que o reembolso não foi feito, aí sim ofereça transferir para humano
+
+**NÃO PEÇA OTP** para esta situação.`;
+    }
+    
+    // 🆕 HANDLER PARA CANCELAMENTO (SEM OTP)
+    if (isCancellationRequest && !isWithdrawalRequest) {
+      console.log('[ai-autopilot-chat] ❌ Detectado pedido de CANCELAMENTO - sem OTP necessário');
+      
+      identityWallNote += `\n\n**=== CANCELAMENTO DE ASSINATURA (SEM OTP) ===**
+O cliente quer cancelar a assinatura Kiwify.
+
+**PROCESSO:**
+- Oriente o cliente sobre como cancelar na plataforma Kiwify
+- NÃO precisa de OTP para cancelamento
+- Se precisar de ajuda adicional, ofereça transferir para humano
+
+**NÃO PEÇA OTP** para esta situação.`;
     }
     
     if (!identityWallNote) {
