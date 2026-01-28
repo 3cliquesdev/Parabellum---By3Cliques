@@ -108,6 +108,53 @@ function formatOptionsAsText(options: Array<{label: string; value: string}> | nu
 }
 
 // ============================================================
+// 🆕 DETECTOR DE INTENÇÃO PARA PRESERVAÇÃO DE CONTEXTO
+// Identifica a categoria da intenção original do cliente
+// para recuperar contexto após verificação de email
+// ============================================================
+function detectIntentCategory(message: string): string | null {
+  const msgLower = message.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  // Cancelamento
+  if (/cancel|assinatura|desinscrever|cancela|desinscrição/.test(msgLower)) return 'cancellation';
+  
+  // Reembolso
+  if (/reembolso|devol|devolucao|trocar|estorno/.test(msgLower)) return 'refund';
+  
+  // Saque
+  if (/saque|sacar|carteira|retirar.*saldo|transferir.*saldo/.test(msgLower)) return 'withdrawal';
+  
+  // Rastreio/Pedidos
+  if (/rastreio|entrega|pedido|envio|rastrear|correio|chegou/.test(msgLower)) return 'tracking';
+  
+  // Problema técnico
+  if (/erro|bug|nao funciona|problema|travou|nao consigo|travar/.test(msgLower)) return 'technical';
+  
+  // Acesso/Login
+  if (/senha|login|acesso|entrar|area.*membro|acessar/.test(msgLower)) return 'access';
+  
+  // Cobrança/Pagamento
+  if (/cobranca|cobraram|pagamento|pagar|boleto|fatura/.test(msgLower)) return 'billing';
+  
+  return null; // Intenção genérica
+}
+
+// Helper: Traduzir categoria de intenção para texto amigável
+function getIntentCategoryLabel(category: string | null): string {
+  const labels: Record<string, string> = {
+    'cancellation': 'cancelamento',
+    'refund': 'reembolso',
+    'withdrawal': 'saque',
+    'tracking': 'seu pedido/entrega',
+    'technical': 'problema técnico',
+    'access': 'acesso à plataforma',
+    'billing': 'cobrança'
+  };
+  return category ? labels[category] || 'sua dúvida' : 'sua dúvida';
+}
+
+// ============================================================
 // 🆕 EXTRATOR DE EMAIL TOLERANTE (WhatsApp-safe)
 // Reconhece emails mesmo quando quebrados por newline/espaços
 // ============================================================
@@ -1379,6 +1426,21 @@ serve(async (req) => {
             // CLIENTE EXISTENTE - Ir para Suporte
             console.log('[ai-autopilot-chat] ✅ Cliente ENCONTRADO no banco - direcionando para Suporte');
             
+            // 🆕 RECUPERAR CONTEXTO ORIGINAL (se existir)
+            const originalIntent = customerMetadata.original_intent;
+            const originalIntentCategory = customerMetadata.original_intent_category;
+            
+            console.log('[ai-autopilot-chat] 📋 Contexto original recuperado:', {
+              hasOriginalIntent: !!originalIntent,
+              originalIntentCategory,
+              intentPreview: originalIntent?.substring(0, 50)
+            });
+            
+            // Limpar contexto original do metadata após usar
+            delete updatedMetadata.original_intent;
+            delete updatedMetadata.original_intent_category;
+            delete updatedMetadata.original_intent_timestamp;
+            
             // Atualizar conversa: limpar metadata + mover para Suporte + status customer
             await supabaseClient.from('conversations')
               .update({
@@ -1392,7 +1454,20 @@ serve(async (req) => {
               .eq('id', contact.id);
             
             const customerName = verifyResult.customer?.name?.split(' ')[0] || contact.first_name || '';
-            const successMessage = `Ótimo, ${customerName}! ✅\n\nIdentifiquei você em nosso sistema. Como posso ajudar hoje?`;
+            
+            // 🆕 MENSAGEM COM CONTEXTO PRESERVADO
+            let successMessage: string;
+            
+            if (originalIntent && originalIntentCategory) {
+              // TEM CONTEXTO: Mensagem que retoma o assunto original
+              const intentLabel = getIntentCategoryLabel(originalIntentCategory);
+              successMessage = `Ótimo, ${customerName}! ✅\n\nIdentifiquei você em nosso sistema. Você mencionou sobre **${intentLabel}** - vou te ajudar com isso agora!\n\n_Processando sua solicitação..._`;
+              
+              console.log('[ai-autopilot-chat] 🎯 Preservando contexto:', intentLabel);
+            } else {
+              // SEM CONTEXTO: Mensagem genérica (comportamento antigo)
+              successMessage = `Ótimo, ${customerName}! ✅\n\nIdentifiquei você em nosso sistema. Como posso ajudar hoje?`;
+            }
             
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId,
@@ -1423,15 +1498,28 @@ serve(async (req) => {
               }
             }
             
-            return new Response(JSON.stringify({
-              status: 'email_verified_customer',
-              message: successMessage,
-              email: detectedEmail,
-              department: 'suporte',
-              extraction_source: emailExtraction.source
-            }), {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            });
+            // 🆕 SE TEM CONTEXTO ORIGINAL: Não retornar, deixar IA processar a intenção original
+            if (originalIntent && originalIntentCategory) {
+              console.log('[ai-autopilot-chat] 🔄 Contexto preservado - deixando IA processar intenção original');
+              
+              // Atualizar objeto local para refletir email
+              contact.email = detectedEmail;
+              contact.status = 'customer';
+              
+              // NÃO RETORNAR - Deixar fluxo continuar para IA processar
+              // A mensagem de confirmação já foi enviada, agora a IA vai responder sobre o assunto original
+            } else {
+              // SEM CONTEXTO: Comportamento original - retornar imediatamente
+              return new Response(JSON.stringify({
+                status: 'email_verified_customer',
+                message: successMessage,
+                email: detectedEmail,
+                department: 'suporte',
+                extraction_source: emailExtraction.source
+              }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              });
+            }
             
           } else {
             // LEAD NOVO - Encaminhar para Comercial com handoff
@@ -3870,14 +3958,27 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           }
         }
         
-        // Atualizar metadata para rastrear que estamos aguardando email
+        // 🆕 PRESERVAÇÃO DE CONTEXTO: Salvar intenção original antes de pedir email
+        const originalIntent = customerMessage;
+        const originalIntentCategory = detectIntentCategory(customerMessage);
+        
+        console.log('[ai-autopilot-chat] 📧 Salvando contexto original:', {
+          originalIntent: originalIntent.substring(0, 50) + '...',
+          originalIntentCategory
+        });
+        
+        // Atualizar metadata para rastrear que estamos aguardando email + CONTEXTO ORIGINAL
         await supabaseClient.from('conversations')
           .update({
             customer_metadata: {
               ...(conversation.customer_metadata || {}),
               awaiting_email_for_handoff: true,
               handoff_blocked_at: new Date().toISOString(),
-              handoff_blocked_reason: 'low_confidence_lead_without_email'
+              handoff_blocked_reason: 'low_confidence_lead_without_email',
+              // 🆕 CONTEXTO: Salvar intenção original para recuperar após email
+              original_intent: originalIntent,
+              original_intent_category: originalIntentCategory,
+              original_intent_timestamp: new Date().toISOString()
             }
           })
           .eq('id', conversationId);
