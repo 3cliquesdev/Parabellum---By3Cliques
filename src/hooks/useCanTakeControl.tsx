@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { hasFullInboxAccess } from "@/hooks/useDepartmentsByRole";
+import { isDepartmentAllowedByName } from "@/utils/departmentMatch";
 
 // Mapeamento de roles para departamentos permitidos (por nome)
 const ROLE_DEPARTMENT_MAP: Record<string, string[]> = {
@@ -90,9 +91,7 @@ export function useCanTakeControl(conversation: ConversationTakeControlContext):
         return { canTake: true };
       }
       
-      const isAllowed = allowedDepartments.some(
-        d => d.toLowerCase() === conversationDeptName.toLowerCase()
-      );
+      const isAllowed = isDepartmentAllowedByName(allowedDepartments, conversationDeptName);
       
       if (!isAllowed) {
         return { 

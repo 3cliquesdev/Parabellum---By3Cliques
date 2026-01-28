@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { hasFullInboxAccess, FULL_ACCESS_ROLES } from "@/hooks/useDepartmentsByRole";
+import { isDepartmentAllowedByName } from "@/utils/departmentMatch";
 
 interface TakeControlParams {
   conversationId: string;
@@ -87,9 +88,7 @@ export function useTakeControl() {
         
         // Se a conversa tem departamento e o role tem restrições
         if (conversationDeptName && allowedDepartments && allowedDepartments.length > 0) {
-          const isAllowed = allowedDepartments.some(
-            dept => dept.toLowerCase() === conversationDeptName.toLowerCase()
-          );
+          const isAllowed = isDepartmentAllowedByName(allowedDepartments, conversationDeptName);
           
           if (!isAllowed) {
             console.warn('[useTakeControl] ❌ Bloqueado: role', userRole, 'não pode assumir conversa do departamento', conversationDeptName);
