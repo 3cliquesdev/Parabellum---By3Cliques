@@ -1426,6 +1426,18 @@ serve(async (req) => {
             // CLIENTE EXISTENTE - Ir para Suporte
             console.log('[ai-autopilot-chat] ✅ Cliente ENCONTRADO no banco - direcionando para Suporte');
             
+            // 🆕 CORREÇÃO: Verificar se o email pertence a OUTRO contato existente
+            const existingCustomerId = verifyResult.customer?.id;
+            const existingCustomerEmail = verifyResult.customer?.email;
+            const isExistingCustomerDifferent = existingCustomerId && existingCustomerId !== contact.id;
+            
+            console.log('[ai-autopilot-chat] 🔍 Verificação de rebind:', {
+              currentContactId: contact.id,
+              existingCustomerId,
+              existingCustomerEmail,
+              isExistingCustomerDifferent
+            });
+            
             // 🆕 RECUPERAR CONTEXTO ORIGINAL (se existir)
             const originalIntent = customerMetadata.original_intent;
             const originalIntentCategory = customerMetadata.original_intent_category;
@@ -1441,17 +1453,35 @@ serve(async (req) => {
             delete updatedMetadata.original_intent_category;
             delete updatedMetadata.original_intent_timestamp;
             
-            // Atualizar conversa: limpar metadata + mover para Suporte + status customer
-            await supabaseClient.from('conversations')
-              .update({
-                customer_metadata: updatedMetadata,
-                department: DEPT_SUPORTE_ID
-              })
-              .eq('id', conversationId);
-            
-            await supabaseClient.from('contacts')
-              .update({ status: 'customer', email: detectedEmail })
-              .eq('id', contact.id);
+            if (isExistingCustomerDifferent) {
+              // 🆕 Email pertence a OUTRO contato existente (customer)
+              // Revincula a conversa ao contato correto
+              console.log('[ai-autopilot-chat] 🔄 Revinculando conversa ao cliente existente:', existingCustomerId);
+              
+              await supabaseClient.from('conversations')
+                .update({
+                  contact_id: existingCustomerId,
+                  customer_metadata: updatedMetadata,
+                  department: DEPT_SUPORTE_ID
+                })
+                .eq('id', conversationId);
+              
+              // Atualizar o contato local para usar o cliente correto
+              contact = { ...contact, id: existingCustomerId, email: existingCustomerEmail, status: 'customer' };
+              
+            } else {
+              // Email não existe OU pertence ao mesmo contato - atualizar status
+              await supabaseClient.from('conversations')
+                .update({
+                  customer_metadata: updatedMetadata,
+                  department: DEPT_SUPORTE_ID
+                })
+                .eq('id', conversationId);
+              
+              await supabaseClient.from('contacts')
+                .update({ status: 'customer', email: detectedEmail })
+                .eq('id', contact.id);
+            }
             
             const customerName = verifyResult.customer?.name?.split(' ')[0] || contact.first_name || '';
             
@@ -2465,35 +2495,70 @@ Como posso ajudar você hoje?`;
             // 🎯 TRIAGEM: Email encontrado = Cliente identificado (SEM OTP) → Menu de departamentos
             console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email encontrado - mostrando menu de departamentos');
             
+            // 🆕 CORREÇÃO: Verificar se o email pertence a OUTRO contato existente
+            const existingCustomerId = verifyResult.customer?.id;
+            const existingCustomerEmail = verifyResult.customer?.email;
+            const isExistingCustomerDifferent = existingCustomerId && existingCustomerId !== contact.id;
+            
+            console.log('[ai-autopilot-chat] 🔍 Verificação de contato:', {
+              currentContactId: contact.id,
+              existingCustomerId,
+              existingCustomerEmail,
+              isExistingCustomerDifferent
+            });
+            
             // Buscar template de confirmação com menu
             let foundMessage = await getMessageTemplate(
               supabaseClient,
               'confirmacao_email_encontrado',
-              { contact_name: verifyResult.customer_name || contact.first_name || 'cliente' }
+              { contact_name: verifyResult.customer?.name || verifyResult.customer_name || contact.first_name || 'cliente' }
             );
             
             if (!foundMessage) {
-              foundMessage = `Encontrei seu cadastro, ${verifyResult.customer_name || contact.first_name || 'cliente'}! 🎉\n\nAgora me diz: precisa de ajuda com:\n**1** - Pedidos\n**2** - Sistema`;
+              foundMessage = `Encontrei seu cadastro, ${verifyResult.customer?.name || verifyResult.customer_name || contact.first_name || 'cliente'}! 🎉\n\nAgora me diz: precisa de ajuda com:\n**1** - Pedidos\n**2** - Sistema`;
             }
             
-            // Atualizar contato com email e marcar para escolha do menu
-            await supabaseClient.from('contacts')
-              .update({ 
-                email: emailInMessage.toLowerCase().trim(),
-                status: 'customer'
-              })
-              .eq('id', contact.id);
-            
-            // Marcar que estamos aguardando escolha do menu
-            await supabaseClient.from('conversations')
-              .update({
-                customer_metadata: {
-                  ...(conversation.customer_metadata || {}),
-                  awaiting_menu_choice: true,
-                  email_verified_at: new Date().toISOString()
-                }
-              })
-              .eq('id', conversationId);
+            if (isExistingCustomerDifferent) {
+              // 🆕 Email pertence a OUTRO contato existente (customer)
+              // Revincula a conversa ao contato correto
+              console.log('[ai-autopilot-chat] 🔄 Revinculando conversa ao cliente existente:', existingCustomerId);
+              
+              await supabaseClient.from('conversations')
+                .update({
+                  contact_id: existingCustomerId,
+                  customer_metadata: {
+                    ...(conversation.customer_metadata || {}),
+                    awaiting_menu_choice: true,
+                    email_verified_at: new Date().toISOString(),
+                    original_contact_id: contact.id, // Guardar referência do lead original
+                    rebind_reason: 'email_matched_existing_customer'
+                  }
+                })
+                .eq('id', conversationId);
+              
+              // Atualizar o contato local para usar o cliente correto
+              contact = { ...contact, id: existingCustomerId, email: existingCustomerEmail, status: 'customer' };
+              
+            } else {
+              // Email não existe OU pertence ao mesmo contato - atualizar status
+              await supabaseClient.from('contacts')
+                .update({ 
+                  email: emailInMessage.toLowerCase().trim(),
+                  status: 'customer'
+                })
+                .eq('id', contact.id);
+              
+              // Marcar que estamos aguardando escolha do menu
+              await supabaseClient.from('conversations')
+                .update({
+                  customer_metadata: {
+                    ...(conversation.customer_metadata || {}),
+                    awaiting_menu_choice: true,
+                    email_verified_at: new Date().toISOString()
+                  }
+                })
+                .eq('id', conversationId);
+            }
             
             autoResponse = foundMessage;
           } else if (!verifyResult.found) {
