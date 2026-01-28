@@ -309,3 +309,36 @@ verify_jwt = false
 
 [functions.run-email-backfill]
 verify_jwt = true
+
+[functions.passive-learning-cron]
+verify_jwt = false
+
+[functions.passive-learning-cron.cron]
+schedule = "0 * * * *"
+region = "us-east-1"
+
+[functions.train-ai-pair]
+verify_jwt = true
+
+[functions.extract-knowledge-from-chat]
+verify_jwt = true
+
+[functions.auto-close-conversations]
+verify_jwt = false
+
+[functions.auto-close-conversations.cron]
+schedule = "*/10 * * * *"
+region = "us-east-1"
+
+[functions.process-pending-deal-closures]
+verify_jwt = false
+
+[functions.process-pending-deal-closures.cron]
+schedule = "*/5 * * * *"
+region = "us-east-1"
+
+[functions.validate-by-kiwify-phone]
+verify_jwt = false
+
+[functions.send-admin-alert]
+verify_jwt = true

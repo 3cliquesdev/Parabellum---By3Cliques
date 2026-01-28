@@ -3207,12 +3207,212 @@ Responda APENAS: skip ou search`
     ];
     const looksLikeTrackingQuery = trackingPatterns.some(p => p.test(customerMessage));
     
+    // 🆕 Extrair números de pedido/rastreio da mensagem para PRÉ-CONSULTA
+    const extractedOrderIds = customerMessage.match(/\b\d{7,15}\b/g) || [];
+    const extractedTrackingCodes = customerMessage.match(/\b[A-Z]{2}\d{9,13}[A-Z]{0,2}\b/gi) || [];
+    const allExtractedCodes = [...new Set([...extractedOrderIds, ...extractedTrackingCodes])];
+    
     console.log('[ai-autopilot-chat] 🔍 Tracking query detection:', {
       customerMessage: customerMessage.substring(0, 50),
       looksLikeTrackingQuery,
       canAccessTracking,
-      originalAction: confidenceResult.action
+      originalAction: confidenceResult.action,
+      extractedCodes: allExtractedCodes
     });
+    
+    // 🚚 PRÉ-CONSULTA DIRETA: Se detectar números de pedido/rastreio, consultar MySQL ANTES da IA
+    if (allExtractedCodes.length > 0 && canAccessTracking) {
+      console.log('[ai-autopilot-chat] 🚚 PRÉ-CONSULTA DIRETA: Consultando MySQL com códigos extraídos');
+      
+      try {
+        const { data: fetchResult, error: fetchError } = await supabaseClient.functions.invoke('fetch-tracking', {
+          body: { tracking_codes: allExtractedCodes }
+        });
+        
+        console.log('[ai-autopilot-chat] 🚚 PRÉ-CONSULTA resultado:', {
+          success: fetchResult?.success,
+          found: fetchResult?.found,
+          total: fetchResult?.total_requested,
+          hasData: !!fetchResult?.data
+        });
+        
+        // Se encontrou resultados, retornar resposta direta SEM chamar IA
+        if (fetchResult?.success && fetchResult?.found > 0 && fetchResult?.data) {
+          console.log('[ai-autopilot-chat] 🚚 BYPASS IA: Retornando dados de rastreio diretamente');
+          
+          let directResponse = '';
+          const codesFound: string[] = [];
+          const codesNotFound: string[] = [];
+          
+          for (const code of allExtractedCodes) {
+            const info = fetchResult.data[code];
+            if (info) {
+              codesFound.push(code);
+              const packedAt = info.packed_at_formatted || 'Recentemente';
+              const trackingNum = info.tracking_number || 'Aguardando código';
+              const buyerName = info.buyer_name || '';
+              const status = info.order_status_label || info.status || 'Em processamento';
+              
+              if (info.is_packed) {
+                directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
+📦 Embalado em: ${packedAt}
+🚚 Código de rastreio: ${trackingNum}
+✅ Status: ${status}
+
+`;
+              } else {
+                directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
+⏳ ${info.packing_message || 'Pedido ainda está sendo preparado.'}
+📋 Status: ${status}
+
+`;
+              }
+            } else {
+              codesNotFound.push(code);
+            }
+          }
+          
+          // Adicionar mensagem para códigos não encontrados
+          if (codesNotFound.length > 0) {
+            if (codesNotFound.length === 1) {
+              directResponse += `\n❓ O código **${codesNotFound[0]}** não foi encontrado no sistema.
+Este número está correto? Se sim, pode ser que o pedido ainda não tenha entrado em preparação.`;
+            } else {
+              directResponse += `\n❓ Os seguintes códigos não foram encontrados: ${codesNotFound.join(', ')}
+Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado em preparação.`;
+            }
+          }
+          
+          if (codesFound.length > 0) {
+            directResponse = `Encontrei as informações do seu pedido:\n\n${directResponse}\nPosso ajudar com mais alguma coisa?`;
+          } else {
+            directResponse = directResponse.trim();
+          }
+          
+          // Salvar mensagem no banco
+          const { data: savedDirectMsg } = await supabaseClient
+            .from('messages')
+            .insert({
+              conversation_id: conversationId,
+              content: directResponse,
+              sender_type: 'user',
+              is_ai_generated: true,
+              channel: responseChannel
+            })
+            .select('id')
+            .single();
+          
+          // Enviar via WhatsApp se necessário
+          if (responseChannel === 'whatsapp' && contact?.phone && savedDirectMsg) {
+            const whatsappResult = await getWhatsAppInstanceForConversation(
+              supabaseClient, 
+              conversationId, 
+              conversation.whatsapp_instance_id,
+              conversation
+            );
+            
+            if (whatsappResult) {
+              await sendWhatsAppMessage(
+                supabaseClient,
+                whatsappResult,
+                contact.phone,
+                directResponse,
+                conversationId,
+                contact.whatsapp_id
+              );
+            }
+          }
+          
+          // Atualizar last_message_at
+          await supabaseClient
+            .from('conversations')
+            .update({ last_message_at: new Date().toISOString() })
+            .eq('id', conversationId);
+          
+          return new Response(JSON.stringify({
+            status: 'success',
+            message: directResponse,
+            type: 'direct_tracking_lookup',
+            codes_found: codesFound,
+            codes_not_found: codesNotFound,
+            bypassed_ai: true
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        
+        // Se NÃO encontrou nada, perguntar se o número está correto
+        if (fetchResult?.success && fetchResult?.found === 0) {
+          console.log('[ai-autopilot-chat] 🚚 Nenhum código encontrado - perguntando confirmação');
+          
+          const notFoundMessage = allExtractedCodes.length === 1
+            ? `Não encontrei o pedido **${allExtractedCodes[0]}** no sistema de rastreio.
+
+🤔 Esse número está correto?
+
+Se foi pago recentemente, pode ser que ainda não tenha entrado em preparação. Caso contrário, me envie o número correto para eu verificar novamente.`
+            : `Não encontrei os códigos ${allExtractedCodes.join(', ')} no sistema de rastreio.
+
+🤔 Esses números estão corretos?
+
+Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparação.`;
+          
+          // Salvar mensagem no banco
+          const { data: savedNotFoundMsg } = await supabaseClient
+            .from('messages')
+            .insert({
+              conversation_id: conversationId,
+              content: notFoundMessage,
+              sender_type: 'user',
+              is_ai_generated: true,
+              channel: responseChannel
+            })
+            .select('id')
+            .single();
+          
+          // Enviar via WhatsApp se necessário
+          if (responseChannel === 'whatsapp' && contact?.phone && savedNotFoundMsg) {
+            const whatsappResult = await getWhatsAppInstanceForConversation(
+              supabaseClient, 
+              conversationId, 
+              conversation.whatsapp_instance_id,
+              conversation
+            );
+            
+            if (whatsappResult) {
+              await sendWhatsAppMessage(
+                supabaseClient,
+                whatsappResult,
+                contact.phone,
+                notFoundMessage,
+                conversationId,
+                contact.whatsapp_id
+              );
+            }
+          }
+          
+          // Atualizar last_message_at
+          await supabaseClient
+            .from('conversations')
+            .update({ last_message_at: new Date().toISOString() })
+            .eq('id', conversationId);
+          
+          return new Response(JSON.stringify({
+            status: 'success',
+            message: notFoundMessage,
+            type: 'tracking_not_found_confirmation',
+            codes_searched: allExtractedCodes,
+            bypassed_ai: true
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        
+      } catch (preQueryError) {
+        console.error('[ai-autopilot-chat] ❌ Erro na pré-consulta de rastreio:', preQueryError);
+        // Continua para o fluxo normal da IA
+      }
+    }
     
     // 🆕 Se parece ser consulta de rastreio E temos permissão de tracking, FORÇAR resposta (não handoff)
     if (looksLikeTrackingQuery && canAccessTracking && confidenceResult.action === 'handoff') {
