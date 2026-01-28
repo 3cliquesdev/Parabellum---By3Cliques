@@ -631,12 +631,19 @@ serve(async (req) => {
       const keywords = flow.trigger_keywords || [];
       const triggers = flow.triggers || [];
       const allTriggers = [...keywords, ...triggers];
+      
+      console.log('[process-chat-flow] 🔍 Checking flow:', flow.name, '- triggers:', allTriggers.length);
 
       for (const trigger of allTriggers) {
         const triggerNorm = normalizeText(trigger);
         
+        console.log('[process-chat-flow] 📝 Comparing:', { 
+          triggerNorm: triggerNorm.slice(0, 40), 
+          triggerLen: triggerNorm.length,
+          messageContainsTrigger: messageNorm.includes(triggerNorm)
+        });
+        
         // Match 0: MATCH EXATO - Se a mensagem é igual ou quase igual ao trigger
-        // Isso resolve o caso "Olá vim pelo email e gostaria de saber da promoção de pré carnaval"
         if (messageNorm === triggerNorm) {
           console.log('[process-chat-flow] ✅ Match EXATO (100%):', trigger);
           matchedFlow = flow;
