@@ -627,7 +627,25 @@ serve(async (req) => {
 
     console.log('[process-chat-flow] Checking triggers for message:', messageNorm.slice(0, 80));
 
-    for (const flow of flows) {
+    // 🆕 CORREÇÃO: Filtrar apenas fluxos com triggers definidos (não Master Flows)
+    // Master Flows são processados separadamente como fallback
+    const flowsWithTriggers = flows.filter(flow => {
+      const keywords = flow.trigger_keywords || [];
+      const triggers = flow.triggers || [];
+      const hasTriggers = keywords.length > 0 || triggers.length > 0;
+      
+      // Se é Master Flow e não tem triggers, NÃO incluir aqui (será usado como fallback)
+      if (flow.is_master_flow && !hasTriggers) {
+        console.log('[process-chat-flow] ⏭️ Skipping Master Flow without triggers:', flow.name);
+        return false;
+      }
+      
+      return hasTriggers;
+    });
+
+    console.log('[process-chat-flow] Flows with triggers:', flowsWithTriggers.length, 'of', flows.length);
+
+    for (const flow of flowsWithTriggers) {
       const keywords = flow.trigger_keywords || [];
       const triggers = flow.triggers || [];
       const allTriggers = [...keywords, ...triggers];
