@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "next-themes";
 import App from "./App.tsx";
 import "./index.css";
-import { getCurrentBuildId } from "./lib/build/ensureLatestBuild";
+import { getCurrentBuildId, forceUpdate } from "./lib/build/ensureLatestBuild";
+import { toast } from "sonner";
 
 // ============================================
 // SISTEMA DE AUTO-HEAL DE BUILD + LIMPEZA
@@ -42,18 +43,24 @@ window.addEventListener('error', (event) => {
     message.includes('ChunkLoadError');
   
   if (isChunkError) {
-    console.error('[Main] ❌ Chunk corrompido detectado, forçando reload...', message);
-    
-    // Limpa caches antes de reload
-    const hasCaches = 'caches' in window;
-    if (hasCaches) {
-      caches.keys().then((names: string[]) => {
-        Promise.all(names.map((name: string) => caches.delete(name))).then(() => {
-          location.reload();
-        });
+    console.error('[Main] ❌ Chunk corrompido detectado (auto-reload desativado):', message);
+
+    // IMPORTANTE: não interromper o trabalho do usuário com reload automático.
+    // Mostra um toast com ação manual para atualizar.
+    const shownKey = 'app_chunk_error_toast_shown';
+    if (!sessionStorage.getItem(shownKey)) {
+      sessionStorage.setItem(shownKey, '1');
+      toast.warning('Nova versão pode estar disponível', {
+        description: 'Para evitar perder seu trabalho, a página não recarrega sozinha. Clique em “Atualizar” quando puder.',
+        duration: 15000,
+        action: {
+          label: 'Atualizar',
+          onClick: () => {
+            // mantém o update como ação do usuário
+            setTimeout(() => forceUpdate(), 200);
+          },
+        },
       });
-    } else {
-      location.reload();
     }
   }
 });
@@ -67,8 +74,20 @@ window.addEventListener('unhandledrejection', (event) => {
     reason.includes('Loading chunk');
   
   if (isChunkError) {
-    console.error('[Main] ❌ Promise de chunk rejeitada, forçando reload...', reason);
-    location.reload();
+    console.error('[Main] ❌ Promise de chunk rejeitada (auto-reload desativado):', reason);
+
+    const shownKey = 'app_chunk_error_toast_shown';
+    if (!sessionStorage.getItem(shownKey)) {
+      sessionStorage.setItem(shownKey, '1');
+      toast.warning('Nova versão pode estar disponível', {
+        description: 'A página não recarrega automaticamente. Clique em “Atualizar” quando for conveniente.',
+        duration: 15000,
+        action: {
+          label: 'Atualizar',
+          onClick: () => setTimeout(() => forceUpdate(), 200),
+        },
+      });
+    }
   }
 });
 
