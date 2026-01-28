@@ -999,6 +999,9 @@ serve(async (req) => {
       // 🔐 PRIORIDADE ABSOLUTA: ESTADO awaiting_otp
       // Se há OTP pendente, validar de forma determinística (com/sem espaços)
       // e NUNCA fazer handoff por código incorreto.
+      // 
+      // 🛡️ MELHORIA: Verificar CONTEXTO da conversa para evitar confusão
+      // Se a IA pediu número de pedido/rastreio, NÃO deve tratar como OTP
       // ============================================================
       {
         const conversationMetadata = conversation.customer_metadata || {};
@@ -1006,13 +1009,91 @@ serve(async (req) => {
         const hasAwaitingOTP = conversationMetadata.awaiting_otp === true;
         const otpExpiresAt = conversationMetadata.otp_expires_at;
         const hasRecentOTPPending = otpExpiresAt && new Date(otpExpiresAt) > new Date();
-        const hasOTPPendingContext = (hasAwaitingOTP || hasRecentOTPPending) && !!contact?.email;
+        
+        // 🆕 VERIFICAÇÃO DE CONTEXTO: Buscar última mensagem da IA para entender o contexto
+        let lastAIAskedForOTP = false;
+        let lastAIAskedForOrder = false;
+        
+        try {
+          const { data: recentAIMessages } = await supabaseClient
+            .from('messages')
+            .select('content, created_at')
+            .eq('conversation_id', conversationId)
+            .eq('sender_type', 'user')
+            .eq('is_ai_generated', true)
+            .order('created_at', { ascending: false })
+            .limit(3);
+          
+          if (recentAIMessages && recentAIMessages.length > 0) {
+            const lastAIContent = (recentAIMessages[0]?.content || '').toLowerCase();
+            const last3AIContent = recentAIMessages.map(m => (m.content || '').toLowerCase()).join(' ');
+            
+            // Padrões que indicam que a IA pediu código OTP/verificação
+            const otpContextPatterns = [
+              /c[óo]digo.*verifica[çc][ãa]o/i,
+              /c[óo]digo.*6.*d[íi]gitos/i,
+              /enviamos.*c[óo]digo/i,
+              /digite.*c[óo]digo/i,
+              /informe.*c[óo]digo/i,
+              /reenviar.*c[óo]digo/i,
+              /otp/i,
+              /validar.*identidade/i,
+              /confirmar.*identidade/i
+            ];
+            
+            // Padrões que indicam que a IA pediu número de PEDIDO/RASTREIO
+            const orderContextPatterns = [
+              /n[úu]mero.*pedido/i,
+              /c[óo]digo.*rastreio/i,
+              /c[óo]digo.*rastreamento/i,
+              /informar.*pedido/i,
+              /fornecer.*pedido/i,
+              /qual.*pedido/i,
+              /status.*pedido/i,
+              /verificar.*status/i,
+              /rastrear/i,
+              /tracking/i
+            ];
+            
+            lastAIAskedForOTP = otpContextPatterns.some(p => p.test(lastAIContent) || p.test(last3AIContent));
+            lastAIAskedForOrder = orderContextPatterns.some(p => p.test(lastAIContent));
+            
+            console.log('[ai-autopilot-chat] 📋 Contexto da conversa:', {
+              lastAIMessage: lastAIContent.substring(0, 100),
+              lastAIAskedForOTP,
+              lastAIAskedForOrder,
+              hasAwaitingOTP,
+              hasRecentOTPPending
+            });
+          }
+        } catch (contextErr) {
+          console.error('[ai-autopilot-chat] Erro ao verificar contexto:', contextErr);
+        }
+        
+        // 🛡️ SÓ INTERCEPTAR COMO OTP SE:
+        // 1. Há estado awaiting_otp E
+        // 2. A última mensagem da IA NÃO foi pedindo número de pedido/rastreio
+        // 3. A última mensagem da IA FOI sobre OTP/verificação
+        const shouldTreatAsOTP = (hasAwaitingOTP || hasRecentOTPPending) && 
+                                  !!contact?.email && 
+                                  !lastAIAskedForOrder &&
+                                  (lastAIAskedForOTP || hasAwaitingOTP);
+        
+        console.log('[ai-autopilot-chat] 🔐 Decisão OTP:', {
+          shouldTreatAsOTP,
+          otpDigitsLength: otpDigitsOnly.length,
+          hasAwaitingOTP,
+          lastAIAskedForOrder,
+          lastAIAskedForOTP
+        });
 
-        if (hasOTPPendingContext && otpDigitsOnly.length > 0) {
+        if (shouldTreatAsOTP && otpDigitsOnly.length > 0 && otpDigitsOnly.length !== 0) {
+          // SOMENTE processar como OTP se realmente é contexto de OTP
+          // E se o cliente mandou exatamente 6 dígitos
           const channelToUse = (conversation.channel as string) || responseChannel;
 
-          // Formato inválido (ex: 4 dígitos, 7 dígitos etc.)
-          if (otpDigitsOnly.length !== 6) {
+          // Formato inválido (ex: 4 dígitos, 7 dígitos etc.) - mas SOMENTE se estamos em contexto OTP real
+          if (otpDigitsOnly.length !== 6 && lastAIAskedForOTP && !lastAIAskedForOrder) {
             const otpFormatResponse = `**Código inválido**\n\nO código deve ter **6 dígitos**.\n\nPor favor, envie apenas os 6 números (pode ser com ou sem espaços).\n\nDigite **"reenviar"** se precisar de um novo código.`;
 
             const { data: savedMsg } = await supabaseClient
@@ -1056,76 +1137,83 @@ serve(async (req) => {
             });
           }
 
-          // Formato ok: validar
-          try {
-            const { data: otpData, error: otpError } = await supabaseClient.functions.invoke('verify-code', {
-              body: { email: contact.email, code: otpDigitsOnly }
-            });
-            if (otpError) throw otpError;
+          // Formato ok (6 dígitos): validar SOMENTE se contexto é realmente OTP
+          // Se a IA pediu número de pedido, NÃO validar como OTP - deixar fluir para busca de rastreio
+          if (lastAIAskedForOrder && !lastAIAskedForOTP) {
+            console.log('[ai-autopilot-chat] 🔄 6 dígitos recebidos, mas contexto é PEDIDO - não tratando como OTP');
+            // Não fazer nada, deixar o fluxo continuar para buscar rastreio
+          } else if (otpDigitsOnly.length === 6) {
+            // Contexto é realmente OTP E tem 6 dígitos - validar
+            try {
+              const { data: otpData, error: otpError } = await supabaseClient.functions.invoke('verify-code', {
+                body: { email: contact.email, code: otpDigitsOnly }
+              });
+              if (otpError) throw otpError;
 
-            const errorMessage = otpData?.error || 'O código não é válido. Verifique e tente novamente.';
-            const contactName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim();
+              const errorMessage = otpData?.error || 'O código não é válido. Verifique e tente novamente.';
+              const contactName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim();
 
-            const otpResponse = otpData?.success
-              ? `**Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada.\n\nAgora posso te ajudar com questões financeiras. Como posso te ajudar?`
-              : `**Código inválido**\n\n${errorMessage}\n\nDigite **"reenviar"** se precisar de um novo código.`;
+              const otpResponse = otpData?.success
+                ? `**Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada.\n\nAgora posso te ajudar com questões financeiras. Como posso te ajudar?`
+                : `**Código inválido**\n\n${errorMessage}\n\nDigite **"reenviar"** se precisar de um novo código.`;
 
-            if (otpData?.success) {
-              await supabaseClient
-                .from('conversations')
-                .update({
-                  customer_metadata: {
-                    ...conversationMetadata,
-                    awaiting_otp: false,
-                    otp_expires_at: null,
-                    last_otp_verified_at: new Date().toISOString()
-                  }
-                })
-                .eq('id', conversationId);
-            }
-
-            const { data: savedMsg } = await supabaseClient
-              .from('messages')
-              .insert({
-                conversation_id: conversationId,
-                content: otpResponse,
-                sender_type: 'user',
-                is_ai_generated: true,
-                channel: channelToUse
-              })
-              .select()
-              .single();
-
-            if (channelToUse === 'whatsapp' && contact?.phone) {
-              const whatsappResult = await getWhatsAppInstanceForConversation(
-                supabaseClient,
-                conversationId,
-                conversation.whatsapp_instance_id,
-                conversation
-              );
-              if (whatsappResult) {
-                await sendWhatsAppMessage(
-                  supabaseClient,
-                  whatsappResult,
-                  contact.phone,
-                  otpResponse,
-                  conversationId,
-                  contact.whatsapp_id
-                );
+              if (otpData?.success) {
+                await supabaseClient
+                  .from('conversations')
+                  .update({
+                    customer_metadata: {
+                      ...conversationMetadata,
+                      awaiting_otp: false,
+                      otp_expires_at: null,
+                      last_otp_verified_at: new Date().toISOString()
+                    }
+                  })
+                  .eq('id', conversationId);
               }
-            }
 
-            return new Response(JSON.stringify({
-              response: otpResponse,
-              messageId: savedMsg?.id,
-              otpValidated: otpData?.success || false,
-              debug: { reason: 'otp_priority_validation_bypass', otp_success: otpData?.success, bypassed_ai: true }
-            }), {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            });
-          } catch (err) {
-            console.error('[ai-autopilot-chat] ❌ Erro ao validar OTP (prioridade):', err);
-            // Se falhar, segue o fluxo normal (mas não é esperado)
+              const { data: savedMsg } = await supabaseClient
+                .from('messages')
+                .insert({
+                  conversation_id: conversationId,
+                  content: otpResponse,
+                  sender_type: 'user',
+                  is_ai_generated: true,
+                  channel: channelToUse
+                })
+                .select()
+                .single();
+
+              if (channelToUse === 'whatsapp' && contact?.phone) {
+                const whatsappResult = await getWhatsAppInstanceForConversation(
+                  supabaseClient,
+                  conversationId,
+                  conversation.whatsapp_instance_id,
+                  conversation
+                );
+                if (whatsappResult) {
+                  await sendWhatsAppMessage(
+                    supabaseClient,
+                    whatsappResult,
+                    contact.phone,
+                    otpResponse,
+                    conversationId,
+                    contact.whatsapp_id
+                  );
+                }
+              }
+
+              return new Response(JSON.stringify({
+                response: otpResponse,
+                messageId: savedMsg?.id,
+                otpValidated: otpData?.success || false,
+                debug: { reason: 'otp_priority_validation_bypass', otp_success: otpData?.success, bypassed_ai: true }
+              }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              });
+            } catch (err) {
+              console.error('[ai-autopilot-chat] ❌ Erro ao validar OTP (prioridade):', err);
+              // Se falhar, segue o fluxo normal (mas não é esperado)
+            }
           }
         }
       }
