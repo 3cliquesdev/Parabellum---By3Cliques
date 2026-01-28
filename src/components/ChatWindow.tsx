@@ -19,6 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
+import { useSendMessageInstant } from "@/hooks/useSendMessageInstant";
 import { useSendEmail } from "@/hooks/useSendEmail";
 import { useAuth } from "@/hooks/useAuth";
 import { useAIMode } from "@/hooks/useAIMode";
@@ -85,6 +86,7 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
   const { data: activePersona } = useActivePersona(conversation?.id || null);
   const sendMessage = useSendMessage();
+  const { sendInstant } = useSendMessageInstant();
   const sendEmail = useSendEmail();
   const takeControl = useTakeControl();
   const returnToAutopilot = useReturnToAutopilot();
@@ -222,14 +224,17 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
           // Don't throw - message is saved with failed status for retry
         }
       } else {
-        // Web chat - save directly (no external API)
-        await sendMessage.mutateAsync({
-          conversation_id: conversation.id,
+        // Web chat - INSTANT send (fire-and-forget)
+        // Mensagem aparece IMEDIATAMENTE (<50ms) - não bloqueia UI
+        sendInstant({
+          conversationId: conversation.id,
           content: messageContent,
-          sender_type: "user",
-          sender_id: user?.id || null,
-          status: 'sent',
+          isInternal: false,
+          channel: 'web_chat',
         });
+        // Input limpa instantaneamente - não aguarda persistência
+        setMessage("");
+        return; // Exit early - sendInstant já atualizou o cache
       }
 
       setMessage("");
