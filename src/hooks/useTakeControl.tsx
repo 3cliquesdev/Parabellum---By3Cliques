@@ -38,39 +38,44 @@ export function useTakeControl() {
 
       console.log('[useTakeControl] Assumindo controle da conversa:', conversationId);
 
-      // 🔒 Regra operacional: para assumir conversa, o atendente precisa estar ONLINE.
-      // Caso contrário, processos automáticos podem redistribuir imediatamente a conversa de volta para o pool.
-      const { data: myProfile, error: myProfileError } = await supabase
-        .from('profiles')
-        .select('availability_status')
-        .eq('id', user.id)
+      // 0. Buscar role do usuário primeiro para verificar se precisa de validação de status
+      const { data: userRoleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      const userRole = userRoleData?.role || null;
+      
+      // 🔒 Regra operacional: atendentes precisam estar ONLINE para assumir conversas.
+      // EXCEÇÃO: Gerentes e Admins podem assumir conversas independente do status.
+      const isManagerOrAdmin = userRole && hasFullInboxAccess(userRole);
+      
+      if (!isManagerOrAdmin) {
+        const { data: myProfile, error: myProfileError } = await supabase
+          .from('profiles')
+          .select('availability_status')
+          .eq('id', user.id)
+          .single();
+
+        if (myProfileError) {
+          console.error('[useTakeControl] Erro ao verificar availability_status:', myProfileError);
+          throw new Error('Não foi possível verificar seu status. Tente novamente.');
+        }
+
+        if (myProfile?.availability_status !== 'online') {
+          throw new Error('Para assumir uma conversa, altere seu status para Online e tente novamente.');
+        }
+      } else {
+        console.log('[useTakeControl] ✅ Usuário é gerente/admin - status online não obrigatório');
+      }
+
+      // Buscar dados da conversa para validação (role já foi buscado acima)
+      const { data: conversation, error: convError } = await supabase
+        .from('conversations')
+        .select('id, department, assigned_to, ai_mode, status, departments:department(id, name)')
+        .eq('id', conversationId)
         .single();
-
-      if (myProfileError) {
-        console.error('[useTakeControl] Erro ao verificar availability_status:', myProfileError);
-        throw new Error('Não foi possível verificar seu status. Tente novamente.');
-      }
-
-      if (myProfile?.availability_status !== 'online') {
-        throw new Error('Para assumir uma conversa, altere seu status para Online e tente novamente.');
-      }
-
-      // 0. Buscar role do usuário e dados da conversa para validação
-      const [userRoleResult, conversationResult] = await Promise.all([
-        supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .maybeSingle(),
-        supabase
-          .from('conversations')
-          .select('id, department, assigned_to, ai_mode, status, departments:department(id, name)')
-          .eq('id', conversationId)
-          .single()
-      ]);
-
-      const userRole = userRoleResult.data?.role || null;
-      const conversation = conversationResult.data;
 
       if (!conversation) {
         throw new Error('Conversa não encontrada');
