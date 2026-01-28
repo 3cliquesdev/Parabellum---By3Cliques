@@ -2,6 +2,7 @@ import { memo, useEffect, useState, useRef, CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ChannelIcon } from "@/components/ChannelIcon";
 import { SentimentBadge } from "@/components/SentimentBadge";
 import { Star, WifiOff } from "lucide-react";
@@ -38,6 +39,9 @@ interface ConversationListItemProps {
   index: number;
   unreadCount?: number;
   style?: CSSProperties;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 // Calcular cor do indicador de SLA com níveis progressivos granulares
@@ -125,7 +129,10 @@ function ConversationListItemComponent({
   onClick,
   index,
   unreadCount = 0,
-  style
+  style,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }: ConversationListItemProps) {
   // Buscar status das instâncias WhatsApp para indicar offline
   const { data: whatsappInstances } = useWhatsAppInstances();
@@ -192,15 +199,43 @@ function ConversationListItemComponent({
   const lastMessage = messages?.[0];
   const lastMessagePreview = lastMessage?.content?.slice(0, 50) || "";
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (selectionMode && onToggleSelect) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleSelect(conversation.id);
+    } else {
+      onClick();
+    }
+  };
+
+  const handleCheckboxClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       style={style}
       className={cn(
         "w-full p-3 flex items-start gap-3 hover:bg-accent transition-colors text-left relative group border-b border-border",
-        isActive && "bg-accent dark:bg-white/[0.05] border-l-2 border-l-primary"
+        isActive && "bg-accent dark:bg-white/[0.05] border-l-2 border-l-primary",
+        isSelected && "bg-primary/10"
       )}
     >
+      {/* Checkbox para seleção em massa */}
+      {selectionMode && (
+        <div 
+          className="shrink-0 flex items-center pt-1"
+          onClick={handleCheckboxClick}
+        >
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => onToggleSelect?.(conversation.id)}
+          />
+        </div>
+      )}
+
       {/* Avatar com ícone de canal */}
       <div className="relative shrink-0">
         <Avatar className={cn(
@@ -346,6 +381,8 @@ export const ConversationListItem = memo(ConversationListItemComponent, (prev, n
     prev.conversation.ai_mode === next.conversation.ai_mode &&
     prev.conversation.assigned_to === next.conversation.assigned_to &&
     prev.isActive === next.isActive &&
-    prev.unreadCount === next.unreadCount
+    prev.unreadCount === next.unreadCount &&
+    prev.selectionMode === next.selectionMode &&
+    prev.isSelected === next.isSelected
   );
 });
