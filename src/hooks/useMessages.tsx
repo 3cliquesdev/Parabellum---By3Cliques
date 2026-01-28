@@ -45,6 +45,11 @@ export function useMessages(conversationId: string | null) {
       return data as any[];
     },
     enabled: !!conversationId,
+    // PRESERVAÇÃO DE HISTÓRICO: Manter cache por mais tempo para não perder mensagens
+    staleTime: 1000 * 60 * 5, // 5 minutos - dados são considerados frescos
+    gcTime: 1000 * 60 * 30, // 30 minutos - manter em cache mesmo após inativo
+    refetchOnWindowFocus: true, // Recarregar ao voltar para a aba
+    refetchOnReconnect: true, // Recarregar ao reconectar internet
   });
 
   // Realtime subscription - otimizado para evitar conflitos
