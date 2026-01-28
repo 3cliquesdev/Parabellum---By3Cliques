@@ -195,6 +195,13 @@ function mergeInboxItems(existing: InboxViewItem[], incoming: InboxViewItem[]): 
   );
 }
 
+function sortInboxItemsByUpdatedAtDesc(items: InboxViewItem[]): InboxViewItem[] {
+  // Never mutate input array (critical for React Query cache + react-window stability)
+  return [...items].sort((a, b) =>
+    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
+}
+
 export function useInboxView(filters?: InboxFilters) {
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
@@ -377,10 +384,8 @@ export function useInboxView(filters?: InboxFilters) {
                     } 
                   : item
               );
-              // Ordenar por updated_at DESC para mover conversa pro topo
-              return updated.sort((a, b) => 
-                new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-              );
+              // Ordenar por updated_at DESC para mover conversa pro topo (sem mutar array)
+              return sortInboxItemsByUpdatedAtDesc(updated);
             }
           );
         }
@@ -443,9 +448,7 @@ export function useInboxView(filters?: InboxFilters) {
                     } 
                   : item
               );
-              return updated.sort((a, b) => 
-                new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-              );
+              return sortInboxItemsByUpdatedAtDesc(updated);
             }
           );
         }

@@ -205,8 +205,8 @@ export function useMessages(conversationId: string | null) {
                       } 
                     : item
                 );
-                // Ordenar por updated_at DESC para mover a conversa pro topo
-                return updated.sort((a, b) => 
+                // Ordenar por updated_at DESC para mover a conversa pro topo (não mutar)
+                return [...updated].sort((a, b) => 
                   new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
                 );
               }
