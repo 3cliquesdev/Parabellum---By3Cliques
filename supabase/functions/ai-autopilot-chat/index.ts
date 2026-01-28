@@ -551,15 +551,31 @@ interface ConfidenceResult {
   department?: string;
 }
 
-// Thresholds - AJUSTADOS para usar artigos com 50%+ de similaridade
-// Antes estava muito alto (0.95/0.85) e rejeitava artigos válidos
+// Thresholds - AJUSTADOS: IA deve SEMPRE tentar responder, só handoff se cliente PEDIR
+// A IA NÃO deve transferir automaticamente por baixa confiança
 const SCORE_DIRECT = 0.75;   // Alta confiança - responde direto
-const SCORE_CAUTIOUS = 0.55; // Média confiança - responde com cautela (permite 60% similarity)
-const SCORE_MINIMUM = 0.30;  // Mínimo para tentar responder (abaixo = handoff) - AJUSTADO: 0.40→0.30
+const SCORE_CAUTIOUS = 0.40; // Média confiança - responde com cautela 
+const SCORE_MINIMUM = 0.10;  // Mínimo MUITO BAIXO - IA tenta responder SEMPRE, handoff só manual
 
 // 🆕 Thresholds do MODO RAG ESTRITO (Anti-Alucinação) - mais conservador
-const STRICT_SCORE_MINIMUM = 0.70;   // Abaixo disso, SEMPRE handoff no modo estrito
-const STRICT_SIMILARITY_THRESHOLD = 0.65; // Artigos com menos de 65% são ignorados
+const STRICT_SCORE_MINIMUM = 0.50;   // Modo estrito mais tolerante
+const STRICT_SIMILARITY_THRESHOLD = 0.45; // Artigos com menos de 45% são ignorados
+
+// 🆕 PADRÕES DE PEDIDO EXPLÍCITO DE ATENDENTE HUMANO
+// SÓ fazer handoff automático se cliente usar essas frases
+const EXPLICIT_HUMAN_REQUEST_PATTERNS = [
+  /quero\s*(falar\s*(com)?)?\s*(um\s*)?(atendente|humano|pessoa|agente|suporte)/i,
+  /preciso\s*(de\s*)?(um\s*)?(atendente|humano|pessoa|agente)/i,
+  /fala(r)?\s+com\s+(um\s+)?(atendente|humano|pessoa|alguém|alguem)/i,
+  /atendente\s*(humano)?/i,
+  /pode\s*(me)?\s*transferir/i,
+  /transferir\s*(para)?\s*(um\s*)?(atendente|humano)/i,
+  /chamar?\s*(um\s*)?(atendente|humano|pessoa)/i,
+  /não\s*consigo\s*resolver\s*(sozinho)?/i,
+  /atendimento\s*humano/i,
+  /pessoa\s*real/i,
+  /suporte\s*humano/i,
+];
 
 // 🆕 Indicadores de incerteza/alucinação para validação pós-resposta
 const HALLUCINATION_INDICATORS = [
@@ -578,12 +594,9 @@ const HALLUCINATION_INDICATORS = [
 // Indicadores de conflito
 const CONFLICT_INDICATORS = ['porém', 'entretanto', 'no entanto', 'diferente', 'contrário', 'atualizado', 'novo', 'antigo'];
 
-// Gatilhos de handoff imediato por departamento
-const IMMEDIATE_HANDOFF_TRIGGERS: Record<string, string[]> = {
-  financeiro: ['estorno judicial', 'processo', 'advogado', 'procon', 'reclamação formal', 'cobrança indevida', 'fraude'],
-  juridico: ['contrato', 'termos de uso', 'lgpd', 'dados pessoais', 'indenização'],
-  tecnico: ['sistema fora', 'erro crítico', 'perdi tudo', 'não funciona nada'],
-};
+// 🆕 GATILHOS REMOVIDOS: IA não faz mais handoff automático por keywords
+// A IA agora SEMPRE tenta responder e só transfere se cliente PEDIR EXPLICITAMENTE
+// const IMMEDIATE_HANDOFF_TRIGGERS foi REMOVIDO
 
 // Helper: Calcular cobertura da query pelos documentos
 function calculateCoverage(query: string, documents: RetrievedDocument[]): number {
@@ -629,21 +642,11 @@ function detectConflicts(documents: RetrievedDocument[]): boolean {
   );
 }
 
-// Helper: Verificar handoff imediato
+// 🆕 Helper: Verificar handoff imediato - DESABILITADO
+// IA NÃO faz mais handoff automático por keywords
 function checkImmediateHandoff(query: string): { triggered: boolean; dept?: string; reason?: string } {
-  const queryLower = query.toLowerCase();
-  
-  for (const [dept, triggers] of Object.entries(IMMEDIATE_HANDOFF_TRIGGERS)) {
-    for (const trigger of triggers) {
-      if (queryLower.includes(trigger)) {
-        return { 
-          triggered: true, 
-          dept, 
-          reason: `Gatilho imediato: "${trigger}"` 
-        };
-      }
-    }
-  }
+  // REMOVIDO: Handoff automático por keywords
+  // Agora retorna sempre false - handoff só acontece se cliente PEDIR EXPLICITAMENTE
   return { triggered: false };
 }
 
@@ -724,7 +727,8 @@ function calculateConfidenceScore(query: string, documents: RetrievedDocument[])
   
   score = Math.max(0, Math.min(1, score)); // Clamp 0-1
   
-  // 5. Determinar ação
+  // 5. Determinar ação - NOVA LÓGICA: IA SEMPRE tenta responder
+  // Handoff SÓ acontece se cliente pedir explicitamente (verificado separadamente)
   let action: 'direct' | 'cautious' | 'handoff';
   let reason: string;
   
@@ -733,14 +737,17 @@ function calculateConfidenceScore(query: string, documents: RetrievedDocument[])
     reason = `Alta confiança (${(score * 100).toFixed(0)}%) - Resposta direta`;
   } else if (score >= SCORE_CAUTIOUS) {
     action = 'cautious';
-    reason = `Confiança média (${(score * 100).toFixed(0)}%) - Resposta cautelosa com base na KB`;
-  } else if (score >= SCORE_MINIMUM) {
-    // 🆕 Novo nível: tenta responder mesmo com baixa confiança (40-55%)
+    reason = `Confiança média (${(score * 100).toFixed(0)}%) - Resposta com base na KB`;
+  } else if (documents.length > 0) {
+    // 🆕 MUDANÇA CRÍTICA: Se tem QUALQUER artigo, tenta responder com cautela
+    // NÃO faz handoff automático por score baixo
     action = 'cautious';
-    reason = `Baixa confiança (${(score * 100).toFixed(0)}%) - Tentando responder com artigos disponíveis`;
+    reason = `Baixa confiança (${(score * 100).toFixed(0)}%) mas encontrou ${documents.length} artigo(s) - tentando responder`;
   } else {
-    action = 'handoff';
-    reason = `Muito baixa confiança (${(score * 100).toFixed(0)}%) - Handoff recomendado`;
+    // 🆕 Só marca handoff se NÃO tem NENHUM artigo na KB
+    // Mas mesmo assim, o handoff real só acontece se cliente PEDIR explicitamente
+    action = 'cautious'; // Mudado de 'handoff' para 'cautious' - IA tenta ajudar sempre
+    reason = `Nenhum artigo encontrado (${(score * 100).toFixed(0)}%) - Resposta genérica, oferecendo ajuda`;
   }
   
   return {
@@ -748,7 +755,7 @@ function calculateConfidenceScore(query: string, documents: RetrievedDocument[])
     components: { retrieval: confRetrieval, coverage, conflicts },
     action,
     reason,
-    department: action === 'handoff' ? pickDepartment(query) : undefined
+    department: undefined // Removido handoff automático por departamento
   };
 }
 
@@ -3981,8 +3988,24 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       });
     }
     
-    if (confidenceResult.action === 'handoff' && !shouldSkipHandoff) {
-      console.log('[ai-autopilot-chat] 🚨 LOW CONFIDENCE HANDOFF - Score:', confidenceResult.score);
+    // 🆕 NOVA VERIFICAÇÃO: Cliente pediu EXPLICITAMENTE por humano?
+    // Só faz handoff se cliente usou uma das frases de pedido explícito
+    const customerRequestedHuman = EXPLICIT_HUMAN_REQUEST_PATTERNS.some(pattern => 
+      pattern.test(customerMessage)
+    );
+    
+    console.log('[ai-autopilot-chat] 🔍 Handoff check:', {
+      confidenceAction: confidenceResult.action,
+      customerRequestedHuman,
+      shouldSkipHandoff,
+      customerMessage: customerMessage.substring(0, 60)
+    });
+    
+    // 🆕 MUDANÇA CRÍTICA: Só fazer handoff se cliente PEDIR EXPLICITAMENTE
+    // OU se action é 'handoff' E cliente pediu humano
+    // REMOVIDO: handoff automático por baixa confiança
+    if (customerRequestedHuman) {
+      console.log('[ai-autopilot-chat] 🚨 CLIENTE PEDIU HUMANO EXPLICITAMENTE');
       
       // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente → PEDIR EMAIL PRIMEIRO
       const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated && !isPhoneVerified;
@@ -3997,8 +4020,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         contactStatus: contact.status
       });
       
-      // 🆕 NOVA LÓGICA: Lead sem email → NÃO fazer handoff, pedir email primeiro
-      // 🛡️ ANTI-LOOP: Verificar se já está aguardando email
+      // Lead sem email → Pedir email primeiro antes de transferir
       if (isLeadWithoutEmail) {
         const existingMetadata = conversation.customer_metadata || {};
         const alreadyAwaitingEmail = existingMetadata.awaiting_email_for_handoff === true;
@@ -5121,37 +5143,55 @@ ${isRecentlyVerified ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira
     // 🐛 DEBUG: Confirmar que priorityInstruction está sendo gerada
     console.log('[ai-autopilot-chat] 📣 Priority Instruction:', priorityInstruction ? 'SET ✅' : 'EMPTY ❌');
     
-    // 🎯 INSTRUÇÃO ANTI-ALUCINAÇÃO - Obrigar IA a admitir quando não sabe
-    const antiHallucinationInstruction = confidenceResult.action === 'cautious' 
-      ? `\n\n**⚠️ ATENÇÃO - CONFIANÇA MÉDIA (${(confidenceResult.score * 100).toFixed(0)}%):**
-Você encontrou POUCA informação na base de conhecimento sobre o assunto.
-- Responda com cautela e prefixe sua resposta indicando incerteza
-- Se não tiver certeza, ADMITA: "Não tenho informação completa sobre isso"
-- OFEREÇA transferir para um especialista se o cliente precisar de mais detalhes\n`
-      : '';
+    // 🎯 INSTRUÇÃO ANTI-ALUCINAÇÃO - IA SEMPRE tenta responder, NÃO transfere automaticamente
+    const antiHallucinationInstruction = `
+
+**🚫 REGRA CRÍTICA ANTI-TRANSFERÊNCIA AUTOMÁTICA:**
+Você NÃO PODE transferir para atendente humano automaticamente por "baixa confiança" ou "não ter informação".
+SÓ transfira se o cliente PEDIR EXPLICITAMENTE com frases como:
+- "Quero falar com um atendente"
+- "Preciso de um humano"
+- "Chama alguém para me ajudar"
+- "Transferir para suporte"
+
+SE você não tiver informação sobre o assunto:
+1. TENTE responder com o que você sabe da base de conhecimento
+2. Se não tiver NADA, responda: "Não encontrei essa informação específica na minha base. Pode me dar mais detalhes sobre o que precisa?"
+3. NUNCA diga "vou te transferir" ou "vou chamar um especialista" sem o cliente pedir
+4. SEMPRE pergunte se pode ajudar de outra forma ANTES de sugerir transferência
+
+**COMPORTAMENTO ESPERADO:**
+- Cliente pergunta algo → IA tenta responder com KB
+- IA não encontra na KB → IA pede mais detalhes ou oferece outras opções
+- Cliente INSISTE ou PEDE humano → Só então transfere
+
+**PROIBIDO:**
+- Transferir automaticamente por score baixo
+- Dizer "vou chamar um especialista" sem cliente pedir
+- Abandonar cliente sem tentar ajudar
+`;
 
     const contextualizedSystemPrompt = `${priorityInstruction}${antiHallucinationInstruction}
 
-**🚫 REGRA CRÍTICA DE HANDOFF (OBRIGATÓRIO):**
-VOCÊ NÃO PODE transferir para atendente humano (request_human_agent) até que o cliente esteja IDENTIFICADO:
-- Cliente DEVE ter fornecido email E email foi verificado na base (email_verified_in_db=true)
-- OU cliente já tem email cadastrado no contato
+**🚫 REGRA DE HANDOFF (SÓ QUANDO CLIENTE PEDIR):**
+Transferência para humano SÓ acontece quando:
+- Cliente pedir EXPLICITAMENTE: "quero falar com humano", "atendente", "transferir"
+- E cliente estiver IDENTIFICADO (tem email verificado)
 
-SE cliente pedir atendente humano mas NÃO está identificado:
+SE cliente pedir atendente mas NÃO está identificado:
 → Responda: "Claro! Para conectar você com um atendente, preciso primeiro confirmar sua identidade. Qual é o seu email de cadastro?"
 → AGUARDE o email
 → Use verify_customer_email para validar
 → SÓ ENTÃO pode usar request_human_agent
 
-**⚠️ REGRA CRÍTICA ANTI-ALUCINAÇÃO:**
-Se você NÃO encontrar informação na BASE DE CONHECIMENTO para responder a pergunta do cliente:
+**⚠️ ANTI-ALUCINAÇÃO - MAS NÃO TRANSFERIR:**
+Se você NÃO encontrar informação na BASE DE CONHECIMENTO:
 1. NÃO INVENTE informações
-2. NÃO use conhecimento externo não validado pela empresa
-3. Se cliente JÁ IDENTIFICADO (tem email verificado): "Não encontrei essa informação. Posso te conectar com um especialista?"
-4. Se cliente NÃO IDENTIFICADO: "Não encontrei essa informação. Para te ajudar melhor, qual é o seu email de cadastro?"
-5. AGUARDE email → verifique → depois pode oferecer handoff
+2. NÃO transfira automaticamente
+3. Responda: "Não encontrei informação sobre isso na minha base. Pode me dar mais detalhes ou perguntar de outra forma?"
+4. SÓ ofereça transferência se cliente pedir ou insistir muito
 
-É MELHOR admitir que não sabe do que fornecer informação ERRADA.
+É MELHOR admitir que não sabe e perguntar mais do que TRANSFERIR sem necessidade.
 
 ---
 
