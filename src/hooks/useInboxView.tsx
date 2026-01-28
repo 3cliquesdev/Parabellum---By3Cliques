@@ -312,6 +312,9 @@ export function useInboxView(filters?: InboxFilters) {
             }
           );
 
+          // Invalidar counts para atualizar badges do sidebar
+          queryClient.invalidateQueries({ queryKey: ["inbox-counts"], exact: false });
+
           // Atualizar cursor
           if (row.updated_at && (!lastSeenRef.current || row.updated_at > lastSeenRef.current)) {
             lastSeenRef.current = row.updated_at;
@@ -418,6 +421,7 @@ export function useInboxView(filters?: InboxFilters) {
           // Fazer refetch para obter dados completos da inbox_view
           // O invalidateQueries forçará um refetch automático
           queryClient.invalidateQueries({ queryKey: ["inbox-view"], exact: false });
+          queryClient.invalidateQueries({ queryKey: ["inbox-counts"], exact: false });
         }
       )
       .on(
@@ -456,6 +460,9 @@ export function useInboxView(filters?: InboxFilters) {
               return sortInboxItemsByUpdatedAtDesc(updated);
             }
           );
+
+          // Invalidar counts para atualizar badges do sidebar
+          queryClient.invalidateQueries({ queryKey: ["inbox-counts"], exact: false });
         }
       )
       .subscribe((status) => {
@@ -536,11 +543,13 @@ export interface InboxCounts {
 }
 
 export function useInboxCounts(userId?: string) {
-  const { role } = useUserRole();
-  const { departmentIds } = useDepartmentsByRole(role);
+  const { role, loading: roleLoading } = useUserRole();
+  const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role);
 
   return useQuery<InboxCounts>({
     queryKey: ["inbox-counts", userId, role, departmentIds],
+    // Rodar assim que tivermos role (departmentIds pode ser null para admins)
+    enabled: !!role && !roleLoading,
     queryFn: async (): Promise<InboxCounts> => {
       // Buscar dados de inbox com filtro de role
       let query = supabase
@@ -629,7 +638,7 @@ export function useInboxCounts(userId?: string) {
         byTag,
       };
     },
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: 15 * 1000,
+    refetchInterval: 30 * 1000,
   });
 }
