@@ -96,7 +96,13 @@ export default function LostReasonDialog({
               <SelectTrigger id="reason">
                 <SelectValue placeholder="Selecione o motivo..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent 
+                position="popper" 
+                side="bottom" 
+                align="start"
+                sideOffset={4}
+                className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+              >
                 {LOST_REASONS.map((r) => (
                   <SelectItem key={r.value} value={r.value}>
                     {r.label}

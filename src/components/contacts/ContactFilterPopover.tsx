@@ -155,7 +155,13 @@ export default function ContactFilterPopover({ filters, onFiltersChange }: Conta
               <SelectTrigger>
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent 
+                position="popper" 
+                side="bottom" 
+                align="start"
+                sideOffset={4}
+                className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+              >
                 <SelectItem value="all">Todos</SelectItem>
                 {CONTACT_STATUS.map((status) => (
                   <SelectItem key={status.value} value={status.value}>
@@ -179,7 +185,13 @@ export default function ContactFilterPopover({ filters, onFiltersChange }: Conta
               <SelectTrigger>
                 <SelectValue placeholder="Qualquer data" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent 
+                position="popper" 
+                side="bottom" 
+                align="start"
+                sideOffset={4}
+                className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+              >
                 <SelectItem value="all">Qualquer data</SelectItem>
                 {LAST_CONTACT_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
@@ -231,7 +243,13 @@ export default function ContactFilterPopover({ filters, onFiltersChange }: Conta
               <SelectTrigger>
                 <SelectValue placeholder="Todos os estados" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent 
+                position="popper" 
+                side="bottom" 
+                align="start"
+                sideOffset={4}
+                className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+              >
                 <SelectItem value="all">Todos os estados</SelectItem>
                 {BRAZILIAN_STATES.map((state) => (
                   <SelectItem key={state} value={state}>
@@ -252,7 +270,13 @@ export default function ContactFilterPopover({ filters, onFiltersChange }: Conta
               <SelectTrigger>
                 <SelectValue placeholder="Todos os tipos" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent 
+                position="popper" 
+                side="bottom" 
+                align="start"
+                sideOffset={4}
+                className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+              >
                 <SelectItem value="all">Todos os tipos</SelectItem>
                 {CUSTOMER_TYPES.map((type) => (
                   <SelectItem key={type.value} value={type.value}>
@@ -273,7 +297,13 @@ export default function ContactFilterPopover({ filters, onFiltersChange }: Conta
               <SelectTrigger>
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent 
+                position="popper" 
+                side="bottom" 
+                align="start"
+                sideOffset={4}
+                className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+              >
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="false">Ativos</SelectItem>
                 <SelectItem value="true">Bloqueados</SelectItem>
@@ -291,7 +321,13 @@ export default function ContactFilterPopover({ filters, onFiltersChange }: Conta
               <SelectTrigger>
                 <SelectValue placeholder="Todos os planos" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent 
+                position="popper" 
+                side="bottom" 
+                align="start"
+                sideOffset={4}
+                className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+              >
                 <SelectItem value="all">Todos os planos</SelectItem>
                 {SUBSCRIPTION_PLANS.map((plan) => (
                   <SelectItem key={plan.value} value={plan.value}>

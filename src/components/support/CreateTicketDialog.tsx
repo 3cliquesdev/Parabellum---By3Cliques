@@ -384,7 +384,13 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-popover z-[9999]">
+                <SelectContent 
+                  position="popper" 
+                  side="bottom" 
+                  align="start"
+                  sideOffset={4}
+                  className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                >
                   <SelectItem value="low">Baixa</SelectItem>
                   <SelectItem value="medium">Média</SelectItem>
                   <SelectItem value="high">Alta</SelectItem>
@@ -433,7 +439,13 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                   <SelectTrigger>
                     <SelectValue placeholder={categories.length === 0 ? "Carregando..." : "Selecione"} />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover z-[9999]">
+                  <SelectContent 
+                    position="popper" 
+                    side="bottom" 
+                    align="start"
+                    sideOffset={4}
+                    className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                  >
                     {categories.length > 0 ? (
                       categories.map((cat) => (
                         <SelectItem key={cat.id} value={cat.name}>
@@ -459,7 +471,13 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
-                <SelectContent className="bg-popover z-[9999]">
+                <SelectContent 
+                  position="popper" 
+                  side="bottom" 
+                  align="start"
+                  sideOffset={4}
+                  className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                >
                   <SelectItem value="none">Nenhum</SelectItem>
                   {activeDepartments.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
@@ -476,7 +494,13 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
-                <SelectContent className="bg-popover z-[9999]">
+                <SelectContent 
+                  position="popper" 
+                  side="bottom" 
+                  align="start"
+                  sideOffset={4}
+                  className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                >
                   <SelectItem value="none">Fila de Espera</SelectItem>
                   {supportUsers.map((user) => (
                     <SelectItem key={user.id} value={user.id}>

@@ -290,7 +290,13 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
                 <SelectTrigger className="h-8">
                   <SelectValue placeholder="Todos os departamentos" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent 
+                  position="popper" 
+                  side="bottom" 
+                  align="start"
+                  sideOffset={4}
+                  className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                >
                   <SelectItem value="all">Todos os departamentos</SelectItem>
                   {departments.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
@@ -317,7 +323,13 @@ export function TicketFilterPopover({ filters, onFiltersChange }: TicketFilterPo
                 <SelectTrigger className="h-8">
                   <SelectValue placeholder="Todos os responsáveis" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent 
+                  position="popper" 
+                  side="bottom" 
+                  align="start"
+                  sideOffset={4}
+                  className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                >
                   <SelectItem value="all">Todos os responsáveis</SelectItem>
                   <SelectItem value="unassigned">Não atribuído</SelectItem>
                   {agents.map((agent) => (

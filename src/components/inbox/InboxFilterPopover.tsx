@@ -263,7 +263,13 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
                   <SelectTrigger>
                     <SelectValue placeholder="Todos os modos" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent 
+                    position="popper" 
+                    side="bottom" 
+                    align="start"
+                    sideOffset={4}
+                    className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                  >
                     <SelectItem value="all">Todos os modos</SelectItem>
                     {AI_MODE_OPTIONS.map((mode) => (
                       <SelectItem key={mode.value} value={mode.value}>
@@ -284,7 +290,13 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
                   <SelectTrigger>
                     <SelectValue placeholder="Todos os agentes" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent 
+                    position="popper" 
+                    side="bottom" 
+                    align="start"
+                    sideOffset={4}
+                    className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                  >
                     <SelectItem value="all">Todos os agentes</SelectItem>
                     <SelectItem value="unassigned">Não atribuídos</SelectItem>
                     {users?.map((user) => (

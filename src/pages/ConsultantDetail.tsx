@@ -591,7 +591,13 @@ export default function ConsultantDetail() {
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o consultor" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent 
+                  position="popper" 
+                  side="bottom" 
+                  align="start"
+                  sideOffset={4}
+                  className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                >
                   {otherConsultants?.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.full_name}

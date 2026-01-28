@@ -151,7 +151,13 @@ export function BulkMoveToProjectDialog({
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione um projeto" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent 
+                  position="popper" 
+                  side="bottom" 
+                  align="start"
+                  sideOffset={4}
+                  className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                >
                   {boards.map((board) => (
                     <SelectItem key={board.id} value={board.id}>
                       {board.name}
@@ -172,7 +178,13 @@ export function BulkMoveToProjectDialog({
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione uma coluna" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent 
+                    position="popper" 
+                    side="bottom" 
+                    align="start"
+                    sideOffset={4}
+                    className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                  >
                     {columns.map((column) => (
                       <SelectItem key={column.id} value={column.id}>
                         {column.name}

@@ -54,7 +54,13 @@ export function AIResponsePropertiesPanel({
             <SelectTrigger className="text-sm">
               <SelectValue placeholder="Usar regras de roteamento" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent 
+              position="popper" 
+              side="bottom" 
+              align="start"
+              sideOffset={4}
+              className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+            >
               <SelectItem value="none">
                 <span className="text-muted-foreground">Usar regras de roteamento (padrão)</span>
               </SelectItem>
