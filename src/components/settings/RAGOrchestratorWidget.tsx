@@ -1,9 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Target, 
   Database, 
@@ -14,7 +16,8 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
-  Settings2
+  Settings2,
+  Bot
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAIGlobalConfig } from "@/hooks/useAIGlobalConfig";
@@ -27,10 +30,87 @@ interface RAGStats {
   sandboxRules: number;
 }
 
+interface AIPersona {
+  id: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+}
+
 export function RAGOrchestratorWidget() {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { isAIEnabled, isLoading: loadingAI } = useAIGlobalConfig();
   const { isStrictMode, isLoading: loadingStrict } = useStrictRAGMode();
+
+  // Buscar personas disponíveis
+  const { data: personas, isLoading: loadingPersonas } = useQuery<AIPersona[]>({
+    queryKey: ['ai-personas-for-rag'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ai_personas')
+        .select('id, name, role, is_active')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 60000,
+  });
+
+  // Buscar persona global configurada
+  const { data: globalPersonaId, isLoading: loadingGlobalPersona } = useQuery({
+    queryKey: ['ai-global-persona'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('system_configurations')
+        .select('value')
+        .eq('key', 'ai_default_persona_id')
+        .maybeSingle();
+      return data?.value || null;
+    },
+    staleTime: 30000,
+  });
+
+  // Mutation para atualizar persona global
+  const updateGlobalPersona = useMutation({
+    mutationFn: async (personaId: string | null) => {
+      // Verificar se já existe a configuração
+      const { data: existing } = await supabase
+        .from('system_configurations')
+        .select('id')
+        .eq('key', 'ai_default_persona_id')
+        .maybeSingle();
+      
+      if (existing) {
+        // Update existing
+        const { error } = await supabase
+          .from('system_configurations')
+          .update({ value: personaId || '' })
+          .eq('key', 'ai_default_persona_id');
+        if (error) throw error;
+      } else {
+        // Insert new - use correct object format
+        const { error } = await supabase
+          .from('system_configurations')
+          .insert({ 
+            key: 'ai_default_persona_id', 
+            value: personaId || '',
+            category: 'ai'
+          });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-global-persona'] });
+      toast({ title: 'Persona global atualizada', description: 'A persona padrão do Autopilot foi salva.' });
+    },
+    onError: (error) => {
+      console.error('Erro ao atualizar persona global:', error);
+      toast({ title: 'Erro', description: 'Não foi possível salvar a persona global.', variant: 'destructive' });
+    },
+  });
 
   // Buscar estatísticas das fontes de dados
   const { data: stats, isLoading: loadingStats, refetch } = useQuery<RAGStats>({
@@ -84,6 +164,7 @@ export function RAGOrchestratorWidget() {
   });
 
   const isLoading = loadingAI || loadingStrict || loadingStats;
+  const selectedPersona = personas?.find(p => p.id === globalPersonaId);
 
   return (
     <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
@@ -149,6 +230,44 @@ export function RAGOrchestratorWidget() {
           ) : (
             <Badge variant={isStrictMode ? "warning" : "outline"}>
               {isStrictMode ? '85%+ confiança' : 'Desativado'}
+            </Badge>
+          )}
+        </div>
+
+        {/* Persona Global */}
+        <div className="p-3 rounded-lg bg-muted/50 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bot className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Persona Global</span>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Persona padrão do Autopilot quando nenhum fluxo específico define
+          </p>
+          {loadingPersonas || loadingGlobalPersona ? (
+            <Skeleton className="h-9 w-full" />
+          ) : (
+            <Select 
+              value={globalPersonaId || ''} 
+              onValueChange={(value) => updateGlobalPersona.mutate(value || null)}
+              disabled={updateGlobalPersona.isPending}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecione a persona padrão..." />
+              </SelectTrigger>
+              <SelectContent>
+                {personas?.map((persona) => (
+                  <SelectItem key={persona.id} value={persona.id}>
+                    {persona.name} ({persona.role})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {selectedPersona && (
+            <Badge variant="secondary" className="text-xs">
+              {selectedPersona.name}
             </Badge>
           )}
         </div>

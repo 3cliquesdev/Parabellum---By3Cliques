@@ -1528,6 +1528,26 @@ serve(async (req) => {
               }
             }
             
+            // 🔧 CORREÇÃO: SEMPRE chamar route-conversation para clientes verificados
+            // Isso distribui a conversa para agentes de suporte disponíveis
+            console.log('[ai-autopilot-chat] 🔄 Chamando route-conversation para cliente verificado...');
+            try {
+              const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
+                body: { 
+                  conversationId,
+                  department_id: DEPT_SUPORTE_ID
+                }
+              });
+              
+              if (routeError) {
+                console.error('[ai-autopilot-chat] ❌ Erro ao rotear cliente verificado:', routeError);
+              } else {
+                console.log('[ai-autopilot-chat] ✅ Cliente verificado roteado para Suporte:', routeResult);
+              }
+            } catch (routeErr) {
+              console.error('[ai-autopilot-chat] ❌ Exceção ao rotear cliente verificado:', routeErr);
+            }
+            
             // 🆕 SE TEM CONTEXTO ORIGINAL: Não retornar, deixar IA processar a intenção original
             if (originalIntent && originalIntentCategory) {
               console.log('[ai-autopilot-chat] 🔄 Contexto preservado - deixando IA processar intenção original');
@@ -1539,12 +1559,14 @@ serve(async (req) => {
               // NÃO RETORNAR - Deixar fluxo continuar para IA processar
               // A mensagem de confirmação já foi enviada, agora a IA vai responder sobre o assunto original
             } else {
-              // SEM CONTEXTO: Comportamento original - retornar imediatamente
+              // SEM CONTEXTO: Retornar com indicação que está tudo ok
+              // A conversa já foi roteada, cliente já recebeu confirmação
               return new Response(JSON.stringify({
                 status: 'email_verified_customer',
                 message: successMessage,
                 email: detectedEmail,
                 department: 'suporte',
+                routed: true,
                 extraction_source: emailExtraction.source
               }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -2691,7 +2713,36 @@ Como posso ajudar você hoje?`;
       }
     }
     
-    // Fallback: usar routing rules se não tem persona do fluxo
+    // Fallback 1: Usar PERSONA GLOBAL se não tem persona do fluxo
+    if (!persona) {
+      console.log('[ai-autopilot-chat] 🔍 Buscando Persona Global...');
+      
+      const { data: globalPersonaConfig } = await supabaseClient
+        .from('system_configurations')
+        .select('value')
+        .eq('key', 'ai_default_persona_id')
+        .maybeSingle();
+      
+      if (globalPersonaConfig?.value) {
+        const { data: globalPersona, error: globalPersonaError } = await supabaseClient
+          .from('ai_personas')
+          .select('id, name, role, system_prompt, temperature, max_tokens, knowledge_base_paths, is_active, use_priority_instructions, data_access')
+          .eq('id', globalPersonaConfig.value)
+          .eq('is_active', true)
+          .single();
+        
+        if (!globalPersonaError && globalPersona) {
+          persona = globalPersona;
+          console.log(`[ai-autopilot-chat] ✅ Persona GLOBAL carregada: ${persona.name}`);
+        } else {
+          console.warn('[ai-autopilot-chat] ⚠️ Persona global configurada mas não encontrada:', globalPersonaConfig.value);
+        }
+      } else {
+        console.log('[ai-autopilot-chat] ℹ️ Nenhuma Persona Global configurada');
+      }
+    }
+    
+    // Fallback 2: Usar routing rules se não tem persona do fluxo nem global
     if (!persona) {
       const { data: routingRules, error: rulesError } = await supabaseClient
         .from('ai_routing_rules')
