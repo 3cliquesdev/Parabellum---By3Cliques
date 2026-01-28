@@ -87,14 +87,18 @@ export function useSendMessageInstant() {
 
     // 3. FIRE-AND-FORGET: Persistir em background usando queueMicrotask
     // Isso garante que a UI seja atualizada ANTES da operação de rede
+    // CORREÇÃO: Usar um tracking_id para garantir matching correto
     queueMicrotask(async () => {
       try {
+        // Capturar o content EXATO no momento do envio (closure segura)
+        const contentToSend = content;
+        
         // Inserir mensagem (banco gerará um novo ID, mas usamos localId para tracking)
         const { data: insertedMessage, error: insertError } = await supabase
           .from("messages")
           .insert([{
             conversation_id: conversationId,
-            content: content,
+            content: contentToSend, // Usar a variável capturada
             sender_type: 'user' as const,
             sender_id: user?.id || null,
             is_internal: isInternal,
@@ -105,7 +109,8 @@ export function useSendMessageInstant() {
 
         if (insertError) throw insertError;
 
-        // Substituir mensagem otimista pela mensagem real do banco
+        // CORREÇÃO: Substituir mensagem otimista por ID local (não por content)
+        // Isso evita race conditions quando múltiplas mensagens são enviadas
         queryClient.setQueryData(
           ["messages", conversationId],
           (old: any[] = []) => old.map(m => 

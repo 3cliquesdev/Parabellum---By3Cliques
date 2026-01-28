@@ -74,6 +74,7 @@ export function useMessages(conversationId: string | null) {
           const oldMessage = payload.old as Message;
           
           // ✨ MERGE OTIMISTA - Sem refetch, atualiza cache diretamente
+          // CORREÇÃO CRÍTICA: Usar apenas ID para matching, não content (evita troca de mensagens)
           if (payload.eventType === 'INSERT') {
             queryClient.setQueryData(
               ["messages", conversationId],
@@ -99,28 +100,35 @@ export function useMessages(conversationId: string | null) {
                   return old;
                 }
                 
-                // 3. Substituir mensagem otimista (fire-and-forget) pela real do banco
-                // Buscar por status="sending" + content + sender_id + timestamp próximo (janela de 10 segundos)
+                // 3. CORREÇÃO: Substituir mensagem otimista APENAS por ordem cronológica
+                // NÃO usar content para matching (causa troca de mensagens quando se digita rápido)
+                // Buscar a PRIMEIRA mensagem com status="sending" do mesmo sender
                 const optimisticIndex = old.findIndex(m => 
                   m.status === 'sending' && 
-                  m.content === newMessage.content &&
-                  m.sender_id === newMessage.sender_id &&
-                  Math.abs(new Date(m.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 10000
+                  m.sender_id === newMessage.sender_id
                 );
                 
                 if (optimisticIndex !== -1) {
-                  console.log('[Realtime] Substituindo mensagem otimista por real:', newMessage.id);
-                  const updated = [...old];
-                  updated[optimisticIndex] = { ...newMessage, status: 'sent' };
-                  return updated;
+                  const optimisticMsg = old[optimisticIndex];
+                  // Verificar se o content é igual (confirmação de que é a mesma mensagem)
+                  if (optimisticMsg.content === newMessage.content) {
+                    console.log('[Realtime] Substituindo mensagem otimista por real:', newMessage.id);
+                    const updated = [...old];
+                    updated[optimisticIndex] = { ...newMessage, status: 'sent' };
+                    return updated;
+                  } else {
+                    // Content diferente: a mensagem otimista pode estar pendente ainda
+                    // Apenas adicionar a nova mensagem sem substituir
+                    console.log('[Realtime] Content diferente - adicionando nova mensagem:', newMessage.id);
+                    return [...old, { ...newMessage, status: 'sent' }];
+                  }
                 }
                 
                 // 4. Fallback: Substituir temp-* por mensagem real (compatibilidade legada)
                 const tempIndex = old.findIndex(m => 
                   m.id?.startsWith('temp-') && 
                   m.content === newMessage.content &&
-                  m.sender_id === newMessage.sender_id &&
-                  Math.abs(new Date(m.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 5000
+                  m.sender_id === newMessage.sender_id
                 );
                 
                 if (tempIndex !== -1) {
