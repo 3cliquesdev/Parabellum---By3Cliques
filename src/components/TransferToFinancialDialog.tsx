@@ -101,7 +101,7 @@ export function TransferToFinancialDialog({
               <SelectTrigger>
                 <SelectValue placeholder={isLoadingUsers ? "Carregando..." : "Selecione um responsável (opcional)"} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" side="bottom" align="start" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
                 {financialUsers.map((user) => (
                   <SelectItem key={user.id} value={user.id}>
                     {user.full_name} {user.job_title ? `(${user.job_title})` : ''}

@@ -94,7 +94,7 @@ export function RoutingRuleDialog({ trigger, rule, onOpenChange }: RoutingRuleDi
               <SelectTrigger id="channel">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" side="bottom" align="start" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
                 <SelectItem value="whatsapp">WhatsApp</SelectItem>
                 <SelectItem value="email">Email</SelectItem>
                 <SelectItem value="web_chat">Chat</SelectItem>
@@ -111,7 +111,7 @@ export function RoutingRuleDialog({ trigger, rule, onOpenChange }: RoutingRuleDi
               <SelectTrigger id="department">
                 <SelectValue placeholder="Qualquer departamento" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" side="bottom" align="start" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
                 <SelectItem value="none">Qualquer departamento</SelectItem>
                 {departments?.filter(d => d.is_active).map((dept) => (
                   <SelectItem key={dept.id} value={dept.id}>

@@ -267,11 +267,17 @@ export function BulkRedistributeDialog({
               </RadioGroup>
 
               {destinationType === "department" && (
-                <Select value={targetDepartmentId} onValueChange={setTargetDepartmentId}>
+              <Select value={targetDepartmentId} onValueChange={setTargetDepartmentId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o departamento..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent 
+                    position="popper" 
+                    side="bottom" 
+                    align="start"
+                    sideOffset={4}
+                    className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                  >
                     {departments?.filter(d => d.is_active).map((dept) => (
                       <SelectItem key={dept.id} value={dept.id}>
                         <div className="flex items-center gap-2">
@@ -292,7 +298,13 @@ export function BulkRedistributeDialog({
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o agente..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent 
+                    position="popper" 
+                    side="bottom" 
+                    align="start"
+                    sideOffset={4}
+                    className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                  >
                     {availableAgents.map((agent) => (
                       <SelectItem key={agent.id} value={agent.id}>
                         <div className="flex items-center gap-2">

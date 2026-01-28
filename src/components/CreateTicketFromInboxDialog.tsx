@@ -194,7 +194,7 @@ export function CreateTicketFromInboxDialog({
                   <SelectTrigger id="category" className="mt-1 bg-background">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
                     {CATEGORY_OPTIONS.map((cat) => (
                       <SelectItem key={cat.value} value={cat.value}>
                         {cat.label}
@@ -214,7 +214,7 @@ export function CreateTicketFromInboxDialog({
                   <SelectTrigger id="priority" className="mt-1 bg-background">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
                     {PRIORITY_OPTIONS.map((prio) => (
                       <SelectItem key={prio.value} value={prio.value}>
                         <div className="flex items-center justify-between w-full gap-2">
@@ -246,7 +246,7 @@ export function CreateTicketFromInboxDialog({
                   <SelectTrigger id="assignee" className="mt-1 bg-background">
                     <SelectValue placeholder="Selecione um agente (opcional)..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
                     {availableUsers.map((user) => (
                       <SelectItem key={user.id} value={user.id}>
                         <div className="flex items-center gap-2">
