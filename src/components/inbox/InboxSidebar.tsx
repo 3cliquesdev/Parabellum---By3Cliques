@@ -283,7 +283,7 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
   const [tagSearch, setTagSearch] = useState("");
   const [redistributeAgent, setRedistributeAgent] = useState<{ id: string; name: string } | null>(null);
 
-  const isManagerOrAdmin = role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager';
+  const isManagerOrAdmin = role === 'admin' || role === 'general_manager' || role === 'manager' || role === 'support_manager' || role === 'cs_manager' || role === 'financial_manager';
 
   const currentFilter = searchParams.get("filter") || "all";
   const currentDept = searchParams.get("dept");
