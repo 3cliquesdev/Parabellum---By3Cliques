@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { Info, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -11,16 +11,12 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-// Intervalo de verificação: 30 segundos
-const CHECK_INTERVAL_MS = 30 * 1000;
-
 export function SidebarVersionIndicator() {
   const [hasUpdate, setHasUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [checking, setChecking] = useState(false);
   const [hardRefreshing, setHardRefreshing] = useState(false);
-  const previousHasUpdate = useRef(false);
-  
+
   const buildId = getCurrentBuildId();
   
   // Formata o buildId para exibição
@@ -46,38 +42,8 @@ export function SidebarVersionIndicator() {
     return id.slice(0, 16);
   };
   
-  // Verificar atualizações periodicamente
-  useEffect(() => {
-    const checkUpdate = async () => {
-      const updateAvailable = await checkForUpdate();
-      
-      // Se antes não tinha update e agora tem, mostrar toast
-      if (updateAvailable && !previousHasUpdate.current) {
-        toast.info("Nova versão disponível!", {
-          description: "Clique no ícone de versão para atualizar.",
-          duration: 10000,
-          action: {
-            label: "Atualizar",
-            onClick: () => {
-              setUpdating(true);
-              setTimeout(() => forceUpdate(), 300);
-            },
-          },
-        });
-      }
-      
-      previousHasUpdate.current = updateAvailable;
-      setHasUpdate(updateAvailable);
-    };
-    
-    // Verificar imediatamente
-    checkUpdate();
-    
-    // Verificar a cada 30 segundos
-    const interval = setInterval(checkUpdate, CHECK_INTERVAL_MS);
-    
-    return () => clearInterval(interval);
-  }, []);
+  // Verificação de update desabilitada - usuário atualiza manualmente pelo botão
+  // Isso evita qualquer refresh automático que possa interromper o trabalho do agente
   
   const handleForceUpdate = async () => {
     if (hasUpdate) {
@@ -138,8 +104,8 @@ export function SidebarVersionIndicator() {
           {/* Badge animado quando há update */}
           {hasUpdate && (
             <div className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive/60 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive"></span>
             </div>
           )}
         </Button>
