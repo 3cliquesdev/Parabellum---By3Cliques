@@ -171,7 +171,7 @@ serve(async (req) => {
           await supabaseAdmin
             .from("conversations")
             .update({ 
-              status: "pending",
+              status: "open",
               assigned_to: null,
               previous_agent_id: agentId,
               // Preserve copilot conversations for human queue, don't give to AI
