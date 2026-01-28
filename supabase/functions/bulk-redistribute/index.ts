@@ -41,11 +41,22 @@ serve(async (req) => {
     let onlineAgents: string[] = [];
     let departmentOnlineAgents: string[] = [];
 
-    // Buscar roles de agentes (excluindo consultores - eles só recebem via transferência manual)
+    // IMPORTANT: Roles elegíveis para auto-distribuição.
+    // Consultores e financeiros NÃO devem receber conversas automaticamente.
+    const AUTO_DISTRIBUTE_ROLES = [
+      "support_agent",
+      "sales_rep",
+      "cs_manager",
+      "support_manager",
+      "manager",
+      "general_manager",
+      "admin",
+    ];
+
     const { data: agentRoles } = await supabase
       .from("user_roles")
       .select("user_id")
-      .in("role", ["support_agent", "sales_rep", "cs_manager"]);
+      .in("role", AUTO_DISTRIBUTE_ROLES);
 
     const agentIds = [...new Set(agentRoles?.map((r) => r.user_id) || [])];
 
