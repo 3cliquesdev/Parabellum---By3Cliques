@@ -16,6 +16,7 @@ interface TrackingResult {
   express_time: Date | null;
   express_time_formatted: string | null;
   is_packed: boolean;
+  packing_message: string;
   buyer_name: string | null;
 }
 
@@ -56,6 +57,23 @@ function mapOrderStatus(status: string | null): string {
     '6': 'Devolvido',
   };
   return status ? (statusMap[status] || `Status ${status}`) : 'Desconhecido';
+}
+
+// Determinar status de embalagem baseado em express_time
+function getPackingStatus(expressTime: Date | null, orderStatus: string | null): { is_packed: boolean; packing_message: string } {
+  // Se não tem express_time, o pedido ainda não foi embalado
+  if (!expressTime) {
+    return {
+      is_packed: false,
+      packing_message: 'Seu pedido ainda está sendo preparado. Se foi pago recentemente, aguarde alguns dias úteis para o envio.'
+    };
+  }
+  
+  // Se tem express_time, foi embalado/enviado
+  return {
+    is_packed: true,
+    packing_message: 'Pedido embalado e enviado.'
+  };
 }
 
 serve(async (req) => {
@@ -313,8 +331,8 @@ serve(async (req) => {
       });
       
       if (originalCode && !trackingData[originalCode]) {
-        // Determinar status de packed baseado em order_status ou express_time
-        const isPacked = orderStatus === '3' || orderStatus === 'PACKED' || !!expressTime;
+        // Determinar status de embalagem baseado em express_time
+        const packingStatus = getPackingStatus(expressTime, orderStatus);
         
         trackingData[originalCode] = {
           original_code: originalCode,
@@ -325,7 +343,8 @@ serve(async (req) => {
           order_status: orderStatus,
           express_time: expressTime,
           express_time_formatted: formatDate(expressTime),
-          is_packed: isPacked,
+          is_packed: packingStatus.is_packed,
+          packing_message: packingStatus.packing_message,
           buyer_name: buyerName,
         };
         
