@@ -37,6 +37,23 @@ export function useTakeControl() {
 
       console.log('[useTakeControl] Assumindo controle da conversa:', conversationId);
 
+      // 🔒 Regra operacional: para assumir conversa, o atendente precisa estar ONLINE.
+      // Caso contrário, processos automáticos podem redistribuir imediatamente a conversa de volta para o pool.
+      const { data: myProfile, error: myProfileError } = await supabase
+        .from('profiles')
+        .select('availability_status')
+        .eq('id', user.id)
+        .single();
+
+      if (myProfileError) {
+        console.error('[useTakeControl] Erro ao verificar availability_status:', myProfileError);
+        throw new Error('Não foi possível verificar seu status. Tente novamente.');
+      }
+
+      if (myProfile?.availability_status !== 'online') {
+        throw new Error('Para assumir uma conversa, altere seu status para Online e tente novamente.');
+      }
+
       // 0. Buscar role do usuário e dados da conversa para validação
       const [userRoleResult, conversationResult] = await Promise.all([
         supabase
@@ -97,11 +114,11 @@ export function useTakeControl() {
       // 🔧 FIX: Verificar se a atualização foi aplicada (proteção contra race condition)
       const { data: updatedConv } = await supabase
         .from('conversations')
-        .select('ai_mode')
+        .select('ai_mode, assigned_to')
         .eq('id', conversationId)
         .single();
 
-      if (updatedConv?.ai_mode !== 'copilot') {
+      if (updatedConv?.ai_mode !== 'copilot' || updatedConv?.assigned_to !== user.id) {
         console.warn('[useTakeControl] ⚠️ ai_mode não foi atualizado! Tentando novamente...');
         // Retry com força
         await supabase
