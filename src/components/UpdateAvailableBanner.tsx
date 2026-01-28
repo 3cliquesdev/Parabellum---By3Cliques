@@ -1,19 +1,46 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RefreshCw, X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { forceUpdate } from "@/lib/build/ensureLatestBuild";
+import { forceUpdate, checkForUpdate } from "@/lib/build/ensureLatestBuild";
 
 // Tempo para reaparecer após "Depois": 5 minutos
 const DISMISS_DURATION_MS = 5 * 60 * 1000;
+
+// Intervalo de verificação: 2 minutos (apenas detecta, NÃO faz refresh automático)
+const CHECK_INTERVAL_MS = 2 * 60 * 1000;
 
 export function UpdateAvailableBanner() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Verificação periódica DESABILITADA para evitar qualquer refresh automático
-  // Usuário pode atualizar manualmente via SidebarVersionIndicator
+  // Verificação periódica que APENAS detecta updates (sem auto-refresh)
+  const checkForUpdates = useCallback(async () => {
+    try {
+      const hasUpdate = await checkForUpdate();
+      if (hasUpdate) {
+        setUpdateAvailable(true);
+      }
+    } catch (error) {
+      // Silenciosamente ignora erros de verificação
+      console.debug("[UpdateBanner] Check failed:", error);
+    }
+  }, []);
+
+  // Verificação inicial + periódica (apenas detecta, nunca recarrega automaticamente)
+  useEffect(() => {
+    // Verificação inicial após 10 segundos
+    const initialTimeout = setTimeout(checkForUpdates, 10000);
+    
+    // Verificações periódicas
+    const interval = setInterval(checkForUpdates, CHECK_INTERVAL_MS);
+    
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
+  }, [checkForUpdates]);
 
   // Lógica para reaparecer após dismiss
   useEffect(() => {
