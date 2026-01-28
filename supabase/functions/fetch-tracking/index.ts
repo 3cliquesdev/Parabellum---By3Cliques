@@ -7,20 +7,22 @@ const corsHeaders = {
 };
 
 interface TrackingResult {
-  box_number: string;
+  original_code: string;
+  platform_order_id: string | null;
+  tracking_number: string | null;
   platform: string | null;
   status: string | null;
-  created_at: Date | null;
-  updated_at: Date | null;
-  packed_at: Date | null;
-  packed_at_formatted: string | null;
+  order_status: string | null;
+  express_time: Date | null;
+  express_time_formatted: string | null;
   is_packed: boolean;
+  buyer_name: string | null;
 }
 
 // Detectar tipo de código automaticamente
 function detectSearchType(code: string): 'tracking' | 'order_id' {
   const upperCode = code.toUpperCase().trim();
-  // Códigos de rastreio geralmente começam com BR, LP, ou similares
+  // Códigos de rastreio geralmente começam com BR, LP, LB, ou similares
   if (upperCode.startsWith('BR') || upperCode.startsWith('LP') || upperCode.startsWith('LB')) {
     return 'tracking';
   }
@@ -43,6 +45,19 @@ function formatDate(date: Date | null): string | null {
   }
 }
 
+// Mapear order_status para texto legível
+function mapOrderStatus(status: string | null): string {
+  const statusMap: Record<string, string> = {
+    '1': 'Aguardando Envio',
+    '2': 'Em Preparação',
+    '3': 'Enviado',
+    '4': 'Entregue',
+    '5': 'Cancelado',
+    '6': 'Devolvido',
+  };
+  return status ? (statusMap[status] || `Status ${status}`) : 'Desconhecido';
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -50,20 +65,8 @@ serve(async (req) => {
   }
 
   try {
-    const { tracking_code, tracking_codes, search_type } = await req.json();
+    const { tracking_code, tracking_codes, debug_schema, debug_tables, debug_table } = await req.json();
     
-    // Support single or multiple tracking codes
-    const codes: string[] = tracking_codes || (tracking_code ? [tracking_code] : []);
-    
-    if (codes.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'tracking_code ou tracking_codes é obrigatório' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('[fetch-tracking] 🔍 Buscando rastreios:', codes, 'search_type:', search_type);
-
     // Get MySQL credentials from secrets
     const mysqlHost = Deno.env.get('MYSQL_HOST');
     const mysqlPort = parseInt(Deno.env.get('MYSQL_PORT') || '3306');
@@ -90,17 +93,192 @@ serve(async (req) => {
 
     console.log('[fetch-tracking] ✅ Conectado ao MySQL externo');
 
-    // Build query with parameterized placeholders
-    const placeholders = codes.map(() => '?').join(', ');
-    const query = `
-      SELECT box_number, platform, status, created_at, updated_at 
-      FROM parcel 
-      WHERE box_number IN (${placeholders})
-    `;
+    // Debug mode: listar todas as tabelas
+    if (debug_tables) {
+      const tablesResult = await client.query('SHOW TABLES');
+      await client.close();
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          tables: tablesResult
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    const results = await client.query(query, codes);
+    // Debug mode: analisar uma tabela específica
+    if (debug_table) {
+      const schemaResult = await client.query(`DESCRIBE ${debug_table}`);
+      const sampleResult = await client.query(`SELECT * FROM ${debug_table} LIMIT 2`);
+      await client.close();
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          table: debug_table,
+          schema: schemaResult,
+          sample: sampleResult
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Debug mode: retornar estrutura da tabela parcel
+    if (debug_schema) {
+      const schemaResult = await client.query('DESCRIBE parcel');
+      const sampleResult = await client.query('SELECT * FROM parcel LIMIT 3');
+      await client.close();
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          parcel_schema: schemaResult,
+          parcel_sample: sampleResult
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Support single or multiple tracking codes
+    const codes: string[] = tracking_codes || (tracking_code ? [tracking_code] : []);
     
-    console.log('[fetch-tracking] 📦 Resultados encontrados:', results?.length || 0);
+    if (codes.length === 0) {
+      await client.close();
+      return new Response(
+        JSON.stringify({ error: 'tracking_code ou tracking_codes é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[fetch-tracking] 🔍 Buscando rastreios:', codes);
+
+    // Separar códigos por tipo
+    const trackingCodes = codes.filter(c => detectSearchType(c) === 'tracking');
+    const orderIds = codes.filter(c => detectSearchType(c) === 'order_id');
+    
+    console.log('[fetch-tracking] 📊 Tipos detectados:', {
+      trackingCodes: trackingCodes.length,
+      orderIds: orderIds.length,
+      tracking: trackingCodes,
+      orders: orderIds
+    });
+
+    let allResults: any[] = [];
+
+    // ========== BUSCAR POR CÓDIGO DE RASTREIO (BR..., LP..., LB...) ==========
+    // Primeiro tenta na tabela parcel (tracking_number)
+    if (trackingCodes.length > 0) {
+      const placeholders = trackingCodes.map(() => '?').join(', ');
+      const query = `
+        SELECT 
+          box_number as platform_order_id, 
+          tracking_number, 
+          platform, 
+          status as order_status, 
+          updated_at as express_time,
+          NULL as buyer_name
+        FROM parcel 
+        WHERE tracking_number IN (${placeholders})
+      `;
+      console.log('[fetch-tracking] 🔍 Query parcel.tracking_number:', query, trackingCodes);
+      
+      const results = await client.query(query, trackingCodes);
+      console.log('[fetch-tracking] 📦 Resultados parcel:', results?.length || 0);
+      
+      if (results && Array.isArray(results)) {
+        allResults = allResults.concat(results.map((r: any) => ({ ...r, source: 'parcel' })));
+      }
+      
+      // Também tenta em mabang_order.track_number
+      try {
+        const query2 = `
+          SELECT 
+            platform_order_id, 
+            track_number as tracking_number, 
+            platform_id as platform, 
+            order_status, 
+            express_time,
+            buyer_name
+          FROM mabang_order 
+          WHERE track_number IN (${placeholders})
+        `;
+        console.log('[fetch-tracking] 🔍 Query mabang_order.track_number:', query2, trackingCodes);
+        
+        const results2 = await client.query(query2, trackingCodes);
+        console.log('[fetch-tracking] 📦 Resultados mabang_order track:', results2?.length || 0);
+        
+        if (results2 && Array.isArray(results2)) {
+          allResults = allResults.concat(results2.map((r: any) => ({ ...r, source: 'mabang_order' })));
+        }
+      } catch (e) {
+        console.log('[fetch-tracking] ℹ️ Erro query mabang_order track:', e);
+      }
+    }
+
+    // ========== BUSCAR POR NÚMERO DO PEDIDO ==========
+    // Busca em mabang_order.platform_order_id com LIKE '%-{numero}'
+    if (orderIds.length > 0) {
+      try {
+        const likeConditions = orderIds.map(() => 'platform_order_id LIKE ?').join(' OR ');
+        const likeParams = orderIds.map(id => `%-${id}`);
+        
+        const query = `
+          SELECT 
+            platform_order_id, 
+            track_number as tracking_number, 
+            platform_id as platform, 
+            order_status, 
+            express_time,
+            buyer_name
+          FROM mabang_order 
+          WHERE ${likeConditions}
+        `;
+        
+        console.log('[fetch-tracking] 🔍 Query mabang_order.platform_order_id:', query, likeParams);
+        
+        const results = await client.query(query, likeParams);
+        console.log('[fetch-tracking] 📦 Resultados mabang_order:', results?.length || 0);
+        
+        if (results && Array.isArray(results)) {
+          allResults = allResults.concat(results.map((r: any) => ({ ...r, source: 'mabang_order' })));
+        }
+      } catch (e) {
+        console.log('[fetch-tracking] ℹ️ Erro query mabang_order:', e);
+      }
+      
+      // Também tenta em parcel.box_number
+      try {
+        const exactConditions = orderIds.map(() => 'box_number = ?').join(' OR ');
+        const likeConditions = orderIds.map(() => 'box_number LIKE ?').join(' OR ');
+        const allParams = [...orderIds, ...orderIds.map(id => `%-${id}`)];
+        
+        const query = `
+          SELECT 
+            box_number as platform_order_id, 
+            tracking_number, 
+            platform, 
+            status as order_status, 
+            updated_at as express_time,
+            NULL as buyer_name
+          FROM parcel 
+          WHERE (${exactConditions}) OR (${likeConditions})
+        `;
+        
+        console.log('[fetch-tracking] 🔍 Query parcel.box_number:', query, allParams);
+        
+        const results = await client.query(query, allParams);
+        console.log('[fetch-tracking] 📦 Resultados parcel box:', results?.length || 0);
+        
+        if (results && Array.isArray(results)) {
+          allResults = allResults.concat(results.map((r: any) => ({ ...r, source: 'parcel' })));
+        }
+      } catch (e) {
+        console.log('[fetch-tracking] ℹ️ Erro query parcel box:', e);
+      }
+    }
+
+    console.log('[fetch-tracking] 📦 Total resultados encontrados:', allResults.length);
 
     // Close connection
     await client.close();
@@ -114,22 +292,49 @@ serve(async (req) => {
     }
     
     // Fill in found results with enhanced data
-    if (results && Array.isArray(results)) {
-      for (const row of results) {
-        const boxNumber = row.box_number as string;
-        const createdAt = row.created_at as Date | null;
+    for (const row of allResults) {
+      const trackingNum = row.tracking_number as string | null;
+      const platformOrderId = row.platform_order_id as string | null;
+      const platform = row.platform as string | null;
+      const expressTime = row.express_time as Date | null;
+      const orderStatus = row.order_status as string | null;
+      const buyerName = row.buyer_name as string | null;
+      
+      // Identificar qual código original encontrou este resultado
+      const originalCode = codes.find(c => {
+        const upperC = c.toUpperCase();
+        // Match por tracking_number (case insensitive)
+        if (trackingNum && upperC === trackingNum.toUpperCase()) return true;
+        // Match exato por platform_order_id
+        if (platformOrderId && upperC === platformOrderId.toUpperCase()) return true;
+        // Match por final do platform_order_id (sufixo)
+        if (platformOrderId && platformOrderId.toUpperCase().endsWith(`-${upperC}`)) return true;
+        return false;
+      });
+      
+      if (originalCode && !trackingData[originalCode]) {
+        // Determinar status de packed baseado em order_status ou express_time
+        const isPacked = orderStatus === '3' || orderStatus === 'PACKED' || !!expressTime;
         
-        trackingData[boxNumber] = {
-          box_number: boxNumber,
-          platform: row.platform as string | null,
-          status: row.status as string | null,
-          created_at: createdAt,
-          updated_at: row.updated_at as Date | null,
-          // Novos campos para horário de embalagem
-          packed_at: createdAt, // created_at = horário de embalagem
-          packed_at_formatted: formatDate(createdAt),
-          is_packed: !!createdAt, // Se tem created_at, foi embalado
+        trackingData[originalCode] = {
+          original_code: originalCode,
+          platform_order_id: platformOrderId,
+          tracking_number: trackingNum,
+          platform: platform,
+          status: mapOrderStatus(orderStatus),
+          order_status: orderStatus,
+          express_time: expressTime,
+          express_time_formatted: formatDate(expressTime),
+          is_packed: isPacked,
+          buyer_name: buyerName,
         };
+        
+        console.log('[fetch-tracking] ✅ Mapeado:', originalCode, '→', {
+          platform_order_id: platformOrderId,
+          tracking_number: trackingNum,
+          status: mapOrderStatus(orderStatus),
+          express_time: formatDate(expressTime)
+        });
       }
     }
 
@@ -141,7 +346,10 @@ serve(async (req) => {
       data: trackingData,
     };
 
-    console.log('[fetch-tracking] ✅ Retornando dados:', response);
+    console.log('[fetch-tracking] ✅ Retornando:', {
+      found: response.found,
+      total_requested: response.total_requested
+    });
 
     return new Response(
       JSON.stringify(response),
