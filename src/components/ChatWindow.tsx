@@ -88,8 +88,14 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const returnToAutopilot = useReturnToAutopilot();
   const { isAIEnabled: isAIGlobalEnabled } = useAIGlobalConfig();
   
-  // Verificar se pode assumir esta conversa (baseado no departamento)
-  const { canTake: canTakeControl, reason: cantTakeReason } = useCanTakeControl(conversation?.department || null);
+  // Verificar se pode assumir esta conversa
+  // Regra: qualquer usuário pode assumir conversas “disponíveis” vindas da IA (não atribuídas)
+  const { canTake: canTakeControl, reason: cantTakeReason } = useCanTakeControl({
+    departmentId: conversation?.department || null,
+    assignedTo: conversation?.assigned_to || null,
+    aiMode: (aiMode as any) || null,
+    status: (conversation?.status as any) || null,
+  });
   // Buscar ticket relacionado para mostrar ticket_number
   const { data: relatedTicket } = useQuery({
     queryKey: ['related-ticket', conversation?.related_ticket_id],

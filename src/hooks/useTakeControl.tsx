@@ -46,7 +46,7 @@ export function useTakeControl() {
           .maybeSingle(),
         supabase
           .from('conversations')
-          .select('id, department, departments:department(id, name)')
+          .select('id, department, assigned_to, ai_mode, status, departments:department(id, name)')
           .eq('id', conversationId)
           .single()
       ]);
@@ -58,8 +58,13 @@ export function useTakeControl() {
         throw new Error('Conversa não encontrada');
       }
 
-      // Validar departamento para roles restritos
-      if (userRole && !hasFullInboxAccess(userRole)) {
+      const isAvailableAIConversation =
+        !conversation.assigned_to &&
+        (conversation.ai_mode === 'autopilot' || String(conversation.status) === 'waiting_human');
+
+      // ✅ Regra solicitada: qualquer usuário pode assumir conversas não atribuídas da IA
+      // (destrava vendedores e suporte). Mantém validação antiga apenas para casos fora disso.
+      if (!isAvailableAIConversation && userRole && !hasFullInboxAccess(userRole)) {
         const allowedDepartments = ROLE_DEPARTMENT_MAP[userRole];
         const conversationDeptName = (conversation.departments as any)?.name || null;
         

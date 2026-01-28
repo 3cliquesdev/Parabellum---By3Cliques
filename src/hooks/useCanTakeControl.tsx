@@ -17,6 +17,13 @@ interface CanTakeControlResult {
   isLoading: boolean;
 }
 
+type ConversationTakeControlContext = {
+  departmentId: string | null;
+  assignedTo: string | null;
+  aiMode: string | null;
+  status: string | null;
+};
+
 /**
  * Hook para verificar se o usuário pode assumir uma conversa específica
  * Usado para desabilitar/ocultar o botão "Assumir" quando não permitido
@@ -27,13 +34,22 @@ interface CanTakeControlResult {
  * - support_agent: só pode assumir conversas do departamento Suporte
  * - financial_agent: só pode assumir conversas do departamento Financeiro
  */
-export function useCanTakeControl(conversationDepartmentId: string | null): CanTakeControlResult {
+export function useCanTakeControl(conversation: ConversationTakeControlContext): CanTakeControlResult {
   const { user } = useAuth();
   
   const { data, isLoading } = useQuery({
-    queryKey: ['can-take-control', user?.id, conversationDepartmentId],
+    queryKey: ['can-take-control', user?.id, conversation.departmentId, conversation.assignedTo, conversation.aiMode, conversation.status],
     queryFn: async (): Promise<{ canTake: boolean; reason?: string }> => {
       if (!user?.id) return { canTake: false, reason: 'Não autenticado' };
+
+      // ✅ Regra solicitada: qualquer usuário pode assumir conversas “disponíveis” vindas da IA
+      // (não atribuídas) — isso destrava vendedores e suporte.
+      const isAvailableAIConversation =
+        !conversation.assignedTo &&
+        (conversation.aiMode === 'autopilot' || conversation.status === 'waiting_human');
+      if (isAvailableAIConversation) {
+        return { canTake: true };
+      }
       
       // Buscar role do usuário
       const { data: roleData } = await supabase
@@ -50,7 +66,7 @@ export function useCanTakeControl(conversationDepartmentId: string | null): CanT
       }
       
       // Se conversa não tem departamento, permitir
-      if (!conversationDepartmentId) {
+      if (!conversation.departmentId) {
         return { canTake: true };
       }
       
@@ -58,7 +74,7 @@ export function useCanTakeControl(conversationDepartmentId: string | null): CanT
       const { data: dept } = await supabase
         .from('departments')
         .select('name')
-        .eq('id', conversationDepartmentId)
+        .eq('id', conversation.departmentId)
         .maybeSingle();
       
       const conversationDeptName = dept?.name || null;
