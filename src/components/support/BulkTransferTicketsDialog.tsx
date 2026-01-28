@@ -105,10 +105,16 @@ export function BulkTransferTicketsDialog({
                 value={selectedDepartmentId}
                 onValueChange={setSelectedDepartmentId}
               >
-                <SelectTrigger>
+              <SelectTrigger>
                   <SelectValue placeholder="Selecione um departamento" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent 
+                  position="popper" 
+                  side="bottom" 
+                  align="start"
+                  sideOffset={4}
+                  className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                >
                   {departments.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
                       {dept.name}
@@ -131,7 +137,13 @@ export function BulkTransferTicketsDialog({
                   <SelectTrigger>
                     <SelectValue placeholder={usersLoading ? "Carregando..." : "Nenhum (fila do departamento)"} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent 
+                    position="popper" 
+                    side="bottom" 
+                    align="start"
+                    sideOffset={4}
+                    className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                  >
                     <SelectItem value="none">
                       Nenhum (fila do departamento)
                     </SelectItem>

@@ -41,7 +41,13 @@ export function TransferPropertiesPanel({ selectedNode, updateNodeData }: Transf
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent 
+            position="popper" 
+            side="bottom" 
+            align="start"
+            sideOffset={4}
+            className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+          >
             <SelectItem value="department">Departamento</SelectItem>
             <SelectItem value="queue">Fila de atendimento</SelectItem>
             <SelectItem value="agent">Agente específico</SelectItem>
@@ -71,7 +77,13 @@ export function TransferPropertiesPanel({ selectedNode, updateNodeData }: Transf
             <SelectTrigger>
               <SelectValue placeholder="Selecione um departamento" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent 
+              position="popper" 
+              side="bottom" 
+              align="start"
+              sideOffset={4}
+              className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+            >
               {departments.length === 0 ? (
                 <div className="px-2 py-3 text-xs text-muted-foreground text-center">
                   Nenhum departamento ativo
@@ -109,7 +121,13 @@ export function TransferPropertiesPanel({ selectedNode, updateNodeData }: Transf
             <SelectTrigger>
               <SelectValue placeholder="Selecione um agente" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent 
+              position="popper" 
+              side="bottom" 
+              align="start"
+              sideOffset={4}
+              className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+            >
               {departmentAgents.length === 0 ? (
                 <div className="px-2 py-3 text-xs text-muted-foreground text-center">
                   Nenhum agente neste departamento
