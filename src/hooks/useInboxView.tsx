@@ -67,13 +67,17 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
   if (role && userId && !hasFullInboxAccess(role)) {
     if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
       if (departmentIds && departmentIds.length > 0) {
-        // Conversa atribuída ao usuário OU (não atribuída E do departamento permitido)
+        // Conversa atribuída ao usuário OU 
+        // (não atribuída E do departamento permitido) OU
+        // (não atribuída E sem departamento definido - pool geral da IA)
         query = query.or(
-          `assigned_to.eq.${userId},and(assigned_to.is.null,department.in.(${departmentIds.join(",")}))`
+          `assigned_to.eq.${userId},and(assigned_to.is.null,department.in.(${departmentIds.join(",")})),and(assigned_to.is.null,department.is.null)`
         );
       } else {
-        // Sem departamentos configurados: apenas as atribuídas ao usuário
-        query = query.eq("assigned_to", userId);
+        // Sem departamentos configurados: atribuídas ao usuário OU sem departamento (pool geral)
+        query = query.or(
+          `assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null)`
+        );
       }
     } else if (role === "consultant" || role === "user") {
       // Consultant/User: apenas conversas atribuídas a ele
@@ -279,9 +283,11 @@ export function useInboxView(filters?: InboxFilters) {
           const currentFilters = filtersRef.current;
 
           // Verificar se a conversa deve ser visível para este role/departamento
+          // Incluir conversas sem departamento (pool geral) para roles operacionais
+          const isInAllowedDepartment = currentDeptIds?.includes(row.department || "") || row.department === null;
           const shouldShow = hasFullInboxAccess(currentRole) || 
             row.assigned_to === user?.id ||
-            (row.assigned_to === null && currentDeptIds?.includes(row.department || ""));
+            (row.assigned_to === null && isInAllowedDepartment);
 
           // Merge incremental no cache
           queryClient.setQueryData<InboxViewItem[]>(
@@ -537,11 +543,15 @@ export function useInboxCounts(userId?: string) {
       if (role && userId && !hasFullInboxAccess(role)) {
         if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
           if (departmentIds && departmentIds.length > 0) {
+            // Incluir conversas sem departamento (pool geral da IA)
             query = query.or(
-              `assigned_to.eq.${userId},and(assigned_to.is.null,department.in.(${departmentIds.join(",")}))`
+              `assigned_to.eq.${userId},and(assigned_to.is.null,department.in.(${departmentIds.join(",")})),and(assigned_to.is.null,department.is.null)`
             );
           } else {
-            query = query.eq("assigned_to", userId);
+            // Sem departamentos configurados: atribuídas ao usuário OU pool geral
+            query = query.or(
+              `assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null)`
+            );
           }
         } else if (role === "consultant" || role === "user") {
           query = query.eq("assigned_to", userId);
