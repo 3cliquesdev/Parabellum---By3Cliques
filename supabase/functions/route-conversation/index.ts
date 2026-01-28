@@ -185,44 +185,80 @@ serve(async (req) => {
         console.log(`[route-conversation] ⚠️ Department not found for UUID: "${targetDepartmentId}"`);
       }
     }
-    // PRIORIDADE 2: department_id (slug)
+    // PRIORIDADE 2: department_id (pode ser slug OU UUID)
     else if (department_id && !conversation.department) {
-      console.log(`[route-conversation] 🏷️ Resolving department from slug: "${department_id}"`);
+      console.log(`[route-conversation] 🏷️ Resolving department from: "${department_id}"`);
       
-      const deptSlug = department_id.toLowerCase();
-      const deptName = DEPARTMENT_SLUG_MAPPING[deptSlug];
+      // 🆕 FIX: Verificar se department_id é um UUID válido (36 chars com hifens)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const isUUID = uuidRegex.test(department_id);
       
-      if (deptName) {
-        console.log(`[route-conversation] 🔄 Mapped slug "${deptSlug}" -> "${deptName}"`);
+      if (isUUID) {
+        // department_id é um UUID - buscar diretamente pelo ID
+        console.log(`[route-conversation] 🔑 department_id is UUID, querying by id...`);
         
-        // Buscar UUID do departamento no banco
-        const { data: dept, error: deptError } = await supabase
+        const { data: deptById, error: deptByIdError } = await supabase
           .from('departments')
           .select('id, name')
-          .ilike('name', deptName)
+          .eq('id', department_id)
           .maybeSingle();
         
-        if (dept && !deptError) {
-          console.log(`[route-conversation] ✅ Found department: ${dept.name} (${dept.id})`);
+        if (deptById && !deptByIdError) {
+          console.log(`[route-conversation] ✅ Found department by UUID: ${deptById.name} (${deptById.id})`);
           
           // Atualizar conversa com o departamento ANTES de rotear
           const { error: updateDeptError } = await supabase
             .from('conversations')
-            .update({ department: dept.id })
+            .update({ department: deptById.id })
             .eq('id', conversationId);
           
           if (updateDeptError) {
             console.error('[route-conversation] ⚠️ Failed to update conversation department:', updateDeptError.message);
           } else {
-            console.log(`[route-conversation] ✅ Conversation department updated to: ${dept.name}`);
-            resolvedDepartmentId = dept.id;
-            resolvedDepartmentName = dept.name;
+            console.log(`[route-conversation] ✅ Conversation department updated to: ${deptById.name}`);
+            resolvedDepartmentId = deptById.id;
+            resolvedDepartmentName = deptById.name;
           }
         } else {
-          console.log(`[route-conversation] ⚠️ Department not found for name: "${deptName}"`);
+          console.log(`[route-conversation] ⚠️ Department not found for UUID: "${department_id}"`);
         }
       } else {
-        console.log(`[route-conversation] ⚠️ No mapping found for slug: "${deptSlug}"`);
+        // department_id é um slug - usar mapeamento
+        const deptSlug = department_id.toLowerCase();
+        const deptName = DEPARTMENT_SLUG_MAPPING[deptSlug];
+        
+        if (deptName) {
+          console.log(`[route-conversation] 🔄 Mapped slug "${deptSlug}" -> "${deptName}"`);
+          
+          // Buscar UUID do departamento no banco
+          const { data: dept, error: deptError } = await supabase
+            .from('departments')
+            .select('id, name')
+            .ilike('name', deptName)
+            .maybeSingle();
+          
+          if (dept && !deptError) {
+            console.log(`[route-conversation] ✅ Found department: ${dept.name} (${dept.id})`);
+            
+            // Atualizar conversa com o departamento ANTES de rotear
+            const { error: updateDeptError } = await supabase
+              .from('conversations')
+              .update({ department: dept.id })
+              .eq('id', conversationId);
+            
+            if (updateDeptError) {
+              console.error('[route-conversation] ⚠️ Failed to update conversation department:', updateDeptError.message);
+            } else {
+              console.log(`[route-conversation] ✅ Conversation department updated to: ${dept.name}`);
+              resolvedDepartmentId = dept.id;
+              resolvedDepartmentName = dept.name;
+            }
+          } else {
+            console.log(`[route-conversation] ⚠️ Department not found for name: "${deptName}"`);
+          }
+        } else {
+          console.log(`[route-conversation] ⚠️ No mapping found for slug: "${deptSlug}"`);
+        }
       }
     }
 
