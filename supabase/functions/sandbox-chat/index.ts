@@ -399,12 +399,19 @@ Você está conversando com um cliente identificado. Use essas informações par
 
       console.log(`[sandbox-chat] Calling Lovable AI (${configuredModel})`);
 
+      // Modelos OpenAI via Lovable AI não suportam temperature customizada
+      const isOpenAIModel = configuredModel.startsWith('openai/');
+      
       const aiPayload: any = {
         model: configuredModel,
         messages: aiMessages,
-        temperature: persona.temperature || 0.7,
         max_completion_tokens: persona.max_tokens || 500,
       };
+
+      // Apenas adicionar temperature para modelos que suportam (Gemini)
+      if (!isOpenAIModel) {
+        aiPayload.temperature = persona.temperature ?? 0.7;
+      }
 
       if (tools.length > 0) {
         aiPayload.tools = tools;
