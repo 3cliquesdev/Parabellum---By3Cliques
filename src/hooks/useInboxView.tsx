@@ -100,6 +100,10 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
   if (!filters) return items;
 
   let result = [...items];
+  
+  // IMPORTANTE: Quando há busca ativa, NÃO filtrar por status automaticamente
+  // Isso permite encontrar conversas em qualquer estado
+  const hasActiveSearch = filters.search && filters.search.trim().length > 0;
 
   // Date range filter
   if (filters.dateRange?.from) {
@@ -122,13 +126,16 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
     );
   }
 
-  // Status filter - por padrão, oculta conversas fechadas (arquivadas)
+  // Status filter - SE o usuário selecionou status específico, aplicar
+  // SE há busca ativa, mostrar todas (não filtrar por status)
+  // SE não há busca e não há status selecionado, ocultar fechadas
   if (filters.status.length > 0) {
     result = result.filter(item => filters.status.includes(item.status));
-  } else {
+  } else if (!hasActiveSearch) {
     // Padrão: mostrar apenas conversas NÃO fechadas (open, pending, etc.)
     result = result.filter(item => item.status !== 'closed');
   }
+  // Se hasActiveSearch && status.length === 0 → não filtra por status
 
   // Assigned to filter
   if (filters.assignedTo) {
@@ -165,17 +172,15 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
   }
 
   // Search filter - case-insensitive em todos os campos
-  if (filters.search) {
-    const searchLower = filters.search.toLowerCase().trim();
-    if (searchLower) {
-      result = result.filter(item => 
-        item.contact_name?.toLowerCase().includes(searchLower) ||
-        item.contact_email?.toLowerCase().includes(searchLower) ||
-        item.contact_phone?.toLowerCase().includes(searchLower) ||
-        item.conversation_id.toLowerCase().includes(searchLower) ||
-        item.last_snippet?.toLowerCase().includes(searchLower)
-      );
-    }
+  if (hasActiveSearch) {
+    const searchLower = filters.search!.toLowerCase().trim();
+    result = result.filter(item => 
+      item.contact_name?.toLowerCase().includes(searchLower) ||
+      item.contact_email?.toLowerCase().includes(searchLower) ||
+      item.contact_phone?.toLowerCase().includes(searchLower) ||
+      item.conversation_id.toLowerCase().includes(searchLower) ||
+      item.last_snippet?.toLowerCase().includes(searchLower)
+    );
   }
 
   return result;
