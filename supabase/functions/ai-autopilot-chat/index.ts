@@ -470,7 +470,7 @@ interface ConfidenceResult {
 // Antes estava muito alto (0.95/0.85) e rejeitava artigos válidos
 const SCORE_DIRECT = 0.75;   // Alta confiança - responde direto
 const SCORE_CAUTIOUS = 0.55; // Média confiança - responde com cautela (permite 60% similarity)
-const SCORE_MINIMUM = 0.40;  // Mínimo para tentar responder (abaixo = handoff)
+const SCORE_MINIMUM = 0.30;  // Mínimo para tentar responder (abaixo = handoff) - AJUSTADO: 0.40→0.30
 
 // 🆕 Thresholds do MODO RAG ESTRITO (Anti-Alucinação) - mais conservador
 const STRICT_SCORE_MINIMUM = 0.70;   // Abaixo disso, SEMPRE handoff no modo estrito
@@ -2761,7 +2761,16 @@ Responda APENAS: skip ou search`
               .filter(word => word.length > 2 && !stopwords.includes(word));
             
             // Termos específicos para busca direta (alta prioridade)
-            const directTerms = ['shopeecreation', 'shopee', 'creation', 'loja', 'produtos', 'cadastro', 'nivelamento', 'formulario'];
+            // Termos específicos para busca direta (alta prioridade) - EXPANDIDO com termos comuns de clientes
+            const directTerms = [
+              // Termos existentes
+              'shopeecreation', 'shopee', 'creation', 'loja', 'produtos', 'cadastro', 'nivelamento', 'formulario',
+              // NOVOS: Termos genéricos que clientes usam muito
+              'pedido', 'pedidos', 'entrega', 'rastreio', 'envio', 'frete', 'rastrear', 'rastreamento',
+              'saque', 'dinheiro', 'pix', 'saldo', 'reembolso', 'pagamento', 'comissao',
+              'assinatura', 'plano', 'curso', 'acesso', 'login', 'senha',
+              'horario', 'atendimento', 'suporte', 'ajuda', 'cancelar', 'cancelamento'
+            ];
             const messageLower = customerMessage.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const matchedDirectTerms = directTerms.filter(term => messageLower.includes(term));
             
@@ -2819,22 +2828,57 @@ Responda APENAS: skip ou search`
           }
 
           if (allArticles.length > 0) {
-            // Ordenar por similaridade e pegar top 5
+            // 🆕 BOOST de similaridade para matches de título (mais relevante que só conteúdo)
+            const customerWords = customerMessage.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+            
             knowledgeArticles = allArticles
+              .map((a: any) => {
+                // Boost de +0.15 se título contém palavra-chave do cliente
+                const titleLower = a.title?.toLowerCase() || '';
+                const hasKeywordInTitle = customerWords.some((word: string) => titleLower.includes(word));
+                const boostedSimilarity = hasKeywordInTitle 
+                  ? Math.min((a.similarity || 0.5) + 0.15, 1.0) 
+                  : (a.similarity || 0.5);
+                
+                return {
+                  id: a.id,
+                  title: a.title,
+                  content: a.content,
+                  category: a.category,
+                  similarity: boostedSimilarity,
+                  originalSimilarity: a.similarity, // Para debug
+                  boosted: hasKeywordInTitle
+                };
+              })
               .sort((a: any, b: any) => b.similarity - a.similarity)
-              .slice(0, 5)
-          .map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            content: a.content,
-            category: a.category,
-            similarity: a.similarity, // 🆕 Preservar score de similaridade
-          }));
+              .slice(0, 5);
+            
+            // 🆕 Log detalhado para diagnóstico de KB search
+            console.log('[ai-autopilot-chat] 📚 KB SEARCH RESULT:', {
+              articles_found: knowledgeArticles.length,
+              persona_has_global_access: !persona.knowledge_base_paths || persona.knowledge_base_paths.length === 0,
+              persona_categories: persona.knowledge_base_paths,
+              data_access_kb_enabled: personaDataAccess.knowledge_base,
+              embedding_used: !!OPENAI_API_KEY,
+              fallback_used: needsKeywordFallback,
+              top_matches: knowledgeArticles.slice(0, 3).map((a: any) => ({
+                title: a.title,
+                similarity: `${(a.similarity * 100).toFixed(1)}%`,
+                category: a.category,
+                boosted: a.boosted || false,
+                originalSimilarity: a.originalSimilarity ? `${(a.originalSimilarity * 100).toFixed(1)}%` : 'N/A'
+              }))
+            });
             
             console.log(`[ai-autopilot-chat] ✅ Query Expansion + Semantic: ${knowledgeArticles.length} artigos finais:`, 
-              allArticles.slice(0, 5).map((a: any) => `${a.title} [${a.category}] (${(a.similarity * 100).toFixed(1)}%)`));
+              knowledgeArticles.map((a: any) => `${a.title} [${a.category}] (${(a.similarity * 100).toFixed(1)}%${a.boosted ? ' BOOSTED' : ''})`));
           } else {
-            console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo relevante após filtros');
+            console.log('[ai-autopilot-chat] ⚠️ Nenhum artigo relevante após filtros', {
+              hasPersonaCategories,
+              personaCategories,
+              articleMapSize: articleMap.size,
+              query: customerMessage.substring(0, 50)
+            });
           }
         }
       } catch (searchError) {
@@ -4409,8 +4453,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         ...messageHistory,
         { role: 'user', content: customerMessage }
       ],
-      temperature: persona.temperature || 0.7,
-      max_tokens: persona.max_tokens || 500
+      temperature: persona.temperature ?? 0.7,  // CORRIGIDO: ?? ao invés de || (temperatura 0 é válida)
+      max_tokens: persona.max_tokens ?? 500    // CORRIGIDO: ?? ao invés de || (consistência)
     };
 
     console.log('[ai-autopilot-chat] Messages structure:', {
