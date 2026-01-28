@@ -43,11 +43,12 @@ export function useCanTakeControl(conversation: ConversationTakeControlContext):
     queryFn: async (): Promise<{ canTake: boolean; reason?: string }> => {
       if (!user?.id) return { canTake: false, reason: 'Não autenticado' };
 
-      // ✅ Regra solicitada: qualquer usuário pode assumir conversas “disponíveis” vindas da IA
+      // ✅ Regra solicitada: qualquer usuário pode assumir conversas "disponíveis" vindas da IA
       // (não atribuídas) — isso destrava vendedores e suporte.
+      // FIXED: Verificar aiMode (não status) para waiting_human, pois status é 'open' no banco
       const isAvailableAIConversation =
         !conversation.assignedTo &&
-        (conversation.aiMode === 'autopilot' || conversation.status === 'waiting_human');
+        (conversation.aiMode === 'autopilot' || conversation.aiMode === 'waiting_human');
       if (isAvailableAIConversation) {
         return { canTake: true };
       }

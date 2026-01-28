@@ -76,9 +76,10 @@ export function useTakeControl() {
         throw new Error('Conversa não encontrada');
       }
 
+      // FIXED: Verificar ai_mode (não status) para waiting_human, pois status é 'open' no banco
       const isAvailableAIConversation =
         !conversation.assigned_to &&
-        (conversation.ai_mode === 'autopilot' || String(conversation.status) === 'waiting_human');
+        (conversation.ai_mode === 'autopilot' || conversation.ai_mode === 'waiting_human');
 
       // ✅ Regra solicitada: qualquer usuário pode assumir conversas não atribuídas da IA
       // (destrava vendedores e suporte). Mantém validação antiga apenas para casos fora disso.
