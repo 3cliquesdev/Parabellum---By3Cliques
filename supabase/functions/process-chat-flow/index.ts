@@ -868,7 +868,79 @@ serve(async (req) => {
 
     // Encontrar primeiro nó (sem edges apontando para ele)
     const targetIds = new Set((flowDef.edges || []).map((e: any) => e.target));
-    const startNode = flowDef.nodes.find((n: any) => !targetIds.has(n.id)) || flowDef.nodes[0];
+    let startNode = flowDef.nodes.find((n: any) => !targetIds.has(n.id)) || flowDef.nodes[0];
+    
+    console.log('[process-chat-flow] 🚀 Start node:', startNode.type, startNode.id);
+
+    // 🆕 CORREÇÃO: Se o nó inicial é "input" ou "condition", seguir para o próximo nó
+    // Esses nós não têm conteúdo para enviar ao usuário
+    let currentNode = startNode;
+    let attempts = 0;
+    const maxAttempts = 10; // Evitar loop infinito
+    
+    while (attempts < maxAttempts && (currentNode.type === 'input' || currentNode.type === 'condition')) {
+      attempts++;
+      console.log('[process-chat-flow] ⏩ Nó sem conteúdo (', currentNode.type, ') - avançando...');
+      
+      if (currentNode.type === 'condition') {
+        // Para nós de condição, avaliar a condição
+        const conditionField = currentNode.data?.condition_field || '';
+        const conditionType = currentNode.data?.condition_type || 'contains';
+        const conditionValue = currentNode.data?.condition_value || '';
+        
+        // Normalizar para comparação
+        const msgNorm = userMessage.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const valueNorm = conditionValue.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        
+        let conditionResult = false;
+        
+        switch (conditionType) {
+          case 'contains':
+            conditionResult = msgNorm.includes(valueNorm);
+            break;
+          case 'equals':
+            conditionResult = msgNorm === valueNorm;
+            break;
+          case 'starts_with':
+            conditionResult = msgNorm.startsWith(valueNorm);
+            break;
+          case 'ends_with':
+            conditionResult = msgNorm.endsWith(valueNorm);
+            break;
+          default:
+            conditionResult = msgNorm.includes(valueNorm);
+        }
+        
+        console.log('[process-chat-flow] 🔍 Condição avaliada:', { conditionType, conditionValue: valueNorm.slice(0, 30), result: conditionResult });
+        
+        // Seguir para true ou false path
+        const path = conditionResult ? 'true' : 'false';
+        currentNode = findNextNode(flowDef, currentNode, path);
+      } else {
+        // Para nó input, apenas seguir para o próximo
+        currentNode = findNextNode(flowDef, currentNode, undefined);
+      }
+      
+      if (!currentNode) {
+        console.log('[process-chat-flow] ❌ Sem próximo nó após avançar');
+        break;
+      }
+      
+      console.log('[process-chat-flow] 📍 Novo nó:', currentNode.type, currentNode.id);
+    }
+
+    if (!currentNode) {
+      console.log('[process-chat-flow] ❌ Não encontrou nó com conteúdo');
+      return new Response(
+        JSON.stringify({ useAI: true, reason: "Flow has no content nodes" }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Atualizar startNode para o nó com conteúdo real
+    startNode = currentNode;
+    
+    console.log('[process-chat-flow] ✅ Nó final com conteúdo:', startNode.type, startNode.id);
 
     // Criar estado do fluxo
     const { data: newState, error: createError } = await supabaseClient
@@ -892,6 +964,23 @@ serve(async (req) => {
     }
 
     console.log('[process-chat-flow] Flow started:', newState.id);
+    
+    // 🆕 Se o nó é AI response, retornar useAI: true com configs
+    if (startNode.type === 'ai_response') {
+      return new Response(
+        JSON.stringify({
+          useAI: true,
+          reason: "Flow started with AI node",
+          flowId: matchedFlow.id,
+          flowStarted: true,
+          personaId: startNode.data?.persona_id || null,
+          kbCategories: startNode.data?.kb_categories || null,
+          contextPrompt: startNode.data?.context_prompt || null,
+          fallbackMessage: startNode.data?.fallback_message || null,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const startMessage = startNode.data?.message || "";
     const options = startNode.type === 'ask_options' 
@@ -905,6 +994,7 @@ serve(async (req) => {
         options,
         flowId: matchedFlow.id,
         flowStarted: true,
+        nodeType: startNode.type,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
