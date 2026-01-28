@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, User, CheckSquare, X } from "lucide-react";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
 import { useBulkReactivateAI } from "@/hooks/useBulkReactivateAI";
+import { useBulkCloseConversations } from "@/hooks/useBulkCloseConversations";
 
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -71,6 +72,7 @@ export default function Inbox() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDistributeDialog, setShowDistributeDialog] = useState(false);
   const bulkReactivate = useBulkReactivateAI();
+  const bulkClose = useBulkCloseConversations();
   
   // Smart default filter based on role
   const defaultFilter = (role === 'admin' || role === 'manager') ? 'all' : 'human_queue';
@@ -210,6 +212,14 @@ export default function Inbox() {
     }
   }, [selectedIds, bulkReactivate, handleClearSelection]);
 
+  const handleBulkCloseConversations = useCallback(() => {
+    if (selectedIds.size > 0) {
+      bulkClose.mutate(Array.from(selectedIds), {
+        onSuccess: handleClearSelection
+      });
+    }
+  }, [selectedIds, bulkClose, handleClearSelection]);
+
   const toggleSelectionMode = useCallback(() => {
     setSelectionMode(prev => !prev);
     if (selectionMode) {
@@ -345,25 +355,25 @@ export default function Inbox() {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-sm text-foreground">Conversas</h3>
-              <Button
-                variant={selectionMode ? "secondary" : "ghost"}
-                size="xs"
-                onClick={toggleSelectionMode}
-                className="h-6 gap-1"
-              >
-                {selectionMode ? (
-                  <>
-                    <X className="h-3 w-3" />
-                    Sair
-                  </>
-                ) : (
-                  <>
-                    <CheckSquare className="h-3 w-3" />
-                    Selecionar
-                  </>
-                )}
-              </Button>
             </div>
+            <Button
+              variant={selectionMode ? "default" : "outline"}
+              size="sm"
+              onClick={toggleSelectionMode}
+              className="h-7 gap-1.5 text-xs"
+            >
+              {selectionMode ? (
+                <>
+                  <X className="h-3.5 w-3.5" />
+                  Cancelar
+                </>
+              ) : (
+                <>
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  Selecionar
+                </>
+              )}
+            </Button>
             <span className="text-xs text-muted-foreground">
               {filteredConversations.length} conversa{filteredConversations.length !== 1 ? 's' : ''}
             </span>
@@ -428,7 +438,9 @@ export default function Inbox() {
         onClearSelection={handleClearSelection}
         onDistribute={() => setShowDistributeDialog(true)}
         onReactivateAI={handleBulkReactivateAI}
+        onCloseConversations={handleBulkCloseConversations}
         isReactivating={bulkReactivate.isPending}
+        isClosing={bulkClose.isPending}
       />
 
       {/* Bulk Distribute Dialog */}

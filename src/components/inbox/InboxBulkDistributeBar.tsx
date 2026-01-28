@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRightLeft, Bot, X, CheckSquare } from "lucide-react";
+import { ArrowRightLeft, Bot, X, CheckSquare, XCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface InboxBulkDistributeBarProps {
@@ -9,8 +9,10 @@ interface InboxBulkDistributeBarProps {
   onClearSelection: () => void;
   onDistribute: () => void;
   onReactivateAI: () => void;
+  onCloseConversations?: () => void;
   isDistributing?: boolean;
   isReactivating?: boolean;
+  isClosing?: boolean;
 }
 
 export function InboxBulkDistributeBar({
@@ -20,8 +22,10 @@ export function InboxBulkDistributeBar({
   onClearSelection,
   onDistribute,
   onReactivateAI,
+  onCloseConversations,
   isDistributing,
   isReactivating,
+  isClosing,
 }: InboxBulkDistributeBarProps) {
   if (selectedCount === 0) return null;
 
@@ -74,6 +78,19 @@ export function InboxBulkDistributeBar({
             <Bot className="h-4 w-4" />
             Reativar IA
           </Button>
+
+          {onCloseConversations && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={onCloseConversations}
+              disabled={isClosing}
+              className="gap-2"
+            >
+              <XCircle className="h-4 w-4" />
+              Encerrar
+            </Button>
+          )}
 
           <div className="h-6 border-l border-border" />
 
