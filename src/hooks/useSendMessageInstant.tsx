@@ -93,10 +93,12 @@ export function useSendMessageInstant() {
         // Capturar o content EXATO no momento do envio (closure segura)
         const contentToSend = content;
         
-        // Inserir mensagem (banco gerará um novo ID, mas usamos localId para tracking)
+        // Inserir mensagem usando o MESMO ID gerado localmente.
+        // Isso elimina race conditions e impede “troca”/duplicação quando múltiplas mensagens são enviadas rápido.
         const { data: insertedMessage, error: insertError } = await supabase
           .from("messages")
           .insert([{
+            id: localId,
             conversation_id: conversationId,
             content: contentToSend, // Usar a variável capturada
             sender_type: 'user' as const,
@@ -171,6 +173,7 @@ export function useSendMessageInstant() {
       const { error } = await supabase
         .from("messages")
         .insert([{
+          id: messageId,
           conversation_id: conversationId,
           content: failedMessage.content,
           sender_type: 'user' as const,

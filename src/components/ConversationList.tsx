@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect, useState, CSSProperties } from "react";
+import { useCallback, useRef, useEffect, useState, useMemo, CSSProperties } from "react";
 import { List, RowComponentProps } from "react-window";
 import { ConversationListItem } from "@/components/ConversationListItem";
 import { ConversationListSkeleton } from "@/components/inbox/MessageSkeleton";
@@ -105,12 +105,20 @@ export default function ConversationList({
     unreadCounts,
   };
 
-  // react-window v2 usa key por índice internamente. Quando a lista reordena após
-  // transferências/redistribuições, isso pode causar DOMExceptions raras.
-  // Forçar remount do List quando a “assinatura” da lista mudar estabiliza.
-  const listKey = `${conversations.length}-${conversations[0]?.id ?? "none"}-${
-    conversations[conversations.length - 1]?.id ?? "none"
-  }`;
+  // react-window v2 usa key por índice internamente. Quando a lista reordena (mesmo sem mudar
+  // primeiro/último item) após transferências/redistribuições, pode ocorrer DOMException.
+  // Forçar remount quando a ordem mudar (hash leve dos IDs) estabiliza.
+  const listKey = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < conversations.length; i++) {
+      const id = conversations[i]?.id ?? "";
+      // Rolling hash simples baseado em alguns chars
+      for (let j = 0; j < id.length; j += 4) {
+        hash = (hash * 31 + id.charCodeAt(j)) | 0;
+      }
+    }
+    return `${conversations.length}-${hash}`;
+  }, [conversations]);
 
   return (
     <div className="w-full shrink-0 bg-card flex flex-col h-full overflow-hidden">

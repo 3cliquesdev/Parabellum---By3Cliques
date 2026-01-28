@@ -100,45 +100,7 @@ export function useMessages(conversationId: string | null) {
                   return old;
                 }
                 
-                // 3. CORREÇÃO: Substituir mensagem otimista APENAS por ordem cronológica
-                // NÃO usar content para matching (causa troca de mensagens quando se digita rápido)
-                // Buscar a PRIMEIRA mensagem com status="sending" do mesmo sender
-                const optimisticIndex = old.findIndex(m => 
-                  m.status === 'sending' && 
-                  m.sender_id === newMessage.sender_id
-                );
-                
-                if (optimisticIndex !== -1) {
-                  const optimisticMsg = old[optimisticIndex];
-                  // Verificar se o content é igual (confirmação de que é a mesma mensagem)
-                  if (optimisticMsg.content === newMessage.content) {
-                    console.log('[Realtime] Substituindo mensagem otimista por real:', newMessage.id);
-                    const updated = [...old];
-                    updated[optimisticIndex] = { ...newMessage, status: 'sent' };
-                    return updated;
-                  } else {
-                    // Content diferente: a mensagem otimista pode estar pendente ainda
-                    // Apenas adicionar a nova mensagem sem substituir
-                    console.log('[Realtime] Content diferente - adicionando nova mensagem:', newMessage.id);
-                    return [...old, { ...newMessage, status: 'sent' }];
-                  }
-                }
-                
-                // 4. Fallback: Substituir temp-* por mensagem real (compatibilidade legada)
-                const tempIndex = old.findIndex(m => 
-                  m.id?.startsWith('temp-') && 
-                  m.content === newMessage.content &&
-                  m.sender_id === newMessage.sender_id
-                );
-                
-                if (tempIndex !== -1) {
-                  console.log('[Realtime] Substituindo temp por real:', newMessage.id);
-                  const updated = [...old];
-                  updated[tempIndex] = { ...newMessage, status: 'sent' };
-                  return updated;
-                }
-                
-                // Nova mensagem de outro usuário/cliente
+                // 3. Nova mensagem (outro usuário/cliente, ou compatibilidade com envios legados)
                 console.log('[Realtime] Nova mensagem:', newMessage.id);
                 return [...old, { ...newMessage, status: 'sent' }];
               }
@@ -244,8 +206,13 @@ export function useSendMessage() {
 
   return useMutation({
     mutationFn: async (message: SendMessageParams) => {
+      // Garantir ID estável gerado no cliente para evitar mismatch entre otimista e realtime
+      // (impede troca de mensagens em envios rápidos)
+      const ensuredId = (message as any).id || crypto.randomUUID();
+
       const messageWithChannel = {
         ...message,
+        id: ensuredId,
         channel: message.channel || 'web_chat',
         is_internal: message.is_internal || false,
       };
@@ -274,12 +241,18 @@ export function useSendMessage() {
         queryKey: ["messages", newMessage.conversation_id] 
       });
 
+      // Mutar o objeto de variáveis para que mutationFn use o mesmo ID.
+      // Isso é intencional: garante consistência entre cache otimista, insert e realtime.
+      if (!(newMessage as any).id) {
+        (newMessage as any).id = crypto.randomUUID();
+      }
+
       const previousMessages = queryClient.getQueryData<any[]>(
         ["messages", newMessage.conversation_id]
       );
 
       const optimisticMessage = {
-        id: `temp-${Date.now()}`,
+        id: (newMessage as any).id,
         conversation_id: newMessage.conversation_id,
         content: newMessage.content,
         sender_type: newMessage.sender_type,

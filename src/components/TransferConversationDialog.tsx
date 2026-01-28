@@ -134,7 +134,7 @@ export default function TransferConversationDialog({
               <SelectTrigger id="department">
                 <SelectValue placeholder="Selecione o departamento" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-50 bg-popover text-popover-foreground shadow-lg">
                 {activeDepartments.map((dept) => (
                   <SelectItem key={dept.id} value={dept.id}>
                     {dept.name}

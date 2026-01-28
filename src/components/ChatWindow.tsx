@@ -93,7 +93,8 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
   const { canTake: canTakeControl, reason: cantTakeReason } = useCanTakeControl({
     departmentId: conversation?.department || null,
     assignedTo: conversation?.assigned_to || null,
-    aiMode: (aiMode as any) || null,
+    // Fallback: useAIMode pode atrasar; usar valor do registro evita botão ficar travado/desabilitado
+    aiMode: ((aiMode as any) || (conversation?.ai_mode as any)) || null,
     status: (conversation?.status as any) || null,
   });
   // Buscar ticket relacionado para mostrar ticket_number
@@ -252,10 +253,11 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
     setMessage(text);
   };
 
-  const isAutopilot = aiMode === 'autopilot';
-  const isCopilot = aiMode === 'copilot';
-  const isDisabled = aiMode === 'disabled';
-  const isWaitingHuman = aiMode === 'waiting_human';
+  const effectiveAIMode = (aiMode as any) ?? (conversation?.ai_mode as any);
+  const isAutopilot = effectiveAIMode === 'autopilot';
+  const isCopilot = effectiveAIMode === 'copilot';
+  const isDisabled = effectiveAIMode === 'disabled';
+  const isWaitingHuman = effectiveAIMode === 'waiting_human';
   
   // IA Global desligada = IA não está ativa mesmo em autopilot
   const isAIActuallyActive = isAutopilot && isAIGlobalEnabled;
