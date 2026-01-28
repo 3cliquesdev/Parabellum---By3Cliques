@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useInboxView, useInboxCounts, type InboxFilters as InboxViewFiltersType, type InboxCounts } from "@/hooks/useInboxView";
 import { useConversations } from "@/hooks/useConversations";
@@ -12,10 +12,12 @@ import ContactDetailsSidebar from "@/components/ContactDetailsSidebar";
 import { InboxSidebar } from "@/components/inbox/InboxSidebar";
 import InboxFilterPopover, { type InboxFilters } from "@/components/inbox/InboxFilterPopover";
 import { BulkActionsBar } from "@/components/inbox/BulkActionsBar";
+import { InboxBulkDistributeBar } from "@/components/inbox/InboxBulkDistributeBar";
+import { InboxBulkDistributeDialog } from "@/components/inbox/InboxBulkDistributeDialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, User } from "lucide-react";
+import { ArrowLeft, User, CheckSquare, X } from "lucide-react";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
 import { useBulkReactivateAI } from "@/hooks/useBulkReactivateAI";
 
@@ -63,6 +65,12 @@ export default function Inbox() {
   
   // Mobile navigation state
   const [mobileView, setMobileView] = useState<MobileView>("list");
+  
+  // Bulk selection state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDistributeDialog, setShowDistributeDialog] = useState(false);
+  const bulkReactivate = useBulkReactivateAI();
   
   // Smart default filter based on role
   const defaultFilter = (role === 'admin' || role === 'manager') ? 'all' : 'human_queue';
@@ -167,6 +175,47 @@ export default function Inbox() {
         return result.filter(c => c.status !== 'closed');
     }
   }, [conversations, filter, departmentFilter, user?.id, role]);
+
+  // Bulk selection handlers (after filteredConversations is defined)
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedIds.size === filteredConversations.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredConversations.map(c => c.id)));
+    }
+  }, [selectedIds.size, filteredConversations]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  }, []);
+
+  const handleBulkReactivateAI = useCallback(() => {
+    if (selectedIds.size > 0) {
+      bulkReactivate.mutate(Array.from(selectedIds), {
+        onSuccess: handleClearSelection
+      });
+    }
+  }, [selectedIds, bulkReactivate, handleClearSelection]);
+
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode(prev => !prev);
+    if (selectionMode) {
+      setSelectedIds(new Set());
+    }
+  }, [selectionMode]);
 
   // Use optimized counts from inbox_view
   const totalActiveCount = (counts?.total || 0);
@@ -294,7 +343,27 @@ export default function Inbox() {
         {/* Mini Header with filters - more padding for breathing room */}
         <div className="flex-none border-b border-border px-4 py-3 bg-card">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-sm text-foreground">Conversas</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-sm text-foreground">Conversas</h3>
+              <Button
+                variant={selectionMode ? "secondary" : "ghost"}
+                size="xs"
+                onClick={toggleSelectionMode}
+                className="h-6 gap-1"
+              >
+                {selectionMode ? (
+                  <>
+                    <X className="h-3 w-3" />
+                    Sair
+                  </>
+                ) : (
+                  <>
+                    <CheckSquare className="h-3 w-3" />
+                    Selecionar
+                  </>
+                )}
+              </Button>
+            </div>
             <span className="text-xs text-muted-foreground">
               {filteredConversations.length} conversa{filteredConversations.length !== 1 ? 's' : ''}
             </span>
@@ -303,7 +372,7 @@ export default function Inbox() {
         </div>
         
         {/* Bulk Actions Bar for waiting_human conversations */}
-        {filter === 'human_queue' && (
+        {filter === 'human_queue' && !selectionMode && (
           <BulkActionsBar
             selectedIds={[]}
             onClearSelection={() => {}}
@@ -313,9 +382,9 @@ export default function Inbox() {
         )}
         
         {hasHiddenConversations && (
-          <div className="flex-none px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800">
-            <p className="text-xs text-yellow-800 dark:text-yellow-200">
-              ⚠️ Nenhuma conversa neste filtro.
+          <div className="flex-none px-3 py-2 bg-warning/10 border-b border-warning/30">
+            <p className="text-xs text-warning-foreground">
+              Nenhuma conversa neste filtro.
               {sidebarCounts.closed > 0 && (
                 <button 
                   onClick={() => navigate('/inbox?filter=archived')}
@@ -334,6 +403,9 @@ export default function Inbox() {
             activeConversationId={activeConversation?.id || null}
             onSelectConversation={handleSelectConversation}
             isLoading={inboxLoading || convLoading}
+            selectionMode={selectionMode}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
           />
         </div>
       </div>
@@ -348,6 +420,24 @@ export default function Inbox() {
         <ContactDetailsSidebar conversation={activeConversation} />
       </div>
 
+      {/* Bulk Distribute Bar - floating at bottom */}
+      <InboxBulkDistributeBar
+        selectedCount={selectedIds.size}
+        totalCount={filteredConversations.length}
+        onSelectAll={handleSelectAll}
+        onClearSelection={handleClearSelection}
+        onDistribute={() => setShowDistributeDialog(true)}
+        onReactivateAI={handleBulkReactivateAI}
+        isReactivating={bulkReactivate.isPending}
+      />
+
+      {/* Bulk Distribute Dialog */}
+      <InboxBulkDistributeDialog
+        open={showDistributeDialog}
+        onOpenChange={setShowDistributeDialog}
+        conversationIds={Array.from(selectedIds)}
+        onSuccess={handleClearSelection}
+      />
     </div>
   );
 }

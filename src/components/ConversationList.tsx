@@ -29,6 +29,9 @@ interface ConversationListProps {
   activeConversationId: string | null;
   onSelectConversation: (conversation: Conversation) => void;
   isLoading?: boolean;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }
 
 interface RowData {
@@ -36,6 +39,9 @@ interface RowData {
   activeConversationId: string | null;
   onSelectConversation: (conversation: Conversation) => void;
   unreadCounts: Record<string, number>;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }
 
 const ITEM_HEIGHT = 100;
@@ -48,6 +54,9 @@ function ConversationRow({
   activeConversationId,
   onSelectConversation,
   unreadCounts,
+  selectionMode,
+  selectedIds,
+  onToggleSelect,
 }: RowComponentProps<RowData>) {
   const conversation = conversations[index];
   if (!conversation) return null;
@@ -60,6 +69,9 @@ function ConversationRow({
       index={index}
       unreadCount={unreadCounts[conversation.id] || 0}
       style={style}
+      selectionMode={selectionMode}
+      isSelected={selectedIds?.has(conversation.id)}
+      onToggleSelect={onToggleSelect}
     />
   );
 }
@@ -69,6 +81,9 @@ export default function ConversationList({
   activeConversationId,
   onSelectConversation,
   isLoading = false,
+  selectionMode = false,
+  selectedIds,
+  onToggleSelect,
 }: ConversationListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState(600);
@@ -103,6 +118,9 @@ export default function ConversationList({
     activeConversationId,
     onSelectConversation,
     unreadCounts,
+    selectionMode,
+    selectedIds,
+    onToggleSelect,
   };
 
   // react-window v2 usa key por índice internamente. Quando a lista reordena (mesmo sem mudar
