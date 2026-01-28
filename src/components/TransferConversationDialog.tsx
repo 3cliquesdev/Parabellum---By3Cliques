@@ -52,7 +52,8 @@ export default function TransferConversationDialog({
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [transferNote, setTransferNote] = useState("");
   const { data: departments } = useDepartments();
-  const { data: users, isLoading } = useUsersByDepartment(selectedDepartmentId || undefined);
+  // Buscar APENAS usuários online para transferência direta
+  const { data: users, isLoading } = useUsersByDepartment(selectedDepartmentId || undefined, { onlineOnly: true });
   const transferMutation = useTransferConversation();
   
   // Early return DEPOIS de todos os hooks
@@ -148,7 +149,7 @@ export default function TransferConversationDialog({
           {selectedDepartmentId && (
             <>
               <div className="space-y-2">
-                <Label>Agente de Destino <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                <Label>Agente de Destino <span className="text-muted-foreground font-normal">(apenas online)</span></Label>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -176,6 +177,7 @@ export default function TransferConversationDialog({
                         </div>
                       </button>
 
+                      {/* Usuários ONLINE do departamento */}
                       {availableUsers?.map((user) => (
                         <button
                           key={user.id}
@@ -186,12 +188,12 @@ export default function TransferConversationDialog({
                               : "border-border"
                           }`}
                         >
-                          <Avatar className="h-10 w-10">
+                          <Avatar className="h-10 w-10 ring-2 ring-green-500">
                             <AvatarImage
                               src={user.avatar_url || undefined}
                               alt={user.full_name}
                             />
-                            <AvatarFallback>
+                            <AvatarFallback className="bg-green-100 text-green-700">
                               {user.full_name
                                 .split(" ")
                                 .map((n) => n[0])
@@ -201,18 +203,9 @@ export default function TransferConversationDialog({
                           </Avatar>
                           <div className="flex-1 text-left">
                             <div className="flex items-center gap-2">
-                              <span className={`w-2 h-2 rounded-full ${
-                                user.availability_status === "online" ? "bg-green-500" : 
-                                user.availability_status === "busy" ? "bg-yellow-500" : 
-                                "bg-gray-400"
-                              }`} />
+                              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                               <p className="font-medium">{user.full_name}</p>
-                              {user.availability_status === "online" && (
-                                <span className="text-xs text-green-600 font-medium">Online</span>
-                              )}
-                              {user.availability_status === "busy" && (
-                                <span className="text-xs text-yellow-600 font-medium">Ocupado</span>
-                              )}
+                              <span className="text-xs text-green-600 font-medium bg-green-100 px-1.5 py-0.5 rounded">Online</span>
                             </div>
                             {user.job_title && (
                               <p className="text-sm text-muted-foreground">
@@ -224,9 +217,14 @@ export default function TransferConversationDialog({
                       ))}
 
                       {(!availableUsers || availableUsers.length === 0) && (
-                        <p className="text-center text-muted-foreground py-4">
-                          Nenhum usuário disponível neste departamento
-                        </p>
+                        <div className="text-center py-4 space-y-2">
+                          <p className="text-muted-foreground">
+                            Nenhum agente <strong>online</strong> neste departamento
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Use "Distribuir Automaticamente" para enviar à fila
+                          </p>
+                        </div>
                       )}
                     </div>
                   </ScrollArea>
