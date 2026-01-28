@@ -39,6 +39,34 @@
       document.documentElement.classList.add('dark');
       document.documentElement.style.colorScheme = 'dark';
     </script>
+
+    <!-- Anti-cache de PWA: remove Service Worker ANTES do app iniciar (evita publicado preso em "Carregando...") -->
+    <script>
+      (function () {
+        try {
+          if (!('serviceWorker' in navigator)) return;
+
+          // Se existir um SW controlando esta página, ele pode estar servindo uma versão antiga/corrompida.
+          // Fazemos uma limpeza e um único reload (apenas 1x) para voltar a servir o HTML/JS correto.
+          var hasController = !!navigator.serviceWorker.controller;
+          var key = 'sw_clean_reload_done';
+
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }).then(function () {
+            if (hasController && !sessionStorage.getItem(key)) {
+              sessionStorage.setItem(key, '1');
+              // Reload único e controlado para quebrar cache antigo.
+              location.reload();
+            }
+          }).catch(function () {
+            // Silencioso: não bloqueia o carregamento caso o navegador falhe ao listar SW.
+          });
+        } catch (e) {
+          // Silencioso
+        }
+      })();
+    </script>
     <meta name="description" content="CRM moderno com caixa de entrada unificada para gerenciar contatos, organizações, negócios e conversas" />
     <meta name="author" content="Lovable" />
     <!-- Preconnect hints for critical origins -->
