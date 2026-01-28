@@ -5809,8 +5809,10 @@ Sobre qual pedido você gostaria de saber mais?`;
                         tracking_code: code,
                         platform: trackingInfo.platform,
                         status: trackingInfo.status,
-                        packed_at: trackingInfo.packed_at,
-                        packed_at_formatted: trackingInfo.packed_at_formatted,
+                        // fetch-tracking retorna express_time / express_time_formatted (horário de embalagem/romaneio)
+                        // Mantemos o nome packed_* aqui por compatibilidade com o restante do código.
+                        packed_at: trackingInfo.packed_at ?? trackingInfo.express_time,
+                        packed_at_formatted: trackingInfo.packed_at_formatted ?? trackingInfo.express_time_formatted,
                         is_packed: trackingInfo.is_packed,
                         external_updated_at: trackingInfo.updated_at
                       });
