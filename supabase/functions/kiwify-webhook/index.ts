@@ -1219,7 +1219,7 @@ async function handlePaidOrder(
         *,
         board:project_boards(id, name),
         initial_column:project_columns!product_board_mappings_initial_column_id_fkey(id, name),
-        form:forms(id, name, short_code)
+        form:forms(id, name)
       `)
       .eq('product_id', product.id)
       .eq('is_active', true)
@@ -1279,7 +1279,8 @@ async function handlePaidOrder(
 
         // Send welcome email with form link if configured
         if (boardMapping.send_welcome_email && boardMapping.form_id && boardMapping.form) {
-          const formShortCode = boardMapping.form.short_code || boardMapping.form_id;
+          // forms table doesn't have short_code column - use form_id directly
+          const formShortCode = boardMapping.form_id;
           const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
           // Extract project ref from URL (between https:// and .supabase.co)
           const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase/)?.[1] || '';

@@ -790,16 +790,16 @@ serve(async (req) => {
         // Notify manager if enabled
         if (form.notify_manager && form.target_department_id) {
           try {
-            // Get department manager
+            // Get department manager (note: profiles doesn't have email, only full_name)
             const { data: deptManager } = await supabase
               .from('profiles')
-              .select('id, email, first_name')
+              .select('id, full_name')
               .eq('department', form.target_department_id)
               .limit(1)
               .single();
             
             if (deptManager) {
-              console.log(`[form-submit-v3] Manager notification would be sent to: ${deptManager.email}`);
+              console.log(`[form-submit-v3] Manager notification would be sent to: ${deptManager.full_name}`);
               // Could invoke email function here for manager notification
             }
           } catch (notifyError) {
