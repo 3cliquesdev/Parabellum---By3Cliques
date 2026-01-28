@@ -105,6 +105,13 @@ export default function ConversationList({
     unreadCounts,
   };
 
+  // react-window v2 usa key por índice internamente. Quando a lista reordena após
+  // transferências/redistribuições, isso pode causar DOMExceptions raras.
+  // Forçar remount do List quando a “assinatura” da lista mudar estabiliza.
+  const listKey = `${conversations.length}-${conversations[0]?.id ?? "none"}-${
+    conversations[conversations.length - 1]?.id ?? "none"
+  }`;
+
   return (
     <div className="w-full shrink-0 bg-card flex flex-col h-full overflow-hidden">
       <div ref={containerRef} className="flex-1 min-h-0">
@@ -116,6 +123,7 @@ export default function ConversationList({
           </div>
         ) : (
           <List
+            key={listKey}
             rowComponent={ConversationRow}
             rowCount={conversations.length}
             rowHeight={ITEM_HEIGHT}
