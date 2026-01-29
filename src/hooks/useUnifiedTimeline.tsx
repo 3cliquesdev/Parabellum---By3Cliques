@@ -76,7 +76,7 @@ export function useUnifiedTimeline(contactId: string | null) {
           `)
           .in("conversation_id", conversationIds)
           .order("created_at", { ascending: false })
-          .limit(5000); // Carregar histórico completo (até 5k mensagens)
+          .limit(10000); // HISTÓRICO COMPLETO: Carregar todas as mensagens do contato
         
         allMessages = messages || [];
       }

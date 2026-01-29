@@ -16,6 +16,8 @@ export function useMessages(conversationId: string | null) {
     queryFn: async () => {
       if (!conversationId) return [];
 
+      // HISTÓRICO COMPLETO: Carregar TODAS as mensagens sem limite artificial
+      // Supabase tem limite padrão de 1000 - removemos para preservar histórico
       const { data, error } = await supabase
         .from("messages")
         .select(`
@@ -39,7 +41,8 @@ export function useMessages(conversationId: string | null) {
           )
         `)
         .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true })
+        .limit(10000); // Limite alto para garantir histórico completo
 
       if (error) throw error;
       return data as any[];
