@@ -39,13 +39,22 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    console.log('[Auto-Close] Starting inactivity check - 15 minute threshold...');
+    console.log('[Auto-Close] Starting inactivity check - 30 minute threshold (excluding comercial)...');
 
-    // Buscar conversas abertas onde a IA respondeu e o cliente não respondeu há mais de 15 minutos
-    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    // Buscar conversas abertas onde a IA respondeu e o cliente não respondeu há mais de 30 minutos
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 
-    // Buscar conversas em modo autopilot/copilot que estão inativas
-    const { data: conversations, error: fetchError } = await supabase
+    // Buscar departamentos comerciais para excluir do auto-close
+    const { data: comercialDepts } = await supabase
+      .from('departments')
+      .select('id')
+      .ilike('name', '%comercial%');
+    
+    const comercialDeptIds = comercialDepts?.map(d => d.id) || [];
+    console.log(`[Auto-Close] Excluding ${comercialDeptIds.length} comercial departments from auto-close`);
+
+    // Buscar conversas em modo autopilot/copilot que estão inativas (exceto comercial)
+    let query = supabase
       .from('conversations')
       .select(`
         id, 
@@ -53,13 +62,21 @@ Deno.serve(async (req) => {
         last_message_at,
         ai_mode,
         channel,
+        department,
         whatsapp_instance_id,
         whatsapp_meta_instance_id,
         whatsapp_provider
       `)
       .eq('status', 'open')
       .in('ai_mode', ['autopilot', 'copilot'])
-      .lt('last_message_at', fifteenMinutesAgo);
+      .lt('last_message_at', thirtyMinutesAgo);
+
+    // Excluir departamentos comerciais do auto-close
+    if (comercialDeptIds.length > 0) {
+      query = query.not('department', 'in', `(${comercialDeptIds.join(',')})`);
+    }
+
+    const { data: conversations, error: fetchError } = await query;
 
     if (fetchError) {
       console.error('[Auto-Close] Error fetching conversations:', fetchError);
