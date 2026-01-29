@@ -1004,6 +1004,35 @@ ${withdrawalData.cpf_last4 ? `**CPF (final):** ...${withdrawalData.cpf_last4}` :
   return `${baseMessage}${orderInfo}`;
 }
 
+// ============================================================
+// 🆕 CONTRATO ANTI-ALUCINAÇÃO: flow_context obrigatório
+// ============================================================
+interface FlowContext {
+  flow_id: string;
+  node_id: string;
+  node_type: 'ai_response';
+  allowed_sources: ('kb' | 'crm' | 'tracking')[];
+  response_format: 'text_only';
+  personaId?: string;
+  kbCategories?: string[];
+  contextPrompt?: string;
+  fallbackMessage?: string;
+}
+
+// 🆕 ESCAPE PATTERNS: Detectar quando IA tenta sair do contrato
+const ESCAPE_PATTERNS = [
+  /vou te transferir/i,
+  /vou transferir voc[êe]/i,
+  /vou encaminhar/i,
+  /escolha uma das op[çc][õo]es/i,
+  /selecione uma op[çc][ãa]o/i,
+  /1️⃣|2️⃣|3️⃣|4️⃣|5️⃣/,
+  /qual.*prefere\?/i,
+  /vou te conectar/i,
+  /aguarde.*atendente/i,
+  /estou.*transferindo/i,
+];
+
 interface AutopilotChatRequest {
   conversationId: string;
   customerMessage: string;
@@ -1013,6 +1042,8 @@ interface AutopilotChatRequest {
     email: string;
     isVerified: boolean;
   } | null;
+  // 🆕 CONTRATO: Contexto do fluxo (obrigatório quando chamado via flow)
+  flow_context?: FlowContext;
 }
 
 serve(async (req) => {
@@ -1038,7 +1069,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, customerMessage, maxHistory = 10, customer_context }: AutopilotChatRequest = parsedBody;
+    const { conversationId, customerMessage, maxHistory = 10, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
     
     // Validação defensiva
     if (!conversationId || conversationId === 'undefined') {
@@ -1051,7 +1082,12 @@ serve(async (req) => {
       });
     }
     
-    console.log('[ai-autopilot-chat] Request received:', { conversationId, messagePreview: customerMessage?.substring(0, 50) });
+    console.log('[ai-autopilot-chat] Request received:', { 
+      conversationId, 
+      messagePreview: customerMessage?.substring(0, 50),
+      hasFlowContext: !!flow_context,
+      flowId: flow_context?.flow_id
+    });
 
     // 🚨 FASE 3: Declarar variáveis fora do try para acesso no catch
     let conversation: any = null;
@@ -1060,10 +1096,10 @@ serve(async (req) => {
     let department: string | null = null;
     
     // 🆕 Chat Flow: variáveis para persona/KB específicas do fluxo
-    let flowPersonaId: string | null = null;
-    let flowKbCategories: string[] | null = null;
-    let flowContextPrompt: string | null = null;
-    let flowFallbackMessage: string | null = null;
+    let flowPersonaId: string | null = flow_context?.personaId || null;
+    let flowKbCategories: string[] | null = flow_context?.kbCategories || null;
+    let flowContextPrompt: string | null = flow_context?.contextPrompt || null;
+    let flowFallbackMessage: string | null = flow_context?.fallbackMessage || null;
 
     // 🚨 FASE 3: Fallback Gracioso - Try-catch interno para capturar falhas da IA
     try {
@@ -7241,6 +7277,34 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
 
     // FASE 2: Salvar resposta no cache para futuras consultas (TTL 1h)
     // 🆕 Verificar se NÃO é fallback antes de cachear (usa constante global)
+    // ============================================================
+    // 🆕 VALIDAÇÃO ANTI-ESCAPE: Detectar se IA tentou sair do contrato
+    // Se flow_context existe, IA só pode retornar texto puro
+    // ============================================================
+    if (flow_context && flow_context.response_format === 'text_only') {
+      const escapeAttempt = ESCAPE_PATTERNS.some(pattern => pattern.test(assistantMessage));
+      
+      if (escapeAttempt) {
+        console.warn('[ai-autopilot-chat] ⚠️ ESCAPE DETECTADO! IA tentou sair do contrato');
+        console.warn('[ai-autopilot-chat] Resposta original:', assistantMessage.substring(0, 100));
+        
+        // Retornar sinal de violação para o chamador
+        return new Response(JSON.stringify({
+          forceTransfer: true,
+          reason: 'ai_contract_violation',
+          original_response: assistantMessage.substring(0, 200),
+          flow_context: {
+            flow_id: flow_context.flow_id,
+            node_id: flow_context.node_id
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      console.log('[ai-autopilot-chat] ✅ Resposta passou na validação anti-escape');
+    }
+
     const shouldSkipCache = FALLBACK_PHRASES.some(phrase => 
       assistantMessage.toLowerCase().includes(phrase)
     );
