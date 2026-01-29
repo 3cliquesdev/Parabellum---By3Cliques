@@ -561,36 +561,40 @@ export function useInboxCounts(userId?: string) {
     // CRITICAL: Só rodar quando role estiver DEFINITIVAMENTE resolvido
     enabled: !!userId && isRoleReady && !deptLoading,
     queryFn: async (): Promise<InboxCounts> => {
-      // Buscar dados de inbox com filtro de role
-      // Buscar todas as conversas (sem limite padrão de 1000)
-      let query = supabase
-        .from("inbox_view")
-        .select("conversation_id, ai_mode, status, sla_status, unread_count, assigned_to, department, last_sender_type")
+      // ✅ FONTE ÚNICA DE VERDADE PARA QUANTIDADES:
+      // As contagens (total, por departamento, por agente, etc.) devem refletir TODAS as conversas na tabela
+      // e não apenas as que aparecem na inbox_view (que pode omitir conversas sem mensagens/derivações).
+      let convQuery = supabase
+        .from("conversations")
+        .select("id, status, ai_mode, assigned_to, department, last_message_at")
         .limit(5000);
 
-      // Aplicar filtros de role no nível do banco
-      // IMPORTANTE: effectiveRole já está validado, só aplicar filtro se NÃO for full access
+      // Aplicar filtros de role no nível do banco (mesma regra do Inbox)
       if (userId && effectiveRole && !hasFullInboxAccess(effectiveRole)) {
         if (effectiveRole === "sales_rep" || effectiveRole === "support_agent" || effectiveRole === "financial_agent") {
           if (departmentIds && departmentIds.length > 0) {
-            // Incluir conversas sem departamento (pool geral da IA)
-            query = query.or(
+            convQuery = convQuery.or(
               `assigned_to.eq.${userId},and(assigned_to.is.null,department.in.(${departmentIds.join(",")})),and(assigned_to.is.null,department.is.null)`
             );
           } else {
-            // Sem departamentos configurados: atribuídas ao usuário OU pool geral
-            query = query.or(
+            convQuery = convQuery.or(
               `assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null)`
             );
           }
         } else if (effectiveRole === "consultant" || effectiveRole === "user") {
-          query = query.eq("assigned_to", userId);
+          convQuery = convQuery.eq("assigned_to", userId);
         }
       }
-      // Roles de gestão (admin, manager, etc) = sem filtro de role (ver tudo)
 
-      const { data: inboxData, error: inboxError } = await query;
+      const { data: conversationsData, error: conversationsError } = await convQuery;
+      if (conversationsError) throw conversationsError;
 
+      // Ainda usamos inbox_view APENAS para métricas que dependem de agregações (unread_count / last_sender_type)
+      // — mas NÃO para o total.
+      const { data: inboxData, error: inboxError } = await supabase
+        .from("inbox_view")
+        .select("conversation_id, sla_status, unread_count, last_sender_type")
+        .limit(5000);
       if (inboxError) throw inboxError;
 
       // Buscar tags por conversa
@@ -608,23 +612,25 @@ export function useInboxCounts(userId?: string) {
       const tagsQuery = supabase.from("tags").select("id, name, color");
       const { data: allTags } = await tagsQuery as unknown as { data: Array<{ id: string; name: string; color: string | null }> | null };
 
-      const items = inboxData || [];
+      const convItems = conversationsData || [];
       // "Ativas" = tudo que não está fechado.
-      // Isso inclui estados como waiting_human, pending, resolved (se não estiverem marcados como closed).
-      const activeItems = items.filter(i => i.status !== "closed");
+      const activeConversations = convItems.filter((c: any) => c.status !== "closed");
+
+      const inboxItems = inboxData || [];
+      const inboxByConversationId = new Map(inboxItems.map((i: any) => [i.conversation_id, i]));
 
       // Contagem por departamento
       const byDepartment = (deptsData || []).map(dept => ({
         id: dept.id,
         name: dept.name,
         color: dept.color,
-        count: activeItems.filter(i => i.department === dept.id).length
+        count: activeConversations.filter((c: any) => c.department === dept.id).length
       }));
 
       // Contagem por tag
       const tagCounts = new Map<string, number>();
       const conversationTags = tagsData || [];
-      const activeConversationIds = new Set(activeItems.map(i => i.conversation_id));
+      const activeConversationIds = new Set(activeConversations.map((c: any) => c.id));
       
       conversationTags.forEach(ct => {
         if (activeConversationIds.has(ct.conversation_id)) {
@@ -640,16 +646,18 @@ export function useInboxCounts(userId?: string) {
       }));
 
       return {
-        total: activeItems.length,
-        mine: userId ? activeItems.filter(i => i.assigned_to === userId).length : 0,
-        aiQueue: activeItems.filter(i => i.ai_mode === "autopilot").length,
-        humanQueue: activeItems.filter(i => i.ai_mode !== "autopilot").length,
-        slaCritical: items.filter(i => i.sla_status === "critical").length,
-        slaWarning: items.filter(i => i.sla_status === "warning").length,
-        notResponded: activeItems.filter(i => i.last_sender_type === "contact").length,
-        unassigned: activeItems.filter(i => !i.assigned_to).length,
-        unread: items.reduce((sum, i) => sum + (i.unread_count || 0), 0),
-        closed: items.filter(i => i.status === "closed").length,
+        // ✅ Agora o total reflete a tabela de conversas (ex.: 255 ativas)
+        total: activeConversations.length,
+        mine: userId ? activeConversations.filter((c: any) => c.assigned_to === userId).length : 0,
+        aiQueue: activeConversations.filter((c: any) => c.ai_mode === "autopilot").length,
+        humanQueue: activeConversations.filter((c: any) => c.ai_mode !== "autopilot").length,
+        // Métricas derivadas da inbox_view (se existir registro)
+        slaCritical: inboxItems.filter((i: any) => i.sla_status === "critical").length,
+        slaWarning: inboxItems.filter((i: any) => i.sla_status === "warning").length,
+        notResponded: activeConversations.filter((c: any) => inboxByConversationId.get(c.id)?.last_sender_type === "contact").length,
+        unassigned: activeConversations.filter((c: any) => !c.assigned_to).length,
+        unread: inboxItems.reduce((sum: number, i: any) => sum + (i.unread_count || 0), 0),
+        closed: convItems.filter((c: any) => c.status === "closed").length,
         byDepartment,
         byTag,
       };

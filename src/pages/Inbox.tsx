@@ -293,6 +293,9 @@ export default function Inbox() {
   const currentFilterCount = orderedConversations.length;
   const hasHiddenConversations = currentFilterCount === 0 && totalActiveCount > 0;
 
+  // Total exibido deve refletir a contagem "real" (hook de counts). Se ainda não carregou, usa fallback do que já está renderizado.
+  const displayTotalCount = totalActiveCount > 0 ? totalActiveCount : filteredConversations.length;
+
   // Default sidebar counts
   const sidebarCounts: InboxCounts = counts || {
     total: 0,
@@ -435,8 +438,7 @@ export default function Inbox() {
           </div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-muted-foreground">
-              {/* Total vem das conversas carregadas, não do useInboxCounts que pode ter cache diferente */}
-              {orderedConversations.length} de {filteredConversations.length} conversa{filteredConversations.length !== 1 ? 's' : ''}
+              {orderedConversations.length} de {displayTotalCount} conversa{displayTotalCount !== 1 ? 's' : ''}
               {filters.waitingTime && filters.waitingTime !== 'all' && filters.waitingTime !== 'newest' && filters.waitingTime !== 'oldest' && (
                 <span className="ml-1 text-warning">
                   (filtrado por tempo)
