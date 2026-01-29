@@ -61,7 +61,7 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
     .from("inbox_view")
     .select("*")
     .order("updated_at", { ascending: true }) // PRIORIDADE: Conversas mais antigas primeiro (aguardando há mais tempo)
-    .limit(2000); // Aumentado para capturar todas as conversas ativas
+    .limit(5000); // Alinhado com useInboxCounts para consistência nos totais
 
   // Aplicar filtros de role no nível do banco
   if (role && userId && !hasFullInboxAccess(role)) {
@@ -549,14 +549,17 @@ export function useInboxCounts(userId?: string) {
   const { role, loading: roleLoading } = useUserRole();
   const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role);
 
-  // Fallback seguro: enquanto o role ainda não foi resolvido (ou não existe),
-  // tratamos como o menor privilégio possível para evitar “sumir” contagens.
-  const effectiveRole = role ?? "user";
+  // IMPORTANTE: Só executar a query quando o role estiver REALMENTE carregado
+  // Para evitar que admin veja dados filtrados como "user"
+  const isRoleReady = !roleLoading && role !== null && role !== undefined;
+  
+  // Usar o role real quando disponível (null = sem filtro de role)
+  const effectiveRole = isRoleReady ? role : null;
 
   return useQuery<InboxCounts>({
     queryKey: ["inbox-counts", userId, effectiveRole, departmentIds],
-    // Rodar assim que tivermos usuário (role pode demorar/vir null)
-    enabled: !!userId && !roleLoading && !deptLoading,
+    // CRITICAL: Só rodar quando role estiver DEFINITIVAMENTE resolvido
+    enabled: !!userId && isRoleReady && !deptLoading,
     queryFn: async (): Promise<InboxCounts> => {
       // Buscar dados de inbox com filtro de role
       // Buscar todas as conversas (sem limite padrão de 1000)
@@ -566,7 +569,8 @@ export function useInboxCounts(userId?: string) {
         .limit(5000);
 
       // Aplicar filtros de role no nível do banco
-      if (userId && !hasFullInboxAccess(effectiveRole)) {
+      // IMPORTANTE: effectiveRole já está validado, só aplicar filtro se NÃO for full access
+      if (userId && effectiveRole && !hasFullInboxAccess(effectiveRole)) {
         if (effectiveRole === "sales_rep" || effectiveRole === "support_agent" || effectiveRole === "financial_agent") {
           if (departmentIds && departmentIds.length > 0) {
             // Incluir conversas sem departamento (pool geral da IA)
@@ -583,6 +587,7 @@ export function useInboxCounts(userId?: string) {
           query = query.eq("assigned_to", userId);
         }
       }
+      // Roles de gestão (admin, manager, etc) = sem filtro de role (ver tudo)
 
       const { data: inboxData, error: inboxError } = await query;
 
