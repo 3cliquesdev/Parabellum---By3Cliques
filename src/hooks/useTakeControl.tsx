@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { hasFullInboxAccess, FULL_ACCESS_ROLES } from "@/hooks/useDepartmentsByRole";
+// hasFullInboxAccess não mais usado - lista MANAGER_ROLES definida localmente para clareza
 import { isDepartmentAllowedByName } from "@/utils/departmentMatch";
 
 interface TakeControlParams {
@@ -47,10 +47,19 @@ export function useTakeControl() {
       
       const userRole = userRoleData?.role || null;
       
+      // 🔒 Lista de roles com acesso total (gerentes e admins)
+      // Esses roles NÃO precisam estar online para assumir conversas
+      const MANAGER_ROLES = ['admin', 'manager', 'general_manager', 'support_manager', 'cs_manager'];
+      const isManagerOrAdmin = userRole && MANAGER_ROLES.includes(userRole);
+      
+      console.log('[useTakeControl] Verificando permissão de assumir:', { 
+        userRole, 
+        isManagerOrAdmin,
+        MANAGER_ROLES_CHECK: MANAGER_ROLES.includes(userRole || '')
+      });
+      
       // 🔒 Regra operacional: atendentes precisam estar ONLINE para assumir conversas.
       // EXCEÇÃO: Gerentes e Admins podem assumir conversas independente do status.
-      const isManagerOrAdmin = userRole && hasFullInboxAccess(userRole);
-      
       if (!isManagerOrAdmin) {
         const { data: myProfile, error: myProfileError } = await supabase
           .from('profiles')
@@ -88,7 +97,7 @@ export function useTakeControl() {
 
       // ✅ Regra solicitada: qualquer usuário pode assumir conversas não atribuídas da IA
       // (destrava vendedores e suporte). Mantém validação antiga apenas para casos fora disso.
-      if (!isAvailableAIConversation && userRole && !hasFullInboxAccess(userRole)) {
+      if (!isAvailableAIConversation && userRole && !MANAGER_ROLES.includes(userRole)) {
         const allowedDepartments = ROLE_DEPARTMENT_MAP[userRole];
         const conversationDeptName = (conversation.departments as any)?.name || null;
         
