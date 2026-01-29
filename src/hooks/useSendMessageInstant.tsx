@@ -4,11 +4,26 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
+// Configuração para envio WhatsApp (Meta ou Evolution)
+interface WhatsAppConfig {
+  provider: 'meta' | 'evolution';
+  instanceId: string;
+  phoneNumber: string;
+  media?: {
+    type: 'image' | 'audio' | 'video' | 'document';
+    url: string;
+    filename?: string;
+    mimeType?: string;
+  };
+}
+
 interface SendInstantParams {
   conversationId: string;
   content: string;
   isInternal?: boolean;
   channel?: string;
+  // NOVO: Config para WhatsApp (envio otimista)
+  whatsappConfig?: WhatsAppConfig;
 }
 
 /**
@@ -19,9 +34,10 @@ interface SendInstantParams {
  * 2. Adiciona ao cache React Query com status="sending" (INSTANTÂNEO)
  * 3. Limpa input imediatamente
  * 4. Persiste no banco EM BACKGROUND (não bloqueia UI)
- * 5. Realtime atualiza status para "sent" quando chega confirmação
+ * 5. Para WhatsApp: Envia via edge function ANTES de persistir
+ * 6. Realtime atualiza status para "sent" quando chega confirmação
  * 
- * LATÊNCIA PERCEBIDA: <50ms (vs 1-30 segundos do fluxo anterior)
+ * LATÊNCIA PERCEBIDA: <100ms (vs 2-5 segundos do fluxo anterior para WhatsApp)
  */
 export function useSendMessageInstant() {
   const queryClient = useQueryClient();
@@ -29,7 +45,13 @@ export function useSendMessageInstant() {
   const { user } = useAuth();
 
   const sendInstant = useCallback((params: SendInstantParams): string => {
-    const { conversationId, content, isInternal = false, channel = 'web_chat' } = params;
+    const { 
+      conversationId, 
+      content, 
+      isInternal = false, 
+      channel = 'web_chat',
+      whatsappConfig 
+    } = params;
     
     // 📊 OBSERVABILIDADE: Timestamp para medir latência
     const t0 = performance.now();
@@ -43,6 +65,9 @@ export function useSendMessageInstant() {
       conversationId: conversationId.slice(0, 8),
       contentLength: content.length,
       isInternal,
+      channel,
+      hasWhatsApp: !!whatsappConfig,
+      whatsappProvider: whatsappConfig?.provider,
     });
     
     const optimisticMessage = {
@@ -96,28 +121,128 @@ export function useSendMessageInstant() {
       }
     );
 
-    // 3. FIRE-AND-FORGET: Persistir em background usando queueMicrotask
+    // 3. FIRE-AND-FORGET: Processamento em background usando queueMicrotask
     // Isso garante que a UI seja atualizada ANTES da operação de rede
-    // CORREÇÃO: Usar um tracking_id para garantir matching correto
     queueMicrotask(async () => {
       const t1 = performance.now();
+      let whatsappSuccess = false;
+      let whatsappExternalId: string | null = null;
+      let whatsappError: string | null = null;
+      
       try {
         // Capturar o content EXATO no momento do envio (closure segura)
         const contentToSend = content;
         
-        // Inserir mensagem usando o MESMO ID gerado localmente.
-        // Isso elimina race conditions e impede “troca”/duplicação quando múltiplas mensagens são enviadas rápido.
+        // ============================================
+        // 3.1 WHATSAPP: Enviar via edge function PRIMEIRO
+        // ============================================
+        if (whatsappConfig) {
+          const t_whatsapp_start = performance.now();
+          
+          try {
+            if (whatsappConfig.provider === 'meta') {
+              // Meta WhatsApp Cloud API
+              console.log('[SendInstant] 📲 Meta WhatsApp - Enviando em background...');
+              
+              const metaPayload: Record<string, unknown> = {
+                instance_id: whatsappConfig.instanceId,
+                phone_number: whatsappConfig.phoneNumber,
+                conversation_id: conversationId,
+                skip_db_save: true, // Frontend faz o insert
+              };
+
+              // Adicionar conteúdo (texto ou mídia)
+              if (whatsappConfig.media) {
+                metaPayload.media = {
+                  type: whatsappConfig.media.type,
+                  url: whatsappConfig.media.url,
+                  caption: contentToSend || undefined,
+                  filename: whatsappConfig.media.filename,
+                  mime_type: whatsappConfig.media.mimeType,
+                };
+              } else {
+                metaPayload.message = contentToSend;
+              }
+              
+              const { data: metaResponse, error: metaError } = await supabase.functions.invoke('send-meta-whatsapp', {
+                body: metaPayload
+              });
+              
+              if (metaError) throw new Error(metaError.message || 'Meta WhatsApp failed');
+              
+              whatsappSuccess = true;
+              whatsappExternalId = metaResponse?.message_id || null;
+              
+              console.log('[SendInstant] ✅ Meta WhatsApp enviado:', {
+                latency_ms: Math.round(performance.now() - t_whatsapp_start),
+                external_id: whatsappExternalId,
+              });
+              
+            } else if (whatsappConfig.provider === 'evolution') {
+              // Evolution API (legacy)
+              console.log('[SendInstant] 📲 Evolution API - Enviando em background...');
+              
+              const evolutionPayload: Record<string, unknown> = {
+                instance_id: whatsappConfig.instanceId,
+                phone_number: whatsappConfig.phoneNumber,
+                use_queue: false, // Envio direto, sem fila
+                skip_db_save: true, // Frontend faz o insert
+              };
+
+              // Adicionar conteúdo (texto ou mídia)
+              if (whatsappConfig.media) {
+                evolutionPayload.media_url = whatsappConfig.media.url;
+                evolutionPayload.media_type = whatsappConfig.media.type;
+                evolutionPayload.media_filename = whatsappConfig.media.filename;
+                evolutionPayload.message = contentToSend || '';
+              } else {
+                evolutionPayload.message = contentToSend;
+              }
+              
+              const { error: evolutionError } = await supabase.functions.invoke('send-whatsapp-message', {
+                body: evolutionPayload
+              });
+              
+              if (evolutionError) throw new Error(evolutionError.message || 'Evolution API failed');
+              
+              whatsappSuccess = true;
+              
+              console.log('[SendInstant] ✅ Evolution API enviado:', {
+                latency_ms: Math.round(performance.now() - t_whatsapp_start),
+              });
+            }
+          } catch (error) {
+            whatsappError = error instanceof Error ? error.message : 'WhatsApp send failed';
+            console.error('[SendInstant] ❌ WhatsApp falhou:', whatsappError);
+            // Continua para salvar no banco com status 'failed'
+          }
+        }
+
+        // ============================================
+        // 3.2 PERSISTIR NO BANCO
+        // ============================================
+        // Base payload com campos obrigatórios
+        const basePayload = {
+          id: localId,
+          conversation_id: conversationId,
+          content: contentToSend,
+          sender_type: 'user' as const,
+          sender_id: user?.id || null,
+          is_internal: isInternal,
+          channel: channel as 'web_chat' | 'whatsapp' | 'email',
+          // Campos condicionais
+          status: (whatsappConfig && !whatsappSuccess) ? 'failed' as const : undefined,
+          delivery_error: (whatsappConfig && !whatsappSuccess) ? whatsappError : undefined,
+          external_id: whatsappExternalId || undefined,
+          metadata: whatsappExternalId ? {
+            whatsapp_provider: whatsappConfig?.provider,
+            sent_via: 'sendInstant',
+          } : undefined,
+        };
+        
         const { data: insertedMessage, error: insertError } = await supabase
           .from("messages")
-          .insert([{
-            id: localId,
-            conversation_id: conversationId,
-            content: contentToSend, // Usar a variável capturada
-            sender_type: 'user' as const,
-            sender_id: user?.id || null,
-            is_internal: isInternal,
-            channel: channel as 'web_chat' | 'whatsapp' | 'email',
-          }])
+          .insert([basePayload])
           .select()
           .single();
 
@@ -126,18 +251,24 @@ export function useSendMessageInstant() {
         const t2 = performance.now();
 
         // ✅ ACK EXPLÍCITO: Atualizar cache com dados confirmados + metadata
+        const finalStatus = whatsappConfig 
+          ? (whatsappSuccess ? 'sent' : 'failed')
+          : 'sent';
+
         queryClient.setQueryData(
           ["messages", conversationId],
           (old: any[] = []) => old.map(m => 
             m.id === localId ? { 
               ...m, 
               ...insertedMessage, 
-              status: 'sent',
+              status: finalStatus,
               // ACK metadata para debugging
               _ack: { 
                 timestamp: new Date().toISOString(),
                 messageId: insertedMessage.id,
                 dbLatency_ms: Math.round(t2 - t1),
+                whatsappSuccess,
+                whatsappExternalId,
               }
             } : m
           )
@@ -147,6 +278,8 @@ export function useSendMessageInstant() {
           messageId: localId,
           dbLatency_ms: Math.round(t2 - t1),
           totalLatency_ms: Math.round(t2 - t0),
+          whatsappSuccess,
+          finalStatus,
         });
 
         // Update last_message_at (também em background, não bloqueia)
@@ -158,6 +291,15 @@ export function useSendMessageInstant() {
             .then(({ error }) => {
               if (error) console.error('[SendInstant] Failed to update last_message_at:', error);
             });
+        }
+
+        // Se WhatsApp falhou, mostrar toast
+        if (whatsappConfig && !whatsappSuccess) {
+          toast({
+            title: "Falha no envio WhatsApp",
+            description: whatsappError || 'Erro desconhecido',
+            variant: "destructive",
+          });
         }
 
       } catch (error) {

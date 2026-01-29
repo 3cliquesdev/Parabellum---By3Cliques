@@ -123,6 +123,7 @@ interface SendMetaWhatsAppRequest {
     };
   };
   conversation_id?: string;      // Para logs e tracking
+  skip_db_save?: boolean;        // 🆕 Se true, não salva no banco (frontend faz insert otimista)
 }
 
 interface MetaApiResponse {
@@ -334,8 +335,9 @@ serve(async (req) => {
     const messageId = result.messages?.[0]?.id;
     console.log("[send-meta-whatsapp] ✅ Message sent:", messageId);
 
-    // Salvar mensagem no banco (se conversation_id fornecido)
-    if (body.conversation_id && messageId) {
+    // Salvar mensagem no banco (se conversation_id fornecido E skip_db_save não está setado)
+    // 🆕 Se skip_db_save=true, o frontend já fez insert otimista
+    if (body.conversation_id && messageId && !body.skip_db_save) {
       const messageContent = body.message || 
                              (body.template ? `[Template: ${body.template.name}]` : "") ||
                              (body.media ? `[${body.media.type}]` : "") ||
@@ -352,6 +354,10 @@ serve(async (req) => {
           phone_number_id: instance.phone_number_id,
         },
       });
+      
+      console.log("[send-meta-whatsapp] 💾 Mensagem salva no banco");
+    } else if (body.skip_db_save) {
+      console.log("[send-meta-whatsapp] ⏭️ skip_db_save=true - frontend fez insert");
     }
 
     return new Response(
