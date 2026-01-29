@@ -178,6 +178,27 @@ export default function Inbox() {
     }
   }, [conversations, filter, departmentFilter, user?.id, role]);
 
+  // Ordenação: usar a prioridade do inbox_view (mais antigas primeiro)
+  // para refletir o SLA/fila corretamente, sem mudar a fonte de dados (conversations).
+  const orderedConversations = useMemo(() => {
+    if (!filteredConversations) return [];
+    if (!inboxItems || inboxItems.length === 0) return filteredConversations;
+
+    const indexById = new Map<string, number>();
+    for (let i = 0; i < inboxItems.length; i++) {
+      indexById.set(inboxItems[i].conversation_id, i);
+    }
+
+    return [...filteredConversations].sort((a, b) => {
+      const ia = indexById.get(a.id);
+      const ib = indexById.get(b.id);
+      if (ia == null && ib == null) return 0;
+      if (ia == null) return 1;
+      if (ib == null) return -1;
+      return ia - ib;
+    });
+  }, [filteredConversations, inboxItems]);
+
   // Bulk selection handlers (after filteredConversations is defined)
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -192,12 +213,12 @@ export default function Inbox() {
   }, []);
 
   const handleSelectAll = useCallback(() => {
-    if (selectedIds.size === filteredConversations.length) {
+    if (selectedIds.size === orderedConversations.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredConversations.map(c => c.id)));
+      setSelectedIds(new Set(orderedConversations.map(c => c.id)));
     }
-  }, [selectedIds.size, filteredConversations]);
+  }, [selectedIds.size, orderedConversations]);
 
   const handleClearSelection = useCallback(() => {
     setSelectedIds(new Set());
@@ -232,7 +253,7 @@ export default function Inbox() {
   const aiQueueCount = counts?.aiQueue || 0;
   const humanQueueCount = counts?.humanQueue || 0;
   
-  const currentFilterCount = filteredConversations.length;
+  const currentFilterCount = orderedConversations.length;
   const hasHiddenConversations = currentFilterCount === 0 && totalActiveCount > 0;
 
   // Default sidebar counts
@@ -386,8 +407,8 @@ export default function Inbox() {
           <BulkActionsBar
             selectedIds={[]}
             onClearSelection={() => {}}
-            waitingHumanCount={filteredConversations.filter(c => c.ai_mode === 'waiting_human').length}
-            waitingHumanIds={filteredConversations.filter(c => c.ai_mode === 'waiting_human').map(c => c.id)}
+            waitingHumanCount={orderedConversations.filter(c => c.ai_mode === 'waiting_human').length}
+            waitingHumanIds={orderedConversations.filter(c => c.ai_mode === 'waiting_human').map(c => c.id)}
           />
         )}
         
@@ -409,7 +430,7 @@ export default function Inbox() {
         
         <div className="flex-1 overflow-hidden">
           <ConversationList
-            conversations={filteredConversations}
+            conversations={orderedConversations}
             activeConversationId={activeConversation?.id || null}
             onSelectConversation={handleSelectConversation}
             isLoading={inboxLoading || convLoading}
@@ -433,7 +454,7 @@ export default function Inbox() {
       {/* Bulk Distribute Bar - floating at bottom */}
       <InboxBulkDistributeBar
         selectedCount={selectedIds.size}
-        totalCount={filteredConversations.length}
+        totalCount={orderedConversations.length}
         onSelectAll={handleSelectAll}
         onClearSelection={handleClearSelection}
         onDistribute={() => setShowDistributeDialog(true)}

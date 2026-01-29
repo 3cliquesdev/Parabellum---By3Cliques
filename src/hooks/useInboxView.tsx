@@ -239,9 +239,10 @@ export function useInboxView(filters?: InboxFilters) {
     queryFn: async () => {
       const data = await fetchInboxData(fetchOptions);
       
-      // Atualizar cursor com o registro mais recente
+      // Atualizar cursor com o registro mais recente.
+      // IMPORTANTE: como a query está ordenada ASC (mais antigas primeiro), o mais recente é o ÚLTIMO.
       if (data.length > 0) {
-        lastSeenRef.current = data[0].updated_at;
+        lastSeenRef.current = data[data.length - 1].updated_at;
       }
 
       // Aplicar filtros de tag (requer lookup separado)
@@ -340,7 +341,8 @@ export function useInboxView(filters?: InboxFilters) {
                 [...QUERY_KEY, user?.id, roleRef.current, departmentIdsRef.current, currentFilters],
                 (prev = []) => mergeInboxItems(prev, catchUpData)
               );
-              lastSeenRef.current = catchUpData[0].updated_at;
+              // catchUpData vem ordenado ASC; último é o mais recente
+              lastSeenRef.current = catchUpData[catchUpData.length - 1].updated_at;
             }
           } catch (error) {
             console.error("[Realtime] Catch-up failed:", error);
@@ -596,23 +598,25 @@ export function useInboxCounts(userId?: string) {
       const { data: allTags } = await tagsQuery as unknown as { data: Array<{ id: string; name: string; color: string | null }> | null };
 
       const items = inboxData || [];
-      const openItems = items.filter(i => i.status === "open");
+      // "Ativas" = tudo que não está fechado.
+      // Isso inclui estados como waiting_human, pending, resolved (se não estiverem marcados como closed).
+      const activeItems = items.filter(i => i.status !== "closed");
 
       // Contagem por departamento
       const byDepartment = (deptsData || []).map(dept => ({
         id: dept.id,
         name: dept.name,
         color: dept.color,
-        count: openItems.filter(i => i.department === dept.id).length
+        count: activeItems.filter(i => i.department === dept.id).length
       }));
 
       // Contagem por tag
       const tagCounts = new Map<string, number>();
       const conversationTags = tagsData || [];
-      const openConversationIds = new Set(openItems.map(i => i.conversation_id));
+      const activeConversationIds = new Set(activeItems.map(i => i.conversation_id));
       
       conversationTags.forEach(ct => {
-        if (openConversationIds.has(ct.conversation_id)) {
+        if (activeConversationIds.has(ct.conversation_id)) {
           tagCounts.set(ct.tag_id, (tagCounts.get(ct.tag_id) || 0) + 1);
         }
       });
@@ -625,14 +629,14 @@ export function useInboxCounts(userId?: string) {
       }));
 
       return {
-        total: openItems.length,
-        mine: userId ? openItems.filter(i => i.assigned_to === userId).length : 0,
-        aiQueue: openItems.filter(i => i.ai_mode === "autopilot").length,
-        humanQueue: openItems.filter(i => i.ai_mode !== "autopilot").length,
+        total: activeItems.length,
+        mine: userId ? activeItems.filter(i => i.assigned_to === userId).length : 0,
+        aiQueue: activeItems.filter(i => i.ai_mode === "autopilot").length,
+        humanQueue: activeItems.filter(i => i.ai_mode !== "autopilot").length,
         slaCritical: items.filter(i => i.sla_status === "critical").length,
         slaWarning: items.filter(i => i.sla_status === "warning").length,
-        notResponded: openItems.filter(i => i.last_sender_type === "contact").length,
-        unassigned: openItems.filter(i => !i.assigned_to).length,
+        notResponded: activeItems.filter(i => i.last_sender_type === "contact").length,
+        unassigned: activeItems.filter(i => !i.assigned_to).length,
         unread: items.reduce((sum, i) => sum + (i.unread_count || 0), 0),
         closed: items.filter(i => i.status === "closed").length,
         byDepartment,
