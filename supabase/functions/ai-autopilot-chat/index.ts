@@ -651,16 +651,21 @@ function checkImmediateHandoff(query: string): { triggered: boolean; dept?: stri
 }
 
 // Helper: Determinar departamento por keywords (OTIMIZADO com regex e prioridade)
+// 🆕 ATUALIZADO: Retorna slugs que mapeiam para sub-departamentos específicos
 function pickDepartment(question: string): string {
   // Normalizar: lowercase + remover acentos para matching consistente
   const q = question.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   
-  // Ordem de prioridade: Financeiro > Tecnico > Comercial > Logistica > Suporte
+  // Ordem de prioridade: Financeiro > Técnico/Sistema > Pedidos/Logística > Comercial > Suporte Geral
   const rules: Array<{ dept: string; patterns: RegExp }> = [
+    // Financeiro - maior prioridade
     { dept: 'financeiro', patterns: /saque|sacar|pix|reembolso|estorno|comiss[aã]o|dinheiro|pagamento|carteira|transfer[eê]ncia|boleto|fatura|cobran[cç]a|saldo|recarga|devolu[cç][aã]o|devolver|cancelamento|cancelar/ },
-    { dept: 'tecnico', patterns: /erro|bug|login|senha|acesso|n[aã]o funciona|travou|caiu|site fora|api|integra[cç][aã]o|token|sistema|nao funciona|num funciona|tela branca|pagina nao carrega/ },
+    // Suporte Sistema (técnico) - segunda maior prioridade
+    { dept: 'suporte_sistema', patterns: /erro|bug|login|senha|acesso|n[aã]o funciona|travou|caiu|site fora|api|integra[cç][aã]o|token|sistema|nao funciona|num funciona|tela branca|pagina nao carrega|problema tecnico|suporte tecnico/ },
+    // Suporte Pedidos (logística/rastreio) - terceira prioridade
+    { dept: 'suporte_pedidos', patterns: /envio|entrega|rastreio|transportadora|correios|prazo|encomenda|coleta|endereco|cep|frete|pedido|onde.*pedido|status.*pedido|rastrear/ },
+    // Comercial - quarta prioridade
     { dept: 'comercial', patterns: /pre[cç]o|proposta|plano|quanto custa|comprar|assinar|desconto|trial|teste|orcamento|catalogo|tabela|upgrade|downgrade|mudar plano|conhecer|demonstra[cç][aã]o|demo/ },
-    { dept: 'logistica', patterns: /envio|entrega|rastreio|transportadora|correios|prazo|encomenda|coleta|endereco|cep|frete/ },
   ];
   
   for (const rule of rules) {
