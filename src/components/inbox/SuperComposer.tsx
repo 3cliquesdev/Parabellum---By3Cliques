@@ -569,7 +569,7 @@ export function SuperComposer({
                 </PopoverContent>
               </Popover>
 
-              {/* Textarea with Slash Commands */}
+              {/* Textarea with Slash Commands - Campo maior para melhor visualização */}
               <SlashCommandMenu value={message} onChange={setMessage}>
                 <Textarea
                   ref={textareaRef}
@@ -578,9 +578,9 @@ export function SuperComposer({
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={handleKeyPress}
                   disabled={isSending || isDisabled}
-                  rows={1}
+                  rows={2}
                   className={cn(
-                    "flex-1 min-h-[44px] max-h-32 resize-none py-3 px-4 rounded-2xl transition-colors",
+                    "flex-1 min-h-[60px] max-h-40 resize-none py-3 px-4 rounded-2xl transition-colors text-base",
                     isInternal
                       ? "bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 focus-visible:ring-yellow-500"
                       : "bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
