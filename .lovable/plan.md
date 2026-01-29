@@ -1,196 +1,167 @@
 
-# Plano de Correção: Delay em WhatsApp (Meta e Evolution)
+# Plano: Autonomia Total do RAG com OpenAI
 
-## Diagnóstico
+## Resumo Executivo
 
-O plano anterior foi **parcialmente implementado**:
-
-| Componente | Status | Problema |
-|------------|--------|----------|
-| `useMessages.tsx` | ✅ Corrigido | Deduplicação com `processedIdsRef` + content matching |
-| `useInboxView.tsx` | ✅ Corrigido | Canal redundante removido |
-| `useSendMessageInstant.tsx` | ✅ Corrigido | Fire-and-forget + ACK explícito |
-| Notas internas | ✅ Corrigido | Usa `sendInstant` |
-| Web chat | ✅ Corrigido | Usa `sendInstant` |
-| **WhatsApp Meta** | ❌ NÃO CORRIGIDO | UI bloqueia aguardando edge function |
-| **WhatsApp Evolution** | ❌ NÃO CORRIGIDO | Usa `sendMessage.mutateAsync` (síncrono) |
+Você quer controle total para configurar o sistema RAG (Retrieval-Augmented Generation) diretamente da página **AI Trainer**, com prioridade para usar **OpenAI**. O plano adiciona configurações editáveis para modelo, thresholds e fontes de dados, eliminando valores hardcoded na Edge Function.
 
 ---
 
-## Problema Técnico Detalhado
+## O Que Será Implementado
 
-### WhatsApp Meta (linhas 213-297)
-```
-1. Usuário clica "Enviar"
-2. await supabase.functions.invoke('send-meta-whatsapp')  ← BLOQUEIA 2-5s
-3. Edge function envia para Meta API
-4. Edge function salva no banco
-5. Edge function retorna
-6. FINALMENTE mensagem aparece  ← DELAY PERCEBIDO!
-```
+### 1. Painel de Configuração RAG na Página AI Trainer
 
-### WhatsApp Evolution (linhas 298-373)
-```
-1. Usuário clica "Enviar"  
-2. await supabase.functions.invoke('send-whatsapp-message')  ← BLOQUEIA 1-3s
-3. Edge function envia para Evolution API
-4. await sendMessage.mutateAsync()  ← BLOQUEIA MAIS 500ms-1s
-5. FINALMENTE mensagem aparece  ← DELAY TOTAL: 2-4s!
-```
+Um novo card "Configuração do RAG" com:
 
----
+- **Seletor de Modelo**: OpenAI (GPT-5, GPT-5 Mini, GPT-5 Nano) e Gemini como opções
+- **Provider Padrão**: OpenAI será marcado como recomendado
+- **Thresholds de Confiança**: Sliders editáveis para definir quando a IA responde ou transfere
+- **Toggle Modo Estrito**: Ativar/desativar anti-alucinação com 1 clique
 
-## Solução: Padrão Otimista para WhatsApp
+### 2. Controle de Fontes de Dados
 
-### Arquitetura Proposta
+Toggles para ativar/desativar cada fonte globalmente:
 
-```
-1. Usuário clica "Enviar"
-2. sendInstant() → Mensagem aparece INSTANTANEAMENTE (status: sending)
-3. queueMicrotask: Enviar para WhatsApp em background
-4. Se sucesso → Atualizar status para "sent" + ACK
-5. Se falha → Marcar como "failed" + opção de retry
-```
+| Fonte | Descrição |
+|-------|-----------|
+| Base de Conhecimento (KB) | Artigos e FAQs |
+| Dados CRM (Kiwify) | Histórico de compras |
+| Rastreio Logístico | Status de entregas |
+| Sandbox Training | Regras de aprendizado |
 
----
+### 3. Persona com Permissões Editáveis
 
-## Alterações Necessárias
+Tornar o widget `PersonaDataAccessWidget` editável, permitindo:
 
-### 1. Expandir `useSendMessageInstant` para WhatsApp
+- Clicar nas badges para ativar/desativar permissões
+- Salvar automaticamente no banco de dados
 
-Adicionar parâmetro `whatsappConfig` opcional:
+### 4. Edge Function Dinâmica
 
-```typescript
-interface SendInstantParams {
-  conversationId: string;
-  content: string;
-  isInternal?: boolean;
-  channel?: string;
-  // NOVO: Config para WhatsApp
-  whatsappConfig?: {
-    provider: 'meta' | 'evolution';
-    instanceId: string;
-    phoneNumber: string;
-    media?: { type: string; url: string; filename?: string };
-  };
-}
-```
+A função `ai-autopilot-chat` passará a ler as configurações do banco:
 
-Dentro do `queueMicrotask`, verificar se é WhatsApp e chamar a edge function correspondente ANTES de inserir no banco.
-
-### 2. Refatorar `SuperComposer.tsx`
-
-**Antes (Meta WhatsApp):**
-```typescript
-// 10+ linhas de código síncrono que bloqueia
-const { data: metaResponse, error: metaError } = await supabase.functions.invoke(...);
-```
-
-**Depois:**
-```typescript
-// 1 linha - instantâneo
-sentMessageId = sendInstant({
-  conversationId,
-  content: messageContent,
-  channel: 'whatsapp',
-  whatsappConfig: {
-    provider: 'meta',
-    instanceId: whatsappMetaInstanceId,
-    phoneNumber: contactPhone,
-  }
-});
-```
-
-### 3. Edge Function: Não salvar mensagem no banco
-
-A edge function `send-meta-whatsapp` atualmente salva a mensagem (linhas 344-355). Isso causa duplicação porque o frontend também salva via `sendInstant`.
-
-**Solução:** Passar flag `skip_db_save: true` quando o frontend já fez insert otimista, OU remover insert da edge function e deixar tudo no frontend.
-
-### 4. Fallback para erros
-
-Se edge function falhar:
-- Marcar mensagem como `status: 'failed'`
-- Salvar `delivery_error` no metadata
-- Mostrar botão "Tentar novamente" na UI
+- `ai_rag_confidence_threshold` → threshold mínimo
+- `ai_rag_sources_enabled` → JSON com fontes ativas
+- Modelo já configurável via `ai_default_model`
 
 ---
 
-## Arquivos a Modificar
+## Detalhes Técnicos
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useSendMessageInstant.tsx` | Adicionar suporte a WhatsApp (meta + evolution) |
-| `src/components/inbox/SuperComposer.tsx` | Usar `sendInstant` para todos os canais |
-| `supabase/functions/send-meta-whatsapp/index.ts` | Aceitar flag `skip_db_save` |
-| `supabase/functions/send-whatsapp-message/index.ts` | Aceitar flag `skip_db_save` |
+### Arquivos a Modificar
 
----
+```text
+src/pages/AITrainer.tsx
+├── Adicionar: RAGConfigurationCard (novo componente inline)
+├── Adicionar: Sliders de threshold com react-hook-form
+└── Mover: Seletor de modelo para este card
 
-## Fluxo Completo Proposto
+src/components/settings/PersonaDataAccessWidget.tsx
+├── Tornar badges clicáveis
+├── Adicionar mutation useUpdatePersona
+└── Feedback visual ao salvar
 
+supabase/functions/ai-autopilot-chat/index.ts
+├── Ler thresholds do banco (não hardcoded)
+├── Ler fontes ativas do banco
+└── Respeitar toggle de cada fonte
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    FLUXO OTIMISTA PARA WHATSAPP                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  SuperComposer.tsx                                                      │
-│  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │  handleSend()                                                      │ │
-│  │                                                                    │ │
-│  │  // TODOS os canais usam sendInstant (instantâneo)                │ │
-│  │  sentMessageId = sendInstant({                                    │ │
-│  │    conversationId,                                                │ │
-│  │    content,                                                       │ │
-│  │    channel: 'whatsapp',                                          │ │
-│  │    whatsappConfig: { provider, instanceId, phoneNumber }         │ │
-│  │  });                                                              │ │
-│  │                                                                    │ │
-│  │  setMessage('');  // Limpa input IMEDIATAMENTE                    │ │
-│  └───────────────────────────────────────────────────────────────────┘ │
-│                            │                                            │
-│                            ▼                                            │
-│  useSendMessageInstant.tsx                                              │
-│  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │  sendInstant()                                                     │ │
-│  │                                                                    │ │
-│  │  1. localId = crypto.randomUUID()                                 │ │
-│  │  2. queryClient.setQueryData() → Mensagem aparece INSTANTANEAMENTE│ │
-│  │  3. queueMicrotask(async () => {                                  │ │
-│  │       if (whatsappConfig) {                                       │ │
-│  │         // Enviar para WhatsApp PRIMEIRO (não bloqueia UI)        │ │
-│  │         await supabase.functions.invoke('send-meta-whatsapp', {   │ │
-│  │           body: { ...whatsappConfig, skip_db_save: true }         │ │
-│  │         });                                                       │ │
-│  │       }                                                           │ │
-│  │       // Depois persistir no banco                                │ │
-│  │       await supabase.from('messages').insert({...});              │ │
-│  │       // Atualizar status para 'sent'                             │ │
-│  │     });                                                           │ │
-│  └───────────────────────────────────────────────────────────────────┘ │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+
+### Novas Configurações no Banco (system_configurations)
+
+| Key | Valor Padrão | Descrição |
+|-----|--------------|-----------|
+| `ai_default_model` | `openai/gpt-5-mini` | Modelo padrão |
+| `ai_rag_min_threshold` | `0.10` | Score mínimo (0-1) |
+| `ai_rag_direct_threshold` | `0.75` | Score para resposta direta |
+| `ai_rag_sources_enabled` | `{"kb":true,"crm":true,"tracking":true}` | Fontes ativas |
+
+### UI do Novo Card "Configuração do RAG"
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│ 🎯 Configuração do RAG                                  │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│ Modelo da IA                                            │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ OpenAI GPT-5 Mini (Recomendado)              ▼      │ │
+│ └─────────────────────────────────────────────────────┘ │
+│                                                         │
+│ ─────────────────────────────────────────────────────── │
+│                                                         │
+│ Threshold de Confiança                                  │
+│                                                         │
+│ Mínimo (handoff se abaixo)   ──●──────────── 10%       │
+│ Direto (sem cautela)         ──────────●─── 75%        │
+│                                                         │
+│ ─────────────────────────────────────────────────────── │
+│                                                         │
+│ Fontes de Dados                                         │
+│                                                         │
+│ [✓] Base de Conhecimento                                │
+│ [✓] Dados CRM (Kiwify)                                  │
+│ [✓] Rastreio Logístico                                  │
+│ [✓] Sandbox Training                                    │
+│                                                         │
+│ ─────────────────────────────────────────────────────── │
+│                                                         │
+│ [○ OFF] Modo Estrito Anti-Alucinação                   │
+│         85%+ confiança, citação obrigatória            │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Métricas de Sucesso
+## Fluxo de Dados
 
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Latência WhatsApp Meta | 2-5 segundos | <100ms |
-| Latência WhatsApp Evolution | 2-4 segundos | <100ms |
-| Latência web_chat | <50ms | <50ms (sem mudança) |
-| Latência notas internas | <50ms | <50ms (sem mudança) |
+```text
+AITrainer.tsx (UI)
+       │
+       ▼
+system_configurations (Banco)
+       │
+       ▼
+ai-autopilot-chat (Edge Function)
+       │
+       ├─► Lê ai_default_model → Usa OpenAI/Gemini
+       ├─► Lê ai_rag_min_threshold → Define score mínimo
+       └─► Lê ai_rag_sources_enabled → Ativa/desativa KB, CRM, etc.
+```
 
 ---
 
-## Testes Recomendados
+## Mudanças no Comportamento
 
-Após implementação:
+### Antes (Hardcoded)
+- Thresholds fixos no código (10%, 40%, 75%)
+- Modelo configurado em página separada
+- Fontes sempre ativas
 
-1. **WhatsApp Meta**: Enviar mensagem e verificar que input limpa instantaneamente
-2. **WhatsApp Evolution**: Mesmo teste
-3. **Verificar duplicação**: Enviar 5 mensagens rápidas, verificar zero duplicatas
-4. **Teste de falha**: Desconectar WiFi antes de enviar, verificar que mostra "failed"
-5. **Console logs**: Verificar timestamps de latência no log `[SendInstant]`
+### Depois (Configurável)
+- Thresholds editáveis via UI
+- Modelo e RAG na mesma página
+- Fontes controláveis por toggle
+- OpenAI como padrão recomendado
+
+---
+
+## Próximos Passos (Após Aprovação)
+
+1. Criar hooks para salvar/ler configurações RAG
+2. Implementar card de configuração no AITrainer
+3. Tornar PersonaDataAccessWidget editável
+4. Atualizar Edge Function para ler do banco
+5. Definir OpenAI GPT-5 Mini como modelo padrão
+6. Testar fluxo completo
+
+---
+
+## Notas Importantes
+
+- ✅ **Preservação**: Tudo que funciona hoje continua funcionando
+- ✅ **Compatibilidade**: Se config não existe, usa valores default atuais
+- ✅ **OpenAI Priorizado**: GPT-5 Mini como padrão recomendado
+- ✅ **Sem Downtime**: Alterações são incrementais
+
