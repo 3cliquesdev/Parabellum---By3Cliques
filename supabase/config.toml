@@ -345,3 +345,6 @@ verify_jwt = false
 
 [functions.send-admin-alert]
 verify_jwt = true
+
+[functions.get-inbox-counts]
+verify_jwt = true
