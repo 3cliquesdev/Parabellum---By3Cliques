@@ -548,14 +548,20 @@ serve(async (req) => {
           })
           .eq('id', activeState.id);
 
-        // 🆕 Retornar personaId e kbCategories do nó para uso no ai-autopilot-chat
+        // 🆕 CONTRATO ANTI-ALUCINAÇÃO: Retornar aiNodeActive = true
+        // Isso autoriza o message-listener/useAutopilotTrigger a chamar a IA
         return new Response(
           JSON.stringify({
             useAI: true,
+            aiNodeActive: true, // 🆕 Flag obrigatória para IA rodar
+            nodeId: nextNode.id,
+            flowId: activeState.flow_id,
             contextPrompt: nextNode.data?.context_prompt,
             useKnowledgeBase: nextNode.data?.use_knowledge_base !== false,
             collectedData,
-            // Novos campos para seleção específica de persona e KB
+            // Campos do contrato fluxo ↔ IA
+            allowedSources: nextNode.data?.allowed_sources || ['kb', 'crm', 'tracking'],
+            responseFormat: 'text_only',
             personaId: nextNode.data?.persona_id || null,
             personaName: nextNode.data?.persona_name || null,
             kbCategories: nextNode.data?.kb_categories || null,
@@ -820,15 +826,21 @@ serve(async (req) => {
         console.log('[process-chat-flow] ✅ Master Flow started:', newState.id);
         
         // Se primeiro nó é AI, retornar useAI true com configs
+        // 🆕 CONTRATO ANTI-ALUCINAÇÃO: aiNodeActive = true autoriza IA
         if (startNode.type === 'ai_response') {
           return new Response(
             JSON.stringify({
               useAI: true,
+              aiNodeActive: true, // 🆕 Flag obrigatória para IA rodar
+              nodeId: startNode.id,
               reason: "Master Flow started with AI node",
               masterFlowId: masterFlow.id,
               masterFlowName: masterFlow.name,
               flowId: masterFlow.id,
               flowStarted: true,
+              // Campos do contrato fluxo ↔ IA
+              allowedSources: startNode.data?.allowed_sources || ['kb', 'crm', 'tracking'],
+              responseFormat: 'text_only',
               personaId: startNode.data?.persona_id || null,
               kbCategories: startNode.data?.kb_categories || null,
               contextPrompt: startNode.data?.context_prompt || null,
@@ -866,9 +878,17 @@ serve(async (req) => {
         );
       }
       
-      // Nenhum master flow configurado - usar IA padrão
+      // 🆕 REGRA ANTI-ALUCINAÇÃO: Sem Master Flow = IA NÃO RODA
+      // Antes: retornava useAI: true (IA rodava livre)
+      // Agora: retorna aiNodeActive: false (IA bloqueada)
+      console.log('[process-chat-flow] ⛔ No Master Flow - AI will NOT run (Anti-Hallucination)');
       return new Response(
-        JSON.stringify({ useAI: true, reason: "No trigger matched and no Master Flow" }),
+        JSON.stringify({ 
+          useAI: false, 
+          aiNodeActive: false, 
+          reason: "No trigger matched and no Master Flow configured",
+          fallbackMessage: "No momento não tenho essa informação. Vou te encaminhar para um atendente humano."
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -983,14 +1003,19 @@ serve(async (req) => {
 
     console.log('[process-chat-flow] Flow started:', newState.id);
     
-    // 🆕 Se o nó é AI response, retornar useAI: true com configs
+    // 🆕 CONTRATO ANTI-ALUCINAÇÃO: Se o nó é AI response, aiNodeActive = true
     if (startNode.type === 'ai_response') {
       return new Response(
         JSON.stringify({
           useAI: true,
+          aiNodeActive: true, // 🆕 Flag obrigatória para IA rodar
+          nodeId: startNode.id,
           reason: "Flow started with AI node",
           flowId: matchedFlow.id,
           flowStarted: true,
+          // Campos do contrato fluxo ↔ IA
+          allowedSources: startNode.data?.allowed_sources || ['kb', 'crm', 'tracking'],
+          responseFormat: 'text_only',
           personaId: startNode.data?.persona_id || null,
           kbCategories: startNode.data?.kb_categories || null,
           contextPrompt: startNode.data?.context_prompt || null,

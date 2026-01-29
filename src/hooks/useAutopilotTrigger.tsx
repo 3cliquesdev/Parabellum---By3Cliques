@@ -6,9 +6,10 @@ import { useAIStreamResponse } from './useAIStreamResponse';
  * Hook que automaticamente dispara resposta da IA quando cliente envia mensagem
  * em conversas no modo Autopilot
  * 
- * UPGRADE v2: Usa streaming SSE para latência <1s (vs 5-20s síncrono)
- * - web_chat: usa streaming via ai-chat-stream
- * - whatsapp: continua usando ai-autopilot-chat (não suporta SSE)
+ * 🆕 REGRA ANTI-ALUCINAÇÃO v3:
+ * - Sempre chama process-chat-flow PRIMEIRO
+ * - Só dispara IA se aiNodeActive === true
+ * - Sem AIResponseNode = IA NÃO RODA
  */
 export function useAutopilotTrigger(conversationId: string | null) {
   // 🛡️ PROTEÇÃO ANTI-LOOP: Rastrear mensagens já processadas
@@ -26,15 +27,72 @@ export function useAutopilotTrigger(conversationId: string | null) {
   // 🚀 Hook de streaming para web_chat
   const { triggerStream, isStreaming } = useAIStreamResponse(conversationId);
 
-  // Callback para trigger síncrono (WhatsApp)
-  const triggerSyncAutopilot = useCallback(async (customerMessage: string) => {
+  // ============================================================
+  // 🆕 PROCESSO ANTI-ALUCINAÇÃO: Chamar process-chat-flow primeiro
+  // ============================================================
+  const processFlowFirst = useCallback(async (customerMessage: string): Promise<{
+    useAI: boolean;
+    aiNodeActive: boolean;
+    flowContext?: any;
+    response?: string;
+  }> => {
+    if (!conversationId) return { useAI: false, aiNodeActive: false };
+    
+    try {
+      console.log('[useAutopilotTrigger] 🔄 Calling process-chat-flow first (Anti-Hallucination)');
+      
+      const { data, error } = await supabase.functions.invoke('process-chat-flow', {
+        body: {
+          conversationId,
+          userMessage: customerMessage
+        }
+      });
+
+      if (error) {
+        console.error('[useAutopilotTrigger] Error calling process-chat-flow:', error);
+        return { useAI: false, aiNodeActive: false };
+      }
+
+      console.log('[useAutopilotTrigger] 📋 process-chat-flow response:', {
+        useAI: data?.useAI,
+        aiNodeActive: data?.aiNodeActive,
+        flowId: data?.flowId,
+        reason: data?.reason
+      });
+
+      return {
+        useAI: data?.useAI || false,
+        aiNodeActive: data?.aiNodeActive || false,
+        flowContext: data?.aiNodeActive ? {
+          flow_id: data?.flowId || data?.masterFlowId,
+          node_id: data?.nodeId,
+          node_type: 'ai_response',
+          allowed_sources: data?.allowedSources || ['kb', 'crm', 'tracking'],
+          response_format: 'text_only',
+          personaId: data?.personaId,
+          kbCategories: data?.kbCategories,
+          contextPrompt: data?.contextPrompt,
+          fallbackMessage: data?.fallbackMessage
+        } : undefined,
+        response: data?.response
+      };
+    } catch (err) {
+      console.error('[useAutopilotTrigger] Exception calling process-chat-flow:', err);
+      return { useAI: false, aiNodeActive: false };
+    }
+  }, [conversationId]);
+
+  // Callback para trigger síncrono (WhatsApp) - agora com flow-first
+  const triggerSyncAutopilot = useCallback(async (customerMessage: string, flowContext?: any) => {
     if (!conversationId) return;
     
     try {
       const { data, error } = await supabase.functions.invoke('ai-autopilot-chat', {
         body: {
           conversationId,
-          customerMessage
+          customerMessage,
+          // 🆕 Passar flow_context se disponível
+          flow_context: flowContext
         }
       });
 
@@ -137,18 +195,35 @@ export function useAutopilotTrigger(conversationId: string | null) {
             console.log('[useAutopilotTrigger] Fetched and cached:', { aiMode, convChannel });
           }
 
-          // Trigger autopilot
-          if (aiMode === 'autopilot') {
-            console.log('[useAutopilotTrigger] 🚀 Triggering AI response...');
-            
-            // 🚀 UPGRADE: Usar streaming para web_chat, síncrono para outros canais
-            if (convChannel === 'web_chat') {
-              console.log('[useAutopilotTrigger] ⚡ Using SSE streaming for web_chat');
-              triggerStream(newMessage.content);
-            } else {
-              console.log('[useAutopilotTrigger] 📡 Using sync mode for:', convChannel);
-              triggerSyncAutopilot(newMessage.content);
-            }
+          // Só processar se em modo autopilot
+          if (aiMode !== 'autopilot') {
+            console.log('[useAutopilotTrigger] Not in autopilot mode:', aiMode);
+            return;
+          }
+
+          // ============================================================
+          // 🆕 REGRA ANTI-ALUCINAÇÃO: Chamar process-chat-flow PRIMEIRO
+          // ============================================================
+          console.log('[useAutopilotTrigger] 🔄 Applying Anti-Hallucination Rule...');
+          const flowResult = await processFlowFirst(newMessage.content);
+
+          // ⛔ Se não há AIResponseNode ativo, NÃO chamar IA
+          if (!flowResult.useAI || !flowResult.aiNodeActive) {
+            console.log('[useAutopilotTrigger] ⛔ No AIResponseNode active - AI will NOT run');
+            return;
+          }
+
+          // ✅ AIResponseNode ativo - agora sim, chamar IA
+          console.log('[useAutopilotTrigger] ✅ AIResponseNode active - triggering AI with flow_context');
+          
+          // 🚀 UPGRADE: Usar streaming para web_chat, síncrono para outros canais
+          if (convChannel === 'web_chat') {
+            console.log('[useAutopilotTrigger] ⚡ Using SSE streaming for web_chat');
+            // TODO: Passar flow_context para streaming também
+            triggerStream(newMessage.content);
+          } else {
+            console.log('[useAutopilotTrigger] 📡 Using sync mode for:', convChannel);
+            triggerSyncAutopilot(newMessage.content, flowResult.flowContext);
           }
         }
       )
@@ -158,7 +233,7 @@ export function useAutopilotTrigger(conversationId: string | null) {
       console.log('[useAutopilotTrigger] Cleaning up subscription');
       supabase.removeChannel(channel);
     };
-  }, [conversationId, triggerStream, triggerSyncAutopilot]);
+  }, [conversationId, triggerStream, triggerSyncAutopilot, processFlowFirst]);
 
   return { isStreaming };
 }

@@ -32,7 +32,7 @@ serve(async (req) => {
     // Buscar ai_mode da conversa
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
-      .select('ai_mode, assigned_to')
+      .select('ai_mode, assigned_to, channel')
       .eq('id', record.conversation_id)
       .single();
 
@@ -61,7 +61,7 @@ serve(async (req) => {
         conversation_id: record.conversation_id,
         content: '👤 Atendente humano assumiu a conversa. A IA está agora em modo assistente.',
         sender_type: 'system',
-        channel: 'chat' // Corrigido: usar valor válido do enum conversation_channel
+        channel: 'chat'
       });
       
       return new Response(JSON.stringify({ 
@@ -81,8 +81,94 @@ serve(async (req) => {
       });
     }
 
-    // Chamar ai-autopilot-chat
-    console.log('[message-listener] Triggering autopilot response for conversation:', record.conversation_id);
+    // ============================================================
+    // 🆕 REGRA ANTI-ALUCINAÇÃO: Chamar process-chat-flow PRIMEIRO
+    // A IA só roda se houver AIResponseNode ativo no fluxo
+    // ============================================================
+    console.log('[message-listener] 🔄 Calling process-chat-flow first (Anti-Hallucination Rule)');
+    
+    const flowResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/process-chat-flow`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+      },
+      body: JSON.stringify({
+        conversationId: record.conversation_id,
+        userMessage: record.content
+      })
+    });
+
+    const flowData = await flowResponse.json();
+    console.log('[message-listener] 📋 process-chat-flow response:', {
+      useAI: flowData.useAI,
+      aiNodeActive: flowData.aiNodeActive,
+      reason: flowData.reason,
+      flowId: flowData.flowId
+    });
+
+    // Se process-chat-flow retornou uma resposta de fluxo (não-IA)
+    if (!flowData.useAI && flowData.response) {
+      console.log('[message-listener] 📝 Flow response (no AI):', flowData.response?.slice(0, 50));
+      
+      // Inserir resposta do fluxo como mensagem
+      await supabase.from('messages').insert({
+        conversation_id: record.conversation_id,
+        content: flowData.response,
+        sender_type: 'user',
+        is_ai_generated: false,
+        channel: conversation.channel || 'web_chat'
+      });
+      
+      return new Response(JSON.stringify({ 
+        status: 'flow_response', 
+        flow_id: flowData.flowId,
+        message: 'Flow handled the message' 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // ============================================================
+    // 🆕 REGRA CRÍTICA: Só chamar IA se aiNodeActive === true
+    // ============================================================
+    if (!flowData.useAI || !flowData.aiNodeActive) {
+      console.log('[message-listener] ⛔ No AIResponseNode active - AI will NOT run');
+      console.log('[message-listener] Reason:', flowData.reason || 'aiNodeActive is false');
+      
+      // Se não há fluxo ativo e não há AIResponseNode, enviar fallback
+      if (!flowData.flowId && !flowData.response) {
+        const fallbackMessage = flowData.fallbackMessage || 
+          'No momento não tenho essa informação. Vou te encaminhar para um atendente humano.';
+        
+        await supabase.from('messages').insert({
+          conversation_id: record.conversation_id,
+          content: fallbackMessage,
+          sender_type: 'user',
+          is_ai_generated: true,
+          channel: conversation.channel || 'web_chat'
+        });
+        
+        // Marcar para transferência humana
+        await supabase
+          .from('conversations')
+          .update({ ai_mode: 'waiting_human' })
+          .eq('id', record.conversation_id);
+      }
+      
+      return new Response(JSON.stringify({ 
+        status: 'no_ai_node', 
+        reason: flowData.reason || 'aiNodeActive is false',
+        ai_mode: 'waiting_human'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // ============================================================
+    // ✅ AIResponseNode ATIVO: Chamar ai-autopilot-chat COM flow_context
+    // ============================================================
+    console.log('[message-listener] 🚀 AIResponseNode active - triggering AI with flow_context');
     
     const autopilotResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-autopilot-chat`, {
       method: 'POST',
@@ -92,7 +178,19 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         conversationId: record.conversation_id,
-        customerMessage: record.content
+        customerMessage: record.content,
+        // 🆕 CONTRATO: Passar contexto do fluxo para IA
+        flow_context: {
+          flow_id: flowData.flowId || flowData.masterFlowId,
+          node_id: flowData.nodeId,
+          node_type: 'ai_response',
+          allowed_sources: flowData.allowedSources || ['kb', 'crm', 'tracking'],
+          response_format: 'text_only',
+          personaId: flowData.personaId,
+          kbCategories: flowData.kbCategories,
+          contextPrompt: flowData.contextPrompt,
+          fallbackMessage: flowData.fallbackMessage
+        }
       })
     });
 
@@ -104,9 +202,35 @@ serve(async (req) => {
       throw new Error(`Autopilot failed: ${JSON.stringify(autopilotData)}`);
     }
 
+    // Verificar se IA tentou escapar do contrato
+    if (autopilotData.forceTransfer) {
+      console.log('[message-listener] ⚠️ AI contract violation - forcing transfer');
+      
+      await supabase
+        .from('conversations')
+        .update({ ai_mode: 'waiting_human' })
+        .eq('id', record.conversation_id);
+      
+      await supabase.from('messages').insert({
+        conversation_id: record.conversation_id,
+        content: '👤 Vou transferir você para um atendente humano.',
+        sender_type: 'user',
+        is_ai_generated: true,
+        channel: conversation.channel || 'web_chat'
+      });
+      
+      return new Response(JSON.stringify({ 
+        status: 'ai_contract_violation', 
+        reason: autopilotData.reason 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     return new Response(JSON.stringify({ 
       status: 'triggered', 
       conversation_id: record.conversation_id,
+      flow_context_used: true,
       autopilot_response: autopilotData 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
