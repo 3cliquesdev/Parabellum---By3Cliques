@@ -7288,10 +7288,12 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         console.warn('[ai-autopilot-chat] ⚠️ ESCAPE DETECTADO! IA tentou sair do contrato');
         console.warn('[ai-autopilot-chat] Resposta original:', assistantMessage.substring(0, 100));
         
-        // Retornar sinal de violação para o chamador
+        // 🆕 AJUSTE ANTI-ESCAPE: IA apenas sinaliza erro, fluxo decide transferência
+        // Retornar sinal de violação de contrato (NÃO decidir transferência aqui!)
         return new Response(JSON.stringify({
-          forceTransfer: true,
+          contractViolation: true,  // ✅ IA só sinaliza erro
           reason: 'ai_contract_violation',
+          violationType: 'escape_attempt',
           original_response: assistantMessage.substring(0, 200),
           flow_context: {
             flow_id: flow_context.flow_id,

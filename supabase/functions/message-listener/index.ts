@@ -202,26 +202,37 @@ serve(async (req) => {
       throw new Error(`Autopilot failed: ${JSON.stringify(autopilotData)}`);
     }
 
-    // Verificar se IA tentou escapar do contrato
-    if (autopilotData.forceTransfer) {
-      console.log('[message-listener] ⚠️ AI contract violation - forcing transfer');
+    // 🆕 AJUSTE ANTI-ESCAPE: Verificar se IA sinalizou violação de contrato
+    // IA NÃO decide transferência — apenas sinaliza erro
+    // Delegamos para process-chat-flow ativar o TransferNode
+    if (autopilotData.contractViolation) {
+      console.log('[message-listener] ⚠️ IA sinalizou violação de contrato');
+      console.log('[message-listener] 📋 Violation type:', autopilotData.violationType);
+      console.log('[message-listener] 📋 Reason:', autopilotData.reason);
       
-      await supabase
-        .from('conversations')
-        .update({ ai_mode: 'waiting_human' })
-        .eq('id', record.conversation_id);
-      
-      await supabase.from('messages').insert({
-        conversation_id: record.conversation_id,
-        content: '👤 Vou transferir você para um atendente humano.',
-        sender_type: 'user',
-        is_ai_generated: true,
-        channel: conversation.channel || 'web_chat'
+      // ✅ Delegar para process-chat-flow ativar TransferNode
+      const transferResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/process-chat-flow`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+        },
+        body: JSON.stringify({
+          conversationId: record.conversation_id,
+          userMessage: record.content,
+          contractViolation: true,
+          violationReason: autopilotData.reason,
+          activateTransfer: true  // Sinaliza para o fluxo ativar TransferNode
+        })
       });
       
+      const transferData = await transferResponse.json();
+      console.log('[message-listener] 📋 Transfer delegated to flow:', transferData);
+      
       return new Response(JSON.stringify({ 
-        status: 'ai_contract_violation', 
-        reason: autopilotData.reason 
+        status: 'contract_violation_delegated', 
+        reason: autopilotData.reason,
+        transfer_handled_by: 'process-chat-flow'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
