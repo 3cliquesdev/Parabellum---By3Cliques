@@ -37,5 +37,12 @@ export function useUsers() {
       if (error) throw error;
       return data.users as UserWithRole[];
     },
+    // Evita tela em branco quando a função falha intermitentemente.
+    // Componentes que fazem `users.map(...)` continuam funcionando com array vazio.
+    placeholderData: [] as UserWithRole[],
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 20,
   });
 }
