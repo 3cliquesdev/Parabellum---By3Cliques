@@ -60,8 +60,8 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
   let query = supabase
     .from("inbox_view")
     .select("*")
-    .order("updated_at", { ascending: false })
-    .limit(500); // Aumentado de 200 para 500 para evitar perda de conversas ao atualizar
+    .order("updated_at", { ascending: true }) // PRIORIDADE: Conversas mais antigas primeiro (aguardando há mais tempo)
+    .limit(2000); // Aumentado para capturar todas as conversas ativas
 
   // Aplicar filtros de role no nível do banco
   if (role && userId && !hasFullInboxAccess(role)) {
@@ -194,16 +194,17 @@ function mergeInboxItems(existing: InboxViewItem[], incoming: InboxViewItem[]): 
     map.set(item.conversation_id, { ...map.get(item.conversation_id), ...item });
   }
   
-  // Ordenar por updated_at DESC
+  // Ordenar por updated_at ASC (mais antigas primeiro = maior prioridade)
   return Array.from(map.values()).sort((a, b) => 
-    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
   );
 }
 
-function sortInboxItemsByUpdatedAtDesc(items: InboxViewItem[]): InboxViewItem[] {
+function sortInboxItemsByPriority(items: InboxViewItem[]): InboxViewItem[] {
   // Never mutate input array (critical for React Query cache + react-window stability)
+  // PRIORIDADE: Conversas mais antigas no topo (aguardando há mais tempo)
   return [...items].sort((a, b) =>
-    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
   );
 }
 
@@ -392,8 +393,8 @@ export function useInboxView(filters?: InboxFilters) {
                     } 
                   : item
               );
-              // Ordenar por updated_at DESC para mover conversa pro topo (sem mutar array)
-              return sortInboxItemsByUpdatedAtDesc(updated);
+              // Ordenar por prioridade (mais antigas primeiro)
+              return sortInboxItemsByPriority(updated);
             }
           );
         }
@@ -457,7 +458,7 @@ export function useInboxView(filters?: InboxFilters) {
                     } 
                   : item
               );
-              return sortInboxItemsByUpdatedAtDesc(updated);
+              return sortInboxItemsByPriority(updated);
             }
           );
 
