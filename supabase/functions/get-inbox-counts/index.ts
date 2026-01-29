@@ -108,6 +108,7 @@ Deno.serve(async (req) => {
     const tags = (tagsData || []) as Array<{ id: string; name: string; color: string | null }>;
 
     // Helper to apply non-management visibility constraints.
+    // IMPORTANT: query must already have .select() called before passing to this function
     const applyVisibility = (query: any) => {
       if (isManager) return query;
 
@@ -145,48 +146,44 @@ Deno.serve(async (req) => {
     };
 
     // -------- Core counts from conversations (true source of "total")
-    const baseConv = applyVisibility(supabaseAdmin.from("conversations"));
+    // FIX: Apply visibility AFTER .select() so .or() method is available
+    const { count: totalActive = 0 } = await applyVisibility(
+      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
+    ).neq("status", "closed");
 
-    const { count: totalActive = 0 } = await baseConv
+    const { count: totalClosed = 0 } = await applyVisibility(
+      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
+    ).eq("status", "closed");
+
+    const { count: mine = 0 } = await supabaseAdmin
+      .from("conversations")
       .select("id", { count: "exact", head: true })
-      .neq("status", "closed");
+      .neq("status", "closed")
+      .eq("assigned_to", userId);
 
-    const { count: totalClosed = 0 } = await applyVisibility(supabaseAdmin.from("conversations"))
-      .select("id", { count: "exact", head: true })
-      .eq("status", "closed");
-
-    const { count: mine = 0 } = isManager
-      ? await supabaseAdmin
-          .from("conversations")
-          .select("id", { count: "exact", head: true })
-          .neq("status", "closed")
-          .eq("assigned_to", userId)
-      : await supabaseAdmin
-          .from("conversations")
-          .select("id", { count: "exact", head: true })
-          .neq("status", "closed")
-          .eq("assigned_to", userId);
-
-    const { count: aiQueue = 0 } = await applyVisibility(supabaseAdmin.from("conversations"))
-      .select("id", { count: "exact", head: true })
+    const { count: aiQueue = 0 } = await applyVisibility(
+      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
+    )
       .neq("status", "closed")
       .eq("ai_mode", "autopilot");
 
-    const { count: humanQueue = 0 } = await applyVisibility(supabaseAdmin.from("conversations"))
-      .select("id", { count: "exact", head: true })
+    const { count: humanQueue = 0 } = await applyVisibility(
+      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
+    )
       .neq("status", "closed")
       .neq("ai_mode", "autopilot");
 
-    const { count: unassigned = 0 } = await applyVisibility(supabaseAdmin.from("conversations"))
-      .select("id", { count: "exact", head: true })
+    const { count: unassigned = 0 } = await applyVisibility(
+      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
+    )
       .neq("status", "closed")
       .is("assigned_to", null);
 
     // -------- Derived counts from inbox_view (unread / sla / last_sender)
-    const baseInbox = applyVisibility(supabaseAdmin.from("inbox_view"));
-    const { data: inboxRows, error: inboxErr } = await baseInbox
-      .select("conversation_id, sla_status, unread_count, last_sender_type, status")
-      .limit(5000);
+    const { data: inboxRows, error: inboxErr } = await applyVisibility(
+      supabaseAdmin.from("inbox_view").select("conversation_id, sla_status, unread_count, last_sender_type, status")
+    ).limit(5000);
+    
     if (inboxErr) throw inboxErr;
     const inbox = inboxRows || [];
 
@@ -199,8 +196,9 @@ Deno.serve(async (req) => {
     // -------- byDepartment (active)
     const byDepartment = await Promise.all(
       departments.map(async (dept) => {
-        const { count = 0 } = await applyVisibility(supabaseAdmin.from("conversations"))
-          .select("id", { count: "exact", head: true })
+        const { count = 0 } = await applyVisibility(
+          supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
+        )
           .neq("status", "closed")
           .eq("department", dept.id);
         return { id: dept.id, name: dept.name, color: dept.color, count };
@@ -209,8 +207,9 @@ Deno.serve(async (req) => {
 
     // -------- byTag (active)
     // Get active conversation ids (bounded). This is safe for current scale and avoids raw SQL.
-    const { data: activeConvIdsRows } = await applyVisibility(supabaseAdmin.from("conversations"))
-      .select("id")
+    const { data: activeConvIdsRows } = await applyVisibility(
+      supabaseAdmin.from("conversations").select("id")
+    )
       .neq("status", "closed")
       .limit(5000);
     const activeConvIds = (activeConvIdsRows || []).map((r: any) => r.id);
