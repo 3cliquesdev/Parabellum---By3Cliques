@@ -322,9 +322,10 @@ serve(async (req) => {
     if (requiredSkillName) {
       console.log(`[route-conversation] 🎯 Skill-based routing: Looking for agents with skill "${requiredSkillName}"`);
       
-      // 🆕 HIERARQUIA COMPLETA: Buscar parent_id E siblings para skill-based routing
+      // 🆕 HIERARQUIA COMPLETA: Buscar parent_id, siblings E children para skill-based routing
       let skillParentDepartmentId: string | null = null;
       let skillSiblingDepartmentIds: string[] = [];
+      let skillChildDepartmentIds: string[] = [];
       
       if (resolvedDepartmentId) {
         const { data: skillDeptData } = await supabase
@@ -349,6 +350,18 @@ serve(async (req) => {
             skillSiblingDepartmentIds = skillSiblings.map(d => d.id);
             console.log(`[route-conversation] 👥 Skill routing - Found ${skillSiblings.length} sibling departments`);
           }
+        }
+        
+        // 🆕 NOVO: Buscar departamentos FILHOS para skill-based routing
+        const { data: skillChildren } = await supabase
+          .from('departments')
+          .select('id, name')
+          .eq('parent_id', resolvedDepartmentId)
+          .eq('is_active', true);
+        
+        if (skillChildren && skillChildren.length > 0) {
+          skillChildDepartmentIds = skillChildren.map(d => d.id);
+          console.log(`[route-conversation] 👶 Skill routing - Found ${skillChildren.length} child departments: ${skillChildren.map(d => d.name).join(', ')}`);
         }
       }
       
@@ -409,9 +422,13 @@ serve(async (req) => {
           return channels.some((ac: any) => ac.channel_id === supportChannelId);
         });
         
-        // 🆕 HIERARQUIA EXPANDIDA: Filtrar por departamento COM fallback para pai E irmãos
+        // 🆕 HIERARQUIA EXPANDIDA: Filtrar por departamento COM fallback para filhos, pai E irmãos
         if (resolvedDepartmentId && agentsWithChannel.length > 0) {
           const skillDeptIds = [resolvedDepartmentId];
+          // 🆕 Adicionar filhos PRIMEIRO (prioridade alta - agentes especializados)
+          if (skillChildDepartmentIds.length > 0) {
+            skillDeptIds.push(...skillChildDepartmentIds);
+          }
           if (skillParentDepartmentId) {
             skillDeptIds.push(skillParentDepartmentId);
           }
@@ -421,13 +438,20 @@ serve(async (req) => {
           }
           onlineAgents = agentsWithChannel.filter(a => skillDeptIds.includes(a.department));
           
-          // 🆕 Ordenar: alvo > pai > irmãos
-          if ((skillParentDepartmentId || skillSiblingDepartmentIds.length > 0) && onlineAgents.length > 0) {
+          // 🆕 Ordenar: alvo > filhos > pai > irmãos
+          if ((skillParentDepartmentId || skillSiblingDepartmentIds.length > 0 || skillChildDepartmentIds.length > 0) && onlineAgents.length > 0) {
             onlineAgents.sort((a, b) => {
               // Prioridade 1: Departamento alvo
               if (a.department === resolvedDepartmentId && b.department !== resolvedDepartmentId) return -1;
               if (b.department === resolvedDepartmentId && a.department !== resolvedDepartmentId) return 1;
-              // Prioridade 2: Departamento pai
+              // Prioridade 2: Departamentos FILHOS (especializados)
+              if (skillChildDepartmentIds.length > 0) {
+                const aIsChild = skillChildDepartmentIds.includes(a.department);
+                const bIsChild = skillChildDepartmentIds.includes(b.department);
+                if (aIsChild && !bIsChild) return -1;
+                if (bIsChild && !aIsChild) return 1;
+              }
+              // Prioridade 3: Departamento pai
               if (skillParentDepartmentId) {
                 if (a.department === skillParentDepartmentId && b.department !== skillParentDepartmentId) return -1;
                 if (b.department === skillParentDepartmentId && a.department !== skillParentDepartmentId) return 1;
@@ -454,9 +478,10 @@ serve(async (req) => {
       console.log('[route-conversation] 📌 Department filter:', resolvedDepartmentId || 'none');
       console.log('[route-conversation] 👥 Priority team members:', priorityTeamMemberIds.length);
       
-      // 🆕 HIERARQUIA COMPLETA: Buscar parent_id E siblings do departamento para fallback
+      // 🆕 HIERARQUIA COMPLETA: Buscar parent_id, siblings E children do departamento para fallback
       let parentDepartmentId: string | null = null;
       let siblingDepartmentIds: string[] = [];
+      let childDepartmentIds: string[] = [];
       
       if (resolvedDepartmentId) {
         const { data: deptData } = await supabase
@@ -481,6 +506,18 @@ serve(async (req) => {
             siblingDepartmentIds = siblingDepts.map(d => d.id);
             console.log(`[route-conversation] 👥 Found ${siblingDepts.length} sibling departments: ${siblingDepts.map(d => d.name).join(', ')}`);
           }
+        }
+        
+        // 🆕 NOVO: Buscar departamentos FILHOS (caso o alvo seja um departamento pai)
+        const { data: childDepts } = await supabase
+          .from('departments')
+          .select('id, name')
+          .eq('parent_id', resolvedDepartmentId)
+          .eq('is_active', true);
+        
+        if (childDepts && childDepts.length > 0) {
+          childDepartmentIds = childDepts.map(d => d.id);
+          console.log(`[route-conversation] 👶 Found ${childDepts.length} child departments: ${childDepts.map(d => d.name).join(', ')}`);
         }
       }
       
@@ -518,10 +555,14 @@ serve(async (req) => {
           .eq('availability_status', 'online')
           .in('id', genericAgentUserIds);
 
-        // 🆕 HIERARQUIA EXPANDIDA: Filtrar por departamento COM fallback para pai E irmãos
+        // 🆕 HIERARQUIA EXPANDIDA: Filtrar por departamento COM fallback para pai, irmãos E filhos
         if (resolvedDepartmentId) {
-          // Prioridade: 1º alvo, 2º pai, 3º irmãos
+          // Prioridade: 1º alvo, 2º filhos, 3º pai, 4º irmãos
           const deptIds = [resolvedDepartmentId];
+          // 🆕 Adicionar filhos PRIMEIRO (prioridade alta - agentes especializados)
+          if (childDepartmentIds.length > 0) {
+            deptIds.push(...childDepartmentIds);
+          }
           if (parentDepartmentId) {
             deptIds.push(parentDepartmentId);
           }
@@ -529,7 +570,7 @@ serve(async (req) => {
           if (siblingDepartmentIds.length > 0) {
             deptIds.push(...siblingDepartmentIds);
           }
-          console.log(`[route-conversation] 📂 Searching in departments: [target, parent, siblings] = ${deptIds.length} total`);
+          console.log(`[route-conversation] 📂 Searching in departments: [target, children, parent, siblings] = ${deptIds.length} total`);
           agentsQuery = agentsQuery.in('department', deptIds);
         }
 
@@ -545,23 +586,31 @@ serve(async (req) => {
           return channels.some((ac: any) => ac.channel_id === supportChannelId);
         });
         
-        // 🆕 HIERARQUIA EXPANDIDA: Ordenar - alvo > pai > irmãos
-        if ((parentDepartmentId || siblingDepartmentIds.length > 0) && genericAgents.length > 0) {
+        // 🆕 HIERARQUIA EXPANDIDA: Ordenar - alvo > filhos > pai > irmãos
+        if ((parentDepartmentId || siblingDepartmentIds.length > 0 || childDepartmentIds.length > 0) && genericAgents.length > 0) {
           genericAgents.sort((a, b) => {
-            // Prioridade 1: Agentes do subdepartamento exato (alvo)
+            // Prioridade 1: Agentes do departamento exato (alvo)
             if (a.department === resolvedDepartmentId && b.department !== resolvedDepartmentId) return -1;
             if (b.department === resolvedDepartmentId && a.department !== resolvedDepartmentId) return 1;
             
-            // Prioridade 2: Agentes do departamento pai
+            // Prioridade 2: Agentes de departamentos FILHOS (especializados)
+            if (childDepartmentIds.length > 0) {
+              const aIsChild = childDepartmentIds.includes(a.department);
+              const bIsChild = childDepartmentIds.includes(b.department);
+              if (aIsChild && !bIsChild) return -1;
+              if (bIsChild && !aIsChild) return 1;
+            }
+            
+            // Prioridade 3: Agentes do departamento pai
             if (parentDepartmentId) {
               if (a.department === parentDepartmentId && b.department !== parentDepartmentId) return -1;
               if (b.department === parentDepartmentId && a.department !== parentDepartmentId) return 1;
             }
             
-            // Prioridade 3: Agentes de departamentos irmãos (último recurso)
+            // Prioridade 4: Agentes de departamentos irmãos (último recurso)
             return 0;
           });
-          console.log(`[route-conversation] 📊 Sorted agents by hierarchy: target > parent > siblings`);
+          console.log(`[route-conversation] 📊 Sorted agents by hierarchy: target > children > parent > siblings`);
         }
       }
       
