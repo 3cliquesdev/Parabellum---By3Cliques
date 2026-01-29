@@ -46,13 +46,23 @@ const DEPARTMENT_SLUG_MAPPING: Record<string, string> = {
   'suporte_n1': 'Suporte',
   'suporte': 'Suporte',
   'support': 'Suporte',
-  'tecnico': 'Suporte',
-  'technical': 'Suporte',
+  // 🆕 Sub-departamentos de Suporte
+  'suporte_sistema': 'Suporte Sistema',
+  'suporte_tecnico': 'Suporte Sistema',
+  'tecnico': 'Suporte Sistema', // Mudado de 'Suporte' para 'Suporte Sistema'
+  'technical': 'Suporte Sistema',
+  'sistema': 'Suporte Sistema',
+  'suporte_pedidos': 'Suporte Pedidos',
+  'pedidos': 'Suporte Pedidos',
+  'logistica': 'Suporte Pedidos', // Mudado de 'Operacional' para 'Suporte Pedidos'
+  'logistics': 'Suporte Pedidos',
+  'rastreio': 'Suporte Pedidos',
+  'entrega': 'Suporte Pedidos',
+  // Financeiro
   'financeiro': 'Financeiro',
   'financial': 'Financeiro',
   'finance': 'Financeiro',
-  'logistica': 'Operacional',
-  'logistics': 'Operacional',
+  // Operacional
   'operacional': 'Operacional',
   'operations': 'Operacional',
   'juridico': 'Suporte', // Fallback para suporte quando não há dept jurídico
