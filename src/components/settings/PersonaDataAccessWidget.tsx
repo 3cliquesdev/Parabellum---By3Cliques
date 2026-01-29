@@ -1,8 +1,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, BookOpen, User, Package, DollarSign, Truck, Check, X } from "lucide-react";
+import { Users, BookOpen, User, Package, DollarSign, Truck, Check, X, Loader2 } from "lucide-react";
 import { usePersonas } from "@/hooks/usePersonas";
+import { useUpdatePersona } from "@/hooks/useUpdatePersona";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 interface DataAccess {
   customer_data?: boolean;
@@ -22,8 +24,21 @@ const ACCESS_LABELS = [
 
 export function PersonaDataAccessWidget() {
   const { data: personas, isLoading } = usePersonas();
+  const updatePersona = useUpdatePersona();
 
   const activePersonas = personas?.filter((p) => p.is_active) || [];
+
+  const handleToggleAccess = (personaId: string, currentDataAccess: DataAccess, accessKey: keyof DataAccess) => {
+    const newDataAccess = {
+      ...currentDataAccess,
+      [accessKey]: !currentDataAccess[accessKey],
+    };
+    
+    updatePersona.mutate({
+      id: personaId,
+      data: { data_access: newDataAccess },
+    });
+  };
 
   if (isLoading) {
     return (
@@ -55,12 +70,20 @@ export function PersonaDataAccessWidget() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <Users className="h-5 w-5 text-primary" />
-          <CardTitle>Acesso por Persona</CardTitle>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            <CardTitle>Acesso por Persona</CardTitle>
+          </div>
+          {updatePersona.isPending && (
+            <Badge variant="secondary" className="gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Salvando...
+            </Badge>
+          )}
         </div>
         <CardDescription>
-          Quais dados cada agente de IA pode acessar
+          Clique nas badges para ativar/desativar permissões de cada agente
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -95,10 +118,14 @@ export function PersonaDataAccessWidget() {
                         <Badge
                           key={key}
                           variant={hasAccess ? "default" : "outline"}
-                          className={`text-xs ${hasAccess ? "" : "opacity-50"}`}
+                          className={cn(
+                            "text-xs cursor-pointer transition-all hover:scale-105",
+                            hasAccess ? "" : "opacity-50 hover:opacity-75"
+                          )}
+                          onClick={() => handleToggleAccess(persona.id, dataAccess, key as keyof DataAccess)}
                         >
                           {hasAccess ? (
-                            <Check className={`h-3 w-3 mr-1 ${color}`} />
+                            <Check className={cn("h-3 w-3 mr-1", color)} />
                           ) : (
                             <X className="h-3 w-3 mr-1 text-muted-foreground" />
                           )}

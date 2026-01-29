@@ -6,20 +6,90 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Helper: Buscar modelo AI configurado no banco
-async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
+// ============================================================
+// 🆕 INTERFACE DE CONFIGURAÇÃO RAG DINÂMICA
+// Lido do banco system_configurations
+// ============================================================
+interface RAGConfig {
+  model: string;
+  minThreshold: number;
+  directThreshold: number;
+  sources: {
+    kb: boolean;
+    crm: boolean;
+    tracking: boolean;
+    sandbox: boolean;
+  };
+  strictMode: boolean;
+}
+
+const DEFAULT_RAG_CONFIG: RAGConfig = {
+  model: 'openai/gpt-5-mini',
+  minThreshold: 0.10,
+  directThreshold: 0.75,
+  sources: { kb: true, crm: true, tracking: true, sandbox: true },
+  strictMode: false,
+};
+
+// Helper: Buscar TODAS as configurações RAG do banco
+async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
   try {
-    const { data } = await supabaseClient
+    const { data, error } = await supabaseClient
       .from('system_configurations')
-      .select('value')
-      .eq('key', 'ai_default_model')
-      .maybeSingle();
+      .select('key, value')
+      .in('key', [
+        'ai_default_model',
+        'ai_rag_min_threshold',
+        'ai_rag_direct_threshold',
+        'ai_rag_sources_enabled',
+        'ai_strict_rag_mode',
+      ]);
     
-    return data?.value || 'openai/gpt-5-mini';
+    if (error) {
+      console.error('[getRAGConfig] Error fetching:', error);
+      return DEFAULT_RAG_CONFIG;
+    }
+    
+    const configMap = new Map<string, string>();
+    if (data) {
+      for (const item of data) {
+        configMap.set(item.key, item.value);
+      }
+    }
+    
+    let sources = DEFAULT_RAG_CONFIG.sources;
+    try {
+      const sourcesStr = configMap.get('ai_rag_sources_enabled');
+      if (sourcesStr) sources = JSON.parse(sourcesStr);
+    } catch {}
+    
+    const config: RAGConfig = {
+      model: configMap.get('ai_default_model') || DEFAULT_RAG_CONFIG.model,
+      minThreshold: parseFloat(configMap.get('ai_rag_min_threshold') || String(DEFAULT_RAG_CONFIG.minThreshold)),
+      directThreshold: parseFloat(configMap.get('ai_rag_direct_threshold') || String(DEFAULT_RAG_CONFIG.directThreshold)),
+      sources,
+      strictMode: configMap.get('ai_strict_rag_mode') === 'true',
+    };
+    
+    console.log('[getRAGConfig] ✅ Configuração RAG carregada:', {
+      model: config.model,
+      minThreshold: config.minThreshold,
+      directThreshold: config.directThreshold,
+      sources: config.sources,
+      strictMode: config.strictMode,
+    });
+    
+    return config;
   } catch (error) {
-    console.error('[ai-autopilot-chat] Error fetching AI model config:', error);
-    return 'openai/gpt-5-mini';
+    console.error('[getRAGConfig] Exception:', error);
+    return DEFAULT_RAG_CONFIG;
   }
+}
+
+// Helper: Buscar modelo AI configurado no banco (mantido para compatibilidade)
+async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
+  const config = await getRAGConfig(supabaseClient);
+  return config.model;
 }
 
 // Helper: Buscar template de mensagem do banco ai_message_templates
@@ -551,11 +621,11 @@ interface ConfidenceResult {
   department?: string;
 }
 
-// Thresholds - AJUSTADOS: IA deve SEMPRE tentar responder, só handoff se cliente PEDIR
-// A IA NÃO deve transferir automaticamente por baixa confiança
-const SCORE_DIRECT = 0.75;   // Alta confiança - responde direto
-const SCORE_CAUTIOUS = 0.40; // Média confiança - responde com cautela 
-const SCORE_MINIMUM = 0.10;  // Mínimo MUITO BAIXO - IA tenta responder SEMPRE, handoff só manual
+// Thresholds - AGORA DINÂMICOS via getRAGConfig()
+// Valores abaixo são FALLBACK apenas - a função calculateConfidenceScore usa config dinâmica
+const SCORE_DIRECT = 0.75;   // Fallback: Alta confiança - responde direto
+const SCORE_CAUTIOUS = 0.40; // Fallback: Média confiança - responde com cautela 
+const SCORE_MINIMUM = 0.10;  // Fallback: Mínimo - IA tenta responder, handoff só manual
 
 // 🆕 Thresholds do MODO RAG ESTRITO (Anti-Alucinação) - mais conservador
 const STRICT_SCORE_MINIMUM = 0.50;   // Modo estrito mais tolerante
@@ -679,8 +749,24 @@ function pickDepartment(question: string): string {
   return 'suporte_n1';
 }
 
-// 🎯 FUNÇÃO PRINCIPAL: Calcular Score de Confiança
-function calculateConfidenceScore(query: string, documents: RetrievedDocument[]): ConfidenceResult {
+// 🎯 FUNÇÃO PRINCIPAL: Calcular Score de Confiança (ATUALIZADA para thresholds dinâmicos)
+function calculateConfidenceScore(
+  query: string, 
+  documents: RetrievedDocument[],
+  ragConfig?: RAGConfig
+): ConfidenceResult {
+  // Usar thresholds dinâmicos do RAGConfig ou fallback para constantes
+  const scoreDirectThreshold = ragConfig?.directThreshold ?? SCORE_DIRECT;
+  const scoreMinThreshold = ragConfig?.minThreshold ?? SCORE_MINIMUM;
+  const scoreCautious = (scoreDirectThreshold + scoreMinThreshold) / 2; // Ponto médio dinâmico
+  
+  console.log('[calculateConfidenceScore] Usando thresholds:', {
+    direct: scoreDirectThreshold,
+    cautious: scoreCautious,
+    minimum: scoreMinThreshold,
+    strictMode: ragConfig?.strictMode ?? false
+  });
+  
   // 1. Verificar gatilhos de handoff imediato
   const immediateCheck = checkImmediateHandoff(query);
   if (immediateCheck.triggered) {
@@ -732,27 +818,32 @@ function calculateConfidenceScore(query: string, documents: RetrievedDocument[])
   
   score = Math.max(0, Math.min(1, score)); // Clamp 0-1
   
+  // 🆕 Modo Estrito: usar thresholds mais conservadores
+  const effectiveMinThreshold = ragConfig?.strictMode ? STRICT_SCORE_MINIMUM : scoreMinThreshold;
+  
   // 5. Determinar ação - NOVA LÓGICA: IA SEMPRE tenta responder
   // Handoff SÓ acontece se cliente pedir explicitamente (verificado separadamente)
   let action: 'direct' | 'cautious' | 'handoff';
   let reason: string;
   
-  if (score >= SCORE_DIRECT) {
+  if (score >= scoreDirectThreshold) {
     action = 'direct';
     reason = `Alta confiança (${(score * 100).toFixed(0)}%) - Resposta direta`;
-  } else if (score >= SCORE_CAUTIOUS) {
+  } else if (score >= scoreCautious) {
     action = 'cautious';
     reason = `Confiança média (${(score * 100).toFixed(0)}%) - Resposta com base na KB`;
-  } else if (documents.length > 0) {
-    // 🆕 MUDANÇA CRÍTICA: Se tem QUALQUER artigo, tenta responder com cautela
-    // NÃO faz handoff automático por score baixo
+  } else if (documents.length > 0 && score >= effectiveMinThreshold) {
+    // Se tem artigos e está acima do mínimo, tenta responder com cautela
     action = 'cautious';
     reason = `Baixa confiança (${(score * 100).toFixed(0)}%) mas encontrou ${documents.length} artigo(s) - tentando responder`;
+  } else if (ragConfig?.strictMode && score < effectiveMinThreshold) {
+    // 🆕 Modo Estrito: handoff se abaixo do threshold mínimo
+    action = 'handoff';
+    reason = `Modo Estrito: confiança (${(score * 100).toFixed(0)}%) abaixo do mínimo (${(effectiveMinThreshold * 100).toFixed(0)}%)`;
   } else {
-    // 🆕 Só marca handoff se NÃO tem NENHUM artigo na KB
-    // Mas mesmo assim, o handoff real só acontece se cliente PEDIR explicitamente
-    action = 'cautious'; // Mudado de 'handoff' para 'cautious' - IA tenta ajudar sempre
-    reason = `Nenhum artigo encontrado (${(score * 100).toFixed(0)}%) - Resposta genérica, oferecendo ajuda`;
+    // Modo normal: tenta ajudar sempre
+    action = 'cautious';
+    reason = `Confiança baixa (${(score * 100).toFixed(0)}%) - Resposta genérica, oferecendo ajuda`;
   }
   
   return {
@@ -760,7 +851,7 @@ function calculateConfidenceScore(query: string, documents: RetrievedDocument[])
     components: { retrieval: confRetrieval, coverage, conflicts },
     action,
     reason,
-    department: undefined // Removido handoff automático por departamento
+    department: undefined
   };
 }
 

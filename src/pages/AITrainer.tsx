@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { AITrainerStatsWidget } from "@/components/settings/AITrainerStatsWidget";
 import { KnowledgeSourcesWidget } from "@/components/settings/KnowledgeSourcesWidget";
 import { PersonaDataAccessWidget } from "@/components/settings/PersonaDataAccessWidget";
+import { RAGConfigurationCard } from "@/components/settings/RAGConfigurationCard";
 import { KnowledgeBrainStatus } from "@/components/KnowledgeBrainStatus";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 
@@ -133,10 +134,13 @@ export default function AITrainer() {
       {/* Knowledge Brain Status (Overview Stats) */}
       <KnowledgeBrainStatus />
 
+      {/* RAG Configuration Card - NEW! */}
+      <RAGConfigurationCard />
+
       {/* Knowledge Sources Widget */}
       <KnowledgeSourcesWidget />
 
-      {/* Persona Data Access Widget */}
+      {/* Persona Data Access Widget (Editable) */}
       <PersonaDataAccessWidget />
 
       {/* Model Selection Card */}
