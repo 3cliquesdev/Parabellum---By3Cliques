@@ -221,13 +221,63 @@ serve(async (req) => {
     );
 
     const body = await req.json();
-    const { conversationId, userMessage, flowId, manualTrigger } = body;
+    const { conversationId, userMessage, flowId, manualTrigger, contractViolation, violationReason, activateTransfer } = body;
     
     if (!conversationId) {
       return new Response(
         JSON.stringify({ useAI: true, reason: "No conversationId provided" }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // ============================================================
+    // 🆕 HANDLER ANTI-ESCAPE: Ativar TransferNode quando IA viola contrato
+    // A IA sinaliza contractViolation, o FLUXO decide a transferência
+    // ============================================================
+    if (contractViolation && activateTransfer) {
+      console.log('[process-chat-flow] ⚠️ Contract violation received - activating TransferNode');
+      console.log('[process-chat-flow] 📋 Violation reason:', violationReason);
+      
+      // Buscar dados da conversa para obter o channel
+      const { data: conversation } = await supabaseClient
+        .from('conversations')
+        .select('channel')
+        .eq('id', conversationId)
+        .maybeSingle();
+      
+      const transferMessage = 'Vou transferir você para um atendente humano.';
+      
+      // ✅ Fluxo é SOBERANO: Ele decide a transferência
+      // Atualizar conversa para waiting_human
+      const { error: updateError } = await supabaseClient
+        .from('conversations')
+        .update({ ai_mode: 'waiting_human' })
+        .eq('id', conversationId);
+      
+      if (updateError) {
+        console.error('[process-chat-flow] ❌ Error updating ai_mode:', updateError);
+      } else {
+        console.log('[process-chat-flow] ✅ ai_mode atualizado para waiting_human');
+      }
+      
+      // Inserir mensagem de transferência
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: transferMessage,
+        sender_type: 'user',
+        is_ai_generated: true,
+        channel: conversation?.channel || 'web_chat'
+      });
+      
+      console.log('[process-chat-flow] ✅ TransferNode ativado pelo fluxo (soberano)');
+      
+      return new Response(JSON.stringify({
+        useAI: false,
+        aiNodeActive: false,
+        transferActivated: true,
+        reason: violationReason || 'contract_violation',
+        message: 'TransferNode activated by flow (sovereign decision)'
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     console.log('[process-chat-flow] Processing:', { 
