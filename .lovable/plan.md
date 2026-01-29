@@ -1,255 +1,196 @@
 
-# Plano: Preservação de Contexto da Conversa Após Verificação de Identidade
+# Plano de Correção: Delay em WhatsApp (Meta e Evolution)
 
-## Problema Identificado
+## Diagnóstico
 
-A IA está perdendo o contexto original da conversa quando o cliente envia o email para verificação de identidade. No caso do screenshot:
+O plano anterior foi **parcialmente implementado**:
 
-1. Cliente queria falar sobre **cancelamento da assinatura Kiwify**
-2. IA pediu email para identificação
-3. Cliente enviou email: `marcrsil@msn.com`
-4. IA encontrou o cadastro, mas **PERDEU o contexto de cancelamento**
-5. Em vez de continuar sobre cancelamento, mostrou menu genérico: "1 - Pedidos, 2 - Sistema"
-
-### Causa Raiz (Técnica)
-
-No arquivo `supabase/functions/ai-autopilot-chat/index.ts`, quando o email é detectado e verificado (linhas 2375-2410):
-
-```typescript
-if (verifyResult.found) {
-  // ❌ PROBLEMA: Resposta HARDCODED ignora contexto original
-  foundMessage = `Encontrei seu cadastro, ${nome}! 🎉
-  
-Agora me diz: precisa de ajuda com:
-**1** - Pedidos
-**2** - Sistema`;
-
-  // Marca awaiting_menu_choice e RETORNA IMEDIATAMENTE
-  // ❌ NÃO considera o que o cliente PEDIU ANTES
-  return new Response(...);
-}
-```
-
-O sistema faz `RETURN EARLY` após verificar o email, sem:
-1. Capturar a intenção original (cancelamento, reembolso, saque, etc.)
-2. Passar essa intenção para a IA continuar a conversa
+| Componente | Status | Problema |
+|------------|--------|----------|
+| `useMessages.tsx` | ✅ Corrigido | Deduplicação com `processedIdsRef` + content matching |
+| `useInboxView.tsx` | ✅ Corrigido | Canal redundante removido |
+| `useSendMessageInstant.tsx` | ✅ Corrigido | Fire-and-forget + ACK explícito |
+| Notas internas | ✅ Corrigido | Usa `sendInstant` |
+| Web chat | ✅ Corrigido | Usa `sendInstant` |
+| **WhatsApp Meta** | ❌ NÃO CORRIGIDO | UI bloqueia aguardando edge function |
+| **WhatsApp Evolution** | ❌ NÃO CORRIGIDO | Usa `sendMessage.mutateAsync` (síncrono) |
 
 ---
 
-## Solução Proposta
+## Problema Técnico Detalhado
 
-### 1. Capturar e Salvar a Intenção Original
-
-Quando o cliente envia a primeira mensagem (ex: "Quero cancelar minha assinatura"), salvar essa intenção no `customer_metadata` da conversa.
-
-**Novo campo:** `original_intent`
-
-```typescript
-// Quando IA pede email, salvar intenção original
-customer_metadata: {
-  awaiting_email_for_handoff: true,
-  original_intent: customerMessage, // "Quero cancelar minha assinatura Kiwify"
-  original_intent_timestamp: new Date().toISOString()
-}
+### WhatsApp Meta (linhas 213-297)
+```
+1. Usuário clica "Enviar"
+2. await supabase.functions.invoke('send-meta-whatsapp')  ← BLOQUEIA 2-5s
+3. Edge function envia para Meta API
+4. Edge function salva no banco
+5. Edge function retorna
+6. FINALMENTE mensagem aparece  ← DELAY PERCEBIDO!
 ```
 
-### 2. Recuperar Contexto Após Verificação de Email
-
-Após verificar o email com sucesso, em vez de mostrar menu genérico, **continuar no contexto original**:
-
-```typescript
-if (verifyResult.found) {
-  const originalIntent = conversation.customer_metadata?.original_intent;
-  
-  if (originalIntent) {
-    // ✅ CONTINUAR NO CONTEXTO ORIGINAL
-    // Não mostrar menu genérico - deixar IA processar normalmente
-    // A IA já tem o histórico de mensagens incluindo a intenção
-    
-    // Atualizar contato como identificado
-    await supabaseClient.from('contacts').update({...});
-    
-    // NÃO retornar aqui - deixar fluxo normal da IA continuar
-    // com o contexto preservado
-  } else {
-    // Sem intenção prévia - mostrar menu de triagem
-    autoResponse = foundMessage;
-  }
-}
+### WhatsApp Evolution (linhas 298-373)
+```
+1. Usuário clica "Enviar"  
+2. await supabase.functions.invoke('send-whatsapp-message')  ← BLOQUEIA 1-3s
+3. Edge function envia para Evolution API
+4. await sendMessage.mutateAsync()  ← BLOQUEIA MAIS 500ms-1s
+5. FINALMENTE mensagem aparece  ← DELAY TOTAL: 2-4s!
 ```
 
-### 3. Melhorar o Histórico de Mensagens
+---
 
-Garantir que a IA sempre receba o histórico completo, incluindo a mensagem original sobre cancelamento, para que possa manter o contexto.
+## Solução: Padrão Otimista para WhatsApp
 
-### 4. Detectar Intenções Conhecidas
+### Arquitetura Proposta
 
-Criar padrões de detecção para intenções comuns que devem ser preservadas:
-
-| Padrão | Intenção |
-|--------|----------|
-| `cancelar`, `cancelamento`, `assinatura` | `cancellation` |
-| `reembolso`, `devolver`, `devolução` | `refund` |
-| `saque`, `sacar`, `carteira` | `withdrawal` |
-| `rastreio`, `entrega`, `pedido` | `tracking` |
+```
+1. Usuário clica "Enviar"
+2. sendInstant() → Mensagem aparece INSTANTANEAMENTE (status: sending)
+3. queueMicrotask: Enviar para WhatsApp em background
+4. Se sucesso → Atualizar status para "sent" + ACK
+5. Se falha → Marcar como "failed" + opção de retry
+```
 
 ---
 
 ## Alterações Necessárias
 
-### Arquivo: `supabase/functions/ai-autopilot-chat/index.ts`
+### 1. Expandir `useSendMessageInstant` para WhatsApp
 
-#### Alteração 1: Salvar intenção original quando pedir email
-
-```typescript
-// Na seção onde marca awaiting_email_for_handoff
-await supabaseClient.from('conversations').update({
-  customer_metadata: {
-    ...(conversation.customer_metadata || {}),
-    awaiting_email_for_handoff: true,
-    original_intent: customerMessage, // ← ADICIONAR
-    original_intent_category: detectIntentCategory(customerMessage), // ← ADICIONAR
-    handoff_blocked_at: new Date().toISOString(),
-  }
-}).eq('id', conversationId);
-```
-
-#### Alteração 2: Modificar fluxo após verificação de email bem-sucedida
-
-Em vez de mostrar menu genérico, verificar se há intenção original e deixar a IA continuar normalmente:
+Adicionar parâmetro `whatsappConfig` opcional:
 
 ```typescript
-if (verifyResult.found) {
-  const originalIntent = conversation.customer_metadata?.original_intent;
-  const intentCategory = conversation.customer_metadata?.original_intent_category;
-  
-  // Atualizar contato como identificado
-  await supabaseClient.from('contacts').update({...});
-  
-  // Limpar metadata de espera
-  delete updatedMetadata.awaiting_email_for_handoff;
-  delete updatedMetadata.original_intent; // Limpar após usar
-  
-  if (originalIntent) {
-    // ✅ PRESERVAR CONTEXTO: Continuar com intenção original
-    console.log('[ai-autopilot-chat] ✅ Recuperando contexto original:', originalIntent);
-    
-    // Mensagem de confirmação que mantém contexto
-    const contextAwareMessage = `Encontrei seu cadastro, ${nome}! ✅\n\nVocê mencionou sobre ${intentCategory === 'cancellation' ? 'cancelamento' : intentCategory === 'refund' ? 'reembolso' : intentCategory === 'withdrawal' ? 'saque' : 'sua dúvida'}. Vou te ajudar com isso agora!`;
-    
-    // Salvar mensagem de confirmação
-    await supabaseClient.from('messages').insert({...});
-    
-    // ❌ NÃO RETORNAR AQUI - deixar fluxo continuar para IA processar
-    // A IA já tem o histórico incluindo a mensagem original
-    
-  } else {
-    // Sem contexto prévio - mostrar menu de triagem
-    return new Response(JSON.stringify({
-      response: menuMessage,
-      ...
-    }));
-  }
+interface SendInstantParams {
+  conversationId: string;
+  content: string;
+  isInternal?: boolean;
+  channel?: string;
+  // NOVO: Config para WhatsApp
+  whatsappConfig?: {
+    provider: 'meta' | 'evolution';
+    instanceId: string;
+    phoneNumber: string;
+    media?: { type: string; url: string; filename?: string };
+  };
 }
 ```
 
-#### Alteração 3: Adicionar função de detecção de intenção
+Dentro do `queueMicrotask`, verificar se é WhatsApp e chamar a edge function correspondente ANTES de inserir no banco.
 
+### 2. Refatorar `SuperComposer.tsx`
+
+**Antes (Meta WhatsApp):**
 ```typescript
-function detectIntentCategory(message: string): string | null {
-  const msgLower = message.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  
-  // Cancelamento
-  if (/cancel|assinatura|desinscrever/.test(msgLower)) return 'cancellation';
-  
-  // Reembolso
-  if (/reembolso|devol|devolucao|trocar/.test(msgLower)) return 'refund';
-  
-  // Saque
-  if (/saque|sacar|carteira|saldo|pix/.test(msgLower)) return 'withdrawal';
-  
-  // Rastreio
-  if (/rastreio|entrega|pedido|envio/.test(msgLower)) return 'tracking';
-  
-  // Problema técnico
-  if (/erro|bug|nao funciona|problema/.test(msgLower)) return 'technical';
-  
-  return null; // Intenção genérica
-}
+// 10+ linhas de código síncrono que bloqueia
+const { data: metaResponse, error: metaError } = await supabase.functions.invoke(...);
 ```
 
----
-
-## Resultado Esperado
-
-### Antes (Problema Atual)
-
-```
-Cliente: Quero cancelar minha assinatura Kiwify
-IA: Para confirmar sua identidade, qual seu email?
-Cliente: marcrsil@msn.com
-IA: Encontrei seu cadastro, Marcos! 🎉
-    Agora me diz: precisa de ajuda com:
-    **1** - Pedidos  ← ❌ Perdeu contexto de cancelamento
-    **2** - Sistema
-```
-
-### Depois (Com a Correção)
-
-```
-Cliente: Quero cancelar minha assinatura Kiwify
-IA: Para confirmar sua identidade, qual seu email?
-Cliente: marcrsil@msn.com
-IA: Encontrei seu cadastro, Marcos! ✅
-    Você mencionou sobre cancelamento. Vou te ajudar com isso agora!
-    
-    Para cancelar sua assinatura Kiwify, siga estes passos:
-    1. Acesse sua conta na Kiwify
-    2. Vá em "Minhas Assinaturas"
-    3. Clique em "Cancelar"
-    ... ← ✅ Manteve contexto de cancelamento
+**Depois:**
+```typescript
+// 1 linha - instantâneo
+sentMessageId = sendInstant({
+  conversationId,
+  content: messageContent,
+  channel: 'whatsapp',
+  whatsappConfig: {
+    provider: 'meta',
+    instanceId: whatsappMetaInstanceId,
+    phoneNumber: contactPhone,
+  }
+});
 ```
 
----
+### 3. Edge Function: Não salvar mensagem no banco
 
-## Fluxo Visual
+A edge function `send-meta-whatsapp` atualmente salva a mensagem (linhas 344-355). Isso causa duplicação porque o frontend também salva via `sendInstant`.
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  CLIENTE ENVIA: "Quero cancelar minha assinatura"               │
-└────────────────────────┬────────────────────────────────────────┘
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  IA detecta: Cliente não identificado                           │
-│  ✅ SALVAR: original_intent = "Quero cancelar..."              │
-│  ✅ SALVAR: intent_category = "cancellation"                   │
-│  IA responde: "Qual seu email?"                                 │
-└────────────────────────┬────────────────────────────────────────┘
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  CLIENTE ENVIA: "marcrsil@msn.com"                              │
-└────────────────────────┬────────────────────────────────────────┘
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Sistema verifica email → ENCONTRADO ✅                         │
-│  ✅ RECUPERAR: original_intent = "Quero cancelar..."           │
-│  ✅ RECUPERAR: intent_category = "cancellation"                │
-│  IA responde com contexto: "Vou te ajudar com cancelamento!"    │
-│  ⏩ Continua fluxo normal da IA com contexto preservado        │
-└─────────────────────────────────────────────────────────────────┘
-```
+**Solução:** Passar flag `skip_db_save: true` quando o frontend já fez insert otimista, OU remover insert da edge function e deixar tudo no frontend.
+
+### 4. Fallback para erros
+
+Se edge function falhar:
+- Marcar mensagem como `status: 'failed'`
+- Salvar `delivery_error` no metadata
+- Mostrar botão "Tentar novamente" na UI
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Alterações |
-|---------|------------|
-| `supabase/functions/ai-autopilot-chat/index.ts` | Salvar `original_intent`, recuperar após verificação, função `detectIntentCategory` |
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useSendMessageInstant.tsx` | Adicionar suporte a WhatsApp (meta + evolution) |
+| `src/components/inbox/SuperComposer.tsx` | Usar `sendInstant` para todos os canais |
+| `supabase/functions/send-meta-whatsapp/index.ts` | Aceitar flag `skip_db_save` |
+| `supabase/functions/send-whatsapp-message/index.ts` | Aceitar flag `skip_db_save` |
 
-## Estimativa
+---
 
-- Complexidade: Média
-- Impacto: Alto (melhora significativa na experiência do usuário)
-- Regressão: Baixa (alterações isoladas no fluxo de verificação de email)
+## Fluxo Completo Proposto
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    FLUXO OTIMISTA PARA WHATSAPP                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  SuperComposer.tsx                                                      │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │  handleSend()                                                      │ │
+│  │                                                                    │ │
+│  │  // TODOS os canais usam sendInstant (instantâneo)                │ │
+│  │  sentMessageId = sendInstant({                                    │ │
+│  │    conversationId,                                                │ │
+│  │    content,                                                       │ │
+│  │    channel: 'whatsapp',                                          │ │
+│  │    whatsappConfig: { provider, instanceId, phoneNumber }         │ │
+│  │  });                                                              │ │
+│  │                                                                    │ │
+│  │  setMessage('');  // Limpa input IMEDIATAMENTE                    │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+│                            │                                            │
+│                            ▼                                            │
+│  useSendMessageInstant.tsx                                              │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │  sendInstant()                                                     │ │
+│  │                                                                    │ │
+│  │  1. localId = crypto.randomUUID()                                 │ │
+│  │  2. queryClient.setQueryData() → Mensagem aparece INSTANTANEAMENTE│ │
+│  │  3. queueMicrotask(async () => {                                  │ │
+│  │       if (whatsappConfig) {                                       │ │
+│  │         // Enviar para WhatsApp PRIMEIRO (não bloqueia UI)        │ │
+│  │         await supabase.functions.invoke('send-meta-whatsapp', {   │ │
+│  │           body: { ...whatsappConfig, skip_db_save: true }         │ │
+│  │         });                                                       │ │
+│  │       }                                                           │ │
+│  │       // Depois persistir no banco                                │ │
+│  │       await supabase.from('messages').insert({...});              │ │
+│  │       // Atualizar status para 'sent'                             │ │
+│  │     });                                                           │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Métricas de Sucesso
+
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Latência WhatsApp Meta | 2-5 segundos | <100ms |
+| Latência WhatsApp Evolution | 2-4 segundos | <100ms |
+| Latência web_chat | <50ms | <50ms (sem mudança) |
+| Latência notas internas | <50ms | <50ms (sem mudança) |
+
+---
+
+## Testes Recomendados
+
+Após implementação:
+
+1. **WhatsApp Meta**: Enviar mensagem e verificar que input limpa instantaneamente
+2. **WhatsApp Evolution**: Mesmo teste
+3. **Verificar duplicação**: Enviar 5 mensagens rápidas, verificar zero duplicatas
+4. **Teste de falha**: Desconectar WiFi antes de enviar, verificar que mostra "failed"
+5. **Console logs**: Verificar timestamps de latência no log `[SendInstant]`
