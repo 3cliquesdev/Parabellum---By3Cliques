@@ -161,6 +161,7 @@ serve(async (req) => {
         }
 
         // Determinar novo assigned_to
+        // 🆕 ROUND-ROBIN POR DEPARTAMENTO - Ignora sobrecarga, distribui uniformemente
         let newAssignedTo: string | null = null;
         let newAiMode = "copilot";
 
@@ -173,9 +174,11 @@ serve(async (req) => {
             newAiMode = "autopilot";
             break;
           case "auto":
+            // Round-robin simples entre agentes online
             if (onlineAgents.length > 0) {
               newAssignedTo = onlineAgents[agentIndex % onlineAgents.length];
               agentIndex++;
+              console.log(`[bulk-redistribute] Round-robin auto: assigned to agent ${agentIndex} of ${onlineAgents.length}`);
             } else {
               // Se não há agentes online, vai para pool
               newAssignedTo = null;
@@ -183,11 +186,20 @@ serve(async (req) => {
             }
             break;
           case "department":
-            if (departmentOnlineAgents.length > 0) {
+            // 🆕 ROUND-ROBIN PURO POR DEPARTAMENTO
+            // Se tem 1 agente, ele recebe tudo
+            // Se tem 2+, distribui em round-robin sem considerar sobrecarga
+            if (departmentOnlineAgents.length === 1) {
+              // Único agente no departamento - recebe todas
+              newAssignedTo = departmentOnlineAgents[0];
+              console.log(`[bulk-redistribute] Single agent in department receives all`);
+            } else if (departmentOnlineAgents.length > 1) {
+              // 2+ agentes - round-robin rotativo
               newAssignedTo = departmentOnlineAgents[agentIndex % departmentOnlineAgents.length];
               agentIndex++;
+              console.log(`[bulk-redistribute] Round-robin department: agent ${agentIndex % departmentOnlineAgents.length + 1} of ${departmentOnlineAgents.length}`);
             } else {
-              // Se não há agentes online no departamento, vai para pool
+              // Nenhum agente online no departamento - vai para pool
               newAssignedTo = null;
               newAiMode = "autopilot";
               console.log("[bulk-redistribute] No online agents in department, sending to pool");

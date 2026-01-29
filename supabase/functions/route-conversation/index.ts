@@ -585,32 +585,51 @@ serve(async (req) => {
     if (onlineAgents && onlineAgents.length > 0) {
       console.log('[route-conversation] Found online agents:', onlineAgents.length);
 
-      // Contar conversas abertas por agente
-      const agentLoads = await Promise.all(
-        onlineAgents.map(async (agent) => {
-          const { count } = await supabase
-            .from('conversations')
-            .select('*', { count: 'exact', head: true })
-            .eq('assigned_to', agent.id)
-            .eq('status', 'open');
+      // 🆕 ROUND-ROBIN PURO POR DEPARTAMENTO (sem considerar sobrecarga)
+      // Se tem 1 agente no departamento, ele recebe tudo
+      // Se tem 2+ agentes, distribui em round-robin rotativo
+      
+      let selectedAgent: any;
+      
+      if (onlineAgents.length === 1) {
+        // Apenas 1 agente no departamento - recebe todas as conversas
+        selectedAgent = onlineAgents[0];
+        console.log(`[route-conversation] 🎯 SINGLE AGENT MODE: ${selectedAgent.full_name} receives all conversations for this department`);
+      } else {
+        // 2+ agentes - Round-robin puro baseado no último atribuído
+        console.log(`[route-conversation] 🔄 ROUND-ROBIN MODE: ${onlineAgents.length} agents in department`);
+        
+        // Buscar última conversa atribuída neste departamento para determinar próximo agente
+        const { data: lastAssigned } = await supabase
+          .from('conversations')
+          .select('assigned_to')
+          .eq('status', 'open')
+          .eq('department', resolvedDepartmentId)
+          .not('assigned_to', 'is', null)
+          .order('last_message_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        // Encontrar índice do último agente atribuído
+        let lastAgentIndex = -1;
+        if (lastAssigned?.assigned_to) {
+          lastAgentIndex = onlineAgents.findIndex(a => a.id === lastAssigned.assigned_to);
+        }
+        
+        // Próximo agente no round-robin (circular)
+        const nextIndex = (lastAgentIndex + 1) % onlineAgents.length;
+        selectedAgent = onlineAgents[nextIndex];
+        
+        console.log(`[route-conversation] 🔄 Last assigned: ${lastAssigned?.assigned_to || 'none'} (index ${lastAgentIndex})`);
+        console.log(`[route-conversation] 🔄 Next agent: ${selectedAgent.full_name} (index ${nextIndex})`);
+      }
 
-          return {
-            ...agent,
-            open_conversations: count || 0
-          };
-        })
-      );
-
-      // Ordenar por carga (menos conversas primeiro)
-      agentLoads.sort((a, b) => a.open_conversations - b.open_conversations);
-      const selectedAgent = agentLoads[0];
-
-      console.log(`[route-conversation] ✅ ${routingStrategy === 'skill_based' ? 'SKILL-BASED ROUTING' : 'DEPARTMENT-BASED LOAD BALANCING'} - Assigning to:`, {
+      console.log(`[route-conversation] ✅ ${routingStrategy === 'skill_based' ? 'SKILL-BASED' : 'DEPARTMENT ROUND-ROBIN'} - Assigning to:`, {
         agent: selectedAgent.full_name,
-        current_load: selectedAgent.open_conversations,
-        routing_strategy: routingStrategy,
+        routing_strategy: 'round_robin_by_department',
         required_skill: requiredSkillName || 'none',
         department: resolvedDepartmentName || 'none',
+        agents_in_department: onlineAgents.length,
         allowed_roles: allowedRoles
       });
 
@@ -622,7 +641,7 @@ serve(async (req) => {
         ? 'waiting_human'
         : 'copilot';
 
-      // Atribuir ao agente com menos carga
+      // Atribuir ao agente selecionado via round-robin
       const { error: updateError } = await supabase
         .from('conversations')
         .update({ 
@@ -654,8 +673,8 @@ serve(async (req) => {
           success: true,
           assigned_to: selectedAgent.id,
           agent_name: selectedAgent.full_name,
-          assignment_type: routingStrategy,
-          current_load: selectedAgent.open_conversations,
+          assignment_type: 'round_robin_by_department',
+          agents_in_department: onlineAgents.length,
           required_skill: requiredSkillName || null,
           department: resolvedDepartmentName || null,
           message: `Conversa atribuída a ${selectedAgent.full_name}${requiredSkillName ? ` (Skill: ${requiredSkillName})` : ''}`
