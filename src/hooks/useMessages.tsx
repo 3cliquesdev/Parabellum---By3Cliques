@@ -10,6 +10,9 @@ type MessageInsert = TablesInsert<"messages">;
 export function useMessages(conversationId: string | null) {
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  
+  // 🛡️ PROTEÇÃO ANTI-DUPLICAÇÃO: Rastrear IDs já processados (30s window)
+  const processedIdsRef = useRef(new Set<string>());
 
   const query = useQuery({
     queryKey: ["messages", conversationId],
@@ -77,12 +80,24 @@ export function useMessages(conversationId: string | null) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         async (payload) => {
-          console.log("[Realtime] Message changed:", payload.eventType, payload.new);
           const newMessage = payload.new as Message;
           const oldMessage = payload.old as Message;
           
+          // 🛡️ PROTEÇÃO 1: Ignorar se já processado nesta sessão
+          if (payload.eventType === 'INSERT' && processedIdsRef.current.has(newMessage.id)) {
+            console.log('[Realtime] ⏭️ ID já processado, ignorando:', newMessage.id);
+            return;
+          }
+          
+          // Marcar como processado (limpar após 30s)
+          if (payload.eventType === 'INSERT') {
+            processedIdsRef.current.add(newMessage.id);
+            setTimeout(() => processedIdsRef.current.delete(newMessage.id), 30000);
+          }
+          
+          console.log("[Realtime] Message changed:", payload.eventType, newMessage?.id);
+          
           // ✨ MERGE OTIMISTA - Sem refetch, atualiza cache diretamente
-          // CORREÇÃO CRÍTICA: Usar apenas ID para matching, não content (evita troca de mensagens)
           if (payload.eventType === 'INSERT') {
             queryClient.setQueryData(
               ["messages", conversationId],
@@ -102,13 +117,29 @@ export function useMessages(conversationId: string | null) {
                   return updated;
                 }
                 
-                // 2. Verificar duplicata por external_id (wamid) - PREVENÇÃO DE DUPLICATAS META
+                // 🛡️ PROTEÇÃO 2: Verificar mensagem pendente com mesmo conteúdo (race condition)
+                const pendingMatch = old.find(m => 
+                  (m.status === 'sending' || m.status === 'streaming') &&
+                  m.content === newMessage.content &&
+                  Math.abs(new Date(m.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 5000
+                );
+                
+                if (pendingMatch) {
+                  console.log('[Realtime] Reconciliando mensagem pendente:', pendingMatch.id, '→', newMessage.id);
+                  return old.map(m => 
+                    m.id === pendingMatch.id 
+                      ? { ...m, ...newMessage, status: 'sent' } 
+                      : m
+                  );
+                }
+                
+                // 3. Verificar duplicata por external_id (wamid)
                 if (newMessage.external_id && old.some(m => m.external_id === newMessage.external_id)) {
                   console.log('[Realtime] Ignorando duplicata por external_id:', newMessage.external_id);
                   return old;
                 }
                 
-                // 3. Nova mensagem (outro usuário/cliente, ou compatibilidade com envios legados)
+                // 4. Nova mensagem (outro usuário/cliente)
                 console.log('[Realtime] Nova mensagem:', newMessage.id);
                 return [...old, { ...newMessage, status: 'sent' }];
               }
@@ -191,10 +222,13 @@ export function useMessages(conversationId: string | null) {
     channelRef.current = channel;
 
     return () => {
+      console.log(`[Realtime] 🧹 Cleanup: Removing channel messages-realtime-${conversationId}`);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
+      // Limpar processedIds para esta conversa
+      processedIdsRef.current.clear();
     };
   }, [conversationId, queryClient]);
 

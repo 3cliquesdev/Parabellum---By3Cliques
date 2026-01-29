@@ -31,8 +31,19 @@ export function useSendMessageInstant() {
   const sendInstant = useCallback((params: SendInstantParams): string => {
     const { conversationId, content, isInternal = false, channel = 'web_chat' } = params;
     
+    // 📊 OBSERVABILIDADE: Timestamp para medir latência
+    const t0 = performance.now();
+    
     // 1. INSTANTÂNEO: Gerar UUID local (será usado como ID real no banco)
     const localId = crypto.randomUUID();
+    
+    console.log('[SendInstant] 📤 Enviando:', {
+      t0_ms: Math.round(t0),
+      messageId: localId,
+      conversationId: conversationId.slice(0, 8),
+      contentLength: content.length,
+      isInternal,
+    });
     
     const optimisticMessage = {
       id: localId,
@@ -89,6 +100,7 @@ export function useSendMessageInstant() {
     // Isso garante que a UI seja atualizada ANTES da operação de rede
     // CORREÇÃO: Usar um tracking_id para garantir matching correto
     queueMicrotask(async () => {
+      const t1 = performance.now();
       try {
         // Capturar o content EXATO no momento do envio (closure segura)
         const contentToSend = content;
@@ -110,15 +122,32 @@ export function useSendMessageInstant() {
           .single();
 
         if (insertError) throw insertError;
+        
+        const t2 = performance.now();
 
-        // CORREÇÃO: Substituir mensagem otimista por ID local (não por content)
-        // Isso evita race conditions quando múltiplas mensagens são enviadas
+        // ✅ ACK EXPLÍCITO: Atualizar cache com dados confirmados + metadata
         queryClient.setQueryData(
           ["messages", conversationId],
           (old: any[] = []) => old.map(m => 
-            m.id === localId ? { ...m, ...insertedMessage, status: 'sent' } : m
+            m.id === localId ? { 
+              ...m, 
+              ...insertedMessage, 
+              status: 'sent',
+              // ACK metadata para debugging
+              _ack: { 
+                timestamp: new Date().toISOString(),
+                messageId: insertedMessage.id,
+                dbLatency_ms: Math.round(t2 - t1),
+              }
+            } : m
           )
         );
+        
+        console.log('[SendInstant] ✅ Persistido:', {
+          messageId: localId,
+          dbLatency_ms: Math.round(t2 - t1),
+          totalLatency_ms: Math.round(t2 - t0),
+        });
 
         // Update last_message_at (também em background, não bloqueia)
         if (!isInternal) {
@@ -132,7 +161,12 @@ export function useSendMessageInstant() {
         }
 
       } catch (error) {
-        console.error('[SendInstant] Background persistence failed:', error);
+        const t2 = performance.now();
+        console.error('[SendInstant] ❌ Falha:', {
+          messageId: localId,
+          error: error instanceof Error ? error.message : 'Unknown',
+          latency_ms: Math.round(t2 - t1),
+        });
         
         // Marcar como falhou no cache
         queryClient.setQueryData(

@@ -350,60 +350,10 @@ export function useInboxView(filters?: InboxFilters) {
         }
       });
 
-    // ✨ Canal 2: messages para update INSTANTÂNEO do snippet (sem esperar trigger de inbox_view)
-    const messagesChannel = supabase
-      .channel("inbox-messages-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-        },
-        (payload) => {
-          const newMsg = payload.new as any;
-          if (!newMsg?.conversation_id) return;
-          
-          console.log("[Realtime] Message INSERT - updating snippet instantly:", newMsg.conversation_id);
-          
-          // Update inline do snippet IMEDIATAMENTE (antes do trigger de inbox_view)
-          queryClient.setQueriesData<InboxViewItem[]>(
-            { queryKey: ["inbox-view"], exact: false },
-            (prev = []) => {
-              // Verificar se a conversa já existe no cache
-              const existingIndex = prev.findIndex(item => item.conversation_id === newMsg.conversation_id);
-              
-              if (existingIndex === -1) {
-                // 🆕 NOVA CONVERSA - Fazer refetch para obter dados completos
-                console.log("[Realtime] Nova conversa detectada via mensagem - forçando refetch");
-                queryClient.invalidateQueries({ queryKey: ["inbox-view"], exact: false });
-                return prev;
-              }
-              
-              const updated = prev.map(item => 
-                item.conversation_id === newMsg.conversation_id 
-                  ? { 
-                      ...item, 
-                      last_snippet: newMsg.content?.slice(0, 100) || '',
-                      last_message_at: newMsg.created_at,
-                      last_sender_type: newMsg.sender_type,
-                      last_channel: newMsg.channel || 'web_chat',
-                      unread_count: newMsg.sender_type === 'contact' 
-                        ? (item.unread_count || 0) + 1 
-                        : item.unread_count,
-                      updated_at: new Date().toISOString(),
-                    } 
-                  : item
-              );
-              // Ordenar por prioridade (mais antigas primeiro)
-              return sortInboxItemsByPriority(updated);
-            }
-          );
-        }
-      )
-      .subscribe((status) => {
-        console.log("[Realtime] messages subscription status:", status);
-      });
+    // ❌ REMOVIDO: Canal messages redundante
+    // O useMessages.tsx já atualiza o inbox-view via setQueriesData no handler de INSERT
+    // Manter este canal duplicava o processamento e causava mensagens duplicadas
+    // Ref: Plano de Correção - Chat Instantâneo sem Duplicações
 
     // 🆕 Canal 3: conversations para detectar NOVAS conversas imediatamente
     const conversationsChannel = supabase
@@ -473,9 +423,9 @@ export function useInboxView(filters?: InboxFilters) {
       });
 
     return () => {
-      console.log("[Realtime] Removing inbox_view + messages + conversations channels");
+      console.log("[Realtime] Removing inbox_view + conversations channels");
       supabase.removeChannel(inboxChannel);
-      supabase.removeChannel(messagesChannel);
+      // messagesChannel foi removido - redundante com useMessages.tsx
       supabase.removeChannel(conversationsChannel);
     };
   }, [queryClient, user?.id]); // APENAS user?.id como dependência - refs mantêm valores atuais
