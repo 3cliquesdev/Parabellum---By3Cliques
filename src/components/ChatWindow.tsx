@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign, Ticket } from "lucide-react";
+import { Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign, Ticket, PanelRightClose, PanelRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
 import { useSendMessageInstant } from "@/hooks/useSendMessageInstant";
@@ -66,9 +66,11 @@ type Conversation = Tables<"conversations"> & {
 
 interface ChatWindowProps {
   conversation: Conversation | null;
+  isContactPanelOpen?: boolean;
+  onToggleContactPanel?: () => void;
 }
 
-export default function ChatWindow({ conversation }: ChatWindowProps) {
+export default function ChatWindow({ conversation, isContactPanelOpen = true, onToggleContactPanel }: ChatWindowProps) {
   const [message, setMessage] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [isEmailMode, setIsEmailMode] = useState(false);
@@ -474,6 +476,23 @@ export default function ChatWindow({ conversation }: ChatWindowProps) {
                     className="h-7 w-7"
                   >
                     {isEmailMode ? <MessageCircle className="h-3.5 w-3.5" /> : <Mail className="h-3.5 w-3.5" />}
+                  </Button>
+                )}
+                
+                {/* Toggle Contact Panel */}
+                {onToggleContactPanel && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onToggleContactPanel}
+                    title={isContactPanelOpen ? "Ocultar painel do contato" : "Mostrar painel do contato"}
+                    className="h-7 w-7"
+                  >
+                    {isContactPanelOpen ? (
+                      <PanelRightClose className="h-3.5 w-3.5" />
+                    ) : (
+                      <PanelRight className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 )}
               </div>

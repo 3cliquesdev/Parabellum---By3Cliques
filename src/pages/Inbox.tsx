@@ -17,7 +17,7 @@ import { InboxBulkDistributeDialog } from "@/components/inbox/InboxBulkDistribut
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, User, CheckSquare, X, PanelRightClose, PanelRight } from "lucide-react";
+import { ArrowLeft, User, CheckSquare, X } from "lucide-react";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
 import { useBulkReactivateAI } from "@/hooks/useBulkReactivateAI";
 import { useBulkCloseConversations } from "@/hooks/useBulkCloseConversations";
@@ -505,23 +505,12 @@ export default function Inbox() {
       </div>
       
       {/* Chat Window - expands to fill remaining space */}
-      <div className="flex-1 min-w-0 border-r border-border relative" data-tour="inbox-chat-area">
-        <ChatWindow conversation={activeConversation} />
-        
-        {/* Toggle Button for Contact Panel */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsContactPanelOpen(!isContactPanelOpen)}
-          className="absolute top-2 right-2 h-8 w-8 z-10 bg-background/80 hover:bg-background border border-border shadow-sm"
-          title={isContactPanelOpen ? "Ocultar painel do contato" : "Mostrar painel do contato"}
-        >
-          {isContactPanelOpen ? (
-            <PanelRightClose className="h-4 w-4" />
-          ) : (
-            <PanelRight className="h-4 w-4" />
-          )}
-        </Button>
+      <div className="flex-1 min-w-0 border-r border-border" data-tour="inbox-chat-area">
+        <ChatWindow 
+          conversation={activeConversation} 
+          isContactPanelOpen={isContactPanelOpen}
+          onToggleContactPanel={() => setIsContactPanelOpen(!isContactPanelOpen)}
+        />
       </div>
       
       {/* Contact Details - fixed width, collapsible */}
