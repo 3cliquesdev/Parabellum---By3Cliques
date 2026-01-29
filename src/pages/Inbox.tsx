@@ -435,7 +435,8 @@ export default function Inbox() {
           </div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-muted-foreground">
-              {orderedConversations.length} de {counts?.total || 0} conversa{(counts?.total || 0) !== 1 ? 's' : ''}
+              {/* Total vem das conversas carregadas, não do useInboxCounts que pode ter cache diferente */}
+              {orderedConversations.length} de {filteredConversations.length} conversa{filteredConversations.length !== 1 ? 's' : ''}
               {filters.waitingTime && filters.waitingTime !== 'all' && filters.waitingTime !== 'newest' && filters.waitingTime !== 'oldest' && (
                 <span className="ml-1 text-warning">
                   (filtrado por tempo)
