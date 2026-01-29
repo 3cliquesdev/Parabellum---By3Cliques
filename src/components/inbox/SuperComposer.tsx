@@ -201,17 +201,15 @@ export function SuperComposer({
     try {
       let sentMessageId: string | null = null;
 
-      // Internal note - just save to database
+      // Internal note - INSTANT send (fire-and-forget) para eliminar delay
       if (isInternal) {
-        const result = await sendMessage.mutateAsync({
-          conversation_id: conversationId,
+        sentMessageId = sendInstant({
+          conversationId,
           content: messageContent,
-          sender_type: "user",
-          sender_id: user?.id || null,
-          status: 'sent',
-          is_internal: true,
+          isInternal: true,
+          channel: 'web_chat',
         });
-        sentMessageId = result?.id || null;
+        // Input limpa imediatamente - não bloqueia!
       } else if (whatsappProvider === 'meta' && whatsappMetaInstanceId && contactPhone) {
         // Meta WhatsApp Cloud API
         try {
