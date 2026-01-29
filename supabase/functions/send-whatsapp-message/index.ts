@@ -16,6 +16,7 @@ interface SendWhatsAppRequest {
   conversation_id?: string; // Para vincular à conversa na fila
   priority?: number;       // 1-10 (1 = urgente, default = 5)
   use_queue?: boolean;     // Se true, usa fila. Default = true para rate limiting
+  skip_db_save?: boolean;  // 🆕 Se true, não salva no banco (frontend faz insert otimista)
   // 🆕 Suporte a Mídia
   media_url?: string;      // URL pública do arquivo (signed URL do storage)
   media_type?: 'image' | 'audio' | 'video' | 'document';
