@@ -350,10 +350,55 @@ export function useInboxView(filters?: InboxFilters) {
         }
       });
 
-    // ❌ REMOVIDO: Canal messages redundante
-    // O useMessages.tsx já atualiza o inbox-view via setQueriesData no handler de INSERT
-    // Manter este canal duplicava o processamento e causava mensagens duplicadas
-    // Ref: Plano de Correção - Chat Instantâneo sem Duplicações
+    // 🆕 Canal 2: messages GLOBAL para atualizar snippet e unread_count de TODAS as conversas
+    // IMPORTANTE: Isso NÃO duplica mensagens no chat - apenas atualiza o preview na sidebar
+    // O useMessages.tsx cuida das mensagens na conversa ATIVA
+    const messagesChannel = supabase
+      .channel("inbox-messages-global-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        (payload) => {
+          const newMessage = payload.new as any;
+          if (!newMessage?.conversation_id) return;
+          
+          console.log("[Realtime] 📩 Nova mensagem global:", newMessage.id?.slice(0, 8), "conv:", newMessage.conversation_id?.slice(0, 8));
+          
+          // Atualizar snippet inline em TODAS as query keys de inbox-view
+          queryClient.setQueriesData<InboxViewItem[]>(
+            { queryKey: ["inbox-view"], exact: false },
+            (prev = []) => {
+              const updated = prev.map(item => 
+                item.conversation_id === newMessage.conversation_id 
+                  ? { 
+                      ...item, 
+                      last_snippet: newMessage.content?.slice(0, 100) || '',
+                      last_message_at: newMessage.created_at,
+                      last_sender_type: newMessage.sender_type,
+                      last_channel: newMessage.channel || 'web_chat',
+                      // Incrementar unread_count APENAS para mensagens de clientes
+                      unread_count: newMessage.sender_type === 'contact' 
+                        ? (item.unread_count || 0) + 1 
+                        : item.unread_count,
+                      updated_at: newMessage.created_at,
+                    } 
+                  : item
+              );
+              return sortInboxItemsByPriority(updated);
+            }
+          );
+          
+          // Invalidar counts para atualizar badges
+          queryClient.invalidateQueries({ queryKey: ["inbox-counts"], exact: false });
+        }
+      )
+      .subscribe((status) => {
+        console.log("[Realtime] messages global subscription status:", status);
+      });
 
     // 🆕 Canal 3: conversations para detectar NOVAS conversas imediatamente
     const conversationsChannel = supabase
@@ -423,9 +468,9 @@ export function useInboxView(filters?: InboxFilters) {
       });
 
     return () => {
-      console.log("[Realtime] Removing inbox_view + conversations channels");
+      console.log("[Realtime] Removing inbox_view + messages + conversations channels");
       supabase.removeChannel(inboxChannel);
-      // messagesChannel foi removido - redundante com useMessages.tsx
+      supabase.removeChannel(messagesChannel);
       supabase.removeChannel(conversationsChannel);
     };
   }, [queryClient, user?.id]); // APENAS user?.id como dependência - refs mantêm valores atuais
