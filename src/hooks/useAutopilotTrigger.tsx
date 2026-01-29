@@ -1,20 +1,52 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAIStreamResponse } from './useAIStreamResponse';
 
 /**
  * Hook que automaticamente dispara resposta da IA quando cliente envia mensagem
- * em conversas no modo Autopilot (fallback caso webhook não funcione)
+ * em conversas no modo Autopilot
  * 
- * OTIMIZAÇÃO: Cache do ai_mode para evitar query a cada mensagem
+ * UPGRADE v2: Usa streaming SSE para latência <1s (vs 5-20s síncrono)
+ * - web_chat: usa streaming via ai-chat-stream
+ * - whatsapp: continua usando ai-autopilot-chat (não suporta SSE)
  */
 export function useAutopilotTrigger(conversationId: string | null) {
   // 🛡️ PROTEÇÃO ANTI-LOOP: Rastrear mensagens já processadas
   const processedMessageIds = useRef(new Set<string>());
   const lastTriggerRef = useRef<number>(0);
   
-  // ✅ OTIMIZAÇÃO: Cache do ai_mode para evitar query repetida
-  const aiModeCache = useRef<{ mode: string | null; fetchedAt: number } | null>(null);
-  const AI_MODE_CACHE_TTL = 10000; // 10 segundos de cache (reduced from 60s to prevent stale mode issues)
+  // ✅ OTIMIZAÇÃO: Cache do ai_mode e channel para evitar query repetida
+  const conversationCache = useRef<{ 
+    mode: string | null; 
+    channel: string | null;
+    fetchedAt: number 
+  } | null>(null);
+  const CACHE_TTL = 10000; // 10 segundos
+
+  // 🚀 Hook de streaming para web_chat
+  const { triggerStream, isStreaming } = useAIStreamResponse(conversationId);
+
+  // Callback para trigger síncrono (WhatsApp)
+  const triggerSyncAutopilot = useCallback(async (customerMessage: string) => {
+    if (!conversationId) return;
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-autopilot-chat', {
+        body: {
+          conversationId,
+          customerMessage
+        }
+      });
+
+      if (error) {
+        console.error('[useAutopilotTrigger] Error invoking AI:', error);
+      } else {
+        console.log('[useAutopilotTrigger] AI response triggered successfully:', data);
+      }
+    } catch (err) {
+      console.error('[useAutopilotTrigger] Exception triggering AI:', err);
+    }
+  }, [conversationId]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -22,7 +54,7 @@ export function useAutopilotTrigger(conversationId: string | null) {
     console.log('[useAutopilotTrigger] Monitoring conversation:', conversationId);
     
     // Limpar cache quando conversationId mudar
-    aiModeCache.current = null;
+    conversationCache.current = null;
 
     const channel = supabase
       .channel(`autopilot-trigger-${conversationId}`)
@@ -39,7 +71,8 @@ export function useAutopilotTrigger(conversationId: string | null) {
           
           console.log('[useAutopilotTrigger] New message detected:', {
             id: newMessage.id,
-            sender_type: newMessage.sender_type
+            sender_type: newMessage.sender_type,
+            channel: newMessage.channel
           });
           
           // 🛡️ PROTEÇÃO 1: Não processar mensagens já processadas
@@ -61,7 +94,7 @@ export function useAutopilotTrigger(conversationId: string | null) {
             return;
           }
 
-          // ✅ FASE 1: Ignorar mensagens WhatsApp (já processadas pelo handle-whatsapp-event)
+          // ✅ Ignorar mensagens WhatsApp (já processadas pelo handle-whatsapp-event)
           if (newMessage.channel === 'whatsapp') {
             console.log('[useAutopilotTrigger] Ignorando mensagem WhatsApp - processada pelo backend');
             return;
@@ -76,18 +109,19 @@ export function useAutopilotTrigger(conversationId: string | null) {
             processedMessageIds.current.delete(newMessage.id);
           }, 60000);
 
-          // ✅ OTIMIZAÇÃO: Usar cache do ai_mode se disponível e válido
+          // ✅ OTIMIZAÇÃO: Usar cache se disponível e válido
           let aiMode: string | null = null;
+          let convChannel: string | null = null;
           
-          if (aiModeCache.current && (now - aiModeCache.current.fetchedAt) < AI_MODE_CACHE_TTL) {
-            // Usar cache
-            aiMode = aiModeCache.current.mode;
-            console.log('[useAutopilotTrigger] Using cached ai_mode:', aiMode);
+          if (conversationCache.current && (now - conversationCache.current.fetchedAt) < CACHE_TTL) {
+            aiMode = conversationCache.current.mode;
+            convChannel = conversationCache.current.channel;
+            console.log('[useAutopilotTrigger] Using cached data:', { aiMode, convChannel });
           } else {
             // Buscar do banco
             const { data: conv, error } = await supabase
               .from('conversations')
-              .select('ai_mode')
+              .select('ai_mode, channel')
               .eq('id', conversationId)
               .single();
 
@@ -97,30 +131,23 @@ export function useAutopilotTrigger(conversationId: string | null) {
             }
 
             aiMode = conv?.ai_mode || null;
+            convChannel = conv?.channel || 'web_chat';
             // Atualizar cache
-            aiModeCache.current = { mode: aiMode, fetchedAt: now };
-            console.log('[useAutopilotTrigger] Fetched and cached ai_mode:', aiMode);
+            conversationCache.current = { mode: aiMode, channel: convChannel, fetchedAt: now };
+            console.log('[useAutopilotTrigger] Fetched and cached:', { aiMode, convChannel });
           }
 
           // Trigger autopilot
           if (aiMode === 'autopilot') {
-            console.log('[useAutopilotTrigger] Triggering AI response...');
+            console.log('[useAutopilotTrigger] 🚀 Triggering AI response...');
             
-            try {
-              const { data, error: invokeError } = await supabase.functions.invoke('ai-autopilot-chat', {
-                body: {
-                  conversationId,
-                  customerMessage: newMessage.content
-                }
-              });
-
-              if (invokeError) {
-                console.error('[useAutopilotTrigger] Error invoking AI:', invokeError);
-              } else {
-                console.log('[useAutopilotTrigger] AI response triggered successfully:', data);
-              }
-            } catch (err) {
-              console.error('[useAutopilotTrigger] Exception triggering AI:', err);
+            // 🚀 UPGRADE: Usar streaming para web_chat, síncrono para outros canais
+            if (convChannel === 'web_chat') {
+              console.log('[useAutopilotTrigger] ⚡ Using SSE streaming for web_chat');
+              triggerStream(newMessage.content);
+            } else {
+              console.log('[useAutopilotTrigger] 📡 Using sync mode for:', convChannel);
+              triggerSyncAutopilot(newMessage.content);
             }
           }
         }
@@ -131,5 +158,7 @@ export function useAutopilotTrigger(conversationId: string | null) {
       console.log('[useAutopilotTrigger] Cleaning up subscription');
       supabase.removeChannel(channel);
     };
-  }, [conversationId]);
+  }, [conversationId, triggerStream, triggerSyncAutopilot]);
+
+  return { isStreaming };
 }

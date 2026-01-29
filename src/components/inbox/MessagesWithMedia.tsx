@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from "react";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { InternalNoteMessage } from "@/components/InternalNoteMessage";
+import { StreamingMessage } from "@/components/inbox/StreamingMessage";
 import { useMediaUrls } from "@/hooks/useMediaUrls";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -198,12 +199,23 @@ export function MessagesWithMedia({
         if (isSystem) {
           return (
             <div key={message.id} className="flex justify-center py-3">
-              <div className="bg-slate-200/50 dark:bg-zinc-800/50 px-4 py-2 rounded-full">
-                <p className="text-xs text-slate-600 dark:text-zinc-400 text-center">
+              <div className="bg-muted/50 px-4 py-2 rounded-full">
+                <p className="text-xs text-muted-foreground text-center">
                   📢 {message.content}
                 </p>
               </div>
             </div>
+          );
+        }
+
+        // 🚀 Renderizar mensagem em streaming (IA gerando resposta)
+        if (message.status === 'streaming' && isAI) {
+          return (
+            <StreamingMessage
+              key={message.id}
+              content={message.content}
+              isStreaming={true}
+            />
           );
         }
 
