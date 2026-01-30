@@ -83,7 +83,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const [pendingTakeControl, setPendingTakeControl] = useState<{ conversationId: string; contactId: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
-  const { isAdmin, isManager, isGeneralManager, isSupportManager, isCSManager, isFinancialManager, isSalesRep } = useUserRole();
+  const { isAdmin, isManager, isSalesRep } = useUserRole();
   const { hasPermission } = useRolePermissions();
   const { data: messages = [], isLoading: isMessagesLoading } = useMessages(conversation?.id || null);
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
@@ -396,8 +396,8 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
 
               {/* Botões de ação - lado direito */}
               <div className="flex items-center gap-1.5 shrink-0">
-                {/* 🧪 Botão de Modo de Teste - apenas para admins/managers quando IA global está OFF */}
-                {(isAdmin || isManager || isGeneralManager || isSupportManager || isCSManager || isFinancialManager) && !isAIGlobalEnabled && isAutopilot && (
+                {/* 🧪 Botão de Modo de Teste - controlado por permissão inbox.test_mode */}
+                {hasPermission('inbox.test_mode') && !isAIGlobalEnabled && isAutopilot && (
                   <Button
                     variant={isTestMode ? "default" : "outline"}
                     size="sm"
