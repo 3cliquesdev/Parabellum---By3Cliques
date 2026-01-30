@@ -78,6 +78,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       {
         auth: { autoRefreshToken: false, persistSession: false },
+        db: { schema: "public" },
       }
     );
 
@@ -216,7 +217,7 @@ serve(async (req) => {
 
     // -------- Derived counts from inbox_view (unread / sla / last_sender)
     const { data: inboxRows, error: inboxErr } = await applyVisibility(
-      supabaseAdmin.from("inbox_view").select("conversation_id, sla_status, unread_count, last_sender_type, status")
+      supabaseAdmin.from("inbox_view").select("conversation_id, sla_status, unread_count, last_sender_type, status, assigned_to")
     ).limit(5000);
     
     if (inboxErr) throw inboxErr;
@@ -226,10 +227,25 @@ serve(async (req) => {
     const slaCritical = inbox.filter((i: any) => i.sla_status === "critical").length;
     const slaWarning = inbox.filter((i: any) => i.sla_status === "warning").length;
     const notResponded = inboxActive.filter((i: any) => i.last_sender_type === "contact").length;
-    // Novo: Conversas do usuário atual com última mensagem do cliente (aguardando resposta do agente)
-    const myNotResponded = inboxActive.filter(
-      (i: any) => i.last_sender_type === "contact" && i.assigned_to === userId
-    ).length;
+    
+    // Conversas do usuário atual com última mensagem do cliente (aguardando resposta do agente)
+    // Query direta sem applyVisibility para garantir contagem precisa para o usuário
+    const { count: myNotRespondedCount } = await supabaseAdmin
+      .from("inbox_view")
+      .select("conversation_id", { count: "exact", head: true })
+      .eq("assigned_to", userId)
+      .eq("last_sender_type", "contact")
+      .neq("status", "closed");
+    
+    const myNotResponded = myNotRespondedCount ?? 0;
+    
+    console.log("[get-inbox-counts] myNotResponded calculated:", {
+      userId,
+      myNotResponded,
+      totalInboxActive: inboxActive.length,
+      notResponded
+    });
+    
     const unread = inbox.reduce((sum: number, i: any) => sum + (i.unread_count || 0), 0);
 
     // -------- byDepartment (active)
