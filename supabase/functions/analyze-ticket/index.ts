@@ -149,12 +149,13 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
       const errorText = await response.text();
       console.error(`[analyze-ticket] AI Gateway error: ${response.status}`, errorText);
       
-      // GRACEFUL DEGRADATION: Return fallback values for known errors (including 402 payment required)
-      if (response.status === 429 || response.status === 503 || response.status === 502 || response.status === 402) {
+      // GRACEFUL DEGRADATION: Return fallback values for known errors (including 402 payment required, 500 server error)
+      if (response.status === 429 || response.status === 503 || response.status === 502 || response.status === 402 || response.status === 500) {
         const errorReason = response.status === 429 ? 'rate_limit' : 
                            response.status === 503 ? 'service_unavailable' :
                            response.status === 502 ? 'bad_gateway' : 
-                           response.status === 402 ? 'credits_depleted' : 'unknown';
+                           response.status === 402 ? 'credits_depleted' :
+                           response.status === 500 ? 'server_error' : 'unknown';
         
         console.warn(`[analyze-ticket] ⚠️ AI Gateway error ${response.status}, returning fallback for mode: ${mode}`);
         
