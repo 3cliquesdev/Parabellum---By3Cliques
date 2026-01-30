@@ -565,8 +565,11 @@ serve(async (req) => {
                 console.log("[AUTO-DECISION] [WhatsApp Meta] Flow skipAutoResponse → waiting_human, reason:", flowData.reason);
                 
                 // 🆕 MENSAGEM DE AGUARDE: Enviar confirmação ao cliente na fila
-                // Apenas se reason indica que está esperando humano (não kill switch ou copilot)
-                if (flowData.reason === 'ai_mode_waiting_human') {
+                // APENAS se reason indica que está esperando humano E NÃO TEM AGENTE ATRIBUÍDO
+                // Se já tem agente atribuído, o atendente humano está responsável - não interferir
+                const hasAssignedAgent = !!conversation.assigned_to;
+                
+                if (flowData.reason === 'ai_mode_waiting_human' && !hasAssignedAgent) {
                   console.log("[meta-whatsapp-webhook] 📨 Verificando rate limit para mensagem de aguarde...");
                   
                   // 🛡️ ANTI-SPAM: Verificar última mensagem do sistema (bot)
