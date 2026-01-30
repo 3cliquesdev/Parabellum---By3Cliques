@@ -248,12 +248,12 @@ async function processJob(supabase: any, job: DispatchJob): Promise<JobResult> {
       return { conversation_id: job.conversation_id, status: 'retry', reason: 'no_agents_available' };
     }
 
-    // 2c. Atomic assignment with lock - D3.3: NÃO mudar ai_mode automaticamente
+    // 2c. Atomic assignment with lock - FIX: Mudar ai_mode para copilot na atribuição
     const { data: updateResult, error: updateError } = await supabase
       .from('conversations')
       .update({
         assigned_to: eligibleAgent.id,
-        // ai_mode: Não muda - mantém 'waiting_human', agente decide via UI
+        ai_mode: 'copilot', // ✅ FIX: Habilita composer imediatamente para o agente atribuído
         dispatch_status: 'assigned',
         last_dispatch_at: new Date().toISOString(),
       })
