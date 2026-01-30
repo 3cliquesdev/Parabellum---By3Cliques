@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { useInboxView, useInboxCounts, type InboxFilters as InboxViewFiltersType, type InboxCounts } from "@/hooks/useInboxView";
 import { useConversations } from "@/hooks/useConversations";
 import { useMyNotRespondedInboxItems } from "@/hooks/useMyNotRespondedInboxItems";
+import { useMyInboxItems } from "@/hooks/useMyInboxItems";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useDepartments } from "@/hooks/useDepartments";
@@ -116,6 +117,9 @@ export default function Inbox() {
   
   // 🔒 Hook dedicado para "Não respondidas" - consulta direta ao banco para consistência absoluta
   const { data: myNotRespondedItems } = useMyNotRespondedInboxItems();
+  
+  // 🔒 Hook dedicado para "Minhas" - consulta direta ao banco para evitar cache stale
+  const { data: myInboxItems } = useMyInboxItems();
   
   const { data: departments } = useDepartments();
   const { data: teams } = useTeams();
@@ -275,14 +279,16 @@ export default function Inbox() {
       });
     }
     
-    // 🔒 FILTRO ESPECIAL: mine - usar inboxItems diretamente para garantir consistência
+    // 🔒 FILTRO ESPECIAL: mine - usar hook dedicado (fonte de verdade absoluta)
     // SOMENTE quando NÃO há busca ativa
+    // 🛡️ INVIOLÁVEL: Resolve bug de cache stale onde rawInboxItems não era atualizado pelo realtime
     if (filter === "mine") {
-      const myItems = sourceInboxItems?.filter(item => 
-        item.assigned_to === user?.id &&
-        item.status !== 'closed'
-      ) || [];
-      return myItems.map(item => {
+      // Usar myInboxItems diretamente - consulta ao banco, não depende de cache stale
+      if (!myInboxItems || myInboxItems.length === 0) {
+        return [];
+      }
+      return myInboxItems.map(item => {
+        // Tentar enriquecer com dados completos se disponível
         const fullConv = fullConversations.find(c => c.id === item.conversation_id);
         return fullConv || inboxItemToConversation(item);
       });
@@ -338,7 +344,7 @@ export default function Inbox() {
       default:
         return result.filter(c => c.status !== 'closed');
     }
-  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, rawInboxItems, inboxItemToConversation, myNotRespondedItems]);
+  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, rawInboxItems, inboxItemToConversation, myNotRespondedItems, myInboxItems]);
 
   // Ordenação e filtragem por tempo de espera
   const orderedConversations = useMemo(() => {
