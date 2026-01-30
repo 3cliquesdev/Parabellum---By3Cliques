@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useInboxView, useInboxCounts, type InboxFilters as InboxViewFiltersType, type InboxCounts } from "@/hooks/useInboxView";
 import { useConversations } from "@/hooks/useConversations";
+import { useMyNotRespondedInboxItems } from "@/hooks/useMyNotRespondedInboxItems";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useDepartments } from "@/hooks/useDepartments";
@@ -112,6 +113,9 @@ export default function Inbox() {
   
   // Use original hook to get full conversation data when selected
   const { data: conversations, isLoading: convLoading } = useConversations();
+  
+  // 🔒 Hook dedicado para "Não respondidas" - consulta direta ao banco para consistência absoluta
+  const { data: myNotRespondedItems } = useMyNotRespondedInboxItems();
   
   const { data: departments } = useDepartments();
   const { data: teams } = useTeams();
@@ -237,18 +241,22 @@ export default function Inbox() {
   }, [conversations, inboxItemToConversation]);
 
   const filteredConversations = useMemo(() => {
-    if (!conversations) return [];
-    
+    // 🔒 CRÍTICO: Não retornar [] quando conversations estiver undefined
+    // Isso evita "ghosting" onde a lista some temporariamente
+    const fullConversations = conversations ?? [];
     const sourceInboxItems = rawInboxItems ?? inboxItems;
     
-    // 🔒 FILTRO ESPECIAL: not_responded - usar inboxItems diretamente
+    // 🔒 FILTRO ESPECIAL: not_responded - usar hook dedicado (fonte de verdade absoluta)
     if (filter === "not_responded") {
-      const notRespondedItems = sourceInboxItems?.filter(item => 
-        item.last_sender_type === 'contact' && 
-        item.assigned_to === user?.id &&
-        item.status !== 'closed'
-      ) || [];
-      return notRespondedItems.map(getConversationFromItem);
+      // Usar myNotRespondedItems diretamente - consulta ao banco, não depende de cache
+      if (!myNotRespondedItems || myNotRespondedItems.length === 0) {
+        return [];
+      }
+      return myNotRespondedItems.map(item => {
+        // Tentar enriquecer com dados completos se disponível
+        const fullConv = fullConversations.find(c => c.id === item.conversation_id);
+        return fullConv || inboxItemToConversation(item);
+      });
     }
     
     // 🔒 FILTRO ESPECIAL: mine - usar inboxItems diretamente para garantir consistência
@@ -257,84 +265,43 @@ export default function Inbox() {
         item.assigned_to === user?.id &&
         item.status !== 'closed'
       ) || [];
-      return myItems.map(getConversationFromItem);
+      return myItems.map(item => {
+        const fullConv = fullConversations.find(c => c.id === item.conversation_id);
+        return fullConv || inboxItemToConversation(item);
+      });
     }
     
-    let result = conversations;
-
     // 🔍 BUSCA GLOBAL: Quando há busca ativa, usar inboxItems diretamente
     // Isso permite encontrar conversas de outros departamentos/status que o usuário não teria acesso normal
     const hasActiveSearch = filters.search && filters.search.trim().length > 0;
     if (hasActiveSearch && inboxItems) {
       // Construir lista diretamente de inboxItems (que já passou pelo filtro de busca)
-      const searchResults = inboxItems
-        .map(item => {
-          // Tentar encontrar a conversa completa na lista de conversations
-          const fullConv = conversations?.find(c => c.id === item.conversation_id);
-          if (fullConv) return fullConv;
-          
-          // Se não encontrou (ex: outro departamento), criar objeto mínimo para exibir
-          // Usamos "as unknown as Conversation" porque estamos criando uma representação parcial
-          // que é suficiente para renderizar na lista
-          return {
-            id: item.conversation_id,
-            contact_id: item.contact_id,
-            status: item.status,
-            ai_mode: item.ai_mode,
-            assigned_to: item.assigned_to,
-            department: item.department,
-            channel: item.last_channel,
-            created_at: item.created_at,
-            last_message_at: item.last_message_at,
-            updated_at: item.updated_at,
-            awaiting_rating: false,
-            auto_closed: false,
-            closed_at: null,
-            closed_by: null,
-            closed_reason: null,
-            customer_metadata: null,
-            dispatch_attempts: null,
-            dispatch_status: null,
-            first_response_at: null,
-            handoff_executed_at: null,
-            is_test_mode: null,
-            last_classified_at: null,
-            last_dispatch_at: null,
-            last_suggestion_at: null,
-            learned_at: null,
-            needs_human_review: null,
-            previous_agent_id: null,
-            rating_sent_at: null,
-            related_ticket_id: null,
-            session_token: null,
-            support_channel_id: null,
-            whatsapp_instance_id: null,
-            whatsapp_meta_instance_id: null,
-            whatsapp_provider: null,
-            contacts: {
-              id: item.contact_id,
-              first_name: item.contact_name?.split(' ')[0] || 'Contato',
-              last_name: item.contact_name?.split(' ').slice(1).join(' ') || '',
-              email: item.contact_email,
-              phone: item.contact_phone,
-              avatar_url: item.contact_avatar,
-              created_at: item.created_at,
-              organizations: null,
-            } as Contact,
-          } as Conversation;
-        })
-        .filter(Boolean);
+      const searchResults = inboxItems.map(item => {
+        // Tentar encontrar a conversa completa na lista de conversations
+        const fullConv = fullConversations.find(c => c.id === item.conversation_id);
+        return fullConv || inboxItemToConversation(item);
+      }).filter(Boolean);
       
       return searchResults;
+    }
+
+    // Para outros filtros, se conversations ainda não carregou mas temos inboxItems,
+    // usar inboxItems para não "sumir" a lista
+    let result: Conversation[];
+    
+    if (fullConversations.length === 0 && sourceInboxItems && sourceInboxItems.length > 0) {
+      // Fallback: construir lista mínima de inboxItems para não ficar vazia
+      result = sourceInboxItems
+        .filter(item => item.status !== 'closed')
+        .map(inboxItemToConversation);
+    } else {
+      result = fullConversations;
     }
 
     // Apply department filter
     if (departmentFilter) {
       result = result.filter(c => c.department === departmentFilter);
     }
-
-    // Apply tag filter - need to check conversation_tags
-    // For now, tag filter is handled by the inboxViewFilters
 
     // Apply filters based on URL params
     switch (filter) {
@@ -368,7 +335,7 @@ export default function Inbox() {
       default:
         return result.filter(c => c.status !== 'closed');
     }
-  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, inboxItemIds, rawInboxItems, getConversationFromItem]);
+  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, rawInboxItems, inboxItemToConversation, myNotRespondedItems]);
 
   // Ordenação e filtragem por tempo de espera
   const orderedConversations = useMemo(() => {
