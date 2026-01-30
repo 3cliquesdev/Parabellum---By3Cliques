@@ -145,6 +145,23 @@ export default function Inbox() {
   const filteredConversations = useMemo(() => {
     if (!conversations) return [];
     
+    // 🔒 FILTRO ESPECIAL: not_responded - IGNORAR todos os outros filtros
+    // Deve retornar TODAS as conversas do agente aguardando resposta, independente de busca/popover
+    if (filter === "not_responded") {
+      const sourceInboxItems = rawInboxItems ?? inboxItems;
+      const notRespondedIds = new Set(
+        sourceInboxItems
+          ?.filter(item => 
+            item.last_sender_type === 'contact' && 
+            item.assigned_to === user?.id &&
+            item.status !== 'closed'
+          )
+          .map(item => item.conversation_id) || []
+      );
+      // Filtrar diretamente de conversations (sem aplicar outros filtros)
+      return conversations.filter(c => notRespondedIds.has(c.id));
+    }
+    
     let result = conversations;
 
     // 🔍 IMPORTANTE: Se há busca ativa, filtrar APENAS pelas conversas que estão no inboxItems
@@ -185,22 +202,6 @@ export default function Inbox() {
       case "sla":
         // SLA critical/warning - would need sla_status field
         return result.filter(c => c.status !== 'closed');
-      
-      case "not_responded":
-        // Filtrar por conversas do agente onde a última mensagem foi do cliente
-        // Usar rawInboxItems (sem filtros) para garantir que todas as conversas são consideradas
-        // IMPORTANT: rawInboxItems pode demorar a carregar; evitar "zerar" usando fallback para inboxItems
-        const sourceInboxItems = rawInboxItems ?? inboxItems;
-        const notRespondedIds = new Set(
-          sourceInboxItems
-            ?.filter(item => 
-              item.last_sender_type === 'contact' && 
-              item.assigned_to === user?.id &&
-              item.status !== 'closed'
-            )
-            .map(item => item.conversation_id) || []
-        );
-        return result.filter(c => notRespondedIds.has(c.id));
       
       case "unassigned":
         return result.filter(c => !c.assigned_to && c.status !== 'closed');
