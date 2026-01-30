@@ -331,12 +331,13 @@ async function findEligibleAgent(
     capacityMap.set(tm.user_id, maxChats);
   }
 
-  // 5. Count active conversations per agent (D3.2: apenas carga humana)
+  // 5. Count active conversations per agent (D3.2: carga humana completa)
+  // Inclui waiting_human porque se está atribuída, é carga do agente
   const { data: activeConvs } = await supabase
     .from('conversations')
     .select('assigned_to')
-    .in('ai_mode', ['copilot', 'disabled']) // Carga humana apenas
-    .in('status', ['open', 'pending']) // Não fechadas
+    .in('ai_mode', ['waiting_human', 'copilot', 'disabled']) // Todas as cargas humanas
+    .eq('status', 'open') // Só 'open' é válido no enum (não existe 'pending')
     .in('assigned_to', profiles.map((p: { id: string }) => p.id));
 
   const activeChatsMap = new Map<string, number>();
