@@ -372,26 +372,9 @@ async function findEligibleAgent(
     console.log(`[findEligibleAgent] No online agents in dept ${departmentId}`);
   }
 
-  // 3. FALLBACK: Try parent department if no agents found/available
-  console.log(`[findEligibleAgent] Trying parent fallback for dept ${departmentId}...`);
-  
-  const { data: dept, error: deptError } = await supabase
-    .from('departments')
-    .select('parent_id, name')
-    .eq('id', departmentId)
-    .single();
-
-  if (deptError) {
-    console.log(`[findEligibleAgent] Error fetching dept ${departmentId}:`, deptError.message);
-    return null;
-  }
-
-  if (dept?.parent_id) {
-    console.log(`[findEligibleAgent] 🔄 Fallback: ${dept.name || departmentId} → parent ${dept.parent_id}`);
-    return findEligibleAgent(supabase, dept.parent_id, attemptedDepts);
-  }
-
-  console.log(`[findEligibleAgent] No parent for dept ${departmentId}, no agents found in hierarchy`);
+  // 3. STRICT MODE: No fallback to parent department
+  // Conversations must wait in queue until an agent from the exact department is available
+  console.log(`[findEligibleAgent] ℹ️ No agents available in dept ${departmentId}. Strict mode: no fallback to parent.`);
   return null;
 }
 
@@ -516,19 +499,8 @@ async function checkDepartmentHasAgents(
     return true;
   }
 
-  // FALLBACK: Try parent department
-  const { data: dept } = await supabase
-    .from('departments')
-    .select('parent_id')
-    .eq('id', departmentId)
-    .single();
-
-  if (dept?.parent_id) {
-    console.log(`[checkDepartmentHasAgents] Checking parent ${dept.parent_id} for dept ${departmentId}`);
-    return checkDepartmentHasAgents(supabase, dept.parent_id, attemptedDepts);
-  }
-
-  console.log(`[checkDepartmentHasAgents] No agents in hierarchy for dept ${departmentId}`);
+  // STRICT MODE: No fallback to parent department
+  console.log(`[checkDepartmentHasAgents] No agents in dept ${departmentId}. Strict mode: no fallback.`);
   return false;
 }
 
