@@ -522,6 +522,7 @@ serve(async (req) => {
                 response?: string;
                 options?: Array<{label: string; value?: string; id?: string}>;
                 skipAutoResponse?: boolean;
+                reason?: string;
                 flow_context?: Record<string, unknown>;
                 transfer?: boolean;
                 transferType?: string;
@@ -559,13 +560,61 @@ serve(async (req) => {
               // 📊 DECISÃO BASEADA NO FLUXO
               // ============================================
               
-              // CASO 1: skipAutoResponse = true → Não enviar nada, mover para humano
+              // CASO 1: skipAutoResponse = true → Cliente na fila/copilot/disabled
               if (flowData.skipAutoResponse) {
-                console.log("[AUTO-DECISION] [WhatsApp Meta] Flow skipAutoResponse → waiting_human");
+                console.log("[AUTO-DECISION] [WhatsApp Meta] Flow skipAutoResponse → waiting_human, reason:", flowData.reason);
+                
+                // 🆕 MENSAGEM DE AGUARDE: Enviar confirmação ao cliente na fila
+                // Apenas se reason indica que está esperando humano (não kill switch ou copilot)
+                if (flowData.reason === 'ai_mode_waiting_human') {
+                  console.log("[meta-whatsapp-webhook] 📨 Verificando rate limit para mensagem de aguarde...");
+                  
+                  // 🛡️ ANTI-SPAM: Verificar última mensagem do sistema (bot)
+                  const { data: lastBotMsg } = await supabase
+                    .from("messages")
+                    .select("created_at, content")
+                    .eq("conversation_id", conversation.id)
+                    .eq("sender_type", "user") // "user" = bot/sistema no modelo atual
+                    .eq("is_ai_generated", true)
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                  
+                  // Só enviar se última mensagem do bot foi há mais de 2 minutos
+                  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+                  const lastMsgDate = lastBotMsg?.created_at ? new Date(lastBotMsg.created_at) : null;
+                  const shouldSendQueueMsg = !lastMsgDate || lastMsgDate < twoMinutesAgo;
+                  
+                  if (shouldSendQueueMsg) {
+                    console.log("[meta-whatsapp-webhook] ✅ Rate limit OK, enviando mensagem de aguarde...");
+                    
+                    const queueMessage = "💬 Sua conversa já está na fila de atendimento.\n\nFique tranquilo, em breve um especialista irá te atender. 🙂";
+                    
+                    try {
+                      await supabase.functions.invoke("send-meta-whatsapp", {
+                        body: {
+                          instance_id: instance.id,
+                          phone_number: fromNumber,
+                          message: queueMessage,
+                          conversation_id: conversation.id,
+                          skip_db_save: false,
+                        },
+                      });
+                      console.log("[meta-whatsapp-webhook] ✅ Mensagem de aguarde enviada");
+                    } catch (queueErr) {
+                      console.error("[meta-whatsapp-webhook] ⚠️ Erro ao enviar mensagem de aguarde:", queueErr);
+                    }
+                  } else {
+                    console.log("[meta-whatsapp-webhook] ⏱️ Rate limit ativo, última msg do bot:", lastMsgDate?.toISOString());
+                  }
+                }
+                
+                // Garantir que está em waiting_human
                 await supabase
                   .from("conversations")
                   .update({ ai_mode: "waiting_human" })
                   .eq("id", conversation.id);
+                
                 continue;
               }
 
