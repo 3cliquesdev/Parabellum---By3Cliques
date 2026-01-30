@@ -477,7 +477,7 @@ serve(async (req) => {
               }
 
               // ============================================
-              // 🛑 KILL SWITCH CHECK - ANTES de chamar AI
+              // 🛑 KILL SWITCH CHECK - ANTES de qualquer automação
               // ============================================
               const aiConfig = await getAIConfig(supabase);
               const { data: convForTest } = await supabase
@@ -488,7 +488,7 @@ serve(async (req) => {
               const isTestMode = convForTest?.is_test_mode === true;
 
               if (!aiConfig.ai_global_enabled && !isTestMode) {
-                console.log("[meta-whatsapp-webhook] 🛑 KILL SWITCH ATIVO - Movendo para fila humana");
+                console.log("[meta-whatsapp-webhook] 🛑 KILL SWITCH ATIVO - Bloqueando TUDO (IA/Fluxo/Fallback)");
                 
                 // Mover conversa para fila humana
                 await supabase
@@ -496,42 +496,131 @@ serve(async (req) => {
                   .update({ ai_mode: "waiting_human" })
                   .eq("id", conversation.id);
                 
-                console.log("[meta-whatsapp-webhook] 📋 Conversa movida para waiting_human");
-                continue; // Pular autopilot, ir para próxima mensagem
+                console.log("[AUTO-DECISION] [WhatsApp Meta] Kill Switch → waiting_human");
+                continue; // Pular toda automação, ir para próxima mensagem
               }
 
-              // Trigger AI Autopilot se ativo
-              if (conversation.ai_mode === "autopilot" && !conversation.awaiting_rating) {
-                console.log("[meta-whatsapp-webhook] 🤖 Triggering AI Autopilot...");
+              // ============================================
+              // 🔄 FLOW SOBERANO - process-chat-flow PRIMEIRO
+              // ============================================
+              let flowData: {
+                useAI?: boolean;
+                aiNodeActive?: boolean;
+                response?: string;
+                skipAutoResponse?: boolean;
+                flow_context?: Record<string, unknown>;
+              } = {};
 
-                try {
-                  const autopilotResponse = await fetch(
-                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-autopilot-chat`,
-                    {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                      },
-                      body: JSON.stringify({
-                        conversationId: conversation.id,      // camelCase para ai-autopilot-chat
-                        customerMessage: messageContent,       // nome correto do parâmetro
-                        contact_id: contact.id,
-                        whatsapp_provider: "meta",
-                        whatsapp_meta_instance_id: instance.id,
-                      }),
-                    }
-                  );
-
-                  if (!autopilotResponse.ok) {
-                    console.error("[meta-whatsapp-webhook] ❌ Autopilot error:", await autopilotResponse.text());
-                  } else {
-                    console.log("[meta-whatsapp-webhook] ✅ Autopilot triggered successfully");
+              try {
+                console.log("[meta-whatsapp-webhook] 🔄 Chamando process-chat-flow...");
+                const flowResponse = await fetch(
+                  `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                    },
+                    body: JSON.stringify({
+                      conversationId: conversation.id,
+                      userMessage: messageContent,
+                    }),
                   }
-                } catch (err) {
-                  console.error("[meta-whatsapp-webhook] ❌ Autopilot exception:", err);
+                );
+
+                if (flowResponse.ok) {
+                  flowData = await flowResponse.json();
+                  console.log("[meta-whatsapp-webhook] 📋 Flow response:", JSON.stringify(flowData));
+                } else {
+                  console.error("[meta-whatsapp-webhook] ⚠️ Flow error:", await flowResponse.text());
                 }
+              } catch (flowErr) {
+                console.error("[meta-whatsapp-webhook] ⚠️ Flow exception:", flowErr);
               }
+
+              // ============================================
+              // 📊 DECISÃO BASEADA NO FLUXO
+              // ============================================
+              
+              // CASO 1: skipAutoResponse = true → Não enviar nada, mover para humano
+              if (flowData.skipAutoResponse) {
+                console.log("[AUTO-DECISION] [WhatsApp Meta] Flow skipAutoResponse → waiting_human");
+                await supabase
+                  .from("conversations")
+                  .update({ ai_mode: "waiting_human" })
+                  .eq("id", conversation.id);
+                continue;
+              }
+
+              // CASO 2: Fluxo retornou resposta estática (Message/AskOptions/etc)
+              if (!flowData.useAI && flowData.response) {
+                console.log("[AUTO-DECISION] [WhatsApp Meta] Flow static response → send-meta-whatsapp");
+                try {
+                  const sendResponse = await supabase.functions.invoke("send-meta-whatsapp", {
+                    body: {
+                      instance_id: instance.id,
+                      phone_number: fromNumber,
+                      message: flowData.response,
+                      conversation_id: conversation.id,
+                      skip_db_save: false, // Persistir a mensagem do fluxo
+                    },
+                  });
+                  
+                  if (sendResponse.error) {
+                    console.error("[meta-whatsapp-webhook] ❌ Erro ao enviar resposta do fluxo:", sendResponse.error);
+                  } else {
+                    console.log("[meta-whatsapp-webhook] ✅ Resposta do fluxo enviada");
+                  }
+                } catch (sendErr) {
+                  console.error("[meta-whatsapp-webhook] ❌ Exception ao enviar resposta do fluxo:", sendErr);
+                }
+                continue;
+              }
+
+              // CASO 3: Fluxo ativou AIResponseNode → Chamar IA com flow_context
+              if (flowData.useAI && flowData.aiNodeActive) {
+                if (conversation.ai_mode === "autopilot" && !conversation.awaiting_rating) {
+                  console.log("[AUTO-DECISION] [WhatsApp Meta] Flow aiNodeActive=true → ai-autopilot-chat");
+
+                  try {
+                    const autopilotResponse = await fetch(
+                      `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-autopilot-chat`,
+                      {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                        },
+                        body: JSON.stringify({
+                          conversationId: conversation.id,
+                          customerMessage: messageContent,
+                          contact_id: contact.id,
+                          whatsapp_provider: "meta",
+                          whatsapp_meta_instance_id: instance.id,
+                          flow_context: flowData.flow_context || {}, // Contexto do fluxo para a IA
+                        }),
+                      }
+                    );
+
+                    if (!autopilotResponse.ok) {
+                      console.error("[meta-whatsapp-webhook] ❌ Autopilot error:", await autopilotResponse.text());
+                    } else {
+                      console.log("[meta-whatsapp-webhook] ✅ Autopilot triggered with flow_context");
+                    }
+                  } catch (err) {
+                    console.error("[meta-whatsapp-webhook] ❌ Autopilot exception:", err);
+                  }
+                }
+                continue;
+              }
+
+              // CASO 4: Sem fluxo ativo e sem AIResponseNode → Fallback controlado
+              // Se IA está ligada mas não há fluxo específico, mover para humano (safety first)
+              console.log("[AUTO-DECISION] [WhatsApp Meta] No active flow → waiting_human (fallback)");
+              await supabase
+                .from("conversations")
+                .update({ ai_mode: "waiting_human" })
+                .eq("id", conversation.id);
             }
           }
 
