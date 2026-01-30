@@ -1,220 +1,186 @@
 
-# Plano: Correção de Duplicação de Mensagens - Unificação de Pipeline
+
+# Plano: Correção de Envio para WhatsApp Meta — Usar whatsapp_id
 
 ## Diagnóstico Confirmado
 
-### Screenshot Analisado
-O usuário vê mensagens duplicadas como "Assistente Virtual" e "Atendente" para o mesmo conteúdo "Obrigado! Suas informações foram registradas."
+### Problema Identificado
+O usuário reportou que clientes "que nunca enviaram mensagem" não recebem resposta. Na investigação descobri:
 
-### Dados do Banco (Prova)
+1. **Mensagem enviada com sucesso para a API do Meta** (`✅ Message sent: wamid...`)
+2. **Webhook do Meta retorna status `failed`** para a entrega
 
-| ID | Conteúdo | is_ai_generated | channel | metadata |
-|----|----------|-----------------|---------|----------|
-| 67ea36f6 | Obrigado! Suas... | **FALSE** | web_chat | send-meta-whatsapp |
-| 85bff5ec | Obrigado! Suas... | **TRUE** | whatsapp | null |
+### Causa Raiz
+O contato Ronny teste tem:
 
-A mesma mensagem foi inserida **2x** com atributos diferentes!
+| Campo | Valor | Comentário |
+|-------|-------|------------|
+| `phone` | 5511988013**283** | Número cadastrado |
+| `whatsapp_id` | 5511988013**284**@s.whatsapp.net | Número real do WhatsApp |
 
-### Causa Raiz Identificada
+Os números são **diferentes**! O sistema envia para o `phone`, mas o WhatsApp real é o `whatsapp_id`.
 
-**Dois pipelines paralelos processam a mesma mensagem:**
+### Log do Webhook Confirmando
 
 ```text
-Cliente envia WhatsApp
-        |
-        v
-meta-whatsapp-webhook → handle-whatsapp-event
-        |
-        v
-insere mensagem do cliente no banco
-        |
-        +----------------------+
-        |                      |
-        v                      v
-CAMINHO 1:               CAMINHO 2:
-Database Trigger         handle-whatsapp-event
-        |                      |
-        v                      v
-message-listener         ai-autopilot-chat (linha 1142)
-        |                      |
-        v                      v
-process-chat-flow        IA gera resposta
-        |                      |
-        v                      v
-INSERE resposta          INSERE resposta
-is_ai_generated:false    is_ai_generated:true
-        |                      |
-        |                      v
-        |                send-meta-whatsapp
-        |                      |
-        |                      v
-        |                INSERE outra copia
-        |                (sem skip_db_save!)
-        +----------------------+
-                |
-                v
-        2-3 mensagens iguais!
+📊 Status update: wamid.xxx -> failed  (para 5511988013283)
+📊 Status update: wamid.xxx -> delivered (para 5511969656723)
 ```
 
-### Por que aparece "Assistente Virtual" vs "Atendente"?
+O Ronildo Oliveira recebe porque `phone` e `whatsapp_id` são iguais. O Ronny teste não recebe porque são diferentes.
 
-No `MessageBubble.tsx` (linha 129):
+### Código com Inconsistência
+
+**Evolution API (funciona):**
 ```typescript
-{isAI ? "Assistente Virtual" : (sender?.full_name || "Atendente")}
-```
-
-- `is_ai_generated: true` → "Assistente Virtual"
-- `is_ai_generated: false` → "Atendente"
-
----
-
-## Solucao Proposta
-
-### Principio: "Um Unico Responsavel"
-
-Para mensagens WhatsApp:
-- **handle-whatsapp-event** processa tudo (fluxo + IA)
-- **message-listener** NAO processa mensagens WhatsApp (ja foram processadas)
-
-Para mensagens Web Chat:
-- **message-listener** continua processando normalmente
-
----
-
-## Alteracoes Detalhadas
-
-### 1. message-listener — Ignorar mensagens ja processadas pelo WhatsApp
-
-**Arquivo**: `supabase/functions/message-listener/index.ts`
-
-**Local**: Apos verificar sender_type (linha 31)
-
-**Logica**: Se a mensagem veio do canal WhatsApp, o `handle-whatsapp-event` ja processou. O `message-listener` deve ignorar para evitar duplicacao.
-
-```typescript
-// Apos linha 38 (busca da conversa)
-
-// ============================================================
-// 🚫 ANTI-DUPLICACAO: Se canal WhatsApp, ja foi processado
-// handle-whatsapp-event chama ai-autopilot-chat diretamente
-// ============================================================
-if (conversation?.channel === 'whatsapp') {
-  console.log('[message-listener] ⏭️ Canal WhatsApp - ja processado por handle-whatsapp-event');
-  return new Response(JSON.stringify({ 
-    status: 'skipped', 
-    reason: 'whatsapp_handled_by_webhook',
-    message: 'WhatsApp messages are processed by handle-whatsapp-event'
-  }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-  });
+// Linha 7366-7371
+{
+  phone_number: contact.phone,
+  whatsapp_id: contact.whatsapp_id,  // ✅ USA WHATSAPP_ID
 }
 ```
 
-### 2. handle-whatsapp-event — Chamar process-chat-flow ANTES da IA
+**Meta API (quebrado):**
+```typescript
+// Linha 7330-7337
+{
+  phone_number: contact.phone?.replace(/\D/g, ''),  // ❌ IGNORA WHATSAPP_ID
+}
+```
+
+---
+
+## Solução Proposta
+
+### Lógica de Prioridade
+Para qualquer envio WhatsApp, usar a seguinte ordem de prioridade:
+
+```text
+1. whatsapp_id (número real confirmado pelo WhatsApp)
+2. phone (fallback se whatsapp_id não existir)
+```
+
+Exemplo:
+```typescript
+const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+```
+
+---
+
+## Alterações Detalhadas
+
+### 1. Criar helper `extractWhatsAppNumber`
+
+**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
+
+**Local**: Após a linha 100 (seção de helpers)
+
+```typescript
+// ============================================================
+// 🔧 HELPER: Extrair número limpo do whatsapp_id
+// Formatos suportados:
+//   - 5511999999999@s.whatsapp.net
+//   - 5511999999999@c.us
+//   - 5511999999999
+// ============================================================
+function extractWhatsAppNumber(whatsappId: string | null | undefined): string | null {
+  if (!whatsappId) return null;
+  
+  // Remove sufixos do WhatsApp
+  let cleaned = whatsappId
+    .replace('@s.whatsapp.net', '')
+    .replace('@c.us', '')
+    .replace('@lid', '') // Leads do Meta (não usar)
+    .replace(/\D/g, '');
+  
+  // Se for número @lid (lead ID do Meta), retornar null
+  if (whatsappId.includes('@lid')) {
+    return null;
+  }
+  
+  return cleaned.length >= 10 ? cleaned : null;
+}
+```
+
+### 2. Atualizar `sendWhatsAppMessage` para usar `whatsappId`
+
+**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
+
+**Local**: Linhas 511-526 (seção Meta API)
+
+```typescript
+if (whatsappResult.provider === 'meta') {
+  // 🆕 CORREÇÃO: Priorizar whatsapp_id sobre phone
+  const targetNumber = extractWhatsAppNumber(whatsappId) || phoneNumber?.replace(/\D/g, '');
+  
+  console.log('[sendWhatsAppMessage] 📤 Enviando via Meta WhatsApp API:', {
+    instanceId: whatsappResult.instance.id,
+    phoneNumberId: whatsappResult.instance.phone_number_id,
+    targetNumber: targetNumber?.slice(-4),
+    usedWhatsappId: !!extractWhatsAppNumber(whatsappId)
+  });
+  
+  const { data, error } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
+    body: {
+      instance_id: whatsappResult.instance.id,
+      phone_number: targetNumber,  // 🆕 Usa targetNumber (whatsapp_id ou phone)
+      message,
+      conversation_id: conversationId,
+      skip_db_save: true
+    }
+  });
+  // ... resto igual
+}
+```
+
+### 3. Atualizar chamada direta na linha 7330
+
+**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
+
+**Local**: Linhas 7324-7338
+
+```typescript
+if (provider === 'meta') {
+  // 🆕 CORREÇÃO: Priorizar whatsapp_id sobre phone
+  const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+  
+  console.log('[ai-autopilot-chat] 📤 Invocando send-meta-whatsapp:', {
+    instanceId: whatsappInstance.id,
+    phoneNumberId: whatsappInstance.phone_number_id,
+    targetNumber: targetNumber?.slice(-4),
+    source: extractWhatsAppNumber(contact.whatsapp_id) ? 'whatsapp_id' : 'phone'
+  });
+
+  const { data: metaResponse, error: metaError } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
+    body: {
+      instance_id: whatsappInstance.id,
+      phone_number: targetNumber,  // 🆕 Usa targetNumber
+      message: assistantMessage,
+      conversation_id: conversationId,
+      skip_db_save: true
+    },
+  });
+  // ... resto igual
+}
+```
+
+### 4. Atualizar `handle-whatsapp-event` (mesmo problema)
 
 **Arquivo**: `supabase/functions/handle-whatsapp-event/index.ts`
 
-**Local**: Antes da linha 1136 (bloco de trigger da IA)
-
-**Logica**: Verificar se existe fluxo ativo antes de chamar a IA. Se o fluxo retornar resposta, enviar e NAO chamar a IA.
+**Local**: Linhas 1168-1178 (envio de resposta do fluxo)
 
 ```typescript
-// Adicionar ANTES da linha 1136 (bloco "Se ai_mode = 'autopilot'")
+// Extrair número correto
+const targetNumber = phoneForDatabase.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
 
-// ============================================================
-// 🔄 PROCESS-CHAT-FLOW PRIMEIRO (Anti-Duplicacao)
-// Se fluxo retornar resposta, nao chamar IA
-// ============================================================
-console.log('[handle-whatsapp-event] 🔄 Verificando fluxo de chat...');
-
-let flowHandled = false;
-try {
-  const { data: flowResult, error: flowError } = await supabase.functions.invoke('process-chat-flow', {
-    body: {
-      conversationId: conversationId,
-      userMessage: messageText
-    }
-  });
-
-  if (!flowError && flowResult && !flowResult.useAI && flowResult.response) {
-    console.log('[handle-whatsapp-event] 📋 Fluxo retornou resposta:', flowResult.response?.slice(0, 50));
-    flowHandled = true;
-
-    // Inserir resposta do fluxo no banco
-    const { data: savedFlowMsg } = await supabase.from('messages').insert({
-      conversation_id: conversationId,
-      content: flowResult.response,
-      sender_type: 'user',
-      is_ai_generated: true, // Marcar como automatico para UI mostrar "Assistente Virtual"
-      channel: 'whatsapp'
-    }).select('id').single();
-
-    // Enviar para WhatsApp com skip_db_save (ja salvamos acima)
-    if (savedFlowMsg?.id) {
-      await supabase.functions.invoke('send-meta-whatsapp', {
-        body: {
-          instance_id: instance.id,
-          phone_number: phoneForDatabase,
-          message: flowResult.response,
-          conversation_id: conversationId,
-          skip_db_save: true // 🆕 CRITICO: Evita duplicacao
-        }
-      });
-      console.log('[handle-whatsapp-event] ✅ Resposta do fluxo enviada via WhatsApp');
-    }
-  }
-} catch (flowError) {
-  console.error('[handle-whatsapp-event] ❌ Erro ao processar fluxo:', flowError);
-}
-
-// ============================================================
-// 🤖 IA APENAS SE FLUXO NAO TRATOU
-// ============================================================
-if (flowHandled) {
-  console.log('[handle-whatsapp-event] ⏭️ Fluxo ja tratou - pulando IA');
-  return new Response(JSON.stringify({
-    success: true,
-    message_saved: true,
-    flow_handled: true
-  }), { headers: corsHeaders });
-}
-```
-
-### 3. ai-autopilot-chat — Adicionar skip_db_save ao enviar WhatsApp
-
-**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
-
-**Local**: Linha 7329 (chamada send-meta-whatsapp)
-
-**Alteracao**: Ja salva mensagem antes (linha 7193), entao deve usar `skip_db_save: true`
-
-```typescript
-// Linha 7329-7336
-const { data: metaResponse, error: metaError } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
+await supabase.functions.invoke('send-meta-whatsapp', {
   body: {
-    instance_id: whatsappInstance.id,
-    phone_number: contact.phone?.replace(/\D/g, ''),
-    message: assistantMessage,
+    instance_id: instance.id,
+    phone_number: targetNumber,  // 🆕 Já vem do webhook, deve estar correto
+    message: flowResult.response,
     conversation_id: conversationId,
-    skip_db_save: true // 🆕 CRITICO: Ja salvamos na linha 7193
-  },
-});
-```
-
-### 4. sendWhatsAppMessage helper — Adicionar skip_db_save
-
-**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
-
-**Local**: Linhas 518-524 (funcao helper)
-
-```typescript
-const { data, error } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
-  body: {
-    instance_id: whatsappResult.instance.id,
-    phone_number: phoneNumber?.replace(/\D/g, ''),
-    message,
-    conversation_id: conversationId,
-    skip_db_save: true // 🆕 CRITICO: Quem chama ja salvou
+    skip_db_save: true
   }
 });
 ```
@@ -223,106 +189,70 @@ const { data, error } = await supabaseClient.functions.invoke('send-meta-whatsap
 
 ## Arquivos a Modificar
 
-| Arquivo | Acao | Descricao |
+| Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `message-listener/index.ts` | Modificar | Ignorar canal WhatsApp |
-| `handle-whatsapp-event/index.ts` | Modificar | Chamar process-chat-flow antes da IA |
-| `ai-autopilot-chat/index.ts` | Modificar | Adicionar skip_db_save em todas chamadas WhatsApp |
+| `ai-autopilot-chat/index.ts` | Modificar | Adicionar helper e usar `whatsapp_id` em todas as chamadas Meta |
+| `handle-whatsapp-event/index.ts` | Verificar | Garantir que usa o número correto do webhook |
 
 ---
 
-## Secao Tecnica
+## Seção Técnica
 
-### Novo Fluxo (Apos Correcao)
+### Fluxo de Decisão do Número
 
 ```text
-Cliente envia WhatsApp
-        |
-        v
-meta-whatsapp-webhook → handle-whatsapp-event
-        |
-        v
-insere mensagem do cliente no banco
-        |
-        v
-Verifica process-chat-flow
-        |
-   +----+----+
-   |         |
-   v         v
-FLUXO      SEM FLUXO
-ATIVO      ATIVO
-   |         |
-   v         v
-Envia      Chama IA
-resposta   (ai-autopilot)
-do fluxo       |
-   |         v
-   v      IA responde
-WhatsApp     |
-(skip_db)    v
-   |      WhatsApp
-   |      (skip_db)
-   +----+----+
-        |
-        v
-   UMA mensagem
-   no banco
-
-Database Trigger → message-listener
-        |
-        v
-Canal = WhatsApp?
-   SIM → IGNORA (ja processado)
-   NAO → Processa normalmente
+Contato tem whatsapp_id?
+    │
+    ├─ SIM → Extrair número (remover @s.whatsapp.net)
+    │         É válido (>= 10 dígitos)?
+    │              │
+    │              ├─ SIM → Usar whatsapp_id
+    │              └─ NÃO → Usar phone
+    │
+    └─ NÃO → Usar phone?.replace(/\D/g, '')
 ```
 
-### Regras de skip_db_save
+### Casos de Teste
 
-| Origem | Salva no banco? | Envia WhatsApp com skip_db_save? |
-|--------|-----------------|----------------------------------|
-| handle-whatsapp-event (fluxo) | SIM (antes de enviar) | SIM |
-| ai-autopilot-chat | SIM (linha 7193) | SIM |
-| message-listener | SIM | N/A (nao envia WhatsApp) |
-| Frontend (sendInstant) | SIM (otimista) | SIM |
-
----
-
-## Criterios de Aceitacao
-
-| Teste | Resultado Esperado |
-|-------|-------------------|
-| Mensagem WhatsApp com fluxo ativo | 1 mensagem no banco, 1 no WhatsApp |
-| Mensagem WhatsApp sem fluxo (IA) | 1 mensagem no banco, 1 no WhatsApp |
-| Mensagem Web Chat | Processada por message-listener normalmente |
-| message-listener recebe WhatsApp | Ignora com log "whatsapp_handled_by_webhook" |
-| UI mostra resposta | Apenas "Assistente Virtual" (nao duplicado) |
+| Cenário | whatsapp_id | phone | Resultado |
+|---------|-------------|-------|-----------|
+| whatsapp_id válido | 5511999999999@s.whatsapp.net | 5511888888888 | Usa 5511999999999 |
+| whatsapp_id @lid (inválido) | 123456789@lid | 5511888888888 | Usa 5511888888888 |
+| whatsapp_id null | null | 5511888888888 | Usa 5511888888888 |
+| Ambos iguais | 5511999999999@s.whatsapp.net | 5511999999999 | Usa 5511999999999 |
 
 ---
 
 ## Impacto
 
-| Componente | Antes | Depois |
-|------------|-------|--------|
-| Mensagens WhatsApp | 2-3 copias | 1 copia |
-| message-listener | Processa tudo | Ignora WhatsApp |
-| handle-whatsapp-event | Nao chamava fluxo | Chama fluxo primeiro |
-| send-meta-whatsapp | Salvava duplicado | skip_db_save = true |
+| Antes | Depois |
+|-------|--------|
+| Meta API usa `contact.phone` | Meta API usa `whatsapp_id` (com fallback para `phone`) |
+| Mensagens falham para contatos com números diferentes | Mensagens entregues corretamente |
+| Inconsistência entre Evolution e Meta | Comportamento uniforme |
 
 ---
 
-## Ordem de Implementacao
+## Ordem de Implementação
 
-1. **ai-autopilot-chat**: Adicionar `skip_db_save: true` nas chamadas WhatsApp
-2. **message-listener**: Adicionar verificacao de canal WhatsApp
-3. **handle-whatsapp-event**: Adicionar chamada ao process-chat-flow
-4. **Deploy**: Publicar todas as edge functions
-5. **Validacao**: Testar envio WhatsApp e verificar 1 mensagem no banco
+1. **Adicionar helper** `extractWhatsAppNumber`
+2. **Atualizar** `sendWhatsAppMessage` para Meta API
+3. **Atualizar** chamada direta na linha 7330
+4. **Verificar** `handle-whatsapp-event` (provavelmente já correto)
+5. **Deploy** edge functions
+6. **Testar** com o contato Ronny teste
 
 ---
 
-## Nota sobre a UI
+## Nota sobre Limpeza de Dados
 
-Apos a correcao, mensagens automaticas devem aparecer APENAS como "Assistente Virtual" porque todas terao `is_ai_generated: true`.
+Recomendação futura: Rodar script para unificar `phone` e `whatsapp_id` onde são diferentes mas próximos (apenas 1 dígito diferente pode ser erro de digitação):
 
-A label "Atendente" sera usada apenas para mensagens enviadas manualmente por humanos (agentes).
+```sql
+-- Identificar contatos com discrepância
+SELECT id, phone, whatsapp_id 
+FROM contacts 
+WHERE whatsapp_id IS NOT NULL 
+  AND phone != REPLACE(REPLACE(whatsapp_id, '@s.whatsapp.net', ''), '@c.us', '');
+```
+
