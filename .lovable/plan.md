@@ -1,85 +1,85 @@
 
-# Plano: Corrigir Filtro "Não Respondidas" para Ignorar Outros Filtros
+# Plano: Buscar por Email, Nome, Telefone e ID no Inbox
 
-## Problema Identificado
+## Situação Atual
 
-O filtro "Não respondidas" mostra contagem correta (1), mas a lista aparece vazia porque:
+A busca do Inbox **já funciona** para a maioria dos campos solicitados:
 
-1. O `result` usado no filtro já foi pré-filtrado por outros critérios (busca, filtros do popover)
-2. A lógica de busca ativa retorna cedo (linha 156), nunca alcançando o `case "not_responded"`
-3. O cruzamento entre `conversations` filtrado e `notRespondedIds` resulta em conjunto vazio
+| Campo         | Suportado | Onde |
+|---------------|-----------|------|
+| Nome          | ✅ Sim    | `contact_name` |
+| Email         | ✅ Sim    | `contact_email` |
+| Telefone      | ✅ Sim    | `contact_phone` |
+| ID Conversa   | ✅ Sim    | `conversation_id` |
+| ID Contato    | ❌ Não    | Não implementado |
+| Mensagem      | ✅ Sim    | `last_snippet` |
 
-## Solução
-
-Reestruturar a lógica do filtro `not_responded` para usar uma abordagem **direta**, ignorando filtros prévios.
-
----
-
-## Mudanças Técnicas
-
-### Arquivo: `src/pages/Inbox.tsx`
-
-#### Mudança 1: Mover lógica do `not_responded` ANTES do early return de busca
-
-O filtro `not_responded` deve ser processado antes de qualquer outro filtro ser aplicado:
-
-```typescript
-// Linhas 145-214 - Reestruturar filteredConversations
-
-const filteredConversations = useMemo(() => {
-  if (!conversations) return [];
-  
-  // 🔒 FILTRO ESPECIAL: not_responded - IGNORAR outros filtros
-  // Deve retornar TODAS as conversas do agente aguardando resposta
-  if (filter === "not_responded") {
-    const sourceInboxItems = rawInboxItems ?? inboxItems;
-    const notRespondedIds = new Set(
-      sourceInboxItems
-        ?.filter(item => 
-          item.last_sender_type === 'contact' && 
-          item.assigned_to === user?.id &&
-          item.status !== 'closed'
-        )
-        .map(item => item.conversation_id) || []
-    );
-    // Filtrar diretamente de conversations (sem outros filtros)
-    return conversations.filter(c => notRespondedIds.has(c.id));
-  }
-  
-  let result = conversations;
-
-  // ... resto da lógica existente (busca, departamento, outros filtros)
-```
-
-#### Mudança 2: Remover o `case "not_responded"` duplicado do switch
-
-Após mover a lógica para cima, remover o case antigo:
-
-```typescript
-// Remover linhas 189-203 (o case antigo)
-case "not_responded":
-  // Deletar este bloco inteiro
-```
+O placeholder do input atualmente diz: **"Buscar por nome, email, ID..."** — não menciona telefone, mas a busca funciona.
 
 ---
 
-## Fluxo Corrigido
+## Problema Real
+
+Embora telefone já funcione, o placeholder pode confundir usuários. Além disso, falta buscar pelo **ID do contato** (`contact_id`), que é útil para operações de suporte.
+
+---
+
+## Mudanças Propostas
+
+### Arquivo 1: `src/components/inbox/InboxFilterPopover.tsx`
+
+**Linha 140** - Atualizar placeholder:
+
+```diff
+- placeholder="Buscar por nome, email, ID..."
++ placeholder="Buscar por nome, email, telefone, ID..."
+```
+
+### Arquivo 2: `src/hooks/useInboxView.tsx`
+
+**Linhas 177-183** - Adicionar busca por `contact_id`:
+
+```typescript
+// ANTES (linhas 177-183)
+result = result.filter(item => 
+  item.contact_name?.toLowerCase().includes(searchLower) ||
+  item.contact_email?.toLowerCase().includes(searchLower) ||
+  item.contact_phone?.toLowerCase().includes(searchLower) ||
+  item.conversation_id.toLowerCase().includes(searchLower) ||
+  item.last_snippet?.toLowerCase().includes(searchLower)
+);
+
+// DEPOIS
+result = result.filter(item => 
+  item.contact_name?.toLowerCase().includes(searchLower) ||
+  item.contact_email?.toLowerCase().includes(searchLower) ||
+  item.contact_phone?.toLowerCase().includes(searchLower) ||
+  item.contact_id?.toLowerCase().includes(searchLower) ||
+  item.conversation_id.toLowerCase().includes(searchLower) ||
+  item.last_snippet?.toLowerCase().includes(searchLower)
+);
+```
+
+---
+
+## Fluxo de Busca Resultante
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Usuário clica em "Não respondidas"                         │
-│  (filter = "not_responded")                                 │
+│  Usuário digita termo no campo de busca                     │
+│  Exemplo: "5511999999999" ou "fulano@email.com"             │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  1. filteredConversations detecta filter === "not_responded"│
-│  2. Busca rawInboxItems (sem filtros de popover)            │
-│  3. Filtra por: last_sender_type='contact' + assigned_to=me │
-│  4. Retorna conversas DIRETAMENTE, ignorando:               │
-│     ❌ Filtro de busca                                       │
-│     ❌ Filtro de departamento                                │
-│     ❌ Filtros do popover (áudio, anexos, etc.)              │
+│  O termo é comparado (case-insensitive) com:                │
 │                                                              │
-│  ✅ Lista mostra conversa não respondida                     │
+│  ✅ contact_name    → Nome do contato                       │
+│  ✅ contact_email   → Email do contato                      │
+│  ✅ contact_phone   → Telefone (com ou sem máscara)         │
+│  ✅ contact_id      → UUID do contato (NOVO)                │
+│  ✅ conversation_id → UUID da conversa                      │
+│  ✅ last_snippet    → Última mensagem                       │
+│                                                              │
+│  Se qualquer campo contiver o termo → conversa aparece      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -89,23 +89,23 @@ case "not_responded":
 
 | Arquivo | Ação |
 |---------|------|
-| `src/pages/Inbox.tsx` | Mover lógica not_responded para início do useMemo |
+| `src/components/inbox/InboxFilterPopover.tsx` | Atualizar placeholder |
+| `src/hooks/useInboxView.tsx` | Adicionar `contact_id` à busca |
 
 ---
 
 ## Validação Pós-Implementação
 
 1. Abrir Inbox
-2. Clicar em "Não respondidas" (mostra 1)
-3. Conversa deve aparecer na lista
-4. Aplicar filtro de busca com outro termo
-5. Voltar para "Não respondidas"
-6. Conversa ainda deve aparecer (ignorando busca)
+2. Digitar parte de um telefone (ex.: "999") → deve encontrar contato
+3. Digitar parte de um email → deve encontrar contato
+4. Digitar um ID de contato (UUID) → deve encontrar contato
+5. Verificar que placeholder mostra "nome, email, telefone, ID..."
 
 ---
 
 ## Conformidade com Regras
 
-- **Upgrade, não downgrade**: Melhora precisão do filtro sem quebrar outros
-- **Zero regressão**: Outros filtros continuam funcionando normalmente
-- **Preservação do existente**: Lógica original mantida para demais filtros
+- **Upgrade, não downgrade**: Adiciona funcionalidade sem remover nenhuma
+- **Zero regressão**: Busca existente continua funcionando
+- **Performance**: Filtro client-side, sem novas queries
