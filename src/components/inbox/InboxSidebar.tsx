@@ -47,6 +47,7 @@ interface InboxSidebarCounts {
   slaCritical: number;
   slaWarning: number;
   notResponded: number;
+  myNotResponded: number; // Conversas do usuário atual aguardando resposta
   unassigned: number;
   aiQueue: number;
   humanQueue: number;
@@ -346,6 +347,18 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
             onClick={() => setFilter("mine")}
           />
 
+          {/* Sub-item: Não respondidas (apenas do usuário atual) */}
+          <div className="pl-4">
+            <FilterItem
+              icon={<Clock className="h-4 w-4" />}
+              label="Não respondidas"
+              count={counts.myNotResponded ?? 0}
+              isActive={isFilterActive("not_responded")}
+              onClick={() => setFilter("not_responded")}
+              variant="warning"
+            />
+          </div>
+
           <FilterItem
             icon={<AlertTriangle className="h-4 w-4" />}
             label="SLA Excedido"
@@ -353,15 +366,6 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
             isActive={isFilterActive("sla")}
             onClick={() => setFilter("sla")}
             variant="danger"
-          />
-
-          <FilterItem
-            icon={<Clock className="h-4 w-4" />}
-            label="Não respondidas"
-            count={counts.notResponded}
-            isActive={isFilterActive("not_responded")}
-            onClick={() => setFilter("not_responded")}
-            variant="warning"
           />
 
           <FilterItem

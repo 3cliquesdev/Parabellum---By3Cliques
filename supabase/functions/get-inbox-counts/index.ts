@@ -28,6 +28,7 @@ type InboxCounts = {
   slaCritical: number;
   slaWarning: number;
   notResponded: number;
+  myNotResponded: number; // Conversas do usuário atual aguardando resposta
   unassigned: number;
   unread: number;
   closed: number;
@@ -225,6 +226,10 @@ serve(async (req) => {
     const slaCritical = inbox.filter((i: any) => i.sla_status === "critical").length;
     const slaWarning = inbox.filter((i: any) => i.sla_status === "warning").length;
     const notResponded = inboxActive.filter((i: any) => i.last_sender_type === "contact").length;
+    // Novo: Conversas do usuário atual com última mensagem do cliente (aguardando resposta do agente)
+    const myNotResponded = inboxActive.filter(
+      (i: any) => i.last_sender_type === "contact" && i.assigned_to === userId
+    ).length;
     const unread = inbox.reduce((sum: number, i: any) => sum + (i.unread_count || 0), 0);
 
     // -------- byDepartment (active)
@@ -274,6 +279,7 @@ serve(async (req) => {
       slaCritical,
       slaWarning,
       notResponded,
+      myNotResponded,
       unassigned: unassigned || 0,
       unread,
       closed: totalClosed || 0,

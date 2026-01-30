@@ -533,6 +533,7 @@ export interface InboxCounts {
   slaCritical: number;
   slaWarning: number;
   notResponded: number;
+  myNotResponded: number; // Conversas do usuário atual aguardando resposta
   unassigned: number;
   unread: number;
   closed: number;
@@ -567,6 +568,7 @@ export function useInboxCounts(userId?: string) {
         slaCritical: 0,
         slaWarning: 0,
         notResponded: 0,
+        myNotResponded: 0,
         unassigned: 0,
         unread: 0,
         closed: 0,
@@ -586,6 +588,7 @@ export function useInboxCounts(userId?: string) {
       slaCritical: 0,
       slaWarning: 0,
       notResponded: 0,
+      myNotResponded: 0,
       unassigned: 0,
       unread: 0,
       closed: 0,

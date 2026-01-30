@@ -182,8 +182,17 @@ export default function Inbox() {
         return result.filter(c => c.status !== 'closed');
       
       case "not_responded":
-        // Last message from contact - would need last_sender_type field
-        return result.filter(c => c.status !== 'closed');
+        // Filtrar por conversas do agente onde a última mensagem foi do cliente
+        const notRespondedIds = new Set(
+          inboxItems
+            ?.filter(item => 
+              item.last_sender_type === 'contact' && 
+              item.assigned_to === user?.id &&
+              item.status !== 'closed'
+            )
+            .map(item => item.conversation_id) || []
+        );
+        return result.filter(c => notRespondedIds.has(c.id));
       
       case "unassigned":
         return result.filter(c => !c.assigned_to && c.status !== 'closed');
@@ -322,6 +331,7 @@ export default function Inbox() {
     slaCritical: 0,
     slaWarning: 0,
     notResponded: 0,
+    myNotResponded: 0,
     unassigned: 0,
     unread: 0,
     closed: 0,
