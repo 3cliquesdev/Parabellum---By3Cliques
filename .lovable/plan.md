@@ -1,241 +1,205 @@
 
 
-# Plano: Corrigir Transferências e Proteção de AI Mode no Comercial
+# Plano: Corrigir Distribuição para Departamento Exato (Sem Fallback)
 
-## Diagnóstico Completo
+## Diagnóstico Confirmado
 
-Após investigação profunda, identifiquei dois problemas que afetam o time Comercial:
+### Estado Real dos Agentes
 
-### Problema 1: "Sem permissão para transferir"
+| Agente | Departamento | Status | Chats |
+|--------|--------------|--------|-------|
+| **Miguel Fedes** | **Suporte Sistema** | ✅ Online | 7 |
+| Camila de Farias | Suporte (pai) | ✅ Online | 31 |
+| Juliana Alves | Suporte Pedidos | ✅ Online | 12 |
 
-A função `transfer_conversation_secure` está falhando ao tentar atualizar `ai_mode` porque:
-- A coluna `ai_mode` é um **ENUM** (tipo customizado)
-- A função atribui strings diretamente: `ai_mode = 'copilot'`
-- O PostgreSQL requer cast explícito: `ai_mode = 'copilot'::ai_mode`
+### Estrutura Hierárquica
 
-O erro que aparece nos logs do Postgres confirma:
+```text
+Suporte (36ce66cd)             → Camila de Farias
+├── Suporte Pedidos (2dd0ee5c) → Juliana Alves, Oliveira
+└── Suporte Sistema (fd4fcc90) → Miguel Fedes ✅
 ```
-ERROR: column "ai_mode" is of type ai_mode but expression is of type text
-```
 
-### Problema 2: IA Respondendo em Conversas com Agente Atribuído
+### Problema Identificado
 
-Algumas conversas podem estar com `ai_mode = 'autopilot'` mesmo tendo agente atribuído. Isso acontece quando:
-1. O UPDATE de `ai_mode` falha silenciosamente devido ao erro de ENUM
-2. A conversa foi transferida antes do fix de handoff
+O sistema implementa **fallback hierárquico automático**:
+1. Conversa chega em "Suporte Sistema"
+2. Miguel não estava online no momento do dispatch
+3. Sistema fez fallback para "Suporte" (pai)
+4. Encontrou Camila → Atribuiu a ela **INCORRETAMENTE**
 
-### Evidência dos Logs
+### Comportamento Desejado
 
-| Timestamp | Erro |
-|-----------|------|
-| 14:27:46 | `column "ai_mode" is of type ai_mode but expression is of type text` |
+- Conversa de "Suporte Sistema" → **SOMENTE** Miguel (ou outros agentes do mesmo departamento)
+- Conversa de "Suporte Pedidos" → **SOMENTE** Juliana/Oliveira
+- Conversa de "Suporte" (geral) → **SOMENTE** Camila
 
-### Estado Atual do Comercial
-
-| Conversa | ai_mode | assigned_to | Status |
-|----------|---------|-------------|--------|
-| Maioria | `copilot` | Fernanda/Thaynara | OK |
-| Algumas | `waiting_human` | Fernanda/Thaynara | OK |
-| Potenciais órfãs | `autopilot`? | Atribuído | PROBLEMA |
+**Se não houver agente disponível no departamento específico, a conversa deve aguardar na fila até que alguém fique online.**
 
 ## Solução
 
-### Correção 1: Cast Explícito para ENUM na Função SQL
+### Correção 1: Desabilitar Fallback Hierárquico na Edge Function
 
-Modificar a função `transfer_conversation_secure` para usar cast explícito:
+Modificar `dispatch-conversations/index.ts` para não fazer fallback para departamento pai:
 
-```sql
--- ANTES (causa erro):
-ai_mode = CASE 
-  WHEN p_to_user_id IS NOT NULL THEN 'copilot'
-  ELSE 'waiting_human'
-END
+```typescript
+// ANTES (com fallback):
+if (dept?.parent_id) {
+  return findEligibleAgent(supabase, dept.parent_id, attemptedDepts);
+}
 
--- DEPOIS (correto):
-ai_mode = CASE 
-  WHEN p_to_user_id IS NOT NULL THEN 'copilot'::ai_mode
-  ELSE 'waiting_human'::ai_mode
-END
+// DEPOIS (sem fallback - distribuição estrita):
+if (dept?.parent_id) {
+  console.log(`[findEligibleAgent] No agents in ${dept.name}, strict mode - waiting for specific dept agents`);
+  // NÃO faz fallback - conversa aguarda na fila
+}
+return null;
 ```
 
-### Correção 2: Cast Explícito no Webhook
+### Correção 2: Desatribuir Conversas Incorretas da Camila
 
-O `meta-whatsapp-webhook` também precisa ajustar os updates para usar o cast correto. Verificar todas as ocorrências de `ai_mode` no código TypeScript das Edge Functions.
-
-### Correção 3: Reparar Conversas Órfãs
-
-Executar SQL para corrigir conversas que têm agente atribuído mas estão em `autopilot`:
+As 39 conversas de "Suporte Sistema" que foram para Camila precisam ser corrigidas:
 
 ```sql
+-- Desatribuir conversas de Suporte Sistema da Camila
 UPDATE conversations
-SET ai_mode = 'copilot'
-WHERE assigned_to IS NOT NULL
-  AND ai_mode = 'autopilot'
+SET 
+  assigned_to = NULL,
+  ai_mode = 'waiting_human',
+  dispatch_status = 'pending'
+WHERE department = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4'
+  AND assigned_to = 'de03d434-9e8c-466b-b7a8-9a08bbef1760'
   AND status = 'open';
 ```
 
-## Mudanças Necessárias
+### Correção 3: Recriar Jobs de Dispatch para Miguel Receber
 
-| Arquivo | Tipo | Mudança |
-|---------|------|---------|
-| Migration SQL | Banco de Dados | Recriar função com cast explícito |
-| `supabase/functions/meta-whatsapp-webhook/index.ts` | Edge Function | Verificar se SDK do Supabase aceita string |
-| Migration SQL | Banco de Dados | Corrigir conversas órfãs |
+```sql
+-- Deletar jobs escalados antigos
+DELETE FROM conversation_dispatch_jobs
+WHERE department_id = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4'
+  AND status = 'escalated';
+
+-- Criar novos jobs pendentes
+INSERT INTO conversation_dispatch_jobs (
+  id, conversation_id, department_id, priority, status,
+  attempts, max_attempts, next_attempt_at, created_at
+)
+SELECT 
+  gen_random_uuid(), c.id, c.department, 1, 'pending',
+  0, 5, NOW(), NOW()
+FROM conversations c
+WHERE c.department = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4'
+  AND c.status = 'open'
+  AND c.ai_mode = 'waiting_human'
+  AND c.assigned_to IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM conversation_dispatch_jobs cdj 
+    WHERE cdj.conversation_id = c.id AND cdj.status = 'pending'
+  );
+```
+
+### Correção 4: Disparar o Dispatcher
+
+Chamar a Edge Function para processar os novos jobs e atribuir ao Miguel.
 
 ## Impacto Esperado
 
-### Antes (Bug)
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Conversas de Suporte Sistema para Camila | 39 | 0 |
+| Conversas de Suporte Sistema para Miguel | 7 | 39+ |
+| Fallback hierárquico | Ativo | Desabilitado |
+| Distribuição | Por hierarquia | Por departamento exato |
 
-| Cenário | Resultado |
-|---------|-----------|
-| Agente do Comercial tenta transferir | "Sem permissão" (UPDATE falha) |
-| IA em conversa com agente | Responde automaticamente |
+## Arquivos a Modificar
 
-### Depois (Corrigido)
-
-| Cenário | Resultado |
-|---------|-----------|
-| Agente do Comercial tenta transferir | Sucesso, ai_mode = copilot |
-| IA em conversa com agente | Bloqueada (ai_mode = copilot) |
-
-## Compatibilidade
-
-- Não afeta fluxo de transferência existente
-- Corrige edge cases de ENUM
-- Mantém todas as proteções de ai_mode
+| Arquivo | Tipo | Mudança |
+|---------|------|---------|
+| `supabase/functions/dispatch-conversations/index.ts` | Edge Function | Remover fallback hierárquico |
+| Migration SQL | Banco de Dados | Desatribuir e recriar jobs |
 
 ---
 
 ## Seção Técnica
 
-### SQL da Função Corrigida
+### Mudança no Código da Edge Function
 
-```sql
-CREATE OR REPLACE FUNCTION public.transfer_conversation_secure(
-  p_conversation_id UUID,
-  p_to_user_id UUID,
-  p_to_department_id UUID,
-  p_transfer_note TEXT DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_caller_id UUID := auth.uid();
-  v_has_permission BOOLEAN;
-  v_conversation RECORD;
-  v_from_user_name TEXT;
-  v_to_user_name TEXT;
-  v_department_name TEXT;
-  v_new_ai_mode ai_mode;  -- Usar tipo ENUM explícito
-BEGIN
-  -- 1. Verificar permissão
-  SELECT EXISTS(
-    SELECT 1 FROM role_permissions rp
-    JOIN user_roles ur ON ur.role::text = rp.role::text
-    WHERE ur.user_id = v_caller_id
-      AND rp.permission_key = 'inbox.transfer'
-      AND rp.enabled = true
-  ) OR public.has_role(v_caller_id, 'admin')
-  INTO v_has_permission;
+Localização: `supabase/functions/dispatch-conversations/index.ts`
 
-  IF NOT v_has_permission THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Sem permissão para transferir conversas');
-  END IF;
+**Função `findEligibleAgent` (linhas 375-395):**
 
-  -- 2. Buscar conversa
-  SELECT c.*, ct.first_name, ct.last_name
-  INTO v_conversation
-  FROM conversations c
-  JOIN contacts ct ON ct.id = c.contact_id
-  WHERE c.id = p_conversation_id;
+```typescript
+// ANTES:
+if (dept?.parent_id) {
+  console.log(`[findEligibleAgent] 🔄 Fallback: ${dept.name || departmentId} → parent ${dept.parent_id}`);
+  return findEligibleAgent(supabase, dept.parent_id, attemptedDepts);
+}
 
-  IF v_conversation IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Conversa não encontrada');
-  END IF;
-
-  -- 3. Buscar nomes
-  SELECT full_name INTO v_from_user_name FROM profiles WHERE id = v_conversation.assigned_to;
-  SELECT full_name INTO v_to_user_name FROM profiles WHERE id = p_to_user_id;
-  SELECT name INTO v_department_name FROM departments WHERE id = p_to_department_id;
-
-  -- 4. Determinar novo ai_mode com cast explícito
-  v_new_ai_mode := CASE 
-    WHEN p_to_user_id IS NOT NULL THEN 'copilot'::ai_mode
-    ELSE 'waiting_human'::ai_mode
-  END;
-
-  -- 5. Executar transferência
-  UPDATE conversations
-  SET 
-    assigned_to = p_to_user_id,
-    department = p_to_department_id,
-    previous_agent_id = v_conversation.assigned_to,
-    ai_mode = v_new_ai_mode  -- Usar variável tipada
-  WHERE id = p_conversation_id;
-
-  -- 6. Registrar auditoria
-  INSERT INTO interactions (customer_id, type, content, channel, metadata)
-  VALUES (
-    v_conversation.contact_id,
-    'conversation_transferred',
-    format('🔄 Conversa transferida de %s para %s (%s)',
-      COALESCE(v_from_user_name, 'Pool'),
-      COALESCE(v_to_user_name, 'Pool do Departamento'),
-      COALESCE(v_department_name, 'Departamento')
-    ),
-    'other',
-    jsonb_build_object(
-      'from_user_id', v_conversation.assigned_to,
-      'to_user_id', p_to_user_id,
-      'from_user_name', v_from_user_name,
-      'to_user_name', v_to_user_name,
-      'to_department_id', p_to_department_id,
-      'to_department_name', v_department_name,
-      'conversation_id', p_conversation_id,
-      'transfer_note', p_transfer_note,
-      'transferred_by', v_caller_id,
-      'is_internal', true,
-      'ai_mode_set_to', v_new_ai_mode::text
-    )
-  );
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'conversation_id', p_conversation_id,
-    'to_user_id', p_to_user_id,
-    'to_department_id', p_to_department_id,
-    'ai_mode', v_new_ai_mode::text
-  );
-END;
-$$;
+// DEPOIS:
+if (dept?.parent_id) {
+  console.log(`[findEligibleAgent] ℹ️ No agents available in ${dept.name}. Strict mode: no fallback to parent.`);
+  // Distribuição estrita por departamento - não faz fallback
+}
+return null;
 ```
 
-### SQL para Corrigir Conversas Órfãs
+**Função `checkDepartmentHasAgents` (linhas 500-530) - também precisa ajustar:**
+
+```typescript
+// ANTES:
+if (dept?.parent_id) {
+  return checkDepartmentHasAgents(supabase, dept.parent_id, attemptedDepts);
+}
+
+// DEPOIS:
+// Verificar apenas o departamento específico, sem fallback
+return count > 0;
+```
+
+### SQL Completo para Execução
 
 ```sql
--- Corrigir conversas com agente mas em autopilot
+-- Passo 1: Desatribuir conversas incorretas da Camila
 UPDATE conversations
-SET ai_mode = 'copilot'::ai_mode
-WHERE assigned_to IS NOT NULL
-  AND ai_mode = 'autopilot'
+SET 
+  assigned_to = NULL,
+  ai_mode = 'waiting_human'::ai_mode,
+  dispatch_status = 'pending'
+WHERE department = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4'
+  AND assigned_to = 'de03d434-9e8c-466b-b7a8-9a08bbef1760'
   AND status = 'open';
 
--- Corrigir conversas do Comercial específicas
-UPDATE conversations
-SET ai_mode = 'waiting_human'::ai_mode
-WHERE department = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c'
-  AND ai_mode = 'autopilot'
-  AND status = 'open'
-  AND assigned_to IS NULL;
+-- Passo 2: Deletar jobs escalados antigos
+DELETE FROM conversation_dispatch_jobs
+WHERE department_id = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4'
+  AND status IN ('escalated', 'completed');
+
+-- Passo 3: Criar novos jobs pendentes
+INSERT INTO conversation_dispatch_jobs (
+  id, conversation_id, department_id, priority, status,
+  attempts, max_attempts, next_attempt_at, created_at
+)
+SELECT 
+  gen_random_uuid(), c.id, c.department, 1, 'pending',
+  0, 5, NOW(), NOW()
+FROM conversations c
+WHERE c.department = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4'
+  AND c.status = 'open'
+  AND c.ai_mode = 'waiting_human'
+  AND c.assigned_to IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM conversation_dispatch_jobs cdj 
+    WHERE cdj.conversation_id = c.id AND cdj.status = 'pending'
+  );
 ```
 
 ### Verificação Pós-Deploy
 
-1. Agente do Comercial tenta transferir uma conversa
-2. Verificar que o toast mostra "Conversa transferida com sucesso"
-3. Verificar no banco: `ai_mode = 'copilot'` ou `'waiting_human'`
-4. Cliente envia mensagem → Verificar que IA NÃO responde
+1. Executar migration SQL
+2. Deploy da Edge Function
+3. Chamar `dispatch-conversations` manualmente
+4. Verificar logs: "✅ Assigned ... to Miguel Fedes"
+5. Confirmar que conversas foram atribuídas ao Miguel
+6. Testar nova conversa de "Suporte Sistema" → Deve ir para Miguel
 
