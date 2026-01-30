@@ -1,290 +1,208 @@
 
-# Plano de Implementação: Fase 1 — IA Útil e Controlada (Anti-Alucinação)
-
-## Resumo Executivo
-
-Esta fase evolui o AIResponseNode para aceitar parâmetros de controle granular, garantindo que a IA responda **apenas** ao que foi autorizado pelo fluxo visual, eliminando alucinações e fugas de comportamento.
-
----
+# Ajustes Finos — Fase 1 Anti-Alucinação
 
 ## Diagnóstico do Estado Atual
 
-| Componente | Status | Observação |
-|------------|--------|------------|
-| `process-chat-flow` | ✅ Já retorna `aiNodeActive: true` | Regra anti-alucinação básica já existe |
-| `FlowContext` interface | ✅ Existe | Falta campos `objective`, `max_sentences`, `forbid_questions`, `forbid_options` |
-| `AIResponseNode` | ⚠️ Parcial | Tem `context_prompt`, `allowed_sources`, mas falta controles de comportamento |
-| `ai-autopilot-chat` | ⚠️ Prompt extenso | Não usa `flow_context` para restringir comportamento |
-| Prompt base | ❌ Não existe | Precisa criar prompt obrigatório anti-alucinação |
-
----
-
-## Arquitetura da Solução
-
-```text
-┌──────────────────────┐          ┌─────────────────────────┐
-│  Chat Flow Editor    │          │  AIResponseNode Props   │
-│  (React Flow)        │          │  - objective            │
-│                      │◄────────►│  - allowed_sources      │
-│  AIResponseNode      │          │  - max_sentences        │
-│                      │          │  - forbid_questions     │
-└──────────────────────┘          │  - forbid_options       │
-           │                      │  - context_prompt       │
-           │ flow_context         │  - fallback_message     │
-           ▼                      └─────────────────────────┘
-┌──────────────────────┐
-│  process-chat-flow   │
-│  (Edge Function)     │
-│                      │
-│  Retorna:            │
-│  - aiNodeActive      │
-│  - objective         │
-│  - allowedSources    │
-│  - maxSentences      │
-│  - forbidQuestions   │
-│  - forbidOptions     │
-└──────────────────────┘
-           │
-           ▼
-┌──────────────────────┐          ┌─────────────────────────┐
-│  ai-autopilot-chat   │◄────────►│  PROMPT BASE            │
-│  (Edge Function)     │          │  (ANTI-ALUCINAÇÃO)      │
-│                      │          │  - Objetivo definido    │
-│  Usa flow_context    │          │  - Fontes permitidas    │
-│  para restringir     │          │  - Sem perguntas        │
-│  comportamento       │          │  - Sem opções           │
-└──────────────────────┘          │  - Resposta curta       │
-                                  │  - Fallback padrão      │
-                                  └─────────────────────────┘
-```
+| Ajuste | Situação Atual | Impacto |
+|--------|----------------|---------|
+| `fallback_message` obrigatório | ❌ Default vazio no frontend (`fallback_message: ""`) | Backend depende de fallback hardcoded |
+| `maxSentences` pós-processamento | ❌ Só existe no prompt | IA pode ignorar limite |
+| `allowed_sources` logging | ❌ Sem validação | Sem visibilidade de violações |
+| `useAutopilotTrigger` novos campos | ❌ Não passa Fase 1 fields | Web Chat não usa novos controles |
 
 ---
 
 ## Alterações Detalhadas
 
-### 1. Atualizar Interface do AIResponseNode (Frontend)
+### 1. Frontend: `fallback_message` com Default Obrigatório
 
-**Arquivo:** `src/components/chat-flows/nodes/AIResponseNode.tsx`
+**Arquivo:** `src/components/chat-flows/ChatFlowEditor.tsx`
 
-Adicionar interface com novos campos:
+Atualizar `getDefaultData` para incluir default no `ai_response`:
 
 ```typescript
-interface AIResponseNodeData {
-  // ... campos existentes
-  objective?: string;              // "Responda dúvidas sobre rastreio"
-  allowed_sources: ('kb' | 'conversation_history' | 'crm')[];
-  max_sentences?: number;          // 1-5 frases máximo
-  forbid_questions?: boolean;      // IA não pode fazer perguntas
-  forbid_options?: boolean;        // IA não pode oferecer opções
-}
+ai_response: { 
+  label: "Resposta IA", 
+  context_prompt: "", 
+  use_knowledge_base: true, 
+  // 🆕 FASE 1: fallback obrigatório com valor padrão
+  fallback_message: "No momento não tenho essa informação.",
+  // 🆕 FASE 1: Valores padrão para controles de comportamento
+  max_sentences: 3,
+  forbid_questions: true,
+  forbid_options: true
+},
 ```
 
-### 2. Atualizar Painel de Propriedades (Frontend)
+### 2. Frontend: Validação Visual no Painel
 
 **Arquivo:** `src/components/chat-flows/AIResponsePropertiesPanel.tsx`
 
-Adicionar nova seção "Controles de Comportamento":
+Adicionar indicador visual se fallback estiver vazio:
 
-- **Objetivo do Nó** (Textarea): "Qual o objetivo da IA neste ponto?"
-- **Máximo de Frases** (Slider 1-5): Limitar verbosidade
-- **Proibir Perguntas** (Switch): IA não pergunta nada
-- **Proibir Opções** (Switch): IA não oferece múltipla escolha
+```tsx
+{/* Seção: Fallback */}
+<div className="space-y-2">
+  <div className="flex items-center gap-2">
+    <AlertTriangle className={cn(
+      "h-4 w-4",
+      selectedNode.data.fallback_message 
+        ? "text-orange-500" 
+        : "text-red-500 animate-pulse"
+    )} />
+    <Label className="text-xs font-semibold uppercase tracking-wide">
+      Mensagem de Fallback
+      {!selectedNode.data.fallback_message && (
+        <Badge variant="destructive" className="ml-2 text-[9px]">Obrigatório</Badge>
+      )}
+    </Label>
+  </div>
+  
+  {/* Se vazio, auto-preencher */}
+  <Textarea
+    value={selectedNode.data.fallback_message || "No momento não tenho essa informação."}
+    onChange={(e) => updateNodeData("fallback_message", e.target.value)}
+    ...
+  />
+</div>
+```
 
-### 3. Atualizar FlowContext Interface (Backend)
+### 3. Backend: Função `limitSentences` Pós-Processamento
 
 **Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
 
-Expandir interface:
+Adicionar função de truncagem de frases após geração:
 
 ```typescript
-interface FlowContext {
-  flow_id: string;
-  node_id: string;
-  node_type: 'ai_response';
-  // Campos existentes
-  allowed_sources: ('kb' | 'crm' | 'tracking' | 'conversation_history')[];
-  response_format: 'text_only';
-  personaId?: string;
-  kbCategories?: string[];
-  contextPrompt?: string;
-  fallbackMessage?: string;
-  // NOVOS CAMPOS (Fase 1)
-  objective?: string;
-  maxSentences?: number;
-  forbidQuestions?: boolean;
-  forbidOptions?: boolean;
+// 🆕 FASE 1: Truncar resposta ao máximo de frases permitido
+function limitSentences(text: string, maxSentences: number): string {
+  // Separar por pontuação final (. ! ?)
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  
+  if (sentences.length <= maxSentences) {
+    return text;
+  }
+  
+  // Truncar e adicionar indicador se necessário
+  const truncated = sentences.slice(0, maxSentences).join(' ').trim();
+  console.log(`[ai-autopilot-chat] ✂️ Resposta truncada de ${sentences.length} para ${maxSentences} frases`);
+  
+  return truncated;
 }
 ```
 
-### 4. Atualizar process-chat-flow (Backend)
-
-**Arquivo:** `supabase/functions/process-chat-flow/index.ts`
-
-Passar novos campos quando AIResponseNode é ativado:
+**Uso após validação (linha ~7420):**
 
 ```typescript
-// Quando nextNode.type === 'ai_response'
-return new Response(JSON.stringify({
-  useAI: true,
-  aiNodeActive: true,
-  // ... campos existentes
-  // NOVOS CAMPOS
-  objective: nextNode.data?.objective || null,
-  maxSentences: nextNode.data?.max_sentences || 3,
-  forbidQuestions: nextNode.data?.forbid_questions ?? true,
-  forbidOptions: nextNode.data?.forbid_options ?? true,
-}));
+// Após validateResponseRestrictions...
+if (restrictionCheck.valid) {
+  // 🆕 FASE 1: Enforce limite de frases no pós-processamento
+  const maxSentences = flow_context.maxSentences ?? 3;
+  assistantMessage = limitSentences(assistantMessage, maxSentences);
+}
 ```
 
-### 5. Criar Prompt Base Anti-Alucinação (Backend)
+### 4. Backend: Logging de Violação de `allowed_sources`
 
 **Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
 
-Criar função que gera prompt restritivo baseado no `flow_context`:
+Adicionar validação de fontes após resposta (não bloqueante):
 
 ```typescript
-function generateRestrictedPrompt(flowContext: FlowContext): string {
-  const maxSentences = flowContext.maxSentences || 3;
-  const objective = flowContext.objective || 'Responder a dúvida do cliente';
+// 🆕 FASE 1: Log de violação de allowed_sources (não bloqueante)
+function logSourceViolationIfAny(
+  response: string, 
+  allowedSources: string[],
+  kbUsed: boolean,
+  crmUsed: boolean,
+  trackingUsed: boolean
+): void {
+  const violations: string[] = [];
   
-  let restrictions = `
-Você é um assistente corporativo.
-Responda SOMENTE ao seguinte objetivo: "${objective}"
-Use APENAS as fontes permitidas: ${flowContext.allowed_sources.join(', ')}.
-Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.
-`;
-
-  if (flowContext.forbidQuestions) {
-    restrictions += '\nNÃO faça perguntas ao cliente.';
+  // Verificar se IA usou fonte não autorizada
+  if (!allowedSources.includes('kb') && kbUsed) {
+    violations.push('kb_not_allowed');
+  }
+  if (!allowedSources.includes('crm') && crmUsed) {
+    violations.push('crm_not_allowed');
+  }
+  if (!allowedSources.includes('tracking') && trackingUsed) {
+    violations.push('tracking_not_allowed');
   }
   
-  if (flowContext.forbidOptions) {
-    restrictions += '\nNÃO ofereça opções ou múltipla escolha.';
+  if (violations.length > 0) {
+    console.warn('[ai-autopilot-chat] ⚠️ SOURCE VIOLATION (não bloqueante):', {
+      violations,
+      allowedSources,
+      responsePreview: response.substring(0, 100)
+    });
   }
-  
-  restrictions += `
-NÃO sugira transferência para humano.
-NÃO invente informações.
-Se não houver dados suficientes, responda exatamente:
-"No momento não tenho essa informação."
-
-A resposta deve ser curta, clara e objetiva.`;
-
-  return restrictions;
 }
 ```
 
-### 6. Injetar Prompt Restritivo na Chamada da IA
+### 5. Frontend: useAutopilotTrigger — Novos Campos Fase 1
 
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
+**Arquivo:** `src/hooks/useAutopilotTrigger.tsx`
 
-Modificar a construção do system prompt quando `flow_context` existe:
-
-```typescript
-// Se tem flow_context válido, usar prompt restritivo
-if (flow_context && flow_context.aiNodeActive) {
-  const restrictedPrompt = generateRestrictedPrompt(flow_context);
-  
-  // Substituir o prompt extenso pelo prompt restritivo
-  contextualizedSystemPrompt = `${restrictedPrompt}
-
-${knowledgeContext}
-
-**Contexto do Cliente:**
-- Nome: ${contactName}
-- Status: ${contactStatus}`;
-}
-```
-
-### 7. Validação Pós-Resposta (Anti-Escape)
-
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
-
-Após receber resposta da IA, validar se ela violou o contrato:
+Atualizar `flowContext` para incluir novos campos:
 
 ```typescript
-// Validar resposta quando flow_context ativo
-if (flow_context && flow_context.forbidQuestions) {
-  const hasQuestion = assistantMessage.includes('?');
-  if (hasQuestion) {
-    console.log('[ai-autopilot-chat] ⚠️ IA violou contrato: fez pergunta');
-    // Usar fallback
-    assistantMessage = flow_context.fallbackMessage || 
-      'No momento não tenho essa informação.';
-  }
-}
-
-if (flow_context && flow_context.forbidOptions) {
-  const hasOptions = ESCAPE_PATTERNS.some(p => p.test(assistantMessage));
-  if (hasOptions) {
-    console.log('[ai-autopilot-chat] ⚠️ IA violou contrato: ofereceu opções');
-    assistantMessage = flow_context.fallbackMessage || 
-      'No momento não tenho essa informação.';
-  }
-}
+flowContext: data?.aiNodeActive ? {
+  flow_id: data?.flowId || data?.masterFlowId,
+  node_id: data?.nodeId,
+  node_type: 'ai_response',
+  allowed_sources: data?.allowedSources || ['kb', 'crm', 'tracking'],
+  response_format: 'text_only',
+  personaId: data?.personaId,
+  kbCategories: data?.kbCategories,
+  contextPrompt: data?.contextPrompt,
+  fallbackMessage: data?.fallbackMessage || 'No momento não tenho essa informação.',
+  // 🆕 FASE 1: Novos campos de controle
+  objective: data?.objective,
+  maxSentences: data?.maxSentences ?? 3,
+  forbidQuestions: data?.forbidQuestions ?? true,
+  forbidOptions: data?.forbidOptions ?? true,
+} : undefined,
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Ação |
-|---------|------|
-| `src/components/chat-flows/nodes/AIResponseNode.tsx` | Adicionar novos campos na interface + badges |
-| `src/components/chat-flows/AIResponsePropertiesPanel.tsx` | Adicionar seção "Controles de Comportamento" |
-| `supabase/functions/process-chat-flow/index.ts` | Passar novos campos no retorno |
-| `supabase/functions/ai-autopilot-chat/index.ts` | Criar `generateRestrictedPrompt`, injetar no prompt, validar resposta |
-| `supabase/functions/message-listener/index.ts` | Passar novos campos no `flow_context` |
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/chat-flows/ChatFlowEditor.tsx` | Default `fallback_message` + campos Fase 1 |
+| `src/components/chat-flows/AIResponsePropertiesPanel.tsx` | Indicador visual de fallback obrigatório |
+| `supabase/functions/ai-autopilot-chat/index.ts` | `limitSentences` + `logSourceViolationIfAny` |
+| `src/hooks/useAutopilotTrigger.tsx` | Passar novos campos Fase 1 |
 
 ---
 
-## Valores Padrão (Default)
+## Resultado Esperado
 
-Quando o usuário não configurar explicitamente:
-
-| Campo | Valor Padrão | Justificativa |
-|-------|--------------|---------------|
-| `objective` | `null` | Usa `context_prompt` existente |
-| `allowed_sources` | `['kb', 'crm', 'conversation_history']` | Acesso a todas as fontes |
-| `max_sentences` | `3` | Respostas concisas |
-| `forbid_questions` | `true` | IA não pergunta por padrão |
-| `forbid_options` | `true` | IA não oferece menus por padrão |
-
----
-
-## Critérios de Aceitação (Fase 1 Concluída)
-
-| Teste | Resultado Esperado |
-|-------|-------------------|
-| IA responde em AIResponseNode | ✅ Somente quando `aiNodeActive: true` |
-| Resposta curta | ✅ Máximo N frases conforme configurado |
-| Sem perguntas | ✅ IA não faz perguntas quando `forbid_questions: true` |
-| Sem opções | ✅ IA não oferece menus quando `forbid_options: true` |
-| Fallback seguro | ✅ "No momento não tenho essa informação." |
-| Foco no objetivo | ✅ IA responde apenas sobre o objetivo definido |
-| Zero escape | ✅ IA não transfere, não cria ticket, não decide |
+| Garantia | Antes | Depois |
+|----------|-------|--------|
+| Fallback sempre definido | ⚠️ Depende do backend | ✅ Frontend garante default |
+| Limite de frases | ⚠️ Só no prompt | ✅ Enforce no pós-processamento |
+| Violação de fontes | ⚠️ Invisível | ✅ Log para auditoria |
+| Web Chat com Fase 1 | ❌ Não propagava | ✅ Campos propagados |
 
 ---
 
 ## Ordem de Implementação
 
-1. **Frontend**: Atualizar `AIResponseNode` e `AIResponsePropertiesPanel`
-2. **Backend**: Atualizar `process-chat-flow` para passar novos campos
-3. **Backend**: Criar `generateRestrictedPrompt` no `ai-autopilot-chat`
-4. **Backend**: Injetar prompt restritivo quando `flow_context` existe
-5. **Backend**: Adicionar validação pós-resposta (anti-escape)
-6. **Backend**: Atualizar `message-listener` para passar novos campos
-7. **Testes**: Verificar comportamento em fluxos reais
+1. **Frontend**: Atualizar `getDefaultData` em `ChatFlowEditor.tsx`
+2. **Frontend**: Adicionar indicador visual em `AIResponsePropertiesPanel.tsx`
+3. **Frontend**: Atualizar `useAutopilotTrigger.tsx` com novos campos
+4. **Backend**: Criar `limitSentences` e `logSourceViolationIfAny`
+5. **Backend**: Aplicar pós-processamento após validação
+6. **Deploy**: Publicar edge functions
 
 ---
 
-## Garantias de Segurança
+## Nenhuma Breaking Change
 
-- ✅ IA só roda em `AIResponseNode` ativo
-- ✅ IA não decide próximos nós
-- ✅ IA não faz perguntas (quando configurado)
-- ✅ IA não oferece opções (quando configurado)
-- ✅ IA não transfere conversa
-- ✅ IA não altera estado
-- ✅ Comportamento 100% determinístico
-
+- ✅ Nós existentes mantêm comportamento (defaults aplicados)
+- ✅ Fallback vazio é auto-preenchido
+- ✅ Logging não bloqueante
+- ✅ Truncagem só quando necessário
