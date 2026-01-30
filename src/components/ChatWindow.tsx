@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign, Ticket, PanelRightClose, PanelRight } from "lucide-react";
+import { Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign, Ticket, PanelRightClose, PanelRight, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
 import { useSendMessageInstant } from "@/hooks/useSendMessageInstant";
@@ -28,6 +28,7 @@ import { useTakeControl } from "@/hooks/useTakeControl";
 import { useCanTakeControl } from "@/hooks/useCanTakeControl";
 import { useReturnToAutopilot } from "@/hooks/useReturnToAutopilot";
 import { useAutopilotTrigger } from "@/hooks/useAutopilotTrigger";
+import { useTestModeToggle } from "@/hooks/useTestModeToggle";
 import TransferConversationDialog from "@/components/TransferConversationDialog";
 import { CreateTicketFromInboxDialog } from "@/components/CreateTicketFromInboxDialog";
 import CopilotSuggestionCard from "@/components/CopilotSuggestionCard";
@@ -93,6 +94,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const takeControl = useTakeControl();
   const returnToAutopilot = useReturnToAutopilot();
   const { isAIEnabled: isAIGlobalEnabled } = useAIGlobalConfig();
+  const { isTestMode, toggle: toggleTestMode, isPending: isTestModePending } = useTestModeToggle(conversation?.id || null);
   const { toast } = useToast();
   
   // Verificar se pode assumir esta conversa
@@ -394,6 +396,29 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
 
               {/* Botões de ação - lado direito */}
               <div className="flex items-center gap-1.5 shrink-0">
+                {/* 🧪 Botão de Modo de Teste - apenas para admins/managers quando IA global está OFF */}
+                {(isAdmin || isManager) && !isAIGlobalEnabled && isAutopilot && (
+                  <Button
+                    variant={isTestMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleTestMode(!isTestMode)}
+                    disabled={isTestModePending}
+                    title={isTestMode 
+                      ? "Modo Teste ATIVO - IA responde apenas nesta conversa" 
+                      : "Ativar Modo Teste - IA responderá nesta conversa mesmo com IA Global desligada"
+                    }
+                    className={cn(
+                      "h-7 gap-1 px-2",
+                      isTestMode && "bg-amber-500 hover:bg-amber-600 text-white border-amber-500"
+                    )}
+                  >
+                    <FlaskConical className="h-3.5 w-3.5" />
+                    <span className="text-xs hidden lg:inline">
+                      {isTestMode ? "🧪 Teste" : "Testar"}
+                    </span>
+                  </Button>
+                )}
+
                 {canShowTakeControl && (
                   <Button
                     variant="default"

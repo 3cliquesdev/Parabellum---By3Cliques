@@ -29,16 +29,21 @@ serve(async (req) => {
       });
     }
 
-    // Buscar ai_mode da conversa
+    // Buscar ai_mode da conversa + is_test_mode para modo de teste individual
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
-      .select('ai_mode, assigned_to, channel')
+      .select('ai_mode, assigned_to, channel, is_test_mode')
       .eq('id', record.conversation_id)
       .single();
 
     if (convError) {
       console.error('[message-listener] Error fetching conversation:', convError);
       throw convError;
+    }
+
+    // 🆕 MODO DE TESTE: Logar se a conversa está em modo de teste
+    if (conversation?.is_test_mode) {
+      console.log('[message-listener] 🧪 MODO TESTE ATIVO para conversa:', record.conversation_id);
     }
 
     // 🆕 DETECTAR RESPOSTA DO AGENTE: Se agente enviou mensagem e está em waiting_human, mudar para copilot

@@ -1715,6 +1715,7 @@ export type Database = {
           first_response_at: string | null
           handoff_executed_at: string | null
           id: string
+          is_test_mode: boolean | null
           last_message_at: string
           needs_human_review: boolean | null
           previous_agent_id: string | null
@@ -1742,6 +1743,7 @@ export type Database = {
           first_response_at?: string | null
           handoff_executed_at?: string | null
           id?: string
+          is_test_mode?: boolean | null
           last_message_at?: string
           needs_human_review?: boolean | null
           previous_agent_id?: string | null
@@ -1769,6 +1771,7 @@ export type Database = {
           first_response_at?: string | null
           handoff_executed_at?: string | null
           id?: string
+          is_test_mode?: boolean | null
           last_message_at?: string
           needs_human_review?: boolean | null
           previous_agent_id?: string | null

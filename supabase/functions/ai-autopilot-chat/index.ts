@@ -1136,13 +1136,22 @@ serve(async (req) => {
       
       const isAIGloballyEnabled = globalConfig?.value === 'true' || globalConfig?.value === true;
       
-      if (!isAIGloballyEnabled) {
-        console.log('[ai-autopilot-chat] 🚫 IA DESLIGADA GLOBALMENTE - IGNORANDO');
+      // 🆕 MODO DE TESTE: Verificar se a conversa está em modo de teste individual
+      // Se is_test_mode = true, ignora ai_global_enabled e processa normalmente
+      const isTestMode = conversation.is_test_mode === true;
+      
+      if (isTestMode) {
+        console.log('[ai-autopilot-chat] 🧪 MODO TESTE ATIVO - Ignorando ai_global_enabled');
+      }
+      
+      if (!isAIGloballyEnabled && !isTestMode) {
+        console.log('[ai-autopilot-chat] 🚫 IA DESLIGADA GLOBALMENTE (e não é test mode) - IGNORANDO');
         return new Response(
           JSON.stringify({ 
             skipped: true, 
             reason: 'AI globally disabled',
-            ai_global_enabled: false
+            ai_global_enabled: false,
+            is_test_mode: false
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
