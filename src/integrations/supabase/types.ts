@@ -1755,6 +1755,124 @@ export type Database = {
           },
         ]
       }
+      conversation_assignment_logs: {
+        Row: {
+          algorithm: string
+          assigned_to: string | null
+          candidates_count: number | null
+          conversation_id: string
+          created_at: string | null
+          department_id: string | null
+          execution_time_ms: number | null
+          id: string
+          metadata: Json | null
+          reason: string
+        }
+        Insert: {
+          algorithm: string
+          assigned_to?: string | null
+          candidates_count?: number | null
+          conversation_id: string
+          created_at?: string | null
+          department_id?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          metadata?: Json | null
+          reason: string
+        }
+        Update: {
+          algorithm?: string
+          assigned_to?: string | null
+          candidates_count?: number | null
+          conversation_id?: string
+          created_at?: string | null
+          department_id?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          metadata?: Json | null
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_assignment_logs_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_assignment_logs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_assignment_logs_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_dispatch_jobs: {
+        Row: {
+          attempts: number | null
+          conversation_id: string
+          created_at: string | null
+          department_id: string | null
+          id: string
+          last_error: string | null
+          max_attempts: number | null
+          next_attempt_at: string | null
+          priority: number | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          conversation_id: string
+          created_at?: string | null
+          department_id?: string | null
+          id?: string
+          last_error?: string | null
+          max_attempts?: number | null
+          next_attempt_at?: string | null
+          priority?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          conversation_id?: string
+          created_at?: string | null
+          department_id?: string | null
+          id?: string
+          last_error?: string | null
+          max_attempts?: number | null
+          next_attempt_at?: string | null
+          priority?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_dispatch_jobs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_dispatch_jobs_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_queue: {
         Row: {
           assigned_at: string | null
@@ -1901,11 +2019,14 @@ export type Database = {
           created_at: string
           customer_metadata: Json | null
           department: string | null
+          dispatch_attempts: number | null
+          dispatch_status: string | null
           first_response_at: string | null
           handoff_executed_at: string | null
           id: string
           is_test_mode: boolean | null
           last_classified_at: string | null
+          last_dispatch_at: string | null
           last_message_at: string
           last_suggestion_at: string | null
           learned_at: string | null
@@ -1933,11 +2054,14 @@ export type Database = {
           created_at?: string
           customer_metadata?: Json | null
           department?: string | null
+          dispatch_attempts?: number | null
+          dispatch_status?: string | null
           first_response_at?: string | null
           handoff_executed_at?: string | null
           id?: string
           is_test_mode?: boolean | null
           last_classified_at?: string | null
+          last_dispatch_at?: string | null
           last_message_at?: string
           last_suggestion_at?: string | null
           learned_at?: string | null
@@ -1965,11 +2089,14 @@ export type Database = {
           created_at?: string
           customer_metadata?: Json | null
           department?: string | null
+          dispatch_attempts?: number | null
+          dispatch_status?: string | null
           first_response_at?: string | null
           handoff_executed_at?: string | null
           id?: string
           is_test_mode?: boolean | null
           last_classified_at?: string | null
+          last_dispatch_at?: string | null
           last_message_at?: string
           last_suggestion_at?: string | null
           learned_at?: string | null
