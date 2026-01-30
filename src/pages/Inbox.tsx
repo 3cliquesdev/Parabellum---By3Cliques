@@ -142,111 +142,122 @@ export default function Inbox() {
     return new Set(inboxItems.map(item => item.conversation_id));
   }, [inboxItems]);
 
+  // 🔧 Helper: Converte um InboxItem em objeto Conversation mínimo
+  const inboxItemToConversation = useCallback((item: any): Conversation => {
+    return {
+      id: item.conversation_id,
+      contact_id: item.contact_id,
+      status: item.status,
+      ai_mode: item.ai_mode,
+      assigned_to: item.assigned_to,
+      department: item.department,
+      channel: item.last_channel,
+      created_at: item.created_at,
+      last_message_at: item.last_message_at,
+      updated_at: item.updated_at,
+      awaiting_rating: false,
+      auto_closed: false,
+      closed_at: null,
+      closed_by: null,
+      closed_reason: null,
+      customer_metadata: null,
+      dispatch_attempts: null,
+      dispatch_status: null,
+      first_response_at: null,
+      handoff_executed_at: null,
+      is_test_mode: false,
+      last_classified_at: null,
+      last_dispatch_at: null,
+      last_suggestion_at: null,
+      learned_at: null,
+      needs_human_review: false,
+      previous_agent_id: null,
+      rating_sent_at: null,
+      related_ticket_id: null,
+      session_token: null,
+      support_channel_id: null,
+      whatsapp_instance_id: null,
+      whatsapp_meta_instance_id: null,
+      whatsapp_provider: null,
+      contacts: {
+        id: item.contact_id,
+        first_name: item.contact_name?.split(' ')[0] || 'Contato',
+        last_name: item.contact_name?.split(' ').slice(1).join(' ') || '',
+        email: item.contact_email,
+        phone: item.contact_phone,
+        avatar_url: item.contact_avatar,
+        organizations: null,
+        created_at: item.created_at,
+        account_balance: null,
+        address: null,
+        address_complement: null,
+        address_number: null,
+        assigned_to: null,
+        birth_date: null,
+        blocked: false,
+        city: null,
+        company: null,
+        consultant_id: null,
+        customer_type: null,
+        document: null,
+        external_ids: null,
+        kiwify_customer_id: null,
+        kiwify_subscription_id: null,
+        kiwify_validated: null,
+        kiwify_validated_at: null,
+        last_contact_date: null,
+        last_kiwify_event: null,
+        last_kiwify_event_at: null,
+        last_payment_date: null,
+        lead_classification: null,
+        lead_score: null,
+        neighborhood: null,
+        next_payment_date: null,
+        onboarding_submission_id: null,
+        organization_id: null,
+        recent_orders_count: null,
+        registration_date: null,
+        source: null,
+        state: null,
+        state_registration: null,
+        status: null,
+        subscription_plan: null,
+        support_channel_id: null,
+        total_ltv: null,
+        whatsapp_id: null,
+        zip_code: null,
+      } as Contact,
+    } as Conversation;
+  }, []);
+
+  // 🔧 Helper: Busca conversa completa ou cria mínima de inboxItem
+  const getConversationFromItem = useCallback((item: any): Conversation => {
+    const fullConv = conversations?.find(c => c.id === item.conversation_id);
+    return fullConv || inboxItemToConversation(item);
+  }, [conversations, inboxItemToConversation]);
+
   const filteredConversations = useMemo(() => {
     if (!conversations) return [];
     
-    // 🔒 FILTRO ESPECIAL: not_responded - IGNORAR todos os outros filtros
-    // Construir lista diretamente de inboxItems (não depender do cruzamento com conversations)
+    const sourceInboxItems = rawInboxItems ?? inboxItems;
+    
+    // 🔒 FILTRO ESPECIAL: not_responded - usar inboxItems diretamente
     if (filter === "not_responded") {
-      const sourceInboxItems = rawInboxItems ?? inboxItems;
       const notRespondedItems = sourceInboxItems?.filter(item => 
         item.last_sender_type === 'contact' && 
         item.assigned_to === user?.id &&
         item.status !== 'closed'
       ) || [];
-      
-      // Construir objetos Conversation diretamente (mesmo padrão da busca global)
-      return notRespondedItems.map(item => {
-        // Tentar encontrar a conversa completa
-        const fullConv = conversations?.find(c => c.id === item.conversation_id);
-        if (fullConv) return fullConv;
-        
-        // Se não encontrou, criar objeto mínimo para exibir na lista
-        return {
-          id: item.conversation_id,
-          contact_id: item.contact_id,
-          status: item.status,
-          ai_mode: item.ai_mode,
-          assigned_to: item.assigned_to,
-          department: item.department,
-          channel: item.last_channel,
-          created_at: item.created_at,
-          last_message_at: item.last_message_at,
-          updated_at: item.updated_at,
-          awaiting_rating: false,
-          auto_closed: false,
-          closed_at: null,
-          closed_by: null,
-          closed_reason: null,
-          customer_metadata: null,
-          dispatch_attempts: null,
-          dispatch_status: null,
-          first_response_at: null,
-          handoff_executed_at: null,
-          is_test_mode: false,
-          last_classified_at: null,
-          last_dispatch_at: null,
-          last_suggestion_at: null,
-          learned_at: null,
-          needs_human_review: false,
-          previous_agent_id: null,
-          rating_sent_at: null,
-          related_ticket_id: null,
-          session_token: null,
-          support_channel_id: null,
-          whatsapp_instance_id: null,
-          whatsapp_meta_instance_id: null,
-          whatsapp_provider: null,
-          contacts: {
-            id: item.contact_id,
-            first_name: item.contact_name?.split(' ')[0] || 'Contato',
-            last_name: item.contact_name?.split(' ').slice(1).join(' ') || '',
-            email: item.contact_email,
-            phone: item.contact_phone,
-            avatar_url: item.contact_avatar,
-            organizations: null,
-            created_at: item.created_at,
-            account_balance: null,
-            address: null,
-            address_complement: null,
-            address_number: null,
-            assigned_to: null,
-            birth_date: null,
-            blocked: false,
-            city: null,
-            company: null,
-            consultant_id: null,
-            customer_type: null,
-            document: null,
-            external_ids: null,
-            kiwify_customer_id: null,
-            kiwify_subscription_id: null,
-            kiwify_validated: null,
-            kiwify_validated_at: null,
-            last_contact_date: null,
-            last_kiwify_event: null,
-            last_kiwify_event_at: null,
-            last_payment_date: null,
-            lead_classification: null,
-            lead_score: null,
-            neighborhood: null,
-            next_payment_date: null,
-            onboarding_submission_id: null,
-            organization_id: null,
-            recent_orders_count: null,
-            registration_date: null,
-            source: null,
-            state: null,
-            state_registration: null,
-            status: null,
-            subscription_plan: null,
-            support_channel_id: null,
-            total_ltv: null,
-            whatsapp_id: null,
-            zip_code: null,
-          } as Contact,
-        } as Conversation;
-      }).filter(Boolean);
+      return notRespondedItems.map(getConversationFromItem);
+    }
+    
+    // 🔒 FILTRO ESPECIAL: mine - usar inboxItems diretamente para garantir consistência
+    if (filter === "mine") {
+      const myItems = sourceInboxItems?.filter(item => 
+        item.assigned_to === user?.id &&
+        item.status !== 'closed'
+      ) || [];
+      return myItems.map(getConversationFromItem);
     }
     
     let result = conversations;
@@ -341,6 +352,7 @@ export default function Inbox() {
         );
       
       case "mine":
+        // Já tratado acima usando inboxItems diretamente
         return result.filter(c => c.assigned_to === user?.id && c.status !== 'closed');
       
       case "sla":
@@ -356,7 +368,7 @@ export default function Inbox() {
       default:
         return result.filter(c => c.status !== 'closed');
     }
-  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, inboxItemIds, rawInboxItems]);
+  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, inboxItemIds, rawInboxItems, getConversationFromItem]);
 
   // Ordenação e filtragem por tempo de espera
   const orderedConversations = useMemo(() => {
