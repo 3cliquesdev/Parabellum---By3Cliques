@@ -164,13 +164,70 @@ export default function Inbox() {
     
     let result = conversations;
 
-    // 🔍 IMPORTANTE: Se há busca ativa, filtrar APENAS pelas conversas que estão no inboxItems
-    // O inboxItems já foi filtrado pelo useInboxView com o termo de busca
+    // 🔍 BUSCA GLOBAL: Quando há busca ativa, usar inboxItems diretamente
+    // Isso permite encontrar conversas de outros departamentos/status que o usuário não teria acesso normal
     const hasActiveSearch = filters.search && filters.search.trim().length > 0;
     if (hasActiveSearch && inboxItems) {
-      result = result.filter(c => inboxItemIds.has(c.id));
-      // Se está buscando, não aplicar outros filtros que possam esconder resultados
-      return result;
+      // Construir lista diretamente de inboxItems (que já passou pelo filtro de busca)
+      const searchResults = inboxItems
+        .map(item => {
+          // Tentar encontrar a conversa completa na lista de conversations
+          const fullConv = conversations?.find(c => c.id === item.conversation_id);
+          if (fullConv) return fullConv;
+          
+          // Se não encontrou (ex: outro departamento), criar objeto mínimo para exibir
+          // Usamos "as unknown as Conversation" porque estamos criando uma representação parcial
+          // que é suficiente para renderizar na lista
+          return {
+            id: item.conversation_id,
+            contact_id: item.contact_id,
+            status: item.status,
+            ai_mode: item.ai_mode,
+            assigned_to: item.assigned_to,
+            department: item.department,
+            channel: item.last_channel,
+            created_at: item.created_at,
+            last_message_at: item.last_message_at,
+            updated_at: item.updated_at,
+            awaiting_rating: false,
+            auto_closed: false,
+            closed_at: null,
+            closed_by: null,
+            closed_reason: null,
+            customer_metadata: null,
+            dispatch_attempts: null,
+            dispatch_status: null,
+            first_response_at: null,
+            handoff_executed_at: null,
+            is_test_mode: null,
+            last_classified_at: null,
+            last_dispatch_at: null,
+            last_suggestion_at: null,
+            learned_at: null,
+            needs_human_review: null,
+            previous_agent_id: null,
+            rating_sent_at: null,
+            related_ticket_id: null,
+            session_token: null,
+            support_channel_id: null,
+            whatsapp_instance_id: null,
+            whatsapp_meta_instance_id: null,
+            whatsapp_provider: null,
+            contacts: {
+              id: item.contact_id,
+              first_name: item.contact_name?.split(' ')[0] || 'Contato',
+              last_name: item.contact_name?.split(' ').slice(1).join(' ') || '',
+              email: item.contact_email,
+              phone: item.contact_phone,
+              avatar_url: item.contact_avatar,
+              created_at: item.created_at,
+              organizations: null,
+            } as Contact,
+          } as Conversation;
+        })
+        .filter(Boolean);
+      
+      return searchResults;
     }
 
     // Apply department filter

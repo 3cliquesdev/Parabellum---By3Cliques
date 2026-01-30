@@ -79,13 +79,14 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
   const { data: users } = useUsers();
   const { data: tags } = useTags();
 
+  // Contagem de filtros ativos - search NÃO é contado (é campo separado, não "filtro")
   const activeFiltersCount = [
     filters.dateRange?.from ? 1 : 0,
     filters.channels.length,
     filters.status.length,
     filters.assignedTo ? 1 : 0,
     filters.tags.length,
-    filters.search ? 1 : 0,
+    // search removido da contagem - é campo de busca, não filtro
     filters.slaExpired ? 1 : 0,
     filters.hasAudio ? 1 : 0,
     filters.hasAttachments ? 1 : 0,
