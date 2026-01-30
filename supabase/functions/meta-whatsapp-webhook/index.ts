@@ -611,12 +611,20 @@ serve(async (req) => {
                     console.log("[meta-whatsapp-webhook] ⏱️ Rate limit ativo, última msg do bot:", lastMsgDate?.toISOString());
                   }
                 }
-                
-                // Garantir que está em waiting_human
-                await supabase
-                  .from("conversations")
-                  .update({ ai_mode: "waiting_human" })
-                  .eq("id", conversation.id);
+
+                // 🛡️ REGRA CRÍTICA: NÃO rebaixar copilot/disabled para waiting_human
+                // Quando existe agente atribuído, a conversa está sob controle humano.
+                // A proteção do process-chat-flow retorna skipAutoResponse para evitar automação,
+                // mas isso NÃO deve mudar o ai_mode.
+                const shouldForceWaitingHuman =
+                  flowData.reason === 'ai_mode_waiting_human' && !hasAssignedAgent;
+
+                if (shouldForceWaitingHuman && conversation.ai_mode !== 'waiting_human') {
+                  await supabase
+                    .from("conversations")
+                    .update({ ai_mode: "waiting_human" })
+                    .eq("id", conversation.id);
+                }
                 
                 continue;
               }
@@ -716,6 +724,11 @@ serve(async (req) => {
 
               // CASO 4: Sem fluxo ativo e sem AIResponseNode → Fallback controlado
               // Se IA está ligada mas não há fluxo específico, mover para humano (safety first)
+              if (conversation.assigned_to && (conversation.ai_mode === 'copilot' || conversation.ai_mode === 'disabled')) {
+                console.log('[AUTO-DECISION] [WhatsApp Meta] No active flow, but human is assigned → no-op');
+                continue;
+              }
+
               console.log("[AUTO-DECISION] [WhatsApp Meta] No active flow → waiting_human (fallback)");
               await supabase
                 .from("conversations")
