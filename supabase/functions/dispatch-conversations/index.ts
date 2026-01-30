@@ -6,6 +6,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ==================== BATCH PROCESSING CONFIG ====================
+const BATCH_SIZE = 5;                    // Process 5 jobs in parallel
+const DELAY_BETWEEN_BATCHES_MS = 100;    // 100ms delay between batches
+// ==================================================================
+
 interface DispatchJob {
   id: string;
   conversation_id: string;
@@ -24,11 +29,20 @@ interface EligibleAgent {
   last_status_change: string;
 }
 
+interface JobResult {
+  conversation_id: string;
+  status: string;
+  agent?: string;
+  reason?: string;
+}
+
 /**
  * Enterprise Conversation Dispatcher
  * 
  * Processes pending dispatch jobs and assigns conversations to eligible agents
  * using a Round-Robin Least-Loaded algorithm with atomic locking.
+ * 
+ * 🚀 BATCH PROCESSING: Processes up to BATCH_SIZE jobs in parallel for 5x faster throughput
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -44,7 +58,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    console.log('[dispatch-conversations] Starting dispatch cycle...');
+    console.log('[dispatch-conversations] Starting dispatch cycle (BATCH MODE)...');
 
     // 1. Fetch pending jobs (LIMIT 50 for performance)
     const { data: pendingJobs, error: jobsError } = await supabase
@@ -73,164 +87,46 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[dispatch-conversations] Found ${pendingJobs.length} pending jobs`);
+    console.log(`[dispatch-conversations] Found ${pendingJobs.length} pending jobs - processing in batches of ${BATCH_SIZE}`);
 
     let assigned = 0;
     let failed = 0;
-    const results: Array<{ conversation_id: string; status: string; agent?: string; reason?: string }> = [];
+    const results: JobResult[] = [];
 
-    // 2. Process each job
-    for (const job of pendingJobs as DispatchJob[]) {
-      const jobStartTime = Date.now();
+    // 2. Process jobs in parallel batches
+    const totalBatches = Math.ceil(pendingJobs.length / BATCH_SIZE);
+    
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const batchStart = batchIndex * BATCH_SIZE;
+      const batch = (pendingJobs as DispatchJob[]).slice(batchStart, batchStart + BATCH_SIZE);
       
-      try {
-        // D3.1: Lock atômico - só processa se conseguir marcar como processing
-        const { data: lockedJob, error: lockError } = await supabase
-          .from('conversation_dispatch_jobs')
-          .update({ status: 'processing', updated_at: new Date().toISOString() })
-          .eq('id', job.id)
-          .eq('status', 'pending') // Só se ainda for pending
-          .select('*')
-          .maybeSingle();
-
-        if (lockError) {
-          console.error(`[dispatch-conversations] Lock error for job ${job.id}:`, lockError);
-          continue;
-        }
-
-        if (!lockedJob) {
-          // Outro worker já pegou este job - pular
-          console.log(`[dispatch-conversations] Job ${job.id} already picked by another worker`);
-          continue;
-        }
-
-        // 2a. Verify conversation still needs assignment
-        const { data: conversation, error: convError } = await supabase
-          .from('conversations')
-          .select('id, ai_mode, assigned_to, department, status')
-          .eq('id', job.conversation_id)
-          .single();
-
-        if (convError || !conversation) {
-          console.log(`[dispatch-conversations] Conversation ${job.conversation_id} not found, marking complete`);
-          await markJobComplete(supabase, job.id, 'conversation_not_found');
-          continue;
-        }
-
-        // If already assigned or not waiting_human, skip
-        if (conversation.assigned_to || conversation.ai_mode !== 'waiting_human') {
-          console.log(`[dispatch-conversations] Conversation ${job.conversation_id} already handled`);
-          await markJobComplete(supabase, job.id, 'already_assigned');
-          continue;
-        }
-
-        // If status is not open, skip
-        if (conversation.status !== 'open') {
-          console.log(`[dispatch-conversations] Conversation ${job.conversation_id} not open (${conversation.status})`);
-          await markJobComplete(supabase, job.id, 'not_open');
-          continue;
-        }
-
-        const departmentId = job.department_id || conversation.department;
-        
-        if (!departmentId) {
-          console.log(`[dispatch-conversations] No department for conversation ${job.conversation_id}`);
-          await handleJobFailure(supabase, job, 'no_department');
-          failed++;
-          results.push({ conversation_id: job.conversation_id, status: 'failed', reason: 'no_department' });
-          continue;
-        }
-
-        // 2b. Find eligible agents with capacity (Round-Robin Least-Loaded)
-        const eligibleAgent = await findEligibleAgent(supabase, departmentId);
-
-        if (!eligibleAgent) {
-          console.log(`[dispatch-conversations] No eligible agents for dept ${departmentId}`);
-          
-          // D4.1: Verificar se o departamento tem ALGUM agente configurado
-          const hasAnyAgents = await checkDepartmentHasAgents(supabase, departmentId);
-          
-          if (!hasAnyAgents) {
-            // Departamento não tem agentes configurados → manual_only
-            console.log(`[dispatch-conversations] Department ${departmentId} has no configured agents, marking manual_only`);
-            await supabase.from('conversations').update({
-              dispatch_status: 'manual_only'
-            }).eq('id', job.conversation_id);
-            
-            await markJobComplete(supabase, job.id, 'no_agents_configured');
-            results.push({ conversation_id: job.conversation_id, status: 'manual_only', reason: 'no_agents_configured' });
-            continue;
+      console.log(`[dispatch-conversations] 📦 Processing batch ${batchIndex + 1}/${totalBatches} (${batch.length} jobs)`);
+      
+      // Process entire batch in parallel
+      const batchResults = await Promise.allSettled(
+        batch.map((job) => processJob(supabase, job))
+      );
+      
+      // Aggregate results from batch
+      for (const result of batchResults) {
+        if (result.status === 'fulfilled') {
+          const jobResult = result.value;
+          if (jobResult.status === 'assigned') {
+            assigned++;
+          } else if (jobResult.status === 'failed' || jobResult.status === 'retry') {
+            failed++;
           }
-          
-          // Tem agentes mas nenhum disponível → retry
-          await handleJobFailure(supabase, job, 'no_agents_available');
+          results.push(jobResult);
+        } else {
+          // Promise rejected - unexpected error
           failed++;
-          results.push({ conversation_id: job.conversation_id, status: 'retry', reason: 'no_agents_available' });
-          continue;
+          console.error('[dispatch-conversations] Batch job error:', result.reason);
         }
-
-        // 2c. Atomic assignment with lock - D3.3: NÃO mudar ai_mode automaticamente
-        const { data: updateResult, error: updateError } = await supabase
-          .from('conversations')
-          .update({
-            assigned_to: eligibleAgent.id,
-            // ai_mode: Não muda - mantém 'waiting_human', agente decide via UI
-            dispatch_status: 'assigned',
-            last_dispatch_at: new Date().toISOString(),
-          })
-          .eq('id', job.conversation_id)
-          .is('assigned_to', null) // Only if still unassigned (atomic lock)
-          .select('id')
-          .maybeSingle();
-
-        if (updateError) {
-          console.error(`[dispatch-conversations] Error assigning ${job.conversation_id}:`, updateError);
-          await handleJobFailure(supabase, job, updateError.message);
-          failed++;
-          results.push({ conversation_id: job.conversation_id, status: 'failed', reason: updateError.message });
-          continue;
-        }
-
-        if (!updateResult) {
-          // Someone else assigned it first (race condition handled)
-          console.log(`[dispatch-conversations] Conversation ${job.conversation_id} was assigned by another process`);
-          await markJobComplete(supabase, job.id, 'assigned_by_other');
-          continue;
-        }
-
-        // 2d. Success! Log and mark complete
-        const executionTime = Date.now() - jobStartTime;
-        
-        await supabase.from('conversation_assignment_logs').insert({
-          conversation_id: job.conversation_id,
-          department_id: departmentId,
-          assigned_to: eligibleAgent.id,
-          algorithm: 'round_robin_least_loaded',
-          reason: 'auto_dispatch',
-          candidates_count: 1,
-          execution_time_ms: executionTime,
-          metadata: {
-            job_id: job.id,
-            attempts: job.attempts + 1,
-            agent_active_chats: eligibleAgent.active_chats,
-            agent_max_chats: eligibleAgent.max_chats,
-          }
-        });
-
-        await markJobComplete(supabase, job.id, 'assigned');
-        assigned++;
-        results.push({ 
-          conversation_id: job.conversation_id, 
-          status: 'assigned', 
-          agent: eligibleAgent.full_name 
-        });
-
-        console.log(`[dispatch-conversations] ✅ Assigned ${job.conversation_id} to ${eligibleAgent.full_name} (${executionTime}ms)`);
-
-      } catch (jobError) {
-        console.error(`[dispatch-conversations] Error processing job ${job.id}:`, jobError);
-        await handleJobFailure(supabase, job, String(jobError));
-        failed++;
+      }
+      
+      // Small delay between batches to avoid overloading the database
+      if (batchIndex + 1 < totalBatches) {
+        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES_MS));
       }
     }
 
@@ -238,12 +134,13 @@ serve(async (req) => {
     await processEscalations(supabase);
 
     const totalDuration = Date.now() - startTime;
-    console.log(`[dispatch-conversations] Cycle complete: ${assigned} assigned, ${failed} failed (${totalDuration}ms)`);
+    console.log(`[dispatch-conversations] ✅ Cycle complete: ${assigned} assigned, ${failed} failed in ${totalBatches} batches (${totalDuration}ms)`);
 
     return new Response(JSON.stringify({
       processed: pendingJobs.length,
       assigned,
       failed,
+      batches: totalBatches,
       results,
       duration_ms: totalDuration,
     }), {
@@ -261,6 +158,159 @@ serve(async (req) => {
     });
   }
 });
+
+/**
+ * Process a single dispatch job
+ * Extracted to support parallel processing with Promise.allSettled
+ */
+// deno-lint-ignore no-explicit-any
+async function processJob(supabase: any, job: DispatchJob): Promise<JobResult> {
+  const jobStartTime = Date.now();
+  
+  try {
+    // D3.1: Lock atômico - só processa se conseguir marcar como processing
+    const { data: lockedJob, error: lockError } = await supabase
+      .from('conversation_dispatch_jobs')
+      .update({ status: 'processing', updated_at: new Date().toISOString() })
+      .eq('id', job.id)
+      .eq('status', 'pending') // Só se ainda for pending
+      .select('*')
+      .maybeSingle();
+
+    if (lockError) {
+      console.error(`[dispatch-conversations] Lock error for job ${job.id}:`, lockError);
+      return { conversation_id: job.conversation_id, status: 'skipped', reason: 'lock_error' };
+    }
+
+    if (!lockedJob) {
+      // Outro worker já pegou este job - pular
+      console.log(`[dispatch-conversations] Job ${job.id} already picked by another worker`);
+      return { conversation_id: job.conversation_id, status: 'skipped', reason: 'already_locked' };
+    }
+
+    // 2a. Verify conversation still needs assignment
+    const { data: conversation, error: convError } = await supabase
+      .from('conversations')
+      .select('id, ai_mode, assigned_to, department, status')
+      .eq('id', job.conversation_id)
+      .single();
+
+    if (convError || !conversation) {
+      console.log(`[dispatch-conversations] Conversation ${job.conversation_id} not found, marking complete`);
+      await markJobComplete(supabase, job.id, 'conversation_not_found');
+      return { conversation_id: job.conversation_id, status: 'skipped', reason: 'not_found' };
+    }
+
+    // If already assigned or not waiting_human, skip
+    if (conversation.assigned_to || conversation.ai_mode !== 'waiting_human') {
+      console.log(`[dispatch-conversations] Conversation ${job.conversation_id} already handled`);
+      await markJobComplete(supabase, job.id, 'already_assigned');
+      return { conversation_id: job.conversation_id, status: 'skipped', reason: 'already_assigned' };
+    }
+
+    // If status is not open, skip
+    if (conversation.status !== 'open') {
+      console.log(`[dispatch-conversations] Conversation ${job.conversation_id} not open (${conversation.status})`);
+      await markJobComplete(supabase, job.id, 'not_open');
+      return { conversation_id: job.conversation_id, status: 'skipped', reason: 'not_open' };
+    }
+
+    const departmentId = job.department_id || conversation.department;
+    
+    if (!departmentId) {
+      console.log(`[dispatch-conversations] No department for conversation ${job.conversation_id}`);
+      await handleJobFailure(supabase, job, 'no_department');
+      return { conversation_id: job.conversation_id, status: 'failed', reason: 'no_department' };
+    }
+
+    // 2b. Find eligible agents with capacity (Round-Robin Least-Loaded)
+    const eligibleAgent = await findEligibleAgent(supabase, departmentId);
+
+    if (!eligibleAgent) {
+      console.log(`[dispatch-conversations] No eligible agents for dept ${departmentId}`);
+      
+      // D4.1: Verificar se o departamento tem ALGUM agente configurado
+      const hasAnyAgents = await checkDepartmentHasAgents(supabase, departmentId);
+      
+      if (!hasAnyAgents) {
+        // Departamento não tem agentes configurados → manual_only
+        console.log(`[dispatch-conversations] Department ${departmentId} has no configured agents, marking manual_only`);
+        await supabase.from('conversations').update({
+          dispatch_status: 'manual_only'
+        }).eq('id', job.conversation_id);
+        
+        await markJobComplete(supabase, job.id, 'no_agents_configured');
+        return { conversation_id: job.conversation_id, status: 'manual_only', reason: 'no_agents_configured' };
+      }
+      
+      // Tem agentes mas nenhum disponível → retry
+      await handleJobFailure(supabase, job, 'no_agents_available');
+      return { conversation_id: job.conversation_id, status: 'retry', reason: 'no_agents_available' };
+    }
+
+    // 2c. Atomic assignment with lock - D3.3: NÃO mudar ai_mode automaticamente
+    const { data: updateResult, error: updateError } = await supabase
+      .from('conversations')
+      .update({
+        assigned_to: eligibleAgent.id,
+        // ai_mode: Não muda - mantém 'waiting_human', agente decide via UI
+        dispatch_status: 'assigned',
+        last_dispatch_at: new Date().toISOString(),
+      })
+      .eq('id', job.conversation_id)
+      .is('assigned_to', null) // Only if still unassigned (atomic lock)
+      .select('id')
+      .maybeSingle();
+
+    if (updateError) {
+      console.error(`[dispatch-conversations] Error assigning ${job.conversation_id}:`, updateError);
+      await handleJobFailure(supabase, job, updateError.message);
+      return { conversation_id: job.conversation_id, status: 'failed', reason: updateError.message };
+    }
+
+    if (!updateResult) {
+      // Someone else assigned it first (race condition handled)
+      console.log(`[dispatch-conversations] Conversation ${job.conversation_id} was assigned by another process`);
+      await markJobComplete(supabase, job.id, 'assigned_by_other');
+      return { conversation_id: job.conversation_id, status: 'skipped', reason: 'assigned_by_other' };
+    }
+
+    // 2d. Success! Log and mark complete
+    const executionTime = Date.now() - jobStartTime;
+    
+    await supabase.from('conversation_assignment_logs').insert({
+      conversation_id: job.conversation_id,
+      department_id: departmentId,
+      assigned_to: eligibleAgent.id,
+      algorithm: 'round_robin_least_loaded',
+      reason: 'auto_dispatch',
+      candidates_count: 1,
+      execution_time_ms: executionTime,
+      metadata: {
+        job_id: job.id,
+        attempts: job.attempts + 1,
+        agent_active_chats: eligibleAgent.active_chats,
+        agent_max_chats: eligibleAgent.max_chats,
+        batch_mode: true,
+      }
+    });
+
+    await markJobComplete(supabase, job.id, 'assigned');
+
+    console.log(`[dispatch-conversations] ✅ Assigned ${job.conversation_id} to ${eligibleAgent.full_name} (${executionTime}ms)`);
+
+    return { 
+      conversation_id: job.conversation_id, 
+      status: 'assigned', 
+      agent: eligibleAgent.full_name 
+    };
+
+  } catch (jobError) {
+    console.error(`[dispatch-conversations] Error processing job ${job.id}:`, jobError);
+    await handleJobFailure(supabase, job, String(jobError));
+    return { conversation_id: job.conversation_id, status: 'failed', reason: String(jobError) };
+  }
+}
 
 /**
  * Find the best eligible agent using Round-Robin Least-Loaded algorithm
