@@ -265,6 +265,40 @@ O motor de fluxos DEVE verificar o `ai_mode` da conversa ANTES de qualquer proce
 
 ---
 
+## 15. Contrato de Proteção `is_bot_message` (CRÍTICO - NÃO MODIFICAR)
+
+### ⚠️ AVISO: Esta seção documenta uma proteção crítica. Qualquer modificação pode quebrar TODO o sistema de fluxos.
+
+### Contexto do Bug Original
+Mensagens automáticas do fluxo (ask_options, message, etc.) eram detectadas como "mensagem de humano" pelo `send-meta-whatsapp`, causando mudança indevida de `ai_mode` para `copilot` e travando o fluxo.
+
+### Solução Implementada
+Flag `is_bot_message: true` em TODOS os envios automáticos:
+
+| Local | Arquivo | Obrigatório |
+|-------|---------|-------------|
+| Resposta do fluxo | `meta-whatsapp-webhook` | ✅ SIM |
+| Mensagem de fila | `meta-whatsapp-webhook` | ✅ SIM |
+| Agradecimento CSAT | `meta-whatsapp-webhook` | ✅ SIM |
+
+### Lógica de Detecção (send-meta-whatsapp)
+```typescript
+// ⛔ NUNCA REMOVER !body.is_bot_message desta condição
+const isHumanMessage = body.message && 
+                       !body.template && 
+                       !body.interactive && 
+                       !body.is_bot_message;
+```
+
+### Regras Invioláveis
+- ❌ **NUNCA** remover `is_bot_message` dos payloads automáticos
+- ❌ **NUNCA** remover `!body.is_bot_message` da condição de detecção
+- ❌ **NUNCA** simplificar esta lógica "para ficar mais limpo"
+- ✅ Mensagens de humano (Inbox) NÃO usam esta flag → mudam para copilot (correto)
+- ✅ Mensagens de bot/fluxo USAM esta flag → NÃO mudam ai_mode (correto)
+
+---
+
 ## ✅ Status de Alinhamento
 
 - ✔️ Alinhado com 100% do código atual
@@ -274,4 +308,4 @@ O motor de fluxos DEVE verificar o `ai_mode` da conversa ANTES de qualquer proce
 
 ---
 
-*Versão: 2.3 | Última atualização: 2026-01-30*
+*Versão: 2.3.1 | Última atualização: 2026-01-30*

@@ -378,11 +378,16 @@ serve(async (req) => {
     // 🛡️ PROTEÇÃO CRÍTICA: Quando HUMANO envia mensagem, ai_mode → copilot
     // Isso impede que a IA interfira após o agente assumir
     // ============================================
+    // ⛔⛔⛔ ATENÇÃO: NÃO MODIFICAR ESTA SEÇÃO ⛔⛔⛔
+    // Esta lógica diferencia mensagens de HUMANO vs BOT/FLUXO
+    // Remover "!body.is_bot_message" QUEBRA TODO O SISTEMA DE FLUXOS
+    // Ver documentação: src/docs/SUPER_PROMPT_v2.3.md - Seção 15
+    // ⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔⛔
     if (body.conversation_id) {
       // Verificar se é mensagem de humano (não é IA/bot/fluxo)
       // Templates e mensagens interativas geralmente são do sistema
       // Mensagens de texto simples do frontend são de humanos
-      // 🆕 is_bot_message = true indica que é mensagem automática do fluxo (NÃO muda ai_mode)
+      // is_bot_message = true indica que é mensagem automática do fluxo (NÃO muda ai_mode)
       const isHumanMessage = body.message && !body.template && !body.interactive && !(body as { is_bot_message?: boolean }).is_bot_message;
       
       if (isHumanMessage) {
