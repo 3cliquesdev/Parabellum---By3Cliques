@@ -1,135 +1,214 @@
 
-# Plano: Forçar Limite Mínimo de 30 Conversas por Agente
+# Plano: Corrigir `ai_mode` na Transferência Manual
 
 ## Problema Identificado
 
-O dispatcher está marcando **"All agents at capacity"** porque:
+A função SQL `transfer_conversation_secure` (usada em transferências manuais) **não atualiza o `ai_mode`**, permitindo que a IA continue respondendo após a transferência.
 
-| Agente | Dept | Chats Atuais | Limite Atual | Status |
-|--------|------|--------------|--------------|--------|
-| Juliana Alves | Suporte Pedidos | 10 | 10 (default) | ❌ "At capacity" |
-| Miguel Fedes | Suporte Pedidos | 65 | 10 (default) | ❌ "At capacity" |
+### Comparativo
 
-O time **Suporte Nacional** (onde está Juliana) não tem `max_concurrent_chats` configurado:
+| Tipo de Transferência | Função | Atualiza `ai_mode`? | Resultado |
+|----------------------|--------|-------------------|-----------|
+| Automática (dispatcher) | `dispatch-conversations` | ✅ `copilot` | IA para, humano responde |
+| IA transfere para humano | `auto-handoff` | ✅ `waiting_human` | IA para, aguarda fila |
+| **Manual (agente→agente)** | `transfer_conversation_secure` | ❌ **NÃO** | ❌ IA continua respondendo |
+
+### Código Atual (Problema)
+
 ```sql
--- Resultado atual
-team: Suporte Nacional
-max_concurrent_chats: NULL  -- Usa default 10
+-- transfer_conversation_secure (linhas 57-62)
+UPDATE conversations
+SET 
+  assigned_to = p_to_user_id,
+  department = p_to_department_id,
+  previous_agent_id = v_conversation.assigned_to
+  -- ❌ FALTA: ai_mode = 'copilot' ou 'waiting_human'
+WHERE id = p_conversation_id;
 ```
 
-Como resultado:
-- Juliana tem 10 chats → já está no limite (10)
-- 4 jobs pendentes para "Suporte Pedidos" ficam travados
-- Fila só cresce, ninguém recebe novas conversas
+## Solução
 
-## Solução: Forçar Mínimo de 30 no Dispatcher
+Adicionar `ai_mode` na atualização da função SQL:
 
-Modificar a função `findEligibleAgent` em `dispatch-conversations/index.ts` para:
+- Se `p_to_user_id IS NOT NULL` (transferindo para pessoa específica): `ai_mode = 'copilot'`
+- Se `p_to_user_id IS NULL` (transferindo para pool): `ai_mode = 'waiting_human'`
 
-1. **Default 30** em vez de 10 quando não há configuração
-2. **Mínimo 30** mesmo que um time configure menos (ex.: 10)
+### Código Corrigido
 
-### Código Atual (linha 371)
-```typescript
-const maxChats = tm.team?.team_settings?.max_concurrent_chats ?? 10;
+```sql
+UPDATE conversations
+SET 
+  assigned_to = p_to_user_id,
+  department = p_to_department_id,
+  previous_agent_id = v_conversation.assigned_to,
+  -- ✅ FIX: Atualizar ai_mode para pausar a IA
+  ai_mode = CASE 
+    WHEN p_to_user_id IS NOT NULL THEN 'copilot'  -- Humano específico assume
+    ELSE 'waiting_human'  -- Vai para fila do departamento
+  END
+WHERE id = p_conversation_id;
 ```
 
-### Código Novo
-```typescript
-// D5: Forçar mínimo de 30 conversas por agente para alta demanda
-const configuredMax = tm.team?.team_settings?.max_concurrent_chats;
-const maxChats = Math.max(configuredMax ?? 30, 30);
-```
-
-### Também ajustar o fallback (linha 398)
-```typescript
-// Atual
-max_chats: capacityMap.get(p.id) ?? 10,
-
-// Novo
-max_chats: capacityMap.get(p.id) ?? 30, // Fallback para 30
-```
-
-## Arquivo a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/dispatch-conversations/index.ts` | Linhas 371 e 398: `min 30` |
-
-## Impacto Esperado
+## Impacto
 
 ### Antes (Bug)
 
-| Agente | Chats | Limite | Resultado |
-|--------|-------|--------|-----------|
-| Juliana | 10 | 10 | ❌ "At capacity" |
-| Miguel | 65 | 10 | ❌ "At capacity" |
-| *Fila pendente* | - | - | **Cresce infinitamente** |
+| Ação | ai_mode | Resultado |
+|------|---------|-----------|
+| Agente A transfere para Agente B | `autopilot` (inalterado) | ❌ IA continua respondendo |
+| Agente B responde | `autopilot` | ❌ IA pode interromper/duplicar |
 
 ### Depois (Corrigido)
 
-| Agente | Chats | Limite | Resultado |
-|--------|-------|--------|-----------|
-| Juliana | 10 | **30** | ✅ 20 slots livres |
-| Miguel | 65 | **30** | ❌ Ainda acima do limite |
-| *Fila pendente* | - | - | **Cai para Juliana** |
+| Ação | ai_mode | Resultado |
+|------|---------|-----------|
+| Agente A transfere para Agente B | `copilot` | ✅ IA para, B responde |
+| Agente A transfere para Pool | `waiting_human` | ✅ IA para, aguarda atribuição |
+
+## Arquivos a Modificar
+
+| Arquivo | Tipo | Mudança |
+|---------|------|---------|
+| Nova migration SQL | Banco de Dados | `ALTER FUNCTION` ou `CREATE OR REPLACE` para `transfer_conversation_secure` |
 
 ## Compatibilidade
 
-- ✅ Mantém configurações de times existentes como "teto" (se > 30)
-- ✅ Força mínimo de 30 para evitar gargalos
-- ✅ Não afeta roles/permissões existentes
-- ✅ Cron executará em até 1 minuto e distribuirá automaticamente
-
-## Observação: Miguel com 65 chats
-
-Miguel está muito acima do limite (65 vs 30). Isso pode indicar:
-1. Conversas antigas não fechadas
-2. Redistribuição manual anterior
-
-Isso não impede o fix - Juliana vai receber as novas porque ela está em 10 (< 30).
-
----
+- ✅ Não quebra transferências existentes
+- ✅ Alinhado com o Super Prompt v2.3 (Seção 14: `copilot` = humano responde, IA sugere internamente)
+- ✅ Mantém comportamento do dispatcher automático
+- ✅ Resolve 100% do problema reportado
 
 ## Seção Técnica
 
-### Alterações no Código
+### Migration SQL Completa
 
-```typescript
-// supabase/functions/dispatch-conversations/index.ts
+```sql
+-- Corrigir função de transferência para atualizar ai_mode
+CREATE OR REPLACE FUNCTION public.transfer_conversation_secure(
+  p_conversation_id UUID,
+  p_to_user_id UUID,
+  p_to_department_id UUID,
+  p_transfer_note TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+  v_has_permission BOOLEAN;
+  v_conversation RECORD;
+  v_from_user_name TEXT;
+  v_to_user_name TEXT;
+  v_department_name TEXT;
+BEGIN
+  -- 1. Verificar se o usuário tem permissão inbox.transfer
+  SELECT EXISTS(
+    SELECT 1 FROM role_permissions rp
+    JOIN user_roles ur ON ur.role::text = rp.role::text
+    WHERE ur.user_id = v_caller_id
+      AND rp.permission_key = 'inbox.transfer'
+      AND rp.enabled = true
+  ) OR public.has_role(v_caller_id, 'admin')
+  INTO v_has_permission;
 
-// Linha 371: Dentro do loop de teamMembers
-for (const tm of (teamMembers || []) as any[]) {
-  // D5: Forçar mínimo de 30 conversas por agente
-  const configuredMax = tm.team?.team_settings?.max_concurrent_chats;
-  const maxChats = Math.max(configuredMax ?? 30, 30);
-  capacityMap.set(tm.user_id, maxChats);
-}
+  IF NOT v_has_permission THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Sem permissão para transferir conversas');
+  END IF;
 
-// Linha 398: Fallback no map de agentes
-.map((p: any) => ({
-  id: p.id,
-  full_name: p.full_name,
-  max_chats: capacityMap.get(p.id) ?? 30, // Fallback para 30
-  active_chats: activeChatsMap.get(p.id) ?? 0,
-  last_status_change: p.last_status_change,
-}))
+  -- 2. Verificar se a conversa existe e buscar dados atuais
+  SELECT c.*, ct.first_name, ct.last_name
+  INTO v_conversation
+  FROM conversations c
+  JOIN contacts ct ON ct.id = c.contact_id
+  WHERE c.id = p_conversation_id;
+
+  IF v_conversation IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Conversa não encontrada');
+  END IF;
+
+  -- 3. Buscar nomes para auditoria
+  SELECT full_name INTO v_from_user_name 
+  FROM profiles WHERE id = v_conversation.assigned_to;
+  
+  SELECT full_name INTO v_to_user_name 
+  FROM profiles WHERE id = p_to_user_id;
+  
+  SELECT name INTO v_department_name 
+  FROM departments WHERE id = p_to_department_id;
+
+  -- 4. Executar transferência (bypassa RLS por ser SECURITY DEFINER)
+  --    🆕 FIX: Atualizar ai_mode para pausar IA após transferência manual
+  UPDATE conversations
+  SET 
+    assigned_to = p_to_user_id,
+    department = p_to_department_id,
+    previous_agent_id = v_conversation.assigned_to,
+    -- Se transferindo para pessoa específica: copilot (humano assume)
+    -- Se transferindo para pool (null): waiting_human (aguarda distribuição)
+    ai_mode = CASE 
+      WHEN p_to_user_id IS NOT NULL THEN 'copilot'
+      ELSE 'waiting_human'
+    END
+  WHERE id = p_conversation_id;
+
+  -- 5. Registrar interação de auditoria
+  INSERT INTO interactions (
+    customer_id,
+    type,
+    content,
+    channel,
+    metadata
+  ) VALUES (
+    v_conversation.contact_id,
+    'conversation_transferred',
+    format('🔄 Conversa transferida de %s para %s (%s)',
+      COALESCE(v_from_user_name, 'Pool'),
+      COALESCE(v_to_user_name, 'Pool do Departamento'),
+      COALESCE(v_department_name, 'Departamento')
+    ),
+    'other',
+    jsonb_build_object(
+      'from_user_id', v_conversation.assigned_to,
+      'to_user_id', p_to_user_id,
+      'from_user_name', v_from_user_name,
+      'to_user_name', v_to_user_name,
+      'to_department_id', p_to_department_id,
+      'to_department_name', v_department_name,
+      'conversation_id', p_conversation_id,
+      'transfer_note', p_transfer_note,
+      'transferred_by', v_caller_id,
+      'is_internal', true,
+      'ai_mode_set_to', CASE WHEN p_to_user_id IS NOT NULL THEN 'copilot' ELSE 'waiting_human' END
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'conversation_id', p_conversation_id,
+    'to_user_id', p_to_user_id,
+    'to_department_id', p_to_department_id,
+    'ai_mode', CASE WHEN p_to_user_id IS NOT NULL THEN 'copilot' ELSE 'waiting_human' END
+  );
+END;
+$$;
 ```
 
 ### Fluxo Corrigido
 
 ```text
-Conversa entra em waiting_human
+Agente A transfere para Agente B (manual)
         ↓
-Job criado em conversation_dispatch_jobs
+transfer_conversation_secure()
         ↓
-dispatch-conversations (CRON a cada 1 min)
+UPDATE conversations SET
+  assigned_to = B,
+  ai_mode = 'copilot'  🆕
         ↓
-findEligibleAgent: dept=Suporte Pedidos
+IA verifica ai_mode antes de responder
         ↓
-Juliana: 10 chats < 30 (MIN) → ELEGÍVEL ✅
+ai_mode = 'copilot' → ❌ IA não responde
         ↓
-Atribuição: assigned_to=Juliana, ai_mode='copilot'
-        ↓
-Juliana abre inbox → Conversa aparece com composer habilitado ✅
+Agente B recebe conversa com composer habilitado ✅
 ```
