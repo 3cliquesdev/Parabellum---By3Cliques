@@ -1,129 +1,165 @@
 
-# Plano: Corrigir Permissão de UPDATE em Departamentos para Support Manager
+# Plano: Adicionar CRON Job para Dispatcher de Conversas
 
-## Problema Identificado
+## Diagnóstico Completo
 
-O **support_manager** consegue acessar a tela de Departamentos mas **não consegue salvar alterações** (como tempo de inatividade) porque a política RLS só permite UPDATE para o role `admin`.
+Após análise profunda, identifiquei o **problema raiz** que impede a distribuição automática:
 
-### Situação Atual
+### Estado Atual
 
-**Tabela `role_permissions`:**
-| Role | `settings.departments` | `cadastros.manage_departments` |
-|------|------------------------|-------------------------------|
-| `support_manager` | ✅ `true` (acessa tela) | ❌ `false` |
-| `cs_manager` | ❌ `false` | ❌ `false` |
-| `general_manager` | ✅ `true` | ✅ `true` |
+| Componente | Status |
+|------------|--------|
+| Trigger `ensure_dispatch_job` | ✅ Funciona (cria jobs quando conversa entra em waiting_human) |
+| Edge function `dispatch-conversations` | ✅ Funciona (atribuiu 5 conversas à Juliana quando chamado manualmente) |
+| **CRON Job para dispatcher** | ❌ **NÃO EXISTE** |
 
-**Políticas RLS em `departments`:**
-| Policy | Comando | Roles |
-|--------|---------|-------|
-| `admins_can_manage_departments` | ALL | `admin` |
-| `support_manager_can_view_departments` | SELECT | `support_manager` |
+### Por que as conversas ficam paradas 18+ minutos?
 
-O `support_manager` tem permissão para VER a tela mas não para SALVAR no banco!
+1. O trigger SQL cria jobs na tabela `conversation_dispatch_jobs` corretamente
+2. **MAS** não há nenhum CRON job que execute `dispatch-conversations` periodicamente
+3. O único momento que o dispatcher é chamado é quando um agente muda status para "online" (via hook `useAvailabilityStatus`)
+4. Como Juliana já estava online, ninguém acionou o dispatcher
+
+### Evidências
+
+**Jobs encontrados sem processamento:**
+```text
+Suporte Pedidos: 6 jobs pendentes (READY)
+Suporte Sistema: 10 jobs pendentes (READY)
+Total: 16 jobs aguardando um dispatcher que nunca vem
+```
+
+**Após chamar manualmente:**
+```json
+{
+  "assigned": 5,
+  "processed": 16,
+  "results": [
+    {"agent": "Juliana Alves", "status": "assigned"},
+    // ... 4 mais para Juliana
+  ]
+}
+```
+
+**CRONs existentes (nenhum para dispatcher):**
+- `process-playbook-queue-every-minute` (cada minuto) ✅
+- `auto-close-inactive-conversations` (cada hora) ✅
+- `process-pending-deal-closures` (cada 5 min) ✅
+- `dispatch-conversations` ❌ **FALTA**
 
 ## Solução
 
-1. **Adicionar política RLS de UPDATE** para `support_manager` na tabela `departments`
-2. **Incluir outros gerentes** que também precisam dessa capacidade (`cs_manager`, `general_manager`, `manager`)
+Criar um **CRON job nativo do Supabase** que execute `dispatch-conversations` a cada minuto, garantindo que:
 
-### Nova Política RLS
+1. Conversas em `waiting_human` sejam processadas em < 1 minuto
+2. O sistema seja resiliente (não dependa de ações do usuário)
+3. Mantenha o hook `useAvailabilityStatus` como "fast path" para latência < 1s quando agente fica online
+
+## Implementação
+
+### Migration SQL
 
 ```sql
-CREATE POLICY "managers_can_update_departments" ON departments
-FOR UPDATE TO authenticated
-USING (
-  has_role(auth.uid(), 'support_manager')
-  OR has_role(auth.uid(), 'cs_manager')
-  OR has_role(auth.uid(), 'general_manager')
-  OR has_role(auth.uid(), 'manager')
-)
-WITH CHECK (
-  has_role(auth.uid(), 'support_manager')
-  OR has_role(auth.uid(), 'cs_manager')
-  OR has_role(auth.uid(), 'general_manager')
-  OR has_role(auth.uid(), 'manager')
+-- Adicionar CRON job para processar fila de dispatch a cada minuto
+SELECT cron.schedule(
+  'dispatch-conversations-every-minute',  -- nome do job
+  '* * * * *',                            -- a cada minuto
+  $$
+  SELECT
+    net.http_post(
+        url:='https://zaeozfdjhrmblfaxsyuu.supabase.co/functions/v1/dispatch-conversations',
+        headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphZW96ZmRqaHJtYmxmYXhzeXV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4NzcxODIsImV4cCI6MjA3OTQ1MzE4Mn0.lowOKwfcgxuGQPcWPEEw6TeCfXMR9h9EQRLAAs4mmZ0"}'::jsonb,
+        body:=jsonb_build_object('source', 'cron', 'time', now())
+    ) as request_id;
+  $$
 );
 ```
 
-## Impacto
+## Impacto Esperado
 
 ### Antes (Bug)
 
-| Ação | Role | Resultado |
-|------|------|-----------|
-| Alterar tempo de inatividade | `support_manager` | ❌ Erro de política RLS |
-| Alterar tempo de inatividade | `admin` | ✅ Funciona |
+| Situação | Tempo de Espera |
+|----------|----------------|
+| Conversa entra em waiting_human | ∞ (até alguém mudar status) |
+| Agente já online | ∞ (sem trigger) |
 
 ### Depois (Corrigido)
 
-| Ação | Role | Resultado |
-|------|------|-----------|
-| Alterar tempo de inatividade | `support_manager` | ✅ Funciona |
-| Alterar tempo de inatividade | `cs_manager` | ✅ Funciona |
-| Alterar tempo de inatividade | `general_manager` | ✅ Funciona |
-| Alterar tempo de inatividade | `admin` | ✅ Funciona (via policy ALL) |
-
-## Compatibilidade
-
-- ✅ Mantém policy existente de `admin` com ALL
-- ✅ Mantém SELECT público para roles autenticados
-- ✅ Não permite INSERT/DELETE para gerentes (apenas `admin`)
-- ✅ Alinhado com memória: "support_manager has expanded RLS permissions equivalent to cs_manager"
+| Situação | Tempo de Espera |
+|----------|----------------|
+| Conversa entra em waiting_human | < 1 minuto (CRON) |
+| Agente muda para online | < 1 segundo (hook fast path) |
 
 ## Arquivos a Modificar
 
 | Arquivo | Tipo | Mudança |
 |---------|------|---------|
-| Nova migration SQL | Banco de Dados | Adicionar policy de UPDATE para gerentes |
+| Nova migration SQL | Banco de Dados | Adicionar CRON job |
+
+## Compatibilidade
+
+- ✅ Não afeta distribuições existentes
+- ✅ Mantém hook de fast path para latência mínima
+- ✅ Segue padrão dos outros CRONs do projeto
+- ✅ Usa mesma anon key dos outros CRONs
+
+## Verificação Pós-Deploy
+
+Após aplicar a migration:
+1. Aguardar 1-2 minutos
+2. Verificar `cron.job` - deve aparecer o novo job
+3. Verificar `cron.job_run_details` - deve mostrar execuções bem-sucedidas
+4. Novas conversas em waiting_human devem ser atribuídas em < 1 min
 
 ---
 
-## Seção Técnica
+## Seção Tecnica
 
-### Migration SQL Completa
-
-```sql
--- Adicionar permissão de UPDATE em departments para roles de gerência
--- Resolve: support_manager não conseguia alterar tempo de inatividade
-
--- Policy para UPDATE (INSERT/DELETE permanece apenas para admin)
-CREATE POLICY "managers_can_update_departments" ON departments
-FOR UPDATE TO authenticated
-USING (
-  has_role(auth.uid(), 'support_manager')
-  OR has_role(auth.uid(), 'cs_manager')
-  OR has_role(auth.uid(), 'general_manager')
-  OR has_role(auth.uid(), 'manager')
-)
-WITH CHECK (
-  has_role(auth.uid(), 'support_manager')
-  OR has_role(auth.uid(), 'cs_manager')
-  OR has_role(auth.uid(), 'general_manager')
-  OR has_role(auth.uid(), 'manager')
-);
-
--- Também atualizar role_permissions para consistência da UI
-UPDATE role_permissions
-SET enabled = true
-WHERE permission_key = 'cadastros.manage_departments'
-AND role IN ('support_manager', 'cs_manager');
-```
-
-### Fluxo Corrigido
+### Fluxo Completo Corrigido
 
 ```text
-Support Manager acessa /departments
+Cliente pede transferência para humano
         ↓
-Tela de Departamentos carrega (SELECT ok)
+ai-autopilot-chat seta ai_mode = 'waiting_human'
         ↓
-Altera tempo de inatividade para 30min
+Trigger ensure_dispatch_job cria job
         ↓
-useUpdateDepartment().mutate({ auto_close_minutes: 30 })
+CRON (a cada minuto) → dispatch-conversations
         ↓
-UPDATE departments SET auto_close_minutes = 30 WHERE id = ?
+findEligibleAgent(dept) → Juliana (11 chats < 30)
         ↓
-RLS verifica: has_role(auth.uid(), 'support_manager') → ✅ TRUE
+UPDATE conversations SET assigned_to = Juliana, ai_mode = 'copilot'
         ↓
-Toast: "Departamento atualizado" ✅
+Juliana recebe notificação no inbox ✅
 ```
+
+### Arquitetura de Resiliência
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                     ENTRADAS DE DISTRIBUIÇÃO                │
+├─────────────────────────────────────────────────────────────┤
+│  1. CRON (cada minuto) - Garantia de processamento          │
+│  2. Hook useAvailabilityStatus (ao ficar online) - Fast     │
+│  3. Manual via API - Debug/emergência                       │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+              ┌───────────────────────────────┐
+              │    dispatch-conversations    │
+              │    (Edge Function)           │
+              └───────────────────────────────┘
+                              ↓
+              ┌───────────────────────────────┐
+              │  conversation_dispatch_jobs  │
+              │  (Fila persistente)          │
+              └───────────────────────────────┘
+```
+
+### Nota sobre Memória do Projeto
+
+A memória `infrastructure/distribution-cron-and-agent-trigger-logic` menciona que deveria existir um CRON:
+
+> "O sistema utiliza um cron job nativo do Supabase (`schedule = "* * * * *"`) para invocar a função `dispatch-conversations` a cada minuto"
+
+Porém este CRON **nunca foi criado** ou foi removido. Esta migration corrige essa lacuna.
