@@ -1,165 +1,244 @@
 
-# Plano: Adicionar CRON Job para Dispatcher de Conversas
+# Plano: Implementar Fallback Hierárquico no Dispatcher
 
-## Diagnóstico Completo
+## Problema Identificado
 
-Após análise profunda, identifiquei o **problema raiz** que impede a distribuição automática:
+O dispatcher de conversas está com política "Strict Department" que **não possui fallback** para departamentos pai, causando:
 
-### Estado Atual
+1. **20+ conversas órfãs** em "Suporte Sistema" (nenhum agente configurado)
+2. **Miguel com apenas 5 chats** enquanto poderia atender mais
+3. **Juliana com 12 chats** também subutilizada
+4. **Camila em "Suporte" pai** com apenas 2 chats - potencial fallback
 
-| Componente | Status |
-|------------|--------|
-| Trigger `ensure_dispatch_job` | ✅ Funciona (cria jobs quando conversa entra em waiting_human) |
-| Edge function `dispatch-conversations` | ✅ Funciona (atribuiu 5 conversas à Juliana quando chamado manualmente) |
-| **CRON Job para dispatcher** | ❌ **NÃO EXISTE** |
+### Estrutura Atual
 
-### Por que as conversas ficam paradas 18+ minutos?
-
-1. O trigger SQL cria jobs na tabela `conversation_dispatch_jobs` corretamente
-2. **MAS** não há nenhum CRON job que execute `dispatch-conversations` periodicamente
-3. O único momento que o dispatcher é chamado é quando um agente muda status para "online" (via hook `useAvailabilityStatus`)
-4. Como Juliana já estava online, ninguém acionou o dispatcher
-
-### Evidências
-
-**Jobs encontrados sem processamento:**
 ```text
-Suporte Pedidos: 6 jobs pendentes (READY)
-Suporte Sistema: 10 jobs pendentes (READY)
-Total: 16 jobs aguardando um dispatcher que nunca vem
+Suporte (36ce66cd) - Camila: 2 chats, online ✅
+├── Suporte Pedidos (2dd0ee5c) - Miguel: 5, Juliana: 12 ✅
+└── Suporte Sistema (fd4fcc90) - NENHUM AGENTE ❌
+    └── 20 conversas aguardando ⏳
 ```
 
-**Após chamar manualmente:**
-```json
-{
-  "assigned": 5,
-  "processed": 16,
-  "results": [
-    {"agent": "Juliana Alves", "status": "assigned"},
-    // ... 4 mais para Juliana
-  ]
-}
-```
+### Comportamento Atual vs Esperado
 
-**CRONs existentes (nenhum para dispatcher):**
-- `process-playbook-queue-every-minute` (cada minuto) ✅
-- `auto-close-inactive-conversations` (cada hora) ✅
-- `process-pending-deal-closures` (cada 5 min) ✅
-- `dispatch-conversations` ❌ **FALTA**
+| Cenário | Atual | Esperado |
+|---------|-------|----------|
+| Conversa em "Suporte Sistema" | ❌ Fica órfã (manual_only) | ✅ Fallback para "Suporte" pai |
+| Agente no parent_id | Ignorado | Atende subdepartamentos |
 
 ## Solução
 
-Criar um **CRON job nativo do Supabase** que execute `dispatch-conversations` a cada minuto, garantindo que:
+Implementar **fallback hierárquico** na função `findEligibleAgent`:
 
-1. Conversas em `waiting_human` sejam processadas em < 1 minuto
-2. O sistema seja resiliente (não dependa de ações do usuário)
-3. Mantenha o hook `useAvailabilityStatus` como "fast path" para latência < 1s quando agente fica online
+1. Tentar encontrar agente no departamento **EXATO** da conversa
+2. Se não encontrar → buscar no **departamento PAI** (parent_id)
+3. Se não encontrar → marcar como manual_only (comportamento atual)
 
-## Implementação
+### Fluxo Corrigido
 
-### Migration SQL
+```text
+Conversa em "Suporte Sistema"
+        ↓
+findEligibleAgent(dept: "Suporte Sistema")
+        ↓
+Busca agentes online em "Suporte Sistema" → []
+        ↓
+Fallback: Buscar parent_id → "Suporte"
+        ↓
+Busca agentes online em "Suporte" → [Camila]
+        ↓
+Camila tem capacidade (2 < 30)? ✅
+        ↓
+Atribuir conversa para Camila ✅
+```
 
-```sql
--- Adicionar CRON job para processar fila de dispatch a cada minuto
-SELECT cron.schedule(
-  'dispatch-conversations-every-minute',  -- nome do job
-  '* * * * *',                            -- a cada minuto
-  $$
-  SELECT
-    net.http_post(
-        url:='https://zaeozfdjhrmblfaxsyuu.supabase.co/functions/v1/dispatch-conversations',
-        headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphZW96ZmRqaHJtYmxmYXhzeXV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4NzcxODIsImV4cCI6MjA3OTQ1MzE4Mn0.lowOKwfcgxuGQPcWPEEw6TeCfXMR9h9EQRLAAs4mmZ0"}'::jsonb,
-        body:=jsonb_build_object('source', 'cron', 'time', now())
-    ) as request_id;
-  $$
-);
+## Mudanças Necessárias
+
+### 1. Edge Function `dispatch-conversations/index.ts`
+
+Modificar `findEligibleAgent` para:
+- Aceitar parâmetro adicional `attemptedDepts` para evitar loops
+- Buscar `parent_id` do departamento quando não encontrar agentes
+- Recursivamente tentar no parent (máximo 2 níveis: subdept → dept pai)
+
+### 2. Lógica de Fallback
+
+```typescript
+async function findEligibleAgent(supabase, departmentId, attemptedDepts = []) {
+  // Evitar loops infinitos
+  if (attemptedDepts.includes(departmentId)) return null;
+  attemptedDepts.push(departmentId);
+  
+  // 1. Tentar departamento exato
+  const agent = await searchInDepartment(supabase, departmentId);
+  if (agent) return agent;
+  
+  // 2. Fallback para parent
+  const { data: dept } = await supabase
+    .from('departments')
+    .select('parent_id')
+    .eq('id', departmentId)
+    .single();
+  
+  if (dept?.parent_id) {
+    console.log(`[findEligibleAgent] Fallback to parent: ${dept.parent_id}`);
+    return findEligibleAgent(supabase, dept.parent_id, attemptedDepts);
+  }
+  
+  return null; // Nenhum agente encontrado em toda hierarquia
+}
 ```
 
 ## Impacto Esperado
 
 ### Antes (Bug)
 
-| Situação | Tempo de Espera |
-|----------|----------------|
-| Conversa entra em waiting_human | ∞ (até alguém mudar status) |
-| Agente já online | ∞ (sem trigger) |
+| Conversa em | Agente Encontrado | Resultado |
+|-------------|-------------------|-----------|
+| Suporte Sistema | ❌ Nenhum | manual_only (órfã) |
+| Suporte Pedidos | ✅ Miguel/Juliana | assigned |
 
 ### Depois (Corrigido)
 
-| Situação | Tempo de Espera |
-|----------|----------------|
-| Conversa entra em waiting_human | < 1 minuto (CRON) |
-| Agente muda para online | < 1 segundo (hook fast path) |
+| Conversa em | Agente Encontrado | Fallback | Resultado |
+|-------------|-------------------|----------|-----------|
+| Suporte Sistema | ❌ Nenhum | → Suporte (Camila) | assigned ✅ |
+| Suporte Pedidos | ✅ Miguel/Juliana | - | assigned ✅ |
+| Financeiro | ❌ Nenhum | Sem parent | manual_only |
+
+## Compatibilidade
+
+- ✅ Mantém preferência por departamento exato
+- ✅ Fallback é transparente para o agente (conversa aparece normalmente)
+- ✅ Máximo 2 níveis de fallback (evita performance issues)
+- ✅ Alinhado com memória `department-routing-fallback-logic`
 
 ## Arquivos a Modificar
 
 | Arquivo | Tipo | Mudança |
 |---------|------|---------|
-| Nova migration SQL | Banco de Dados | Adicionar CRON job |
-
-## Compatibilidade
-
-- ✅ Não afeta distribuições existentes
-- ✅ Mantém hook de fast path para latência mínima
-- ✅ Segue padrão dos outros CRONs do projeto
-- ✅ Usa mesma anon key dos outros CRONs
-
-## Verificação Pós-Deploy
-
-Após aplicar a migration:
-1. Aguardar 1-2 minutos
-2. Verificar `cron.job` - deve aparecer o novo job
-3. Verificar `cron.job_run_details` - deve mostrar execuções bem-sucedidas
-4. Novas conversas em waiting_human devem ser atribuídas em < 1 min
+| `supabase/functions/dispatch-conversations/index.ts` | Edge Function | Adicionar fallback hierárquico |
 
 ---
 
-## Seção Tecnica
+## Seção Técnica
 
-### Fluxo Completo Corrigido
+### Código Completo da Modificação
 
-```text
-Cliente pede transferência para humano
-        ↓
-ai-autopilot-chat seta ai_mode = 'waiting_human'
-        ↓
-Trigger ensure_dispatch_job cria job
-        ↓
-CRON (a cada minuto) → dispatch-conversations
-        ↓
-findEligibleAgent(dept) → Juliana (11 chats < 30)
-        ↓
-UPDATE conversations SET assigned_to = Juliana, ai_mode = 'copilot'
-        ↓
-Juliana recebe notificação no inbox ✅
+```typescript
+// ANTES (linha 319-421):
+async function findEligibleAgent(supabase, departmentId) {
+  // Busca APENAS no departamento exato
+  console.log(`[findEligibleAgent] Searching ONLY in exact dept: ${departmentId}`);
+  // ...
+}
+
+// DEPOIS:
+async function findEligibleAgent(
+  supabase: any,
+  departmentId: string,
+  attemptedDepts: string[] = []
+): Promise<EligibleAgent | null> {
+  
+  // Evitar loops infinitos
+  if (attemptedDepts.includes(departmentId)) {
+    console.log(`[findEligibleAgent] Already tried dept ${departmentId}, stopping`);
+    return null;
+  }
+  attemptedDepts.push(departmentId);
+  
+  const eligibleRoles = [
+    'support_agent', 'sales_rep', 'cs_manager', 
+    'support_manager', 'manager', 'general_manager', 'admin'
+  ];
+
+  const { data: eligibleUserRoles, error: rolesError } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .in('role', eligibleRoles);
+
+  if (rolesError || !eligibleUserRoles?.length) {
+    return null;
+  }
+
+  const eligibleUserIds = eligibleUserRoles.map((r) => r.user_id);
+
+  console.log(`[findEligibleAgent] Searching in dept: ${departmentId}`);
+
+  // Buscar agentes online no departamento
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, full_name, last_status_change')
+    .eq('availability_status', 'online')
+    .eq('is_blocked', false)
+    .eq('department', departmentId)
+    .in('id', eligibleUserIds);
+
+  // Se encontrou agentes, processar normalmente
+  if (!profilesError && profiles?.length) {
+    // ... (código existente para calcular capacidade e retornar agente)
+    const agent = await processAgentCapacity(supabase, profiles);
+    if (agent) return agent;
+  }
+
+  // FALLBACK: Tentar departamento pai
+  console.log(`[findEligibleAgent] No agents in ${departmentId}, trying parent...`);
+  
+  const { data: dept } = await supabase
+    .from('departments')
+    .select('parent_id')
+    .eq('id', departmentId)
+    .single();
+
+  if (dept?.parent_id) {
+    console.log(`[findEligibleAgent] Fallback to parent: ${dept.parent_id}`);
+    return findEligibleAgent(supabase, dept.parent_id, attemptedDepts);
+  }
+
+  console.log(`[findEligibleAgent] No parent for ${departmentId}, no agents found`);
+  return null;
+}
 ```
 
-### Arquitetura de Resiliência
+### Atualização em `checkDepartmentHasAgents`
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                     ENTRADAS DE DISTRIBUIÇÃO                │
-├─────────────────────────────────────────────────────────────┤
-│  1. CRON (cada minuto) - Garantia de processamento          │
-│  2. Hook useAvailabilityStatus (ao ficar online) - Fast     │
-│  3. Manual via API - Debug/emergência                       │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-              ┌───────────────────────────────┐
-              │    dispatch-conversations    │
-              │    (Edge Function)           │
-              └───────────────────────────────┘
-                              ↓
-              ┌───────────────────────────────┐
-              │  conversation_dispatch_jobs  │
-              │  (Fila persistente)          │
-              └───────────────────────────────┘
+Também deve verificar hierarquia:
+
+```typescript
+async function checkDepartmentHasAgents(supabase, departmentId, attemptedDepts = []) {
+  if (attemptedDepts.includes(departmentId)) return false;
+  attemptedDepts.push(departmentId);
+  
+  // Verificar departamento exato
+  const { count } = await supabase
+    .from('profiles')
+    .select('id', { count: 'exact', head: true })
+    .eq('department', departmentId)
+    .in('id', eligibleUserIds);
+
+  if (count > 0) return true;
+  
+  // Verificar parent
+  const { data: dept } = await supabase
+    .from('departments')
+    .select('parent_id')
+    .eq('id', departmentId)
+    .single();
+
+  if (dept?.parent_id) {
+    return checkDepartmentHasAgents(supabase, dept.parent_id, attemptedDepts);
+  }
+  
+  return false;
+}
 ```
 
-### Nota sobre Memória do Projeto
+### Log Esperado Após Correção
 
-A memória `infrastructure/distribution-cron-and-agent-trigger-logic` menciona que deveria existir um CRON:
-
-> "O sistema utiliza um cron job nativo do Supabase (`schedule = "* * * * *"`) para invocar a função `dispatch-conversations` a cada minuto"
-
-Porém este CRON **nunca foi criado** ou foi removido. Esta migration corrige essa lacuna.
+```text
+[findEligibleAgent] Searching in dept: fd4fcc90 (Suporte Sistema)
+[findEligibleAgent] No agents in fd4fcc90, trying parent...
+[findEligibleAgent] Fallback to parent: 36ce66cd (Suporte)
+[findEligibleAgent] Found 1 agents: [Camila]
+[dispatch-conversations] ✅ Assigned xxx to Camila (150ms)
+```
