@@ -1,6 +1,6 @@
-import { ArrowLeft, Brain, Sparkles, BookOpen, Power, Shield, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Brain, Sparkles, BookOpen, Power, Shield, AlertTriangle, Eye, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import AIModelConfigCard from "@/components/settings/AIModelConfigCard";
 import { AITrainerStatsWidget } from "@/components/settings/AITrainerStatsWidget";
 import { RAGOrchestratorWidget } from "@/components/settings/RAGOrchestratorWidget";
@@ -8,11 +8,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { useAIGlobalConfig } from "@/hooks/useAIGlobalConfig";
 import { useStrictRAGMode } from "@/hooks/useStrictRAGMode";
+import { useShadowMode } from "@/hooks/useShadowMode";
+import { useAILearningTimeline } from "@/hooks/useAILearningTimeline";
 
 export default function AISettingsPage() {
   const navigate = useNavigate();
   const { isAIEnabled, isLoading, toggleAI, isToggling } = useAIGlobalConfig();
   const { isStrictMode, isLoading: isLoadingStrict, toggleStrictMode, isToggling: isTogglingStrict } = useStrictRAGMode();
+  const { isShadowMode, isLoading: isLoadingShadow, toggleShadowMode, isToggling: isTogglingShadow } = useShadowMode();
+  const { stats: auditStats } = useAILearningTimeline({ status: 'pending' });
 
   return (
     <div className="min-h-screen bg-background">
@@ -73,6 +77,81 @@ export default function AISettingsPage() {
                     disabled={isLoading || isToggling}
                   />
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Shadow Mode - FASE 6 */}
+            <Card className={isShadowMode ? "border-primary/30 bg-primary/5" : ""}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Eye className={`h-5 w-5 ${isShadowMode ? 'text-primary' : 'text-muted-foreground'}`} />
+                  Shadow Mode (Apenas Observa)
+                </CardTitle>
+                <CardDescription>
+                  IA analisa e sugere, mas NUNCA aplica ações automaticamente
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">
+                      {isShadowMode ? 'Ativado' : 'Desativado'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {isShadowMode 
+                        ? 'IA gera sugestões mas requer aprovação humana para aplicar' 
+                        : 'IA pode executar ações automaticamente conforme regras'}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={isShadowMode} 
+                    onCheckedChange={toggleShadowMode}
+                    disabled={isLoadingShadow || isTogglingShadow || !isAIEnabled}
+                  />
+                </div>
+                
+                {isShadowMode && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <Eye className="h-4 w-4 text-primary mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-primary">Comportamento quando ativo:</p>
+                        <ul className="mt-1 space-y-1 text-muted-foreground">
+                          <li>• <strong>Sugestões:</strong> IA gera mas não aplica</li>
+                          <li>• <strong>KB Drafts:</strong> Criados como pendentes para revisão</li>
+                          <li>• <strong>Roteamento:</strong> Sugerido mas não executado</li>
+                          <li>• <strong>Aprendizado:</strong> Registrado para aprovação na Auditoria</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Audit Link - FASE 6 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-primary" />
+                  Auditoria de IA
+                  {auditStats.pending > 0 && (
+                    <span className="ml-2 bg-warning text-warning-foreground text-xs font-bold px-2 py-0.5 rounded-full">
+                      {auditStats.pending} pendentes
+                    </span>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Revise e aprove/rejeite aprendizados automáticos da IA
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button variant="outline" asChild>
+                  <Link to="/settings/ai-audit">
+                    <ClipboardCheck className="h-4 w-4 mr-2" />
+                    Abrir Auditoria
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
 

@@ -19,6 +19,35 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // ============================================
+    // FASE 6: Kill Switch Global
+    // ============================================
+    const { data: globalConfig } = await supabase
+      .from('system_configurations')
+      .select('value')
+      .eq('key', 'ai_global_enabled')
+      .maybeSingle();
+
+    if (globalConfig?.value === 'false') {
+      console.log('[passive-learning-cron] 🚫 Kill Switch ativo - retornando');
+      return new Response(
+        JSON.stringify({ success: true, reason: 'kill_switch', processed: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ============================================
+    // FASE 6: Shadow Mode Check
+    // ============================================
+    const { data: shadowConfig } = await supabase
+      .from('system_configurations')
+      .select('value')
+      .eq('key', 'ai_shadow_mode')
+      .maybeSingle();
+
+    const isShadowMode = shadowConfig?.value === 'true';
+    console.log(`[passive-learning-cron] Shadow Mode: ${isShadowMode ? 'ATIVO' : 'Inativo'}`);
+
     // Verificar se aprendizado passivo está habilitado
     const { data: configData } = await supabase
       .from('system_configurations')

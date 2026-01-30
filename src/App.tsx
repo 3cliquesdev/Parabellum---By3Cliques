@@ -108,6 +108,7 @@ const ProjectBoardPage = lazy(() => import("./pages/ProjectBoardPage"));
 const FormBoardIntegrationsPage = lazy(() => import("./pages/FormBoardIntegrationsPage"));
 const ProductBoardMappingsPage = lazy(() => import("./pages/ProductBoardMappingsPage"));
 const AISettingsPage = lazy(() => import("./pages/AISettingsPage"));
+const AIAuditPage = lazy(() => import("./pages/AIAuditPage"));
 const InstagramSettings = lazy(() => import("./pages/InstagramSettings"));
 const KiwifySettingsPage = lazy(() => import("./pages/KiwifySettingsPage"));
 const SecuritySettingsPage = lazy(() => import("./pages/SecuritySettingsPage"));
@@ -254,6 +255,7 @@ const App = () => {
               <Route path="/instagram" element={<ProtectedRoute requiredPermission="inbox.access"><Layout><InstagramDashboard /></Layout></ProtectedRoute>} />
               <Route path="/settings/instagram" element={<ProtectedRoute requiredPermission="settings.integrations"><Layout><InstagramSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/ai" element={<ProtectedRoute requiredPermission="settings.view"><Layout><AISettingsPage /></Layout></ProtectedRoute>} />
+              <Route path="/settings/ai-audit" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AIAuditPage /></Layout></ProtectedRoute>} />
               <Route path="/settings/kiwify" element={<ProtectedRoute requiredPermission="settings.integrations"><Layout><KiwifySettingsPage /></Layout></ProtectedRoute>} />
               <Route path="/settings/security" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SecuritySettingsPage /></Layout></ProtectedRoute>} />
               <Route path="/settings/database" element={<ProtectedRoute requiredPermission="settings.view"><Layout><DatabaseSettingsPage /></Layout></ProtectedRoute>} />

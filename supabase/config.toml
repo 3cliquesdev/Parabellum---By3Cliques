@@ -354,3 +354,10 @@ verify_jwt = true
 
 [functions.generate-copilot-insights]
 verify_jwt = true
+
+[functions.check-ai-anomalies]
+verify_jwt = false
+
+[functions.check-ai-anomalies.cron]
+schedule = "0 6 * * *"
+region = "us-east-1"

@@ -51,9 +51,40 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // ============================================
+    // FASE 6: Kill Switch Global
+    // ============================================
+    const { data: globalConfig } = await supabaseClient
+      .from('system_configurations')
+      .select('value')
+      .eq('key', 'ai_global_enabled')
+      .maybeSingle();
+
+    if (globalConfig?.value === 'false') {
+      console.log('[generate-kb-draft] 🚫 Kill Switch ativo - retornando');
+      return new Response(JSON.stringify({ 
+        status: 'disabled', 
+        reason: 'kill_switch',
+        ai_global_enabled: false 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ============================================
+    // FASE 6: Shadow Mode Check
+    // ============================================
+    const { data: shadowConfig } = await supabaseClient
+      .from('system_configurations')
+      .select('value')
+      .eq('key', 'ai_shadow_mode')
+      .maybeSingle();
+
+    const isShadowMode = shadowConfig?.value === 'true';
+
     const { gapId, conversationId }: GenerateDraftRequest = await req.json();
 
-    console.log(`[generate-kb-draft] Gerando draft para KB Gap: ${gapId}`);
+    console.log(`[generate-kb-draft] Gerando draft para KB Gap: ${gapId} (Shadow Mode: ${isShadowMode})`);
 
     // 1. Buscar o KB Gap
     const { data: gap, error: gapError } = await supabaseClient
@@ -183,11 +214,33 @@ Gere um artigo de base de conhecimento em JSON.`;
       .update({ used: true })
       .eq('id', gapId);
 
-    console.log(`[generate-kb-draft] ✅ Draft criado: ${article.id}`);
+    // ============================================
+    // FASE 6: Registrar na ai_learning_timeline
+    // ============================================
+    await supabaseClient
+      .from('ai_learning_timeline')
+      .insert({
+        learning_type: 'draft',
+        summary: `Draft KB criado: "${draft.title}" a partir de gap detectado`,
+        source_conversations: convId ? 1 : 0,
+        source_conversation_ids: convId ? [convId] : null,
+        confidence: 'alta',
+        status: isShadowMode ? 'pending' : 'pending', // Sempre pending para revisão
+        related_article_id: article.id,
+        metadata: { 
+          gap_id: gapId, 
+          shadow_mode: isShadowMode,
+          gap_description: gap.kb_gap_description?.substring(0, 200)
+        }
+      });
+
+    console.log(`[generate-kb-draft] ✅ Draft criado: ${article.id} (Shadow Mode: ${isShadowMode})`);
 
     return new Response(JSON.stringify({ 
       success: true,
-      article
+      article,
+      shadow_mode: isShadowMode,
+      applied: !isShadowMode
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

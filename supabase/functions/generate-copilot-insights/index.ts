@@ -94,6 +94,28 @@ serve(async (req) => {
 
     const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
+    // ============================================
+    // FASE 6: Kill Switch Global
+    // ============================================
+    const { data: globalConfig } = await supabaseClient
+      .from('system_configurations')
+      .select('value')
+      .eq('key', 'ai_global_enabled')
+      .maybeSingle();
+
+    if (globalConfig?.value === 'false') {
+      console.log('[generate-copilot-insights] 🚫 Kill Switch ativo - retornando');
+      return new Response(
+        JSON.stringify({ 
+          status: 'disabled', 
+          reason: 'kill_switch',
+          ai_global_enabled: false,
+          insights: []
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Get authorization header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
