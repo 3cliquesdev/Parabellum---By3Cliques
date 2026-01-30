@@ -47,6 +47,11 @@ interface PendingAttachment {
 export interface SuperComposerProps {
   conversationId: string;
   isDisabled?: boolean;
+  /** 
+   * 🛡️ SEGURANÇA: ai_mode da conversa para bloquear envio automático 
+   * Quando aiMode === 'waiting_human', o envio é bloqueado para evitar duplicação
+   */
+  aiMode?: 'autopilot' | 'copilot' | 'disabled' | 'waiting_human' | null;
   whatsappInstanceId?: string | null;
   whatsappMetaInstanceId?: string | null;
   whatsappProvider?: string | null;
@@ -56,6 +61,7 @@ export interface SuperComposerProps {
 export function SuperComposer({
   conversationId,
   isDisabled = false,
+  aiMode,
   whatsappInstanceId,
   whatsappMetaInstanceId,
   whatsappProvider,
@@ -184,6 +190,20 @@ export function SuperComposer({
   };
 
   const handleSend = async () => {
+    // =========================================================================
+    // 🛡️ REGRA DE SEGURANÇA: Bloquear envio em waiting_human
+    // Isso evita duplicação por re-render ou retry visual no frontend
+    // =========================================================================
+    if (aiMode === 'waiting_human') {
+      console.warn('[SuperComposer] ⛔ Bloqueado: aiMode é waiting_human - aguarde assumir a conversa');
+      toast({
+        title: "Aguardando atendente",
+        description: "Você precisa assumir a conversa antes de enviar mensagens.",
+        variant: "default",
+      });
+      return;
+    }
+
     const hasContent = message.trim() || pendingAttachments.some((a) => a.uploadedMedia);
     if (!hasContent || !conversationId) return;
 

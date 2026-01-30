@@ -49,6 +49,30 @@ serve(async (req) => {
     const aiConfig = await getAIConfig(supabase);
     const isTestMode = conversation?.is_test_mode === true;
 
+    // ============================================================
+    // 📊 LOG DE DECISÃO UNIFICADO (Observabilidade)
+    // Este log é a "caixa-preta" para auditoria de incidentes
+    // ============================================================
+    console.log('[AUTO-DECISION]', JSON.stringify({
+      timestamp: new Date().toISOString(),
+      conversation_id: record.conversation_id,
+      message_id: record.id,
+      ai_global_enabled: aiConfig.ai_global_enabled,
+      is_test_mode: isTestMode,
+      ai_mode: conversation?.ai_mode,
+      assigned_to: conversation?.assigned_to || null,
+      decision: !aiConfig.ai_global_enabled && !isTestMode 
+        ? 'HUMAN_ONLY' 
+        : isTestMode 
+          ? 'TEST_MODE_ACTIVE' 
+          : 'AI_PROCESSING',
+      reason: !aiConfig.ai_global_enabled && !isTestMode
+        ? 'kill_switch_active'
+        : isTestMode
+          ? 'test_mode_bypass'
+          : 'normal_flow',
+    }));
+
     if (!aiConfig.ai_global_enabled && !isTestMode) {
       console.log('[message-listener] 🛑 KILL SWITCH ATIVO - Nenhum envio automático');
       

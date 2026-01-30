@@ -658,9 +658,10 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                   </div>
                 </div>
               ) : (
-                <SuperComposer
+              <SuperComposer
                   conversationId={conversation.id}
                   isDisabled={conversation.status === "closed"}
+                  aiMode={effectiveAIMode}
                   whatsappInstanceId={conversation.whatsapp_instance_id}
                   whatsappMetaInstanceId={conversation.whatsapp_meta_instance_id}
                   whatsappProvider={conversation.whatsapp_provider}
