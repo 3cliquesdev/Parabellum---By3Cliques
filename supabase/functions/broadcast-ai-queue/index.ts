@@ -72,12 +72,13 @@ serve(async (req) => {
 
     console.log("[broadcast-ai-queue] ✅ Meta instance found:", metaInstance.id);
 
-    // 2. Buscar conversas elegíveis (fila da IA)
+    // 2. Buscar conversas elegíveis (fila da IA) - SOMENTE WHATSAPP
     const { data: conversations, error: convError } = await supabase
       .from("conversations")
       .select(`
         id,
         contact_id,
+        channel,
         contacts!inner (
           id,
           phone,
@@ -88,6 +89,7 @@ serve(async (req) => {
       `)
       .eq("ai_mode", "autopilot")
       .eq("status", "open")
+      .eq("channel", "whatsapp")
       .is("assigned_to", null)
       .not("contacts.phone", "is", null)
       .limit(limit);

@@ -147,7 +147,7 @@ export function BroadcastAIQueueDialog({
           <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
             <AlertTriangle className="h-5 w-5 text-warning" />
             <span className="text-sm">
-              <strong>{queueCount}</strong> conversas serão notificadas
+              <strong>{queueCount}</strong> conversas WhatsApp serão notificadas
             </span>
           </div>
 
