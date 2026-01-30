@@ -1,193 +1,131 @@
 
+# Plano: Reativação Automática de Conversas Escaladas quando Agente Volta Online
 
-# Plano: Sistema Robusto de Versionamento e Limpeza de Estado
+## Diagnóstico
 
-## Contexto
+**Problema confirmado**: O atendente Miguel Fedes está **online** no departamento "Suporte Sistema", mas existem **22 conversas "escalated"** que não estão sendo distribuídas para ele.
 
-O sistema atual já possui:
-- **Service Worker cleanup** em `main.tsx` e `index.html`
-- **Build ID** gerado por timestamp ISO no Vite
-- **Banner de atualização** com verificação periódica
+### Causa Raiz
 
-**Problema**: Falta um sistema de **versionamento semântico** que detecte mudanças críticas (fluxos, enums, contratos) e force limpeza automática de estado antigo para evitar bugs fantasmas.
+1. Quando um agente fica **offline/ausente/ocupado**, os jobs de distribuição tentam várias vezes
+2. Após atingir `max_attempts` (padrão: 5), o job é marcado como **"escalated"**
+3. Quando o agente **volta para online**, o dispatcher é chamado
+4. **BUG**: O dispatcher só processa jobs com `status = 'pending'`, **ignorando completamente os escalated**
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                   FLUXO ATUAL (COM BUG)                                 │
+├────────────────────────────────────────────────────────────────────────┤
+│  1. Conversa entra na fila                                              │
+│  2. Job criado com status='pending'                                     │
+│  3. Dispatcher tenta atribuir → nenhum agente online                    │
+│  4. Após 5 tentativas → status='escalated'                              │
+│  5. Agente volta ONLINE → dispatcher chamado                            │
+│  6. ❌ Query só busca status='pending' → conversas escalated IGNORADAS  │
+│  7. ❌ Miguel online mas sem receber conversas                          │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Arquitetura da Solução
+## Solução Proposta
+
+Implementar **re-enfileiramento automático** de conversas escaladas quando:
+1. Um agente muda seu status para `online`
+2. O dispatcher é executado e há agentes disponíveis no departamento
+
+### Arquitetura
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                        FLOW DE INICIALIZAÇÃO                     │
-├─────────────────────────────────────────────────────────────────┤
-│  1. main.tsx (ANTES do React)                                    │
-│     ├─ Lê APP_SCHEMA_VERSION (ex: "2026.01.30-v1")              │
-│     ├─ Compara com localStorage.app_schema_version               │
-│     ├─ Se diferente:                                             │
-│     │   ├─ Preserva auth token do Supabase                       │
-│     │   ├─ Limpa TODO localStorage/sessionStorage/IndexedDB      │
-│     │   ├─ Restaura auth token                                   │
-│     │   ├─ Salva nova versão                                     │
-│     │   └─ Força reload                                          │
-│     └─ Continua boot normal                                      │
-│                                                                  │
-│  2. App.tsx carrega                                              │
-│     └─ UpdateAvailableBanner verifica BUILD_ID periódico        │
-│                                                                  │
-│  3. Se erro crítico detectado                                    │
-│     └─ Modal não-técnico com botão "Atualizar agora"            │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                   FLUXO CORRIGIDO                                       │
+├────────────────────────────────────────────────────────────────────────┤
+│  1. Agente muda status para ONLINE                                      │
+│  2. Frontend chama dispatcher com { agent_id, department_id }           │
+│  3. Dispatcher detecta agente online em dept X                          │
+│  4. ✅ NOVO: Re-enfileira jobs escalados do dept X                      │
+│  5. ✅ Processa todos os jobs (incluindo os re-enfileirados)            │
+│  6. ✅ Miguel recebe conversas imediatamente                            │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Mudanças Técnicas
 
-### 1. Criar constante de versão de schema (`src/lib/build/schemaVersion.ts`)
+### 1. Modificar `dispatch-conversations/index.ts`
 
-Nova constante que você incrementa manualmente apenas em deploys críticos:
+Adicionar função `requeueEscalatedJobs` que:
 
-```typescript
-/**
- * SCHEMA VERSION - Incrementar quando:
- * - Mudar estrutura de dados no localStorage/IndexedDB
- * - Alterar enums ou estados de fluxo
- * - Modificar contratos de API
- * - Refatorar lógica de distribuição
- * 
- * NÃO incrementar para mudanças de UI ou CSS
- */
-export const APP_SCHEMA_VERSION = "2026.01.30-v1";
-```
-
-### 2. Adicionar validação de schema em `main.tsx`
-
-Inserir **antes** da limpeza de Service Workers (linha ~16):
+- Busca departamentos com agentes online e capacidade disponível
+- Identifica jobs `escalated` desses departamentos
+- Reseta o status para `pending` e `attempts` para 0
+- Atualiza `dispatch_status` nas conversas correspondentes
 
 ```typescript
-import { APP_SCHEMA_VERSION } from "./lib/build/schemaVersion";
-
-// ============================================
-// SISTEMA DE VERSIONAMENTO DE SCHEMA
-// ============================================
-
-const SCHEMA_VERSION_KEY = 'app_schema_version';
-const storedVersion = localStorage.getItem(SCHEMA_VERSION_KEY);
-
-if (storedVersion !== APP_SCHEMA_VERSION) {
-  console.warn('[Main] ⚠️ Schema version mismatch — resetting client state');
-  console.warn('[Main] Stored:', storedVersion, '→ Current:', APP_SCHEMA_VERSION);
+async function requeueEscalatedJobs(supabase, agentDepartmentId?: string) {
+  // Se recebeu department_id específico (agente acabou de ficar online)
+  // prioriza esse departamento
+  const targetDepts = agentDepartmentId ? [agentDepartmentId] : await getDeptsWithOnlineAgents(supabase);
   
-  // Preservar auth token do Supabase
-  const supabaseAuthKey = Object.keys(localStorage).find(key => 
-    key.startsWith('sb-') && key.endsWith('-auth-token')
-  );
-  const supabaseAuthValue = supabaseAuthKey ? localStorage.getItem(supabaseAuthKey) : null;
-  
-  // Limpar localStorage
-  localStorage.clear();
-  
-  // Restaurar auth
-  if (supabaseAuthKey && supabaseAuthValue) {
-    localStorage.setItem(supabaseAuthKey, supabaseAuthValue);
-  }
-  
-  // Salvar nova versão
-  localStorage.setItem(SCHEMA_VERSION_KEY, APP_SCHEMA_VERSION);
-  
-  // Limpar sessionStorage
-  sessionStorage.clear();
-  
-  // Limpar IndexedDB (assíncrono, mas não bloqueia)
-  if ('indexedDB' in window && indexedDB.databases) {
-    indexedDB.databases().then(dbs => {
-      dbs.forEach(db => {
-        if (db.name && !db.name.startsWith('sb-')) {
-          indexedDB.deleteDatabase(db.name);
-        }
-      });
-    });
-  }
-  
-  // Reload único e controlado
-  const reloadKey = 'app_schema_reload_done';
-  if (!sessionStorage.getItem(reloadKey)) {
-    sessionStorage.setItem(reloadKey, '1');
-    window.location.reload();
+  for (const deptId of targetDepts) {
+    // Verificar se há agentes online com capacidade
+    const hasCapacity = await checkDepartmentHasAvailableCapacity(supabase, deptId);
+    if (!hasCapacity) continue;
+    
+    // Re-enfileirar jobs escalados deste departamento
+    const { data: requeued } = await supabase
+      .from('conversation_dispatch_jobs')
+      .update({ 
+        status: 'pending', 
+        attempts: 0,
+        next_attempt_at: new Date().toISOString(),
+        last_error: 'requeued_agent_online'
+      })
+      .eq('status', 'escalated')
+      .eq('department_id', deptId)
+      .select('conversation_id');
+    
+    // Atualizar status das conversas
+    if (requeued?.length) {
+      await supabase
+        .from('conversations')
+        .update({ dispatch_status: 'pending' })
+        .in('id', requeued.map(j => j.conversation_id));
+    }
   }
 }
 ```
 
-### 3. Melhorar `AppErrorBoundary.tsx` com modal não-técnico
-
-Substituir a UI atual por um modal profissional:
+### 2. Chamar no início do dispatch cycle
 
 ```typescript
-render() {
-  if (this.state.hasError) {
-    const handleForceUpdate = async () => {
-      // Limpar tudo e recarregar
-      const { hardRefresh } = await import('@/lib/build/ensureLatestBuild');
-      await hardRefresh();
-    };
-
-    return (
-      <div className="h-screen flex flex-col items-center justify-center bg-background text-foreground p-6">
-        <div className="max-w-md text-center space-y-6">
-          <div className="text-6xl">⚠️</div>
-          <h1 className="text-2xl font-bold">Atualização importante</h1>
-          <p className="text-muted-foreground">
-            Detectamos que seu navegador está usando uma versão antiga do sistema.
-            Para garantir o funcionamento correto, precisamos atualizar agora.
-          </p>
-          <button
-            onClick={handleForceUpdate}
-            className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors"
-          >
-            Atualizar agora
-          </button>
-          {/* Detalhes técnicos escondidos para devs */}
-          {process.env.NODE_ENV === 'development' && this.state.error && (
-            <details className="text-left text-xs text-muted-foreground mt-4">
-              <summary className="cursor-pointer">Detalhes técnicos</summary>
-              <pre className="mt-2 p-2 bg-muted rounded overflow-auto">
-                {this.state.error.message}
-              </pre>
-            </details>
-          )}
-        </div>
-      </div>
-    );
+serve(async (req) => {
+  // ... existing code ...
+  
+  // Parse body para pegar department_id do agente que ficou online
+  let agentDepartmentId: string | undefined;
+  if (req.method === 'POST') {
+    const body = await req.json().catch(() => ({}));
+    agentDepartmentId = body.department_id;
   }
-  return this.props.children;
-}
+  
+  // ✅ NOVO: Re-enfileirar jobs escalados antes de processar
+  await requeueEscalatedJobs(supabase, agentDepartmentId);
+  
+  // ... continue with existing dispatch logic ...
+});
 ```
 
-### 4. Refatorar `index.html` para simplificar script de SW
+### 3. Adicionar verificação de capacidade
 
-O script atual é bom, mas pode ser otimizado para evitar reload duplo:
-
-```html
-<script>
-  (function () {
-    try {
-      if (!('serviceWorker' in navigator)) return;
-      
-      var hasController = !!navigator.serviceWorker.controller;
-      var key = 'sw_clean_v2';  // Nova chave para evitar conflito
-      
-      // Limpar SW de forma assíncrona (não bloqueia carregamento)
-      navigator.serviceWorker.getRegistrations().then(function (regs) {
-        return Promise.all(regs.map(function (r) { return r.unregister(); }));
-      });
-      
-      // Reload apenas se estava sendo controlado por SW antigo e ainda não fez reload
-      if (hasController && !sessionStorage.getItem(key)) {
-        sessionStorage.setItem(key, '1');
-        setTimeout(function() { location.reload(); }, 100);
-      }
-    } catch (e) {}
-  })();
-</script>
+```typescript
+async function checkDepartmentHasAvailableCapacity(supabase, departmentId) {
+  // Reutilizar lógica existente de findEligibleAgent
+  // mas apenas verificar se EXISTE algum agente elegível
+  const agent = await findEligibleAgent(supabase, departmentId);
+  return agent !== null;
+}
 ```
 
 ---
@@ -196,29 +134,32 @@ O script atual é bom, mas pode ser otimizado para evitar reload duplo:
 
 | Arquivo | Ação |
 |---------|------|
-| `src/lib/build/schemaVersion.ts` | **Criar** - Constante de versão de schema |
-| `src/main.tsx` | **Modificar** - Adicionar validação de schema |
-| `src/components/AppErrorBoundary.tsx` | **Modificar** - UI não-técnica com botão de atualização |
-| `index.html` | **Modificar** - Otimizar script de SW cleanup |
+| `supabase/functions/dispatch-conversations/index.ts` | **Modificar** - Adicionar requeue de escalados |
 
 ---
 
-## Uso Futuro
+## Regras Aplicadas (Base de Conhecimento)
 
-Quando você fizer um deploy crítico que mude estruturas de dados:
+- **Upgrade, não downgrade**: Melhoria que não quebra nada existente
+- **Distribuição estrita por departamento**: Mantém regra de não fazer fallback entre departamentos
+- **Capacidade mínima de 30**: Mantém regra existente
+- **Trigger imediato ao ficar online**: Aproveita chamada existente do frontend
 
-1. Abra `src/lib/build/schemaVersion.ts`
-2. Incremente a versão: `"2026.01.30-v1"` → `"2026.01.31-v1"` (ou v2 no mesmo dia)
-3. Deploy
+---
 
-Todos os usuários que abrirem o app terão seu estado resetado automaticamente.
+## Teste de Validação
+
+Após implementação:
+
+1. Marcar Miguel como "busy" ou "offline"
+2. Aguardar conversas serem escaladas
+3. Marcar Miguel como "online"
+4. **Esperado**: Conversas escaladas devem ser distribuídas para ele em segundos
 
 ---
 
 ## Impacto
 
-- **Zero downgrade**: Usuários presos em versão antiga serão forçados a atualizar
-- **Zero perda de sessão**: Auth token do Supabase é preservado
-- **Zero interrupção**: Reload acontece apenas 1x por mudança de schema
-- **UX profissional**: Modal limpo sem termos técnicos
-
+- **Zero regressão**: Código existente permanece intacto
+- **Imediato**: Miguel receberá conversas assim que voltar online
+- **Universal**: Regra aplicada para todos os agentes/departamentos
