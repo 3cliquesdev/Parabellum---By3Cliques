@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Bot, Sparkles, AlertTriangle } from "lucide-react";
 import { usePersonas } from "@/hooks/usePersonas";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RAGSourcesSection } from "./panels/RAGSourcesSection";
 import { SmartCollectionSection } from "./panels/SmartCollectionSection";
@@ -133,14 +134,24 @@ export function AIResponsePropertiesPanel({
 
       <Separator />
 
-      {/* Seção: Fallback */}
+      {/* Seção: Fallback - 🆕 FASE 1: Obrigatório com indicador visual */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-orange-500" />
-          <Label className="text-xs font-semibold uppercase tracking-wide">Mensagem de Fallback</Label>
+          <AlertTriangle className={cn(
+            "h-4 w-4",
+            selectedNode.data.fallback_message 
+              ? "text-orange-500" 
+              : "text-red-500 animate-pulse"
+          )} />
+          <Label className="text-xs font-semibold uppercase tracking-wide">
+            Mensagem de Fallback
+          </Label>
+          {!selectedNode.data.fallback_message && (
+            <Badge variant="destructive" className="text-[9px] px-1.5">Obrigatório</Badge>
+          )}
         </div>
         <Textarea
-          value={selectedNode.data.fallback_message || ""}
+          value={selectedNode.data.fallback_message || "No momento não tenho essa informação."}
           onChange={(e) => updateNodeData("fallback_message", e.target.value)}
           placeholder="Mensagem se a IA não conseguir responder..."
           rows={2}

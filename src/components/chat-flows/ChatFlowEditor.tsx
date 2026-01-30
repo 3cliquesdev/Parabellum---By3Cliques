@@ -175,7 +175,18 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
       ask_options: { label: "Múltipla Escolha", message: "Selecione uma opção:", save_as: "choice", options: [] },
       ask_text: { label: "Pergunta Aberta", message: "Digite sua resposta:", save_as: "response", required: false },
       condition: { label: "Condição", condition_type: "contains", condition_field: "", condition_value: "" },
-      ai_response: { label: "Resposta IA", context_prompt: "", use_knowledge_base: true, fallback_message: "" },
+      ai_response: { 
+        label: "Resposta IA", 
+        context_prompt: "", 
+        use_knowledge_base: true, 
+        // 🆕 FASE 1: fallback obrigatório com valor padrão
+        fallback_message: "No momento não tenho essa informação.",
+        // 🆕 FASE 1: Valores padrão para controles de comportamento
+        max_sentences: 3,
+        forbid_questions: true,
+        forbid_options: true,
+        objective: ""
+      },
       transfer: { label: "Transferir", message: "Transferindo para atendimento humano...", transfer_type: "department" },
       end: { label: "Fim", message: "Obrigado pelo contato!", end_action: "none" },
       fetch_order: { 

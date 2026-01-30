@@ -72,7 +72,13 @@ export function useAutopilotTrigger(conversationId: string | null) {
           personaId: data?.personaId,
           kbCategories: data?.kbCategories,
           contextPrompt: data?.contextPrompt,
-          fallbackMessage: data?.fallbackMessage
+          // 🆕 FASE 1: Fallback obrigatório com default
+          fallbackMessage: data?.fallbackMessage || 'No momento não tenho essa informação.',
+          // 🆕 FASE 1: Novos campos de controle de comportamento
+          objective: data?.objective,
+          maxSentences: data?.maxSentences ?? 3,
+          forbidQuestions: data?.forbidQuestions ?? true,
+          forbidOptions: data?.forbidOptions ?? true,
         } : undefined,
         response: data?.response
       };

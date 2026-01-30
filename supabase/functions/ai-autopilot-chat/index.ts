@@ -161,6 +161,58 @@ function maskPhone(phone: string | null | undefined): string {
 }
 
 // ============================================================
+// 🆕 FASE 1: Truncar resposta ao máximo de frases permitido
+// Enforce pós-processamento para garantir verbosidade controlada
+// ============================================================
+function limitSentences(text: string, maxSentences: number): string {
+  // Separar por pontuação final (. ! ?)
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  
+  if (sentences.length <= maxSentences) {
+    return text;
+  }
+  
+  // Truncar ao máximo permitido
+  const truncated = sentences.slice(0, maxSentences).join(' ').trim();
+  console.log(`[ai-autopilot-chat] ✂️ Resposta truncada de ${sentences.length} para ${maxSentences} frases`);
+  
+  return truncated;
+}
+
+// ============================================================
+// 🆕 FASE 1: Log de violação de allowed_sources (não bloqueante)
+// Registra quando a IA usa fontes não autorizadas para auditoria
+// ============================================================
+function logSourceViolationIfAny(
+  response: string, 
+  allowedSources: string[],
+  kbUsed: boolean,
+  crmUsed: boolean,
+  trackingUsed: boolean
+): void {
+  const violations: string[] = [];
+  
+  // Verificar se IA usou fonte não autorizada
+  if (!allowedSources.includes('kb') && kbUsed) {
+    violations.push('kb_not_allowed');
+  }
+  if (!allowedSources.includes('crm') && crmUsed) {
+    violations.push('crm_not_allowed');
+  }
+  if (!allowedSources.includes('tracking') && trackingUsed) {
+    violations.push('tracking_not_allowed');
+  }
+  
+  if (violations.length > 0) {
+    console.warn('[ai-autopilot-chat] ⚠️ SOURCE VIOLATION (não bloqueante):', {
+      violations,
+      allowedSources,
+      responsePreview: response.substring(0, 100)
+    });
+  }
+}
+
+// ============================================================
 // 🔢 HELPER: Formatar opções de múltipla escolha como texto
 // Transforma array de opções em lista numerada com emojis
 // ============================================================
@@ -7417,6 +7469,22 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         
         console.log('[ai-autopilot-chat] ✅ Resposta substituída por fallback');
       } else {
+        // 🆕 FASE 1: Enforce limite de frases no pós-processamento
+        const maxSentences = flow_context.maxSentences ?? 3;
+        assistantMessage = limitSentences(assistantMessage, maxSentences);
+        
+        // 🆕 FASE 1: Log de violação de allowed_sources (não bloqueante, apenas auditoria)
+        const kbUsed = knowledgeArticles && knowledgeArticles.length > 0;
+        const crmUsed = false; // TODO: Implementar detecção de uso de CRM
+        const trackingUsed = false; // TODO: Implementar detecção de uso de tracking
+        logSourceViolationIfAny(
+          assistantMessage, 
+          flow_context.allowed_sources || ['kb', 'crm', 'tracking'],
+          kbUsed,
+          crmUsed,
+          trackingUsed
+        );
+        
         console.log('[ai-autopilot-chat] ✅ Resposta passou na validação anti-escape e de restrições');
       }
     }
