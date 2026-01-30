@@ -538,7 +538,14 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     if (csatRating !== null) {
       console.log(`[handle-whatsapp-event] ⭐ CSAT PRE-CHECK: Rating ${csatRating} detected BEFORE reopen`);
       
-      // Salvar rating na tabela conversation_ratings
+      // Buscar department_id da conversa para relatórios
+      const { data: convForDept } = await supabase
+        .from('conversations')
+        .select('department')
+        .eq('id', csatConversation.id)
+        .single();
+
+      // Salvar rating na tabela conversation_ratings com department_id
       const { error: ratingError } = await supabase
         .from('conversation_ratings')
         .insert({
@@ -546,6 +553,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           rating: csatRating,
           channel: 'whatsapp',
           feedback_text: messageText,
+          department_id: convForDept?.department || null,
         });
       
       if (ratingError) {
@@ -629,7 +637,14 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     if (rating !== null) {
       console.log(`[handle-whatsapp-event] ⭐ Rating detected: ${rating}`);
       
-      // Salvar rating na tabela conversation_ratings
+      // Buscar department_id da conversa para relatórios
+      const { data: convForDeptId } = await supabase
+        .from('conversations')
+        .select('department')
+        .eq('id', conversationId)
+        .single();
+
+      // Salvar rating na tabela conversation_ratings com department_id
       const { error: ratingError } = await supabase
         .from('conversation_ratings')
         .insert({
@@ -637,6 +652,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           rating: rating,
           channel: 'whatsapp',
           feedback_text: messageText,
+          department_id: convForDeptId?.department || null,
         });
       
       if (ratingError) {
@@ -1386,30 +1402,19 @@ async function handleOTPValidation(
 }
 
 // 📊 Função auxiliar: Extrair rating (1-5) da mensagem
+// ✅ SIMPLIFICADO: Apenas números 1-5 (determinístico, sem IA)
 function extractRating(message: string): number | null {
-  const normalized = message.toLowerCase().trim();
+  const normalized = message.trim();
   
-  // Detectar número direto: "5", "4", etc.
+  // Detectar número direto: "1", "2", "3", "4", "5"
   const numMatch = normalized.match(/^[1-5]$/);
   if (numMatch) return parseInt(numMatch[0]);
   
-  // Detectar estrelas emoji: "⭐⭐⭐⭐⭐"
+  // Detectar estrelas emoji: "⭐⭐⭐⭐⭐" (fallback visual)
   const starCount = (message.match(/⭐/g) || []).length;
   if (starCount >= 1 && starCount <= 5) return starCount;
   
-  // Detectar texto: "excelente" (5), "ruim" (1), etc.
-  const textRatings: Record<string, number> = {
-    'excelente': 5, 'otimo': 5, 'ótimo': 5, 'perfeito': 5, 'incrivel': 5, 'incrível': 5, 'maravilhoso': 5, 'show': 5,
-    'bom': 4, 'legal': 4, 'bacana': 4, 'massa': 4,
-    'regular': 3, 'ok': 3, 'medio': 3, 'médio': 3, 'razoavel': 3, 'razoável': 3,
-    'ruim': 2, 'fraco': 2, 'poderia ser melhor': 2,
-    'pessimo': 1, 'péssimo': 1, 'horrivel': 1, 'horrível': 1, 'terrivel': 1, 'terrível': 1
-  };
-  
-  for (const [text, rating] of Object.entries(textRatings)) {
-    if (normalized.includes(text)) return rating;
-  }
-  
+  // Não interpretar texto - comportamento determinístico
   return null;
 }
 

@@ -1615,6 +1615,7 @@ export type Database = {
           channel: Database["public"]["Enums"]["conversation_channel"]
           conversation_id: string
           created_at: string
+          department_id: string | null
           feedback_text: string | null
           id: string
           manager_alert_sent: boolean
@@ -1626,6 +1627,7 @@ export type Database = {
           channel: Database["public"]["Enums"]["conversation_channel"]
           conversation_id: string
           created_at?: string
+          department_id?: string | null
           feedback_text?: string | null
           id?: string
           manager_alert_sent?: boolean
@@ -1637,6 +1639,7 @@ export type Database = {
           channel?: Database["public"]["Enums"]["conversation_channel"]
           conversation_id?: string
           created_at?: string
+          department_id?: string | null
           feedback_text?: string | null
           id?: string
           manager_alert_sent?: boolean
@@ -1649,6 +1652,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: true
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_ratings_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]
@@ -1708,6 +1718,7 @@ export type Database = {
           channel: Database["public"]["Enums"]["conversation_channel"]
           closed_at: string | null
           closed_by: string | null
+          closed_reason: string | null
           contact_id: string
           created_at: string
           customer_metadata: Json | null
@@ -1736,6 +1747,7 @@ export type Database = {
           channel: Database["public"]["Enums"]["conversation_channel"]
           closed_at?: string | null
           closed_by?: string | null
+          closed_reason?: string | null
           contact_id: string
           created_at?: string
           customer_metadata?: Json | null
@@ -1764,6 +1776,7 @@ export type Database = {
           channel?: Database["public"]["Enums"]["conversation_channel"]
           closed_at?: string | null
           closed_by?: string | null
+          closed_reason?: string | null
           contact_id?: string
           created_at?: string
           customer_metadata?: Json | null
@@ -2255,6 +2268,8 @@ export type Database = {
       }
       departments: {
         Row: {
+          auto_close_enabled: boolean | null
+          auto_close_minutes: number | null
           color: string | null
           created_at: string
           description: string | null
@@ -2262,10 +2277,13 @@ export type Database = {
           is_active: boolean
           name: string
           parent_id: string | null
+          send_rating_on_close: boolean | null
           updated_at: string
           whatsapp_number: string | null
         }
         Insert: {
+          auto_close_enabled?: boolean | null
+          auto_close_minutes?: number | null
           color?: string | null
           created_at?: string
           description?: string | null
@@ -2273,10 +2291,13 @@ export type Database = {
           is_active?: boolean
           name: string
           parent_id?: string | null
+          send_rating_on_close?: boolean | null
           updated_at?: string
           whatsapp_number?: string | null
         }
         Update: {
+          auto_close_enabled?: boolean | null
+          auto_close_minutes?: number | null
           color?: string | null
           created_at?: string
           description?: string | null
@@ -2284,6 +2305,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           parent_id?: string | null
+          send_rating_on_close?: boolean | null
           updated_at?: string
           whatsapp_number?: string | null
         }

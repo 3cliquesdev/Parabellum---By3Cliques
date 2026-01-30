@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, Clock, MessageSquare } from "lucide-react";
 import { useDepartments, type Department } from "@/hooks/useDepartments";
 import { useDeleteDepartment } from "@/hooks/useDeleteDepartment";
 import { useUpdateDepartment } from "@/hooks/useUpdateDepartment";
@@ -98,31 +98,47 @@ export default function Departments() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={department.is_active}
-                    onCheckedChange={() => toggleActive(department)}
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {department.is_active ? "Ativo" : "Inativo"}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleEdit(department)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(department.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+              <div className="space-y-3">
+                {/* Auto-close info */}
+                {department.auto_close_enabled && department.auto_close_minutes && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>Auto-fecha em {department.auto_close_minutes} min</span>
+                    {department.send_rating_on_close && (
+                      <>
+                        <MessageSquare className="h-4 w-4 ml-2" />
+                        <span>+ CSAT</span>
+                      </>
+                    )}
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={department.is_active}
+                      onCheckedChange={() => toggleActive(department)}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {department.is_active ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEdit(department)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(department.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>
