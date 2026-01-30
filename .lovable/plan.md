@@ -1,69 +1,30 @@
 
 
-# Plano: Respeitar `waiting_human` - Bloquear Fluxo/IA Quando Cliente Está na Fila
+# Análise: Proteção de `ai_mode` - Já Implementado e Funcionando
 
-## Problema Identificado
+## Situação Atual
 
-Quando o cliente **entra na fila** (`ai_mode = 'waiting_human'`) e manda outra mensagem:
+A proteção de `ai_mode` **já foi implementada e está funcionando corretamente** desde o deploy de hoje (~11:49).
 
-1. O `meta-whatsapp-webhook` chama `process-chat-flow` (sem verificar `ai_mode`)
-2. O `process-chat-flow` NÃO encontra fluxo ativo (porque foi completado)
-3. O `process-chat-flow` busca um novo fluxo para iniciar
-4. Encontra o **Master Flow** e reinicia do começo!
+## Evidências nos Logs
 
-**Resultado:** O bot repete "Olá! Como posso ajudar? 1️⃣ Pedidos 2️⃣ Sistema..." quando o cliente deveria estar aguardando um humano.
-
----
-
-## Solução: Verificação Obrigatória de `ai_mode`
-
-Adicionar verificação no início do `process-chat-flow` (logo após o Kill Switch) para respeitar o contrato do Super Prompt v2.3:
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    FLUXO DE DECISÃO CORRIGIDO                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  1. Mensagem chega no webhook                                               │
-│     └──▶ Salva mensagem no banco                                            │
-│                                                                             │
-│  2. Webhook chama process-chat-flow                                         │
-│     └──▶ [NOVO] Verificar ai_mode da conversa PRIMEIRO                      │
-│                                                                             │
-│  3. Se ai_mode = 'waiting_human':                                           │
-│     └──▶ NÃO processar fluxo                                                │
-│     └──▶ NÃO chamar IA                                                      │
-│     └──▶ Retornar { skipAutoResponse: true, reason: 'waiting_human' }       │
-│     └──▶ Mensagem fica apenas no histórico para humano ver                  │
-│                                                                             │
-│  4. Se ai_mode = 'copilot':                                                 │
-│     └──▶ NÃO processar fluxo                                                │
-│     └──▶ NÃO chamar IA automaticamente                                      │
-│     └──▶ Humano já está respondendo                                         │
-│                                                                             │
-│  5. Se ai_mode = 'disabled':                                                │
-│     └──▶ NÃO processar fluxo                                                │
-│     └──▶ NÃO chamar IA                                                      │
-│     └──▶ Atendimento manual                                                 │
-│                                                                             │
-│  6. Se ai_mode = 'autopilot':                                               │
-│     └──▶ Processar fluxo normalmente (comportamento atual)                  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+### Proteção Ativa (logs do `process-chat-flow`)
+```
+11:52:38 - 🛡️ PROTEÇÃO: ai_mode=waiting_human - NÃO processar fluxo/IA ✅
+11:52:28 - 🛡️ PROTEÇÃO: ai_mode=copilot - NÃO processar fluxo/IA ✅
+11:49:53 - 🛡️ PROTEÇÃO: ai_mode=waiting_human - NÃO processar fluxo/IA ✅
 ```
 
----
+### Nenhuma Mensagem de Fluxo Após Deploy
+- **Zero mensagens** de fluxo/bot em conversas `copilot` ou `waiting_human` após 11:50
+- Antes do deploy (11:41-11:47) havia mensagens incorretas - isso foi o que o time reportou
 
-## Alterações a Implementar
+## O Que Foi Implementado
 
-### 1. Edge Function: `process-chat-flow/index.ts`
-
-**Após a linha 294** (após o Kill Switch), adicionar verificação de `ai_mode`:
-
+### 1. Verificação de `ai_mode` no `process-chat-flow`
 ```typescript
 // ============================================================
 // 🛡️ PROTEÇÃO: Respeitar ai_mode da conversa (Contrato v2.3)
-// Se cliente está na fila ou com humano, NÃO processar fluxo
 // ============================================================
 const { data: convState } = await supabaseClient
   .from('conversations')
@@ -71,121 +32,43 @@ const { data: convState } = await supabaseClient
   .eq('id', conversationId)
   .maybeSingle();
 
-const currentAiMode = convState?.ai_mode;
-
-// waiting_human: Cliente na fila, aguardando humano
-// copilot: Humano atendendo com sugestões da IA
-// disabled: Atendimento 100% manual
 if (currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') {
-  console.log(`[process-chat-flow] 🛡️ PROTEÇÃO: ai_mode=${currentAiMode} - NÃO processar fluxo/IA`);
-  console.log(`[process-chat-flow] 📋 assigned_to: ${convState?.assigned_to || 'null'}`);
-  
   return new Response(JSON.stringify({
     useAI: false,
-    aiNodeActive: false,
     skipAutoResponse: true,
-    reason: `ai_mode_${currentAiMode}`,
-    message: `Conversa em modo ${currentAiMode} - fluxo/IA bloqueados`
-  }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-  });
+    reason: `ai_mode_${currentAiMode}`
+  }), { headers });
 }
-
-// autopilot: IA ativa, processar normalmente
-console.log(`[process-chat-flow] ✅ ai_mode=${currentAiMode} - processando fluxo`);
 ```
 
-### 2. Atualizar Super Prompt v2.3
+### 2. Documentação no Super Prompt v2.3
+Seção 14 adicionada com regras claras de comportamento por modo.
 
-Adicionar regra explícita na documentação:
+## Proteção Multi-Camada
 
-```markdown
-## 14. Contrato de Proteção de Modo
+O sistema agora tem **3 camadas de proteção**:
 
-### Regras obrigatórias
-O motor de fluxos DEVE verificar o `ai_mode` da conversa ANTES de qualquer processamento.
+| Camada | Arquivo | Verificação |
+|--------|---------|-------------|
+| 1 | `process-chat-flow/index.ts` | Verifica `ai_mode` antes de processar fluxo |
+| 2 | `meta-whatsapp-webhook/index.ts` | Verifica `conversation.ai_mode === "autopilot"` |
+| 3 | `ai-autopilot-chat/index.ts` | Verifica `conversation.ai_mode !== 'autopilot'` e retorna `skipped` |
 
-### Comportamento por modo
+## Status Final
 
-| ai_mode | Processar Fluxo | Chamar IA | Enviar Resposta |
-|---------|-----------------|-----------|-----------------|
-| autopilot | ✅ Sim | ✅ Se AIResponseNode | ✅ Sim |
-| waiting_human | ❌ Não | ❌ Não | ❌ Não |
-| copilot | ❌ Não | ❌ Não | ❌ Não |
-| disabled | ❌ Não | ❌ Não | ❌ Não |
+| Cenário | Status |
+|---------|--------|
+| Cliente em `waiting_human` manda mensagem | ✅ Fluxo silencia, mensagem vai pro histórico |
+| Cliente em `copilot` manda mensagem | ✅ Fluxo silencia, humano responde |
+| IA assumindo conversa com humano | ✅ Bloqueado em 3 camadas |
 
-### Justificativa
-- `waiting_human`: Cliente está na fila aguardando humano. Fluxo e IA devem ficar silenciosos.
-- `copilot`: Humano está atendendo. IA pode sugerir internamente, mas NÃO enviar.
-- `disabled`: Atendimento 100% manual. Nenhuma automação.
-```
+## Recomendação
 
----
+Nenhuma alteração adicional necessária. A implementação já está:
+- ✅ Deployada
+- ✅ Funcionando
+- ✅ Documentada no Super Prompt v2.3
+- ✅ Com logs de auditoria
 
-## Arquivos a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/process-chat-flow/index.ts` | Adicionar verificação de `ai_mode` após Kill Switch |
-| `src/docs/SUPER_PROMPT_v2.3.md` | Adicionar seção 14 - Contrato de Proteção de Modo |
-
----
-
-## Impacto
-
-### Antes (Bug)
-| Cenário | Resultado |
-|---------|-----------|
-| Cliente na fila manda "Oi" | ❌ Fluxo reinicia do começo |
-| Cliente na fila manda "Cadê meu pedido?" | ❌ IA responde (deveria esperar humano) |
-| Humano atendendo, cliente manda foto | ❌ Fluxo pode interferir |
-
-### Depois (Corrigido)
-| Cenário | Resultado |
-|---------|-----------|
-| Cliente na fila manda "Oi" | ✅ Mensagem salva, aguarda humano |
-| Cliente na fila manda "Cadê meu pedido?" | ✅ Mensagem salva, aguarda humano |
-| Humano atendendo, cliente manda foto | ✅ Foto vai pro chat, humano vê |
-
----
-
-## Segurança e Conformidade
-
-| Controle | Status |
-|----------|--------|
-| Fluxo não reinicia quando cliente está na fila | ✅ |
-| IA não responde quando humano está atendendo | ✅ |
-| Mensagens são salvas normalmente | ✅ (já funciona) |
-| Compatível com Super Prompt v2.3 | ✅ |
-| Sem breaking changes | ✅ |
-
----
-
-## Diagrama de Sequência
-
-```text
-Cliente (na fila)         Webhook         process-chat-flow         Banco
-       |                     |                    |                    |
-       |--- "Oi, cadê?"----->|                    |                    |
-       |                     |--save message----->|                    |
-       |                     |                    |                    |
-       |                     |--process flow?---->|                    |
-       |                     |                    |--get ai_mode------>|
-       |                     |                    |<--waiting_human----|
-       |                     |                    |                    |
-       |                     |<--skipAutoResponse-|                    |
-       |                     |   (não enviar)     |                    |
-       |                     |                    |                    |
-       |        [Mensagem fica no histórico para humano ver]           |
-```
-
----
-
-## Compatibilidade
-
-A mudança é **backward compatible**:
-- Conversas em `autopilot` continuam funcionando normalmente
-- Conversas em `waiting_human/copilot/disabled` agora respeitam o contrato
-- Nenhuma tabela ou coluna nova necessária
-- Deploy apenas da Edge Function
+O time pode ter visto mensagens antigas (antes do deploy de ~11:49). A partir de agora, o comportamento está correto.
 
