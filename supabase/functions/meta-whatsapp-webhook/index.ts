@@ -15,6 +15,21 @@ const corsHeaders = {
  * - Message status updates (delivered, read, etc.)
  */
 
+// Função auxiliar: Extrair rating (1-5) da mensagem
+function extractRating(message: string): number | null {
+  const normalized = message.trim();
+  
+  // Detectar número direto: "1", "2", "3", "4", "5"
+  const numMatch = normalized.match(/^[1-5]$/);
+  if (numMatch) return parseInt(numMatch[0]);
+  
+  // Detectar estrelas emoji: "⭐⭐⭐⭐⭐"
+  const starCount = (message.match(/⭐/g) || []).length;
+  if (starCount >= 1 && starCount <= 5) return starCount;
+  
+  return null;
+}
+
 interface MetaWebhookPayload {
   object: string;
   entry: Array<{
@@ -274,6 +289,93 @@ serve(async (req) => {
                 console.error("[meta-whatsapp-webhook] ❌ Failed to find/create contact");
                 continue;
               }
+
+              // ============================================
+              // PRÉ-VERIFICAÇÃO CSAT - ANTES de criar conversa nova
+              // Se cliente respondeu avaliação, processar e MANTER fechada
+              // ============================================
+              const { data: csatConversation } = await supabase
+                .from("conversations")
+                .select("id, awaiting_rating, status, whatsapp_meta_instance_id")
+                .eq("contact_id", contact.id)
+                .eq("awaiting_rating", true)
+                .eq("status", "closed")
+                .order("closed_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (csatConversation && csatConversation.awaiting_rating) {
+                const csatRating = extractRating(messageContent);
+                
+                if (csatRating !== null) {
+                  console.log(`[meta-whatsapp-webhook] ⭐ CSAT PRE-CHECK: Rating ${csatRating} detected BEFORE reopen`);
+                  
+                  // Buscar department_id para relatórios
+                  const { data: convForDept } = await supabase
+                    .from("conversations")
+                    .select("department")
+                    .eq("id", csatConversation.id)
+                    .single();
+
+                  // Salvar rating
+                  const { error: ratingError } = await supabase
+                    .from("conversation_ratings")
+                    .insert({
+                      conversation_id: csatConversation.id,
+                      rating: csatRating,
+                      channel: "whatsapp",
+                      feedback_text: messageContent,
+                      department_id: convForDept?.department || null,
+                    });
+                  
+                  if (ratingError) {
+                    console.error("[meta-whatsapp-webhook] ❌ Error saving CSAT rating:", ratingError);
+                  } else {
+                    console.log("[meta-whatsapp-webhook] ✅ CSAT rating saved successfully");
+                    
+                    // Limpar flag - MANTER status = 'closed'
+                    await supabase
+                      .from("conversations")
+                      .update({ awaiting_rating: false })
+                      .eq("id", csatConversation.id);
+                    
+                    // Enviar agradecimento
+                    let thankYouMessage = "";
+                    if (csatRating >= 4) {
+                      thankYouMessage = `🎉 Obrigado pela avaliação de ${csatRating} estrela${csatRating > 1 ? "s" : ""}!\n\nFicamos muito felizes em ter ajudado. Conte sempre conosco! 💚`;
+                    } else if (csatRating === 3) {
+                      thankYouMessage = `👍 Obrigado pela sua avaliação!\n\nEstamos sempre buscando melhorar. Se tiver sugestões, fique à vontade para compartilhar!`;
+                    } else {
+                      thankYouMessage = `🙏 Agradecemos seu feedback.\n\nLamentamos que sua experiência não tenha sido ideal. Vamos trabalhar para melhorar!`;
+                    }
+                    
+                    // Enviar via send-meta-whatsapp
+                    await supabase.functions.invoke("send-meta-whatsapp", {
+                      body: {
+                        instance_id: instance.id,
+                        phone_number: fromNumber,
+                        message: thankYouMessage,
+                        conversation_id: csatConversation.id,
+                        skip_db_save: true,
+                      },
+                    });
+                    
+                    // Inserir mensagem da avaliação na conversa fechada
+                    await supabase.from("messages").insert({
+                      conversation_id: csatConversation.id,
+                      content: `⭐ Avaliação: ${csatRating}/5`,
+                      sender_type: "contact",
+                      channel: "whatsapp",
+                    });
+                  }
+                  
+                  console.log("[meta-whatsapp-webhook] ✅ CSAT processed - conversation stays CLOSED");
+                  continue; // ⚠️ CRÍTICO: Pular para próxima mensagem, NÃO criar conversa
+                }
+              }
+              // ============================================
+              // FIM PRÉ-VERIFICAÇÃO CSAT
+              // ============================================
 
               // Buscar conversa existente (QUALQUER provider) - priorizar aberta
               let { data: conversation } = await supabase
