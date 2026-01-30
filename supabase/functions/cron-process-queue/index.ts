@@ -47,19 +47,29 @@ serve(async (req) => {
 
     if (error) {
       console.error("[cron-process-queue] Error invoking processor:", error);
-      return new Response(
-        JSON.stringify({ success: false, error: error.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
-    console.log("[cron-process-queue] Queue processed:", data);
+    console.log("[cron-process-queue] Message queue processed:", data);
+
+    // D4: Process conversation dispatch jobs (Enterprise distribution)
+    console.log("[cron-process-queue] Triggering conversation dispatcher...");
+    
+    const { data: dispatchData, error: dispatchError } = await supabase.functions.invoke("dispatch-conversations", {
+      body: { source: "cron" }
+    });
+
+    if (dispatchError) {
+      console.error("[cron-process-queue] Error invoking dispatcher:", dispatchError);
+    } else {
+      console.log("[cron-process-queue] Dispatch completed:", dispatchData);
+    }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         timestamp: new Date().toISOString(),
-        result: data 
+        message_queue: data,
+        dispatch_queue: dispatchData
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
