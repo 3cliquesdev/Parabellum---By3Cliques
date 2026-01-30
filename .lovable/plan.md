@@ -1,211 +1,68 @@
 
 
-# Plano: Broadcast de Reengajamento para Fila da IA
+# Plano: Adicionar Filtro de Canal WhatsApp no Broadcast
 
-## Situação Confirmada
+## Problema Identificado
 
-| Métrica | Valor |
-|---------|-------|
-| Conversas na fila IA | **263** |
-| Canal | WhatsApp |
-| Provider | 100% Meta Cloud API |
-| Dados disponíveis | `phone` e `whatsapp_id` em todos |
+A query atual do `broadcast-ai-queue` **não filtra pelo canal**. Embora os dados mostrem que todas são WhatsApp, devemos garantir na query para evitar falhas futuras.
 
----
+## Alteração
 
-## Mensagem a Ser Enviada
+### Arquivo: `supabase/functions/broadcast-ai-queue/index.ts`
 
-```text
-Olá! 👋 Sou a assistente virtual da 3Cliques. 
-
-Tivemos uma instabilidade técnica e sua mensagem pode não ter sido respondida. 
-
-Ainda precisa de atendimento? Responda aqui que já te ajudo! 🚀
-```
-
----
-
-## Arquitetura da Solução
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                         INBOX                               │
-│         Filtro: ai_queue (/inbox?filter=ai_queue)           │
-├─────────────────────────────────────────────────────────────┤
-│  [📢 Broadcast para Fila]  ← Novo botão (admin/manager)     │
-└──────────────┬──────────────────────────────────────────────┘
-               │ click
-               ▼
-┌─────────────────────────────────────────────────────────────┐
-│            BroadcastAIQueueDialog                           │
-├─────────────────────────────────────────────────────────────┤
-│  • Exibe: "263 conversas serão notificadas"                 │
-│  • Campo de texto editável com mensagem                     │
-│  • Checkbox: [ ] Modo teste (não envia de verdade)          │
-│  • Botões: [Cancelar] [Enviar Broadcast]                    │
-└──────────────┬──────────────────────────────────────────────┘
-               │ confirmar
-               ▼
-┌─────────────────────────────────────────────────────────────┐
-│           Edge Function: broadcast-ai-queue                 │
-├─────────────────────────────────────────────────────────────┤
-│  1. Busca instância Meta ativa                              │
-│  2. Busca conversas:                                        │
-│     - ai_mode = 'autopilot'                                 │
-│     - status = 'open'                                       │
-│     - assigned_to IS NULL                                   │
-│  3. Para cada conversa:                                     │
-│     - Busca phone do contato                                │
-│     - Envia via send-meta-whatsapp                          │
-│     - Salva mensagem como sender_type = 'system'            │
-│  4. Retorna relatório: {sent: X, failed: Y}                 │
-└──────────────┬──────────────────────────────────────────────┘
-               │ resposta do cliente
-               ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Webhook recebe → Fluxo/IA processa normalmente             │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Alterações a Implementar
-
-### 1. Nova Edge Function: `broadcast-ai-queue`
-
-**Localização:** `supabase/functions/broadcast-ai-queue/index.ts`
-
-**Parâmetros de entrada:**
-```typescript
-{
-  message: string;           // Texto da mensagem
-  dry_run?: boolean;         // Se true, simula sem enviar
-  limit?: number;            // Limite de conversas (default: 500)
-}
-```
-
-**Lógica:**
-1. Buscar instância Meta ativa (`whatsapp_meta_instances.status = 'active'`)
-2. Query nas conversas elegíveis
-3. Para cada conversa:
-   - Delay de 200ms entre envios (evitar throttling Meta)
-   - Chamar `send-meta-whatsapp` com:
-     - `instance_id`: da instância Meta
-     - `phone_number`: do contato
-     - `message`: texto do broadcast
-     - `conversation_id`: para vincular
-     - `skip_db_save: false` (salvar no histórico)
-4. Retornar relatório
-
-**Rate Limiting:**
-- Delay de 200ms entre mensagens
-- Máximo 500 por execução
-- Timeout de 120s para a função
-
-### 2. Componente UI: `BroadcastAIQueueDialog`
-
-**Localização:** `src/components/inbox/BroadcastAIQueueDialog.tsx`
-
-**Features:**
-- Modal com preview da quantidade de destinatários
-- Campo de texto editável (pré-preenchido com mensagem padrão)
-- Toggle de modo teste (dry_run)
-- Progress bar durante envio
-- Resultado final: "X enviados, Y falhas"
-
-### 3. Componente UI: `BroadcastAIQueueButton`
-
-**Localização:** `src/components/inbox/BroadcastAIQueueButton.tsx`
-
-**Features:**
-- Botão "📢 Broadcast" visível apenas quando:
-  - Filtro = `ai_queue`
-  - Role = `admin`, `manager`, ou `general_manager`
-- Abre o dialog de broadcast
-
-### 4. Integração no Inbox
-
-**Arquivo:** `src/pages/Inbox.tsx`
-
-**Mudanças:**
-- Importar `BroadcastAIQueueButton`
-- Adicionar botão no header quando filtro = `ai_queue`
-- Estado para controlar dialog
-
----
-
-## Detalhes Técnicos
-
-### Query de Conversas Elegíveis
-
-```sql
-SELECT 
-  c.id as conversation_id,
-  ct.phone,
-  ct.whatsapp_id
-FROM conversations c
-JOIN contacts ct ON ct.id = c.contact_id
-WHERE c.ai_mode = 'autopilot' 
-  AND c.status = 'open' 
-  AND c.assigned_to IS NULL
-  AND ct.phone IS NOT NULL
-LIMIT 500
-```
-
-### Formato da Mensagem Salva
+**Linha 76-93** - Adicionar filtro `channel = 'whatsapp'`:
 
 ```typescript
-{
-  conversation_id: string,
-  content: mensagem,
-  sender_type: 'system',
-  metadata: {
-    broadcast_id: uuid,
-    broadcast_type: 'ai_queue_reengagement'
-  }
-}
+// 2. Buscar conversas elegíveis (fila da IA) - SOMENTE WHATSAPP
+const { data: conversations, error: convError } = await supabase
+  .from("conversations")
+  .select(`
+    id,
+    contact_id,
+    channel,
+    contacts!inner (
+      id,
+      phone,
+      whatsapp_id,
+      first_name,
+      last_name
+    )
+  `)
+  .eq("ai_mode", "autopilot")
+  .eq("status", "open")
+  .eq("channel", "whatsapp")  // ← NOVO: Garante apenas WhatsApp
+  .is("assigned_to", null)
+  .not("contacts.phone", "is", null)
+  .limit(limit);
 ```
 
----
+## Impacto
 
-## Segurança
+| Antes | Depois |
+|-------|--------|
+| Busca todas as conversas da fila IA | Busca **apenas** conversas WhatsApp |
+| Pode incluir web_chat por engano | Garante que só WhatsApp é processado |
+| 263 elegíveis (misturado) | ~263 elegíveis (só WhatsApp) |
 
-| Controle | Implementação |
-|----------|---------------|
-| Autorização | Apenas `admin`, `manager`, `general_manager` |
-| Rate Limit | 200ms entre envios, máx 500/execução |
-| Audit Trail | Todas mensagens salvas com metadata `broadcast_type` |
-| Dry Run | Modo teste para validar antes de enviar |
-| Confirmação | Dialog obrigatório antes do envio |
+## Atualização no Dialog
 
----
+Mostrar ao usuário que são conversas **WhatsApp** especificamente:
 
-## Arquivos a Criar
-
-| Arquivo | Tipo |
-|---------|------|
-| `supabase/functions/broadcast-ai-queue/index.ts` | Edge Function |
-| `src/components/inbox/BroadcastAIQueueButton.tsx` | Componente |
-| `src/components/inbox/BroadcastAIQueueDialog.tsx` | Componente |
+```typescript
+// BroadcastAIQueueDialog.tsx
+<p className="text-sm text-muted-foreground">
+  {count} conversas WhatsApp na fila da IA serão notificadas
+</p>
+```
 
 ## Arquivos a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/pages/Inbox.tsx` | Adicionar botão no header da ai_queue |
+| `supabase/functions/broadcast-ai-queue/index.ts` | Adicionar `.eq("channel", "whatsapp")` na query |
+| `src/components/inbox/BroadcastAIQueueDialog.tsx` | Clarificar que são conversas WhatsApp |
 
----
+## Resultado
 
-## Fluxo de Uso
-
-1. Admin acessa `/inbox?filter=ai_queue`
-2. Vê botão "📢 Broadcast para Fila"
-3. Clica e vê dialog com:
-   - "263 conversas serão notificadas"
-   - Mensagem editável
-   - Opção de teste
-4. Clica "Enviar Broadcast"
-5. Progress bar mostra envio
-6. Resultado: "263 enviados, 0 falhas"
-7. Quando clientes respondem, IA processa normalmente
+O broadcast agora é **100% seguro** para enviar apenas via WhatsApp Meta API, sem risco de tentar enviar para conversas de outros canais.
 
