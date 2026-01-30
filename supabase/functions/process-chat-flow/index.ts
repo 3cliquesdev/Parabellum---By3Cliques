@@ -294,6 +294,39 @@ serve(async (req) => {
     }
 
     // ============================================================
+    // 🛡️ PROTEÇÃO: Respeitar ai_mode da conversa (Contrato v2.3)
+    // Se cliente está na fila ou com humano, NÃO processar fluxo
+    // ============================================================
+    const { data: convState } = await supabaseClient
+      .from('conversations')
+      .select('ai_mode, assigned_to')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    const currentAiMode = convState?.ai_mode;
+
+    // waiting_human: Cliente na fila, aguardando humano
+    // copilot: Humano atendendo com sugestões da IA
+    // disabled: Atendimento 100% manual
+    if (currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') {
+      console.log(`[process-chat-flow] 🛡️ PROTEÇÃO: ai_mode=${currentAiMode} - NÃO processar fluxo/IA`);
+      console.log(`[process-chat-flow] 📋 assigned_to: ${convState?.assigned_to || 'null'}`);
+      
+      return new Response(JSON.stringify({
+        useAI: false,
+        aiNodeActive: false,
+        skipAutoResponse: true,
+        reason: `ai_mode_${currentAiMode}`,
+        message: `Conversa em modo ${currentAiMode} - fluxo/IA bloqueados`
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // autopilot: IA ativa, processar normalmente
+    console.log(`[process-chat-flow] ✅ ai_mode=${currentAiMode || 'autopilot'} - processando fluxo`);
+
+    // ============================================================
     // 🆕 HANDLER ANTI-ESCAPE: Ativar TransferNode quando IA viola contrato
     // A IA sinaliza contractViolation, o FLUXO decide a transferência
     // ============================================================

@@ -238,6 +238,33 @@ Por favor, responda com o *número* ou *nome* de uma das opções:
 
 ---
 
+## 14. Contrato de Proteção de Modo (`ai_mode`)
+
+### Regras obrigatórias
+O motor de fluxos DEVE verificar o `ai_mode` da conversa ANTES de qualquer processamento.
+
+### Comportamento por modo
+
+| ai_mode | Processar Fluxo | Chamar IA | Enviar Resposta |
+|---------|-----------------|-----------|-----------------|
+| `autopilot` | ✅ Sim | ✅ Se AIResponseNode | ✅ Sim |
+| `waiting_human` | ❌ Não | ❌ Não | ❌ Não |
+| `copilot` | ❌ Não | ❌ Não | ❌ Não |
+| `disabled` | ❌ Não | ❌ Não | ❌ Não |
+
+### Justificativa
+- `waiting_human`: Cliente está na fila aguardando humano. Fluxo e IA devem ficar silenciosos.
+- `copilot`: Humano está atendendo. IA pode sugerir internamente, mas NÃO enviar.
+- `disabled`: Atendimento 100% manual. Nenhuma automação.
+
+### Comportamento esperado
+- Mensagens do cliente são **salvas normalmente** no histórico
+- Fluxo **NÃO reinicia** quando cliente está na fila
+- IA **NÃO responde** automaticamente
+- Humano vê todas as mensagens no painel
+
+---
+
 ## ✅ Status de Alinhamento
 
 - ✔️ Alinhado com 100% do código atual
