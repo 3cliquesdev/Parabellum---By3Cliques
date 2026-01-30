@@ -45,23 +45,20 @@
       (function () {
         try {
           if (!('serviceWorker' in navigator)) return;
-
-          // Se existir um SW controlando esta página, ele pode estar servindo uma versão antiga/corrompida.
-          // Fazemos uma limpeza e um único reload (apenas 1x) para voltar a servir o HTML/JS correto.
+          
           var hasController = !!navigator.serviceWorker.controller;
-          var key = 'sw_clean_reload_done';
-
+          var key = 'sw_clean_v2';  // Nova chave para evitar conflito com versões anteriores
+          
+          // Limpar SW de forma assíncrona (não bloqueia carregamento)
           navigator.serviceWorker.getRegistrations().then(function (regs) {
             return Promise.all(regs.map(function (r) { return r.unregister(); }));
-          }).then(function () {
-            if (hasController && !sessionStorage.getItem(key)) {
-              sessionStorage.setItem(key, '1');
-              // Reload único e controlado para quebrar cache antigo.
-              location.reload();
-            }
-          }).catch(function () {
-            // Silencioso: não bloqueia o carregamento caso o navegador falhe ao listar SW.
           });
+          
+          // Reload apenas se estava sendo controlado por SW antigo e ainda não fez reload
+          if (hasController && !sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, '1');
+            setTimeout(function() { location.reload(); }, 100);
+          }
         } catch (e) {
           // Silencioso
         }

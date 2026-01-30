@@ -4,7 +4,61 @@ import { ThemeProvider } from "next-themes";
 import App from "./App.tsx";
 import "./index.css";
 import { getCurrentBuildId, forceUpdate } from "./lib/build/ensureLatestBuild";
+import { APP_SCHEMA_VERSION } from "./lib/build/schemaVersion";
 import { toast } from "sonner";
+
+// ============================================
+// SISTEMA DE VERSIONAMENTO DE SCHEMA
+// ============================================
+
+const SCHEMA_VERSION_KEY = 'app_schema_version';
+const storedVersion = localStorage.getItem(SCHEMA_VERSION_KEY);
+
+if (storedVersion !== APP_SCHEMA_VERSION) {
+  console.warn('[Main] ⚠️ Schema version mismatch — resetting client state');
+  console.warn('[Main] Stored:', storedVersion, '→ Current:', APP_SCHEMA_VERSION);
+  
+  // Preservar auth token do Supabase
+  const supabaseAuthKey = Object.keys(localStorage).find(key => 
+    key.startsWith('sb-') && key.endsWith('-auth-token')
+  );
+  const supabaseAuthValue = supabaseAuthKey ? localStorage.getItem(supabaseAuthKey) : null;
+  
+  // Limpar localStorage
+  localStorage.clear();
+  
+  // Restaurar auth
+  if (supabaseAuthKey && supabaseAuthValue) {
+    localStorage.setItem(supabaseAuthKey, supabaseAuthValue);
+  }
+  
+  // Salvar nova versão
+  localStorage.setItem(SCHEMA_VERSION_KEY, APP_SCHEMA_VERSION);
+  
+  // Limpar sessionStorage (exceto a flag de reload)
+  const reloadKey = 'app_schema_reload_done';
+  const alreadyReloaded = sessionStorage.getItem(reloadKey);
+  sessionStorage.clear();
+  
+  // Limpar IndexedDB (assíncrono, não bloqueia)
+  if ('indexedDB' in window && indexedDB.databases) {
+    indexedDB.databases().then(dbs => {
+      dbs.forEach(db => {
+        if (db.name && !db.name.startsWith('sb-')) {
+          indexedDB.deleteDatabase(db.name);
+          console.log('[Main] 🗑️ IndexedDB deletado:', db.name);
+        }
+      });
+    }).catch(e => console.warn('[Main] Erro ao limpar IndexedDB:', e));
+  }
+  
+  // Reload único e controlado
+  if (!alreadyReloaded) {
+    sessionStorage.setItem(reloadKey, '1');
+    console.log('[Main] 🔄 Recarregando para aplicar nova versão de schema...');
+    window.location.reload();
+  }
+}
 
 // ============================================
 // SISTEMA DE AUTO-HEAL DE BUILD + LIMPEZA
@@ -12,6 +66,7 @@ import { toast } from "sonner";
 
 // Log do build atual para diagnóstico
 console.log('[Main] 🏗️ Build ID:', getCurrentBuildId());
+console.log('[Main] 📋 Schema Version:', APP_SCHEMA_VERSION);
 
 // 1. Remove service workers residuais (PWA antigo)
 if ('serviceWorker' in navigator) {
@@ -23,8 +78,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// 2. Limpa IndexedDB antigo (cache Dexie)
-if ('indexedDB' in window) {
+// 2. Limpa IndexedDB antigo (cache Dexie) - apenas se não foi limpo acima
+if ('indexedDB' in window && storedVersion === APP_SCHEMA_VERSION) {
   try {
     indexedDB.deleteDatabase('CRMChatDB');
     console.log('[Main] 🗑️ IndexedDB CRMChatDB limpo');
@@ -51,7 +106,7 @@ window.addEventListener('error', (event) => {
     if (!sessionStorage.getItem(shownKey)) {
       sessionStorage.setItem(shownKey, '1');
       toast.warning('Nova versão pode estar disponível', {
-        description: 'Para evitar perder seu trabalho, a página não recarrega sozinha. Clique em “Atualizar” quando puder.',
+        description: 'Para evitar perder seu trabalho, a página não recarrega sozinha. Clique em "Atualizar" quando puder.',
         duration: 15000,
         action: {
           label: 'Atualizar',
@@ -80,7 +135,7 @@ window.addEventListener('unhandledrejection', (event) => {
     if (!sessionStorage.getItem(shownKey)) {
       sessionStorage.setItem(shownKey, '1');
       toast.warning('Nova versão pode estar disponível', {
-        description: 'A página não recarrega automaticamente. Clique em “Atualizar” quando for conveniente.',
+        description: 'A página não recarrega automaticamente. Clique em "Atualizar" quando for conveniente.',
         duration: 15000,
         action: {
           label: 'Atualizar',

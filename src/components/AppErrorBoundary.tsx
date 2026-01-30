@@ -26,25 +26,56 @@ export class AppErrorBoundary extends React.Component<
     console.error("App crashed:", error, errorInfo);
   }
 
+  handleForceUpdate = async () => {
+    try {
+      // Importação dinâmica para evitar problemas de circular dependency
+      const { hardRefresh } = await import('@/lib/build/ensureLatestBuild');
+      await hardRefresh();
+    } catch (e) {
+      // Fallback: reload simples se a importação falhar
+      console.error("Erro ao executar hardRefresh:", e);
+      window.location.reload();
+    }
+  };
+
   render() {
     if (this.state.hasError) {
+      const isDev = import.meta.env.DEV;
+
       return (
-        <div className="h-screen flex flex-col items-center justify-center bg-background text-foreground">
-          <h1 className="text-2xl font-bold mb-4">Algo deu errado 😢</h1>
-          <p className="mb-2 text-muted-foreground">
-            Por favor, recarregue a página para tentar novamente.
-          </p>
-          {this.state.error && (
-            <p className="mb-6 text-sm text-destructive max-w-md text-center">
-              {this.state.error.message}
+        <div className="h-screen flex flex-col items-center justify-center bg-background text-foreground p-6">
+          <div className="max-w-md text-center space-y-6">
+            <div className="text-6xl">⚠️</div>
+            <h1 className="text-2xl font-bold">Atualização importante</h1>
+            <p className="text-muted-foreground">
+              Detectamos que seu navegador está usando uma versão antiga do sistema.
+              Para garantir o funcionamento correto, precisamos atualizar agora.
             </p>
-          )}
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Recarregar
-          </button>
+            <button
+              onClick={this.handleForceUpdate}
+              className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+            >
+              Atualizar agora
+            </button>
+            
+            {/* Detalhes técnicos escondidos para devs */}
+            {isDev && this.state.error && (
+              <details className="text-left text-xs text-muted-foreground mt-4">
+                <summary className="cursor-pointer hover:text-foreground transition-colors">
+                  Detalhes técnicos
+                </summary>
+                <pre className="mt-2 p-2 bg-muted rounded overflow-auto max-h-40 text-destructive">
+                  {this.state.error.message}
+                  {this.state.error.stack && (
+                    <>
+                      {"\n\n"}
+                      {this.state.error.stack}
+                    </>
+                  )}
+                </pre>
+              </details>
+            )}
+          </div>
         </div>
       );
     }
