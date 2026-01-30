@@ -30,13 +30,13 @@ export function OfflineConfirmationDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            ⚠️ Atenção
+            Ficar Offline
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-4">
               {activeConversations > 0 ? (
                 <p className="text-base font-medium text-foreground">
-                  Você tem <span className="text-primary font-bold">{activeConversations}</span> conversa(s) ativa(s).
+                  Você tem <span className="text-primary font-bold">{activeConversations}</span> conversa(s) em andamento.
                 </p>
               ) : (
                 <p className="text-base">
@@ -44,24 +44,21 @@ export function OfflineConfirmationDialog({
                 </p>
               )}
               
+              {/* CONTRATO v2.2 §11: UI deve refletir comportamento real */}
               <div className="bg-muted/50 p-4 rounded-lg space-y-2">
                 <p className="font-medium text-foreground">Ao ficar offline:</p>
                 <ul className="list-none space-y-2 text-sm">
                   <li className="flex items-start gap-2">
-                    <span className="text-green-500">✓</span>
-                    <span>Suas conversas serão <strong>encerradas</strong></span>
+                    <span className="text-muted-foreground">⏸</span>
+                    <span>Você <strong>deixará de receber</strong> novas conversas</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-green-500">✓</span>
-                    <span>Clientes receberão <strong>pesquisa de satisfação</strong></span>
+                    <span className="text-primary">✓</span>
+                    <span>Suas conversas atuais <strong>permanecerão abertas</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-green-500">✓</span>
-                    <span>Conversas serão <strong>redistribuídas</strong> para outros atendentes</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-500">✓</span>
-                    <span>Se não houver atendentes online, a <strong>IA assumirá</strong> temporariamente</span>
+                    <span className="text-primary">✓</span>
+                    <span>Elas entrarão na <strong>fila de atendimento</strong> para redistribuição</span>
                   </li>
                 </ul>
               </div>
@@ -73,12 +70,11 @@ export function OfflineConfirmationDialog({
           <AlertDialogAction 
             onClick={onConfirm}
             disabled={isLoading}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Encerrando...
+                Processando...
               </>
             ) : (
               "Confirmar e Ficar Offline"
