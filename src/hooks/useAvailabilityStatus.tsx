@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useRef, useCallback } from "react";
 
-type AvailabilityStatus = "online" | "busy" | "offline";
+type AvailabilityStatus = "online" | "busy" | "away" | "offline";
 
 // Intervalo de heartbeat (2 minutos)
 const HEARTBEAT_INTERVAL = 2 * 60 * 1000;
@@ -138,9 +138,10 @@ export function useAvailabilityStatus() {
         }
       }
       
-      const messages = {
+      const messages: Record<AvailabilityStatus, string> = {
         online: "Você está online e receberá novas conversas",
         busy: "Status alterado para Ocupado - você não receberá novos chats",
+        away: "Status alterado para Ausente - você não receberá novos chats",
         offline: "Você está offline - não receberá conversas",
       };
 

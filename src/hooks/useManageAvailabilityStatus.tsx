@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type AvailabilityStatus = 'online' | 'busy' | 'offline';
+type AvailabilityStatus = 'online' | 'busy' | 'away' | 'offline';
 
 interface ManageAvailabilityParams {
   user_id: string;

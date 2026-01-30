@@ -37,6 +37,12 @@ const statusConfig = {
     color: "text-yellow-600 dark:text-yellow-400",
     bg: "bg-yellow-50 dark:bg-yellow-950/20",
   },
+  away: {
+    label: "Ausente",
+    icon: "🟠",
+    color: "text-orange-600 dark:text-orange-400",
+    bg: "bg-orange-50 dark:bg-orange-950/20",
+  },
   offline: {
     label: "Offline",
     icon: "🔴",
@@ -75,12 +81,12 @@ export function AvailabilityToggle() {
     enabled: !!user,
   });
 
-  const handleStatusChange = (newStatus: "online" | "busy" | "offline") => {
+  const handleStatusChange = (newStatus: "online" | "busy" | "away" | "offline") => {
     if (newStatus === "offline") {
       // Mostrar dialog de confirmação antes de ficar offline
       setShowOfflineDialog(true);
-    } else if (newStatus === "online" && status === "busy") {
-      // Proteção anti-clique: confirmar antes de sair de Busy
+    } else if (newStatus === "online" && (status === "busy" || status === "away")) {
+      // Proteção anti-clique: confirmar antes de sair de Busy ou Away
       setShowBusyToOnlineDialog(true);
     } else {
       updateStatus(newStatus);
@@ -186,6 +192,17 @@ export function AvailabilityToggle() {
             <div className="flex flex-col">
               <span className="font-medium">{statusConfig.busy.label}</span>
               <span className="text-xs text-muted-foreground">Não recebe novos</span>
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => handleStatusChange("away")}
+            disabled={status === "away"}
+            className="gap-2"
+          >
+            <span className="text-base">{statusConfig.away.icon}</span>
+            <div className="flex flex-col">
+              <span className="font-medium">{statusConfig.away.label}</span>
+              <span className="text-xs text-muted-foreground">Temporariamente indisponível</span>
             </div>
           </DropdownMenuItem>
           <DropdownMenuItem

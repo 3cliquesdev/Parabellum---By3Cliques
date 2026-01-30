@@ -10,10 +10,10 @@ Nenhuma automação pode surpreender o usuário, o agente ou o gestor.
 ## 1. Contrato de Status do Agente
 
 ### Status válidos (`availability_status`)
-- `online`
-- `busy`
-- `away`
-- `offline`
+- `online` — disponível para receber novas conversas
+- `busy` — ocupado, não recebe novas conversas, mantém conversas atuais
+- `away` — temporariamente indisponível, não recebe novas conversas, mantém conversas atuais
+- `offline` — desconectado, não recebe novas conversas
 
 ### Regras obrigatórias
 - ✅ Apenas agentes `online` recebem novas conversas

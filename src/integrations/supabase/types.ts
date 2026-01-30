@@ -8839,7 +8839,7 @@ export type Database = {
         | "activity_overdue"
         | "contact_created"
         | "contact_inactive"
-      availability_status: "online" | "busy" | "offline"
+      availability_status: "online" | "busy" | "away" | "offline"
       communication_channel:
         | "email"
         | "phone"
@@ -9081,7 +9081,7 @@ export const Constants = {
         "contact_created",
         "contact_inactive",
       ],
-      availability_status: ["online", "busy", "offline"],
+      availability_status: ["online", "busy", "away", "offline"],
       communication_channel: [
         "email",
         "phone",
