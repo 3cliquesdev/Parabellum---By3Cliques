@@ -1,141 +1,141 @@
 
-# Plano: Correções Críticas para Travessia de Fluxo (Versão Produção-Safe)
 
-## Problema Atual
-O código implementado anteriormente tem 4 vulnerabilidades que causam o comportamento "só transfere":
+# Plano: Corrigir Opções Não Formatadas no WhatsApp (Master Flow)
 
-1. **Retorna `response: ""`** → webhook interpreta como "sem fluxo" e transfere
-2. **Cria state duplicado** → comportamentos "fantasma" e loops
-3. **Condition usa path fixo** → se handle do edge não for `true`/`false`, não encontra próximo nó
-4. **Logs insuficientes** → difícil diagnosticar por que caiu em transfer
+## Problema Identificado
 
----
+O fluxo `ask_options` está retornando a mensagem corretamente, mas **as opções não estão sendo formatadas junto com a mensagem** antes de enviar ao WhatsApp.
 
-## 4 Correções a Aplicar
-
-### 1. Nunca retornar `response: ""`
-**Antes:**
-```typescript
-response: contentMessage
-```
-
-**Depois:**
-```typescript
-const msg = (contentMessage || '').trim();
-response: msg.length ? msg : null  // ✅ null quando vazio
-```
-
-### 2. Não criar state duplicado (UPSERT)
-**Antes:**
-```typescript
-// Sempre INSERT
-const { data: newState } = await supabaseClient
-  .from('chat_flow_states')
-  .insert({...})
-```
-
-**Depois:**
-```typescript
-// Verificar se já existe
-const { data: existingState } = await supabaseClient
-  .from('chat_flow_states')
-  .select('id')
-  .eq('conversation_id', conversationId)
-  .eq('flow_id', masterFlow.id)
-  .in('status', ['active', 'waiting_input'])
-  .maybeSingle();
-
-if (existingState?.id) {
-  // UPDATE existente
-  await supabaseClient
-    .from('chat_flow_states')
-    .update({ current_node_id: node.id, collected_data: collectedData })
-    .eq('id', existingState.id);
-} else {
-  // INSERT apenas se não existe
-  const { data: newState } = await supabaseClient
-    .from('chat_flow_states')
-    .insert({...})
-    .select('id')
-    .single();
+### Evidência nos Logs
+```json
+{
+  "response": "Seja bem-vindo à 3 Cliques! Antes de transferi-lo para um Cliquer, preciso saber: \nVocê já é nosso cliente?",
+  "options": [{"label":"SIm","id":"opt_1769459506022"}, {"label":"Não","id":"opt_1769459507383"}]
 }
 ```
 
-### 3. Condition com cascata de handles
-**Antes:**
-```typescript
-path = conditionResult ? 'true' : 'false';
-const nextNode = findNextNode(flowDef, contentNode, path);
+### O que deveria aparecer no WhatsApp
+```
+Seja bem-vindo à 3 Cliques! Antes de transferi-lo para um Cliquer, preciso saber:
+Você já é nosso cliente?
+
+1️⃣ Sim
+2️⃣ Não
 ```
 
-**Depois:**
-```typescript
-// Tentar múltiplos handles (true/false, yes/no, 1/2)
-const handles = conditionResult ? ['true', 'yes', '1'] : ['false', 'no', '2'];
+### O que está aparecendo
+```
+Seja bem-vindo à 3 Cliques! Antes de transferi-lo para um Cliquer, preciso saber:
+Você já é nosso cliente?
+```
+**(Sem as opções!)**
 
-let nextNode = null;
-for (const h of handles) {
-  nextNode = findNextNode(flowDef, node, h);
-  if (nextNode) break;
+---
+
+## Causa Raiz
+
+No arquivo `supabase/functions/meta-whatsapp-webhook/index.ts` (linhas 556-577), o **CASO 2** envia apenas `flowData.response`:
+
+```typescript
+// CASO 2: Fluxo retornou resposta estática
+if (!flowData.useAI && flowData.response) {
+  await supabase.functions.invoke("send-meta-whatsapp", {
+    body: {
+      message: flowData.response,  // ❌ Ignora flowData.options!
+      // ...
+    },
+  });
 }
 ```
 
-### 4. Logs fortes para diagnóstico
-```typescript
-console.log('[process-chat-flow] 🔍 Condition evaluation:', {
-  condition_type,
-  condition_field,
-  condition_value,
-  fieldValue,
-  contactId: contactData?.id
-});
+O campo `flowData.options` existe mas está sendo **ignorado**.
 
-console.log('[process-chat-flow] 🔀 Trying handles:', handles.join(', '));
-console.log('[process-chat-flow] ✓ Found next node via handle "X":', nextNode.type);
+---
+
+## Solução
+
+### 1. Adicionar função `formatOptionsAsText` no meta-whatsapp-webhook
+
+Mesma função já usada no `ai-autopilot-chat`:
+
+```typescript
+function formatOptionsAsText(options: Array<{label: string; value?: string}> | null | undefined): string {
+  if (!options || options.length === 0) return '';
+  
+  const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+  
+  const formatted = options.map((opt, idx) => {
+    const emoji = emojis[idx] || `${idx + 1}.`;
+    return `${emoji} ${opt.label}`;
+  }).join('\n');
+  
+  return `\n\n${formatted}`;
+}
+```
+
+### 2. Modificar CASO 2 para incluir opções formatadas
+
+```typescript
+// CASO 2: Fluxo retornou resposta estática (Message/AskOptions/etc)
+if (!flowData.useAI && flowData.response) {
+  // 🆕 Formatar opções junto com a mensagem
+  const formattedMessage = flowData.response + formatOptionsAsText(flowData.options);
+  
+  console.log("[AUTO-DECISION] [WhatsApp Meta] Flow static response → send-meta-whatsapp");
+  await supabase.functions.invoke("send-meta-whatsapp", {
+    body: {
+      instance_id: instance.id,
+      phone_number: fromNumber,
+      message: formattedMessage,  // ✅ Inclui opções formatadas
+      conversation_id: conversation.id,
+      skip_db_save: false,
+    },
+  });
+}
+```
+
+### 3. Atualizar tipagem de flowData
+
+Adicionar `options` na interface:
+
+```typescript
+let flowData: {
+  useAI?: boolean;
+  aiNodeActive?: boolean;
+  response?: string;
+  options?: Array<{label: string; value?: string; id?: string}>;  // 🆕
+  skipAutoResponse?: boolean;
+  flow_context?: Record<string, unknown>;
+} = {};
 ```
 
 ---
 
-## Arquivo a Modificar
+## Arquivos a Modificar
 
-| Arquivo | Linhas | Ação |
-|---------|--------|------|
-| `supabase/functions/process-chat-flow/index.ts` | 879-1131 | Substituir bloco do Master Flow |
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/meta-whatsapp-webhook/index.ts` | Adicionar `formatOptionsAsText` + usar no CASO 2 |
 
 ---
 
 ## Fluxo Corrigido
 
 ```text
-Cliente envia "Bom dia" via WhatsApp
-         │
-         ▼
-meta-whatsapp-webhook → process-chat-flow
-         │
-         ▼
-Encontra startNode: "input"
-         │
-         ▼ [Travessia automática]
-Atravessa: input → condition
-         │
-         ▼
-Avalia condition (is_validated_customer)
-Tenta handles: ['true', 'yes', '1'] ou ['false', 'no', '2']
-         │
-    ┌────┴────┐
-    │         │
-  true      false
-    │         │
-    ▼         ▼
-ask_options transfer
-    │
-    ▼
-Retorna response: "Olá! Como posso ajudar?" (ou null se vazio)
-         │
-         ▼
-meta-whatsapp-webhook:
-  - Se response não-null → envia via WhatsApp ✅
-  - Se response=null + flowStarted=true → aguarda (não transfere automaticamente)
+process-chat-flow retorna:
+  response: "Mensagem..."
+  options: [{label: "Sim"}, {label: "Não"}]
+       │
+       ▼
+meta-whatsapp-webhook (CASO 2):
+  formattedMessage = response + formatOptionsAsText(options)
+       │
+       ▼
+send-meta-whatsapp:
+  "Mensagem...\n\n1️⃣ Sim\n2️⃣ Não"
+       │
+       ▼
+WhatsApp exibe mensagem completa ✅
 ```
 
 ---
@@ -144,19 +144,17 @@ meta-whatsapp-webhook:
 
 | Antes | Depois |
 |-------|--------|
-| `response: ""` → webhook transfere | `response: null` + `flowStarted: true` → webhook sabe que fluxo está ativo |
-| State duplicado → comportamento fantasma | UPSERT → um state por conversa/fluxo |
-| Condition falha silenciosamente | Tenta 3 handles + logs detalhados |
-| "Só transfere" | Segue o caminho correto do fluxo |
+| "Você já é nosso cliente?" | "Você já é nosso cliente?\n\n1️⃣ Sim\n2️⃣ Não" |
+| Opções ignoradas | Opções formatadas com emojis |
 
 ---
 
-## Testes Obrigatórios
+## Testes
 
-| Cenário | Resultado Esperado |
-|---------|-------------------|
-| Input → Condition(true) → ask_options | Retorna mensagem do ask_options |
-| Input → Condition(false) → transfer | Retorna transfer com mensagem |
-| Cliente já com state ativo | UPDATE, não INSERT duplicado |
-| Condition sem handle compatível | Log de aviso, para no nó atual |
-| Mensagem vazia | `response: null` (não `""`) |
+| Cenário | Esperado |
+|---------|----------|
+| ask_options com 2 opções | "1️⃣ Sim\n2️⃣ Não" aparece |
+| ask_options com 4 opções | "1️⃣...\n2️⃣...\n3️⃣...\n4️⃣..." |
+| message sem options | Apenas mensagem (sem quebras extras) |
+| options vazio | Apenas mensagem |
+
