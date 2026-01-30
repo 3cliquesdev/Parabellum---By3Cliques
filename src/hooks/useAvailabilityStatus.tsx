@@ -105,8 +105,38 @@ export function useAvailabilityStatus() {
 
       return newStatus;
     },
-    onSuccess: (newStatus) => {
+    onSuccess: async (newStatus) => {
       queryClient.invalidateQueries({ queryKey: ["availability-status", user?.id] });
+      
+      // UPGRADE D4: Disparar dispatcher imediatamente quando agente fica online
+      if (newStatus === 'online' && user) {
+        console.log("[useAvailabilityStatus] Agent went online - triggering dispatcher");
+        try {
+          // Buscar departamento do agente para priorizar jobs desse dept
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("department")
+            .eq("id", user.id)
+            .single();
+          
+          // Chamar dispatcher assincronamente (não bloquear UI)
+          supabase.functions.invoke("dispatch-conversations", {
+            body: { 
+              source: "agent_online", 
+              agent_id: user.id,
+              department_id: profile?.department 
+            }
+          }).then(({ error }) => {
+            if (error) {
+              console.error("[useAvailabilityStatus] Dispatcher trigger error:", error);
+            } else {
+              console.log("[useAvailabilityStatus] Dispatcher triggered successfully");
+            }
+          });
+        } catch (err) {
+          console.error("[useAvailabilityStatus] Failed to trigger dispatcher:", err);
+        }
+      }
       
       const messages = {
         online: "Você está online e receberá novas conversas",
