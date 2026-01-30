@@ -1,244 +1,140 @@
 
-
-# Plano: Adicionar Guard CSAT ao meta-whatsapp-webhook
+# Plano: Remover Triagem Legada Restante do ai-autopilot-chat
 
 ## Diagnóstico Confirmado
 
 ### Problema Identificado
-O webhook da **Meta WhatsApp Cloud API** (`meta-whatsapp-webhook`) **NÃO tem** a verificação de CSAT que existe no webhook da Evolution API (`handle-whatsapp-event`).
+Ainda existe um **segundo bloco de triagem legada** que não foi removido anteriormente. Este bloco está gerando as mensagens destacadas na imagem:
 
-Quando cliente responde "5" à pesquisa de satisfação:
+| Mensagem | Origem | Linha no Código |
+|----------|--------|-----------------|
+| "Olá, Ronildo Oliveira! 👋 Que bom ter você de volta!..." | Triagem legada (linha 4637) | 4620-4700 |
+| "Ótimo! Você mencionou pedidos..." | IA RAG respondendo "1" como intenção | Resposta da IA |
 
-| Webhook | Comportamento Atual |
-|---------|-------------------|
-| `handle-whatsapp-event` (Evolution) | Detecta conversa fechada + `awaiting_rating=true` → processa nota → **NÃO reabre** |
-| `meta-whatsapp-webhook` (Meta) | Ignora conversas fechadas (`.neq("status", "closed")`) → **CRIA nova conversa** |
+### Código Problemático
 
-### Código Problemático (meta-whatsapp-webhook)
+**Linhas 4620-4759:** Bloco condicional que ainda executa lógica de triagem:
 
-**Linha 278-286:**
 ```typescript
-// Buscar conversa existente - priorizar aberta
-let { data: conversation } = await supabase
-  .from("conversations")
-  .select(...)
-  .eq("contact_id", contact.id)
-  .neq("status", "closed")  // ❌ IGNORA conversas fechadas com awaiting_rating!
-  .order(...)
+// Linha 4620
+if (intentType === 'skip' && !isFinancialContext && isFirstMessageOfSession) {
+  // CASO 1: Cliente conhecido = MENU DE TRIAGEM (linhas 4622-4700)
+  if (isValidatedCustomer) {
+    menuMessage = `Olá, ${contactName}! 👋 Que bom ter você de volta!...`;
+    // Envia menu + define awaiting_menu_choice=true
+  }
+  
+  // CASO 2: Lead novo = pedir email (linhas 4703-4758)
+  if (!isValidatedCustomer && responseChannel === 'whatsapp') {
+    leadGreeting = `Olá! Para garantir um atendimento personalizado...`;
+    // Pede email
+  }
+}
 ```
 
-**Linha 317:**
-```typescript
-status: "open" // Reabrir se estava fechada  // ❌ Não deveria reabrir!
-```
+### Por que Ainda Executa?
 
-### Código Correto (handle-whatsapp-event) - Já implementado
+A remoção anterior (linhas 2576-2808) removeu o **processamento da escolha do menu** (quando cliente responde "1" ou "2"), mas NÃO removeu o **envio inicial do menu**:
 
-**Linhas 522-602:** Guard de CSAT que:
-1. Busca última conversa fechada com `awaiting_rating=true`
-2. Extrai rating da mensagem
-3. Salva rating na tabela `conversation_ratings`
-4. Envia agradecimento
-5. **NÃO reabre** a conversa
-6. Retorna early (`return`) para não processar mais nada
+- ❌ **Removido anteriormente**: Detectar "1" ou "2" e rotear para departamento
+- ❌ **NÃO removido**: Enviar o menu "1-Pedidos / 2-Sistema" na primeira mensagem
+
+### Por que a Segunda Mensagem Aparece?
+
+Após enviar o menu legado, quando o cliente responde "1":
+1. O código não encontra mais o handler de `awaiting_menu_choice` (foi removido)
+2. A mensagem "1" cai na IA RAG
+3. A IA interpreta "1" como intenção de "pedidos" e responde com "Ótimo! Você mencionou pedidos..."
 
 ---
 
 ## Solução Proposta
 
-Replicar a lógica de CSAT do `handle-whatsapp-event` para o `meta-whatsapp-webhook`, inserindo o guard **ANTES** da busca/criação de conversa.
+Remover completamente o bloco de triagem legada (linhas 4620-4759), pois o Master Flow visual já implementa:
+- Saudação personalizada
+- Menu de opções
+- Coleta de email para leads
 
 ---
 
 ## Alterações Detalhadas
 
-### 1. Adicionar função `extractRating` no meta-whatsapp-webhook
+### 1. Remover bloco de triagem na primeira mensagem
 
-**Arquivo**: `supabase/functions/meta-whatsapp-webhook/index.ts`
+**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
 
-**Local**: Após linha 60 (após interfaces)
+**Local**: Linhas 4589-4759
 
-```typescript
-// Função auxiliar: Extrair rating (1-5) da mensagem
-function extractRating(message: string): number | null {
-  const normalized = message.trim();
-  
-  // Detectar número direto: "1", "2", "3", "4", "5"
-  const numMatch = normalized.match(/^[1-5]$/);
-  if (numMatch) return parseInt(numMatch[0]);
-  
-  // Detectar estrelas emoji: "⭐⭐⭐⭐⭐"
-  const starCount = (message.match(/⭐/g) || []).length;
-  if (starCount >= 1 && starCount <= 5) return starCount;
-  
-  return null;
-}
-```
+**Ação**: Remover todo o bloco que:
+- Detecta `isFirstMessageOfSession`
+- Envia menu para `isValidatedCustomer`
+- Pede email para `!isValidatedCustomer`
 
-### 2. Adicionar Guard CSAT antes da busca de conversa
-
-**Local**: Após linha 276 (após verificar contato existe), ANTES de buscar conversa
+**Código a remover** (aproximadamente 170 linhas):
 
 ```typescript
-// ============================================
-// PRÉ-VERIFICAÇÃO CSAT - ANTES de criar conversa nova
-// Se cliente respondeu avaliação, processar e MANTER fechada
-// ============================================
-const { data: csatConversation } = await supabase
-  .from("conversations")
-  .select("id, awaiting_rating, status, whatsapp_meta_instance_id")
-  .eq("contact_id", contact.id)
-  .eq("awaiting_rating", true)
-  .eq("status", "closed")
-  .order("closed_at", { ascending: false })
-  .limit(1)
-  .maybeSingle();
-
-if (csatConversation && csatConversation.awaiting_rating) {
-  const csatRating = extractRating(messageContent);
-  
-  if (csatRating !== null) {
-    console.log(`[meta-whatsapp-webhook] ⭐ CSAT PRE-CHECK: Rating ${csatRating} detected BEFORE reopen`);
-    
-    // Buscar department_id para relatórios
-    const { data: convForDept } = await supabase
-      .from("conversations")
-      .select("department")
-      .eq("id", csatConversation.id)
-      .single();
-
-    // Salvar rating
-    const { error: ratingError } = await supabase
-      .from("conversation_ratings")
-      .insert({
-        conversation_id: csatConversation.id,
-        rating: csatRating,
-        channel: "whatsapp",
-        feedback_text: messageContent,
-        department_id: convForDept?.department || null,
-      });
-    
-    if (ratingError) {
-      console.error("[meta-whatsapp-webhook] Error saving CSAT rating:", ratingError);
-    } else {
-      console.log("[meta-whatsapp-webhook] ✅ CSAT rating saved successfully");
-      
-      // Limpar flag - MANTER status = 'closed'
-      await supabase
-        .from("conversations")
-        .update({ awaiting_rating: false })
-        .eq("id", csatConversation.id);
-      
-      // Enviar agradecimento
-      let thankYouMessage = "";
-      if (csatRating >= 4) {
-        thankYouMessage = `🎉 Obrigado pela avaliação de ${csatRating} estrela${csatRating > 1 ? "s" : ""}!\n\nFicamos muito felizes em ter ajudado. Conte sempre conosco! 💚`;
-      } else if (csatRating === 3) {
-        thankYouMessage = `👍 Obrigado pela sua avaliação!\n\nEstamos sempre buscando melhorar. Se tiver sugestões, fique à vontade para compartilhar!`;
-      } else {
-        thankYouMessage = `🙏 Agradecemos seu feedback.\n\nLamentamos que sua experiência não tenha sido ideal. Vamos trabalhar para melhorar!`;
-      }
-      
-      // Enviar via send-meta-whatsapp
-      await supabase.functions.invoke("send-meta-whatsapp", {
-        body: {
-          instance_id: instance.id,
-          phone_number: fromNumber,
-          message: thankYouMessage,
-          conversation_id: csatConversation.id,
-          skip_db_save: true,
-        },
-      });
-      
-      // Inserir mensagem da avaliação na conversa fechada
-      await supabase.from("messages").insert({
-        conversation_id: csatConversation.id,
-        content: `⭐ Avaliação: ${csatRating}/5`,
-        sender_type: "contact",
-        channel: "whatsapp",
-      });
-    }
-    
-    console.log("[meta-whatsapp-webhook] ✅ CSAT processed - conversation stays CLOSED");
-    continue; // ⚠️ CRÍTICO: Pular para próxima mensagem, NÃO criar conversa
-  }
-}
-// ============================================
-// FIM PRÉ-VERIFICAÇÃO CSAT
-// ============================================
+// REMOVER: Linhas 4589-4759
+// 🎯 BYPASS DA IA: Saudação Direta na PRIMEIRA MENSAGEM da SESSÃO
+const rawMessages = messages || [];
+// ... todo o bloco até linha 4759
 ```
 
-### 3. Adicionar verificação de awaiting_rating na busca de conversa existente
-
-**Local**: Linha 377 - já existe verificação parcial
+**Substituir por comentário simples:**
 
 ```typescript
-// Trigger AI Autopilot se ativo (já existe - OK)
-if (conversation.ai_mode === "autopilot" && !conversation.awaiting_rating) {
+// ============================================================
+// 🎯 TRIAGEM VIA MASTER FLOW
+// A triagem (saudação, menu, coleta de email) é feita 100% pelo 
+// Master Flow visual processado via process-chat-flow
+// ============================================================
 ```
-
-Isso já está correto e impede que IA responda se `awaiting_rating=true`. Mas o problema é que o código **não chega aqui** porque cria conversa nova antes.
 
 ---
 
 ## Seção Técnica
 
+### Arquivos a Modificar
+
+| Arquivo | Ação | Linhas Afetadas |
+|---------|------|-----------------|
+| `ai-autopilot-chat/index.ts` | Remover | 4589-4759 (triagem na primeira mensagem) |
+
 ### Fluxo Corrigido
 
 ```text
-Cliente responde "5" à pesquisa CSAT
+Cliente envia "Oi"
          │
          ▼
-meta-whatsapp-webhook recebe POST
+ai-autopilot-chat invocado
          │
          ▼
-Buscar/criar contato
+Chama process-chat-flow PRIMEIRO
          │
-         ▼
-🆕 GUARD CSAT: Existe conversa fechada + awaiting_rating=true?
-    SIM ─────────────────┐
-         │               │
-         ▼               │
-    Mensagem é rating (1-5)?
-    SIM ─────────────────┤
-         │               │
-         ▼               │
-    Salvar rating        │
-    Enviar agradecimento │
-    continue (pular msg) │◀─────── NÃO cria conversa!
-         │               │
-    NÃO ─┘               │
-         │               │
-         ▼               ▼
-    Continuar fluxo normal (cria conversa se não houver aberta)
+         ├─ useAI: false + response? ────► RETURN resposta do fluxo (CORRETO!)
+         │                                  Ex: "Seja bem-vindo à 3 Cliques!"
+         │
+         └─ useAI: true? ────► Continuar para IA RAG
+                               (SEM triagem legada no caminho)
 ```
 
-### Arquivos a Modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `meta-whatsapp-webhook/index.ts` | Modificar | Adicionar `extractRating` + guard CSAT antes de buscar conversa |
-
----
-
-## Impacto
+### Impacto da Remoção
 
 | Antes | Depois |
 |-------|--------|
-| Resposta CSAT cria nova conversa | Resposta CSAT anexada na conversa fechada |
-| Cliente recebe boas-vindas do fluxo | Cliente recebe apenas agradecimento |
-| Rating perdido | Rating salvo na `conversation_ratings` |
-| `awaiting_rating` fica true | `awaiting_rating` setado para false |
+| Menu legado + Master Flow = 2 mensagens | Apenas Master Flow = 1 mensagem |
+| Cliente recebe "Olá! 1-Pedidos 2-Sistema" + "Seja bem-vindo" | Cliente recebe apenas "Seja bem-vindo" |
+| Resposta "1" confunde IA | Resposta "1" processada pelo fluxo visual |
 
 ---
 
 ## Ordem de Implementação
 
-1. Adicionar função `extractRating` no arquivo
-2. Adicionar guard CSAT ANTES da busca de conversa (linhas 278-286)
-3. Usar `continue` em vez de `return` (estamos dentro de loop `for (const msg of value.messages)`)
-4. Deploy da edge function
-5. Testar: encerrar conversa com CSAT → cliente responde "5" → verificar que NÃO cria conversa nova
+1. Localizar exatamente o início do bloco (linha 4589 - comentário "BYPASS DA IA")
+2. Localizar o fim do bloco (linha 4759 - fechamento dos ifs)
+3. Remover todo o bloco (4589-4759)
+4. Adicionar comentário explicativo
+5. Deploy da edge function
+6. Testar: enviar "Oi" deve mostrar APENAS mensagem do Master Flow
 
 ---
 
@@ -246,8 +142,7 @@ Buscar/criar contato
 
 | Teste | Resultado Esperado |
 |-------|-------------------|
-| Cliente responde "5" após CSAT | Rating salvo, conversa permanece fechada |
-| Cliente responde "preciso de ajuda" após CSAT | Nova conversa criada (não é rating) |
-| Logs mostram guard funcionando | `"⭐ CSAT PRE-CHECK: Rating X detected"` |
-| Agradecimento enviado | Mensagem correta baseada no rating |
-
+| Cliente envia "Oi" | Recebe APENAS mensagem do Master Flow |
+| Cliente envia "1" após menu do fluxo | Próximo nó do fluxo (não IA) |
+| Logs não mostram "TRIAGEM: Enviando menu" | Mensagem só do fluxo visual |
+| `awaiting_menu_choice` não é mais setado | Campo não atualizado |
