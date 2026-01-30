@@ -178,6 +178,7 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
       item.contact_name?.toLowerCase().includes(searchLower) ||
       item.contact_email?.toLowerCase().includes(searchLower) ||
       item.contact_phone?.toLowerCase().includes(searchLower) ||
+      item.contact_id?.toLowerCase().includes(searchLower) ||
       item.conversation_id.toLowerCase().includes(searchLower) ||
       item.last_snippet?.toLowerCase().includes(searchLower)
     );
