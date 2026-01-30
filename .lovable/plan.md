@@ -1,93 +1,136 @@
 
-# Plano: Mensagem de "Aguarde" Quando Cliente Está na Fila
+
+# Plano: Processamento em Lote (Batch) para Distribuição Enterprise
 
 ## Problema Identificado
 
-Atualmente, quando o cliente está em `waiting_human` (na fila aguardando atendente) e envia uma mensagem:
-- O `process-chat-flow` retorna `skipAutoResponse: true` ✅
-- O webhook simplesmente faz `continue` sem enviar nada ❌
+O `dispatch-conversations` processa **1 job por vez** em um loop sequencial:
 
-**Resultado:** Cliente fica sem resposta, pode pensar que foi ignorado.
-
-## Solução: Mensagem Tranquilizadora Automática
-
-Quando `skipAutoResponse: true` E `reason` indica que cliente está na fila, enviar uma mensagem de aguarde:
-
-```text
-💬 Sua conversa já está na fila de atendimento. 
-
-Fique tranquilo, em breve um especialista irá te atender. 🙂
+```typescript
+// ATUAL - SEQUENCIAL (LENTO)
+for (const job of pendingJobs) {  // 10 jobs
+  await lockJob(job);             // ~50ms
+  await verifyConversation();     // ~50ms  
+  await findEligibleAgent();      // ~100ms
+  await assignConversation();     // ~50ms
+  await logAssignment();          // ~50ms
+}
+// Total: 10 × 300ms = 3 SEGUNDOS por ciclo
 ```
+
+**Resultado:** Com 10 jobs na fila e cron a cada 60 segundos, demora até 3 segundos por ciclo - mas ainda precisa esperar o próximo minuto!
 
 ---
 
-## Alteração a Implementar
+## Solução: Processamento Paralelo com Batches
 
-### 1. Edge Function: `meta-whatsapp-webhook/index.ts`
+Processar múltiplos jobs em paralelo usando `Promise.all`:
 
-**Linhas 562-570** - Adicionar mensagem de aguarde:
+```text
+┌───────────────────────────────────────────────────────────────────────────┐
+│                    ANTES (Sequencial)                                     │
+├───────────────────────────────────────────────────────────────────────────┤
+│  Job1 ────▶ Job2 ────▶ Job3 ────▶ Job4 ────▶ Job5 ...                     │
+│  300ms     300ms      300ms      300ms      300ms                         │
+│  Total: 10 jobs × 300ms = 3000ms (3 segundos)                             │
+└───────────────────────────────────────────────────────────────────────────┘
 
+┌───────────────────────────────────────────────────────────────────────────┐
+│                    DEPOIS (Paralelo em Batches de 5)                      │
+├───────────────────────────────────────────────────────────────────────────┤
+│  [Job1, Job2, Job3, Job4, Job5] ────▶ [Job6, Job7, Job8, Job9, Job10]     │
+│         300ms (paralelo)                      300ms (paralelo)            │
+│  Total: 2 batches × 300ms = 600ms (0.6 segundos)                          │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+**Ganho: 5x mais rápido!**
+
+---
+
+## Alterações a Implementar
+
+### 1. Edge Function: `dispatch-conversations/index.ts`
+
+Mudar de loop sequencial para processamento em batches paralelos:
+
+**Código Atual (linhas 78-235):**
 ```typescript
-// CASO 1: skipAutoResponse = true → Cliente na fila/copilot/disabled
-if (flowData.skipAutoResponse) {
-  console.log("[AUTO-DECISION] [WhatsApp Meta] Flow skipAutoResponse → waiting_human");
-  
-  // 🆕 MENSAGEM DE AGUARDE: Enviar confirmação ao cliente na fila
-  // Apenas se reason indica que está esperando humano (não kill switch)
-  if (flowData.reason === 'ai_mode_waiting_human') {
-    console.log("[meta-whatsapp-webhook] 📨 Enviando mensagem de aguarde...");
-    
-    const queueMessage = "💬 Sua conversa já está na fila de atendimento.\n\nFique tranquilo, em breve um especialista irá te atender. 🙂";
-    
-    try {
-      await supabase.functions.invoke("send-meta-whatsapp", {
-        body: {
-          instance_id: instance.id,
-          phone_number: fromNumber,
-          message: queueMessage,
-          conversation_id: conversation.id,
-          skip_db_save: false,
-        },
-      });
-      console.log("[meta-whatsapp-webhook] ✅ Mensagem de aguarde enviada");
-    } catch (queueErr) {
-      console.error("[meta-whatsapp-webhook] ⚠️ Erro ao enviar mensagem de aguarde:", queueErr);
-    }
-  }
-  
-  // Garantir que está em waiting_human
-  await supabase
-    .from("conversations")
-    .update({ ai_mode: "waiting_human" })
-    .eq("id", conversation.id);
-  
-  continue;
+for (const job of pendingJobs as DispatchJob[]) {
+  // processar cada job sequencialmente
 }
 ```
 
-### 2. Considerar Rate Limiting (Proteção Anti-Spam)
+**Código Novo:**
+```typescript
+const BATCH_SIZE = 5;
+const DELAY_BETWEEN_BATCHES_MS = 100;
 
-Para evitar que o cliente receba muitas mensagens de "aguarde" se mandar várias mensagens seguidas:
+// Processar em batches paralelos
+for (let i = 0; i < pendingJobs.length; i += BATCH_SIZE) {
+  const batch = pendingJobs.slice(i, i + BATCH_SIZE);
+  
+  // Processar batch em paralelo
+  const batchResults = await Promise.allSettled(
+    batch.map((job: DispatchJob) => processJob(supabase, job))
+  );
+  
+  // Agregar resultados
+  for (const result of batchResults) {
+    if (result.status === 'fulfilled') {
+      const jobResult = result.value;
+      if (jobResult.status === 'assigned') assigned++;
+      else if (jobResult.status === 'failed') failed++;
+      results.push(jobResult);
+    } else {
+      failed++;
+    }
+  }
+  
+  // Pequeno delay entre batches para não sobrecarregar
+  if (i + BATCH_SIZE < pendingJobs.length) {
+    await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES_MS));
+  }
+}
+```
+
+### 2. Extrair Lógica de Job para Função
+
+Criar função `processJob()` que encapsula toda a lógica de um job individual:
 
 ```typescript
-// 🛡️ ANTI-SPAM: Verificar última mensagem do sistema
-const { data: lastBotMsg } = await supabase
-  .from("messages")
-  .select("created_at, content")
-  .eq("conversation_id", conversation.id)
-  .eq("sender_type", "user") // "user" = bot/sistema no modelo atual
-  .eq("is_ai_generated", true)
-  .order("created_at", { ascending: false })
-  .limit(1)
-  .single();
+async function processJob(
+  supabase: any,
+  job: DispatchJob
+): Promise<{ conversation_id: string; status: string; agent?: string; reason?: string }> {
+  const jobStartTime = Date.now();
+  
+  // 1. Lock atômico
+  const { data: lockedJob } = await supabase
+    .from('conversation_dispatch_jobs')
+    .update({ status: 'processing', updated_at: new Date().toISOString() })
+    .eq('id', job.id)
+    .eq('status', 'pending')
+    .select('*')
+    .maybeSingle();
 
-// Só enviar se última mensagem do bot foi há mais de 2 minutos
-const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
-const lastMsgDate = lastBotMsg?.created_at ? new Date(lastBotMsg.created_at) : null;
-const shouldSendQueueMsg = !lastMsgDate || lastMsgDate < twoMinutesAgo;
+  if (!lockedJob) {
+    return { conversation_id: job.conversation_id, status: 'skipped', reason: 'already_locked' };
+  }
 
-if (shouldSendQueueMsg) {
-  // Enviar mensagem de aguarde...
+  // 2. Verificar conversa
+  const { data: conversation } = await supabase
+    .from('conversations')
+    .select('id, ai_mode, assigned_to, department, status')
+    .eq('id', job.conversation_id)
+    .single();
+
+  if (!conversation) {
+    await markJobComplete(supabase, job.id, 'conversation_not_found');
+    return { conversation_id: job.conversation_id, status: 'skipped', reason: 'not_found' };
+  }
+
+  // ... resto da lógica (findEligibleAgent, assign, etc.)
 }
 ```
 
@@ -97,67 +140,88 @@ if (shouldSendQueueMsg) {
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/meta-whatsapp-webhook/index.ts` | Adicionar mensagem de aguarde quando `skipAutoResponse` + `waiting_human` |
+| `supabase/functions/dispatch-conversations/index.ts` | Refatorar para processamento paralelo em batches |
 
 ---
 
 ## Impacto
 
-### Antes (Problema)
-| Cenário | Resultado |
-|---------|-----------|
-| Cliente na fila manda "Oi" | ❌ Silêncio total |
-| Cliente na fila manda "Demora muito?" | ❌ Silêncio total |
-| Cliente na fila manda "?" | ❌ Silêncio total |
+### Performance
 
-### Depois (Corrigido)
-| Cenário | Resultado |
-|---------|-----------|
-| Cliente na fila manda "Oi" | ✅ "Sua conversa já está na fila... em breve um especialista irá te atender" |
-| Cliente na fila manda "Demora muito?" | ✅ Mesma mensagem (max 1x a cada 2 min) |
-| Cliente na fila manda "?" | ✅ Mesma mensagem (rate limited) |
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| 10 jobs na fila | 3000ms | 600ms |
+| 50 jobs na fila | 15000ms | 3000ms |
+| Tempo de espera máximo do cliente | ~60s (aguardar cron) | ~12s |
 
----
-
-## Segurança
+### Segurança
 
 | Controle | Status |
 |----------|--------|
-| Fluxo não reinicia quando cliente está na fila | ✅ Mantido |
-| IA não responde quando humano está atendendo | ✅ Mantido |
-| Mensagem de aguarde não dispara em `copilot` | ✅ Só em `waiting_human` |
-| Rate limiting para evitar spam | ✅ 2 minutos entre mensagens |
-| Compatível com Super Prompt v2.3 | ✅ |
+| Lock atômico por job | ✅ Mantido |
+| Race condition handling | ✅ Mantido |
+| Sem duplicação de atribuição | ✅ Mantido |
+| Logs de auditoria | ✅ Mantido |
 
 ---
 
 ## Fluxo Visual
 
 ```text
-Cliente (na fila)         Webhook         process-chat-flow         WhatsApp
-       |                     |                    |                    |
-       |--- "Oi, demora?"-->|                    |                    |
-       |                     |--save message----->|                    |
-       |                     |                    |                    |
-       |                     |--process flow?---->|                    |
-       |                     |                    |--check ai_mode---->|
-       |                     |                    |<--waiting_human----|
-       |                     |                    |                    |
-       |                     |<--skipAutoResponse-|                    |
-       |                     |   reason: ai_mode_waiting_human         |
-       |                     |                    |                    |
-       |                     |--- [NOVO] Enviar mensagem de aguarde--->|
-       |<-------- "Sua conversa já está na fila..." ------------------|
-       |                     |                    |                    |
-       |        [Mensagem + confirmação aparecem no histórico]         |
+Fila (10 jobs)         dispatch-conversations              Agentes
+      |                         |                              |
+      |                    [Batch 1: 5 jobs]                   |
+      |                         |                              |
+      |---Job1----------------->|                              |
+      |---Job2----------------->|   (paralelo)                 |
+      |---Job3----------------->|                              |
+      |---Job4----------------->|                              |
+      |---Job5----------------->|                              |
+      |                         |---assign Job1--------------->|
+      |                         |---assign Job2--------------->|
+      |                         |---assign Job3--------------->|
+      |                         |---assign Job4--------------->|
+      |                         |---assign Job5--------------->|
+      |                         |                              |
+      |                    [Delay 100ms]                       |
+      |                         |                              |
+      |                    [Batch 2: 5 jobs]                   |
+      |                         |                              |
+      |---Job6----------------->|                              |
+      |---Job7----------------->|   (paralelo)                 |
+      |---Job8----------------->|                              |
+      |---Job9----------------->|                              |
+      |---Job10---------------->|                              |
+      |                         |---assign Job6--------------->|
+      |                         |---...                        |
 ```
 
 ---
 
 ## Compatibilidade
 
-A mudança é **backward compatible**:
-- Comportamento de `copilot` e `disabled` não muda (silêncio total)
-- Apenas `waiting_human` recebe a mensagem de aguarde
-- Rate limiting previne spam
-- Humano ainda pode assumir a qualquer momento
+- ✅ Lock atômico previne race conditions mesmo com paralelismo
+- ✅ Cada job ainda é processado de forma isolada
+- ✅ Erros em um job não afetam outros do batch
+- ✅ Escalação funciona normalmente
+- ✅ Logs de auditoria mantidos
+
+---
+
+## Seção Técnica
+
+### Parâmetros de Tuning
+
+| Parâmetro | Valor | Justificativa |
+|-----------|-------|---------------|
+| `BATCH_SIZE` | 5 | Balanceia paralelismo vs carga no banco |
+| `DELAY_BETWEEN_BATCHES` | 100ms | Evita throttling, permite outros requests |
+| `LIMIT` | 50 | Já existe, mantém |
+
+### Promise.allSettled vs Promise.all
+
+Usamos `Promise.allSettled` porque:
+- Não falha se um job falhar
+- Retorna status de cada promise individualmente
+- Permite continuar processando mesmo com erros parciais
+
