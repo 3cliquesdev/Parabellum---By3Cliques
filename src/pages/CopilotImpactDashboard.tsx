@@ -108,7 +108,15 @@ export default function CopilotImpactDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 mb-6">
           {/* Health Score Gauge - spans 2 cols */}
           <div className="lg:col-span-2">
-            <HealthScoreGauge score={healthScore?.health_score} isLoading={healthLoading} />
+            <HealthScoreGauge 
+              score={healthScore?.health_score} 
+              isLoading={healthLoading}
+              adoptionComponent={healthScore?.adoption_component}
+              kbComponent={healthScore?.kb_component}
+              csatComponent={healthScore?.csat_component}
+              usageComponent={healthScore?.usage_component}
+              dataQuality={healthScore?.data_quality}
+            />
           </div>
 
           {/* Metric Cards - spans 4 cols */}
@@ -277,6 +285,7 @@ export default function CopilotImpactDashboard() {
             isLoading={insightsLoading}
             onRefresh={() => refetchInsights()}
             source={insightsData?.source}
+            confidence={insightsData?.confidence}
           />
         </div>
 

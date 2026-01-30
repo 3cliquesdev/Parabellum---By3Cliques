@@ -45,6 +45,15 @@ Exemplos de insights PROIBIDOS:
 - "Cobrar equipe para usar mais IA" ❌
 - "Agentes precisam ser mais produtivos" ❌`;
 
+// Prompt mais cauteloso para poucos dados
+const CAUTIOUS_PROMPT_SUFFIX = `
+
+ATENÇÃO: A base de dados é pequena (menos de 50 conversas).
+- Seja mais cauteloso nas conclusões
+- Use palavras como "indica", "sugere", "pode indicar" em vez de afirmações definitivas
+- Evite percentuais muito específicos
+- Foque em tendências gerais, não em números absolutos`;
+
 interface InsightRequest {
   healthScore: any;
   comparison: any[];
@@ -57,6 +66,17 @@ interface Insight {
   title: string;
   description: string;
   action: string;
+  confidence: "alta" | "média";
+}
+
+// Determina nível de confiança baseado em volume
+function getConfidence(totalConversations: number): "alta" | "média" {
+  return totalConversations >= 50 ? "alta" : "média";
+}
+
+// Gera cache key consistente
+function getCacheKey(period: number, departmentId: string | null): string {
+  return `${period}_${departmentId || 'null'}`;
 }
 
 serve(async (req) => {
@@ -98,12 +118,43 @@ serve(async (req) => {
     const body: InsightRequest = await req.json();
     const { healthScore, comparison, evolution, kbGaps } = body;
 
-    console.log("[generate-copilot-insights] 📊 Gerando insights para dados agregados");
+    const totalConversations = healthScore?.total_conversations || 0;
+    const confidence = getConfidence(totalConversations);
+    
+    // Extrair período do request (default 30 dias)
+    const period = 30;
+    const departmentId = null;
+    const cacheKey = getCacheKey(period, departmentId);
+
+    console.log(`[generate-copilot-insights] 📊 Verificando cache para key: ${cacheKey}`);
+
+    // 1. Verificar cache
+    const { data: cached } = await supabaseClient
+      .from('copilot_insights_cache')
+      .select('*')
+      .eq('cache_key', cacheKey)
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle();
+
+    if (cached) {
+      console.log(`[generate-copilot-insights] ✅ Cache hit! Retornando ${cached.insights.length} insights`);
+      return new Response(
+        JSON.stringify({ 
+          insights: cached.insights.map((i: any) => ({ ...i, confidence: cached.confidence })),
+          source: "cache",
+          confidence: cached.confidence,
+          generatedAt: cached.created_at
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("[generate-copilot-insights] 🔄 Cache miss, gerando novos insights");
 
     // Build context for AI
     const dataContext = `
 ## Dados do Health Score da Operação (últimos 30 dias)
-- Total de conversas: ${healthScore?.total_conversations || 0}
+- Total de conversas: ${totalConversations}
 - Conversas com Copilot ativo: ${healthScore?.copilot_active_count || 0}
 - Taxa de adoção: ${healthScore?.copilot_adoption_rate || 0}%
 - Tempo médio com Copilot: ${healthScore?.avg_resolution_time_with_copilot || 0}s
@@ -128,6 +179,11 @@ ${JSON.stringify(evolution || [], null, 2)}
 ${JSON.stringify(kbGaps || [], null, 2)}
 `;
 
+    // Ajustar prompt se poucos dados
+    const systemPrompt = confidence === "média" 
+      ? INSIGHTS_PROMPT + CAUTIOUS_PROMPT_SUFFIX 
+      : INSIGHTS_PROMPT;
+
     // Call AI to generate insights
     const aiGatewayUrl = Deno.env.get("AI_GATEWAY_URL") || "https://ai.lovable.dev/v1/chat/completions";
 
@@ -140,7 +196,7 @@ ${JSON.stringify(kbGaps || [], null, 2)}
       body: JSON.stringify({
         model: "openai/gpt-5-mini",
         messages: [
-          { role: "system", content: INSIGHTS_PROMPT },
+          { role: "system", content: systemPrompt },
           { role: "user", content: dataContext },
         ],
         max_tokens: 1000,
@@ -152,12 +208,14 @@ ${JSON.stringify(kbGaps || [], null, 2)}
       console.error("[generate-copilot-insights] ❌ Erro na chamada AI:", await aiResponse.text());
       
       // Fallback: generate basic insights without AI
-      const fallbackInsights = generateFallbackInsights(healthScore, comparison, kbGaps);
+      const fallbackInsights = generateFallbackInsights(healthScore, comparison, kbGaps, confidence);
       
       return new Response(
         JSON.stringify({ 
           insights: fallbackInsights,
-          source: "fallback"
+          source: "fallback",
+          confidence,
+          generatedAt: new Date().toISOString()
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -173,23 +231,48 @@ ${JSON.stringify(kbGaps || [], null, 2)}
       insights = parsed.insights || [];
     } catch (parseError) {
       console.error("[generate-copilot-insights] ⚠️ Erro ao parsear JSON, usando fallback");
-      insights = generateFallbackInsights(healthScore, comparison, kbGaps);
+      insights = generateFallbackInsights(healthScore, comparison, kbGaps, confidence);
     }
 
-    // Validate and sanitize insights
+    // Validate and sanitize insights, add confidence
     insights = insights.slice(0, 5).map((insight) => ({
       type: ["positive", "warning", "opportunity"].includes(insight.type) ? insight.type : "opportunity",
       title: String(insight.title || "").slice(0, 60),
       description: String(insight.description || "").slice(0, 150),
       action: String(insight.action || "").slice(0, 120),
+      confidence,
     }));
 
-    console.log(`[generate-copilot-insights] ✅ ${insights.length} insights gerados`);
+    console.log(`[generate-copilot-insights] ✅ ${insights.length} insights gerados (confiança: ${confidence})`);
+
+    // 3. Salvar no cache
+    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(); // 12 horas
+    
+    const { error: cacheError } = await supabaseClient
+      .from('copilot_insights_cache')
+      .upsert({
+        cache_key: cacheKey,
+        insights,
+        source: 'ai',
+        confidence,
+        total_conversations: totalConversations,
+        created_at: new Date().toISOString(),
+        expires_at: expiresAt
+      }, { 
+        onConflict: 'cache_key' 
+      });
+
+    if (cacheError) {
+      console.warn("[generate-copilot-insights] ⚠️ Erro ao salvar cache:", cacheError.message);
+    } else {
+      console.log("[generate-copilot-insights] 💾 Cache salvo com sucesso");
+    }
 
     return new Response(
       JSON.stringify({ 
         insights,
         source: "ai",
+        confidence,
         generatedAt: new Date().toISOString()
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -206,8 +289,14 @@ ${JSON.stringify(kbGaps || [], null, 2)}
 });
 
 // Fallback insights when AI is unavailable
-function generateFallbackInsights(healthScore: any, comparison: any[], kbGaps: any[]): Insight[] {
+function generateFallbackInsights(
+  healthScore: any, 
+  comparison: any[], 
+  kbGaps: any[], 
+  confidence: "alta" | "média"
+): Insight[] {
   const insights: Insight[] = [];
+  const prefix = confidence === "média" ? "indica " : "";
 
   // Insight 1: Adoption rate
   const adoptionRate = healthScore?.copilot_adoption_rate || 0;
@@ -215,22 +304,25 @@ function generateFallbackInsights(healthScore: any, comparison: any[], kbGaps: a
     insights.push({
       type: "positive",
       title: "Alta adoção do Copilot",
-      description: `${adoptionRate}% das conversas utilizam o assistente IA`,
+      description: `${prefix}${adoptionRate}% das conversas utilizam o assistente IA`,
       action: "Continue promovendo as melhores práticas da equipe",
+      confidence,
     });
   } else if (adoptionRate >= 40) {
     insights.push({
       type: "opportunity",
       title: "Adoção do Copilot pode melhorar",
-      description: `${adoptionRate}% de adoção — há espaço para crescimento`,
+      description: `${prefix}${adoptionRate}% de adoção — há espaço para crescimento`,
       action: "Identifique barreiras e promova treinamentos",
+      confidence,
     });
   } else {
     insights.push({
       type: "warning",
       title: "Baixa adoção do Copilot",
-      description: `Apenas ${adoptionRate}% das conversas usam IA`,
+      description: `${prefix}Apenas ${adoptionRate}% das conversas usam IA`,
       action: "Investigue motivos e promova benefícios do assistente",
+      confidence,
     });
   }
 
@@ -242,8 +334,9 @@ function generateFallbackInsights(healthScore: any, comparison: any[], kbGaps: a
     insights.push({
       type: "positive",
       title: "Copilot acelera resoluções",
-      description: `Conversas com IA resolvem ${improvement}% mais rápido`,
+      description: `${prefix}Conversas com IA resolvem ${improvement}% mais rápido`,
       action: "Considere expandir uso para outras filas",
+      confidence,
     });
   }
 
@@ -254,15 +347,17 @@ function generateFallbackInsights(healthScore: any, comparison: any[], kbGaps: a
     insights.push({
       type: "warning",
       title: "Alta criação de KB Gaps",
-      description: `${gapCount} gaps identificados${topGap ? ` — categoria "${topGap.category}" lidera` : ""}`,
+      description: `${prefix}${gapCount} gaps identificados${topGap ? ` — categoria "${topGap.category}" lidera` : ""}`,
       action: "Priorize criação de artigos para categorias com mais gaps",
+      confidence,
     });
   } else if (gapCount > 0) {
     insights.push({
       type: "opportunity",
       title: "Oportunidade de expandir KB",
-      description: `${gapCount} gaps podem virar novos artigos`,
+      description: `${prefix}${gapCount} gaps podem virar novos artigos`,
       action: "Revise sugestões de artigos no painel de KB",
+      confidence,
     });
   }
 
@@ -272,8 +367,9 @@ function generateFallbackInsights(healthScore: any, comparison: any[], kbGaps: a
     insights.push({
       type: "opportunity",
       title: "Sugestões pouco utilizadas",
-      description: `Apenas ${usageRate}% das sugestões são aproveitadas`,
+      description: `${prefix}Apenas ${usageRate}% das sugestões são aproveitadas`,
       action: "Avalie qualidade das sugestões e relevância do contexto",
+      confidence,
     });
   }
 

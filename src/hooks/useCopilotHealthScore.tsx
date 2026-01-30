@@ -18,11 +18,17 @@ export interface CopilotHealthScore {
   suggestions_available_total: number;
   suggestion_usage_rate: number;
   health_score: number;
+  // Componentes explicáveis (0-25 pts cada)
+  adoption_component: number;
+  kb_component: number;
+  csat_component: number;
+  usage_component: number;
+  data_quality: 'alta' | 'média' | 'baixa';
 }
 
 export interface MonthlyEvolution {
   month: string;
-  month_date: string;
+  month_date?: string;
   copilot_active_count: number;
   total_conversations: number;
   adoption_rate: number;

@@ -1934,6 +1934,39 @@ export type Database = {
           },
         ]
       }
+      copilot_insights_cache: {
+        Row: {
+          cache_key: string
+          confidence: string | null
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          insights: Json
+          source: string | null
+          total_conversations: number | null
+        }
+        Insert: {
+          cache_key: string
+          confidence?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          insights: Json
+          source?: string | null
+          total_conversations?: number | null
+        }
+        Update: {
+          cache_key?: string
+          confidence?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          insights?: Json
+          source?: string | null
+          total_conversations?: number | null
+        }
+        Relationships: []
+      }
       cs_goals: {
         Row: {
           activation_count: number
@@ -8180,6 +8213,7 @@ export type Database = {
         Args: { p_email: string; p_form_id: string }
         Returns: Json
       }
+      cleanup_expired_insights_cache: { Args: never; Returns: number }
       distribute_client_to_consultant: {
         Args: { p_contact_id: string }
         Returns: Json
@@ -8303,14 +8337,18 @@ export type Database = {
           p_start_date?: string
         }
         Returns: {
+          adoption_component: number
           avg_csat_with_copilot: number
           avg_csat_without_copilot: number
           avg_resolution_time_with_copilot: number
           avg_resolution_time_without_copilot: number
           copilot_active_count: number
           copilot_adoption_rate: number
+          csat_component: number
           csat_improvement_percent: number
+          data_quality: string
           health_score: number
+          kb_component: number
           kb_coverage_rate: number
           kb_gap_count: number
           resolution_improvement_percent: number
@@ -8318,6 +8356,7 @@ export type Database = {
           suggestions_available_total: number
           suggestions_used_total: number
           total_conversations: number
+          usage_component: number
         }[]
       }
       get_copilot_monthly_evolution: {

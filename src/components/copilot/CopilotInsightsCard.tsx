@@ -7,18 +7,34 @@ import {
   AlertTriangle,
   Sparkles,
   RefreshCw,
+  Database,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { CopilotInsight } from "@/hooks/useCopilotInsights";
 
 interface CopilotInsightsCardProps {
   insights: CopilotInsight[] | undefined;
   isLoading?: boolean;
   onRefresh?: () => void;
-  source?: "ai" | "fallback";
+  source?: "ai" | "cache" | "fallback";
+  confidence?: "alta" | "média";
 }
 
-export function CopilotInsightsCard({ insights, isLoading, onRefresh, source }: CopilotInsightsCardProps) {
+export function CopilotInsightsCard({ 
+  insights, 
+  isLoading, 
+  onRefresh, 
+  source,
+  confidence 
+}: CopilotInsightsCardProps) {
   const getInsightIcon = (type: CopilotInsight["type"]) => {
     switch (type) {
       case "positive":
@@ -52,18 +68,74 @@ export function CopilotInsightsCard({ insights, isLoading, onRefresh, source }: 
     }
   };
 
+  const getSourceBadge = () => {
+    switch (source) {
+      case "ai":
+        return (
+          <Badge variant="outline" className="text-xs gap-1">
+            <Sparkles className="h-3 w-3" />
+            IA
+          </Badge>
+        );
+      case "cache":
+        return (
+          <Badge variant="outline" className="text-xs gap-1">
+            <Database className="h-3 w-3" />
+            Cache
+          </Badge>
+        );
+      case "fallback":
+        return (
+          <Badge variant="secondary" className="text-xs">
+            Fallback
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const getConfidenceBadge = (insightConfidence?: "alta" | "média") => {
+    const conf = insightConfidence || confidence;
+    if (!conf) return null;
+
+    if (conf === "alta") {
+      return (
+        <Badge variant="outline" className="text-xs gap-1 border-chart-2/50 text-chart-2">
+          <ShieldCheck className="h-3 w-3" />
+          Confiança Alta
+        </Badge>
+      );
+    }
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger>
+            <Badge variant="outline" className="text-xs gap-1 border-chart-4/50 text-chart-4">
+              <ShieldAlert className="h-3 w-3" />
+              Confiança Média
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            <p className="text-xs">
+              Baseado em volume limitado de dados. Aguarde mais conversas para maior precisão.
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 flex-wrap">
             <Sparkles className="h-5 w-5 text-primary" />
             Insights Acionáveis
-            {source === "ai" && (
-              <Badge variant="outline" className="text-xs ml-2">
-                IA
-              </Badge>
-            )}
+            {getSourceBadge()}
+            {confidence && getConfidenceBadge()}
           </CardTitle>
           <CardDescription>
             Padrões identificados para melhorar a operação
@@ -104,11 +176,12 @@ export function CopilotInsightsCard({ insights, isLoading, onRefresh, source }: 
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5">{getInsightIcon(insight.type)}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-medium truncate">{insight.title}</span>
                       <Badge variant={getInsightBadgeVariant(insight.type)} className="text-xs">
                         {getInsightBadgeLabel(insight.type)}
                       </Badge>
+                      {insight.confidence && getConfidenceBadge(insight.confidence)}
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">
                       {insight.description}

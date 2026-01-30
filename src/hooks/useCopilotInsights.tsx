@@ -7,11 +7,13 @@ export interface CopilotInsight {
   title: string;
   description: string;
   action: string;
+  confidence?: "alta" | "média";
 }
 
 interface InsightsResponse {
   insights: CopilotInsight[];
-  source: "ai" | "fallback";
+  source: "ai" | "cache" | "fallback";
+  confidence: "alta" | "média";
   generatedAt: string;
 }
 
@@ -25,7 +27,7 @@ export function useCopilotInsights(
     queryKey: ["copilot-insights", healthScore?.health_score, comparison?.length, evolution?.length],
     queryFn: async (): Promise<InsightsResponse> => {
       if (!healthScore) {
-        return { insights: [], source: "fallback", generatedAt: new Date().toISOString() };
+        return { insights: [], source: "fallback", confidence: "média", generatedAt: new Date().toISOString() };
       }
 
       const { data, error } = await supabase.functions.invoke("generate-copilot-insights", {
