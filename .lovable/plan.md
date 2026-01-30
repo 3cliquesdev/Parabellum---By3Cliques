@@ -1,287 +1,208 @@
 
 
-# Plano: Sistema de Broadcast com Job Assíncrono + Progresso em Tempo Real
+# Plano: Validação Estrita para `ask_options` + Atualização do Super Prompt
 
 ## Problema Identificado
 
-A UI mostra "travou em 90%" porque:
-1. A Edge Function processa **264 conversas sequencialmente** (delay de 200ms cada = ~53s)
-2. A requisição HTTP fica aberta até completar tudo
-3. Se a função der timeout ou a conexão cair, parece "travado"
+O código atual no `process-chat-flow` tem matching numérico e fuzzy para `ask_options`, **mas quando nenhuma opção é encontrada**, ele:
+1. Deixa `path = undefined`
+2. Chama `findNextNode()` com path indefinido
+3. O sistema busca "qualquer edge" como fallback e pode avançar incorretamente
 
-## Solução: Arquitetura de Job Assíncrono
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           NOVO FLUXO                                        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  1. UI dispara broadcast                                                    │
-│     └──▶ Edge Function cria job na tabela 'broadcast_jobs'                  │
-│         └──▶ Retorna imediatamente com job_id                               │
-│                                                                             │
-│  2. Edge Function continua em background (waitUntil)                        │
-│     └──▶ Envia mensagens uma a uma                                          │
-│         └──▶ Atualiza 'broadcast_jobs.progress' a cada envio                │
-│                                                                             │
-│  3. UI escuta via Realtime                                                  │
-│     └──▶ Mostra progresso real: "150/264 enviados"                          │
-│         └──▶ Botão "Cancelar" disponível                                    │
-│                                                                             │
-│  4. Se usuário clicar Cancelar                                              │
-│     └──▶ Atualiza 'broadcast_jobs.status' = 'cancelled'                     │
-│         └──▶ Edge Function verifica status e para                           │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+**Resultado:** Cliente digita "Fff", fluxo avança para nó errado em vez de pedir que repita a resposta.
 
 ---
 
 ## Alterações a Implementar
 
-### 1. Nova Tabela: `broadcast_jobs`
+### 1. Edge Function: `process-chat-flow/index.ts`
 
-```sql
-CREATE TABLE broadcast_jobs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  created_by UUID REFERENCES auth.users(id),
-  
-  -- Configuração
-  message TEXT NOT NULL,
-  target_filter JSONB DEFAULT '{}',  -- Filtros usados (ai_queue, etc)
-  
-  -- Progresso
-  status TEXT DEFAULT 'pending',  -- pending, running, completed, cancelled, failed
-  total INT DEFAULT 0,
-  sent INT DEFAULT 0,
-  failed INT DEFAULT 0,
-  skipped INT DEFAULT 0,
-  
-  -- Resultados detalhados
-  results JSONB DEFAULT '[]',  -- Array de {conversation_id, phone, status, error}
-  
-  -- Controle
-  started_at TIMESTAMPTZ,
-  completed_at TIMESTAMPTZ,
-  cancelled_at TIMESTAMPTZ,
-  error_message TEXT
-);
-
--- Habilitar Realtime para progresso
-ALTER PUBLICATION supabase_realtime ADD TABLE broadcast_jobs;
-
--- RLS: apenas admin/manager pode ver/criar
-```
-
-### 2. Refatorar Edge Function: `broadcast-ai-queue`
-
-**Novo fluxo:**
+**Linhas 480-518** - Adicionar validação estrita com reenvio de opções:
 
 ```typescript
-// 1. Criar job imediatamente
-const { data: job } = await supabase
-  .from('broadcast_jobs')
-  .insert({ message, created_by: userId, status: 'pending' })
-  .select()
-  .single();
-
-// 2. Retornar job_id para UI (resposta rápida)
-const response = new Response(JSON.stringify({ 
-  job_id: job.id, 
-  message: 'Broadcast iniciado' 
-}));
-
-// 3. Continuar processamento em background
-EdgeRuntime.waitUntil(async () => {
-  // Atualizar status para 'running'
-  await supabase.from('broadcast_jobs')
-    .update({ status: 'running', started_at: new Date() })
-    .eq('id', job.id);
+if (currentNode.type === 'ask_options') {
+  const options = currentNode.data?.options || [];
+  let selectedOption = options.find((opt: any) => 
+    opt.label.toLowerCase() === userMessage.toLowerCase() ||
+    opt.value.toLowerCase() === userMessage.toLowerCase()
+  );
   
-  for (const conv of conversations) {
-    // Verificar cancelamento
-    const { data: currentJob } = await supabase
-      .from('broadcast_jobs')
-      .select('status')
-      .eq('id', job.id)
-      .single();
-    
-    if (currentJob.status === 'cancelled') {
-      break; // Parar processamento
-    }
-    
-    // Enviar mensagem
-    await sendMessage(conv);
-    
-    // Atualizar progresso (a cada 5 envios para não sobrecarregar)
-    if (sent % 5 === 0) {
-      await supabase.from('broadcast_jobs')
-        .update({ sent, failed })
-        .eq('id', job.id);
+  // 🔢 MATCHING NUMÉRICO: Permitir resposta "1", "2", "3"...
+  if (!selectedOption) {
+    const numericChoice = parseInt(userMessage.trim());
+    if (!isNaN(numericChoice) && numericChoice >= 1 && numericChoice <= options.length) {
+      selectedOption = options[numericChoice - 1];
+      console.log('[process-chat-flow] 🔢 Numeric choice matched:', numericChoice, '→', selectedOption?.label);
     }
   }
   
-  // Marcar como concluído
-  await supabase.from('broadcast_jobs')
-    .update({ status: 'completed', completed_at: new Date() })
-    .eq('id', job.id);
-});
-
-return response;
+  // 🔍 MATCHING FUZZY: Match parcial (desabilitado por padrão - muito permissivo)
+  // Removido para garantir validação estrita
+  
+  // ❌ VALIDAÇÃO ESTRITA: Se nenhuma opção válida, NÃO avança
+  if (!selectedOption) {
+    console.log('[process-chat-flow] ❌ Invalid option response:', userMessage);
+    
+    // Formatar opções para reenvio
+    const formattedOptions = options.map((opt: any, idx: number) => ({
+      label: opt.label,
+      value: opt.value,
+      id: opt.id
+    }));
+    
+    return new Response(
+      JSON.stringify({
+        useAI: false,
+        response: "❗ Não entendi sua resposta.\n\nPor favor, responda com o *número* ou *nome* de uma das opções:",
+        options: formattedOptions,
+        retry: true,
+        flowId: activeState.flow_id,
+        nodeId: currentNode.id, // Mantém no mesmo nó
+        invalidOption: true,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+  
+  // ✅ Opção válida - avança normalmente
+  path = selectedOption.id;
+  collectedData[currentNode.data?.save_as || 'choice'] = selectedOption.value;
+}
 ```
 
-### 3. Atualizar Dialog: `BroadcastAIQueueDialog`
+**Mudanças principais:**
+- Remover matching fuzzy (muito permissivo, causa confusão)
+- Adicionar validação estrita com mensagem clara
+- Retornar `retry: true` para manter no mesmo nó
+- Incluir `nodeId` e `invalidOption` para tracking
 
-**Novo comportamento:**
+### 2. Função Helper: `matchAskOption()`
 
-- Ao clicar "Enviar", recebe `job_id` imediatamente
-- Muda para modo "monitoramento" 
-- Escuta via Realtime: `supabase.channel('broadcast-progress').on('postgres_changes', ...)`
-- Mostra progresso real: "Enviando... 150/264 (57%)"
-- Botão "Cancelar" visível durante execução
-- Ao completar, mostra resultado final
-- Dialog pode ser fechado - o job continua no backend
+Adicionar função utilitária no início do arquivo para padronizar matching:
 
-### 4. Novo Componente: `BroadcastHistoryDialog`
+```typescript
+// Matcher estrito para ask_options
+function matchAskOption(
+  userInput: string,
+  options: Array<{ label: string; value?: string; id?: string }>
+): { label: string; value?: string; id?: string } | null {
+  const normalized = userInput.trim().toLowerCase();
 
-**Funcionalidades:**
+  // 1️⃣ Número (1, 2, 3…)
+  const index = parseInt(normalized, 10);
+  if (!isNaN(index) && options[index - 1]) {
+    return options[index - 1];
+  }
 
-- Lista broadcasts anteriores
-- Status de cada um (concluído, cancelado, em andamento)
-- Detalhes: quem criou, quando, quantos enviados/falhas
-- Opção de ver log detalhado (quais contatos receberam)
+  // 2️⃣ Texto exato da opção (label ou value)
+  const exactMatch = options.find(opt =>
+    opt.label.toLowerCase() === normalized ||
+    (opt.value && opt.value.toLowerCase() === normalized)
+  );
+  
+  return exactMatch || null;
+}
+```
 
-### 5. Atualizar Botão: `BroadcastAIQueueButton`
+### 3. Super Prompt v2.3: Adicionar Contrato de `ask_options`
 
-- Se houver broadcast em andamento, mostrar indicador
-- Adicionar ícone de histórico
+**Arquivo:** `src/docs/SUPER_PROMPT_v2.2.md` → renomear para `v2.3`
 
+**Nova seção a adicionar:**
+
+```markdown
 ---
 
-## Arquivos a Criar
+## 13. Contrato de `ask_options` (Validação Estrita)
 
-| Arquivo | Descrição |
+### Regras obrigatórias
+Nós do tipo `ask_options` exigem validação estrita de resposta.
+
+### Entradas válidas
+✅ Número correspondente à posição (1, 2, 3...)
+✅ Texto exato do label da opção
+✅ Texto exato do value da opção
+
+### Entradas inválidas
+❌ Texto parcial ou fuzzy
+❌ Números fora do range
+❌ Qualquer outra resposta
+
+### Comportamento para entrada inválida
+1. Fluxo **NÃO avança**
+2. Fluxo **NÃO transfere**
+3. Fluxo **NÃO chama IA**
+4. Sistema reenvia a pergunta com orientação clara:
+
+```
+❗ Não entendi sua resposta.
+
+Por favor, responda com o *número* ou *nome* de uma das opções:
+1️⃣ Pedidos
+2️⃣ Sistema
+3️⃣ Acesso
+4️⃣ Outros
+```
+
+### Exemplo de comportamento
+
+| Entrada | Resultado |
 |---------|-----------|
-| Migração SQL | Tabela `broadcast_jobs` com RLS |
-| `src/components/inbox/BroadcastHistoryDialog.tsx` | Histórico de broadcasts |
-| `src/hooks/useBroadcastProgress.ts` | Hook para Realtime do job |
+| `1` | ✅ Avança para opção 1 |
+| `Pedidos` | ✅ Avança para opção "Pedidos" |
+| `pedidos` | ✅ Avança (case-insensitive) |
+| `Fff` | ❌ Repete opções |
+| `5` (se só há 4 opções) | ❌ Repete opções |
+| `Ped` | ❌ Repete opções (sem fuzzy) |
+
+---
+```
+
+---
 
 ## Arquivos a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/broadcast-ai-queue/index.ts` | Arquitetura de job assíncrono com waitUntil |
-| `src/components/inbox/BroadcastAIQueueDialog.tsx` | Monitoramento Realtime + Cancelar |
-| `src/components/inbox/BroadcastAIQueueButton.tsx` | Indicador de andamento + link histórico |
+| `supabase/functions/process-chat-flow/index.ts` | Validação estrita + helper `matchAskOption()` |
+| `src/docs/SUPER_PROMPT_v2.2.md` | Atualizar para v2.3 com contrato de `ask_options` |
 
 ---
 
-## Detalhes Técnicos
+## Impacto
 
-### Progresso via Realtime
+### Antes
+| Entrada | Resultado |
+|---------|-----------|
+| `Fff` | ❌ Avança para nó errado (fallback) |
+| `5` (4 opções) | ❌ Comportamento indefinido |
+| `Ped` | ⚠️ Fuzzy match - pode acertar ou errar |
 
-```typescript
-// Hook: useBroadcastProgress
-const channel = supabase
-  .channel(`broadcast-${jobId}`)
-  .on('postgres_changes', {
-    event: 'UPDATE',
-    schema: 'public',
-    table: 'broadcast_jobs',
-    filter: `id=eq.${jobId}`
-  }, (payload) => {
-    setProgress(payload.new);
-  })
-  .subscribe();
-```
-
-### Cancelamento
-
-```typescript
-const cancelBroadcast = async (jobId: string) => {
-  await supabase
-    .from('broadcast_jobs')
-    .update({ 
-      status: 'cancelled', 
-      cancelled_at: new Date().toISOString() 
-    })
-    .eq('id', jobId);
-};
-```
-
-### RLS Policies
-
-```sql
--- Apenas admin/manager pode criar
-CREATE POLICY "Managers can create broadcasts" ON broadcast_jobs
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM user_roles 
-      WHERE user_id = auth.uid() 
-      AND role IN ('admin', 'manager', 'general_manager')
-    )
-  );
-
--- Apenas admin/manager pode ver
-CREATE POLICY "Managers can view broadcasts" ON broadcast_jobs
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM user_roles 
-      WHERE user_id = auth.uid() 
-      AND role IN ('admin', 'manager', 'general_manager')
-    )
-  );
-
--- Apenas admin/manager pode cancelar
-CREATE POLICY "Managers can cancel broadcasts" ON broadcast_jobs
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM user_roles 
-      WHERE user_id = auth.uid() 
-      AND role IN ('admin', 'manager', 'general_manager')
-    )
-  );
-```
-
----
-
-## Fluxo de Uso Atualizado
-
-1. Admin acessa `/inbox?filter=ai_queue`
-2. Clica "Broadcast (264)"
-3. Edita mensagem se quiser
-4. Clica "Enviar Broadcast"
-5. UI mostra: "Iniciando..." e recebe `job_id`
-6. UI muda para modo monitoramento:
-   - Progress bar real: "45/264 enviados (17%)"
-   - Botão "Cancelar" disponível
-7. Admin pode fechar o dialog - job continua
-8. Ao reabrir, vê status atual
-9. Ao completar: "264 enviados, 0 falhas"
-10. Pode acessar Histórico para ver broadcasts anteriores
-
----
-
-## Vantagens
-
-| Antes | Depois |
-|-------|--------|
-| Requere conexão aberta por ~1min | Resposta em menos de 1s |
-| Parece travado em 90% | Progresso real atualizado |
-| Não pode cancelar | Cancelamento a qualquer momento |
-| Sem histórico | Auditoria completa |
-| Timeout pode falhar silenciosamente | Status persistido no banco |
+### Depois
+| Entrada | Resultado |
+|---------|-----------|
+| `Fff` | ✅ Repete opções com orientação |
+| `5` (4 opções) | ✅ Repete opções |
+| `Ped` | ✅ Repete opções (sem fuzzy) |
 
 ---
 
 ## Segurança
 
-| Controle | Implementação |
-|----------|---------------|
-| Autorização | RLS: apenas admin/manager/general_manager |
-| Rate Limit | 200ms entre envios (mantido) |
-| Audit Trail | Tabela broadcast_jobs com criador e timestamps |
-| Cancelamento | Verificação a cada envio |
-| Duplicação | Job ID único, verificação de status |
+| Controle | Status |
+|----------|--------|
+| Fluxo não avança com entrada inválida | ✅ |
+| IA não é chamada com entrada inválida | ✅ |
+| Transferência não ocorre com entrada inválida | ✅ |
+| Cliente recebe feedback claro | ✅ |
+| Matching fuzzy removido (ambíguo) | ✅ |
+
+---
+
+## Compatibilidade
+
+A mudança é **backward compatible**:
+- Entradas numéricas (1, 2, 3) continuam funcionando
+- Entradas de texto exato continuam funcionando
+- Apenas fuzzy matching foi removido (era fonte de bugs)
 
