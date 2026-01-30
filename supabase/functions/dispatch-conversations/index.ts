@@ -84,12 +84,25 @@ serve(async (req) => {
       const jobStartTime = Date.now();
       
       try {
-        // Mark job as processing to prevent duplicate processing
-        await supabase
+        // D3.1: Lock atômico - só processa se conseguir marcar como processing
+        const { data: lockedJob, error: lockError } = await supabase
           .from('conversation_dispatch_jobs')
           .update({ status: 'processing', updated_at: new Date().toISOString() })
           .eq('id', job.id)
-          .eq('status', 'pending'); // Only if still pending
+          .eq('status', 'pending') // Só se ainda for pending
+          .select('*')
+          .maybeSingle();
+
+        if (lockError) {
+          console.error(`[dispatch-conversations] Lock error for job ${job.id}:`, lockError);
+          continue;
+        }
+
+        if (!lockedJob) {
+          // Outro worker já pegou este job - pular
+          console.log(`[dispatch-conversations] Job ${job.id} already picked by another worker`);
+          continue;
+        }
 
         // 2a. Verify conversation still needs assignment
         const { data: conversation, error: convError } = await supabase
@@ -133,18 +146,35 @@ serve(async (req) => {
 
         if (!eligibleAgent) {
           console.log(`[dispatch-conversations] No eligible agents for dept ${departmentId}`);
+          
+          // D4.1: Verificar se o departamento tem ALGUM agente configurado
+          const hasAnyAgents = await checkDepartmentHasAgents(supabase, departmentId);
+          
+          if (!hasAnyAgents) {
+            // Departamento não tem agentes configurados → manual_only
+            console.log(`[dispatch-conversations] Department ${departmentId} has no configured agents, marking manual_only`);
+            await supabase.from('conversations').update({
+              dispatch_status: 'manual_only'
+            }).eq('id', job.conversation_id);
+            
+            await markJobComplete(supabase, job.id, 'no_agents_configured');
+            results.push({ conversation_id: job.conversation_id, status: 'manual_only', reason: 'no_agents_configured' });
+            continue;
+          }
+          
+          // Tem agentes mas nenhum disponível → retry
           await handleJobFailure(supabase, job, 'no_agents_available');
           failed++;
           results.push({ conversation_id: job.conversation_id, status: 'retry', reason: 'no_agents_available' });
           continue;
         }
 
-        // 2c. Atomic assignment with lock
+        // 2c. Atomic assignment with lock - D3.3: NÃO mudar ai_mode automaticamente
         const { data: updateResult, error: updateError } = await supabase
           .from('conversations')
           .update({
             assigned_to: eligibleAgent.id,
-            ai_mode: 'copilot',
+            // ai_mode: Não muda - mantém 'waiting_human', agente decide via UI
             dispatch_status: 'assigned',
             last_dispatch_at: new Date().toISOString(),
           })
@@ -301,11 +331,12 @@ async function findEligibleAgent(
     capacityMap.set(tm.user_id, maxChats);
   }
 
-  // 5. Count active conversations per agent
+  // 5. Count active conversations per agent (D3.2: apenas carga humana)
   const { data: activeConvs } = await supabase
     .from('conversations')
     .select('assigned_to')
-    .eq('status', 'open')
+    .in('ai_mode', ['copilot', 'disabled']) // Carga humana apenas
+    .in('status', ['open', 'pending']) // Não fechadas
     .in('assigned_to', profiles.map((p: { id: string }) => p.id));
 
   const activeChatsMap = new Map<string, number>();
@@ -343,6 +374,59 @@ async function findEligibleAgent(
   });
 
   return agentsWithCapacity[0];
+}
+
+/**
+ * D4.1: Check if department has ANY agents configured (regardless of online status)
+ */
+// deno-lint-ignore no-explicit-any
+async function checkDepartmentHasAgents(
+  supabase: any,
+  departmentId: string
+): Promise<boolean> {
+  // Get eligible roles (same as findEligibleAgent)
+  const eligibleRoles = [
+    'support_agent', 'sales_rep', 'cs_manager', 
+    'support_manager', 'manager', 'general_manager', 'admin'
+  ];
+
+  // Get users with eligible roles
+  const { data: eligibleUserRoles } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .in('role', eligibleRoles);
+
+  if (!eligibleUserRoles?.length) {
+    return false;
+  }
+
+  const eligibleUserIds = eligibleUserRoles.map((r: { user_id: string }) => r.user_id);
+
+  // Check for parent department
+  const { data: department } = await supabase
+    .from('departments')
+    .select('id, parent_id')
+    .eq('id', departmentId)
+    .single();
+
+  const deptIds = [departmentId];
+  if (department?.parent_id) {
+    deptIds.push(department.parent_id);
+  }
+
+  // Count profiles in department with eligible roles (any status)
+  const { count, error } = await supabase
+    .from('profiles')
+    .select('id', { count: 'exact', head: true })
+    .in('department', deptIds)
+    .in('id', eligibleUserIds);
+
+  if (error) {
+    console.error('[checkDepartmentHasAgents] Error:', error);
+    return false;
+  }
+
+  return (count ?? 0) > 0;
 }
 
 /**
