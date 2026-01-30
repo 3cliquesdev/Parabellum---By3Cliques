@@ -24,6 +24,8 @@ export interface CopilotHealthScore {
   csat_component: number;
   usage_component: number;
   data_quality: 'alta' | 'média' | 'baixa';
+  // Versão da fórmula para rastreabilidade histórica
+  health_score_version: string;
 }
 
 export interface MonthlyEvolution {

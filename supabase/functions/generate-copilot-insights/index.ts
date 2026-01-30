@@ -268,6 +268,36 @@ ${JSON.stringify(kbGaps || [], null, 2)}
       console.log("[generate-copilot-insights] 💾 Cache salvo com sucesso");
     }
 
+    // 4. Salvar warnings na tabela de auditoria (copilot_insights_events)
+    const warnings = insights.filter((i: Insight) => i.type === 'warning');
+    
+    if (warnings.length > 0) {
+      console.log(`[generate-copilot-insights] 📋 Salvando ${warnings.length} warnings para auditoria`);
+      
+      const { error: auditError } = await supabaseClient
+        .from('copilot_insights_events')
+        .insert(
+          warnings.map((w: Insight) => ({
+            insight_type: w.type,
+            title: w.title,
+            description: w.description,
+            action: w.action,
+            confidence: w.confidence,
+            health_score_at_time: healthScore?.health_score,
+            total_conversations_at_time: totalConversations,
+            department_id: departmentId,
+            source: 'ai',
+            health_score_version: 'v1'
+          }))
+        );
+
+      if (auditError) {
+        console.warn("[generate-copilot-insights] ⚠️ Erro ao salvar auditoria:", auditError.message);
+      } else {
+        console.log("[generate-copilot-insights] ✅ Warnings salvos para auditoria");
+      }
+    }
+
     return new Response(
       JSON.stringify({ 
         insights,
