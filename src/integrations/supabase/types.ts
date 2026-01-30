@@ -583,27 +583,39 @@ export type Database = {
       }
       ai_suggestions: {
         Row: {
+          classification_label: string | null
+          confidence_score: number | null
           context: Json | null
           conversation_id: string
           created_at: string
           id: string
+          kb_gap_description: string | null
           suggested_reply: string
+          suggestion_type: string | null
           used: boolean
         }
         Insert: {
+          classification_label?: string | null
+          confidence_score?: number | null
           context?: Json | null
           conversation_id: string
           created_at?: string
           id?: string
+          kb_gap_description?: string | null
           suggested_reply: string
+          suggestion_type?: string | null
           used?: boolean
         }
         Update: {
+          classification_label?: string | null
+          confidence_score?: number | null
           context?: Json | null
           conversation_id?: string
           created_at?: string
           id?: string
+          kb_gap_description?: string | null
           suggested_reply?: string
+          suggestion_type?: string | null
           used?: boolean
         }
         Relationships: [

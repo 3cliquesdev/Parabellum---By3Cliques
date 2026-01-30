@@ -78,7 +78,36 @@ serve(async (req) => {
       });
     }
 
-    // Se não é autopilot, ignorar (inclui waiting_human, copilot, disabled)
+    // ============================================================
+    // 🆕 MODO COPILOT: Disparar generate-smart-reply para sugestões
+    // ============================================================
+    if (conversation?.ai_mode === 'copilot') {
+      console.log('[message-listener] 🧠 Modo Copilot - gerando sugestões em background...');
+      
+      // Disparar geração de sugestões em background (não bloqueia resposta)
+      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-smart-reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+        },
+        body: JSON.stringify({
+          conversationId: record.conversation_id,
+          maxMessages: 15,
+          includeKBSearch: true
+        })
+      }).catch(err => console.error('[message-listener] Erro ao gerar sugestões Copilot:', err));
+      
+      return new Response(JSON.stringify({ 
+        status: 'copilot_suggestion_triggered', 
+        conversation_id: record.conversation_id,
+        message: 'Sugestões sendo geradas em background' 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Se não é autopilot, ignorar (inclui waiting_human, disabled)
     if (conversation?.ai_mode !== 'autopilot') {
       console.log('[message-listener] Conversation not in autopilot mode:', conversation?.ai_mode);
       return new Response(JSON.stringify({ status: 'ignored', reason: 'not_autopilot', ai_mode: conversation?.ai_mode }), {

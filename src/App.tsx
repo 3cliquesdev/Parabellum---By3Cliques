@@ -54,6 +54,7 @@ const Support = lazy(() => import("./pages/Support"));
 const TicketDetail = lazy(() => import("./pages/TicketDetail"));
 const Knowledge = lazy(() => import("./pages/Knowledge"));
 const KnowledgeCuration = lazy(() => import("./pages/KnowledgeCuration"));
+const KBGapsDashboard = lazy(() => import("./pages/KBGapsDashboard"));
 const PublicTicketForm = lazy(() => import("./pages/PublicTicketForm"));
 const MyTickets = lazy(() => import("./pages/MyTickets"));
 const AIStudio = lazy(() => import("./pages/AIStudio"));
@@ -207,6 +208,7 @@ const App = () => {
               <Route path="/support/:ticketId" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><TicketDetail /></Layout></ProtectedRoute>} />
               <Route path="/knowledge" element={<ProtectedRoute requiredPermission="inbox.view_knowledge"><Layout><Knowledge /></Layout></ProtectedRoute>} />
               <Route path="/knowledge/curation" element={<ProtectedRoute requiredPermission="knowledge.manage_articles"><Layout><KnowledgeCuration /></Layout></ProtectedRoute>} />
+              <Route path="/knowledge/gaps" element={<ProtectedRoute requiredPermission="knowledge.manage_articles"><Layout><KBGapsDashboard /></Layout></ProtectedRoute>} />
               <Route path="/ai-studio/personas" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AIStudio /></Layout></ProtectedRoute>} />
               <Route path="/import-clients" element={<ProtectedRoute requiredPermission="contacts.import"><Layout><ImportClients /></Layout></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute requiredPermission="settings.view"><Layout><Settings /></Layout></ProtectedRoute>} />

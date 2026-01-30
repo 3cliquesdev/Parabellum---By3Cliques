@@ -6,9 +6,122 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============================================================
+// PROMPT OBSERVADOR - FASE 3: IA Silenciosa / Copiloto Interno
+// ============================================================
+const OBSERVER_PROMPT = `Você é um ANALISTA INTERNO DE ATENDIMENTO.
+Seu papel é OBSERVAR conversas e GERAR SUGESTÕES para agentes humanos.
+
+⚠️ REGRAS ABSOLUTAS (NUNCA QUEBRE):
+- Você NÃO fala com o cliente.
+- Você NÃO envia mensagens.
+- Você NÃO executa ações.
+- Você NÃO altera status de conversa.
+- Você NÃO cria tickets, fluxos ou decisões.
+- Você NÃO decide nada sozinho.
+
+Você APENAS:
+1. Sugere respostas para o agente
+2. Identifica lacunas de conhecimento (KB Gap)
+3. Classifica o tipo de problema para fins analíticos
+
+---
+
+## 📥 CONTEXTO DISPONÍVEL
+Você receberá:
+- Histórico recente da conversa
+- Base de Conhecimento APROVADA
+- Departamento da conversa
+- Status da conversa (aberta ou fechada)
+
+---
+
+## 🎯 OBJETIVOS
+
+### 1️⃣ SUGESTÃO DE RESPOSTA (reply)
+Se existir uma resposta clara baseada na KB ou padrão histórico:
+- Gere uma sugestão curta e profissional
+- Não use emojis
+- Não faça perguntas
+- Não ofereça opções
+- Não mencione processos internos
+
+Formato:
+"Explique objetivamente X conforme política Y."
+
+---
+
+### 2️⃣ DETECÇÃO DE LACUNA DE CONHECIMENTO (kb_gap)
+Se o problema:
+- Aparece no atendimento
+- NÃO existe na KB
+- Foi resolvido manualmente
+
+Então gere um alerta de lacuna:
+"Este tipo de problema não possui artigo na KB."
+
+⚠️ Não invente solução.
+
+---
+
+### 3️⃣ CLASSIFICAÇÃO INTERNA (classification)
+Classifique a conversa apenas para relatórios internos.
+
+Exemplos:
+- "Rastreio / Logística"
+- "Financeiro / Reembolso"
+- "Erro de Etiqueta"
+- "Configuração Inicial"
+- "Exceção Operacional"
+
+---
+
+## 📤 FORMATO DE RESPOSTA (OBRIGATÓRIO)
+Responda SEMPRE em JSON válido.
+
+{
+  "suggestions": [
+    {
+      "type": "reply | kb_gap | classification",
+      "content": "Texto da sugestão",
+      "confidence_score": 0-100
+    }
+  ]
+}
+
+---
+
+## 🛑 RESTRIÇÕES CRÍTICAS
+- Se NÃO houver sugestão útil → retorne lista vazia
+- NÃO repita informações já existentes na KB
+- NÃO gere múltiplas sugestões redundantes
+- NÃO seja prolixo
+- NÃO explique seu raciocínio
+- NÃO use linguagem conversacional
+
+---
+
+## 🧯 FALLBACK OBRIGATÓRIO
+Se não houver contribuição clara:
+
+{
+  "suggestions": []
+}`;
+
 interface SmartReplyRequest {
   conversationId: string;
   maxMessages?: number;
+  includeKBSearch?: boolean;
+}
+
+interface ObserverSuggestion {
+  type: 'reply' | 'kb_gap' | 'classification';
+  content: string;
+  confidence_score: number;
+}
+
+interface ObserverResponse {
+  suggestions: ObserverSuggestion[];
 }
 
 serve(async (req) => {
@@ -22,9 +135,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, maxMessages = 10 }: SmartReplyRequest = await req.json();
+    const { conversationId, maxMessages = 15, includeKBSearch = true }: SmartReplyRequest = await req.json();
     
-    console.log(`[generate-smart-reply] Gerando sugestão para conversa ${conversationId}...`);
+    console.log(`[generate-smart-reply] 🧠 Gerando sugestões Copilot para conversa ${conversationId}...`);
 
     // 1. Buscar conversa e verificar modo
     const { data: conversation, error: convError } = await supabaseClient
@@ -33,11 +146,12 @@ serve(async (req) => {
         ai_mode, 
         contact_id, 
         channel,
+        department,
+        status,
         contacts!inner(
           first_name, 
           last_name, 
-          company,
-          assigned_user:profiles!contacts_assigned_to_fkey(department)
+          company
         )
       `)
       .eq('id', conversationId)
@@ -50,8 +164,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const contact = conversation.contacts as any;
 
     // Só gera sugestão em modo copilot
     if (conversation.ai_mode !== 'copilot') {
@@ -81,66 +193,75 @@ serve(async (req) => {
       });
     }
 
-    // 3. Preparar contexto para IA (ordem cronológica)
-    const reversedMessages = [...messages].reverse();
-    const lastCustomerMessage = messages.find(m => m.sender_type === 'customer')?.content || '';
+    // 3. Buscar artigos relevantes da KB (busca semântica)
+    let kbContext = 'Nenhum artigo relevante encontrado.';
     
-    const conversationContext = reversedMessages.map(m => {
-      const role = m.sender_type === 'customer' ? 'Cliente' : 
-                   m.sender_type === 'agent' ? 'Atendente' : 'Sistema';
-      return `${role}: ${m.content}`;
-    }).join('\n');
-
-    const contactName = contact?.first_name 
-      ? `${contact.first_name} ${contact.last_name || ''}`.trim()
-      : 'Cliente';
-    
-    const contactCompany = contact?.company 
-      ? ` da empresa ${contact.company}`
-      : '';
-
-    console.log('[generate-smart-reply] Chamando Lovable AI para gerar sugestão...');
-
-    // 4. Buscar persona baseada em routing rules
-    const channel = conversation.channel || 'whatsapp';
-    const department = (conversation.contacts as any)?.assigned_user?.department || null;
-
-    const { data: routingRules } = await supabaseClient
-      .from('ai_routing_rules')
-      .select(`*, ai_personas!inner(*)`)
-      .eq('channel', channel)
-      .eq('is_active', true)
-      .order('priority', { ascending: false });
-
-    let persona = null;
-    if (routingRules && routingRules.length > 0) {
-      const matchedRule = routingRules.find(r => r.department === department) || 
-                          routingRules.find(r => r.department === null);
-      if (matchedRule) {
-        persona = matchedRule.ai_personas;
+    if (includeKBSearch) {
+      const lastCustomerMessage = messages.find(m => m.sender_type === 'customer')?.content || '';
+      
+      if (lastCustomerMessage) {
+        // Buscar artigos publicados relevantes
+        const { data: articles } = await supabaseClient
+          .from('knowledge_articles')
+          .select('title, content, category')
+          .eq('is_published', true)
+          .textSearch('content', lastCustomerMessage.split(' ').slice(0, 5).join(' | '))
+          .limit(5);
+        
+        if (articles && articles.length > 0) {
+          kbContext = articles.map(a => 
+            `- **${a.title}** (${a.category || 'Geral'}): ${a.content.substring(0, 200)}...`
+          ).join('\n');
+        }
       }
     }
 
-    const systemPrompt = persona 
-      ? `${persona.system_prompt}\n\n**Contexto:** Você está ajudando ${contactName}${contactCompany} em modo Copilot. Sugira respostas profissionais e úteis.`
-      : `Você é um assistente em modo Copilot ajudando ${contactName}${contactCompany}. Sugira respostas profissionais e úteis.`;
-
-    // 5. Chamar Lovable AI para gerar resposta sugerida
-    console.log('[generate-smart-reply] Chamando Lovable AI para gerar sugestão...');
+    // 4. Preparar contexto para IA (ordem cronológica)
+    const reversedMessages = [...messages].reverse();
     
+    const conversationContext = reversedMessages.map(m => {
+      const role = m.sender_type === 'customer' ? 'Cliente' : 
+                   m.sender_type === 'agent' ? 'Agente' : 'Sistema';
+      return `${role}: ${m.content}`;
+    }).join('\n');
+
+    const contact = conversation.contacts as any;
+    const contactName = contact?.first_name 
+      ? `${contact.first_name} ${contact.last_name || ''}`.trim()
+      : 'Cliente';
+
+    // 5. Buscar nome do departamento
+    let departmentName = 'Não definido';
+    if (conversation.department) {
+      const { data: dept } = await supabaseClient
+        .from('departments')
+        .select('name')
+        .eq('id', conversation.department)
+        .single();
+      if (dept) departmentName = dept.name;
+    }
+
+    console.log('[generate-smart-reply] Chamando Lovable AI com prompt Observador...');
+
+    // 6. Chamar Lovable AI com prompt estruturado
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY não configurada');
     }
 
-    const aiPayload: any = {
-      model: 'openai/gpt-5-mini',
-      max_completion_tokens: persona?.max_tokens || 300,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Contexto da conversa:\n${conversationContext}\n\nGere uma resposta sugerida profissional para o atendente usar.` }
-      ],
-    };
+    const userPrompt = `## Contexto da Conversa (${contactName}):
+${conversationContext}
+
+## Base de Conhecimento Disponível:
+${kbContext}
+
+## Departamento:
+${departmentName}
+
+## Status:
+${conversation.status}
+
+Analise e gere suas sugestões em JSON.`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -148,7 +269,15 @@ serve(async (req) => {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(aiPayload),
+      body: JSON.stringify({
+        model: 'openai/gpt-5-mini',
+        max_completion_tokens: 500,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: 'system', content: OBSERVER_PROMPT },
+          { role: 'user', content: userPrompt }
+        ],
+      }),
     });
 
     if (!aiResponse.ok) {
@@ -158,42 +287,81 @@ serve(async (req) => {
     }
 
     const aiData = await aiResponse.json();
-    const suggestedReply = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui gerar uma sugestão.';
+    const rawContent = aiData.choices?.[0]?.message?.content || '{"suggestions":[]}';
+    
+    console.log('[generate-smart-reply] Resposta bruta da IA:', rawContent.substring(0, 200));
 
-    console.log(`[generate-smart-reply] Sugestão gerada (${suggestedReply.length} chars)`);
-
-    // 6. Salvar sugestão na tabela ai_suggestions
-    const { data: savedSuggestion, error: saveError } = await supabaseClient
-      .from('ai_suggestions')
-      .insert({
-        conversation_id: conversationId,
-        suggested_reply: suggestedReply,
-        context: {
-          last_message: lastCustomerMessage,
-          contact_name: contactName,
-          messages_count: messages.length,
-          generated_at: new Date().toISOString()
-        },
-        used: false
-      })
-      .select()
-      .single();
-
-    if (saveError) {
-      console.error('[generate-smart-reply] Erro ao salvar sugestão:', saveError);
-      return new Response(JSON.stringify({ 
-        error: 'Erro ao salvar sugestão' 
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // 7. Parsear e validar resposta JSON
+    let observerResponse: ObserverResponse;
+    try {
+      observerResponse = JSON.parse(rawContent);
+      if (!Array.isArray(observerResponse.suggestions)) {
+        observerResponse = { suggestions: [] };
+      }
+    } catch (parseError) {
+      console.error('[generate-smart-reply] Erro ao parsear JSON:', parseError);
+      observerResponse = { suggestions: [] };
     }
 
-    console.log('[generate-smart-reply] ✅ Sugestão salva com sucesso!');
+    console.log(`[generate-smart-reply] Sugestões geradas: ${observerResponse.suggestions.length}`);
+
+    // 8. Salvar sugestões na tabela ai_suggestions
+    const savedSuggestions = [];
+    
+    for (const suggestion of observerResponse.suggestions) {
+      // Validar tipo
+      if (!['reply', 'kb_gap', 'classification'].includes(suggestion.type)) {
+        console.warn('[generate-smart-reply] Tipo inválido ignorado:', suggestion.type);
+        continue;
+      }
+
+      // Validar confidence
+      const confidence = Math.min(100, Math.max(0, suggestion.confidence_score || 0));
+
+      const insertData: any = {
+        conversation_id: conversationId,
+        suggestion_type: suggestion.type,
+        confidence_score: confidence,
+        used: false,
+        context: {
+          contact_name: contactName,
+          messages_count: messages.length,
+          department: departmentName,
+          generated_at: new Date().toISOString()
+        }
+      };
+
+      // Mapear campos específicos por tipo
+      if (suggestion.type === 'reply') {
+        insertData.suggested_reply = suggestion.content;
+      } else if (suggestion.type === 'kb_gap') {
+        insertData.kb_gap_description = suggestion.content;
+        insertData.suggested_reply = ''; // Campo obrigatório
+      } else if (suggestion.type === 'classification') {
+        insertData.classification_label = suggestion.content;
+        insertData.suggested_reply = ''; // Campo obrigatório
+      }
+
+      const { data: savedSuggestion, error: saveError } = await supabaseClient
+        .from('ai_suggestions')
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (saveError) {
+        console.error('[generate-smart-reply] Erro ao salvar sugestão:', saveError);
+      } else {
+        savedSuggestions.push(savedSuggestion);
+        console.log(`[generate-smart-reply] ✅ Sugestão ${suggestion.type} salva: ${savedSuggestion.id}`);
+      }
+    }
+
+    console.log(`[generate-smart-reply] ✅ ${savedSuggestions.length} sugestões salvas com sucesso!`);
 
     return new Response(JSON.stringify({ 
       status: 'success',
-      suggestion: savedSuggestion
+      suggestions_count: savedSuggestions.length,
+      suggestions: savedSuggestions
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
