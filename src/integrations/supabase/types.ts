@@ -1967,6 +1967,59 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_insights_events: {
+        Row: {
+          action: string | null
+          confidence: string | null
+          created_at: string | null
+          department_id: string | null
+          description: string | null
+          health_score_at_time: number | null
+          health_score_version: string | null
+          id: string
+          insight_type: string
+          source: string | null
+          title: string
+          total_conversations_at_time: number | null
+        }
+        Insert: {
+          action?: string | null
+          confidence?: string | null
+          created_at?: string | null
+          department_id?: string | null
+          description?: string | null
+          health_score_at_time?: number | null
+          health_score_version?: string | null
+          id?: string
+          insight_type: string
+          source?: string | null
+          title: string
+          total_conversations_at_time?: number | null
+        }
+        Update: {
+          action?: string | null
+          confidence?: string | null
+          created_at?: string | null
+          department_id?: string | null
+          description?: string | null
+          health_score_at_time?: number | null
+          health_score_version?: string | null
+          id?: string
+          insight_type?: string
+          source?: string | null
+          title?: string
+          total_conversations_at_time?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_insights_events_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cs_goals: {
         Row: {
           activation_count: number
@@ -8333,8 +8386,8 @@ export type Database = {
       get_copilot_health_score: {
         Args: {
           p_department_id?: string
-          p_end_date?: string
-          p_start_date?: string
+          p_end_date: string
+          p_start_date: string
         }
         Returns: {
           adoption_component: number
@@ -8348,6 +8401,7 @@ export type Database = {
           csat_improvement_percent: number
           data_quality: string
           health_score: number
+          health_score_version: string
           kb_component: number
           kb_coverage_rate: number
           kb_gap_count: number
