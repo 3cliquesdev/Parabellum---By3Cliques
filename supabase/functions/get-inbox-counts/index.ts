@@ -34,6 +34,16 @@ type InboxCounts = {
   byTag: Array<{ id: string; name: string; color: string | null; count: number }>;
 };
 
+type CacheEntry = {
+  expiresAt: number;
+  value: { counts: InboxCounts; role: AppRole };
+};
+
+// Small in-memory cache to absorb UI burst traffic and prevent cold-start thrash.
+// Keyed by userId + role (role affects visibility rules).
+const CACHE_TTL_MS = 4_000;
+const cache = new Map<string, CacheEntry>();
+
 function isManagementRole(role: AppRole | null | undefined) {
   return (
     role === "admin" ||
@@ -51,6 +61,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const startedAt = Date.now();
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -92,19 +104,33 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Cache hit (after role is known, since visibility depends on role).
+    const cacheKey = `${userId}:${role}`;
+    const now = Date.now();
+    const cached = cache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return new Response(JSON.stringify({ ...cached.value, cached: true }), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          "X-Counts-Cache": "hit",
+        },
+      });
+    }
+
     // Base filters: for non-management roles we restrict by department rules similar to the UI.
     // For management roles, return global counts.
     const isManager = isManagementRole(role);
 
-    // Departments meta
-    const { data: deptsData } = await supabaseAdmin
-      .from("departments")
-      .select("id, name, color")
-      .eq("is_active", true);
-    const departments = (deptsData || []) as Array<{ id: string; name: string; color: string | null }>;
+    // Meta (run in parallel)
+    const [{ data: deptsData }, { data: tagsData }] = await Promise.all([
+      supabaseAdmin.from("departments").select("id, name, color").eq("is_active", true),
+      supabaseAdmin.from("tags").select("id, name, color"),
+    ]);
 
-    // Tags meta
-    const { data: tagsData } = await supabaseAdmin.from("tags").select("id, name, color");
+    const departments = (deptsData || []) as Array<{ id: string; name: string; color: string | null }>;
     const tags = (tagsData || []) as Array<{ id: string; name: string; color: string | null }>;
 
     // Helper to apply non-management visibility constraints.
@@ -147,37 +173,44 @@ Deno.serve(async (req) => {
 
     // -------- Core counts from conversations (true source of "total")
     // FIX: Apply visibility AFTER .select() so .or() method is available
-    const { count: totalActive = 0 } = await applyVisibility(
-      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
-    ).neq("status", "closed");
+    const [
+      totalActiveRes,
+      totalClosedRes,
+      mineRes,
+      aiQueueRes,
+      humanQueueRes,
+      unassignedRes,
+    ] = await Promise.all([
+      applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })).neq(
+        "status",
+        "closed"
+      ),
+      applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })).eq(
+        "status",
+        "closed"
+      ),
+      supabaseAdmin
+        .from("conversations")
+        .select("id", { count: "exact", head: true })
+        .neq("status", "closed")
+        .eq("assigned_to", userId),
+      applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
+        .neq("status", "closed")
+        .eq("ai_mode", "autopilot"),
+      applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
+        .neq("status", "closed")
+        .neq("ai_mode", "autopilot"),
+      applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
+        .neq("status", "closed")
+        .is("assigned_to", null),
+    ]);
 
-    const { count: totalClosed = 0 } = await applyVisibility(
-      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
-    ).eq("status", "closed");
-
-    const { count: mine = 0 } = await supabaseAdmin
-      .from("conversations")
-      .select("id", { count: "exact", head: true })
-      .neq("status", "closed")
-      .eq("assigned_to", userId);
-
-    const { count: aiQueue = 0 } = await applyVisibility(
-      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
-    )
-      .neq("status", "closed")
-      .eq("ai_mode", "autopilot");
-
-    const { count: humanQueue = 0 } = await applyVisibility(
-      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
-    )
-      .neq("status", "closed")
-      .neq("ai_mode", "autopilot");
-
-    const { count: unassigned = 0 } = await applyVisibility(
-      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
-    )
-      .neq("status", "closed")
-      .is("assigned_to", null);
+    const totalActive = totalActiveRes.count ?? 0;
+    const totalClosed = totalClosedRes.count ?? 0;
+    const mine = mineRes.count ?? 0;
+    const aiQueue = aiQueueRes.count ?? 0;
+    const humanQueue = humanQueueRes.count ?? 0;
+    const unassigned = unassignedRes.count ?? 0;
 
     // -------- Derived counts from inbox_view (unread / sla / last_sender)
     const { data: inboxRows, error: inboxErr } = await applyVisibility(
@@ -247,9 +280,20 @@ Deno.serve(async (req) => {
       byTag,
     };
 
-    return new Response(JSON.stringify({ counts, role }), {
+    // Store in cache
+    cache.set(cacheKey, {
+      expiresAt: Date.now() + CACHE_TTL_MS,
+      value: { counts, role },
+    });
+
+    return new Response(JSON.stringify({ counts, role, cached: false, tookMs: Date.now() - startedAt }), {
       status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        "X-Counts-Cache": "miss",
+      },
     });
   } catch (error) {
     console.error("[get-inbox-counts] Error:", error);
