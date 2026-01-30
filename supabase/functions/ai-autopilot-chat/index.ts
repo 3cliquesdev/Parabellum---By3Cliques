@@ -2572,241 +2572,11 @@ Como posso ajudar você hoje?`;
     }
     
     // ============================================================
-    // 🎯 TRIAGEM INTELIGENTE: Só executa se Chat Flow não processou
+    // 🎯 TRIAGEM VIA MASTER FLOW: Lógica legada REMOVIDA
+    // A triagem agora é feita 100% pelo Master Flow visual
+    // que foi processado anteriormente via process-chat-flow
     // ============================================================
-    const conversationMetadataForMenu = conversation.customer_metadata || {};
-    const isAwaitingMenuChoice = conversationMetadataForMenu.awaiting_menu_choice === true;
-    
-    // 🆕 FASE 1: Contador de lembretes para evitar loop infinito
-    const menuReminderCount = (conversationMetadataForMenu.menu_reminder_count as number) || 0;
-    const MAX_MENU_REMINDERS = 3; // Máximo de lembretes antes de pular triagem
-    
-    // 🆕 FASE 2: Detectar se mensagem tem intenção clara (pular triagem)
-    const hasSpecificIntent = customerMessage.length > 30 || 
-      /promo[çc][ãa]o|oferta|desconto|pre[çc]o|quanto custa|comprar|pre.?carnaval|email|indicac|parceria|revenda|orcamento|orçamento|catalogo|catálogo|tabela|atacado|representante/i.test(customerMessage);
-    
-    // 🆕 FASE 3: Verificar se é referência contextual (veio de campanha/email)
-    const isFromCampaign = /vim (pelo|por|do) (email|link|site|campanha|instagram|face|whats)|indicac|parceria|representante/i.test(customerMessage);
-    
-    // Regex para detectar escolha do menu
-    const menuChoiceRegex = /^(1|2|pedido[s]?|sistema|suporte\s*(pedido|sistema)?)[\s!.]*$/i;
-    const menuChoice = customerMessage.trim().match(menuChoiceRegex);
-    
-    // IDs dos departamentos de triagem
-    const DEPT_SUPORTE_PEDIDOS = '2dd0ee5c-fd20-44be-94ad-f83f1be1c4e9';
-    const DEPT_SUPORTE_SISTEMA = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4';
-    const DEPT_COMERCIAL = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-    
-    // Se cliente IDENTIFICADO está escolhendo departamento do menu
-    if (menuChoice && contact.email && isAwaitingMenuChoice) {
-      const choice = menuChoice[1].toLowerCase();
-      const isPedidos = choice === '1' || choice.includes('pedido');
-      const isSistema = choice === '2' || choice.includes('sistema');
-      
-      if (isPedidos || isSistema) {
-        const targetDeptId = isPedidos ? DEPT_SUPORTE_PEDIDOS : DEPT_SUPORTE_SISTEMA;
-        const targetDeptName = isPedidos ? 'Suporte Pedidos' : 'Suporte Sistema';
-        
-        console.log(`[ai-autopilot-chat] 🎯 TRIAGEM: Cliente escolheu ${targetDeptName}`, {
-          choice: choice,
-          department_id: targetDeptId,
-          contact_email: contact.email
-        });
-        
-        // Atualizar departamento da conversa e limpar flag de menu
-        await supabaseClient.from('conversations')
-          .update({ 
-            department: targetDeptId,
-            customer_metadata: {
-              ...conversationMetadataForMenu,
-              awaiting_menu_choice: false,
-              department_selected: targetDeptName,
-              department_selected_at: new Date().toISOString()
-            }
-          })
-          .eq('id', conversationId);
-        
-        // Buscar template de confirmação
-        const templateKey = isPedidos ? 'direcionado_suporte_pedidos' : 'direcionado_suporte_sistema';
-        let confirmMessage = await getMessageTemplate(supabaseClient, templateKey, {});
-        
-        if (!confirmMessage) {
-          confirmMessage = isPedidos 
-            ? 'Entendi! Estou te direcionando para o time de **Suporte de Pedidos**. 📦\n\nComo posso ajudar com seu pedido?'
-            : 'Entendi! Estou te direcionando para o time de **Suporte Técnico**. 💻\n\nQual é sua dúvida ou problema?';
-        }
-        
-        // Salvar mensagem de confirmação
-        const { data: savedMsg } = await supabaseClient.from('messages').insert({
-          conversation_id: conversationId,
-          content: confirmMessage,
-          sender_type: 'user',
-          is_ai_generated: true,
-          channel: responseChannel
-        }).select().single();
-        
-        // Atualizar last_message_at
-        await supabaseClient.from('conversations')
-          .update({ last_message_at: new Date().toISOString() })
-          .eq('id', conversationId);
-        
-        // Enviar via WhatsApp se necessário (Meta ou Evolution)
-        if (responseChannel === 'whatsapp' && contact?.phone) {
-          const whatsappResult = await getWhatsAppInstanceForConversation(
-            supabaseClient, 
-            conversationId, 
-            conversation.whatsapp_instance_id,
-            conversation
-          );
-          
-          if (whatsappResult) {
-            await sendWhatsAppMessage(
-              supabaseClient,
-              whatsappResult,
-              contact.phone,
-              confirmMessage,
-              conversationId,
-              contact.whatsapp_id
-            );
-          }
-        }
-        
-        // Registrar nota interna
-        await supabaseClient.from('interactions').insert({
-          customer_id: contact.id,
-          type: 'internal_note',
-          content: `🎯 **Triagem Inteligente** - Cliente escolheu: ${targetDeptName}`,
-          channel: responseChannel
-        });
-        
-        // RETURN EARLY - Triagem concluída
-        return new Response(JSON.stringify({
-          status: 'triage_complete',
-          message: confirmMessage,
-          department: targetDeptName,
-          department_id: targetDeptId,
-          messageId: savedMsg?.id,
-          debug: {
-            reason: 'menu_choice_processed',
-            choice: choice,
-            bypassed_ai: true
-          }
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-    }
-    
-    // Se cliente está aguardando escolha mas enviou outra coisa
-    if (isAwaitingMenuChoice && !menuChoice && contact.email) {
-      
-      // 🆕 ESCAPE 1: Se mensagem tem intenção clara ou veio de campanha, pular triagem
-      if (hasSpecificIntent || isFromCampaign) {
-        console.log('[ai-autopilot-chat] 🎯 BYPASS TRIAGEM: Detectada intenção específica', {
-          hasSpecificIntent,
-          isFromCampaign,
-          messagePreview: customerMessage.substring(0, 50)
-        });
-        
-        // Limpar flag e continuar processamento normal
-        await supabaseClient.from('conversations')
-          .update({
-            customer_metadata: {
-              ...conversationMetadataForMenu,
-              awaiting_menu_choice: false,
-              menu_reminder_count: 0,
-              triage_bypassed: true,
-              triage_bypass_reason: hasSpecificIntent ? 'specific_intent' : 'campaign_reference'
-            }
-          })
-          .eq('id', conversationId);
-        
-        // NÃO fazer return - deixar continuar para processamento da IA
-        console.log('[ai-autopilot-chat] 🎯 Continuando para processamento da IA...');
-      }
-      // 🆕 ESCAPE 2: Se já enviou muitos lembretes, parar e processar com IA
-      else if (menuReminderCount >= MAX_MENU_REMINDERS) {
-        console.log('[ai-autopilot-chat] 🎯 BYPASS TRIAGEM: Limite de lembretes atingido (' + menuReminderCount + '/' + MAX_MENU_REMINDERS + ')');
-        
-        // Limpar flag e encaminhar para IA
-        await supabaseClient.from('conversations')
-          .update({
-            customer_metadata: {
-              ...conversationMetadataForMenu,
-              awaiting_menu_choice: false,
-              menu_reminder_count: 0,
-              triage_bypassed: true,
-              triage_bypass_reason: 'max_reminders_exceeded'
-            }
-          })
-          .eq('id', conversationId);
-        
-        // NÃO fazer return - deixar continuar para processamento da IA
-        console.log('[ai-autopilot-chat] 🎯 Continuando para processamento da IA após limite de lembretes...');
-      }
-      // COMPORTAMENTO ORIGINAL: Enviar lembrete (com contador)
-      else {
-        // Incrementar contador de lembretes
-        await supabaseClient.from('conversations')
-          .update({
-            customer_metadata: {
-              ...conversationMetadataForMenu,
-              menu_reminder_count: menuReminderCount + 1
-            }
-          })
-          .eq('id', conversationId);
-        
-        const reminderTemplate = await getMessageTemplate(supabaseClient, 'aguardando_escolha_departamento', {});
-        const reminderMessage = reminderTemplate || 'Por favor, escolha uma das opções:\n\n**1** - Pedidos (entregas, rastreio, trocas)\n**2** - Sistema (acesso, dúvidas técnicas)';
-        
-        console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Lembrete ' + (menuReminderCount + 1) + '/' + MAX_MENU_REMINDERS);
-        
-        // Salvar lembrete
-        const { data: savedMsg } = await supabaseClient.from('messages').insert({
-          conversation_id: conversationId,
-          content: reminderMessage,
-          sender_type: 'user',
-          is_ai_generated: true,
-          channel: responseChannel
-        }).select().single();
-        
-        // Enviar via WhatsApp se necessário (Meta ou Evolution)
-        if (responseChannel === 'whatsapp' && contact?.phone) {
-          const whatsappResult = await getWhatsAppInstanceForConversation(
-            supabaseClient, 
-            conversationId, 
-            conversation.whatsapp_instance_id,
-            conversation
-          );
-          
-          if (whatsappResult) {
-            await sendWhatsAppMessage(
-              supabaseClient,
-              whatsappResult,
-              contact.phone,
-              reminderMessage,
-              conversationId,
-              contact.whatsapp_id
-            );
-          }
-        }
-        
-        // RETURN EARLY - Lembrete enviado
-        return new Response(JSON.stringify({
-          status: 'awaiting_menu_choice',
-          message: reminderMessage,
-          reminder_count: menuReminderCount + 1,
-          max_reminders: MAX_MENU_REMINDERS,
-          messageId: savedMsg?.id,
-          debug: {
-            reason: 'menu_reminder_sent',
-            bypassed_ai: true
-          }
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-    }
+    console.log('[ai-autopilot-chat] ✅ Triagem legada desativada - Master Flow é a única fonte de triagem');
     
     // ============================================================
     // 🔍 DETECÇÃO AUTOMÁTICA DE EMAIL NA MENSAGEM
@@ -2877,7 +2647,6 @@ Como posso ajudar você hoje?`;
                   contact_id: existingCustomerId,
                   customer_metadata: {
                     ...(conversation.customer_metadata || {}),
-                    awaiting_menu_choice: true,
                     email_verified_at: new Date().toISOString(),
                     original_contact_id: contact.id, // Guardar referência do lead original
                     rebind_reason: 'email_matched_existing_customer'
@@ -2897,18 +2666,19 @@ Como posso ajudar você hoje?`;
                 })
                 .eq('id', contact.id);
               
-              // Marcar que estamos aguardando escolha do menu
+              // Email verificado - continuar processamento normal (Master Flow assume)
               await supabaseClient.from('conversations')
                 .update({
                   customer_metadata: {
                     ...(conversation.customer_metadata || {}),
-                    awaiting_menu_choice: true,
                     email_verified_at: new Date().toISOString()
                   }
                 })
                 .eq('id', conversationId);
             }
             
+            // 🆕 NÃO retornar mensagem de menu legado - deixar Master Flow assumir
+            console.log('[ai-autopilot-chat] ✅ Email verificado - Master Flow assumirá a triagem');
             autoResponse = foundMessage;
           } else if (!verifyResult.found) {
             // 🎯 TRIAGEM: Email não encontrado = Lead → Rotear para Comercial
