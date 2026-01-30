@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RAGSourcesSection } from "./panels/RAGSourcesSection";
 import { SmartCollectionSection } from "./panels/SmartCollectionSection";
+import { BehaviorControlsSection } from "./panels/BehaviorControlsSection";
 
 interface AIResponsePropertiesPanelProps {
   selectedNode: Node;
@@ -37,6 +38,14 @@ export function AIResponsePropertiesPanel({
 
   return (
     <div className="space-y-4">
+      {/* 🆕 FASE 1: Seção de Controles de Comportamento (PRIMEIRO - mais importante) */}
+      <BehaviorControlsSection
+        selectedNode={selectedNode}
+        updateNodeData={updateNodeData}
+      />
+
+      <Separator />
+
       {/* Seção: Persona */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
@@ -87,7 +96,7 @@ export function AIResponsePropertiesPanel({
 
       <Separator />
 
-      {/* Seção: Fontes de Dados RAG (NOVO) */}
+      {/* Seção: Fontes de Dados RAG */}
       <RAGSourcesSection
         selectedNode={selectedNode}
         updateNodeData={updateNodeData}
@@ -95,7 +104,7 @@ export function AIResponsePropertiesPanel({
 
       <Separator />
 
-      {/* Seção: Coleta Inteligente (NOVO) */}
+      {/* Seção: Coleta Inteligente */}
       <SmartCollectionSection
         selectedNode={selectedNode}
         updateNodeData={updateNodeData}
@@ -138,7 +147,7 @@ export function AIResponsePropertiesPanel({
           className="resize-none text-sm"
         />
         <p className="text-[10px] text-muted-foreground">
-          Exibida quando a IA não encontra resposta na KB selecionada
+          Exibida quando a IA não encontra resposta ou viola restrições
         </p>
       </div>
     </div>

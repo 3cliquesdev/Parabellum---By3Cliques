@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { NodeProps } from "reactflow";
-import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2 } from "lucide-react";
+import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target } from "lucide-react";
 import { ChatFlowNodeWrapper } from "../ChatFlowNodeWrapper";
 import { Badge } from "@/components/ui/badge";
 
@@ -13,18 +13,27 @@ interface AIResponseNodeData {
   persona_id?: string;
   persona_name?: string;
   kb_categories?: string[];
-  // Novos campos para fontes de dados expandidas
+  // Fontes de dados expandidas
   use_customer_data?: boolean;
   use_order_history?: boolean;
   use_tracking?: boolean;
   // Coleta inteligente
   smart_collection_enabled?: boolean;
   smart_collection_fields?: string[];
+  // 🆕 FASE 1: Controles de Comportamento Anti-Alucinação
+  objective?: string;
+  max_sentences?: number;
+  forbid_questions?: boolean;
+  forbid_options?: boolean;
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
   // Subtitle dinâmico baseado nas configurações
   const getSubtitle = () => {
+    // Priorizar objetivo se definido
+    if (data.objective) {
+      return `🎯 ${data.objective.slice(0, 35)}${data.objective.length > 35 ? '...' : ''}`;
+    }
     if (data.persona_name) {
       return `Persona: ${data.persona_name}`;
     }
@@ -34,12 +43,11 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
     return "Usar IA para responder";
   };
 
-  // Contar fontes ativas
-  const activeSources = [
-    data.use_knowledge_base !== false,
-    data.use_customer_data,
-    data.use_tracking,
-  ].filter(Boolean).length;
+  // Verificar restrições ativas
+  const forbidQuestions = data.forbid_questions ?? true;
+  const forbidOptions = data.forbid_options ?? true;
+  const maxSentences = data.max_sentences ?? 3;
+  const hasRestrictions = forbidQuestions || forbidOptions;
 
   return (
     <ChatFlowNodeWrapper
@@ -50,6 +58,22 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
       selected={selected}
     >
       <div className="flex items-center gap-1 mt-1 flex-wrap">
+        {/* 🆕 Badge de Objetivo definido */}
+        {data.objective && (
+          <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-purple-500/90">
+            <Target className="h-2.5 w-2.5" />
+            Objetivo
+          </Badge>
+        )}
+
+        {/* 🆕 Badge de Restrições ativas */}
+        {hasRestrictions && (
+          <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 gap-0.5">
+            <Shield className="h-2.5 w-2.5" />
+            {maxSentences}f
+          </Badge>
+        )}
+        
         {/* Badge de Persona selecionada */}
         {data.persona_name && (
           <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-pink-500/90">

@@ -616,6 +616,11 @@ serve(async (req) => {
             personaName: nextNode.data?.persona_name || null,
             kbCategories: nextNode.data?.kb_categories || null,
             fallbackMessage: nextNode.data?.fallback_message || null,
+            // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
+            objective: nextNode.data?.objective || null,
+            maxSentences: nextNode.data?.max_sentences ?? 3,
+            forbidQuestions: nextNode.data?.forbid_questions ?? true,
+            forbidOptions: nextNode.data?.forbid_options ?? true,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -895,6 +900,11 @@ serve(async (req) => {
               kbCategories: startNode.data?.kb_categories || null,
               contextPrompt: startNode.data?.context_prompt || null,
               fallbackMessage: startNode.data?.fallback_message || null,
+              // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
+              objective: startNode.data?.objective || null,
+              maxSentences: startNode.data?.max_sentences ?? 3,
+              forbidQuestions: startNode.data?.forbid_questions ?? true,
+              forbidOptions: startNode.data?.forbid_options ?? true,
               debug: {
                 source: 'master_flow',
                 startNodeType: startNode.type,
@@ -1070,6 +1080,11 @@ serve(async (req) => {
           kbCategories: startNode.data?.kb_categories || null,
           contextPrompt: startNode.data?.context_prompt || null,
           fallbackMessage: startNode.data?.fallback_message || null,
+          // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
+          objective: startNode.data?.objective || null,
+          maxSentences: startNode.data?.max_sentences ?? 3,
+          forbidQuestions: startNode.data?.forbid_questions ?? true,
+          forbidOptions: startNode.data?.forbid_options ?? true,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

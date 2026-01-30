@@ -1017,6 +1017,77 @@ interface FlowContext {
   kbCategories?: string[];
   contextPrompt?: string;
   fallbackMessage?: string;
+  // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
+  objective?: string;
+  maxSentences?: number;
+  forbidQuestions?: boolean;
+  forbidOptions?: boolean;
+}
+
+// 🆕 FASE 1: Função para gerar prompt RESTRITIVO baseado no flow_context
+// Substitui o prompt extenso quando flow_context tem controles ativos
+function generateRestrictedPrompt(flowContext: FlowContext, contactName: string, contactStatus: string): string {
+  const maxSentences = flowContext.maxSentences ?? 3;
+  const objective = flowContext.objective || 'Responder a dúvida do cliente';
+  const forbidQuestions = flowContext.forbidQuestions ?? true;
+  const forbidOptions = flowContext.forbidOptions ?? true;
+  
+  let restrictions = `Você é um assistente corporativo.
+Responda SOMENTE ao seguinte objetivo: "${objective}"
+Use APENAS as fontes permitidas: ${flowContext.allowed_sources.join(', ')}.
+Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;
+
+  if (forbidQuestions) {
+    restrictions += '\nNÃO faça perguntas ao cliente.';
+  }
+  
+  if (forbidOptions) {
+    restrictions += '\nNÃO ofereça opções ou múltipla escolha.';
+  }
+  
+  restrictions += `
+NÃO sugira transferência para humano.
+NÃO invente informações.
+Se não houver dados suficientes, responda exatamente:
+"No momento não tenho essa informação."
+
+A resposta deve ser curta, clara e objetiva.
+
+**Contexto do Cliente:**
+- Nome: ${contactName}
+- Status: ${contactStatus}`;
+
+  return restrictions;
+}
+
+// 🆕 FASE 1: Função para validar se IA violou restrições de comportamento
+function validateResponseRestrictions(
+  response: string, 
+  forbidQuestions: boolean, 
+  forbidOptions: boolean
+): { valid: boolean; violation?: string } {
+  // Verificar perguntas (qualquer ? no texto)
+  if (forbidQuestions && response.includes('?')) {
+    return { valid: false, violation: 'question_detected' };
+  }
+  
+  // Verificar opções (padrões comuns de múltipla escolha)
+  if (forbidOptions) {
+    const optionPatterns = [
+      /1️⃣|2️⃣|3️⃣|4️⃣|5️⃣/,
+      /\*\*A\)\*\*|\*\*B\)\*\*|\*\*C\)\*\*/i,
+      /opção.*[:\-]/i,
+      /escolha.*opção/i,
+      /selecione/i,
+      /qual.*prefere/i,
+    ];
+    
+    if (optionPatterns.some(p => p.test(response))) {
+      return { valid: false, violation: 'options_detected' };
+    }
+  }
+  
+  return { valid: true };
 }
 
 // 🆕 ESCAPE PATTERNS: Detectar quando IA tenta sair do contrato
@@ -1100,6 +1171,24 @@ serve(async (req) => {
     let flowKbCategories: string[] | null = flow_context?.kbCategories || null;
     let flowContextPrompt: string | null = flow_context?.contextPrompt || null;
     let flowFallbackMessage: string | null = flow_context?.fallbackMessage || null;
+    
+    // 🆕 FASE 1: Variáveis de Controle de Comportamento Anti-Alucinação
+    const flowObjective: string | null = flow_context?.objective || null;
+    const flowMaxSentences: number = flow_context?.maxSentences ?? 3;
+    const flowForbidQuestions: boolean = flow_context?.forbidQuestions ?? true;
+    const flowForbidOptions: boolean = flow_context?.forbidOptions ?? true;
+    
+    // 🆕 FASE 1: Flag para usar prompt restritivo
+    const useRestrictedPrompt = !!(flow_context && (flowObjective || flowForbidQuestions || flowForbidOptions));
+    
+    if (useRestrictedPrompt) {
+      console.log('[ai-autopilot-chat] 🎯 FASE 1: Modo restritivo ATIVO:', {
+        objective: flowObjective?.substring(0, 50),
+        maxSentences: flowMaxSentences,
+        forbidQuestions: flowForbidQuestions,
+        forbidOptions: flowForbidOptions
+      });
+    }
 
     // 🚨 FASE 3: Fallback Gracioso - Try-catch interno para capturar falhas da IA
     try {
@@ -7313,7 +7402,23 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         });
       }
       
-      console.log('[ai-autopilot-chat] ✅ Resposta passou na validação anti-escape');
+      // 🆕 FASE 1: Validação de restrições de comportamento (forbidQuestions, forbidOptions)
+      const forbidQuestions = flow_context.forbidQuestions ?? true;
+      const forbidOptions = flow_context.forbidOptions ?? true;
+      const restrictionCheck = validateResponseRestrictions(assistantMessage, forbidQuestions, forbidOptions);
+      
+      if (!restrictionCheck.valid) {
+        console.warn('[ai-autopilot-chat] ⚠️ VIOLAÇÃO DE RESTRIÇÃO:', restrictionCheck.violation);
+        console.warn('[ai-autopilot-chat] Resposta original:', assistantMessage.substring(0, 100));
+        
+        // Usar fallback ao invés da resposta que violou restrições
+        const fallbackMessage = flow_context.fallbackMessage || 'No momento não tenho essa informação.';
+        assistantMessage = fallbackMessage;
+        
+        console.log('[ai-autopilot-chat] ✅ Resposta substituída por fallback');
+      } else {
+        console.log('[ai-autopilot-chat] ✅ Resposta passou na validação anti-escape e de restrições');
+      }
     }
 
     const shouldSkipCache = FALLBACK_PHRASES.some(phrase => 

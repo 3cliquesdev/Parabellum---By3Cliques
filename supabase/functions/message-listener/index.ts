@@ -184,7 +184,7 @@ serve(async (req) => {
       body: JSON.stringify({
         conversationId: record.conversation_id,
         customerMessage: record.content,
-        // 🆕 CONTRATO: Passar contexto do fluxo para IA
+        // 🆕 CONTRATO: Passar contexto do fluxo para IA com novos campos Fase 1
         flow_context: {
           flow_id: flowData.flowId || flowData.masterFlowId,
           node_id: flowData.nodeId,
@@ -194,7 +194,12 @@ serve(async (req) => {
           personaId: flowData.personaId,
           kbCategories: flowData.kbCategories,
           contextPrompt: flowData.contextPrompt,
-          fallbackMessage: flowData.fallbackMessage
+          fallbackMessage: flowData.fallbackMessage,
+          // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
+          objective: flowData.objective || null,
+          maxSentences: flowData.maxSentences ?? 3,
+          forbidQuestions: flowData.forbidQuestions ?? true,
+          forbidOptions: flowData.forbidOptions ?? true,
         }
       })
     });
