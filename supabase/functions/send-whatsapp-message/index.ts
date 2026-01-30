@@ -565,6 +565,36 @@ serve(async (req) => {
 
     console.log('[send-whatsapp-message] Message sent successfully:', responseData);
 
+    // ============================================
+    // 🛡️ PROTEÇÃO CRÍTICA: Quando HUMANO envia mensagem, ai_mode → copilot
+    // Isso impede que a IA interfira após o agente assumir
+    // ============================================
+    if (body.conversation_id) {
+      // Mensagens de texto simples são de humanos
+      const isHumanMessage = !!body.message && !body.use_queue;
+      
+      if (isHumanMessage) {
+        // Verificar estado atual da conversa
+        const { data: conversation } = await supabase
+          .from("conversations")
+          .select("ai_mode, assigned_to")
+          .eq("id", body.conversation_id)
+          .maybeSingle();
+        
+        // Se não está em copilot/disabled, atualizar para copilot
+        if (conversation && conversation.ai_mode !== 'copilot' && conversation.ai_mode !== 'disabled') {
+          console.log(`[send-whatsapp-message] 🛡️ Human sent message - updating ai_mode from '${conversation.ai_mode}' to 'copilot'`);
+          
+          await supabase
+            .from("conversations")
+            .update({ ai_mode: "copilot" })
+            .eq("id", body.conversation_id);
+          
+          console.log("[send-whatsapp-message] ✅ ai_mode updated to 'copilot' - AI will not interfere");
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

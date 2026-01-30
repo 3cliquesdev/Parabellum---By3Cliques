@@ -360,6 +360,39 @@ serve(async (req) => {
       console.log("[send-meta-whatsapp] ⏭️ skip_db_save=true - frontend fez insert");
     }
 
+    // ============================================
+    // 🛡️ PROTEÇÃO CRÍTICA: Quando HUMANO envia mensagem, ai_mode → copilot
+    // Isso impede que a IA interfira após o agente assumir
+    // ============================================
+    if (body.conversation_id) {
+      // Verificar se é mensagem de humano (não é IA/bot)
+      // Templates e mensagens interativas geralmente são do sistema
+      // Mensagens de texto simples do frontend são de humanos
+      const isHumanMessage = body.message && !body.template && !body.interactive;
+      
+      if (isHumanMessage) {
+        // Verificar estado atual da conversa
+        const { data: conversation } = await supabase
+          .from("conversations")
+          .select("ai_mode, assigned_to")
+          .eq("id", body.conversation_id)
+          .maybeSingle();
+        
+        // Se está em waiting_human e tem agente, ou qualquer modo que não seja copilot
+        // Atualizar para copilot para proteger contra IA
+        if (conversation && conversation.ai_mode !== 'copilot' && conversation.ai_mode !== 'disabled') {
+          console.log(`[send-meta-whatsapp] 🛡️ Human sent message - updating ai_mode from '${conversation.ai_mode}' to 'copilot'`);
+          
+          await supabase
+            .from("conversations")
+            .update({ ai_mode: "copilot" })
+            .eq("id", body.conversation_id);
+          
+          console.log("[send-meta-whatsapp] ✅ ai_mode updated to 'copilot' - AI will not interfere");
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
