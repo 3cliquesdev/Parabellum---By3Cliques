@@ -1,227 +1,139 @@
 
-
-# Plano: Processamento em Lote (Batch) para Distribuição Enterprise
+# Plano: Corrigir AI Mode Após Atribuição pelo Dispatcher
 
 ## Problema Identificado
 
-O `dispatch-conversations` processa **1 job por vez** em um loop sequencial:
+O distribuidor automático (dispatcher) atribui conversas a agentes mas **não muda** o `ai_mode` de `waiting_human` para `copilot`. Resultado:
 
+| Campo | Valor |
+|-------|-------|
+| `assigned_to` | Juliana Alves ✅ |
+| `ai_mode` | waiting_human ❌ (deveria ser `copilot`) |
+
+A UI verifica:
 ```typescript
-// ATUAL - SEQUENCIAL (LENTO)
-for (const job of pendingJobs) {  // 10 jobs
-  await lockJob(job);             // ~50ms
-  await verifyConversation();     // ~50ms  
-  await findEligibleAgent();      // ~100ms
-  await assignConversation();     // ~50ms
-  await logAssignment();          // ~50ms
-}
-// Total: 10 × 300ms = 3 SEGUNDOS por ciclo
+const canShowTakeControl = isAutopilot || isWaitingHuman || !conversation?.assigned_to;
 ```
 
-**Resultado:** Com 10 jobs na fila e cron a cada 60 segundos, demora até 3 segundos por ciclo - mas ainda precisa esperar o próximo minuto!
+Como `isWaitingHuman = true`, ela mostra "Clique em Assumir" mesmo para a própria Juliana que já foi atribuída!
 
 ---
 
-## Solução: Processamento Paralelo com Batches
+## Causa Raiz
 
-Processar múltiplos jobs em paralelo usando `Promise.all`:
+No arquivo `dispatch-conversations/index.ts` (linhas 251-259):
 
-```text
-┌───────────────────────────────────────────────────────────────────────────┐
-│                    ANTES (Sequencial)                                     │
-├───────────────────────────────────────────────────────────────────────────┤
-│  Job1 ────▶ Job2 ────▶ Job3 ────▶ Job4 ────▶ Job5 ...                     │
-│  300ms     300ms      300ms      300ms      300ms                         │
-│  Total: 10 jobs × 300ms = 3000ms (3 segundos)                             │
-└───────────────────────────────────────────────────────────────────────────┘
-
-┌───────────────────────────────────────────────────────────────────────────┐
-│                    DEPOIS (Paralelo em Batches de 5)                      │
-├───────────────────────────────────────────────────────────────────────────┤
-│  [Job1, Job2, Job3, Job4, Job5] ────▶ [Job6, Job7, Job8, Job9, Job10]     │
-│         300ms (paralelo)                      300ms (paralelo)            │
-│  Total: 2 batches × 300ms = 600ms (0.6 segundos)                          │
-└───────────────────────────────────────────────────────────────────────────┘
+```typescript
+.update({
+  assigned_to: eligibleAgent.id,
+  // ai_mode: Não muda - mantém 'waiting_human', agente decide via UI
+  dispatch_status: 'assigned',
+  ...
+})
 ```
 
-**Ganho: 5x mais rápido!**
+O comentário diz que o agente deveria decidir via UI, mas a UI não permite isso porque ainda mostra a tela de "Assumir".
 
 ---
 
-## Alterações a Implementar
+## Solução: Dispatcher Deve Mudar ai_mode para copilot
 
-### 1. Edge Function: `dispatch-conversations/index.ts`
+Quando o dispatcher atribui uma conversa a um agente, ele deve:
+1. Definir `assigned_to = agente.id`
+2. **Mudar** `ai_mode = 'copilot'` (não mais `waiting_human`)
 
-Mudar de loop sequencial para processamento em batches paralelos:
-
-**Código Atual (linhas 78-235):**
-```typescript
-for (const job of pendingJobs as DispatchJob[]) {
-  // processar cada job sequencialmente
-}
-```
-
-**Código Novo:**
-```typescript
-const BATCH_SIZE = 5;
-const DELAY_BETWEEN_BATCHES_MS = 100;
-
-// Processar em batches paralelos
-for (let i = 0; i < pendingJobs.length; i += BATCH_SIZE) {
-  const batch = pendingJobs.slice(i, i + BATCH_SIZE);
-  
-  // Processar batch em paralelo
-  const batchResults = await Promise.allSettled(
-    batch.map((job: DispatchJob) => processJob(supabase, job))
-  );
-  
-  // Agregar resultados
-  for (const result of batchResults) {
-    if (result.status === 'fulfilled') {
-      const jobResult = result.value;
-      if (jobResult.status === 'assigned') assigned++;
-      else if (jobResult.status === 'failed') failed++;
-      results.push(jobResult);
-    } else {
-      failed++;
-    }
-  }
-  
-  // Pequeno delay entre batches para não sobrecarregar
-  if (i + BATCH_SIZE < pendingJobs.length) {
-    await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES_MS));
-  }
-}
-```
-
-### 2. Extrair Lógica de Job para Função
-
-Criar função `processJob()` que encapsula toda a lógica de um job individual:
-
-```typescript
-async function processJob(
-  supabase: any,
-  job: DispatchJob
-): Promise<{ conversation_id: string; status: string; agent?: string; reason?: string }> {
-  const jobStartTime = Date.now();
-  
-  // 1. Lock atômico
-  const { data: lockedJob } = await supabase
-    .from('conversation_dispatch_jobs')
-    .update({ status: 'processing', updated_at: new Date().toISOString() })
-    .eq('id', job.id)
-    .eq('status', 'pending')
-    .select('*')
-    .maybeSingle();
-
-  if (!lockedJob) {
-    return { conversation_id: job.conversation_id, status: 'skipped', reason: 'already_locked' };
-  }
-
-  // 2. Verificar conversa
-  const { data: conversation } = await supabase
-    .from('conversations')
-    .select('id, ai_mode, assigned_to, department, status')
-    .eq('id', job.conversation_id)
-    .single();
-
-  if (!conversation) {
-    await markJobComplete(supabase, job.id, 'conversation_not_found');
-    return { conversation_id: job.conversation_id, status: 'skipped', reason: 'not_found' };
-  }
-
-  // ... resto da lógica (findEligibleAgent, assign, etc.)
-}
-```
-
----
-
-## Arquivos a Modificar
+### Arquivo a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/dispatch-conversations/index.ts` | Refatorar para processamento paralelo em batches |
+| `supabase/functions/dispatch-conversations/index.ts` | Adicionar `ai_mode: 'copilot'` no update de atribuição |
+
+### Código Atual (linha 252-259)
+```typescript
+const { data: updateResult, error: updateError } = await supabase
+  .from('conversations')
+  .update({
+    assigned_to: eligibleAgent.id,
+    // ai_mode: Não muda - mantém 'waiting_human', agente decide via UI
+    dispatch_status: 'assigned',
+    last_dispatch_at: new Date().toISOString(),
+  })
+```
+
+### Código Novo
+```typescript
+const { data: updateResult, error: updateError } = await supabase
+  .from('conversations')
+  .update({
+    assigned_to: eligibleAgent.id,
+    ai_mode: 'copilot', // ✅ FIX: Mudar para copilot na atribuição
+    dispatch_status: 'assigned',
+    last_dispatch_at: new Date().toISOString(),
+  })
+```
 
 ---
 
 ## Impacto
 
-### Performance
+### Antes (Bug)
 
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| 10 jobs na fila | 3000ms | 600ms |
-| 50 jobs na fila | 15000ms | 3000ms |
-| Tempo de espera máximo do cliente | ~60s (aguardar cron) | ~12s |
+| Cenário | Resultado |
+|---------|-----------|
+| Dispatcher atribui Juliana | `ai_mode = waiting_human` → UI mostra "Assumir" ❌ |
+| Juliana abre a conversa | Não consegue digitar, precisa clicar em "Assumir" ❌ |
+| Juliana clica em "Assumir" | Finalmente pode escrever ✅ |
 
-### Segurança
+### Depois (Corrigido)
 
-| Controle | Status |
-|----------|--------|
-| Lock atômico por job | ✅ Mantido |
-| Race condition handling | ✅ Mantido |
-| Sem duplicação de atribuição | ✅ Mantido |
-| Logs de auditoria | ✅ Mantido |
-
----
-
-## Fluxo Visual
-
-```text
-Fila (10 jobs)         dispatch-conversations              Agentes
-      |                         |                              |
-      |                    [Batch 1: 5 jobs]                   |
-      |                         |                              |
-      |---Job1----------------->|                              |
-      |---Job2----------------->|   (paralelo)                 |
-      |---Job3----------------->|                              |
-      |---Job4----------------->|                              |
-      |---Job5----------------->|                              |
-      |                         |---assign Job1--------------->|
-      |                         |---assign Job2--------------->|
-      |                         |---assign Job3--------------->|
-      |                         |---assign Job4--------------->|
-      |                         |---assign Job5--------------->|
-      |                         |                              |
-      |                    [Delay 100ms]                       |
-      |                         |                              |
-      |                    [Batch 2: 5 jobs]                   |
-      |                         |                              |
-      |---Job6----------------->|                              |
-      |---Job7----------------->|   (paralelo)                 |
-      |---Job8----------------->|                              |
-      |---Job9----------------->|                              |
-      |---Job10---------------->|                              |
-      |                         |---assign Job6--------------->|
-      |                         |---...                        |
-```
+| Cenário | Resultado |
+|---------|-----------|
+| Dispatcher atribui Juliana | `ai_mode = copilot` ✅ |
+| Juliana abre a conversa | Composer já está habilitado ✅ |
+| Juliana pode responder imediatamente | Sem cliques extras ✅ |
 
 ---
 
 ## Compatibilidade
 
-- ✅ Lock atômico previne race conditions mesmo com paralelismo
-- ✅ Cada job ainda é processado de forma isolada
-- ✅ Erros em um job não afetam outros do batch
-- ✅ Escalação funciona normalmente
+- ✅ Mantém consistência: atribuição = copilot
+- ✅ Alinhado com `useTakeControl` que já define `copilot` na atribuição manual
+- ✅ UI funciona corretamente porque `copilot` habilita o composer
 - ✅ Logs de auditoria mantidos
+- ✅ Não afeta conversas em `autopilot` (IA respondendo)
+
+---
+
+## Fix Adicional (Opcional): Dados Existentes
+
+Para corrigir conversas já atribuídas mas travadas em `waiting_human`, pode-se executar um fix pontual no SQL:
+
+```sql
+-- Fix: Conversas atribuídas mas ainda em waiting_human
+UPDATE conversations
+SET ai_mode = 'copilot'
+WHERE assigned_to IS NOT NULL
+  AND ai_mode = 'waiting_human'
+  AND status = 'open';
+```
 
 ---
 
 ## Seção Técnica
 
-### Parâmetros de Tuning
+### Fluxo Corrigido
 
-| Parâmetro | Valor | Justificativa |
-|-----------|-------|---------------|
-| `BATCH_SIZE` | 5 | Balanceia paralelismo vs carga no banco |
-| `DELAY_BETWEEN_BATCHES` | 100ms | Evita throttling, permite outros requests |
-| `LIMIT` | 50 | Já existe, mantém |
-
-### Promise.allSettled vs Promise.all
-
-Usamos `Promise.allSettled` porque:
-- Não falha se um job falhar
-- Retorna status de cada promise individualmente
-- Permite continuar processando mesmo com erros parciais
-
+```text
+Cliente pede atendente
+        ↓
+process-chat-flow → ai_mode = 'waiting_human'
+        ↓
+conversation_dispatch_jobs (job criado)
+        ↓
+dispatch-conversations (CRON)
+        ↓
+Encontra agente → assigned_to = Juliana
+                → ai_mode = 'copilot' (FIX)
+        ↓
+Juliana abre inbox → Composer habilitado ✅
+```
