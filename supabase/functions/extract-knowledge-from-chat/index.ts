@@ -21,6 +21,35 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // ============================================
+    // FASE 6: Kill Switch Global
+    // ============================================
+    const { data: globalConfig } = await supabase
+      .from('system_configurations')
+      .select('value')
+      .eq('key', 'ai_global_enabled')
+      .maybeSingle();
+
+    if (globalConfig?.value === 'false') {
+      console.log('[extract-knowledge] 🚫 Kill Switch ativo - retornando');
+      return new Response(
+        JSON.stringify({ success: false, reason: 'kill_switch' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ============================================
+    // FASE 6: Shadow Mode Check
+    // ============================================
+    const { data: shadowConfig } = await supabase
+      .from('system_configurations')
+      .select('value')
+      .eq('key', 'ai_shadow_mode')
+      .maybeSingle();
+
+    const isShadowMode = shadowConfig?.value === 'true';
+    console.log(`[extract-knowledge] Shadow Mode: ${isShadowMode ? 'ATIVO' : 'Inativo'}`);
+
     // 🆕 FASE 2: Guard-rail - verificar se já foi aprendido
     const { data: conversation } = await supabase
       .from('conversations')
@@ -211,6 +240,31 @@ Se não houver conhecimento útil, retorne: { "extracted_items": [], "confidence
         savedCandidates.push(candidate);
         console.log(`[extract-knowledge] Candidate saved: ${candidate.id}`);
       }
+    }
+
+    // ============================================
+    // FASE 6: Registrar na ai_learning_timeline
+    // ============================================
+    if (savedCandidates.length > 0) {
+      await supabase
+        .from('ai_learning_timeline')
+        .insert({
+          learning_type: 'kb',
+          summary: `Conhecimento extraído: ${savedCandidates.length} item(s) de conversa com agente ${agentName}`,
+          source_conversations: 1,
+          source_conversation_ids: [conversationId],
+          confidence: globalConfidence >= 85 ? 'alta' : 'média',
+          status: isShadowMode ? 'pending' : 'pending', // Sempre pending para revisão humana
+          department_id: departmentId || null,
+          metadata: { 
+            candidate_ids: savedCandidates.map((c: any) => c.id),
+            agent_name: agentName,
+            confidence_score: globalConfidence,
+            shadow_mode: isShadowMode
+          }
+        });
+
+      console.log(`[extract-knowledge] 📋 Registrado na ai_learning_timeline (Shadow Mode: ${isShadowMode})`);
     }
 
     // Notificar gerentes sobre novos candidatos

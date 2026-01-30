@@ -254,6 +254,56 @@ export type Database = {
           },
         ]
       }
+      ai_anomaly_logs: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          change_percent: number
+          current_value: number
+          department_id: string | null
+          detected_at: string | null
+          id: string
+          metric_type: string
+          previous_value: number
+          severity: string | null
+          threshold_percent: number
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          change_percent: number
+          current_value: number
+          department_id?: string | null
+          detected_at?: string | null
+          id?: string
+          metric_type: string
+          previous_value: number
+          severity?: string | null
+          threshold_percent: number
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          change_percent?: number
+          current_value?: number
+          department_id?: string | null
+          detected_at?: string | null
+          id?: string
+          metric_type?: string
+          previous_value?: number
+          severity?: string | null
+          threshold_percent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_anomaly_logs_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_failure_logs: {
         Row: {
           contact_id: string | null
@@ -301,6 +351,72 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_learning_timeline: {
+        Row: {
+          confidence: string | null
+          department_id: string | null
+          id: string
+          learned_at: string | null
+          learning_type: string
+          metadata: Json | null
+          rejection_reason: string | null
+          related_article_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_conversation_ids: string[] | null
+          source_conversations: number | null
+          status: string | null
+          summary: string
+        }
+        Insert: {
+          confidence?: string | null
+          department_id?: string | null
+          id?: string
+          learned_at?: string | null
+          learning_type: string
+          metadata?: Json | null
+          rejection_reason?: string | null
+          related_article_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_conversation_ids?: string[] | null
+          source_conversations?: number | null
+          status?: string | null
+          summary: string
+        }
+        Update: {
+          confidence?: string | null
+          department_id?: string | null
+          id?: string
+          learned_at?: string | null
+          learning_type?: string
+          metadata?: Json | null
+          rejection_reason?: string | null
+          related_article_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_conversation_ids?: string[] | null
+          source_conversations?: number | null
+          status?: string | null
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_learning_timeline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_learning_timeline_related_article_id_fkey"
+            columns: ["related_article_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_articles"
             referencedColumns: ["id"]
           },
         ]
