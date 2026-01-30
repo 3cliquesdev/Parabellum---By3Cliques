@@ -43,6 +43,7 @@ interface JobResult {
  * using a Round-Robin Least-Loaded algorithm with atomic locking.
  * 
  * 🚀 BATCH PROCESSING: Processes up to BATCH_SIZE jobs in parallel for 5x faster throughput
+ * ✅ AUTO-REQUEUE: Requeues escalated jobs when agents come online
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -59,6 +60,27 @@ serve(async (req) => {
     );
 
     console.log('[dispatch-conversations] Starting dispatch cycle (BATCH MODE)...');
+
+    // ==================== NEW: Parse body for agent context ====================
+    let agentDepartmentId: string | undefined;
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json();
+        agentDepartmentId = body.department_id;
+        if (agentDepartmentId) {
+          console.log(`[dispatch-conversations] 🟢 Agent came online in dept: ${agentDepartmentId}`);
+        }
+      } catch {
+        // No body or invalid JSON, that's fine
+      }
+    }
+
+    // ==================== NEW: Requeue escalated jobs ====================
+    const requeueResult = await requeueEscalatedJobs(supabase, agentDepartmentId);
+    if (requeueResult.requeued > 0) {
+      console.log(`[dispatch-conversations] ♻️ Requeued ${requeueResult.requeued} escalated jobs`);
+    }
+    // ======================================================================
 
     // 1. Fetch pending jobs (LIMIT 50 for performance)
     const { data: pendingJobs, error: jobsError } = await supabase
@@ -81,6 +103,7 @@ serve(async (req) => {
         processed: 0, 
         assigned: 0, 
         failed: 0,
+        requeued: requeueResult.requeued,
         duration_ms: Date.now() - startTime 
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -134,12 +157,13 @@ serve(async (req) => {
     await processEscalations(supabase);
 
     const totalDuration = Date.now() - startTime;
-    console.log(`[dispatch-conversations] ✅ Cycle complete: ${assigned} assigned, ${failed} failed in ${totalBatches} batches (${totalDuration}ms)`);
+    console.log(`[dispatch-conversations] ✅ Cycle complete: ${assigned} assigned, ${failed} failed, ${requeueResult.requeued} requeued in ${totalBatches} batches (${totalDuration}ms)`);
 
     return new Response(JSON.stringify({
       processed: pendingJobs.length,
       assigned,
       failed,
+      requeued: requeueResult.requeued,
       batches: totalBatches,
       results,
       duration_ms: totalDuration,
@@ -158,6 +182,105 @@ serve(async (req) => {
     });
   }
 });
+
+/**
+ * ==================== NEW FUNCTION ====================
+ * Requeue escalated jobs when agents become available
+ * 
+ * This solves the bug where conversations get stuck in "escalated" status
+ * even after agents come back online.
+ */
+// deno-lint-ignore no-explicit-any
+async function requeueEscalatedJobs(
+  supabase: any, 
+  specificDepartmentId?: string
+): Promise<{ requeued: number; departments: string[] }> {
+  const requeuedDepartments: string[] = [];
+  let totalRequeued = 0;
+
+  try {
+    // Determine which departments to check
+    let targetDepartmentIds: string[] = [];
+
+    if (specificDepartmentId) {
+      // Agent just came online in specific department
+      targetDepartmentIds = [specificDepartmentId];
+    } else {
+      // General dispatch cycle - check all departments with escalated jobs
+      const { data: escalatedDepts } = await supabase
+        .from('conversation_dispatch_jobs')
+        .select('department_id')
+        .eq('status', 'escalated')
+        .not('department_id', 'is', null);
+
+      if (!escalatedDepts?.length) {
+        console.log('[requeueEscalatedJobs] No escalated jobs found');
+        return { requeued: 0, departments: [] };
+      }
+
+      // Get unique department IDs
+      targetDepartmentIds = [...new Set(escalatedDepts.map((j: { department_id: string }) => j.department_id))] as string[];
+    }
+
+    console.log(`[requeueEscalatedJobs] Checking ${targetDepartmentIds.length} department(s) for requeue eligibility`);
+
+    // Check each department
+    for (const deptId of targetDepartmentIds) {
+      // Verify there's at least one eligible agent with capacity
+      const eligibleAgent = await findEligibleAgent(supabase, deptId);
+      
+      if (!eligibleAgent) {
+        console.log(`[requeueEscalatedJobs] Dept ${deptId}: No eligible agents, skipping requeue`);
+        continue;
+      }
+
+      console.log(`[requeueEscalatedJobs] Dept ${deptId}: Agent ${eligibleAgent.full_name} available, requeuing escalated jobs`);
+
+      // Requeue escalated jobs for this department
+      const { data: requeuedJobs, error: requeueError } = await supabase
+        .from('conversation_dispatch_jobs')
+        .update({ 
+          status: 'pending', 
+          attempts: 0,
+          next_attempt_at: new Date().toISOString(),
+          last_error: 'requeued_agent_online',
+          updated_at: new Date().toISOString()
+        })
+        .eq('status', 'escalated')
+        .eq('department_id', deptId)
+        .select('conversation_id');
+
+      if (requeueError) {
+        console.error(`[requeueEscalatedJobs] Error requeuing jobs in dept ${deptId}:`, requeueError);
+        continue;
+      }
+
+      if (requeuedJobs?.length) {
+        // Update conversation dispatch_status
+        const conversationIds = requeuedJobs.map((j: { conversation_id: string }) => j.conversation_id);
+        
+        await supabase
+          .from('conversations')
+          .update({ 
+            dispatch_status: 'pending',
+            dispatch_attempts: 0
+          })
+          .in('id', conversationIds);
+
+        totalRequeued += requeuedJobs.length;
+        requeuedDepartments.push(deptId);
+
+        console.log(`[requeueEscalatedJobs] ✅ Requeued ${requeuedJobs.length} conversations in dept ${deptId}`);
+      }
+    }
+
+    return { requeued: totalRequeued, departments: requeuedDepartments };
+
+  } catch (error) {
+    console.error('[requeueEscalatedJobs] Error:', error);
+    return { requeued: 0, departments: [] };
+  }
+}
 
 /**
  * Process a single dispatch job
