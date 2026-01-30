@@ -645,32 +645,39 @@ serve(async (req) => {
                 } catch (sendErr) {
                   console.error("[meta-whatsapp-webhook] ❌ Exception ao enviar resposta do fluxo:", sendErr);
                 }
+              }
+
+              // 🆕 CASO 2.5: EXECUTAR TRANSFERÊNCIA INDEPENDENTEMENTE DE HAVER RESPOSTA
+              // Este bloco DEVE estar fora do if(response) para garantir que transferências
+              // sem mensagem também sejam executadas corretamente
+              if (flowData.transfer) {
+                console.log("[meta-whatsapp-webhook] 🔄 Executing transfer to department:", flowData.departmentId);
                 
-                // 🆕 EXECUTAR TRANSFERÊNCIA SE NECESSÁRIO
-                if (flowData.transfer) {
-                  console.log("[meta-whatsapp-webhook] 🔄 Executing transfer to department:", flowData.departmentId);
-                  
-                  const updateData: Record<string, unknown> = {
-                    ai_mode: 'waiting_human',
-                    handoff_executed_at: new Date().toISOString(),
-                  };
-                  
-                  if (flowData.departmentId) {
-                    updateData.department = flowData.departmentId;
-                  }
-                  
-                  const { error: updateError } = await supabase
-                    .from("conversations")
-                    .update(updateData)
-                    .eq("id", conversation.id);
-                  
-                  if (updateError) {
-                    console.error("[meta-whatsapp-webhook] ❌ Error executing transfer:", updateError);
-                  } else {
-                    console.log("[meta-whatsapp-webhook] ✅ Transfer executed → department:", flowData.departmentId, "ai_mode: waiting_human");
-                  }
+                const updateData: Record<string, unknown> = {
+                  ai_mode: 'waiting_human',
+                  handoff_executed_at: new Date().toISOString(),
+                };
+                
+                if (flowData.departmentId) {
+                  updateData.department = flowData.departmentId;
                 }
                 
+                const { error: updateError } = await supabase
+                  .from("conversations")
+                  .update(updateData)
+                  .eq("id", conversation.id);
+                
+                if (updateError) {
+                  console.error("[meta-whatsapp-webhook] ❌ Error executing transfer:", updateError);
+                } else {
+                  console.log("[meta-whatsapp-webhook] ✅ Transfer executed → department:", flowData.departmentId, "ai_mode: waiting_human");
+                }
+                
+                continue; // Pular para próxima mensagem após transferência
+              }
+              
+              // Se teve resposta estática mas NÃO foi transferência, continuar
+              if (!flowData.useAI && flowData.response) {
                 continue;
               }
 
