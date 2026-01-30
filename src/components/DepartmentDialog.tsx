@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { useCreateDepartment } from "@/hooks/useCreateDepartment";
 import { useUpdateDepartment } from "@/hooks/useUpdateDepartment";
 import type { Department } from "@/hooks/useDepartments";
@@ -19,6 +21,11 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
   const [description, setDescription] = useState("");
   const [color, setColor] = useState("#3B82F6");
   const [whatsappNumber, setWhatsappNumber] = useState("");
+  
+  // Auto-close settings
+  const [autoCloseEnabled, setAutoCloseEnabled] = useState(false);
+  const [autoCloseMinutes, setAutoCloseMinutes] = useState<number | "">("");
+  const [sendRatingOnClose, setSendRatingOnClose] = useState(true);
 
   const createMutation = useCreateDepartment();
   const updateMutation = useUpdateDepartment();
@@ -29,16 +36,26 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
       setDescription(department.description || "");
       setColor(department.color);
       setWhatsappNumber(department.whatsapp_number || "");
+      setAutoCloseEnabled(department.auto_close_enabled ?? false);
+      setAutoCloseMinutes(department.auto_close_minutes ?? "");
+      setSendRatingOnClose(department.send_rating_on_close ?? true);
     } else {
       setName("");
       setDescription("");
       setColor("#3B82F6");
       setWhatsappNumber("");
+      setAutoCloseEnabled(false);
+      setAutoCloseMinutes("");
+      setSendRatingOnClose(true);
     }
   }, [department, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const autoCloseMinutesValue = autoCloseEnabled && autoCloseMinutes !== "" 
+      ? Number(autoCloseMinutes) 
+      : null;
 
     if (department) {
       await updateMutation.mutateAsync({
@@ -47,6 +64,9 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
         description,
         color,
         whatsapp_number: whatsappNumber || undefined,
+        auto_close_enabled: autoCloseEnabled,
+        auto_close_minutes: autoCloseMinutesValue,
+        send_rating_on_close: sendRatingOnClose,
       });
     } else {
       await createMutation.mutateAsync({
@@ -54,6 +74,9 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
         description,
         color,
         whatsapp_number: whatsappNumber || undefined,
+        auto_close_enabled: autoCloseEnabled,
+        auto_close_minutes: autoCloseMinutesValue,
+        send_rating_on_close: sendRatingOnClose,
       });
     }
 
@@ -125,6 +148,61 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
               <p className="text-xs text-muted-foreground">
                 Apenas números (DDI + DDD + número). Ex: 5511999999999
               </p>
+            </div>
+
+            <Separator className="my-4" />
+
+            {/* Auto-close settings */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium text-foreground">Encerramento Automático</h4>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="autoCloseEnabled">Encerrar por inatividade</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Fecha conversas automaticamente quando o cliente não responde
+                  </p>
+                </div>
+                <Switch
+                  id="autoCloseEnabled"
+                  checked={autoCloseEnabled}
+                  onCheckedChange={setAutoCloseEnabled}
+                />
+              </div>
+
+              {autoCloseEnabled && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="autoCloseMinutes">Tempo de inatividade (minutos)</Label>
+                    <Input
+                      id="autoCloseMinutes"
+                      type="number"
+                      min={5}
+                      max={1440}
+                      placeholder="Ex: 30"
+                      value={autoCloseMinutes}
+                      onChange={(e) => setAutoCloseMinutes(e.target.value ? Number(e.target.value) : "")}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Mínimo 5 minutos. Deixe em branco para nunca encerrar automaticamente.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="sendRatingOnClose">Enviar pesquisa de satisfação</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Envia pesquisa CSAT (1-5 estrelas) ao encerrar conversa
+                      </p>
+                    </div>
+                    <Switch
+                      id="sendRatingOnClose"
+                      checked={sendRatingOnClose}
+                      onCheckedChange={setSendRatingOnClose}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <DialogFooter>

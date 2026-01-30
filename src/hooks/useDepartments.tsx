@@ -9,6 +9,10 @@ export interface Department {
   is_active: boolean;
   whatsapp_number?: string | null;
   parent_id?: string | null;
+  // Auto-close settings
+  auto_close_enabled: boolean;
+  auto_close_minutes: number | null;
+  send_rating_on_close: boolean;
   created_at: string;
   updated_at: string;
 }

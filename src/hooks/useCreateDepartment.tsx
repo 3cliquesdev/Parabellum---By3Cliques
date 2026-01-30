@@ -7,6 +7,9 @@ interface CreateDepartmentParams {
   description?: string;
   color?: string;
   whatsapp_number?: string;
+  auto_close_enabled?: boolean;
+  auto_close_minutes?: number | null;
+  send_rating_on_close?: boolean;
 }
 
 export function useCreateDepartment() {
@@ -22,6 +25,9 @@ export function useCreateDepartment() {
           description: params.description,
           color: params.color || "#3B82F6",
           whatsapp_number: params.whatsapp_number,
+          auto_close_enabled: params.auto_close_enabled ?? false,
+          auto_close_minutes: params.auto_close_minutes ?? null,
+          send_rating_on_close: params.send_rating_on_close ?? true,
         })
         .select()
         .single();

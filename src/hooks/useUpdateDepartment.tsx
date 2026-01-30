@@ -9,6 +9,9 @@ interface UpdateDepartmentParams {
   color?: string;
   is_active?: boolean;
   whatsapp_number?: string;
+  auto_close_enabled?: boolean;
+  auto_close_minutes?: number | null;
+  send_rating_on_close?: boolean;
 }
 
 export function useUpdateDepartment() {
