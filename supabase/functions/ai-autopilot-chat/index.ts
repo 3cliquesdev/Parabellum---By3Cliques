@@ -1069,7 +1069,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, customerMessage, maxHistory = 10, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
+    const { conversationId, customerMessage, maxHistory = 50, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
     
     // Validação defensiva
     if (!conversationId || conversationId === 'undefined') {

@@ -48,7 +48,7 @@ async function getActivePersona(supabaseClient: any): Promise<any> {
 async function getConversationHistory(
   supabaseClient: any,
   conversationId: string,
-  limit: number = 10
+  limit: number = 30
 ): Promise<Array<{ role: string; content: string }>> {
   const { data } = await supabaseClient
     .from('messages')
@@ -145,7 +145,7 @@ serve(async (req) => {
         .eq('id', conversationId)
         .single(),
       getActivePersona(supabaseClient),
-      getConversationHistory(supabaseClient, conversationId, 10),
+      getConversationHistory(supabaseClient, conversationId, 30),
       getConfiguredAIModel(supabaseClient),
     ]);
 
