@@ -30,6 +30,19 @@ function extractRating(message: string): number | null {
   
   return null;
 }
+// Função para formatar opções do ask_options como texto com emojis numéricos
+function formatOptionsAsText(options: Array<{label: string; value?: string; id?: string}> | null | undefined): string {
+  if (!options || options.length === 0) return '';
+  
+  const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+  
+  const formatted = options.map((opt, idx) => {
+    const emoji = emojis[idx] || `${idx + 1}.`;
+    return `${emoji} ${opt.label}`;
+  }).join('\n');
+  
+  return `\n\n${formatted}`;
+}
 
 interface MetaWebhookPayload {
   object: string;
@@ -507,6 +520,7 @@ serve(async (req) => {
                 useAI?: boolean;
                 aiNodeActive?: boolean;
                 response?: string;
+                options?: Array<{label: string; value?: string; id?: string}>;
                 skipAutoResponse?: boolean;
                 flow_context?: Record<string, unknown>;
               } = {};
@@ -554,13 +568,18 @@ serve(async (req) => {
 
               // CASO 2: Fluxo retornou resposta estática (Message/AskOptions/etc)
               if (!flowData.useAI && flowData.response) {
+                // 🆕 Formatar opções junto com a mensagem se existirem
+                const formattedMessage = flowData.response + formatOptionsAsText(flowData.options);
+                
                 console.log("[AUTO-DECISION] [WhatsApp Meta] Flow static response → send-meta-whatsapp");
+                console.log("[meta-whatsapp-webhook] 📝 Message with options:", formattedMessage.substring(0, 200));
+                
                 try {
                   const sendResponse = await supabase.functions.invoke("send-meta-whatsapp", {
                     body: {
                       instance_id: instance.id,
                       phone_number: fromNumber,
-                      message: flowData.response,
+                      message: formattedMessage, // ✅ Inclui opções formatadas
                       conversation_id: conversation.id,
                       skip_db_save: false, // Persistir a mensagem do fluxo
                     },
@@ -569,7 +588,7 @@ serve(async (req) => {
                   if (sendResponse.error) {
                     console.error("[meta-whatsapp-webhook] ❌ Erro ao enviar resposta do fluxo:", sendResponse.error);
                   } else {
-                    console.log("[meta-whatsapp-webhook] ✅ Resposta do fluxo enviada");
+                    console.log("[meta-whatsapp-webhook] ✅ Resposta do fluxo enviada com opções");
                   }
                 } catch (sendErr) {
                   console.error("[meta-whatsapp-webhook] ❌ Exception ao enviar resposta do fluxo:", sendErr);
