@@ -1,180 +1,191 @@
 
-# Plano: Recriar Jobs de Distribuição para Conversas Órfãs do Suporte Sistema
+# Plano: Corrigir Transferências Não Executadas pelo Fluxo
 
 ## Diagnóstico Completo
 
-Após investigação profunda, identifiquei que:
+Após investigação profunda, identifiquei o **bug raiz** que faz com que conversas transferidas para o departamento Comercial continuem sendo respondidas pela IA.
 
-1. ✅ **O código de fallback hierárquico está funcionando corretamente** (logs confirmam)
-2. ✅ **Camila de Farias está recebendo conversas via fallback** (último assignment às 14:16)
-3. ❌ **64 conversas órfãs** têm jobs marcados como `completed` com erro `no_agents_configured`
-4. ❌ **Os jobs foram completados ANTES do deploy do fallback hierárquico**
+### Evidências Encontradas
 
-### Evidência dos Logs
+| Conversa | Departamento | ai_mode | handoff_executed_at | Problema |
+|----------|--------------|---------|---------------------|----------|
+| 2c34993d... | Comercial | **autopilot** | NULL | ❌ Transferência não executou |
+| 87415fb1... | Comercial | **autopilot** | 2026-01-29 14:50:18 | ❌ ai_mode não mudou |
+| 0f668c7d... | Comercial | **autopilot** | NULL | ❌ Transferência não executou |
+| + 7 outras | Comercial | **autopilot** | misto | ❌ Mesmo problema |
 
-```text
-14:16:02 [findEligibleAgent] Searching in dept: fd4fcc90 (Suporte Sistema)
-14:16:03 [findEligibleAgent] No online agents in dept fd4fcc90
-14:16:03 [findEligibleAgent] 🔄 Fallback: Suporte Sistema → parent 36ce66cd
-14:16:03 [findEligibleAgent] ✅ Found agent Camila de Farias in dept 36ce66cd
-14:16:03 ✅ Assigned 9a9f2a3f... to Camila de Farias ← FALLBACK FUNCIONOU!
+### Estado dos Agentes do Comercial
+
+Todos os 30+ agentes do departamento Comercial estão **offline**. Isso explica por que o dispatcher não consegue atribuir, mas não explica por que o `ai_mode` não muda para `waiting_human`.
+
+### Bug Identificado
+
+O problema está no **meta-whatsapp-webhook** nas linhas 621-674:
+
+```typescript
+// CASO 2: Fluxo retornou resposta estática (Message/AskOptions/etc)
+if (!flowData.useAI && flowData.response) {  // ❌ BUG: Requer response
+  // ... envia mensagem ...
+  
+  // 🆕 EXECUTAR TRANSFERÊNCIA SE NECESSÁRIO
+  if (flowData.transfer) {  // ❌ NUNCA EXECUTA SE response é vazio/undefined
+    // atualiza ai_mode = 'waiting_human'
+  }
+}
 ```
 
-### Situação Atual dos Agentes
+A condição `flowData.response` é **obrigatória** para entrar no CASO 2. Se o nó de transferência não tem mensagem configurada (ou foi apagada), a transferência **nunca é executada**.
 
-| Agente | Departamento | Chats Ativos | Capacidade |
-|--------|--------------|--------------|------------|
-| Camila de Farias | Suporte (pai) | 7 | 30 |
-| Miguel Fedes | Suporte Pedidos | 6 | 30 |
-| Juliana Alves | Suporte Pedidos | 8 | 30 |
-
-### Estrutura de Departamentos
+### Fluxo do Bug
 
 ```text
-Suporte (36ce66cd) → Camila de Farias: 7 chats
-├── Suporte Pedidos (2dd0ee5c) → Miguel: 6, Juliana: 8 chats
-└── Suporte Sistema (fd4fcc90) → 0 agentes, 64 conversas órfãs ❌
+Cliente responde "1" (Drop Nacional)
+        ↓
+process-chat-flow retorna:
+  { transfer: true, departmentId: "Comercial", response: "" }
+        ↓
+meta-whatsapp-webhook verifica CASO 2:
+  !flowData.useAI (✅ true) && flowData.response (❌ "" = falsy)
+        ↓
+CASO 2 NÃO ENTRA → Pula para CASO 3
+        ↓
+CASO 3: flowData.useAI (❌ false) → Não entra
+        ↓
+CASO 4 (fallback): ai_mode = 'waiting_human'
+        ↓
+❌ MAS: department não foi atualizado!
+❌ E: handoff_executed_at não foi setado!
 ```
 
-## Problema Identificado
-
-Os 64 jobs das conversas de "Suporte Sistema" foram marcados como `completed` com `last_error = 'no_agents_configured'` **ANTES** da implementação do fallback hierárquico. Como estão marcados como `completed`, o dispatcher não os reprocessa.
+**Resultado**: A conversa fica em `waiting_human` MAS sem departamento correto, ou fica em `autopilot` se alguma outra lógica interferir.
 
 ## Solução
 
-Recriar jobs de dispatch pendentes para as 64 conversas órfãs.
+Separar a **verificação de transferência** da verificação de resposta, garantindo que transferências sejam executadas **independentemente** de haver mensagem.
 
-### Passo 1: Deletar jobs antigos completados incorretamente
+### Mudanças Necessárias
 
-```sql
-DELETE FROM conversation_dispatch_jobs
-WHERE conversation_id IN (
-  SELECT c.id 
-  FROM conversations c
-  WHERE c.department = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4'
-    AND c.status = 'open'
-    AND c.ai_mode = 'waiting_human'
-    AND c.assigned_to IS NULL
-)
-AND status = 'completed'
-AND last_error = 'no_agents_configured';
+**Arquivo:** `supabase/functions/meta-whatsapp-webhook/index.ts`
+
+1. **Mover a execução de transferência para ANTES do continue** (ou para um bloco separado)
+2. **Verificar `flowData.transfer` de forma independente** de `flowData.response`
+3. **Garantir que `ai_mode = 'waiting_human'` seja setado** mesmo se não há mensagem
+
+### Código Corrigido
+
+```typescript
+// CASO 2: Fluxo retornou resposta estática (Message/AskOptions/etc)
+if (!flowData.useAI && flowData.response) {
+  // ... envia mensagem normalmente ...
+}
+
+// 🆕 EXECUTAR TRANSFERÊNCIA INDEPENDENTEMENTE DE HAVER RESPOSTA
+if (flowData.transfer) {
+  console.log("[meta-whatsapp-webhook] 🔄 Executing transfer to department:", flowData.departmentId);
+  
+  const updateData: Record<string, unknown> = {
+    ai_mode: 'waiting_human',
+    handoff_executed_at: new Date().toISOString(),
+  };
+  
+  if (flowData.departmentId) {
+    updateData.department = flowData.departmentId;
+  }
+  
+  const { error: updateError } = await supabase
+    .from("conversations")
+    .update(updateData)
+    .eq("id", conversation.id);
+  
+  if (updateError) {
+    console.error("[meta-whatsapp-webhook] ❌ Error executing transfer:", updateError);
+  } else {
+    console.log("[meta-whatsapp-webhook] ✅ Transfer executed → department:", flowData.departmentId, "ai_mode: waiting_human");
+  }
+  
+  continue; // Pular para próxima mensagem após transferência
+}
 ```
-
-### Passo 2: Criar novos jobs pendentes
-
-```sql
-INSERT INTO conversation_dispatch_jobs (
-  id,
-  conversation_id,
-  department_id,
-  priority,
-  status,
-  attempts,
-  max_attempts,
-  next_attempt_at,
-  created_at
-)
-SELECT 
-  gen_random_uuid(),
-  c.id,
-  c.department,
-  1,
-  'pending',
-  0,
-  5,
-  NOW(),
-  NOW()
-FROM conversations c
-WHERE c.department = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4'
-  AND c.status = 'open'
-  AND c.ai_mode = 'waiting_human'
-  AND c.assigned_to IS NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM conversation_dispatch_jobs cdj 
-    WHERE cdj.conversation_id = c.id 
-    AND cdj.status = 'pending'
-  );
-```
-
-### Passo 3: Disparar o dispatcher manualmente
-
-Chamar a edge function `dispatch-conversations` para processar os novos jobs imediatamente.
 
 ## Impacto Esperado
 
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Conversas órfãs Suporte Sistema | 64 | 0 |
-| Jobs pendentes | 0 | 64 → 0 (processados) |
-| Camila de Farias (chats) | 7 | 7 + ~23 = 30 (capacidade) |
-| Miguel Fedes (chats) | 6 | 6 (não afetado - dept diferente) |
-| Juliana Alves (chats) | 8 | 8 (não afetado - dept diferente) |
+### Antes (Bug)
 
-## Nota sobre Miguel e Juliana
+| Cenário | Resultado |
+|---------|-----------|
+| Transferência com mensagem | ✅ Funciona |
+| Transferência sem mensagem | ❌ IA continua respondendo |
+| Transferência com response vazio | ❌ IA continua respondendo |
 
-Miguel e Juliana estão no departamento **"Suporte Pedidos"**, que é **irmão** de "Suporte Sistema", não pai. O fallback hierárquico funciona assim:
+### Depois (Corrigido)
 
-```text
-Suporte Sistema → Suporte (pai) ✅
-Suporte Sistema → Suporte Pedidos (irmão) ❌ NÃO FAZ FALLBACK
+| Cenário | Resultado |
+|---------|-----------|
+| Transferência com mensagem | ✅ Funciona |
+| Transferência sem mensagem | ✅ ai_mode = waiting_human |
+| Transferência com response vazio | ✅ ai_mode = waiting_human |
+
+## Correção Adicional: Conversas Órfãs
+
+Além da correção do código, precisamos corrigir as **10 conversas** que já estão em autopilot mas deveriam estar em waiting_human:
+
+```sql
+UPDATE conversations
+SET ai_mode = 'waiting_human'
+WHERE department = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c'  -- Comercial
+  AND ai_mode = 'autopilot'
+  AND status = 'open'
+  AND assigned_to IS NULL;
 ```
-
-Isso é **comportamento correto** porque:
-- Suporte Pedidos atende questões de pedidos
-- Suporte Sistema atende questões técnicas
-- São especializações diferentes
-
-Se quiser que Miguel e Juliana também recebam de Suporte Sistema, eles precisam ser movidos para o departamento pai "Suporte" ou ter uma política de cross-routing manual.
 
 ## Arquivos a Modificar
 
-| Tipo | Ação |
-|------|------|
-| SQL Migration | Recriar jobs pendentes para 64 conversas |
-| Edge Function | Nenhuma (código já está correto) |
+| Arquivo | Tipo | Mudança |
+|---------|------|---------|
+| `supabase/functions/meta-whatsapp-webhook/index.ts` | Edge Function | Separar lógica de transferência |
+| Migration SQL | Banco de Dados | Corrigir conversas órfãs |
+
+## Compatibilidade
+
+- Não afeta transferências que já funcionam (com resposta)
+- Corrige edge case de transferências sem mensagem
+- Mantém toda lógica existente de fluxo/IA
 
 ---
 
 ## Seção Técnica
 
-### SQL Completo para Execução
+### Estrutura Final do Webhook (Pseudocódigo)
 
-```sql
--- Passo 1: Limpar jobs incorretos
-DELETE FROM conversation_dispatch_jobs
-WHERE conversation_id IN (
-  SELECT c.id 
-  FROM conversations c
-  WHERE c.department = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4'
-    AND c.status = 'open'
-    AND c.ai_mode = 'waiting_human'
-    AND c.assigned_to IS NULL
-)
-AND status = 'completed'
-AND last_error = 'no_agents_configured';
+```text
+// CASO 1: skipAutoResponse (cliente na fila)
+if (flowData.skipAutoResponse) → continue
 
--- Passo 2: Criar novos jobs
-INSERT INTO conversation_dispatch_jobs (
-  id, conversation_id, department_id, priority, status, 
-  attempts, max_attempts, next_attempt_at, created_at
-)
-SELECT 
-  gen_random_uuid(), c.id, c.department, 1, 'pending',
-  0, 5, NOW(), NOW()
-FROM conversations c
-WHERE c.department = 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4'
-  AND c.status = 'open'
-  AND c.ai_mode = 'waiting_human'
-  AND c.assigned_to IS NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM conversation_dispatch_jobs cdj 
-    WHERE cdj.conversation_id = c.id AND cdj.status = 'pending'
-  );
+// CASO 2: Resposta estática (envia mensagem)
+if (!flowData.useAI && flowData.response) {
+  → enviar mensagem
+}
+
+// CASO 2.5: 🆕 TRANSFERÊNCIA (independente de response)
+if (flowData.transfer) {
+  → atualizar ai_mode = 'waiting_human'
+  → atualizar department = flowData.departmentId
+  → continue
+}
+
+// CASO 3: AIResponseNode
+if (flowData.useAI && flowData.aiNodeActive) {
+  → chamar ai-autopilot-chat
+  → continue
+}
+
+// CASO 4: Fallback
+→ ai_mode = 'waiting_human'
 ```
 
-### Verificação Pós-Execução
+### Verificação Pós-Deploy
 
-1. Chamar `dispatch-conversations` manualmente
-2. Verificar logs: "✅ Assigned ... to Camila de Farias"
-3. Confirmar que conversas órfãs foram atribuídas
-4. Camila deve ter ~30 chats após processamento
+1. Enviar mensagem de teste que dispare transferência
+2. Verificar logs: deve aparecer "🔄 Executing transfer"
+3. Verificar banco: `ai_mode = 'waiting_human'` e `department` correto
+4. Cliente não deve receber mais respostas da IA
