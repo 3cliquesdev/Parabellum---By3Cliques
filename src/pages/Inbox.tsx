@@ -103,6 +103,11 @@ export default function Inbox() {
   
   // Use optimized inbox_view for list (fast)
   const { data: inboxItems, isLoading: inboxLoading } = useInboxView(inboxViewFilters);
+  
+  // Query separada SEM filtros para identificar conversas não respondidas do usuário
+  // Isso garante que o filtro not_responded funcione independente dos filtros do popover
+  const { data: rawInboxItems } = useInboxView();
+  
   const { data: counts } = useInboxCounts(user?.id);
   
   // Use original hook to get full conversation data when selected
@@ -183,8 +188,9 @@ export default function Inbox() {
       
       case "not_responded":
         // Filtrar por conversas do agente onde a última mensagem foi do cliente
+        // Usar rawInboxItems (sem filtros) para garantir que todas as conversas são consideradas
         const notRespondedIds = new Set(
-          inboxItems
+          rawInboxItems
             ?.filter(item => 
               item.last_sender_type === 'contact' && 
               item.assigned_to === user?.id &&
@@ -203,7 +209,7 @@ export default function Inbox() {
       default:
         return result.filter(c => c.status !== 'closed');
     }
-  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, inboxItemIds]);
+  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, inboxItemIds, rawInboxItems]);
 
   // Ordenação e filtragem por tempo de espera
   const orderedConversations = useMemo(() => {
