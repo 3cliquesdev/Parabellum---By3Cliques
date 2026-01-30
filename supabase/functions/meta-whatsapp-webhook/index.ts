@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getAIConfig } from "../_shared/ai-config-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -473,6 +474,30 @@ serve(async (req) => {
                     }
                   }).catch(err => console.error("[meta-whatsapp-webhook] ❌ Media download error:", err));
                 }
+              }
+
+              // ============================================
+              // 🛑 KILL SWITCH CHECK - ANTES de chamar AI
+              // ============================================
+              const aiConfig = await getAIConfig(supabase);
+              const { data: convForTest } = await supabase
+                .from("conversations")
+                .select("is_test_mode")
+                .eq("id", conversation.id)
+                .single();
+              const isTestMode = convForTest?.is_test_mode === true;
+
+              if (!aiConfig.ai_global_enabled && !isTestMode) {
+                console.log("[meta-whatsapp-webhook] 🛑 KILL SWITCH ATIVO - Movendo para fila humana");
+                
+                // Mover conversa para fila humana
+                await supabase
+                  .from("conversations")
+                  .update({ ai_mode: "waiting_human" })
+                  .eq("id", conversation.id);
+                
+                console.log("[meta-whatsapp-webhook] 📋 Conversa movida para waiting_human");
+                continue; // Pular autopilot, ir para próxima mensagem
               }
 
               // Trigger AI Autopilot se ativo
