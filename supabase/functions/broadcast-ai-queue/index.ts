@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
+
+// Declare EdgeRuntime for background tasks
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,17 +17,176 @@ interface BroadcastRequest {
   limit?: number;
 }
 
+interface ConversationWithContact {
+  id: string;
+  contact_id: string;
+  channel: string;
+  contacts: {
+    id: string;
+    phone: string | null;
+    whatsapp_id: string | null;
+    first_name: string | null;
+    last_name: string | null;
+  };
+}
+
 interface BroadcastResult {
-  total: number;
-  sent: number;
-  failed: number;
-  skipped: number;
-  conversations: Array<{
-    conversation_id: string;
-    phone: string;
-    status: "sent" | "failed" | "skipped";
-    error?: string;
-  }>;
+  conversation_id: string;
+  phone: string;
+  status: "sent" | "failed" | "skipped";
+  error?: string;
+}
+
+// Helper: Process broadcast in background
+async function processBroadcast(
+  supabase: SupabaseClient,
+  jobId: string,
+  message: string,
+  conversations: ConversationWithContact[],
+  metaInstanceId: string
+) {
+  console.log("[broadcast-ai-queue] 🚀 Background processing started for job:", jobId);
+
+  let sent = 0;
+  let failed = 0;
+  let skipped = 0;
+  const results: BroadcastResult[] = [];
+
+  // Update job to running
+  await (supabase as any)
+    .from("broadcast_jobs")
+    .update({
+      status: "running",
+      started_at: new Date().toISOString(),
+      total: conversations.length,
+    })
+    .eq("id", jobId);
+
+  for (let i = 0; i < conversations.length; i++) {
+    const conv = conversations[i];
+    const contact = conv.contacts;
+    const phone = contact.phone;
+    const whatsappId = contact.whatsapp_id;
+    const targetNumber = whatsappId || phone;
+
+    // Check if job was cancelled (every 5 iterations to reduce DB calls)
+    if (i % 5 === 0) {
+      const { data: currentJob } = await (supabase as any)
+        .from("broadcast_jobs")
+        .select("status")
+        .eq("id", jobId)
+        .single();
+
+      if (currentJob?.status === "cancelled") {
+        console.log("[broadcast-ai-queue] ⏹️ Job cancelled, stopping...");
+        break;
+      }
+
+      // Update progress
+      await (supabase as any)
+        .from("broadcast_jobs")
+        .update({ sent, failed, skipped, results })
+        .eq("id", jobId);
+    }
+
+    if (!targetNumber) {
+      console.log("[broadcast-ai-queue] ⏭️ Skipping - no phone/whatsapp_id:", conv.id);
+      skipped++;
+      results.push({
+        conversation_id: conv.id,
+        phone: phone || "N/A",
+        status: "skipped",
+        error: "No phone or whatsapp_id",
+      });
+      continue;
+    }
+
+    try {
+      console.log("[broadcast-ai-queue] 📤 Sending to:", targetNumber);
+
+      const { data: sendResult, error: sendError } = await supabase.functions.invoke(
+        "send-meta-whatsapp",
+        {
+          body: {
+            instance_id: metaInstanceId,
+            phone_number: targetNumber,
+            message: message,
+            conversation_id: conv.id,
+            skip_db_save: false,
+          },
+        }
+      );
+
+      if (sendError) {
+        throw new Error(sendError.message);
+      }
+
+      console.log("[broadcast-ai-queue] ✅ Sent to:", targetNumber, "message_id:", sendResult?.message_id);
+
+      sent++;
+      results.push({
+        conversation_id: conv.id,
+        phone: phone || targetNumber,
+        status: "sent",
+      });
+
+      // Update message metadata with broadcast info
+      if (sendResult?.message_id) {
+        await (supabase as any)
+          .from("messages")
+          .update({
+            metadata: {
+              broadcast_id: jobId,
+              broadcast_type: "ai_queue_reengagement",
+              sent_via: "broadcast-ai-queue",
+            },
+            sender_type: "system",
+          })
+          .eq("external_id", sendResult.message_id);
+      }
+
+      // Delay between sends (200ms to avoid Meta throttling)
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    } catch (error) {
+      console.error("[broadcast-ai-queue] ❌ Failed to send to:", targetNumber, error);
+      failed++;
+      results.push({
+        conversation_id: conv.id,
+        phone: phone || targetNumber,
+        status: "failed",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  // Final update
+  const { data: finalStatus } = await (supabase as any)
+    .from("broadcast_jobs")
+    .select("status")
+    .eq("id", jobId)
+    .single();
+
+  const isCancelled = finalStatus?.status === "cancelled";
+
+  await (supabase as any)
+    .from("broadcast_jobs")
+    .update({
+      status: isCancelled ? "cancelled" : "completed",
+      sent,
+      failed,
+      skipped,
+      results,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", jobId);
+
+  console.log("[broadcast-ai-queue] ✅ Job finished:", {
+    jobId,
+    sent,
+    failed,
+    skipped,
+    cancelled: isCancelled,
+  });
 }
 
 serve(async (req) => {
@@ -30,11 +194,8 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const startTime = Date.now();
-
   try {
     const body: BroadcastRequest = await req.json();
-    
     const { message, dry_run = false, limit = 500 } = body;
 
     if (!message || message.trim().length === 0) {
@@ -55,8 +216,8 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Buscar instância Meta ativa
-    const { data: metaInstance, error: instanceError } = await supabase
+    // 1. Fetch active Meta instance
+    const { data: metaInstance, error: instanceError } = await (supabase as any)
       .from("whatsapp_meta_instances")
       .select("*")
       .eq("status", "active")
@@ -72,8 +233,8 @@ serve(async (req) => {
 
     console.log("[broadcast-ai-queue] ✅ Meta instance found:", metaInstance.id);
 
-    // 2. Buscar conversas elegíveis (fila da IA) - SOMENTE WHATSAPP
-    const { data: conversations, error: convError } = await supabase
+    // 2. Fetch eligible conversations (AI queue - WhatsApp only)
+    const { data: conversations, error: convError } = await (supabase as any)
       .from("conversations")
       .select(`
         id,
@@ -102,7 +263,7 @@ serve(async (req) => {
       );
     }
 
-    const eligibleConversations = conversations || [];
+    const eligibleConversations = (conversations || []) as ConversationWithContact[];
     console.log("[broadcast-ai-queue] 📊 Found", eligibleConversations.length, "eligible conversations");
 
     if (eligibleConversations.length === 0) {
@@ -119,11 +280,11 @@ serve(async (req) => {
       );
     }
 
-    // DRY RUN - apenas retorna preview sem enviar
+    // DRY RUN - return preview only
     if (dry_run) {
       console.log("[broadcast-ai-queue] 🧪 DRY RUN - returning preview only");
-      
-      const previewResults = eligibleConversations.map((conv: any) => ({
+
+      const previewResults = eligibleConversations.map((conv) => ({
         conversation_id: conv.id,
         phone: conv.contacts.phone,
         contact_name: `${conv.contacts.first_name || ""} ${conv.contacts.last_name || ""}`.trim(),
@@ -144,120 +305,50 @@ serve(async (req) => {
       );
     }
 
-    // 3. Enviar mensagens (com delay para evitar throttling)
-    const broadcastId = crypto.randomUUID();
-    const results: BroadcastResult = {
-      total: eligibleConversations.length,
-      sent: 0,
-      failed: 0,
-      skipped: 0,
-      conversations: [],
-    };
+    // 3. Create job record immediately
+    const { data: job, error: jobError } = await (supabase as any)
+      .from("broadcast_jobs")
+      .insert({
+        message: message.trim(),
+        target_filter: { type: "ai_queue", channel: "whatsapp" },
+        status: "pending",
+        total: eligibleConversations.length,
+      })
+      .select()
+      .single();
 
-    for (const conv of eligibleConversations) {
-      const contact = conv.contacts as any;
-      const phone = contact.phone;
-      const whatsappId = contact.whatsapp_id;
-
-      // Usar whatsapp_id se disponível (mais confiável), senão phone
-      const targetNumber = whatsappId || phone;
-
-      if (!targetNumber) {
-        console.log("[broadcast-ai-queue] ⏭️ Skipping - no phone/whatsapp_id:", conv.id);
-        results.skipped++;
-        results.conversations.push({
-          conversation_id: conv.id,
-          phone: phone || "N/A",
-          status: "skipped",
-          error: "No phone or whatsapp_id",
-        });
-        continue;
-      }
-
-      try {
-        console.log("[broadcast-ai-queue] 📤 Sending to:", targetNumber);
-
-        // Chamar send-meta-whatsapp
-        const { data: sendResult, error: sendError } = await supabase.functions.invoke(
-          "send-meta-whatsapp",
-          {
-            body: {
-              instance_id: metaInstance.id,
-              phone_number: targetNumber,
-              message: message,
-              conversation_id: conv.id,
-              skip_db_save: false, // Queremos que salve no histórico
-            },
-          }
-        );
-
-        if (sendError) {
-          throw new Error(sendError.message);
-        }
-
-        console.log("[broadcast-ai-queue] ✅ Sent to:", targetNumber, "message_id:", sendResult?.message_id);
-        
-        results.sent++;
-        results.conversations.push({
-          conversation_id: conv.id,
-          phone: phone,
-          status: "sent",
-        });
-
-        // Atualizar metadata da mensagem com info de broadcast
-        if (sendResult?.message_id) {
-          await supabase
-            .from("messages")
-            .update({
-              metadata: {
-                broadcast_id: broadcastId,
-                broadcast_type: "ai_queue_reengagement",
-                sent_via: "broadcast-ai-queue",
-              },
-              sender_type: "system",
-            })
-            .eq("external_id", sendResult.message_id);
-        }
-
-        // Delay de 200ms entre envios (evitar throttling Meta)
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-      } catch (error) {
-        console.error("[broadcast-ai-queue] ❌ Failed to send to:", targetNumber, error);
-        results.failed++;
-        results.conversations.push({
-          conversation_id: conv.id,
-          phone: phone,
-          status: "failed",
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
+    if (jobError || !job) {
+      console.error("[broadcast-ai-queue] ❌ Failed to create job:", jobError);
+      return new Response(
+        JSON.stringify({ error: "Failed to create broadcast job" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const elapsedMs = Date.now() - startTime;
-    console.log("[broadcast-ai-queue] ✅ Broadcast completed in", elapsedMs, "ms");
-    console.log("[broadcast-ai-queue] 📊 Results:", {
-      total: results.total,
-      sent: results.sent,
-      failed: results.failed,
-      skipped: results.skipped,
-    });
+    console.log("[broadcast-ai-queue] ✅ Job created:", job.id);
 
-    return new Response(
+    // 4. Return immediately with job_id
+    const response = new Response(
       JSON.stringify({
-        ...results,
-        broadcast_id: broadcastId,
-        elapsed_ms: elapsedMs,
-        message: `Broadcast completed: ${results.sent} sent, ${results.failed} failed, ${results.skipped} skipped`,
+        job_id: job.id,
+        total: eligibleConversations.length,
+        message: "Broadcast job started",
+        status: "pending",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
+    // 5. Process in background using waitUntil
+    EdgeRuntime.waitUntil(
+      processBroadcast(supabase, job.id, message.trim(), eligibleConversations, metaInstance.id)
+    );
+
+    return response;
   } catch (error) {
     console.error("[broadcast-ai-queue] ❌ Error:", error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Unknown error" 
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

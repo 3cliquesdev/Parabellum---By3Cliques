@@ -1046,6 +1046,60 @@ export type Database = {
           },
         ]
       }
+      broadcast_jobs: {
+        Row: {
+          cancelled_at: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          failed: number
+          id: string
+          message: string
+          results: Json | null
+          sent: number
+          skipped: number
+          started_at: string | null
+          status: string
+          target_filter: Json | null
+          total: number
+        }
+        Insert: {
+          cancelled_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          failed?: number
+          id?: string
+          message: string
+          results?: Json | null
+          sent?: number
+          skipped?: number
+          started_at?: string | null
+          status?: string
+          target_filter?: Json | null
+          total?: number
+        }
+        Update: {
+          cancelled_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          failed?: number
+          id?: string
+          message?: string
+          results?: Json | null
+          sent?: number
+          skipped?: number
+          started_at?: string | null
+          status?: string
+          target_filter?: Json | null
+          total?: number
+        }
+        Relationships: []
+      }
       business_holidays: {
         Row: {
           created_at: string | null

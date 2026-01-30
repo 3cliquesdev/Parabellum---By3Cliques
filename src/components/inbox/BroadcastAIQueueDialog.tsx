@@ -14,7 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, Send, TestTube, CheckCircle, XCircle } from "lucide-react";
+import { useBroadcastProgress, BroadcastJob } from "@/hooks/useBroadcastProgress";
+import { AlertTriangle, Send, TestTube, CheckCircle, XCircle, Ban, Loader2 } from "lucide-react";
 
 interface BroadcastAIQueueDialogProps {
   open: boolean;
@@ -28,18 +29,7 @@ Tivemos uma instabilidade técnica e sua mensagem pode não ter sido respondida.
 
 Ainda precisa de atendimento? Responda aqui que já te ajudo! 🚀`;
 
-type BroadcastStatus = "idle" | "loading" | "sending" | "complete" | "error";
-
-interface BroadcastResult {
-  total: number;
-  sent: number;
-  failed: number;
-  skipped: number;
-  dry_run?: boolean;
-  message?: string;
-  broadcast_id?: string;
-  elapsed_ms?: number;
-}
+type DialogMode = "compose" | "monitoring";
 
 export function BroadcastAIQueueDialog({
   open,
@@ -49,17 +39,30 @@ export function BroadcastAIQueueDialog({
   const { toast } = useToast();
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
   const [dryRun, setDryRun] = useState(true);
-  const [status, setStatus] = useState<BroadcastStatus>("idle");
-  const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState<BroadcastResult | null>(null);
+  const [mode, setMode] = useState<DialogMode>("compose");
+  const [isStarting, setIsStarting] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [dryRunResult, setDryRunResult] = useState<{ total: number } | null>(null);
+
+  // Realtime progress hook
+  const { job, progressPercent, cancelJob, isLoading: isLoadingJob } = useBroadcastProgress({
+    jobId: activeJobId,
+    onComplete: (completedJob) => {
+      toast({
+        title: completedJob.status === "cancelled" ? "⏹️ Broadcast cancelado" : "📢 Broadcast concluído!",
+        description: `${completedJob.sent} enviados, ${completedJob.failed} falhas`,
+      });
+    },
+  });
 
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      setStatus("idle");
-      setProgress(0);
-      setResult(null);
+      setMode("compose");
+      setActiveJobId(null);
+      setDryRunResult(null);
       setDryRun(true);
+      setIsStarting(false);
     }
   }, [open]);
 
@@ -73,15 +76,9 @@ export function BroadcastAIQueueDialog({
       return;
     }
 
-    setStatus(dryRun ? "loading" : "sending");
-    setProgress(10);
+    setIsStarting(true);
 
     try {
-      // Simulate progress while waiting
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => Math.min(prev + 5, 90));
-      }, 500);
-
       const { data, error } = await supabase.functions.invoke("broadcast-ai-queue", {
         body: {
           message: message.trim(),
@@ -90,44 +87,59 @@ export function BroadcastAIQueueDialog({
         },
       });
 
-      clearInterval(progressInterval);
-
       if (error) {
         throw new Error(error.message);
       }
 
-      setProgress(100);
-      setResult(data);
-      setStatus("complete");
-
       if (dryRun) {
+        // Dry run - show preview
+        setDryRunResult({ total: data.total });
         toast({
           title: "🧪 Teste concluído",
           description: `${data.total} conversas seriam notificadas.`,
         });
       } else {
+        // Real broadcast - switch to monitoring mode
+        setActiveJobId(data.job_id);
+        setMode("monitoring");
         toast({
-          title: "📢 Broadcast enviado!",
-          description: `${data.sent} mensagens enviadas, ${data.failed} falhas.`,
+          title: "📢 Broadcast iniciado!",
+          description: `Enviando para ${data.total} conversas...`,
         });
       }
     } catch (error) {
       console.error("[BroadcastAIQueueDialog] Error:", error);
-      setStatus("error");
       toast({
         title: "Erro no broadcast",
         description: error instanceof Error ? error.message : "Erro desconhecido",
         variant: "destructive",
       });
+    } finally {
+      setIsStarting(false);
     }
   };
 
+  const handleCancel = async () => {
+    await cancelJob();
+    toast({
+      title: "⏹️ Cancelando...",
+      description: "O broadcast será interrompido em breve.",
+    });
+  };
+
   const handleClose = () => {
-    if (status === "sending") {
-      return; // Don't allow closing while sending
+    // Allow closing even during monitoring - job continues in background
+    if (mode === "monitoring" && job?.status === "running") {
+      toast({
+        title: "ℹ️ Broadcast continua",
+        description: "O envio continuará em segundo plano.",
+      });
     }
     onOpenChange(false);
   };
+
+  const isJobActive = job?.status === "running" || job?.status === "pending";
+  const isJobComplete = job?.status === "completed" || job?.status === "cancelled" || job?.status === "failed";
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -137,127 +149,167 @@ export function BroadcastAIQueueDialog({
             📢 Broadcast para Fila da IA
           </DialogTitle>
           <DialogDescription>
-            Envie uma mensagem de reengajamento para todas as conversas na fila
-            da IA que não foram respondidas.
+            {mode === "compose"
+              ? "Envie uma mensagem de reengajamento para todas as conversas WhatsApp na fila da IA."
+              : "Acompanhe o progresso do envio em tempo real."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Queue Count */}
-          <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-            <AlertTriangle className="h-5 w-5 text-warning" />
-            <span className="text-sm">
-              <strong>{queueCount}</strong> conversas WhatsApp serão notificadas
-            </span>
-          </div>
-
-          {/* Message Input */}
-          <div className="space-y-2">
-            <Label htmlFor="broadcast-message">Mensagem</Label>
-            <Textarea
-              id="broadcast-message"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Digite a mensagem..."
-              rows={6}
-              disabled={status === "sending"}
-              className="resize-none"
-            />
-            <p className="text-xs text-muted-foreground">
-              {message.length} caracteres
-            </p>
-          </div>
-
-          {/* Dry Run Toggle */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="dry-run"
-              checked={dryRun}
-              onCheckedChange={(checked) => setDryRun(checked === true)}
-              disabled={status === "sending"}
-            />
-            <Label
-              htmlFor="dry-run"
-              className="text-sm font-normal cursor-pointer"
-            >
-              Modo teste (não envia de verdade)
-            </Label>
-          </div>
-
-          {/* Progress Bar */}
-          {(status === "loading" || status === "sending") && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span>{dryRun ? "Verificando..." : "Enviando mensagens..."}</span>
-                <span>{progress}%</span>
-              </div>
-              <Progress value={progress} className="h-2" />
-            </div>
-          )}
-
-          {/* Results */}
-          {status === "complete" && result && (
-            <div className="p-4 border rounded-lg bg-card space-y-2">
-              <div className="flex items-center gap-2">
-                {result.dry_run ? (
-                  <TestTube className="h-5 w-5 text-primary" />
-                ) : (
-                  <CheckCircle className="h-5 w-5 text-success" />
-                )}
-                <span className="font-medium">
-                  {result.dry_run ? "Resultado do Teste" : "Broadcast Concluído"}
+          {mode === "compose" ? (
+            <>
+              {/* Queue Count */}
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <AlertTriangle className="h-5 w-5 text-warning" />
+                <span className="text-sm">
+                  <strong>{queueCount}</strong> conversas WhatsApp serão notificadas
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-sm">
-                <div className="p-2 bg-muted rounded text-center">
-                  <div className="text-lg font-bold">{result.total}</div>
-                  <div className="text-xs text-muted-foreground">Total</div>
-                </div>
-                <div className="p-2 bg-success/10 rounded text-center">
-                  <div className="text-lg font-bold text-success">{result.sent}</div>
-                  <div className="text-xs text-muted-foreground">Enviados</div>
-                </div>
-                <div className="p-2 bg-destructive/10 rounded text-center">
-                  <div className="text-lg font-bold text-destructive">{result.failed}</div>
-                  <div className="text-xs text-muted-foreground">Falhas</div>
-                </div>
-              </div>
-              {result.elapsed_ms && (
-                <p className="text-xs text-muted-foreground text-right">
-                  Tempo: {(result.elapsed_ms / 1000).toFixed(1)}s
-                </p>
-              )}
-            </div>
-          )}
 
-          {/* Error State */}
-          {status === "error" && (
-            <div className="p-4 border border-destructive rounded-lg bg-destructive/10 flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-destructive" />
-              <span className="text-sm text-destructive">
-                Erro ao executar broadcast. Tente novamente.
-              </span>
-            </div>
+              {/* Message Input */}
+              <div className="space-y-2">
+                <Label htmlFor="broadcast-message">Mensagem</Label>
+                <Textarea
+                  id="broadcast-message"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Digite a mensagem..."
+                  rows={6}
+                  disabled={isStarting}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {message.length} caracteres
+                </p>
+              </div>
+
+              {/* Dry Run Toggle */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="dry-run"
+                  checked={dryRun}
+                  onCheckedChange={(checked) => {
+                    setDryRun(checked === true);
+                    setDryRunResult(null);
+                  }}
+                  disabled={isStarting}
+                />
+                <Label htmlFor="dry-run" className="text-sm font-normal cursor-pointer">
+                  Modo teste (não envia de verdade)
+                </Label>
+              </div>
+
+              {/* Dry Run Result */}
+              {dryRunResult && (
+                <div className="p-3 border rounded-lg bg-card flex items-center gap-2">
+                  <TestTube className="h-5 w-5 text-primary" />
+                  <span className="text-sm">
+                    Teste OK: <strong>{dryRunResult.total}</strong> conversas seriam notificadas
+                  </span>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Monitoring Mode */}
+              <div className="space-y-4">
+                {/* Status Badge */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">
+                    {job?.status === "running" && "📤 Enviando..."}
+                    {job?.status === "pending" && "⏳ Iniciando..."}
+                    {job?.status === "completed" && "✅ Concluído!"}
+                    {job?.status === "cancelled" && "⏹️ Cancelado"}
+                    {job?.status === "failed" && "❌ Falhou"}
+                  </span>
+                  {isJobActive && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancel}
+                      className="text-destructive"
+                    >
+                      <Ban className="h-4 w-4 mr-1" />
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
+
+                {/* Progress Bar */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>
+                      {job ? `${job.sent + job.failed + job.skipped}/${job.total}` : "0/0"}
+                    </span>
+                    <span>{progressPercent}%</span>
+                  </div>
+                  <Progress value={progressPercent} className="h-3" />
+                </div>
+
+                {/* Stats Grid */}
+                {job && (
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div className="p-2 bg-success/10 rounded text-center">
+                      <div className="text-lg font-bold text-success">{job.sent}</div>
+                      <div className="text-xs text-muted-foreground">Enviados</div>
+                    </div>
+                    <div className="p-2 bg-destructive/10 rounded text-center">
+                      <div className="text-lg font-bold text-destructive">{job.failed}</div>
+                      <div className="text-xs text-muted-foreground">Falhas</div>
+                    </div>
+                    <div className="p-2 bg-muted rounded text-center">
+                      <div className="text-lg font-bold">{job.skipped}</div>
+                      <div className="text-xs text-muted-foreground">Pulados</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error Message */}
+                {job?.error_message && (
+                  <div className="p-3 border border-destructive rounded-lg bg-destructive/10 flex items-start gap-2">
+                    <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                    <span className="text-sm text-destructive">{job.error_message}</span>
+                  </div>
+                )}
+
+                {/* Completion Message */}
+                {isJobComplete && (
+                  <div className="p-3 border rounded-lg bg-card flex items-center gap-2">
+                    {job?.status === "completed" ? (
+                      <CheckCircle className="h-5 w-5 text-success" />
+                    ) : job?.status === "cancelled" ? (
+                      <Ban className="h-5 w-5 text-muted-foreground" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-destructive" />
+                    )}
+                    <span className="text-sm">
+                      {job?.status === "completed" && "Broadcast enviado com sucesso!"}
+                      {job?.status === "cancelled" && "Broadcast foi cancelado."}
+                      {job?.status === "failed" && "Broadcast falhou."}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={status === "sending"}
-          >
-            {status === "complete" ? "Fechar" : "Cancelar"}
+          <Button variant="outline" onClick={handleClose}>
+            {mode === "monitoring" && isJobComplete ? "Fechar" : "Cancelar"}
           </Button>
-          
-          {status !== "complete" && (
+
+          {mode === "compose" && (
             <Button
               onClick={handleBroadcast}
-              disabled={status === "loading" || status === "sending" || !message.trim()}
+              disabled={isStarting || !message.trim()}
               variant={dryRun ? "secondary" : "default"}
             >
-              {status === "sending" ? (
-                "Enviando..."
+              {isStarting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {dryRun ? "Testando..." : "Iniciando..."}
+                </>
               ) : dryRun ? (
                 <>
                   <TestTube className="h-4 w-4 mr-2" />
