@@ -189,8 +189,10 @@ export default function Inbox() {
       case "not_responded":
         // Filtrar por conversas do agente onde a última mensagem foi do cliente
         // Usar rawInboxItems (sem filtros) para garantir que todas as conversas são consideradas
+        // IMPORTANT: rawInboxItems pode demorar a carregar; evitar "zerar" usando fallback para inboxItems
+        const sourceInboxItems = rawInboxItems ?? inboxItems;
         const notRespondedIds = new Set(
-          rawInboxItems
+          sourceInboxItems
             ?.filter(item => 
               item.last_sender_type === 'contact' && 
               item.assigned_to === user?.id &&
