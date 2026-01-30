@@ -371,6 +371,7 @@ serve(async (req) => {
                         message: thankYouMessage,
                         conversation_id: csatConversation.id,
                         skip_db_save: true,
+                        is_bot_message: true, // 🆕 Agradecimento automático - NÃO mudar ai_mode
                       },
                     });
                     
@@ -601,6 +602,7 @@ serve(async (req) => {
                           message: queueMessage,
                           conversation_id: conversation.id,
                           skip_db_save: false,
+                          is_bot_message: true, // 🆕 Mensagem automática - NÃO mudar ai_mode
                         },
                       });
                       console.log("[meta-whatsapp-webhook] ✅ Mensagem de aguarde enviada");
@@ -645,6 +647,7 @@ serve(async (req) => {
                       message: formattedMessage,
                       conversation_id: conversation.id,
                       skip_db_save: false,
+                      is_bot_message: true, // 🆕 Resposta do fluxo - NÃO mudar ai_mode
                     },
                   });
                   

@@ -379,10 +379,11 @@ serve(async (req) => {
     // Isso impede que a IA interfira após o agente assumir
     // ============================================
     if (body.conversation_id) {
-      // Verificar se é mensagem de humano (não é IA/bot)
+      // Verificar se é mensagem de humano (não é IA/bot/fluxo)
       // Templates e mensagens interativas geralmente são do sistema
       // Mensagens de texto simples do frontend são de humanos
-      const isHumanMessage = body.message && !body.template && !body.interactive;
+      // 🆕 is_bot_message = true indica que é mensagem automática do fluxo (NÃO muda ai_mode)
+      const isHumanMessage = body.message && !body.template && !body.interactive && !(body as { is_bot_message?: boolean }).is_bot_message;
       
       if (isHumanMessage) {
         // Verificar estado atual da conversa
