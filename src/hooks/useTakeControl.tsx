@@ -209,7 +209,57 @@ export function useTakeControl() {
 
       return { conversationId };
     },
+    onMutate: async ({ conversationId }) => {
+      // 🚀 OPTIMISTIC UPDATE: Atualiza o cache ANTES da mutation completar
+      // Isso garante que o composer apareça INSTANTANEAMENTE após clicar em Assumir
+      
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["ai-mode", conversationId] });
+      await queryClient.cancelQueries({ queryKey: ["conversations"] });
+      
+      // Snapshot previous values
+      const previousAIMode = queryClient.getQueryData(["ai-mode", conversationId]);
+      const previousConversations = queryClient.getQueryData(["conversations"]);
+      
+      // Optimistically update ai-mode to 'copilot'
+      queryClient.setQueryData(["ai-mode", conversationId], 'copilot');
+      
+      // Also update conversations cache if it exists
+      queryClient.setQueriesData({ queryKey: ["conversations"] }, (old: any) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.map((conv: any) => 
+            conv.id === conversationId 
+              ? { ...conv, ai_mode: 'copilot', assigned_to: user?.id }
+              : conv
+          );
+        }
+        if (old.id === conversationId) {
+          return { ...old, ai_mode: 'copilot', assigned_to: user?.id };
+        }
+        return old;
+      });
+      
+      return { previousAIMode, previousConversations, conversationId };
+    },
+    onError: (error: Error, variables, context) => {
+      // Rollback on error
+      if (context?.previousAIMode !== undefined) {
+        queryClient.setQueryData(["ai-mode", context.conversationId], context.previousAIMode);
+      }
+      if (context?.previousConversations !== undefined) {
+        queryClient.setQueryData(["conversations"], context.previousConversations);
+      }
+      
+      console.error('[useTakeControl] Erro:', error);
+      toast({
+        title: "Erro ao assumir controle",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
     onSuccess: ({ conversationId }) => {
+      // Revalidate to sync with server
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["ai-mode", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["customer-timeline"] });
@@ -217,14 +267,6 @@ export function useTakeControl() {
       toast({
         title: "✋ Controle Assumido",
         description: "Você agora está no modo Copilot. A IA irá sugerir respostas para você.",
-      });
-    },
-    onError: (error: Error) => {
-      console.error('[useTakeControl] Erro:', error);
-      toast({
-        title: "Erro ao assumir controle",
-        description: error.message,
-        variant: "destructive",
       });
     },
   });
