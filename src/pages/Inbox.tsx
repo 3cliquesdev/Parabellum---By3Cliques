@@ -246,7 +246,23 @@ export default function Inbox() {
     const fullConversations = conversations ?? [];
     const sourceInboxItems = rawInboxItems ?? inboxItems;
     
+    // 🔍 BUSCA GLOBAL - PRIORIDADE MÁXIMA
+    // Quando há busca ativa, SEMPRE usar inboxItems (que já passou pelo filtro de busca)
+    // Isso ignora qualquer filtro de categoria (mine, not_responded, etc)
+    const hasActiveSearch = filters.search && filters.search.trim().length > 0;
+    if (hasActiveSearch && inboxItems) {
+      // Construir lista diretamente de inboxItems (que já passou pelo filtro de busca)
+      const searchResults = inboxItems.map(item => {
+        // Tentar encontrar a conversa completa na lista de conversations
+        const fullConv = fullConversations.find(c => c.id === item.conversation_id);
+        return fullConv || inboxItemToConversation(item);
+      }).filter(Boolean);
+      
+      return searchResults;
+    }
+    
     // 🔒 FILTRO ESPECIAL: not_responded - usar hook dedicado (fonte de verdade absoluta)
+    // SOMENTE quando NÃO há busca ativa
     if (filter === "not_responded") {
       // Usar myNotRespondedItems diretamente - consulta ao banco, não depende de cache
       if (!myNotRespondedItems || myNotRespondedItems.length === 0) {
@@ -260,6 +276,7 @@ export default function Inbox() {
     }
     
     // 🔒 FILTRO ESPECIAL: mine - usar inboxItems diretamente para garantir consistência
+    // SOMENTE quando NÃO há busca ativa
     if (filter === "mine") {
       const myItems = sourceInboxItems?.filter(item => 
         item.assigned_to === user?.id &&
@@ -269,20 +286,6 @@ export default function Inbox() {
         const fullConv = fullConversations.find(c => c.id === item.conversation_id);
         return fullConv || inboxItemToConversation(item);
       });
-    }
-    
-    // 🔍 BUSCA GLOBAL: Quando há busca ativa, usar inboxItems diretamente
-    // Isso permite encontrar conversas de outros departamentos/status que o usuário não teria acesso normal
-    const hasActiveSearch = filters.search && filters.search.trim().length > 0;
-    if (hasActiveSearch && inboxItems) {
-      // Construir lista diretamente de inboxItems (que já passou pelo filtro de busca)
-      const searchResults = inboxItems.map(item => {
-        // Tentar encontrar a conversa completa na lista de conversations
-        const fullConv = fullConversations.find(c => c.id === item.conversation_id);
-        return fullConv || inboxItemToConversation(item);
-      }).filter(Boolean);
-      
-      return searchResults;
     }
 
     // Para outros filtros, se conversations ainda não carregou mas temos inboxItems,
