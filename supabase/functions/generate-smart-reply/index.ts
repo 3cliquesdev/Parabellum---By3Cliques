@@ -124,6 +124,40 @@ interface ObserverResponse {
   suggestions: ObserverSuggestion[];
 }
 
+// ============================================================
+// NORMALIZAÇÃO: Calcular system_confidence_score
+// Evita que a IA infle scores arbitrariamente
+// ============================================================
+function calculateSystemConfidence(
+  suggestion: ObserverSuggestion, 
+  kbContext: string
+): number {
+  let systemScore = 50; // Base
+  
+  if (suggestion.type === 'reply') {
+    // +30 se KB foi encontrada
+    if (kbContext !== 'Nenhum artigo relevante encontrado.') {
+      systemScore += 30;
+    }
+    // +10 se resposta é curta e objetiva (< 200 chars)
+    if (suggestion.content.length < 200) {
+      systemScore += 10;
+    }
+    // +10 se não contém perguntas
+    if (!suggestion.content.includes('?')) {
+      systemScore += 10;
+    }
+  } else if (suggestion.type === 'kb_gap') {
+    // KB Gap sempre score fixo (precisa de revisão humana)
+    systemScore = 60;
+  } else if (suggestion.type === 'classification') {
+    // Classification sempre confiança média
+    systemScore = 70;
+  }
+  
+  return Math.min(100, systemScore);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -139,7 +173,7 @@ serve(async (req) => {
     
     console.log(`[generate-smart-reply] 🧠 Gerando sugestões Copilot para conversa ${conversationId}...`);
 
-    // 1. Buscar conversa e verificar modo
+    // 1. Buscar conversa e verificar modo + cooldown
     const { data: conversation, error: convError } = await supabaseClient
       .from('conversations')
       .select(`
@@ -148,6 +182,7 @@ serve(async (req) => {
         channel,
         department,
         status,
+        last_suggestion_at,
         contacts!inner(
           first_name, 
           last_name, 
@@ -159,8 +194,12 @@ serve(async (req) => {
 
     if (convError || !conversation) {
       console.error('[generate-smart-reply] Conversa não encontrada:', convError);
-      return new Response(JSON.stringify({ error: 'Conversa não encontrada' }), {
-        status: 404,
+      return new Response(JSON.stringify({ 
+        status: 'silent_fallback',
+        suggestions_count: 0,
+        suggestions: []
+      }), {
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -171,6 +210,27 @@ serve(async (req) => {
       return new Response(JSON.stringify({ 
         status: 'ignored', 
         reason: 'not_copilot' 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ============================================================
+    // ANTI-SPAM: Verificar cooldown de 60 segundos
+    // ============================================================
+    const lastSuggestionAt = conversation.last_suggestion_at 
+      ? new Date(conversation.last_suggestion_at) 
+      : null;
+    const now = new Date();
+    const COOLDOWN_MS = 60000; // 60 segundos
+
+    if (lastSuggestionAt && (now.getTime() - lastSuggestionAt.getTime()) < COOLDOWN_MS) {
+      const secondsRemaining = Math.ceil((COOLDOWN_MS - (now.getTime() - lastSuggestionAt.getTime())) / 1000);
+      console.log(`[generate-smart-reply] ⏳ Cooldown ativo (${secondsRemaining}s restantes), ignorando...`);
+      return new Response(JSON.stringify({ 
+        status: 'skipped', 
+        reason: 'cooldown_60s',
+        seconds_remaining: secondsRemaining
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -187,8 +247,12 @@ serve(async (req) => {
 
     if (messagesError || !messages || messages.length === 0) {
       console.error('[generate-smart-reply] Erro ao buscar mensagens:', messagesError);
-      return new Response(JSON.stringify({ error: 'Nenhuma mensagem encontrada' }), {
-        status: 400,
+      return new Response(JSON.stringify({ 
+        status: 'silent_fallback',
+        suggestions_count: 0,
+        suggestions: []
+      }), {
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -315,18 +379,48 @@ Analise e gere suas sugestões em JSON.`;
         continue;
       }
 
-      // Validar confidence
-      const confidence = Math.min(100, Math.max(0, suggestion.confidence_score || 0));
+      // ============================================================
+      // ANTI-DUPLICIDADE: Limitar 1 classification por conversa
+      // ============================================================
+      if (suggestion.type === 'classification') {
+        const { data: existingClassification } = await supabaseClient
+          .from('ai_suggestions')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('suggestion_type', 'classification')
+          .limit(1)
+          .maybeSingle();
+        
+        if (existingClassification) {
+          console.log('[generate-smart-reply] ⏭️ Classification já existe, pulando...');
+          continue;
+        }
+        
+        // Atualizar timestamp de classificação
+        await supabaseClient
+          .from('conversations')
+          .update({ last_classified_at: new Date().toISOString() })
+          .eq('id', conversationId);
+      }
+
+      // ============================================================
+      // NORMALIZAÇÃO: Calcular score final = MIN(AI, System)
+      // ============================================================
+      const aiConfidence = Math.min(100, Math.max(0, suggestion.confidence_score || 0));
+      const systemConfidence = calculateSystemConfidence(suggestion, kbContext);
+      const finalConfidence = Math.min(aiConfidence, systemConfidence);
 
       const insertData: any = {
         conversation_id: conversationId,
         suggestion_type: suggestion.type,
-        confidence_score: confidence,
+        confidence_score: finalConfidence,
         used: false,
         context: {
           contact_name: contactName,
           messages_count: messages.length,
           department: departmentName,
+          ai_confidence: aiConfidence,
+          system_confidence: systemConfidence,
           generated_at: new Date().toISOString()
         }
       };
@@ -352,9 +446,17 @@ Analise e gere suas sugestões em JSON.`;
         console.error('[generate-smart-reply] Erro ao salvar sugestão:', saveError);
       } else {
         savedSuggestions.push(savedSuggestion);
-        console.log(`[generate-smart-reply] ✅ Sugestão ${suggestion.type} salva: ${savedSuggestion.id}`);
+        console.log(`[generate-smart-reply] ✅ Sugestão ${suggestion.type} salva: ${savedSuggestion.id} (conf: ${finalConfidence}%)`);
       }
     }
+
+    // ============================================================
+    // Atualizar timestamp de última sugestão (anti-spam)
+    // ============================================================
+    await supabaseClient
+      .from('conversations')
+      .update({ last_suggestion_at: new Date().toISOString() })
+      .eq('id', conversationId);
 
     console.log(`[generate-smart-reply] ✅ ${savedSuggestions.length} sugestões salvas com sucesso!`);
 
@@ -367,11 +469,18 @@ Analise e gere suas sugestões em JSON.`;
     });
 
   } catch (error) {
-    console.error('[generate-smart-reply] Erro geral:', error);
+    // ============================================================
+    // FALHA SILENCIOSA: Log interno apenas, retorno vazio para agente
+    // Sempre 200 para não disparar erro no frontend
+    // ============================================================
+    console.error('[generate-smart-reply] ❌ Erro silenciado:', error);
+    
     return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Erro desconhecido' 
+      status: 'silent_fallback',
+      suggestions_count: 0,
+      suggestions: []
     }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

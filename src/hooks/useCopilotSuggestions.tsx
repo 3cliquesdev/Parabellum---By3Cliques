@@ -80,12 +80,9 @@ export function useGenerateCopilotSuggestions() {
       }
     },
     onError: (error: Error) => {
-      console.error('[useGenerateCopilotSuggestions] Erro:', error);
-      toast({
-        title: "Erro ao gerar sugestões",
-        description: error.message,
-        variant: "destructive",
-      });
+      // SILENCIOSO: Não exibir toast de erro para sugestões
+      // Agente não precisa saber que sugestão falhou - isso é background
+      console.warn('[useGenerateCopilotSuggestions] Erro silenciado:', error.message);
     },
   });
 }

@@ -1739,7 +1739,9 @@ export type Database = {
           handoff_executed_at: string | null
           id: string
           is_test_mode: boolean | null
+          last_classified_at: string | null
           last_message_at: string
+          last_suggestion_at: string | null
           learned_at: string | null
           needs_human_review: boolean | null
           previous_agent_id: string | null
@@ -1769,7 +1771,9 @@ export type Database = {
           handoff_executed_at?: string | null
           id?: string
           is_test_mode?: boolean | null
+          last_classified_at?: string | null
           last_message_at?: string
+          last_suggestion_at?: string | null
           learned_at?: string | null
           needs_human_review?: boolean | null
           previous_agent_id?: string | null
@@ -1799,7 +1803,9 @@ export type Database = {
           handoff_executed_at?: string | null
           id?: string
           is_test_mode?: boolean | null
+          last_classified_at?: string | null
           last_message_at?: string
+          last_suggestion_at?: string | null
           learned_at?: string | null
           needs_human_review?: boolean | null
           previous_agent_id?: string | null
