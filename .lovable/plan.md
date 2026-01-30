@@ -1,111 +1,86 @@
 
-# Plano: Corrigir Transferências Não Executadas pelo Fluxo
+
+# Plano: Corrigir Transferências e Proteção de AI Mode no Comercial
 
 ## Diagnóstico Completo
 
-Após investigação profunda, identifiquei o **bug raiz** que faz com que conversas transferidas para o departamento Comercial continuem sendo respondidas pela IA.
+Após investigação profunda, identifiquei dois problemas que afetam o time Comercial:
 
-### Evidências Encontradas
+### Problema 1: "Sem permissão para transferir"
 
-| Conversa | Departamento | ai_mode | handoff_executed_at | Problema |
-|----------|--------------|---------|---------------------|----------|
-| 2c34993d... | Comercial | **autopilot** | NULL | ❌ Transferência não executou |
-| 87415fb1... | Comercial | **autopilot** | 2026-01-29 14:50:18 | ❌ ai_mode não mudou |
-| 0f668c7d... | Comercial | **autopilot** | NULL | ❌ Transferência não executou |
-| + 7 outras | Comercial | **autopilot** | misto | ❌ Mesmo problema |
+A função `transfer_conversation_secure` está falhando ao tentar atualizar `ai_mode` porque:
+- A coluna `ai_mode` é um **ENUM** (tipo customizado)
+- A função atribui strings diretamente: `ai_mode = 'copilot'`
+- O PostgreSQL requer cast explícito: `ai_mode = 'copilot'::ai_mode`
 
-### Estado dos Agentes do Comercial
-
-Todos os 30+ agentes do departamento Comercial estão **offline**. Isso explica por que o dispatcher não consegue atribuir, mas não explica por que o `ai_mode` não muda para `waiting_human`.
-
-### Bug Identificado
-
-O problema está no **meta-whatsapp-webhook** nas linhas 621-674:
-
-```typescript
-// CASO 2: Fluxo retornou resposta estática (Message/AskOptions/etc)
-if (!flowData.useAI && flowData.response) {  // ❌ BUG: Requer response
-  // ... envia mensagem ...
-  
-  // 🆕 EXECUTAR TRANSFERÊNCIA SE NECESSÁRIO
-  if (flowData.transfer) {  // ❌ NUNCA EXECUTA SE response é vazio/undefined
-    // atualiza ai_mode = 'waiting_human'
-  }
-}
+O erro que aparece nos logs do Postgres confirma:
+```
+ERROR: column "ai_mode" is of type ai_mode but expression is of type text
 ```
 
-A condição `flowData.response` é **obrigatória** para entrar no CASO 2. Se o nó de transferência não tem mensagem configurada (ou foi apagada), a transferência **nunca é executada**.
+### Problema 2: IA Respondendo em Conversas com Agente Atribuído
 
-### Fluxo do Bug
+Algumas conversas podem estar com `ai_mode = 'autopilot'` mesmo tendo agente atribuído. Isso acontece quando:
+1. O UPDATE de `ai_mode` falha silenciosamente devido ao erro de ENUM
+2. A conversa foi transferida antes do fix de handoff
 
-```text
-Cliente responde "1" (Drop Nacional)
-        ↓
-process-chat-flow retorna:
-  { transfer: true, departmentId: "Comercial", response: "" }
-        ↓
-meta-whatsapp-webhook verifica CASO 2:
-  !flowData.useAI (✅ true) && flowData.response (❌ "" = falsy)
-        ↓
-CASO 2 NÃO ENTRA → Pula para CASO 3
-        ↓
-CASO 3: flowData.useAI (❌ false) → Não entra
-        ↓
-CASO 4 (fallback): ai_mode = 'waiting_human'
-        ↓
-❌ MAS: department não foi atualizado!
-❌ E: handoff_executed_at não foi setado!
-```
+### Evidência dos Logs
 
-**Resultado**: A conversa fica em `waiting_human` MAS sem departamento correto, ou fica em `autopilot` se alguma outra lógica interferir.
+| Timestamp | Erro |
+|-----------|------|
+| 14:27:46 | `column "ai_mode" is of type ai_mode but expression is of type text` |
+
+### Estado Atual do Comercial
+
+| Conversa | ai_mode | assigned_to | Status |
+|----------|---------|-------------|--------|
+| Maioria | `copilot` | Fernanda/Thaynara | OK |
+| Algumas | `waiting_human` | Fernanda/Thaynara | OK |
+| Potenciais órfãs | `autopilot`? | Atribuído | PROBLEMA |
 
 ## Solução
 
-Separar a **verificação de transferência** da verificação de resposta, garantindo que transferências sejam executadas **independentemente** de haver mensagem.
+### Correção 1: Cast Explícito para ENUM na Função SQL
 
-### Mudanças Necessárias
+Modificar a função `transfer_conversation_secure` para usar cast explícito:
 
-**Arquivo:** `supabase/functions/meta-whatsapp-webhook/index.ts`
+```sql
+-- ANTES (causa erro):
+ai_mode = CASE 
+  WHEN p_to_user_id IS NOT NULL THEN 'copilot'
+  ELSE 'waiting_human'
+END
 
-1. **Mover a execução de transferência para ANTES do continue** (ou para um bloco separado)
-2. **Verificar `flowData.transfer` de forma independente** de `flowData.response`
-3. **Garantir que `ai_mode = 'waiting_human'` seja setado** mesmo se não há mensagem
-
-### Código Corrigido
-
-```typescript
-// CASO 2: Fluxo retornou resposta estática (Message/AskOptions/etc)
-if (!flowData.useAI && flowData.response) {
-  // ... envia mensagem normalmente ...
-}
-
-// 🆕 EXECUTAR TRANSFERÊNCIA INDEPENDENTEMENTE DE HAVER RESPOSTA
-if (flowData.transfer) {
-  console.log("[meta-whatsapp-webhook] 🔄 Executing transfer to department:", flowData.departmentId);
-  
-  const updateData: Record<string, unknown> = {
-    ai_mode: 'waiting_human',
-    handoff_executed_at: new Date().toISOString(),
-  };
-  
-  if (flowData.departmentId) {
-    updateData.department = flowData.departmentId;
-  }
-  
-  const { error: updateError } = await supabase
-    .from("conversations")
-    .update(updateData)
-    .eq("id", conversation.id);
-  
-  if (updateError) {
-    console.error("[meta-whatsapp-webhook] ❌ Error executing transfer:", updateError);
-  } else {
-    console.log("[meta-whatsapp-webhook] ✅ Transfer executed → department:", flowData.departmentId, "ai_mode: waiting_human");
-  }
-  
-  continue; // Pular para próxima mensagem após transferência
-}
+-- DEPOIS (correto):
+ai_mode = CASE 
+  WHEN p_to_user_id IS NOT NULL THEN 'copilot'::ai_mode
+  ELSE 'waiting_human'::ai_mode
+END
 ```
+
+### Correção 2: Cast Explícito no Webhook
+
+O `meta-whatsapp-webhook` também precisa ajustar os updates para usar o cast correto. Verificar todas as ocorrências de `ai_mode` no código TypeScript das Edge Functions.
+
+### Correção 3: Reparar Conversas Órfãs
+
+Executar SQL para corrigir conversas que têm agente atribuído mas estão em `autopilot`:
+
+```sql
+UPDATE conversations
+SET ai_mode = 'copilot'
+WHERE assigned_to IS NOT NULL
+  AND ai_mode = 'autopilot'
+  AND status = 'open';
+```
+
+## Mudanças Necessárias
+
+| Arquivo | Tipo | Mudança |
+|---------|------|---------|
+| Migration SQL | Banco de Dados | Recriar função com cast explícito |
+| `supabase/functions/meta-whatsapp-webhook/index.ts` | Edge Function | Verificar se SDK do Supabase aceita string |
+| Migration SQL | Banco de Dados | Corrigir conversas órfãs |
 
 ## Impacto Esperado
 
@@ -113,79 +88,154 @@ if (flowData.transfer) {
 
 | Cenário | Resultado |
 |---------|-----------|
-| Transferência com mensagem | ✅ Funciona |
-| Transferência sem mensagem | ❌ IA continua respondendo |
-| Transferência com response vazio | ❌ IA continua respondendo |
+| Agente do Comercial tenta transferir | "Sem permissão" (UPDATE falha) |
+| IA em conversa com agente | Responde automaticamente |
 
 ### Depois (Corrigido)
 
 | Cenário | Resultado |
 |---------|-----------|
-| Transferência com mensagem | ✅ Funciona |
-| Transferência sem mensagem | ✅ ai_mode = waiting_human |
-| Transferência com response vazio | ✅ ai_mode = waiting_human |
-
-## Correção Adicional: Conversas Órfãs
-
-Além da correção do código, precisamos corrigir as **10 conversas** que já estão em autopilot mas deveriam estar em waiting_human:
-
-```sql
-UPDATE conversations
-SET ai_mode = 'waiting_human'
-WHERE department = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c'  -- Comercial
-  AND ai_mode = 'autopilot'
-  AND status = 'open'
-  AND assigned_to IS NULL;
-```
-
-## Arquivos a Modificar
-
-| Arquivo | Tipo | Mudança |
-|---------|------|---------|
-| `supabase/functions/meta-whatsapp-webhook/index.ts` | Edge Function | Separar lógica de transferência |
-| Migration SQL | Banco de Dados | Corrigir conversas órfãs |
+| Agente do Comercial tenta transferir | Sucesso, ai_mode = copilot |
+| IA em conversa com agente | Bloqueada (ai_mode = copilot) |
 
 ## Compatibilidade
 
-- Não afeta transferências que já funcionam (com resposta)
-- Corrige edge case de transferências sem mensagem
-- Mantém toda lógica existente de fluxo/IA
+- Não afeta fluxo de transferência existente
+- Corrige edge cases de ENUM
+- Mantém todas as proteções de ai_mode
 
 ---
 
 ## Seção Técnica
 
-### Estrutura Final do Webhook (Pseudocódigo)
+### SQL da Função Corrigida
 
-```text
-// CASO 1: skipAutoResponse (cliente na fila)
-if (flowData.skipAutoResponse) → continue
+```sql
+CREATE OR REPLACE FUNCTION public.transfer_conversation_secure(
+  p_conversation_id UUID,
+  p_to_user_id UUID,
+  p_to_department_id UUID,
+  p_transfer_note TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+  v_has_permission BOOLEAN;
+  v_conversation RECORD;
+  v_from_user_name TEXT;
+  v_to_user_name TEXT;
+  v_department_name TEXT;
+  v_new_ai_mode ai_mode;  -- Usar tipo ENUM explícito
+BEGIN
+  -- 1. Verificar permissão
+  SELECT EXISTS(
+    SELECT 1 FROM role_permissions rp
+    JOIN user_roles ur ON ur.role::text = rp.role::text
+    WHERE ur.user_id = v_caller_id
+      AND rp.permission_key = 'inbox.transfer'
+      AND rp.enabled = true
+  ) OR public.has_role(v_caller_id, 'admin')
+  INTO v_has_permission;
 
-// CASO 2: Resposta estática (envia mensagem)
-if (!flowData.useAI && flowData.response) {
-  → enviar mensagem
-}
+  IF NOT v_has_permission THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Sem permissão para transferir conversas');
+  END IF;
 
-// CASO 2.5: 🆕 TRANSFERÊNCIA (independente de response)
-if (flowData.transfer) {
-  → atualizar ai_mode = 'waiting_human'
-  → atualizar department = flowData.departmentId
-  → continue
-}
+  -- 2. Buscar conversa
+  SELECT c.*, ct.first_name, ct.last_name
+  INTO v_conversation
+  FROM conversations c
+  JOIN contacts ct ON ct.id = c.contact_id
+  WHERE c.id = p_conversation_id;
 
-// CASO 3: AIResponseNode
-if (flowData.useAI && flowData.aiNodeActive) {
-  → chamar ai-autopilot-chat
-  → continue
-}
+  IF v_conversation IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Conversa não encontrada');
+  END IF;
 
-// CASO 4: Fallback
-→ ai_mode = 'waiting_human'
+  -- 3. Buscar nomes
+  SELECT full_name INTO v_from_user_name FROM profiles WHERE id = v_conversation.assigned_to;
+  SELECT full_name INTO v_to_user_name FROM profiles WHERE id = p_to_user_id;
+  SELECT name INTO v_department_name FROM departments WHERE id = p_to_department_id;
+
+  -- 4. Determinar novo ai_mode com cast explícito
+  v_new_ai_mode := CASE 
+    WHEN p_to_user_id IS NOT NULL THEN 'copilot'::ai_mode
+    ELSE 'waiting_human'::ai_mode
+  END;
+
+  -- 5. Executar transferência
+  UPDATE conversations
+  SET 
+    assigned_to = p_to_user_id,
+    department = p_to_department_id,
+    previous_agent_id = v_conversation.assigned_to,
+    ai_mode = v_new_ai_mode  -- Usar variável tipada
+  WHERE id = p_conversation_id;
+
+  -- 6. Registrar auditoria
+  INSERT INTO interactions (customer_id, type, content, channel, metadata)
+  VALUES (
+    v_conversation.contact_id,
+    'conversation_transferred',
+    format('🔄 Conversa transferida de %s para %s (%s)',
+      COALESCE(v_from_user_name, 'Pool'),
+      COALESCE(v_to_user_name, 'Pool do Departamento'),
+      COALESCE(v_department_name, 'Departamento')
+    ),
+    'other',
+    jsonb_build_object(
+      'from_user_id', v_conversation.assigned_to,
+      'to_user_id', p_to_user_id,
+      'from_user_name', v_from_user_name,
+      'to_user_name', v_to_user_name,
+      'to_department_id', p_to_department_id,
+      'to_department_name', v_department_name,
+      'conversation_id', p_conversation_id,
+      'transfer_note', p_transfer_note,
+      'transferred_by', v_caller_id,
+      'is_internal', true,
+      'ai_mode_set_to', v_new_ai_mode::text
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'conversation_id', p_conversation_id,
+    'to_user_id', p_to_user_id,
+    'to_department_id', p_to_department_id,
+    'ai_mode', v_new_ai_mode::text
+  );
+END;
+$$;
+```
+
+### SQL para Corrigir Conversas Órfãs
+
+```sql
+-- Corrigir conversas com agente mas em autopilot
+UPDATE conversations
+SET ai_mode = 'copilot'::ai_mode
+WHERE assigned_to IS NOT NULL
+  AND ai_mode = 'autopilot'
+  AND status = 'open';
+
+-- Corrigir conversas do Comercial específicas
+UPDATE conversations
+SET ai_mode = 'waiting_human'::ai_mode
+WHERE department = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c'
+  AND ai_mode = 'autopilot'
+  AND status = 'open'
+  AND assigned_to IS NULL;
 ```
 
 ### Verificação Pós-Deploy
 
-1. Enviar mensagem de teste que dispare transferência
-2. Verificar logs: deve aparecer "🔄 Executing transfer"
-3. Verificar banco: `ai_mode = 'waiting_human'` e `department` correto
-4. Cliente não deve receber mais respostas da IA
+1. Agente do Comercial tenta transferir uma conversa
+2. Verificar que o toast mostra "Conversa transferida com sucesso"
+3. Verificar no banco: `ai_mode = 'copilot'` ou `'waiting_human'`
+4. Cliente envia mensagem → Verificar que IA NÃO responde
+
