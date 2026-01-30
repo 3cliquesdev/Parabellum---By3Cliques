@@ -1,74 +1,163 @@
 
+# Plano: Mensagem de "Aguarde" Quando Cliente Está na Fila
 
-# Análise: Proteção de `ai_mode` - Já Implementado e Funcionando
+## Problema Identificado
 
-## Situação Atual
+Atualmente, quando o cliente está em `waiting_human` (na fila aguardando atendente) e envia uma mensagem:
+- O `process-chat-flow` retorna `skipAutoResponse: true` ✅
+- O webhook simplesmente faz `continue` sem enviar nada ❌
 
-A proteção de `ai_mode` **já foi implementada e está funcionando corretamente** desde o deploy de hoje (~11:49).
+**Resultado:** Cliente fica sem resposta, pode pensar que foi ignorado.
 
-## Evidências nos Logs
+## Solução: Mensagem Tranquilizadora Automática
 
-### Proteção Ativa (logs do `process-chat-flow`)
+Quando `skipAutoResponse: true` E `reason` indica que cliente está na fila, enviar uma mensagem de aguarde:
+
+```text
+💬 Sua conversa já está na fila de atendimento. 
+
+Fique tranquilo, em breve um especialista irá te atender. 🙂
 ```
-11:52:38 - 🛡️ PROTEÇÃO: ai_mode=waiting_human - NÃO processar fluxo/IA ✅
-11:52:28 - 🛡️ PROTEÇÃO: ai_mode=copilot - NÃO processar fluxo/IA ✅
-11:49:53 - 🛡️ PROTEÇÃO: ai_mode=waiting_human - NÃO processar fluxo/IA ✅
-```
 
-### Nenhuma Mensagem de Fluxo Após Deploy
-- **Zero mensagens** de fluxo/bot em conversas `copilot` ou `waiting_human` após 11:50
-- Antes do deploy (11:41-11:47) havia mensagens incorretas - isso foi o que o time reportou
+---
 
-## O Que Foi Implementado
+## Alteração a Implementar
 
-### 1. Verificação de `ai_mode` no `process-chat-flow`
+### 1. Edge Function: `meta-whatsapp-webhook/index.ts`
+
+**Linhas 562-570** - Adicionar mensagem de aguarde:
+
 ```typescript
-// ============================================================
-// 🛡️ PROTEÇÃO: Respeitar ai_mode da conversa (Contrato v2.3)
-// ============================================================
-const { data: convState } = await supabaseClient
-  .from('conversations')
-  .select('ai_mode, assigned_to')
-  .eq('id', conversationId)
-  .maybeSingle();
-
-if (currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') {
-  return new Response(JSON.stringify({
-    useAI: false,
-    skipAutoResponse: true,
-    reason: `ai_mode_${currentAiMode}`
-  }), { headers });
+// CASO 1: skipAutoResponse = true → Cliente na fila/copilot/disabled
+if (flowData.skipAutoResponse) {
+  console.log("[AUTO-DECISION] [WhatsApp Meta] Flow skipAutoResponse → waiting_human");
+  
+  // 🆕 MENSAGEM DE AGUARDE: Enviar confirmação ao cliente na fila
+  // Apenas se reason indica que está esperando humano (não kill switch)
+  if (flowData.reason === 'ai_mode_waiting_human') {
+    console.log("[meta-whatsapp-webhook] 📨 Enviando mensagem de aguarde...");
+    
+    const queueMessage = "💬 Sua conversa já está na fila de atendimento.\n\nFique tranquilo, em breve um especialista irá te atender. 🙂";
+    
+    try {
+      await supabase.functions.invoke("send-meta-whatsapp", {
+        body: {
+          instance_id: instance.id,
+          phone_number: fromNumber,
+          message: queueMessage,
+          conversation_id: conversation.id,
+          skip_db_save: false,
+        },
+      });
+      console.log("[meta-whatsapp-webhook] ✅ Mensagem de aguarde enviada");
+    } catch (queueErr) {
+      console.error("[meta-whatsapp-webhook] ⚠️ Erro ao enviar mensagem de aguarde:", queueErr);
+    }
+  }
+  
+  // Garantir que está em waiting_human
+  await supabase
+    .from("conversations")
+    .update({ ai_mode: "waiting_human" })
+    .eq("id", conversation.id);
+  
+  continue;
 }
 ```
 
-### 2. Documentação no Super Prompt v2.3
-Seção 14 adicionada com regras claras de comportamento por modo.
+### 2. Considerar Rate Limiting (Proteção Anti-Spam)
 
-## Proteção Multi-Camada
+Para evitar que o cliente receba muitas mensagens de "aguarde" se mandar várias mensagens seguidas:
 
-O sistema agora tem **3 camadas de proteção**:
+```typescript
+// 🛡️ ANTI-SPAM: Verificar última mensagem do sistema
+const { data: lastBotMsg } = await supabase
+  .from("messages")
+  .select("created_at, content")
+  .eq("conversation_id", conversation.id)
+  .eq("sender_type", "user") // "user" = bot/sistema no modelo atual
+  .eq("is_ai_generated", true)
+  .order("created_at", { ascending: false })
+  .limit(1)
+  .single();
 
-| Camada | Arquivo | Verificação |
-|--------|---------|-------------|
-| 1 | `process-chat-flow/index.ts` | Verifica `ai_mode` antes de processar fluxo |
-| 2 | `meta-whatsapp-webhook/index.ts` | Verifica `conversation.ai_mode === "autopilot"` |
-| 3 | `ai-autopilot-chat/index.ts` | Verifica `conversation.ai_mode !== 'autopilot'` e retorna `skipped` |
+// Só enviar se última mensagem do bot foi há mais de 2 minutos
+const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+const lastMsgDate = lastBotMsg?.created_at ? new Date(lastBotMsg.created_at) : null;
+const shouldSendQueueMsg = !lastMsgDate || lastMsgDate < twoMinutesAgo;
 
-## Status Final
+if (shouldSendQueueMsg) {
+  // Enviar mensagem de aguarde...
+}
+```
 
-| Cenário | Status |
-|---------|--------|
-| Cliente em `waiting_human` manda mensagem | ✅ Fluxo silencia, mensagem vai pro histórico |
-| Cliente em `copilot` manda mensagem | ✅ Fluxo silencia, humano responde |
-| IA assumindo conversa com humano | ✅ Bloqueado em 3 camadas |
+---
 
-## Recomendação
+## Arquivos a Modificar
 
-Nenhuma alteração adicional necessária. A implementação já está:
-- ✅ Deployada
-- ✅ Funcionando
-- ✅ Documentada no Super Prompt v2.3
-- ✅ Com logs de auditoria
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/meta-whatsapp-webhook/index.ts` | Adicionar mensagem de aguarde quando `skipAutoResponse` + `waiting_human` |
 
-O time pode ter visto mensagens antigas (antes do deploy de ~11:49). A partir de agora, o comportamento está correto.
+---
 
+## Impacto
+
+### Antes (Problema)
+| Cenário | Resultado |
+|---------|-----------|
+| Cliente na fila manda "Oi" | ❌ Silêncio total |
+| Cliente na fila manda "Demora muito?" | ❌ Silêncio total |
+| Cliente na fila manda "?" | ❌ Silêncio total |
+
+### Depois (Corrigido)
+| Cenário | Resultado |
+|---------|-----------|
+| Cliente na fila manda "Oi" | ✅ "Sua conversa já está na fila... em breve um especialista irá te atender" |
+| Cliente na fila manda "Demora muito?" | ✅ Mesma mensagem (max 1x a cada 2 min) |
+| Cliente na fila manda "?" | ✅ Mesma mensagem (rate limited) |
+
+---
+
+## Segurança
+
+| Controle | Status |
+|----------|--------|
+| Fluxo não reinicia quando cliente está na fila | ✅ Mantido |
+| IA não responde quando humano está atendendo | ✅ Mantido |
+| Mensagem de aguarde não dispara em `copilot` | ✅ Só em `waiting_human` |
+| Rate limiting para evitar spam | ✅ 2 minutos entre mensagens |
+| Compatível com Super Prompt v2.3 | ✅ |
+
+---
+
+## Fluxo Visual
+
+```text
+Cliente (na fila)         Webhook         process-chat-flow         WhatsApp
+       |                     |                    |                    |
+       |--- "Oi, demora?"-->|                    |                    |
+       |                     |--save message----->|                    |
+       |                     |                    |                    |
+       |                     |--process flow?---->|                    |
+       |                     |                    |--check ai_mode---->|
+       |                     |                    |<--waiting_human----|
+       |                     |                    |                    |
+       |                     |<--skipAutoResponse-|                    |
+       |                     |   reason: ai_mode_waiting_human         |
+       |                     |                    |                    |
+       |                     |--- [NOVO] Enviar mensagem de aguarde--->|
+       |<-------- "Sua conversa já está na fila..." ------------------|
+       |                     |                    |                    |
+       |        [Mensagem + confirmação aparecem no histórico]         |
+```
+
+---
+
+## Compatibilidade
+
+A mudança é **backward compatible**:
+- Comportamento de `copilot` e `disabled` não muda (silêncio total)
+- Apenas `waiting_human` recebe a mensagem de aguarde
+- Rate limiting previne spam
+- Humano ainda pode assumir a qualquer momento
