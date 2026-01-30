@@ -17,6 +17,7 @@ import {
   useGenerateCopilotSuggestions, 
   useMarkSuggestionAsUsed 
 } from "@/hooks/useCopilotSuggestions";
+import { useTrackQualityMetric } from "@/hooks/useTrackQualityMetric";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -36,6 +37,7 @@ export default function CopilotSuggestionCard({
   const { data, isLoading } = useCopilotSuggestions(conversationId);
   const generateSuggestions = useGenerateCopilotSuggestions();
   const markAsUsed = useMarkSuggestionAsUsed();
+  const trackQuality = useTrackQualityMetric();
 
   // Reset dismissed state when conversation changes
   useEffect(() => {
@@ -45,6 +47,16 @@ export default function CopilotSuggestionCard({
   const handleUseSuggestion = (suggestion: any) => {
     onUseSuggestion(suggestion.suggested_reply);
     markAsUsed.mutate(suggestion.id);
+    
+    // Track quality metric for analytics
+    trackQuality.mutate({
+      conversationId,
+      event: 'suggestion_used',
+      data: {
+        suggestionsAvailable: data?.all.length || 0,
+      },
+    });
+    
     toast.success("Sugestão aplicada no composer");
   };
 

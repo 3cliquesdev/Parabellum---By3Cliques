@@ -21,6 +21,7 @@ interface KnowledgeArticle {
   category: string | null;
   tags: string[];
   is_published: boolean;
+  source?: string | null;
 }
 
 interface KnowledgeArticleDialogProps {
@@ -107,12 +108,31 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
     onOpenChange(false);
   };
 
+  // Check if this is an AI draft
+  const isAIDraft = article?.source === 'ai_draft';
+  const urlParams = new URLSearchParams(window.location.search);
+  const isEditingAIDraft = urlParams.get('ai_draft') === 'true' || isAIDraft;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{article ? "Editar Artigo" : "Novo Artigo"}</DialogTitle>
         </DialogHeader>
+
+        {/* AI Draft Warning Banner */}
+        {isEditingAIDraft && (
+          <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <AlertDescription className="text-amber-800 dark:text-amber-200">
+              <strong>⚠️ Conteúdo gerado por IA — revisão obrigatória antes de publicar.</strong>
+              <p className="mt-1 text-sm">
+                Este rascunho foi criado automaticamente a partir de uma lacuna de conhecimento.
+                Revise e edite o conteúdo antes de publicar.
+              </p>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {similarArticles && similarArticles.length > 0 && (
           <Alert className="bg-amber-50 border-amber-200">

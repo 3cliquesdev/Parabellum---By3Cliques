@@ -23,17 +23,21 @@ import {
   Search,
   Sparkles,
   Check,
-  X
+  X,
+  Loader2
 } from "lucide-react";
 import { useKBGapsDashboard, useMarkSuggestionAsUsed } from "@/hooks/useCopilotSuggestions";
+import { useGenerateKBDraft } from "@/hooks/useGenerateKBDraft";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
 export default function KBGapsDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [generatingGapId, setGeneratingGapId] = useState<string | null>(null);
   const { data: gaps, isLoading, refetch } = useKBGapsDashboard(100);
   const markAsUsed = useMarkSuggestionAsUsed();
+  const generateDraft = useGenerateKBDraft();
 
   const filteredGaps = gaps?.filter(gap => 
     gap.kb_gap_description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -52,6 +56,15 @@ export default function KBGapsDashboard() {
       problem: gap.kb_gap_description || '',
     });
     window.location.href = `/knowledge?action=create&${params.toString()}`;
+  };
+
+  const handleGenerateDraft = async (gap: any) => {
+    setGeneratingGapId(gap.id);
+    try {
+      await generateDraft.mutateAsync(gap.id);
+    } finally {
+      setGeneratingGapId(null);
+    }
   };
 
   return (
@@ -228,12 +241,26 @@ export default function KBGapsDashboard() {
                               </Button>
                             )}
                             <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleGenerateDraft(gap)}
+                              disabled={generatingGapId === gap.id}
+                              className="bg-primary hover:bg-primary/90"
+                            >
+                              {generatingGapId === gap.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                              ) : (
+                                <Sparkles className="h-4 w-4 mr-1" />
+                              )}
+                              Gerar com IA
+                            </Button>
+                            <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleCreateArticle(gap)}
                             >
                               <FileText className="h-4 w-4 mr-1" />
-                              Criar Artigo
+                              Manual
                             </Button>
                             <Button
                               variant="ghost"

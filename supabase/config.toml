@@ -348,3 +348,6 @@ verify_jwt = true
 
 [functions.get-inbox-counts]
 verify_jwt = true
+
+[functions.generate-kb-draft]
+verify_jwt = true

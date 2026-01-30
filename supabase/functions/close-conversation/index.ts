@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
         contact_id,
         whatsapp_instance_id,
         created_at,
+        assigned_to,
         contacts (
           id,
           first_name,
@@ -99,6 +100,60 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[close-conversation] Conversation marked as closed`);
+
+    // FASE 4B: Registrar métricas de qualidade para o agente
+    if (userId && conversation.assigned_to) {
+      try {
+        // Buscar sugestões usadas nesta conversa
+        const { data: suggestions } = await supabase
+          .from('ai_suggestions')
+          .select('id, used')
+          .eq('conversation_id', conversationId);
+
+        const suggestionsUsed = suggestions?.filter(s => s.used).length || 0;
+        const suggestionsAvailable = suggestions?.length || 0;
+
+        // Buscar classificação se existir
+        const { data: classification } = await supabase
+          .from('ai_suggestions')
+          .select('classification_label')
+          .eq('conversation_id', conversationId)
+          .eq('suggestion_type', 'classification')
+          .maybeSingle();
+
+        // Buscar se foi criado KB Gap
+        const { data: kbGaps } = await supabase
+          .from('ai_suggestions')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('suggestion_type', 'kb_gap')
+          .limit(1);
+
+        const createdKbGap = (kbGaps?.length || 0) > 0;
+
+        // Upsert métricas de qualidade
+        await supabase
+          .from('agent_quality_metrics')
+          .upsert({
+            agent_id: conversation.assigned_to,
+            conversation_id: conversationId,
+            suggestions_used: suggestionsUsed,
+            suggestions_available: suggestionsAvailable,
+            resolution_time_seconds: durationMinutes * 60,
+            created_kb_gap: createdKbGap,
+            copilot_active: suggestionsAvailable > 0,
+            classification_label: classification?.classification_label,
+          }, {
+            onConflict: 'agent_id,conversation_id',
+            ignoreDuplicates: false,
+          });
+
+        console.log(`[close-conversation] Quality metrics recorded for agent ${conversation.assigned_to}`);
+      } catch (metricsError) {
+        // Non-blocking - just log the error
+        console.error(`[close-conversation] Failed to record quality metrics:`, metricsError);
+      }
+    }
 
     // FASE 4: Registrar tags na timeline do contato
     if (conversation.contact_id) {

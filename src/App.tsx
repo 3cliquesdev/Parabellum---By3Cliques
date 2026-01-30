@@ -62,6 +62,7 @@ const MyPortfolio = lazy(() => import("./pages/MyPortfolio"));
 const FraudDetection = lazy(() => import("./pages/reports/FraudDetection"));
 const CSManagement = lazy(() => import("./pages/CSManagement"));
 const SalesManagement = lazy(() => import("./pages/SalesManagement"));
+const AgentQualityDashboard = lazy(() => import("./pages/AgentQualityDashboard"));
 const SalesRepDetail = lazy(() => import("./pages/SalesRepDetail"));
 const OnboardingBuilder = lazy(() => import("./pages/OnboardingBuilder"));
 const PlaybookExecutions = lazy(() => import("./pages/PlaybookExecutions"));
@@ -198,6 +199,7 @@ const App = () => {
               <Route path="/reports/fiscal-export" element={<ProtectedRoute requiredPermission="reports.fiscal_export"><Layout><FiscalExport /></Layout></ProtectedRoute>} />
               <Route path="/reports/fraud-detection" element={<ProtectedRoute requiredPermission="reports.fraud_detection"><Layout><FraudDetection /></Layout></ProtectedRoute>} />
               <Route path="/reports/sales-distribution" element={<ProtectedRoute requiredPermission="reports.lead_distribution"><Layout><SalesRepDistribution /></Layout></ProtectedRoute>} />
+              <Route path="/reports/quality" element={<ProtectedRoute requiredPermission="analytics.view"><AgentQualityDashboard /></ProtectedRoute>} />
               <Route path="/goals" element={<ProtectedRoute requiredPermission="goals.view_own"><Layout><Goals /></Layout></ProtectedRoute>} />
               <Route path="/goals-management" element={<ProtectedRoute requiredPermission="goals.set"><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
               <Route path="/internal-requests" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><InternalRequests /></Layout></ProtectedRoute>} />

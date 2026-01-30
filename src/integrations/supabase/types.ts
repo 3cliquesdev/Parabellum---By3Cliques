@@ -168,6 +168,56 @@ export type Database = {
           },
         ]
       }
+      agent_quality_metrics: {
+        Row: {
+          agent_id: string
+          classification_label: string | null
+          conversation_id: string
+          copilot_active: boolean | null
+          created_at: string | null
+          created_kb_gap: boolean | null
+          csat_rating: number | null
+          id: string
+          resolution_time_seconds: number | null
+          suggestions_available: number | null
+          suggestions_used: number | null
+        }
+        Insert: {
+          agent_id: string
+          classification_label?: string | null
+          conversation_id: string
+          copilot_active?: boolean | null
+          created_at?: string | null
+          created_kb_gap?: boolean | null
+          csat_rating?: number | null
+          id?: string
+          resolution_time_seconds?: number | null
+          suggestions_available?: number | null
+          suggestions_used?: number | null
+        }
+        Update: {
+          agent_id?: string
+          classification_label?: string | null
+          conversation_id?: string
+          copilot_active?: boolean | null
+          created_at?: string | null
+          created_kb_gap?: boolean | null
+          csat_rating?: number | null
+          id?: string
+          resolution_time_seconds?: number | null
+          suggestions_available?: number | null
+          suggestions_used?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_quality_metrics_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_support_channels: {
         Row: {
           channel_id: string
@@ -4302,12 +4352,15 @@ export type Database = {
           created_at: string
           created_by: string | null
           department_id: string | null
+          draft_from_gap_id: string | null
           embedding: string | null
           embedding_generated: boolean | null
           id: string
           is_published: boolean
           problem: string | null
           published_at: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           solution: string | null
           source: string | null
           source_conversation_id: string | null
@@ -4328,12 +4381,15 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           department_id?: string | null
+          draft_from_gap_id?: string | null
           embedding?: string | null
           embedding_generated?: boolean | null
           id?: string
           is_published?: boolean
           problem?: string | null
           published_at?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           solution?: string | null
           source?: string | null
           source_conversation_id?: string | null
@@ -4354,12 +4410,15 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           department_id?: string | null
+          draft_from_gap_id?: string | null
           embedding?: string | null
           embedding_generated?: boolean | null
           id?: string
           is_published?: boolean
           problem?: string | null
           published_at?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           solution?: string | null
           source?: string | null
           source_conversation_id?: string | null
@@ -4377,6 +4436,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_articles_draft_from_gap_id_fkey"
+            columns: ["draft_from_gap_id"]
+            isOneToOne: false
+            referencedRelation: "ai_suggestions"
             referencedColumns: ["id"]
           },
           {
