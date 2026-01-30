@@ -1,160 +1,113 @@
 
-# Plano: Blindar Kill Switch em Toda a Arquitetura (Correção Crítica)
+Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Diagnóstico Atual
+Objetivo do ajuste: fazer o WhatsApp (Meta) “seguir o fluxo” de verdade, usando a mesma arquitetura soberana que você já tem no Web Chat: **process-chat-flow primeiro**, e só depois (se e somente se) o fluxo permitir, chamar IA. Hoje o `meta-whatsapp-webhook` salva a mensagem e chama `ai-autopilot-chat` direto, então o fluxo pode ser ignorado.
 
-### Análise dos 3 Pontos Críticos
+## Diagnóstico (por que não está seguindo o fluxo)
+1) **WhatsApp não passa pelo `message-listener`**
+- O `message-listener` deliberadamente “pula” WhatsApp (`channel === 'whatsapp'`) com log “já processado por webhook”.
+- Ou seja: toda a regra “Flow soberano → IA só se aiNodeActive=true” **não roda** para WhatsApp.
 
-| Arquivo | Kill Switch Implementado? | Problema |
-|---------|--------------------------|----------|
-| `message-listener` | ✅ **SIM** (linhas 64-111) | Correto - bloqueia e move para `waiting_human` |
-| `process-chat-flow` | ✅ **SIM** (linhas 238-260) | Correto - retorna `skipAutoResponse: true` |
-| `ai-autopilot-chat` | ✅ **SIM** (linhas 1309-1337) | Correto - retorna `skipped: true` |
+2) **`meta-whatsapp-webhook` chama a IA direto**
+No arquivo `supabase/functions/meta-whatsapp-webhook/index.ts`, o pipeline atual é:
+- encontra/cria conversa
+- salva mensagem
+- (agora) checa kill switch antes de IA
+- **se ai_mode === 'autopilot'** → chama `ai-autopilot-chat` diretamente
 
-### Status: ARQUITETURA JÁ ESTÁ CORRETA 
+Resultado: o cliente pode receber resposta da IA ou mensagens fora do “Master Flow” porque o fluxo nem foi consultado.
 
-Após analisar os 3 arquivos críticos, **o Kill Switch já está implementado corretamente em todos os pontos**:
+## O que vamos corrigir (upgrade sem quebrar o existente)
+Vamos implementar no `meta-whatsapp-webhook` o mesmo padrão do `message-listener`:
 
----
+### A) Chamar `process-chat-flow` antes de qualquer decisão de automação
+Depois de salvar a mensagem (e depois do Kill Switch, que já está no lugar), vamos:
+- chamar `process-chat-flow` com `{ conversationId, userMessage }`
+- analisar o retorno:
+  - `skipAutoResponse: true` → não enviar nada (e garantir `ai_mode = waiting_human`)
+  - `useAI: false` + `response` → **enviar a resposta do fluxo** pelo WhatsApp (usando `send-meta-whatsapp`)
+  - `useAI: true` + `aiNodeActive: true` → chamar `ai-autopilot-chat` **com flow_context**
+  - sem fluxo e sem AIResponseNode → fallback controlado (opcional) + mover para humano (mantendo o padrão atual do seu sistema)
 
-## Verificação Detalhada
+### B) Garantir “IA só roda se o fluxo permitir” também no WhatsApp
+Ou seja, substituir a condição atual:
+- `if (conversation.ai_mode === "autopilot" && !conversation.awaiting_rating) { call ai-autopilot-chat }`
+por:
+- `if (conversation.ai_mode === "autopilot" && !conversation.awaiting_rating && flowData.useAI && flowData.aiNodeActive) { call ai-autopilot-chat com flow_context }`
 
-### 1. message-listener (PRIMEIRO PONTO) ✅
+### C) Responder mensagens de fluxo via WhatsApp do jeito correto (sem duplicar persistência)
+Para WhatsApp Meta, a regra correta é: **quem envia e persiste outbound é o `send-meta-whatsapp`** (single source of truth).
+Então, quando `process-chat-flow` retornar `response`, vamos:
+- chamar `send-meta-whatsapp` com:
+  - `instance_id: instance.id`
+  - `phone_number: fromNumber`
+  - `message: flowData.response`
+  - `conversation_id: conversation.id`
+  - `skip_db_save: false` (para persistir corretamente a mensagem enviada e evitar inserts manuais duplicados)
 
-```typescript
-// Linha 64-111
-const aiConfig = await getAIConfig(supabase);
-const isTestMode = conversation?.is_test_mode === true;
+### D) Ajuste de consistência: não “reabrir” conversa fechada de forma agressiva
+Hoje, ao encontrar conversa existente, o webhook força:
+- `status: "open" // Reabrir se estava fechada`
+Mas ao mesmo tempo ele faz `.neq("status", "closed")`, então essa reabertura é meio incoerente e pode atrapalhar estados.
+Vamos revisar esse trecho e alinhar com a regra de produto:
+- manter fechado quando `awaiting_rating=true` (já coberto pelo CSAT guard)
+- e definir de forma clara quando reabre/quando cria nova (sem mudar comportamento atual sem necessidade; apenas remover inconsistências)
 
-if (!aiConfig.ai_global_enabled && !isTestMode) {
-  console.log('[message-listener] 🛑 KILL SWITCH ATIVO - Nenhum envio automático');
-  
-  // Mover conversa para fila humana se estiver em autopilot
-  if (conversation?.ai_mode === 'autopilot') {
-    await supabase.from('conversations')
-      .update({ ai_mode: 'waiting_human' })
-      .eq('id', record.conversation_id);
-    console.log('[message-listener] 📋 Conversa movida para fila humana');
-  }
-  
-  return new Response(JSON.stringify({ 
-    status: 'kill_switch_active',
-    action: 'skip_all_auto',
-    reason: 'ai_global_enabled = false'
-  }));
-}
-```
+## Arquivos envolvidos
+- `supabase/functions/meta-whatsapp-webhook/index.ts` (principal)
+- (sem mudança planejada agora) `supabase/functions/process-chat-flow/index.ts`
+- (sem mudança planejada agora) `supabase/functions/ai-autopilot-chat/index.ts`
 
-**Impede**: IA, fluxo, fallback
+## Sequência de implementação (passo a passo)
+1) No `meta-whatsapp-webhook`, localizar o ponto após salvar a mensagem inbound.
+2) Manter o Kill Switch já existente (ele está correto e cedo o suficiente antes da IA).
+3) Inserir chamada ao `process-chat-flow`:
+   - `fetch(`${SUPABASE_URL}/functions/v1/process-chat-flow`...)` com service role
+4) Interpretar `flowData` e tomar decisão:
+   - se `flowData.skipAutoResponse` → update `ai_mode=waiting_human` e `continue`
+   - se `!flowData.useAI && flowData.response` → `send-meta-whatsapp` com `skip_db_save:false` e `continue`
+   - se `flowData.useAI && flowData.aiNodeActive` → chamar `ai-autopilot-chat` com `flow_context` (espelhando o contrato do message-listener)
+   - se não tem flow/aiNodeActive → fallback (se IA estiver ligada) + `waiting_human`
+5) Revisar o trecho que “reabre conversa” para remover inconsistência com a query que ignora `closed`.
+6) Adicionar logs `[AUTO-DECISION]` no WhatsApp também (mesmo formato do message-listener), para auditoria.
 
----
+## Testes obrigatórios (regressão zero)
+Vou validar os cenários abaixo:
 
-### 2. process-chat-flow (SEGURANÇA DUPLA) ✅
+1) IA Global OFF (Kill Switch OFF):
+- Cliente manda mensagem no WhatsApp
+- Resultado esperado:
+  - nenhuma resposta automática
+  - conversa vai para `waiting_human`
+  - o fluxo não manda mensagem
+  - a IA não roda
 
-```typescript
-// Linha 238-260
-const aiConfig = await getAIConfig(supabaseClient);
-const isTestMode = convForTest?.is_test_mode === true;
+2) IA Global ON + Shadow Mode ON:
+- Cliente manda mensagem que ativa um AIResponseNode no fluxo
+- Resultado esperado:
+  - fluxo decide `aiNodeActive=true`
+  - IA gera sugestão (sem enviar automaticamente, conforme seu Shadow Mode)
+  - nenhum texto automático é disparado se a arquitetura atual já bloqueia “apply”
 
-if (!aiConfig.ai_global_enabled && !isTestMode) {
-  console.log('[process-chat-flow] 🛑 KILL SWITCH ATIVO - Retornando sem processar');
-  return new Response(JSON.stringify({ 
-    useAI: false,
-    aiNodeActive: false,
-    skipAutoResponse: true,  // Flag para não enviar nada
-    reason: 'kill_switch_active'
-  }));
-}
-```
+3) Fluxo com resposta estática (Message/AskOptions etc.):
+- Cliente manda mensagem que o fluxo consegue responder sem IA
+- Resultado esperado:
+  - `process-chat-flow` retorna `response`
+  - `send-meta-whatsapp` envia exatamente essa resposta
+  - IA não é chamada
 
-**Impede**: Execução de fluxos visuais quando Kill Switch ativo
+4) CSAT (já corrigido) continua estável:
+- conversa fechada + awaiting_rating=true
+- cliente manda “5”
+- Resultado esperado:
+  - não cria novo chat
+  - salva rating
+  - envia agradecimento
+  - não roda fluxo nem IA
 
----
+## Resultado esperado final (arquitetura ideal)
+- WhatsApp Meta passa a respeitar o “Flow soberano”
+- IA só roda quando o fluxo permitir (`aiNodeActive=true`)
+- Kill Switch bloqueia tudo (IA/fluxo/fallback) também no WhatsApp
+- Zero mensagens duplicadas / fora do fluxo
 
-### 3. ai-autopilot-chat (BARREIRA FINAL) ✅
-
-```typescript
-// Linha 1309-1337
-const { data: globalConfig } = await supabaseClient
-  .from('system_configurations')
-  .select('value')
-  .eq('key', 'ai_global_enabled')
-  .single();
-
-const isAIGloballyEnabled = globalConfig?.value === 'true';
-const isTestMode = conversation.is_test_mode === true;
-
-if (!isAIGloballyEnabled && !isTestMode) {
-  console.log('[ai-autopilot-chat] 🚫 IA DESLIGADA GLOBALMENTE - IGNORANDO');
-  return new Response(JSON.stringify({ 
-    skipped: true, 
-    reason: 'AI globally disabled'
-  }));
-}
-```
-
-**Impede**: Qualquer resposta de IA RAG
-
----
-
-## Possíveis Causas do Problema Reportado
-
-Se o usuário ainda vê a IA respondendo quando Kill Switch está OFF, as causas podem ser:
-
-### 1. WhatsApp usa caminho diferente
-
-O `message-listener` pula mensagens WhatsApp (linha 49-58):
-```typescript
-if (conversation?.channel === 'whatsapp') {
-  console.log('[message-listener] ⏭️ Canal WhatsApp - já processado por handle-whatsapp-event');
-  return; // Não passa pelo Kill Switch do message-listener!
-}
-```
-
-O caminho WhatsApp é:
-```
-meta-whatsapp-webhook → ai-autopilot-chat (direto)
-```
-
-**Verificação necessária**: O `meta-whatsapp-webhook` precisa ter o Kill Switch?
-
-### 2. Chamada direta ao ai-autopilot-chat
-
-Se algum código chama `ai-autopilot-chat` diretamente sem passar pelo `message-listener`, o Kill Switch do `ai-autopilot-chat` (linha 1326) já bloqueia.
-
-### 3. Cache desatualizado (60 segundos)
-
-O cache do `getAIConfig` tem TTL de 60 segundos. Se o usuário desliga o Kill Switch, pode levar até 60s para o bloqueio ser efetivo.
-
----
-
-## Conclusão
-
-A arquitetura do Kill Switch **já está correta** nos 3 pontos críticos. O problema reportado pode ser:
-
-1. **Timing de cache** (60s de delay)
-2. **Teste feito antes das correções** (versão antiga deployed)
-3. **Canal WhatsApp** passando por caminho diferente
-
----
-
-## Próximos Passos Recomendados
-
-| Ação | Prioridade |
-|------|------------|
-| Verificar se `meta-whatsapp-webhook` tem Kill Switch | Alta |
-| Reduzir TTL do cache para 30s durante testes | Média |
-| Adicionar log `[KILL-SWITCH]` unificado para auditoria | Média |
-| Testar novamente após deploy recente | Alta |
-
----
-
-## Resumo
-
-A arquitetura atual **já implementa** o Kill Switch nos 3 pontos obrigatórios. Se o problema persiste, precisamos:
-
-1. **Confirmar qual canal está sendo testado** (WhatsApp Meta, Evolution ou Web Chat)
-2. **Verificar logs** para ver se `🛑 KILL SWITCH` aparece
-3. **Verificar se o deploy mais recente foi publicado**
-
-Deseja que eu verifique o `meta-whatsapp-webhook` para garantir que o Kill Switch está implementado lá também?
