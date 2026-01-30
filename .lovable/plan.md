@@ -1,258 +1,280 @@
 
 
-# Plano: Correção de Envio para WhatsApp Meta — Usar whatsapp_id
+# Plano: Correção do Envio de Pesquisa de Satisfação via WhatsApp Meta
 
 ## Diagnóstico Confirmado
 
 ### Problema Identificado
-O usuário reportou que clientes "que nunca enviaram mensagem" não recebem resposta. Na investigação descobri:
-
-1. **Mensagem enviada com sucesso para a API do Meta** (`✅ Message sent: wamid...`)
-2. **Webhook do Meta retorna status `failed`** para a entrega
+O sistema **não envia** a pesquisa de satisfação para clientes no WhatsApp, apesar de:
+1. `sendCsat: true` ser passado corretamente
+2. A mensagem aparecer no sistema
 
 ### Causa Raiz
-O contato Ronny teste tem:
+A função `close-conversation` verifica **apenas** `whatsapp_instance_id` (Evolution API), mas as conversas usam `whatsapp_meta_instance_id` (Meta Cloud API):
 
-| Campo | Valor | Comentário |
-|-------|-------|------------|
-| `phone` | 5511988013**283** | Número cadastrado |
-| `whatsapp_id` | 5511988013**284**@s.whatsapp.net | Número real do WhatsApp |
-
-Os números são **diferentes**! O sistema envia para o `phone`, mas o WhatsApp real é o `whatsapp_id`.
-
-### Log do Webhook Confirmando
-
-```text
-📊 Status update: wamid.xxx -> failed  (para 5511988013283)
-📊 Status update: wamid.xxx -> delivered (para 5511969656723)
+```
+Conversas recentes:
+├── whatsapp_instance_id: NULL ❌
+└── whatsapp_meta_instance_id: d9fafe12-... ✅ (Meta Oficial)
 ```
 
-O Ronildo Oliveira recebe porque `phone` e `whatsapp_id` são iguais. O Ronny teste não recebe porque são diferentes.
+### Código Problemático (linha 194)
 
-### Código com Inconsistência
-
-**Evolution API (funciona):**
 ```typescript
-// Linha 7366-7371
-{
-  phone_number: contact.phone,
-  whatsapp_id: contact.whatsapp_id,  // ✅ USA WHATSAPP_ID
-}
-```
-
-**Meta API (quebrado):**
-```typescript
-// Linha 7330-7337
-{
-  phone_number: contact.phone?.replace(/\D/g, ''),  // ❌ IGNORA WHATSAPP_ID
-}
+// Só verifica Evolution API - ignora Meta!
+if (sendCsat && conversation.channel === "whatsapp" && conversation.whatsapp_instance_id) {
 ```
 
 ---
 
 ## Solução Proposta
 
-### Lógica de Prioridade
-Para qualquer envio WhatsApp, usar a seguinte ordem de prioridade:
-
-```text
-1. whatsapp_id (número real confirmado pelo WhatsApp)
-2. phone (fallback se whatsapp_id não existir)
-```
-
-Exemplo:
-```typescript
-const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
-```
+Modificar `close-conversation` para:
+1. Buscar também `whatsapp_meta_instance_id`
+2. Detectar qual tipo de instância está sendo usada
+3. Chamar a função correta (`send-meta-whatsapp` ou `send-whatsapp-message`)
+4. Usar `whatsapp_id` como prioridade (correção anterior)
 
 ---
 
 ## Alterações Detalhadas
 
-### 1. Criar helper `extractWhatsAppNumber`
+### 1. Atualizar a query de busca da conversa
 
-**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
+**Arquivo**: `supabase/functions/close-conversation/index.ts`
 
-**Local**: Após a linha 100 (seção de helpers)
+**Local**: Linhas 36-54
+
+Adicionar `whatsapp_meta_instance_id` e buscar dados da instância Meta:
 
 ```typescript
-// ============================================================
-// 🔧 HELPER: Extrair número limpo do whatsapp_id
-// Formatos suportados:
-//   - 5511999999999@s.whatsapp.net
-//   - 5511999999999@c.us
-//   - 5511999999999
-// ============================================================
-function extractWhatsAppNumber(whatsappId: string | null | undefined): string | null {
-  if (!whatsappId) return null;
+const { data: conversation, error: convError } = await supabase
+  .from("conversations")
+  .select(`
+    id,
+    channel,
+    contact_id,
+    whatsapp_instance_id,
+    whatsapp_meta_instance_id,
+    created_at,
+    assigned_to,
+    contacts (
+      id,
+      first_name,
+      last_name,
+      phone,
+      whatsapp_id
+    )
+  `)
+  .eq("id", conversationId)
+  .single();
+```
+
+### 2. Buscar instância Meta se aplicável
+
+**Local**: Após linha 62 (após verificar conversa existe)
+
+```typescript
+// Buscar instância Meta se whatsapp_meta_instance_id existir
+let metaInstance = null;
+if (conversation.whatsapp_meta_instance_id) {
+  const { data: meta } = await supabase
+    .from("whatsapp_meta_instances")
+    .select("id, phone_number_id, access_token, status")
+    .eq("id", conversation.whatsapp_meta_instance_id)
+    .single();
   
-  // Remove sufixos do WhatsApp
-  let cleaned = whatsappId
-    .replace('@s.whatsapp.net', '')
-    .replace('@c.us', '')
-    .replace('@lid', '') // Leads do Meta (não usar)
-    .replace(/\D/g, '');
-  
-  // Se for número @lid (lead ID do Meta), retornar null
-  if (whatsappId.includes('@lid')) {
-    return null;
+  if (meta && meta.status === 'active') {
+    metaInstance = meta;
+    console.log(`[close-conversation] Meta instance found: ${meta.id}`);
   }
-  
-  return cleaned.length >= 10 ? cleaned : null;
 }
 ```
 
-### 2. Atualizar `sendWhatsAppMessage` para usar `whatsappId`
+### 3. Atualizar a lógica de envio do CSAT
 
-**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
+**Local**: Linhas 193-246 (bloco de envio CSAT)
 
-**Local**: Linhas 511-526 (seção Meta API)
+Substituir por lógica que detecta e usa a instância correta:
 
 ```typescript
-if (whatsappResult.provider === 'meta') {
-  // 🆕 CORREÇÃO: Priorizar whatsapp_id sobre phone
-  const targetNumber = extractWhatsAppNumber(whatsappId) || phoneNumber?.replace(/\D/g, '');
+// Send CSAT via WhatsApp if requested and applicable
+if (sendCsat && conversation.channel === "whatsapp") {
+  const contact = conversation.contacts as unknown as { 
+    id: string; 
+    first_name: string; 
+    last_name: string; 
+    phone: string | null; 
+    whatsapp_id: string | null 
+  } | null;
   
-  console.log('[sendWhatsAppMessage] 📤 Enviando via Meta WhatsApp API:', {
-    instanceId: whatsappResult.instance.id,
-    phoneNumberId: whatsappResult.instance.phone_number_id,
-    targetNumber: targetNumber?.slice(-4),
-    usedWhatsappId: !!extractWhatsAppNumber(whatsappId)
-  });
-  
-  const { data, error } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
-    body: {
-      instance_id: whatsappResult.instance.id,
-      phone_number: targetNumber,  // 🆕 Usa targetNumber (whatsapp_id ou phone)
-      message,
-      conversation_id: conversationId,
-      skip_db_save: true
+  if (contact && (contact.phone || contact.whatsapp_id)) {
+    const csatMessage = `📊 *Pesquisa de Satisfação*
+
+Seu atendimento foi encerrado.
+
+Por favor, avalie de 1 a 5:
+
+1️⃣ Péssimo
+2️⃣ Ruim
+3️⃣ Regular
+4️⃣ Bom
+5️⃣ Excelente
+
+_Responda apenas com o número._`;
+
+    console.log(`[close-conversation] Sending CSAT for contact ${contact.id}`);
+
+    // Extrair número limpo do whatsapp_id (prioridade) ou phone
+    function extractWhatsAppNumber(whatsappId: string | null): string | null {
+      if (!whatsappId) return null;
+      if (whatsappId.includes('@lid')) return null; // LID não é número válido
+      
+      const cleaned = whatsappId
+        .replace('@s.whatsapp.net', '')
+        .replace('@c.us', '')
+        .replace(/\D/g, '');
+      
+      return cleaned.length >= 10 ? cleaned : null;
     }
-  });
-  // ... resto igual
-}
-```
 
-### 3. Atualizar chamada direta na linha 7330
+    const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
 
-**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
+    try {
+      let whatsappError = null;
 
-**Local**: Linhas 7324-7338
+      // 🆕 PRIORIDADE 1: Meta Cloud API
+      if (metaInstance) {
+        console.log(`[close-conversation] 📤 Sending CSAT via Meta WhatsApp API to ${targetNumber?.slice(-4)}`);
+        
+        const { error: metaError } = await supabase.functions.invoke("send-meta-whatsapp", {
+          body: {
+            instance_id: metaInstance.id,
+            phone_number: targetNumber,
+            message: csatMessage,
+            conversation_id: conversationId,
+            skip_db_save: true, // Mensagem de sistema já foi salva
+          },
+        });
 
-```typescript
-if (provider === 'meta') {
-  // 🆕 CORREÇÃO: Priorizar whatsapp_id sobre phone
-  const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
-  
-  console.log('[ai-autopilot-chat] 📤 Invocando send-meta-whatsapp:', {
-    instanceId: whatsappInstance.id,
-    phoneNumberId: whatsappInstance.phone_number_id,
-    targetNumber: targetNumber?.slice(-4),
-    source: extractWhatsAppNumber(contact.whatsapp_id) ? 'whatsapp_id' : 'phone'
-  });
+        whatsappError = metaError;
+      }
+      // FALLBACK: Evolution API
+      else if (conversation.whatsapp_instance_id) {
+        console.log(`[close-conversation] 📤 Sending CSAT via Evolution API to ${targetNumber?.slice(-4)}`);
+        
+        const { error: evoError } = await supabase.functions.invoke("send-whatsapp-message", {
+          body: {
+            instance_id: conversation.whatsapp_instance_id,
+            phone_number: contact.phone,
+            whatsapp_id: contact.whatsapp_id,
+            message: csatMessage,
+          },
+        });
 
-  const { data: metaResponse, error: metaError } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
-    body: {
-      instance_id: whatsappInstance.id,
-      phone_number: targetNumber,  // 🆕 Usa targetNumber
-      message: assistantMessage,
-      conversation_id: conversationId,
-      skip_db_save: true
-    },
-  });
-  // ... resto igual
-}
-```
+        whatsappError = evoError;
+      }
+      // Nenhuma instância encontrada
+      else {
+        console.log(`[close-conversation] ⚠️ No WhatsApp instance found for conversation`);
+        whatsappError = { message: 'No WhatsApp instance configured' };
+      }
 
-### 4. Atualizar `handle-whatsapp-event` (mesmo problema)
+      if (whatsappError) {
+        console.error(`[close-conversation] Failed to send WhatsApp CSAT: ${whatsappError.message}`);
+      } else {
+        console.log(`[close-conversation] ✅ CSAT sent via WhatsApp successfully`);
 
-**Arquivo**: `supabase/functions/handle-whatsapp-event/index.ts`
+        // Mark conversation as awaiting rating
+        await supabase
+          .from("conversations")
+          .update({
+            awaiting_rating: true,
+            rating_sent_at: new Date().toISOString(),
+          })
+          .eq("id", conversationId);
 
-**Local**: Linhas 1168-1178 (envio de resposta do fluxo)
-
-```typescript
-// Extrair número correto
-const targetNumber = phoneForDatabase.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
-
-await supabase.functions.invoke('send-meta-whatsapp', {
-  body: {
-    instance_id: instance.id,
-    phone_number: targetNumber,  // 🆕 Já vem do webhook, deve estar correto
-    message: flowResult.response,
-    conversation_id: conversationId,
-    skip_db_save: true
+        console.log(`[close-conversation] Conversation marked as awaiting_rating`);
+      }
+    } catch (whatsappErr) {
+      console.error(`[close-conversation] WhatsApp send error:`, whatsappErr);
+    }
+  } else {
+    console.log(`[close-conversation] No phone/whatsapp_id for contact, skipping WhatsApp CSAT`);
   }
-});
+}
 ```
 
 ---
 
-## Arquivos a Modificar
+## Resumo das Alterações
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `ai-autopilot-chat/index.ts` | Modificar | Adicionar helper e usar `whatsapp_id` em todas as chamadas Meta |
-| `handle-whatsapp-event/index.ts` | Verificar | Garantir que usa o número correto do webhook |
+| Componente | Antes | Depois |
+|------------|-------|--------|
+| Query da conversa | Não busca `whatsapp_meta_instance_id` | Busca ambos os campos |
+| Detecção de instância | Só verifica Evolution | Verifica Meta (prioridade) e Evolution |
+| Função de envio | `send-whatsapp-message` (Evolution) | `send-meta-whatsapp` (Meta) ou fallback Evolution |
+| Número de destino | `contact.phone` | `whatsapp_id` (prioridade) ou `phone` |
 
 ---
 
 ## Seção Técnica
 
-### Fluxo de Decisão do Número
+### Fluxo de Envio do CSAT Corrigido
 
 ```text
-Contato tem whatsapp_id?
-    │
-    ├─ SIM → Extrair número (remover @s.whatsapp.net)
-    │         É válido (>= 10 dígitos)?
-    │              │
-    │              ├─ SIM → Usar whatsapp_id
-    │              └─ NÃO → Usar phone
-    │
-    └─ NÃO → Usar phone?.replace(/\D/g, '')
+close-conversation recebe sendCsat: true
+         │
+         ▼
+Conversa é WhatsApp?
+    SIM ──────────────────┐
+         │                │
+         ▼                ▼
+Tem whatsapp_meta_instance_id?
+    SIM ──────┐     NÃO ────┐
+              │             │
+              ▼             ▼
+    Buscar instância Meta   Tem whatsapp_instance_id?
+              │                 SIM ──────┐
+              ▼                           │
+    Instância ativa?                      │
+    SIM ──────┐                           │
+              │                           │
+              ▼                           ▼
+    send-meta-whatsapp         send-whatsapp-message
+              │                           │
+              └───────────┬───────────────┘
+                          │
+                          ▼
+              Marcar awaiting_rating: true
 ```
 
-### Casos de Teste
+### Arquivos a Modificar
 
-| Cenário | whatsapp_id | phone | Resultado |
-|---------|-------------|-------|-----------|
-| whatsapp_id válido | 5511999999999@s.whatsapp.net | 5511888888888 | Usa 5511999999999 |
-| whatsapp_id @lid (inválido) | 123456789@lid | 5511888888888 | Usa 5511888888888 |
-| whatsapp_id null | null | 5511888888888 | Usa 5511888888888 |
-| Ambos iguais | 5511999999999@s.whatsapp.net | 5511999999999 | Usa 5511999999999 |
-
----
-
-## Impacto
-
-| Antes | Depois |
-|-------|--------|
-| Meta API usa `contact.phone` | Meta API usa `whatsapp_id` (com fallback para `phone`) |
-| Mensagens falham para contatos com números diferentes | Mensagens entregues corretamente |
-| Inconsistência entre Evolution e Meta | Comportamento uniforme |
+| Arquivo | Ação | Linhas Afetadas |
+|---------|------|-----------------|
+| `close-conversation/index.ts` | Modificar | 36-54 (query), 62-80 (busca Meta), 193-246 (envio CSAT) |
 
 ---
 
 ## Ordem de Implementação
 
-1. **Adicionar helper** `extractWhatsAppNumber`
-2. **Atualizar** `sendWhatsAppMessage` para Meta API
-3. **Atualizar** chamada direta na linha 7330
-4. **Verificar** `handle-whatsapp-event` (provavelmente já correto)
-5. **Deploy** edge functions
-6. **Testar** com o contato Ronny teste
+1. Atualizar query para buscar `whatsapp_meta_instance_id`
+2. Adicionar lógica para buscar instância Meta
+3. Refatorar bloco de envio CSAT com detecção de tipo
+4. Adicionar helper `extractWhatsAppNumber`
+5. Deploy da edge function
+6. Testar encerramento de conversa com envio de CSAT
 
 ---
 
-## Nota sobre Limpeza de Dados
+## Critérios de Aceitação
 
-Recomendação futura: Rodar script para unificar `phone` e `whatsapp_id` onde são diferentes mas próximos (apenas 1 dígito diferente pode ser erro de digitação):
-
-```sql
--- Identificar contatos com discrepância
-SELECT id, phone, whatsapp_id 
-FROM contacts 
-WHERE whatsapp_id IS NOT NULL 
-  AND phone != REPLACE(REPLACE(whatsapp_id, '@s.whatsapp.net', ''), '@c.us', '');
-```
+| Teste | Resultado Esperado |
+|-------|-------------------|
+| Encerrar conversa WhatsApp Meta | CSAT enviado via `send-meta-whatsapp` |
+| Encerrar conversa Evolution | CSAT enviado via `send-whatsapp-message` |
+| Logs mostram instância detectada | `"📤 Sending CSAT via Meta WhatsApp API"` |
+| Cliente recebe mensagem | Pesquisa de 1-5 estrelas no WhatsApp |
+| `awaiting_rating` atualizado | `true` após envio bem-sucedido |
 
