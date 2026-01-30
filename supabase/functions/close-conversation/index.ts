@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch conversation with contact data
+    // Fetch conversation with contact data - include Meta instance ID
     const { data: conversation, error: convError } = await supabase
       .from("conversations")
       .select(`
@@ -40,6 +40,7 @@ Deno.serve(async (req) => {
         channel,
         contact_id,
         whatsapp_instance_id,
+        whatsapp_meta_instance_id,
         created_at,
         assigned_to,
         contacts (
@@ -59,6 +60,21 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Conversation not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Buscar instância Meta se whatsapp_meta_instance_id existir
+    let metaInstance: { id: string; phone_number_id: string; status: string } | null = null;
+    if (conversation.whatsapp_meta_instance_id) {
+      const { data: meta } = await supabase
+        .from("whatsapp_meta_instances")
+        .select("id, phone_number_id, status")
+        .eq("id", conversation.whatsapp_meta_instance_id)
+        .single();
+      
+      if (meta && meta.status === 'active') {
+        metaInstance = meta;
+        console.log(`[close-conversation] Meta instance found: ${meta.id}`);
+      }
     }
 
     console.log(`[close-conversation] Found conversation, channel: ${conversation.channel}`);
@@ -191,8 +207,15 @@ Deno.serve(async (req) => {
     }
 
     // Send CSAT via WhatsApp if requested and applicable
-    if (sendCsat && conversation.channel === "whatsapp" && conversation.whatsapp_instance_id) {
-      const contact = conversation.contacts as unknown as { id: string; first_name: string; last_name: string; phone: string | null; whatsapp_id: string | null } | null;
+    // 🆕 Agora suporta Meta Cloud API (prioridade) e Evolution API (fallback)
+    if (sendCsat && conversation.channel === "whatsapp") {
+      const contact = conversation.contacts as unknown as { 
+        id: string; 
+        first_name: string; 
+        last_name: string; 
+        phone: string | null; 
+        whatsapp_id: string | null 
+      } | null;
       
       if (contact && (contact.phone || contact.whatsapp_id)) {
         const csatMessage = `📊 *Pesquisa de Satisfação*
@@ -209,22 +232,69 @@ Por favor, avalie de 1 a 5:
 
 _Responda apenas com o número._`;
 
-        console.log(`[close-conversation] Sending CSAT to WhatsApp for contact ${contact.id}`);
+        console.log(`[close-conversation] Sending CSAT for contact ${contact.id}`);
+
+        // Helper: Extrair número limpo do whatsapp_id (prioridade) ou phone
+        function extractWhatsAppNumber(whatsappId: string | null): string | null {
+          if (!whatsappId) return null;
+          if (whatsappId.includes('@lid')) return null; // LID não é número válido
+          
+          const cleaned = whatsappId
+            .replace('@s.whatsapp.net', '')
+            .replace('@c.us', '')
+            .replace(/\D/g, '');
+          
+          return cleaned.length >= 10 ? cleaned : null;
+        }
+
+        const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+        
+        console.log(`[close-conversation] Target number: ...${targetNumber?.slice(-4)}, source: ${extractWhatsAppNumber(contact.whatsapp_id) ? 'whatsapp_id' : 'phone'}`);
 
         try {
-          const { error: whatsappError } = await supabase.functions.invoke("send-whatsapp-message", {
-            body: {
-              instance_id: conversation.whatsapp_instance_id,
-              phone_number: contact.phone,
-              whatsapp_id: contact.whatsapp_id,
-              message: csatMessage,
-            },
-          });
+          let whatsappError: { message: string } | null = null;
+
+          // 🆕 PRIORIDADE 1: Meta Cloud API
+          if (metaInstance) {
+            console.log(`[close-conversation] 📤 Sending CSAT via Meta WhatsApp API to ...${targetNumber?.slice(-4)}`);
+            
+            const { error: metaError } = await supabase.functions.invoke("send-meta-whatsapp", {
+              body: {
+                instance_id: metaInstance.id,
+                phone_number: targetNumber,
+                message: csatMessage,
+                conversation_id: conversationId,
+                skip_db_save: true, // Mensagem de sistema será inserida depois
+              },
+            });
+
+            whatsappError = metaError;
+          }
+          // FALLBACK: Evolution API
+          else if (conversation.whatsapp_instance_id) {
+            console.log(`[close-conversation] 📤 Sending CSAT via Evolution API to ...${targetNumber?.slice(-4)}`);
+            
+            const { error: evoError } = await supabase.functions.invoke("send-whatsapp-message", {
+              body: {
+                instance_id: conversation.whatsapp_instance_id,
+                phone_number: contact.phone,
+                whatsapp_id: contact.whatsapp_id,
+                message: csatMessage,
+              },
+            });
+
+            whatsappError = evoError;
+          }
+          // Nenhuma instância encontrada
+          else {
+            console.log(`[close-conversation] ⚠️ No WhatsApp instance found for conversation`);
+            whatsappError = { message: 'No WhatsApp instance configured' };
+          }
 
           if (whatsappError) {
             console.error(`[close-conversation] Failed to send WhatsApp CSAT: ${whatsappError.message}`);
           } else {
-            console.log(`[close-conversation] CSAT sent via WhatsApp successfully`);
+            console.log(`[close-conversation] ✅ CSAT sent via WhatsApp successfully`);
 
             // Mark conversation as awaiting rating
             await supabase
