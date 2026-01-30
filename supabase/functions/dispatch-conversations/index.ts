@@ -314,12 +314,21 @@ async function processJob(supabase: any, job: DispatchJob): Promise<JobResult> {
 
 /**
  * Find the best eligible agent using Round-Robin Least-Loaded algorithm
+ * with HIERARCHICAL FALLBACK: subdept → parent dept
  */
 // deno-lint-ignore no-explicit-any
 async function findEligibleAgent(
   supabase: any,
-  departmentId: string
+  departmentId: string,
+  attemptedDepts: string[] = []
 ): Promise<EligibleAgent | null> {
+  
+  // Avoid infinite loops in recursive fallback
+  if (attemptedDepts.includes(departmentId)) {
+    console.log(`[findEligibleAgent] Already tried dept ${departmentId}, stopping recursion`);
+    return null;
+  }
+  attemptedDepts.push(departmentId);
   
   // Get eligible roles (same as useTransferConversation)
   const eligibleRoles = [
@@ -340,25 +349,63 @@ async function findEligibleAgent(
 
   const eligibleUserIds = eligibleUserRoles.map((r: { user_id: string }) => r.user_id);
 
-  // SIMPLES: Buscar apenas no departamento EXATO da conversa
-  // Sem fallback para parent/siblings - gerente decide transferências manualmente
-  console.log(`[findEligibleAgent] Searching ONLY in exact dept: ${departmentId}`);
+  console.log(`[findEligibleAgent] Searching in dept: ${departmentId} (attempt ${attemptedDepts.length})`);
 
-  // 2. Get online profiles in EXACT department with capacity info
+  // 2. Get online profiles in department with capacity info
   const { data: profiles, error: profilesError } = await supabase
     .from('profiles')
     .select('id, full_name, last_status_change')
     .eq('availability_status', 'online')
     .eq('is_blocked', false)
-    .eq('department', departmentId)  // EXATO - sem .in()
+    .eq('department', departmentId)
     .in('id', eligibleUserIds);
 
-  if (profilesError || !profiles?.length) {
-    console.log(`[findEligibleAgent] No online profiles in dept ${departmentId}`);
+  // If we found agents in this department, process them
+  if (!profilesError && profiles?.length) {
+    const agent = await processAgentCapacity(supabase, profiles, eligibleUserIds);
+    if (agent) {
+      console.log(`[findEligibleAgent] ✅ Found agent ${agent.full_name} in dept ${departmentId}`);
+      return agent;
+    }
+    console.log(`[findEligibleAgent] All agents at capacity in dept ${departmentId}`);
+  } else {
+    console.log(`[findEligibleAgent] No online agents in dept ${departmentId}`);
+  }
+
+  // 3. FALLBACK: Try parent department if no agents found/available
+  console.log(`[findEligibleAgent] Trying parent fallback for dept ${departmentId}...`);
+  
+  const { data: dept, error: deptError } = await supabase
+    .from('departments')
+    .select('parent_id, name')
+    .eq('id', departmentId)
+    .single();
+
+  if (deptError) {
+    console.log(`[findEligibleAgent] Error fetching dept ${departmentId}:`, deptError.message);
     return null;
   }
 
-  // 4. Get team settings for max chats
+  if (dept?.parent_id) {
+    console.log(`[findEligibleAgent] 🔄 Fallback: ${dept.name || departmentId} → parent ${dept.parent_id}`);
+    return findEligibleAgent(supabase, dept.parent_id, attemptedDepts);
+  }
+
+  console.log(`[findEligibleAgent] No parent for dept ${departmentId}, no agents found in hierarchy`);
+  return null;
+}
+
+/**
+ * Process agent capacity and return the best agent (extracted for reuse)
+ */
+// deno-lint-ignore no-explicit-any
+async function processAgentCapacity(
+  supabase: any,
+  profiles: any[],
+  eligibleUserIds: string[]
+): Promise<EligibleAgent | null> {
+  
+  // Get team settings for max chats
   const { data: teamMembers } = await supabase
     .from('team_members')
     .select('user_id, team:teams(id, team_settings(max_concurrent_chats))')
@@ -374,13 +421,12 @@ async function findEligibleAgent(
     capacityMap.set(tm.user_id, maxChats);
   }
 
-  // 5. Count active conversations per agent (D3.2: carga humana completa)
-  // Inclui waiting_human porque se está atribuída, é carga do agente
+  // Count active conversations per agent (D3.2: carga humana completa)
   const { data: activeConvs } = await supabase
     .from('conversations')
     .select('assigned_to')
-    .in('ai_mode', ['waiting_human', 'copilot', 'disabled']) // Todas as cargas humanas
-    .eq('status', 'open') // Só 'open' é válido no enum (não existe 'pending')
+    .in('ai_mode', ['waiting_human', 'copilot', 'disabled'])
+    .eq('status', 'open')
     .in('assigned_to', profiles.map((p: { id: string }) => p.id));
 
   const activeChatsMap = new Map<string, number>();
@@ -391,29 +437,27 @@ async function findEligibleAgent(
     }
   }
 
-  // 6. Find agents with capacity
+  // Find agents with capacity
   // deno-lint-ignore no-explicit-any
   const agentsWithCapacity: EligibleAgent[] = profiles
     .map((p: any) => ({
       id: p.id,
       full_name: p.full_name,
-      max_chats: capacityMap.get(p.id) ?? 30, // D5: Fallback para mínimo 30
+      max_chats: capacityMap.get(p.id) ?? 30,
       active_chats: activeChatsMap.get(p.id) ?? 0,
       last_status_change: p.last_status_change,
     }))
     .filter((a: EligibleAgent) => a.active_chats < a.max_chats);
 
   if (agentsWithCapacity.length === 0) {
-    console.log('[findEligibleAgent] All agents at capacity');
     return null;
   }
 
-  // 7. Sort by least-loaded, then by last_status_change (round-robin)
+  // Sort by least-loaded, then by last_status_change (round-robin)
   agentsWithCapacity.sort((a, b) => {
     if (a.active_chats !== b.active_chats) {
-      return a.active_chats - b.active_chats; // Least loaded first
+      return a.active_chats - b.active_chats;
     }
-    // If same load, prefer the one online longer (round-robin effect)
     return new Date(a.last_status_change).getTime() - new Date(b.last_status_change).getTime();
   });
 
@@ -422,12 +466,21 @@ async function findEligibleAgent(
 
 /**
  * D4.1: Check if department has ANY agents configured (regardless of online status)
+ * with HIERARCHICAL FALLBACK: subdept → parent dept
  */
 // deno-lint-ignore no-explicit-any
 async function checkDepartmentHasAgents(
   supabase: any,
-  departmentId: string
+  departmentId: string,
+  attemptedDepts: string[] = []
 ): Promise<boolean> {
+  
+  // Avoid infinite loops in recursive fallback
+  if (attemptedDepts.includes(departmentId)) {
+    return false;
+  }
+  attemptedDepts.push(departmentId);
+  
   // Get eligible roles (same as findEligibleAgent)
   const eligibleRoles = [
     'support_agent', 'sales_rep', 'cs_manager', 
@@ -446,12 +499,11 @@ async function checkDepartmentHasAgents(
 
   const eligibleUserIds = eligibleUserRoles.map((r: { user_id: string }) => r.user_id);
 
-  // SIMPLES: Verificar apenas no departamento EXATO
-  // Count profiles in EXACT department with eligible roles (any status)
+  // Count profiles in department with eligible roles (any status)
   const { count, error } = await supabase
     .from('profiles')
     .select('id', { count: 'exact', head: true })
-    .eq('department', departmentId)  // EXATO - sem .in()
+    .eq('department', departmentId)
     .in('id', eligibleUserIds);
 
   if (error) {
@@ -459,7 +511,25 @@ async function checkDepartmentHasAgents(
     return false;
   }
 
-  return (count ?? 0) > 0;
+  if ((count ?? 0) > 0) {
+    console.log(`[checkDepartmentHasAgents] Found ${count} agents in dept ${departmentId}`);
+    return true;
+  }
+
+  // FALLBACK: Try parent department
+  const { data: dept } = await supabase
+    .from('departments')
+    .select('parent_id')
+    .eq('id', departmentId)
+    .single();
+
+  if (dept?.parent_id) {
+    console.log(`[checkDepartmentHasAgents] Checking parent ${dept.parent_id} for dept ${departmentId}`);
+    return checkDepartmentHasAgents(supabase, dept.parent_id, attemptedDepts);
+  }
+
+  console.log(`[checkDepartmentHasAgents] No agents in hierarchy for dept ${departmentId}`);
+  return false;
 }
 
 /**
