@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { getAIConfig, createKillSwitchResponse } from "../_shared/ai-config-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,15 +96,11 @@ serve(async (req) => {
     const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
     // ============================================
-    // FASE 6: Kill Switch Global
+    // FASE 6: Kill Switch (Cached)
     // ============================================
-    const { data: globalConfig } = await supabaseClient
-      .from('system_configurations')
-      .select('value')
-      .eq('key', 'ai_global_enabled')
-      .maybeSingle();
+    const aiConfig = await getAIConfig(supabaseClient);
 
-    if (globalConfig?.value === 'false') {
+    if (!aiConfig.ai_global_enabled) {
       console.log('[generate-copilot-insights] 🚫 Kill Switch ativo - retornando');
       return new Response(
         JSON.stringify({ 

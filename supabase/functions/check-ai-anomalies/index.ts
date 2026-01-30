@@ -5,12 +5,36 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Thresholds de anomalia
+// Thresholds de anomalia (warning level)
 const THRESHOLDS = {
   CSAT_DROP_PERCENT: 15,           // Queda de CSAT > 15%
   RESOLUTION_INCREASE_PERCENT: 25, // Aumento de tempo de resolução > 25%
   ADOPTION_DROP_PERCENT: 30,       // Queda de adoção do Copilot > 30%
 };
+
+// Thresholds de severidade (warning vs critical)
+const SEVERITY_THRESHOLDS: Record<string, { warning: number; critical: number }> = {
+  csat_drop: {
+    warning: 15,   // 15-24% = warning
+    critical: 25,  // >= 25% = critical
+  },
+  resolution_increase: {
+    warning: 25,   // 25-49% = warning
+    critical: 50,  // >= 50% = critical
+  },
+  adoption_drop: {
+    warning: 30,   // 30-49% = warning
+    critical: 50,  // >= 50% = critical
+  },
+};
+
+// Função helper para calcular severidade dinamicamente
+function getSeverity(metricType: string, changePercent: number): 'warning' | 'critical' {
+  const thresholds = SEVERITY_THRESHOLDS[metricType];
+  if (!thresholds) return 'warning';
+  
+  return changePercent >= thresholds.critical ? 'critical' : 'warning';
+}
 
 interface AnomalyResult {
   metric_type: string;
@@ -70,9 +94,9 @@ Deno.serve(async (req) => {
             previous_value: Number(previousAvg.toFixed(2)),
             change_percent: Number(changePercent.toFixed(1)),
             threshold_percent: THRESHOLDS.CSAT_DROP_PERCENT,
-            severity: changePercent > 25 ? 'critical' : 'warning',
+            severity: getSeverity('csat_drop', changePercent),
           });
-          console.log(`[check-ai-anomalies] ⚠️ CSAT drop detectado: ${changePercent.toFixed(1)}%`);
+          console.log(`[check-ai-anomalies] ⚠️ CSAT drop detectado: ${changePercent.toFixed(1)}% (${getSeverity('csat_drop', changePercent)})`);
         }
       }
     }
@@ -120,9 +144,9 @@ Deno.serve(async (req) => {
             previous_value: Number(previousAvgMinutes.toFixed(0)),
             change_percent: Number(changePercent.toFixed(1)),
             threshold_percent: THRESHOLDS.RESOLUTION_INCREASE_PERCENT,
-            severity: changePercent > 50 ? 'critical' : 'warning',
+            severity: getSeverity('resolution_increase', changePercent),
           });
-          console.log(`[check-ai-anomalies] ⚠️ Resolution time increase: ${changePercent.toFixed(1)}%`);
+          console.log(`[check-ai-anomalies] ⚠️ Resolution time increase: ${changePercent.toFixed(1)}% (${getSeverity('resolution_increase', changePercent)})`);
         }
       }
     }
@@ -157,9 +181,9 @@ Deno.serve(async (req) => {
             previous_value: Number(previousRate.toFixed(1)),
             change_percent: Number(changePercent.toFixed(1)),
             threshold_percent: THRESHOLDS.ADOPTION_DROP_PERCENT,
-            severity: changePercent > 50 ? 'critical' : 'warning',
+            severity: getSeverity('adoption_drop', changePercent),
           });
-          console.log(`[check-ai-anomalies] ⚠️ Adoption drop: ${changePercent.toFixed(1)}%`);
+          console.log(`[check-ai-anomalies] ⚠️ Adoption drop: ${changePercent.toFixed(1)}% (${getSeverity('adoption_drop', changePercent)})`);
         }
       }
     }

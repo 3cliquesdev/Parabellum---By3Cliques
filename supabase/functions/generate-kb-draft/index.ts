@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getAIConfig, createKillSwitchResponse, AI_STATUS } from "../_shared/ai-config-cache.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -52,35 +53,16 @@ Deno.serve(async (req) => {
     );
 
     // ============================================
-    // FASE 6: Kill Switch Global
+    // FASE 6: Kill Switch + Shadow Mode (Cached)
     // ============================================
-    const { data: globalConfig } = await supabaseClient
-      .from('system_configurations')
-      .select('value')
-      .eq('key', 'ai_global_enabled')
-      .maybeSingle();
+    const aiConfig = await getAIConfig(supabaseClient);
 
-    if (globalConfig?.value === 'false') {
+    if (!aiConfig.ai_global_enabled) {
       console.log('[generate-kb-draft] 🚫 Kill Switch ativo - retornando');
-      return new Response(JSON.stringify({ 
-        status: 'disabled', 
-        reason: 'kill_switch',
-        ai_global_enabled: false 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return createKillSwitchResponse(corsHeaders);
     }
 
-    // ============================================
-    // FASE 6: Shadow Mode Check
-    // ============================================
-    const { data: shadowConfig } = await supabaseClient
-      .from('system_configurations')
-      .select('value')
-      .eq('key', 'ai_shadow_mode')
-      .maybeSingle();
-
-    const isShadowMode = shadowConfig?.value === 'true';
+    const isShadowMode = aiConfig.ai_shadow_mode;
 
     const { gapId, conversationId }: GenerateDraftRequest = await req.json();
 
@@ -239,8 +221,8 @@ Gere um artigo de base de conhecimento em JSON.`;
     return new Response(JSON.stringify({ 
       success: true,
       article,
-      shadow_mode: isShadowMode,
-      applied: !isShadowMode
+      status: isShadowMode ? AI_STATUS.SUGGESTED_ONLY : AI_STATUS.APPLIED, // Semantic status
+      applied: !isShadowMode // Backward compatibility
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getAIConfig } from "../_shared/ai-config-cache.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,15 +23,11 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // ============================================
-    // FASE 6: Kill Switch Global
+    // FASE 6: Kill Switch + Shadow Mode (Cached)
     // ============================================
-    const { data: globalConfig } = await supabase
-      .from('system_configurations')
-      .select('value')
-      .eq('key', 'ai_global_enabled')
-      .maybeSingle();
+    const aiConfig = await getAIConfig(supabase);
 
-    if (globalConfig?.value === 'false') {
+    if (!aiConfig.ai_global_enabled) {
       console.log('[extract-knowledge] 🚫 Kill Switch ativo - retornando');
       return new Response(
         JSON.stringify({ success: false, reason: 'kill_switch' }),
@@ -38,16 +35,7 @@ serve(async (req) => {
       );
     }
 
-    // ============================================
-    // FASE 6: Shadow Mode Check
-    // ============================================
-    const { data: shadowConfig } = await supabase
-      .from('system_configurations')
-      .select('value')
-      .eq('key', 'ai_shadow_mode')
-      .maybeSingle();
-
-    const isShadowMode = shadowConfig?.value === 'true';
+    const isShadowMode = aiConfig.ai_shadow_mode;
     console.log(`[extract-knowledge] Shadow Mode: ${isShadowMode ? 'ATIVO' : 'Inativo'}`);
 
     // 🆕 FASE 2: Guard-rail - verificar se já foi aprendido
