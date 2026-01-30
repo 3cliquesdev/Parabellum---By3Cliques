@@ -1,199 +1,119 @@
 
-# Plano: Upgrade Enterprise D2-D4 - Correções Críticas
+# Plano: Ajuste D0 → D4 - Correções Indispensáveis
 
-## Problemas Identificados
+## Diagnóstico Atual
 
-### 1. Trigger NÃO dispara em todos os cenários
-**Problema**: O trigger atual exige "transição" para `waiting_human`, mas conversas podem:
-- Nascer já em `waiting_human` (via webhook) → INSERT trigger atual não dispara se OLD não existe
-- Ser atualizadas múltiplas vezes sem mudar `ai_mode`
+### O que está funcionando
+- Trigger `BEFORE INSERT OR UPDATE` existe e está ativo
+- Jobs estão sendo criados (31 jobs pending)
+- Recovery de conversas órfãs funcionou
 
-**Solução**: Mudar a lógica para verificar o **estado atual** em vez de transição
+### Problemas Identificados
 
-### 2. Conversas Existentes Sem Job
-**Problema**: Existem 5+ conversas em `waiting_human` sem `assigned_to` mas sem jobs criados
-```
-947e77f6-fd7c-42d3-abe4-6b010ff7a246 → Comercial, waiting_human, sem agente
-2921ce0a-bd8a-4cdf-90b2-8101ee561393 → Comercial, waiting_human, sem agente
-```
-
-**Solução**: Criar job de "recuperação" que detecta conversas órfãs
-
-### 3. Elegibilidade de Agente - Departamento Comercial Vazio
-**Problema**: Nenhum agente elegível no Comercial porque:
-- Thaynara está `busy` (não `online`)
-- Outros estão `offline` ou com role `user` (não elegível)
-
-**Solução**: 
-- O sistema está correto em não atribuir (nenhum elegível)
-- O job ficará em retry até um agente ficar online
-- Após 5 tentativas → `escalated` → alerta para admin
-
-### 4. Lock de Processamento
-**Problema**: Sem lock atômico ao pegar job, dois workers podem processar o mesmo
-
-**Solução**: UPDATE com RETURNING para garantir lock exclusivo
-
-### 5. Contagem de Capacidade
-**Problema**: Conta `status='open'` mas deveria contar apenas conversas em "carga humana"
-
-**Solução**: Ajustar para `ai_mode IN ('copilot', 'disabled')` E `status IN ('open', 'pending')`
-
-### 6. ai_mode = 'copilot' na Atribuição
-**Problema**: Mudar para `copilot` automaticamente pode interferir em filtros da UI
-
-**Solução**: Manter `waiting_human` ou fazer configurável via setting
+| Problema | Causa | Impacto |
+|----------|-------|---------|
+| Dispatcher diz "No pending jobs" | Jobs criados às 07:55, último ciclo às 07:51 | Jobs não processados |
+| 0 agentes online em depts com jobs | Comercial, Suporte Sistema, Suporte Pedidos sem online | Nenhuma atribuição possível |
+| Código usa status `'pending'` | Enum só tem: `open`, `resolved`, `closed`, `waiting_human` | Erro silencioso na contagem |
+| Trigger usa lógica robusta mas sem detalhe de UPDATE OF | Trigger dispara em QUALQUER update, não só campos relevantes | Performance desnecessária |
 
 ---
 
 ## Alterações Propostas
 
-### D2.1 - Trigger Enterprise (INSERT + UPDATE)
+### 1. Migration SQL - Trigger Refinado (D0)
 
 ```sql
--- Função única para INSERT e UPDATE
-CREATE OR REPLACE FUNCTION trigger_dispatch_on_waiting_human()
+-- Função robusta que verifica ESTADO ATUAL
+CREATE OR REPLACE FUNCTION public.ensure_dispatch_job()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Regra: "Se ESTÁ em waiting_human, sem agente, com dept, open → garante job"
-  IF NEW.ai_mode = 'waiting_human' 
-     AND NEW.assigned_to IS NULL 
+  -- Se conversa elegível para distribuição, garante job pendente
+  IF NEW.ai_mode = 'waiting_human'
+     AND NEW.assigned_to IS NULL
      AND NEW.department IS NOT NULL
-     AND NEW.status = 'open'
+     AND NEW.status = 'open'  -- Só 'open' é válido no enum
   THEN
-    INSERT INTO conversation_dispatch_jobs (conversation_id, department_id, priority)
+    INSERT INTO public.conversation_dispatch_jobs (conversation_id, department_id, priority)
     VALUES (NEW.id, NEW.department, 1)
-    ON CONFLICT (conversation_id) 
-    DO UPDATE SET 
-      status = CASE 
-        WHEN conversation_dispatch_jobs.status = 'completed' THEN conversation_dispatch_jobs.status
+    ON CONFLICT (conversation_id)
+    DO UPDATE SET
+      department_id   = EXCLUDED.department_id,
+      status          = CASE 
+        WHEN conversation_dispatch_jobs.status = 'completed' 
+        THEN 'pending'  -- Reativa job se foi completo mas voltou a precisar
         ELSE 'pending'
       END,
-      next_attempt_at = CASE 
-        WHEN conversation_dispatch_jobs.status != 'completed' THEN now()
-        ELSE conversation_dispatch_jobs.next_attempt_at
-      END,
-      updated_at = now();
-    
-    NEW.dispatch_status := 'pending';
+      next_attempt_at = now(),
+      updated_at      = now();
   END IF;
-  
-  -- Marcar como completo quando atribuído
-  IF TG_OP = 'UPDATE' AND NEW.assigned_to IS NOT NULL AND (OLD.assigned_to IS NULL OR OLD.assigned_to IS DISTINCT FROM NEW.assigned_to) THEN
-    UPDATE conversation_dispatch_jobs 
+
+  -- Se atribuiu agente, encerra job
+  IF NEW.assigned_to IS NOT NULL THEN
+    UPDATE public.conversation_dispatch_jobs
     SET status = 'completed', updated_at = now()
-    WHERE conversation_id = NEW.id AND status != 'completed';
-    
-    NEW.dispatch_status := 'assigned';
+    WHERE conversation_id = NEW.id
+      AND status <> 'completed';
   END IF;
-  
+
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- TRIGGER ÚNICO para INSERT e UPDATE
-DROP TRIGGER IF EXISTS trigger_conversation_dispatch ON conversations;
-DROP TRIGGER IF EXISTS trigger_conversation_dispatch_insert ON conversations;
+-- Triggers separados para INSERT e UPDATE (melhor performance)
+DROP TRIGGER IF EXISTS trg_dispatch_on_conversation_insert ON public.conversations;
+DROP TRIGGER IF EXISTS trg_dispatch_on_conversation_update ON public.conversations;
+DROP TRIGGER IF EXISTS trigger_conversation_dispatch ON public.conversations;
 
-CREATE TRIGGER trigger_conversation_dispatch
-  BEFORE INSERT OR UPDATE ON conversations
+-- INSERT: sempre verifica
+CREATE TRIGGER trg_dispatch_on_conversation_insert
+  AFTER INSERT ON public.conversations
   FOR EACH ROW
-  EXECUTE FUNCTION trigger_dispatch_on_waiting_human();
+  EXECUTE FUNCTION public.ensure_dispatch_job();
+
+-- UPDATE: só dispara quando campos relevantes mudam
+CREATE TRIGGER trg_dispatch_on_conversation_update
+  AFTER UPDATE OF ai_mode, assigned_to, department, status ON public.conversations
+  FOR EACH ROW
+  EXECUTE FUNCTION public.ensure_dispatch_job();
 ```
 
-### D2.2 - Job de Recuperação (Conversas Órfãs)
+### 2. Edge Function - Corrigir Contagem de Capacidade (D3)
 
-```sql
--- Query para criar jobs para conversas esquecidas
-INSERT INTO conversation_dispatch_jobs (conversation_id, department_id, priority)
-SELECT c.id, c.department, 0
-FROM conversations c
-WHERE c.ai_mode = 'waiting_human'
-  AND c.assigned_to IS NULL
-  AND c.department IS NOT NULL
-  AND c.status = 'open'
-  AND NOT EXISTS (
-    SELECT 1 FROM conversation_dispatch_jobs cdj 
-    WHERE cdj.conversation_id = c.id 
-      AND cdj.status IN ('pending', 'processing')
-  )
-ON CONFLICT (conversation_id) DO NOTHING;
-```
+**Problema**: Código usa `status IN ('open', 'pending')` mas `pending` não existe no enum.
 
-### D3.1 - Lock Atômico no Dispatcher
+**Arquivo**: `supabase/functions/dispatch-conversations/index.ts`
 
 ```typescript
-// Pegar job com lock exclusivo
-const { data: lockedJob, error: lockError } = await supabase
-  .from('conversation_dispatch_jobs')
-  .update({ 
-    status: 'processing', 
-    updated_at: new Date().toISOString() 
-  })
-  .eq('id', job.id)
-  .eq('status', 'pending')  // Só se ainda for pending
-  .select('*')
-  .maybeSingle();
+// ANTES (ERRADO):
+.in('status', ['open', 'pending'])
 
-if (!lockedJob) {
-  // Outro worker já pegou - pular
-  continue;
-}
+// DEPOIS (CORRETO):
+.eq('status', 'open')  // Só 'open' é válido
 ```
 
-### D3.2 - Contagem de Capacidade Correta
+### 3. Edge Function - Incluir waiting_human na Capacidade (D3)
+
+**Problema**: Conta só `copilot` e `disabled`, mas `waiting_human` também é carga se atribuído.
 
 ```typescript
-// Contar apenas conversas em "carga humana"
-const { data: activeConvs } = await supabase
-  .from('conversations')
-  .select('assigned_to')
-  .in('ai_mode', ['copilot', 'disabled'])  // Carga humana
-  .in('status', ['open', 'pending'])        // Não fechadas
-  .in('assigned_to', profiles.map(p => p.id));
+// ANTES:
+.in('ai_mode', ['copilot', 'disabled'])
+
+// DEPOIS - Contar TODAS as conversas atribuídas ao agente:
+.in('ai_mode', ['waiting_human', 'copilot', 'disabled'])
+.eq('status', 'open')
 ```
 
-### D3.3 - Não Mudar ai_mode Automaticamente
+### 4. Garantir CRON está chamando o Dispatcher
+
+Verificar `cron-process-queue` está invocando `dispatch-conversations`:
 
 ```typescript
-// Na atribuição, manter waiting_human ou usar config
-const { data: updateResult } = await supabase
-  .from('conversations')
-  .update({
-    assigned_to: eligibleAgent.id,
-    // ai_mode: Não muda - deixa o agente decidir via UI
-    dispatch_status: 'assigned',
-    last_dispatch_at: new Date().toISOString(),
-  })
-  .eq('id', job.conversation_id)
-  .is('assigned_to', null);
-```
-
-### D4.1 - Status `manual_only` para Departamentos Sem Agentes
-
-```typescript
-// Se não há agentes elegíveis E departamento não tem nenhum agente configurado
-if (!eligibleAgent) {
-  // Verificar se o departamento tem ALGUM agente (offline ou online)
-  const { count } = await supabase
-    .from('profiles')
-    .select('id', { count: 'exact', head: true })
-    .eq('department', departmentId)
-    .in('id', eligibleUserIds);  // Com roles elegíveis
-  
-  if (count === 0) {
-    // Departamento não tem agentes configurados → manual_only
-    await supabase.from('conversations').update({
-      dispatch_status: 'manual_only'
-    }).eq('id', job.conversation_id);
-    
-    await markJobComplete(supabase, job.id, 'no_agents_configured');
-    continue;
-  }
-  
-  // Tem agentes mas nenhum disponível → retry
-  await handleJobFailure(supabase, job, 'no_agents_available');
-}
+// D4: Process conversation dispatch jobs
+const { data: dispatchData, error: dispatchError } = await supabase.functions.invoke("dispatch-conversations", {
+  body: { source: "cron" }
+});
 ```
 
 ---
@@ -202,68 +122,104 @@ if (!eligibleAgent) {
 
 | Arquivo | Alteração |
 |---------|-----------|
-| **Nova Migration SQL** | Trigger unificado + query de recuperação |
-| `supabase/functions/dispatch-conversations/index.ts` | Lock atômico, contagem correta, não mudar ai_mode |
-| `supabase/migrations/...dispatch...sql` | Atualizar check constraint para incluir `manual_only` |
+| **Nova Migration SQL** | Trigger `ensure_dispatch_job` refinado com INSERT e UPDATE OF |
+| `supabase/functions/dispatch-conversations/index.ts` | Corrigir `'pending'` → `'open'` e incluir `waiting_human` na capacidade |
 
 ---
 
 ## Fluxo Corrigido
 
-```
-Conversa entra/atualiza com:
-  ai_mode = 'waiting_human'
-  assigned_to = NULL
-  department = UUID
-  status = 'open'
-         │
-         ▼
-TRIGGER (INSERT OU UPDATE):
-  Estado atual exige distribuição?
-  → SIM: UPSERT job com status='pending'
-         │
-         ▼
-CRON (cada 30-60s):
-  1. Buscar jobs pending com next_attempt_at <= now()
-  2. Para cada job:
-     a. UPDATE SET status='processing' WHERE status='pending' RETURNING *
-        → Se 0 rows: outro worker pegou, skip
+```text
+1. Conversa criada/atualizada com:
+   ai_mode = 'waiting_human'
+   assigned_to = NULL
+   department = UUID
+   status = 'open'
+           │
+           ▼
+2. TRIGGER (INSERT ou UPDATE OF ai_mode,assigned_to,department,status):
+   Estado atual exige distribuição?
+   → SIM: UPSERT job com status='pending'
+           │
+           ▼
+3. CRON (cada 30-60s via cron-process-queue):
+   → Chama dispatch-conversations
+   → Busca jobs pending com next_attempt_at <= now()
+   → Para cada job:
+     a. Lock atômico (UPDATE WHERE status='pending')
      b. Verificar conversa ainda precisa
-     c. Buscar agentes elegíveis:
-        - online (não busy, não offline)
-        - no departamento (ou parent)
-        - com capacity (copilot+disabled conversas < max)
-        - com role elegível
-     d. Se encontrou → UPDATE atômico com lock
-     e. Se não encontrou → retry ou manual_only
-         │
-         ▼
-Conversa atribuída → dispatch_status = 'assigned'
-Conversa sem agentes → dispatch_status = 'manual_only' ou retry
+     c. Buscar agentes:
+        - online
+        - no departamento OU parent
+        - com capacity (waiting_human+copilot+disabled < max)
+     d. Se encontrou → Atribuir atomicamente
+     e. Se não → Retry com backoff
+           │
+           ▼
+4. Resultado:
+   - Agente atribuído → job completo
+   - Nenhum agente → retry até TTL → escalated
+   - Dept sem agentes → manual_only
 ```
 
 ---
 
-## Validação Imediata
+## Situação Atual dos Departamentos
 
-Após implementar, executar a query de recuperação para criar jobs para as conversas que estão travadas:
+| Departamento | Jobs Pending | Agentes Online | Ação Esperada |
+|--------------|--------------|----------------|---------------|
+| Comercial | 17 | 0 (Thaynara busy) | Retry até alguém online |
+| Suporte Sistema | 12 | 0 | Fallback para parent (Suporte) |
+| Suporte Pedidos | 2 | 0 | Fallback para parent (Suporte) |
+| **Suporte (parent)** | - | 0 (Camila busy) | Nenhum online também |
+
+**Conclusão**: Nenhum agente está `online` nos departamentos com jobs. O sistema está funcionando corretamente - ele tentará atribuir quando alguém ficar online.
+
+---
+
+## Detalhes Técnicos
+
+### Correção da Contagem de Capacidade
+
+```typescript
+// Linha ~335-340 em dispatch-conversations/index.ts
+// ANTES:
+const { data: activeConvs } = await supabase
+  .from('conversations')
+  .select('assigned_to')
+  .in('ai_mode', ['copilot', 'disabled']) // Falta waiting_human
+  .in('status', ['open', 'pending'])       // 'pending' não existe!
+  .in('assigned_to', profiles.map((p: { id: string }) => p.id));
+
+// DEPOIS:
+const { data: activeConvs } = await supabase
+  .from('conversations')
+  .select('assigned_to')
+  .in('ai_mode', ['waiting_human', 'copilot', 'disabled']) // Todas as cargas humanas
+  .eq('status', 'open')  // Só 'open' é válido
+  .in('assigned_to', profiles.map((p: { id: string }) => p.id));
+```
+
+### Trigger com UPDATE OF
 
 ```sql
--- Criar jobs para conversas órfãs
-INSERT INTO conversation_dispatch_jobs (conversation_id, department_id, priority)
-SELECT c.id, c.department, 0
-FROM conversations c
-WHERE c.ai_mode = 'waiting_human'
-  AND c.assigned_to IS NULL
-  AND c.department IS NOT NULL
-  AND c.status = 'open'
-  AND NOT EXISTS (
-    SELECT 1 FROM conversation_dispatch_jobs cdj 
-    WHERE cdj.conversation_id = c.id 
-      AND cdj.status IN ('pending', 'processing')
-  )
-ON CONFLICT (conversation_id) DO NOTHING;
+-- UPDATE OF restringe trigger para disparar APENAS quando esses campos mudam
+-- Evita processamento desnecessário em updates de outros campos
+CREATE TRIGGER trg_dispatch_on_conversation_update
+  AFTER UPDATE OF ai_mode, assigned_to, department, status ON public.conversations
+  FOR EACH ROW
+  EXECUTE FUNCTION public.ensure_dispatch_job();
 ```
+
+---
+
+## Validação Pós-Implementação
+
+1. **Testar INSERT**: Criar conversa já em `waiting_human` → job deve ser criado
+2. **Testar UPDATE**: Mudar `ai_mode` para `waiting_human` → job deve ser criado
+3. **Testar atribuição**: Atribuir agente → job deve ser marcado `completed`
+4. **Verificar capacidade**: Agente online com 0 chats → deve receber atribuição
+5. **Fallback parent**: Conversa em "Suporte Sistema" → deve buscar agentes em "Suporte" também
 
 ---
 
@@ -271,10 +227,7 @@ ON CONFLICT (conversation_id) DO NOTHING;
 
 | Problema | Correção |
 |----------|----------|
-| Trigger só UPDATE | Trigger único INSERT OR UPDATE |
-| Verifica transição | Verifica estado atual |
-| Sem lock | Lock atômico com UPDATE+SELECT |
-| Conta todas open | Conta apenas copilot+disabled |
-| Muda ai_mode | Mantém waiting_human |
-| Retenta infinito | manual_only se dept vazio |
-| Conversas órfãs | Query de recuperação |
+| Trigger dispara em qualquer update | `UPDATE OF ai_mode, assigned_to, department, status` |
+| Status `'pending'` inválido | Usar apenas `'open'` |
+| Capacidade não conta `waiting_human` | Incluir `waiting_human` no IN |
+| Jobs reativados sempre como pending | `ON CONFLICT` reativa mesmo jobs completed |
