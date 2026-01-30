@@ -876,75 +876,62 @@ serve(async (req) => {
           );
         }
         
-        // Encontrar primeiro nó (sem edges apontando para ele)
+        // ============================================================
+        // 🆕 VERSÃO PRODUÇÃO-SAFE: Travessia com 4 correções críticas
+        // 1. Nunca retorna response: "" (usa null)
+        // 2. UPSERT de state (não duplica)
+        // 3. Condition com cascata de handles
+        // 4. Logs fortes para diagnóstico
+        // ============================================================
+        
+        const NO_CONTENT = new Set(['input', 'start', 'condition']);
+        const MAX_TRAVERSAL = 12;
+
+        // 1) Descobrir startNode
         const targetIds = new Set((flowDef.edges || []).map((e: any) => e.target));
         const startNode = flowDef.nodes.find((n: any) => !targetIds.has(n.id)) || flowDef.nodes[0];
-        
-        console.log('[process-chat-flow] 🚀 Iniciando Master Flow - primeiro nó:', startNode.type, startNode.id);
-        
-        // ============================================================
-        // 🆕 TRAVESSIA AUTOMÁTICA: Atravessar nós sem conteúdo
-        // Nós como 'input', 'start' e 'condition' não têm mensagem direta
-        // Precisamos navegar até encontrar um nó com conteúdo
-        // ============================================================
-        const noContentTypes = ['input', 'start'];
-        let contentNode = startNode;
-        let traversalCount = 0;
-        const MAX_TRAVERSAL = 10; // Evitar loop infinito
-        let collectedData: Record<string, any> = {};
 
-        // Buscar dados do contato para avaliar condições
-        const { data: convData } = await supabaseClient
+        console.log('[process-chat-flow] 🚀 Master Flow start:', startNode.type, startNode.id);
+
+        // 2) Carregar contact/conversation uma vez
+        const { data: conversation } = await supabaseClient
           .from('conversations')
-          .select('contact_id')
+          .select('id, contact_id')
           .eq('id', conversationId)
           .maybeSingle();
 
-        let contactData: Record<string, any> | null = null;
-        if (convData?.contact_id) {
+        let contactData: any = null;
+        if (conversation?.contact_id) {
           const { data: contact } = await supabaseClient
             .from('contacts')
             .select('*')
-            .eq('id', convData.contact_id)
+            .eq('id', conversation.contact_id)
             .maybeSingle();
           contactData = contact;
         }
 
-        // Função auxiliar para avaliar condição no contexto do fluxo
-        function evaluateNodeCondition(conditionData: any): boolean {
-          if (!conditionData) return true;
-          
-          const { condition_type, condition_field, condition_value } = conditionData;
-          
-          // Determinar de onde vem o valor
-          let fieldValue: any = null;
-          
-          // Primeiro tentar dados coletados
-          if (collectedData[condition_field]) {
-            fieldValue = collectedData[condition_field];
-          } 
-          // Depois tentar dados do contato
-          else if (contactData && condition_field in contactData) {
-            fieldValue = contactData[condition_field];
-          }
-          // Checagem especial para campos comuns
-          else if (condition_field === 'is_validated_customer' || condition_field === 'isValidatedCustomer') {
+        let collectedData: Record<string, any> = {};
+
+        // Função para avaliar condição com logs fortes
+        function evalCond(data: any): boolean {
+          const { condition_type, condition_field, condition_value } = data || {};
+          let fieldValue =
+            collectedData?.[condition_field] ??
+            (contactData ? contactData[condition_field] : null);
+
+          // Compatibilidade com campos comuns
+          if (condition_field === 'is_validated_customer' || condition_field === 'isValidatedCustomer') {
             fieldValue = contactData?.kiwify_validated ?? false;
           }
-          else if (condition_field === 'email' && contactData?.email) {
-            fieldValue = contactData.email;
-          }
-          else if (condition_field === 'document' && contactData?.document) {
-            fieldValue = contactData.document;
-          }
-          
-          console.log('[process-chat-flow] 🔍 Evaluating condition:', {
-            condition_type,
-            condition_field,
-            condition_value,
-            fieldValue: typeof fieldValue === 'string' ? fieldValue?.slice(0, 20) : fieldValue
+
+          console.log('[process-chat-flow] 🔍 Condition evaluation:', { 
+            condition_type, 
+            condition_field, 
+            condition_value, 
+            fieldValue,
+            contactId: contactData?.id
           });
-          
+
           switch (condition_type) {
             case 'has_data':
             case 'not_empty':
@@ -953,178 +940,198 @@ serve(async (req) => {
             case 'no_data':
               return !fieldValue || String(fieldValue).trim().length === 0;
             case 'equals':
-              return String(fieldValue).toLowerCase() === String(condition_value || '').toLowerCase();
+              return String(fieldValue ?? '').toLowerCase() === String(condition_value ?? '').toLowerCase();
             case 'not_equals':
-              return String(fieldValue).toLowerCase() !== String(condition_value || '').toLowerCase();
+              return String(fieldValue ?? '').toLowerCase() !== String(condition_value ?? '').toLowerCase();
             case 'is_true':
               return fieldValue === true || fieldValue === 'true';
             case 'is_false':
               return fieldValue === false || fieldValue === 'false' || !fieldValue;
             case 'contains':
-              return String(fieldValue || '').toLowerCase().includes(String(condition_value || '').toLowerCase());
+              return String(fieldValue ?? '').toLowerCase().includes(String(condition_value ?? '').toLowerCase());
             default:
               console.log('[process-chat-flow] ⚠️ Unknown condition_type:', condition_type);
               return false;
           }
         }
 
-        // Loop de travessia: atravessar nós sem conteúdo
-        while ((noContentTypes.includes(contentNode.type) || contentNode.type === 'condition') && traversalCount < MAX_TRAVERSAL) {
-          traversalCount++;
-          console.log(`[process-chat-flow] ⏩ Traversing[${traversalCount}]: ${contentNode.type} (${contentNode.id})`);
-          
-          let path: string | undefined;
-          
-          // Se é um nó de condição, avaliar para determinar o caminho
-          if (contentNode.type === 'condition') {
-            const conditionResult = evaluateNodeCondition(contentNode.data);
-            path = conditionResult ? 'true' : 'false';
-            console.log(`[process-chat-flow] 🔀 Condition evaluated: ${path}`);
+        // 3) Loop de travessia com cascata de handles
+        let node: any = startNode;
+        let steps = 0;
+
+        while (node && NO_CONTENT.has(node.type) && steps < MAX_TRAVERSAL) {
+          steps++;
+          console.log(`[process-chat-flow] ⏩ Traversing[${steps}] ${node.type} (${node.id})`);
+
+          if (node.type === 'condition') {
+            const result = evalCond(node.data);
+            console.log(`[process-chat-flow] 🔀 Condition result: ${result}`);
+
+            // CORREÇÃO #3: Cascata de handles (true/false, yes/no, 1/2)
+            const handles = result ? ['true', 'yes', '1'] : ['false', 'no', '2'];
+            console.log('[process-chat-flow] 🔀 Trying handles:', handles.join(', '));
+            
+            let next: any = null;
+            for (const h of handles) {
+              next = findNextNode(flowDef, node, h);
+              if (next) {
+                console.log(`[process-chat-flow] ✓ Found next node via handle "${h}":`, next.type);
+                break;
+              }
+            }
+            if (!next) {
+              console.log('[process-chat-flow] ⚠️ No next node for condition - stopping traversal');
+              break;
+            }
+            node = next;
+          } else {
+            const next = findNextNode(flowDef, node);
+            if (!next) {
+              console.log('[process-chat-flow] ⚠️ No next node - stopping traversal');
+              break;
+            }
+            node = next;
           }
-          
-          const nextNode = findNextNode(flowDef, contentNode, path);
-          
-          if (!nextNode) {
-            console.log('[process-chat-flow] ⚠️ No next node found during traversal');
-            break;
-          }
-          
-          contentNode = nextNode;
         }
 
-        console.log('[process-chat-flow] 📍 Content node reached:', contentNode.type, contentNode.id, `(after ${traversalCount} traversals)`);
+        console.log('[process-chat-flow] 📍 Content node:', node?.type, node?.id, `steps=${steps}`);
 
-        // Criar estado do fluxo apontando para o nó com conteúdo
-        const { data: newState, error: createError } = await supabaseClient
+        // 4) CORREÇÃO #2: UPSERT de state (não duplicar)
+        const { data: existingState } = await supabaseClient
           .from('chat_flow_states')
-          .insert({
-            conversation_id: conversationId,
-            flow_id: masterFlow.id,
-            current_node_id: contentNode.id, // 🆕 Salvar o nó com conteúdo, não o input
-            collected_data: collectedData,
-            status: 'active',
-          })
-          .select()
-          .single();
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('flow_id', masterFlow.id)
+          .in('status', ['active', 'waiting_input'])
+          .maybeSingle();
 
-        if (createError) {
-          console.error('[process-chat-flow] Error creating master flow state:', createError);
-          const aiNode = flowDef?.nodes?.find((n: any) => n.type === 'ai_response');
+        let stateId: string | null = null;
+
+        if (existingState?.id) {
+          stateId = existingState.id;
+          console.log('[process-chat-flow] 📝 Updating existing state:', stateId);
+          await supabaseClient
+            .from('chat_flow_states')
+            .update({ current_node_id: node.id, collected_data: collectedData })
+            .eq('id', existingState.id);
+        } else {
+          const { data: newState, error } = await supabaseClient
+            .from('chat_flow_states')
+            .insert({
+              conversation_id: conversationId,
+              flow_id: masterFlow.id,
+              current_node_id: node.id,
+              collected_data: collectedData,
+              status: 'active',
+            })
+            .select('id')
+            .single();
+
+          if (error) {
+            console.error('[process-chat-flow] Error creating state:', error);
+            return new Response(
+              JSON.stringify({
+                useAI: false,
+                response: null,
+                error: 'Failed to create flow state',
+                flowId: masterFlow.id,
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          stateId = newState.id;
+          console.log('[process-chat-flow] ✅ Created new state:', stateId);
+        }
+
+        // 5) Responder baseado no nó final - CORREÇÃO #1: Nunca response: ""
+
+        if (node.type === 'ai_response') {
           return new Response(
-            JSON.stringify({
-              useAI: true,
-              reason: "Error creating master flow state - fallback to AI config",
+            JSON.stringify({ 
+              useAI: true, 
+              aiNodeActive: true, 
+              nodeId: node.id, 
+              flowId: masterFlow.id, 
+              flowStarted: true,
               masterFlowId: masterFlow.id,
-              personaId: aiNode?.data?.persona_id || null,
-              kbCategories: aiNode?.data?.kb_categories || null,
+              masterFlowName: masterFlow.name,
+              allowedSources: node.data?.allowed_sources || ['kb', 'crm', 'tracking'],
+              responseFormat: 'text_only',
+              personaId: node.data?.persona_id || null,
+              kbCategories: node.data?.kb_categories || null,
+              contextPrompt: node.data?.context_prompt || null,
+              fallbackMessage: node.data?.fallback_message || null,
+              objective: node.data?.objective || null,
+              maxSentences: node.data?.max_sentences ?? 3,
+              forbidQuestions: node.data?.forbid_questions ?? true,
+              forbidOptions: node.data?.forbid_options ?? true,
+              debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        console.log('[process-chat-flow] ✅ Master Flow started:', newState.id, '- content node:', contentNode.type);
-
-        // Processar o nó com conteúdo encontrado
-
-        // Se é nó de transferência
-        if (contentNode.type === 'transfer') {
+        if (node.type === 'transfer') {
           await supabaseClient
             .from('chat_flow_states')
             .update({ status: 'transferred' })
-            .eq('id', newState.id);
-          
+            .eq('id', stateId);
+            
+          const transferMsg = replaceVariables(node.data?.message || 'Transferindo para um atendente...', collectedData);
+          const msg = (transferMsg || '').trim();
           return new Response(
-            JSON.stringify({
-              useAI: false,
-              response: replaceVariables(contentNode.data?.message || "Transferindo para um atendente...", collectedData),
-              transfer: true,
-              transferType: contentNode.data?.transfer_type,
-              departmentId: contentNode.data?.department_id,
-              flowId: masterFlow.id,
+            JSON.stringify({ 
+              useAI: false, 
+              response: msg.length ? msg : null,  // ✅ null quando vazio
+              transfer: true, 
+              transferType: node.data?.transfer_type,
+              departmentId: node.data?.department_id,
+              flowId: masterFlow.id, 
               flowStarted: true,
               isMasterFlow: true,
+              debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Se é nó de AI, retornar useAI true com configs
-        if (contentNode.type === 'ai_response') {
-          return new Response(
-            JSON.stringify({
-              useAI: true,
-              aiNodeActive: true,
-              nodeId: contentNode.id,
-              reason: "Master Flow started with AI node",
-              masterFlowId: masterFlow.id,
-              masterFlowName: masterFlow.name,
-              flowId: masterFlow.id,
-              flowStarted: true,
-              allowedSources: contentNode.data?.allowed_sources || ['kb', 'crm', 'tracking'],
-              responseFormat: 'text_only',
-              personaId: contentNode.data?.persona_id || null,
-              kbCategories: contentNode.data?.kb_categories || null,
-              contextPrompt: contentNode.data?.context_prompt || null,
-              fallbackMessage: contentNode.data?.fallback_message || null,
-              objective: contentNode.data?.objective || null,
-              maxSentences: contentNode.data?.max_sentences ?? 3,
-              forbidQuestions: contentNode.data?.forbid_questions ?? true,
-              forbidOptions: contentNode.data?.forbid_options ?? true,
-              debug: {
-                source: 'master_flow',
-                startNodeType: startNode.type,
-                contentNodeType: contentNode.type,
-                traversalCount,
-                hasAiNode: true
-              }
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        // Se é nó de fim
-        if (contentNode.type === 'end') {
+        if (node.type === 'end') {
           await supabaseClient
             .from('chat_flow_states')
             .update({ status: 'completed', completed_at: new Date().toISOString() })
-            .eq('id', newState.id);
-          
-          const endMessage = contentNode.data?.message 
-            ? replaceVariables(contentNode.data.message, collectedData)
-            : "";
-          
+            .eq('id', stateId);
+            
+          const endMsg = replaceVariables(node.data?.message || '', collectedData);
+          const msg = (endMsg || '').trim();
           return new Response(
-            JSON.stringify({
-              useAI: false,
-              response: endMessage,
-              flowCompleted: true,
+            JSON.stringify({ 
+              useAI: false, 
+              response: msg.length ? msg : null,  // ✅ null quando vazio
+              flowCompleted: true, 
               flowId: masterFlow.id,
               isMasterFlow: true,
+              debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Se é nó com mensagem (message, ask_options, ask_name, etc)
-        const contentMessage = replaceVariables(contentNode.data?.message || "", collectedData);
-        const options = contentNode.type === 'ask_options' 
-          ? (contentNode.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value, id: opt.id }))
+        // message / ask_options / ask_*
+        const contentMessage = replaceVariables(node.data?.message || '', collectedData);
+        const msg = (contentMessage || '').trim();  // ✅ CORREÇÃO #1
+        const options = node.type === 'ask_options'
+          ? (node.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value, id: opt.id }))
           : null;
 
         return new Response(
           JSON.stringify({
             useAI: false,
-            response: contentMessage,
+            response: msg.length ? msg : null,  // ✅ nunca "" - sempre null quando vazio
             options,
             flowId: masterFlow.id,
             flowStarted: true,
             isMasterFlow: true,
-            debug: {
-              source: 'master_flow',
-              startNodeType: startNode.type,
-              contentNodeType: contentNode.type,
-              traversalCount
-            }
+            debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
