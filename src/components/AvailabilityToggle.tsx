@@ -196,7 +196,7 @@ export function AvailabilityToggle() {
             <span className="text-base">{statusConfig.offline.icon}</span>
             <div className="flex flex-col">
               <span className="font-medium">{statusConfig.offline.label}</span>
-              <span className="text-xs text-muted-foreground">Encerra conversas</span>
+              <span className="text-xs text-muted-foreground">Para de receber</span>
             </div>
           </DropdownMenuItem>
         </DropdownMenuContent>
