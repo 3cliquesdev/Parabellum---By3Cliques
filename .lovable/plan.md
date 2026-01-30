@@ -1,442 +1,328 @@
 
-# Plano: Ajustes de Segurança Anti-Duplicação (A, B, C)
+# Plano: Correção de Duplicação de Mensagens - Unificação de Pipeline
 
-## Resumo Executivo
+## Diagnóstico Confirmado
 
-Este plano implementa 3 camadas de segurança para garantir que quando o Kill Switch está ativo (`ai_global_enabled = false`), não haja mensagens automáticas em nenhuma hipótese:
+### Screenshot Analisado
+O usuário vê mensagens duplicadas como "Assistente Virtual" e "Atendente" para o mesmo conteúdo "Obrigado! Suas informações foram registradas."
 
-| Ajuste | Camada | Objetivo |
-|--------|--------|----------|
-| A | Frontend | Desabilitar auto-send na UI quando `waiting_human` |
-| B | Backend | Log único de observabilidade para auditoria |
-| C | Testes | Teste canário para prevenção de regressão |
+### Dados do Banco (Prova)
 
----
+| ID | Conteúdo | is_ai_generated | channel | metadata |
+|----|----------|-----------------|---------|----------|
+| 67ea36f6 | Obrigado! Suas... | **FALSE** | web_chat | send-meta-whatsapp |
+| 85bff5ec | Obrigado! Suas... | **TRUE** | whatsapp | null |
 
-## Diagnóstico do Estado Atual
+A mesma mensagem foi inserida **2x** com atributos diferentes!
 
-| Componente | Situação | Observação |
-|------------|----------|------------|
-| ChatWindow | ⚠️ Parcial | Bloqueia composer quando `canShowTakeControl`, mas não verifica `waiting_human` diretamente |
-| SuperComposer | ⚠️ Parcial | Aceita `isDisabled`, mas não sabe do ai_mode |
-| message-listener | ✅ Bom | Já loga Kill Switch, mas pode melhorar estrutura |
-| Testes | ❌ Ausente | Projeto não tem testes configurados |
+### Causa Raiz Identificada
 
----
+**Dois pipelines paralelos processam a mesma mensagem:**
 
-## Ajuste A — Frontend: Bloquear Auto-Send em `waiting_human`
-
-### Problema Identificado
-No `ChatWindow.tsx`, a lógica `canShowTakeControl` já bloqueia o composer quando a conversa está em `autopilot` ou `waiting_human`. No entanto, o `SuperComposer` não recebe o estado `ai_mode` diretamente, apenas um `isDisabled` genérico.
-
-Se houver qualquer tentativa de auto-send (por re-render, retry visual, ou hook mal comportado), o frontend não bloqueia explicitamente baseado em `waiting_human`.
-
-### Solução Proposta
-Adicionar verificação explícita no `SuperComposer` para bloquear envio quando `aiMode === 'waiting_human'`:
-
-**Arquivo**: `src/components/inbox/SuperComposer.tsx`
-
-**Alterações**:
-1. Adicionar prop `aiMode` ao `SuperComposer`
-2. Verificar no `handleSend` se `aiMode === 'waiting_human'` e bloquear
-3. Adicionar comentário de segurança para documentação
-
-```typescript
-// Adicionar à interface
-export interface SuperComposerProps {
-  conversationId: string;
-  isDisabled?: boolean;
-  aiMode?: 'autopilot' | 'copilot' | 'disabled' | 'waiting_human' | null;
-  // ... outros props existentes
-}
-
-// No handleSend, adicionar guard no início
-const handleSend = async () => {
-  // 🛡️ REGRA DE SEGURANÇA: Bloquear envio automático em waiting_human
-  // Isso evita duplicação por re-render ou retry visual
-  if (aiMode === 'waiting_human') {
-    console.warn('[SuperComposer] ⛔ Bloqueado: aiMode é waiting_human');
-    toast({
-      title: "Aguardando atendente",
-      description: "Você precisa assumir a conversa antes de enviar mensagens.",
-      variant: "default",
-    });
-    return;
-  }
-  
-  // ... resto da função existente
-};
+```text
+Cliente envia WhatsApp
+        |
+        v
+meta-whatsapp-webhook → handle-whatsapp-event
+        |
+        v
+insere mensagem do cliente no banco
+        |
+        +----------------------+
+        |                      |
+        v                      v
+CAMINHO 1:               CAMINHO 2:
+Database Trigger         handle-whatsapp-event
+        |                      |
+        v                      v
+message-listener         ai-autopilot-chat (linha 1142)
+        |                      |
+        v                      v
+process-chat-flow        IA gera resposta
+        |                      |
+        v                      v
+INSERE resposta          INSERE resposta
+is_ai_generated:false    is_ai_generated:true
+        |                      |
+        |                      v
+        |                send-meta-whatsapp
+        |                      |
+        |                      v
+        |                INSERE outra copia
+        |                (sem skip_db_save!)
+        +----------------------+
+                |
+                v
+        2-3 mensagens iguais!
 ```
 
-**Arquivo**: `src/components/ChatWindow.tsx`
+### Por que aparece "Assistente Virtual" vs "Atendente"?
 
-**Alteração**: Passar `aiMode` para o `SuperComposer`:
-
+No `MessageBubble.tsx` (linha 129):
 ```typescript
-<SuperComposer
-  conversationId={conversation.id}
-  isDisabled={conversation.status === "closed"}
-  aiMode={effectiveAIMode}  // 🆕 Adicionar esta prop
-  whatsappInstanceId={conversation.whatsapp_instance_id}
-  // ... resto dos props
-/>
+{isAI ? "Assistente Virtual" : (sender?.full_name || "Atendente")}
 ```
 
-### Impacto
-- Zero envios automáticos quando conversa está em `waiting_human`
-- Mensagem clara para o usuário se tentar enviar
-- Não afeta o fluxo normal quando humano já assumiu (copilot)
+- `is_ai_generated: true` → "Assistente Virtual"
+- `is_ai_generated: false` → "Atendente"
 
 ---
 
-## Ajuste B — Backend: Log Estruturado de Decisão
+## Solucao Proposta
 
-### Problema Identificado
-Atualmente o `message-listener` loga informações espalhadas em múltiplas linhas. Para debugging de incidentes ("o bot respondeu quando não devia"), precisamos de um log único e estruturado que capture toda a decisão.
+### Principio: "Um Unico Responsavel"
 
-### Solução Proposta
-Adicionar log estruturado único no ponto de decisão principal:
+Para mensagens WhatsApp:
+- **handle-whatsapp-event** processa tudo (fluxo + IA)
+- **message-listener** NAO processa mensagens WhatsApp (ja foram processadas)
+
+Para mensagens Web Chat:
+- **message-listener** continua processando normalmente
+
+---
+
+## Alteracoes Detalhadas
+
+### 1. message-listener — Ignorar mensagens ja processadas pelo WhatsApp
 
 **Arquivo**: `supabase/functions/message-listener/index.ts`
 
-**Local**: Logo após a verificação do Kill Switch (linha ~52)
+**Local**: Apos verificar sender_type (linha 31)
+
+**Logica**: Se a mensagem veio do canal WhatsApp, o `handle-whatsapp-event` ja processou. O `message-listener` deve ignorar para evitar duplicacao.
 
 ```typescript
+// Apos linha 38 (busca da conversa)
+
 // ============================================================
-// 📊 LOG DE DECISÃO UNIFICADO (Observabilidade)
-// Este log é a "caixa-preta" para auditoria de incidentes
+// 🚫 ANTI-DUPLICACAO: Se canal WhatsApp, ja foi processado
+// handle-whatsapp-event chama ai-autopilot-chat diretamente
 // ============================================================
-console.log('[AUTO-DECISION]', JSON.stringify({
-  timestamp: new Date().toISOString(),
-  conversation_id: record.conversation_id,
-  message_id: record.id,
-  ai_global_enabled: aiConfig.ai_global_enabled,
-  is_test_mode: isTestMode,
-  ai_mode: conversation?.ai_mode,
-  assigned_to: conversation?.assigned_to || null,
-  decision: !aiConfig.ai_global_enabled && !isTestMode 
-    ? 'HUMAN_ONLY' 
-    : isTestMode 
-      ? 'TEST_MODE_ACTIVE' 
-      : 'AI_PROCESSING',
-  reason: !aiConfig.ai_global_enabled && !isTestMode
-    ? 'kill_switch_active'
-    : isTestMode
-      ? 'test_mode_bypass'
-      : 'normal_flow',
-}));
-```
-
-### Benefício
-Quando alguém reclamar "o bot respondeu quando não devia", basta buscar nos logs:
-```
-grep "AUTO-DECISION" logs.txt | jq
-```
-
----
-
-## Ajuste C — Teste Canário (Configuração de Testes + Teste)
-
-### Problema Identificado
-O projeto não tem testes configurados. Sem teste canário, bugs de duplicação podem reaparecer silenciosamente.
-
-### Solução Proposta
-
-#### Parte 1: Configurar Vitest
-
-**Arquivo**: `vitest.config.ts` (criar)
-
-```typescript
-import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
-
-export default defineConfig({
-  plugins: [react()],
-  test: {
-    environment: "jsdom",
-    globals: true,
-    setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
-  },
-  resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
-  },
-});
-```
-
-**Arquivo**: `src/test/setup.ts` (criar)
-
-```typescript
-import "@testing-library/jest-dom";
-
-// Mock de matchMedia para componentes que usam media queries
-Object.defineProperty(window, "matchMedia", {
-  writable: true,
-  value: (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: () => {},
-    removeListener: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => {},
-  }),
-});
-```
-
-**Arquivo**: `tsconfig.app.json` (modificar)
-
-Adicionar `"vitest/globals"` ao `compilerOptions.types`:
-
-```json
-{
-  "compilerOptions": {
-    "types": ["vitest/globals"],
-    // ... resto existente
-  }
+if (conversation?.channel === 'whatsapp') {
+  console.log('[message-listener] ⏭️ Canal WhatsApp - ja processado por handle-whatsapp-event');
+  return new Response(JSON.stringify({ 
+    status: 'skipped', 
+    reason: 'whatsapp_handled_by_webhook',
+    message: 'WhatsApp messages are processed by handle-whatsapp-event'
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  });
 }
 ```
 
-#### Parte 2: Teste Canário do Kill Switch
+### 2. handle-whatsapp-event — Chamar process-chat-flow ANTES da IA
 
-**Arquivo**: `src/test/kill-switch-canary.test.ts` (criar)
+**Arquivo**: `supabase/functions/handle-whatsapp-event/index.ts`
+
+**Local**: Antes da linha 1136 (bloco de trigger da IA)
+
+**Logica**: Verificar se existe fluxo ativo antes de chamar a IA. Se o fluxo retornar resposta, enviar e NAO chamar a IA.
 
 ```typescript
-import { describe, it, expect, vi, beforeEach } from "vitest";
+// Adicionar ANTES da linha 1136 (bloco "Se ai_mode = 'autopilot'")
 
-/**
- * 🐤 TESTE CANÁRIO: Kill Switch bloqueia todos os envios automáticos
- * 
- * Este teste garante que quando ai_global_enabled = false:
- * 1. Nenhuma mensagem com source 'bot' ou 'ai' é criada
- * 2. ai_mode é alterado para 'waiting_human'
- * 
- * Se este teste falhar, há risco de duplicação de mensagens!
- */
-describe("Kill Switch Canary", () => {
-  let mockSupabase: any;
-  let insertedMessages: any[] = [];
+// ============================================================
+// 🔄 PROCESS-CHAT-FLOW PRIMEIRO (Anti-Duplicacao)
+// Se fluxo retornar resposta, nao chamar IA
+// ============================================================
+console.log('[handle-whatsapp-event] 🔄 Verificando fluxo de chat...');
 
-  beforeEach(() => {
-    insertedMessages = [];
-    
-    // Mock do Supabase com tracking de inserts
-    mockSupabase = {
-      from: vi.fn((table: string) => ({
-        select: vi.fn().mockReturnThis(),
-        insert: vi.fn((data: any) => {
-          if (table === 'messages') {
-            insertedMessages.push(...(Array.isArray(data) ? data : [data]));
-          }
-          return { data: null, error: null };
-        }),
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ 
-          data: { 
-            ai_mode: 'autopilot', 
-            is_test_mode: false,
-            assigned_to: null,
-          }, 
-          error: null 
-        }),
-        in: vi.fn().mockResolvedValue({
-          data: [{ key: 'ai_global_enabled', value: 'false' }],
-          error: null,
-        }),
-      })),
-    };
+let flowHandled = false;
+try {
+  const { data: flowResult, error: flowError } = await supabase.functions.invoke('process-chat-flow', {
+    body: {
+      conversationId: conversationId,
+      userMessage: messageText
+    }
   });
 
-  it("deve bloquear envio de mensagem bot/ai quando kill switch ativo", async () => {
-    // Simular processamento do message-listener com Kill Switch ativo
-    const record = {
-      id: "msg-123",
-      conversation_id: "conv-456",
-      content: "Olá, preciso de ajuda",
-      sender_type: "contact",
-    };
+  if (!flowError && flowResult && !flowResult.useAI && flowResult.response) {
+    console.log('[handle-whatsapp-event] 📋 Fluxo retornou resposta:', flowResult.response?.slice(0, 50));
+    flowHandled = true;
 
-    // Verificar que ai_global_enabled = false no mock
-    const { data: configs } = await mockSupabase
-      .from('system_configurations')
-      .select()
-      .in('key', ['ai_global_enabled']);
-    
-    const aiGlobalEnabled = configs?.find(
-      (c: any) => c.key === 'ai_global_enabled'
-    )?.value !== 'false';
+    // Inserir resposta do fluxo no banco
+    const { data: savedFlowMsg } = await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      content: flowResult.response,
+      sender_type: 'user',
+      is_ai_generated: true, // Marcar como automatico para UI mostrar "Assistente Virtual"
+      channel: 'whatsapp'
+    }).select('id').single();
 
-    // ASSERT: Kill Switch está ativo
-    expect(aiGlobalEnabled).toBe(false);
-
-    // ASSERT: Nenhuma mensagem automática foi inserida
-    const autoMessages = insertedMessages.filter(
-      (m) => m.sender_type === 'bot' || m.sender_type === 'ai' || m.is_ai_generated
-    );
-    expect(autoMessages).toHaveLength(0);
-  });
-
-  it("deve permitir envio quando kill switch desativado", async () => {
-    // Modificar mock para Kill Switch OFF
-    mockSupabase.from = vi.fn((table: string) => ({
-      select: vi.fn().mockReturnThis(),
-      insert: vi.fn((data: any) => {
-        if (table === 'messages') {
-          insertedMessages.push(...(Array.isArray(data) ? data : [data]));
+    // Enviar para WhatsApp com skip_db_save (ja salvamos acima)
+    if (savedFlowMsg?.id) {
+      await supabase.functions.invoke('send-meta-whatsapp', {
+        body: {
+          instance_id: instance.id,
+          phone_number: phoneForDatabase,
+          message: flowResult.response,
+          conversation_id: conversationId,
+          skip_db_save: true // 🆕 CRITICO: Evita duplicacao
         }
-        return { data: null, error: null };
-      }),
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ 
-        data: { ai_mode: 'autopilot', is_test_mode: false }, 
-        error: null 
-      }),
-      in: vi.fn().mockResolvedValue({
-        data: [{ key: 'ai_global_enabled', value: 'true' }], // 🆕 Ativado
-        error: null,
-      }),
-    }));
+      });
+      console.log('[handle-whatsapp-event] ✅ Resposta do fluxo enviada via WhatsApp');
+    }
+  }
+} catch (flowError) {
+  console.error('[handle-whatsapp-event] ❌ Erro ao processar fluxo:', flowError);
+}
 
-    // Verificar que ai_global_enabled = true
-    const { data: configs } = await mockSupabase
-      .from('system_configurations')
-      .select()
-      .in('key', ['ai_global_enabled']);
-    
-    const aiGlobalEnabled = configs?.find(
-      (c: any) => c.key === 'ai_global_enabled'
-    )?.value !== 'false';
+// ============================================================
+// 🤖 IA APENAS SE FLUXO NAO TRATOU
+// ============================================================
+if (flowHandled) {
+  console.log('[handle-whatsapp-event] ⏭️ Fluxo ja tratou - pulando IA');
+  return new Response(JSON.stringify({
+    success: true,
+    message_saved: true,
+    flow_handled: true
+  }), { headers: corsHeaders });
+}
+```
 
-    // ASSERT: Kill Switch está desativado
-    expect(aiGlobalEnabled).toBe(true);
-  });
+### 3. ai-autopilot-chat — Adicionar skip_db_save ao enviar WhatsApp
+
+**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
+
+**Local**: Linha 7329 (chamada send-meta-whatsapp)
+
+**Alteracao**: Ja salva mensagem antes (linha 7193), entao deve usar `skip_db_save: true`
+
+```typescript
+// Linha 7329-7336
+const { data: metaResponse, error: metaError } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
+  body: {
+    instance_id: whatsappInstance.id,
+    phone_number: contact.phone?.replace(/\D/g, ''),
+    message: assistantMessage,
+    conversation_id: conversationId,
+    skip_db_save: true // 🆕 CRITICO: Ja salvamos na linha 7193
+  },
+});
+```
+
+### 4. sendWhatsAppMessage helper — Adicionar skip_db_save
+
+**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
+
+**Local**: Linhas 518-524 (funcao helper)
+
+```typescript
+const { data, error } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
+  body: {
+    instance_id: whatsappResult.instance.id,
+    phone_number: phoneNumber?.replace(/\D/g, ''),
+    message,
+    conversation_id: conversationId,
+    skip_db_save: true // 🆕 CRITICO: Quem chama ja salvou
+  }
 });
 ```
 
 ---
 
-## Arquivos a Criar/Modificar
+## Arquivos a Modificar
 
-| Arquivo | Ação | Descrição |
+| Arquivo | Acao | Descricao |
 |---------|------|-----------|
-| `src/components/inbox/SuperComposer.tsx` | Modificar | Adicionar prop `aiMode` e guard no `handleSend` |
-| `src/components/ChatWindow.tsx` | Modificar | Passar `aiMode` para `SuperComposer` |
-| `supabase/functions/message-listener/index.ts` | Modificar | Adicionar log estruturado `[AUTO-DECISION]` |
-| `vitest.config.ts` | Criar | Configuração do Vitest |
-| `src/test/setup.ts` | Criar | Setup de testes com mocks globais |
-| `tsconfig.app.json` | Modificar | Adicionar `vitest/globals` aos types |
-| `src/test/kill-switch-canary.test.ts` | Criar | Teste canário para Kill Switch |
+| `message-listener/index.ts` | Modificar | Ignorar canal WhatsApp |
+| `handle-whatsapp-event/index.ts` | Modificar | Chamar process-chat-flow antes da IA |
+| `ai-autopilot-chat/index.ts` | Modificar | Adicionar skip_db_save em todas chamadas WhatsApp |
 
 ---
 
-## Dependências a Instalar
+## Secao Tecnica
 
-O projeto precisa das seguintes devDependencies para testes:
+### Novo Fluxo (Apos Correcao)
 
-```json
-{
-  "@testing-library/jest-dom": "^6.6.0",
-  "@testing-library/react": "^16.0.0",
-  "jsdom": "^20.0.3",
-  "vitest": "^3.2.4"
-}
+```text
+Cliente envia WhatsApp
+        |
+        v
+meta-whatsapp-webhook → handle-whatsapp-event
+        |
+        v
+insere mensagem do cliente no banco
+        |
+        v
+Verifica process-chat-flow
+        |
+   +----+----+
+   |         |
+   v         v
+FLUXO      SEM FLUXO
+ATIVO      ATIVO
+   |         |
+   v         v
+Envia      Chama IA
+resposta   (ai-autopilot)
+do fluxo       |
+   |         v
+   v      IA responde
+WhatsApp     |
+(skip_db)    v
+   |      WhatsApp
+   |      (skip_db)
+   +----+----+
+        |
+        v
+   UMA mensagem
+   no banco
+
+Database Trigger → message-listener
+        |
+        v
+Canal = WhatsApp?
+   SIM → IGNORA (ja processado)
+   NAO → Processa normalmente
 ```
 
----
+### Regras de skip_db_save
 
-## Ordem de Implementação
-
-1. **Instalar dependências de teste** (devDependencies)
-2. **Configurar Vitest** (vitest.config.ts + src/test/setup.ts)
-3. **Atualizar tsconfig.app.json** (adicionar vitest/globals)
-4. **Ajuste A**: Modificar SuperComposer + ChatWindow
-5. **Ajuste B**: Adicionar log estruturado no message-listener
-6. **Ajuste C**: Criar teste canário
-7. **Deploy**: Publicar edge functions atualizadas
-8. **Validação**: Rodar testes + teste manual
+| Origem | Salva no banco? | Envia WhatsApp com skip_db_save? |
+|--------|-----------------|----------------------------------|
+| handle-whatsapp-event (fluxo) | SIM (antes de enviar) | SIM |
+| ai-autopilot-chat | SIM (linha 7193) | SIM |
+| message-listener | SIM | N/A (nao envia WhatsApp) |
+| Frontend (sendInstant) | SIM (otimista) | SIM |
 
 ---
 
-## Critérios de Aceitação
+## Criterios de Aceitacao
 
 | Teste | Resultado Esperado |
 |-------|-------------------|
-| SuperComposer com `aiMode='waiting_human'` | ✅ Toast "Aguardando atendente" + não envia |
-| SuperComposer com `aiMode='copilot'` | ✅ Envia normalmente |
-| Log `[AUTO-DECISION]` no message-listener | ✅ JSON estruturado com todos os campos |
-| `npm run test` | ✅ Teste canário passa |
-| Kill Switch OFF + mensagem cliente | ✅ Zero mensagens bot/ai |
+| Mensagem WhatsApp com fluxo ativo | 1 mensagem no banco, 1 no WhatsApp |
+| Mensagem WhatsApp sem fluxo (IA) | 1 mensagem no banco, 1 no WhatsApp |
+| Mensagem Web Chat | Processada por message-listener normalmente |
+| message-listener recebe WhatsApp | Ignora com log "whatsapp_handled_by_webhook" |
+| UI mostra resposta | Apenas "Assistente Virtual" (nao duplicado) |
 
 ---
 
-## Seção Técnica
+## Impacto
 
-### Interface Atualizada do SuperComposer
-
-```typescript
-export interface SuperComposerProps {
-  conversationId: string;
-  isDisabled?: boolean;
-  aiMode?: 'autopilot' | 'copilot' | 'disabled' | 'waiting_human' | null;
-  whatsappInstanceId?: string | null;
-  whatsappMetaInstanceId?: string | null;
-  whatsappProvider?: string | null;
-  contactPhone?: string | null;
-}
-```
-
-### Estrutura do Log AUTO-DECISION
-
-```typescript
-interface AutoDecisionLog {
-  timestamp: string;
-  conversation_id: string;
-  message_id: string;
-  ai_global_enabled: boolean;
-  is_test_mode: boolean;
-  ai_mode: string | null;
-  assigned_to: string | null;
-  decision: 'HUMAN_ONLY' | 'TEST_MODE_ACTIVE' | 'AI_PROCESSING';
-  reason: string;
-}
-```
-
-### Script de Teste
-
-Adicionar ao `package.json`:
-
-```json
-{
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest"
-  }
-}
-```
+| Componente | Antes | Depois |
+|------------|-------|--------|
+| Mensagens WhatsApp | 2-3 copias | 1 copia |
+| message-listener | Processa tudo | Ignora WhatsApp |
+| handle-whatsapp-event | Nao chamava fluxo | Chama fluxo primeiro |
+| send-meta-whatsapp | Salvava duplicado | skip_db_save = true |
 
 ---
 
-## Impacto e Prioridade
+## Ordem de Implementacao
 
-| Ajuste | Esforço | Impacto | Prioridade |
-|--------|---------|---------|------------|
-| A (Frontend guard) | Baixo | Alta (previne duplicação) | P1 |
-| B (Log estruturado) | Baixo | Média (observabilidade) | P2 |
-| C (Teste canário) | Médio | Alta (prevenção de regressão) | P1 |
+1. **ai-autopilot-chat**: Adicionar `skip_db_save: true` nas chamadas WhatsApp
+2. **message-listener**: Adicionar verificacao de canal WhatsApp
+3. **handle-whatsapp-event**: Adicionar chamada ao process-chat-flow
+4. **Deploy**: Publicar todas as edge functions
+5. **Validacao**: Testar envio WhatsApp e verificar 1 mensagem no banco
 
 ---
 
-## Nota Importante
+## Nota sobre a UI
 
-Estes ajustes são **camadas de defesa complementares**:
+Apos a correcao, mensagens automaticas devem aparecer APENAS como "Assistente Virtual" porque todas terao `is_ai_generated: true`.
 
-1. **Backend já bloqueia** (message-listener, process-chat-flow)
-2. **Frontend agora também bloqueia** (SuperComposer guard)
-3. **Log permite auditoria** (AUTO-DECISION)
-4. **Teste previne regressão** (canary test)
-
-O sistema ficará com **defesa em profundidade** contra duplicação de mensagens.
+A label "Atendente" sera usada apenas para mensagens enviadas manualmente por humanos (agentes).
