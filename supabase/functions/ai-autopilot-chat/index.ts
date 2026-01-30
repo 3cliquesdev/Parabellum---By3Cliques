@@ -92,6 +92,38 @@ async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
   return config.model;
 }
 
+// ============================================================
+// 🔧 HELPER: Extrair número limpo do whatsapp_id
+// Prioriza whatsapp_id sobre phone para envio Meta API
+// Formatos suportados:
+//   - 5511999999999@s.whatsapp.net
+//   - 5511999999999@c.us
+//   - 5511999999999
+// ============================================================
+function extractWhatsAppNumber(whatsappId: string | null | undefined): string | null {
+  if (!whatsappId) return null;
+  
+  // Se for número @lid (lead ID do Meta), retornar null - não é um número válido
+  if (whatsappId.includes('@lid')) {
+    console.log('[extractWhatsAppNumber] ⚠️ Lead ID detectado, ignorando:', whatsappId);
+    return null;
+  }
+  
+  // Remove sufixos do WhatsApp e caracteres não numéricos
+  const cleaned = whatsappId
+    .replace('@s.whatsapp.net', '')
+    .replace('@c.us', '')
+    .replace(/\D/g, '');
+  
+  // Validar se tem pelo menos 10 dígitos (número válido)
+  if (cleaned.length >= 10) {
+    return cleaned;
+  }
+  
+  console.log('[extractWhatsAppNumber] ⚠️ Número inválido após limpeza:', { original: whatsappId, cleaned });
+  return null;
+}
+
 // Helper: Buscar template de mensagem do banco ai_message_templates
 async function getMessageTemplate(
   supabaseClient: any,
@@ -509,16 +541,21 @@ async function sendWhatsAppMessage(
 ): Promise<{ success: boolean; error?: any }> {
   try {
     if (whatsappResult.provider === 'meta') {
+      // 🆕 CORREÇÃO: Priorizar whatsapp_id sobre phone
+      const targetNumber = extractWhatsAppNumber(whatsappId) || phoneNumber?.replace(/\D/g, '');
+      
       console.log('[sendWhatsAppMessage] 📤 Enviando via Meta WhatsApp API:', {
         instanceId: whatsappResult.instance.id,
         phoneNumberId: whatsappResult.instance.phone_number_id,
-        phoneNumber: phoneNumber?.replace(/\D/g, '').slice(-4)
+        targetNumber: targetNumber?.slice(-4),
+        usedWhatsappId: !!extractWhatsAppNumber(whatsappId),
+        source: extractWhatsAppNumber(whatsappId) ? 'whatsapp_id' : 'phone'
       });
       
       const { data, error } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
         body: {
           instance_id: whatsappResult.instance.id,
-          phone_number: phoneNumber?.replace(/\D/g, ''),
+          phone_number: targetNumber, // 🆕 Usa whatsapp_id se disponível
           message,
           conversation_id: conversationId,
           skip_db_save: true // 🆕 CRÍTICO: Quem chama já salvou a mensagem
@@ -7321,16 +7358,22 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         
         // ========== META WHATSAPP CLOUD API ==========
         if (provider === 'meta') {
+          // 🆕 CORREÇÃO: Priorizar whatsapp_id sobre phone
+          const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+          
           console.log('[ai-autopilot-chat] 📤 Invocando send-meta-whatsapp:', {
             instanceId: whatsappInstance.id,
             phoneNumberId: whatsappInstance.phone_number_id,
-            phoneNumber: contact.phone
+            targetNumber: targetNumber?.slice(-4),
+            source: extractWhatsAppNumber(contact.whatsapp_id) ? 'whatsapp_id' : 'phone',
+            contactPhone: contact.phone?.slice(-4),
+            contactWhatsappId: contact.whatsapp_id?.slice(-20)
           });
 
           const { data: metaResponse, error: metaError } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
             body: {
               instance_id: whatsappInstance.id,
-              phone_number: contact.phone?.replace(/\D/g, ''),
+              phone_number: targetNumber, // 🆕 Usa whatsapp_id se disponível
               message: assistantMessage,
               conversation_id: conversationId,
               skip_db_save: true // 🆕 CRÍTICO: Já salvamos na linha 7193

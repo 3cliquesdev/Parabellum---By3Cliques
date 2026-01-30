@@ -1166,11 +1166,22 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         }).select('id').single();
 
         // Enviar para WhatsApp com skip_db_save (já salvamos acima)
+        // 🆕 CORREÇÃO: Extrair número limpo do phoneForDatabase (já vem do webhook correto)
         if (savedFlowMsg?.id) {
+          const targetNumber = phoneForDatabase
+            .replace('@s.whatsapp.net', '')
+            .replace('@c.us', '')
+            .replace(/\D/g, '');
+          
+          console.log('[handle-whatsapp-event] 📤 Enviando resposta do fluxo:', {
+            targetNumber: targetNumber?.slice(-4),
+            originalPhone: phoneForDatabase?.slice(-20)
+          });
+          
           await supabase.functions.invoke('send-meta-whatsapp', {
             body: {
               instance_id: instance.id,
-              phone_number: phoneForDatabase,
+              phone_number: targetNumber, // 🆕 Número limpo extraído do webhook
               message: flowResult.response,
               conversation_id: conversationId,
               skip_db_save: true // 🆕 CRÍTICO: Evita duplicação
