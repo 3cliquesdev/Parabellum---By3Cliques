@@ -37,15 +37,14 @@ export function useInboxSearch(searchTerm: string) {
 
       // Query direta ao banco - SEM dependência do array pré-carregado
       // Ordenação: open primeiro (alfabeticamente), depois por recência
+      // Query direta ao banco - apenas campos TEXT (UUID não suporta ILIKE)
       const { data, error } = await supabase
         .from("inbox_view")
         .select("*")
         .or(
           `contact_name.ilike.%${searchLower}%,` +
           `contact_email.ilike.%${searchLower}%,` +
-          `contact_phone.ilike.%${searchLower}%,` +
-          `contact_id.ilike.%${searchLower}%,` +
-          `conversation_id.ilike.%${searchLower}%`
+          `contact_phone.ilike.%${searchLower}%`
         )
         .order("status", { ascending: true }) // 'open' vem antes de 'closed'
         .order("last_message_at", { ascending: false }) // Mais recentes primeiro
