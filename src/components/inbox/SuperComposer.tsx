@@ -200,20 +200,22 @@ export function SuperComposer({
     });
 
     if (needsTranscoding(audioFile.type)) {
-      toast({
-        title: "Convertendo áudio...",
-        description: "Preparando formato compatível com WhatsApp",
+      // Show persistent converting toast with progress
+      const toastId = toast({
+        title: "⏳ Convertendo áudio...",
+        description: "Isso pode levar alguns segundos",
+        duration: 60000, // Keep visible during conversion
       });
 
       try {
-        // FFmpeg core/wasm download can be slow; allow a more generous timeout.
-        const TRANSCODE_TIMEOUT_MS = 120000;
+        // Timeout mais curto (30s) - se FFmpeg não carregou em background, provavelmente vai falhar
+        const TRANSCODE_TIMEOUT_MS = 30000;
         const startTime = performance.now();
 
         const { blob, mimeType } = await Promise.race([
           transcodeToOgg(audioFile, audioFile.type),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Transcoding timeout')), TRANSCODE_TIMEOUT_MS)
+            setTimeout(() => reject(new Error('Tempo limite de conversão excedido')), TRANSCODE_TIMEOUT_MS)
           ),
         ]);
 
@@ -226,19 +228,32 @@ export function SuperComposer({
           );
         }
 
+        const tookMs = Math.round(performance.now() - startTime);
         console.log('[SuperComposer] ✅ Audio ready:', {
           originalType: audioFile.type,
           finalType: finalFile.type,
           originalSizeKB: Math.round(audioFile.size / 1024),
           finalSizeKB: Math.round(finalFile.size / 1024),
-          tookMs: Math.round(performance.now() - startTime),
+          tookMs,
+        });
+
+        // Dismiss converting toast and show success
+        toast({
+          title: "✅ Áudio convertido!",
+          description: `Pronto em ${(tookMs / 1000).toFixed(1)}s`,
+          duration: 2000,
         });
       } catch (err) {
-        console.error('[SuperComposer] ❌ Audio transcoding failed:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+        console.error('[SuperComposer] ❌ Audio transcoding failed:', errorMessage);
+        
         toast({
-          title: "Falha ao converter áudio",
-          description: "Não consegui preparar o áudio para o WhatsApp. Tente gravar novamente.",
+          title: "❌ Falha ao converter áudio",
+          description: errorMessage.includes('timeout') || errorMessage.includes('limite')
+            ? "Conversão demorou demais. Tente gravar um áudio mais curto."
+            : "Não consegui preparar o áudio. Tente novamente.",
           variant: "destructive",
+          duration: 5000,
         });
         // Não faz upload de WebM para WhatsApp Meta (não chega do outro lado)
         return;
@@ -246,8 +261,9 @@ export function SuperComposer({
     }
 
     toast({
-      title: "Enviando áudio...",
+      title: "📤 Enviando áudio...",
       description: "Fazendo upload",
+      duration: 3000,
     });
 
     setPendingAttachments((prev) => [...prev, { file: finalFile }]);

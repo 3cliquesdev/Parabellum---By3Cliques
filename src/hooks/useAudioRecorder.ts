@@ -103,6 +103,11 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
+      // CRITICAL: Stop timer IMMEDIATELY before anything else
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
