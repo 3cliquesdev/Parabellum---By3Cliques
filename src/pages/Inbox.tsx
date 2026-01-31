@@ -381,6 +381,21 @@ export default function Inbox() {
       }
     }
     
+    // 🔍 BUSCA ATIVA: Ordenar por relevância (abertas primeiro, depois fechadas por recência)
+    const hasActiveSearch = filters.search && filters.search.trim().length > 0;
+    if (hasActiveSearch) {
+      result.sort((a, b) => {
+        // Prioridade 1: Conversas abertas primeiro
+        const aOpen = a.status !== 'closed';
+        const bOpen = b.status !== 'closed';
+        if (aOpen && !bOpen) return -1;
+        if (!aOpen && bOpen) return 1;
+        // Prioridade 2: Mais recentes primeiro (dentro do mesmo status)
+        return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+      });
+      return result;
+    }
+    
     // Ordenar por tempo de espera
     if (filters.waitingTime === 'newest') {
       // Mais recentes primeiro (ordenação decrescente por last_message_at)
