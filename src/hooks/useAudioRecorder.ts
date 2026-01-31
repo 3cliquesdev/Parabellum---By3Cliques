@@ -54,11 +54,22 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       streamRef.current = stream;
       
       // Determine best supported format
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm') 
-          ? 'audio/webm' 
-          : 'audio/ogg';
+      // PRIORITY: audio/ogg with opus (Meta WhatsApp compatible)
+      // FALLBACK: audio/webm with opus (needs conversion server-side)
+      let mimeType = 'audio/webm'; // Final fallback
+      
+      // Prefer ogg/opus - directly compatible with Meta WhatsApp API
+      if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+        mimeType = 'audio/ogg;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+        mimeType = 'audio/ogg';
+      } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/webm';
+      }
+      
+      console.log('[useAudioRecorder] Selected MIME type:', mimeType);
       
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
