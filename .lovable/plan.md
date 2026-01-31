@@ -1,207 +1,79 @@
 
 
-# Plano: Octadesk-ification — Visual Enterprise Limpo
+# Plano: Configurar Secrets do Instagram para Validação do Webhook
 
-## Objetivo
-Replicar o padrão visual do Octadesk no CRM, mantendo a arquitetura separada por canal (WhatsApp/Instagram). Foco em limpeza visual, remoção de **todos os emojis** e simplificação da lista de conversas.
+## Problema Identificado
+O Meta não consegue validar o webhook porque o secret `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` não existe no backend. A edge function `instagram-webhook` precisa desse valor para responder corretamente à verificação.
 
----
+## Dados Encontrados na Sua Configuração Meta
 
-## Diagnóstico Atual vs Octadesk
+| Campo | Valor |
+|-------|-------|
+| ID do App Instagram | `1192784686401515` |
+| Verify Token (usado no Meta) | `parabellum_instagram_webhook_2026` |
+| URL do Webhook | `https://zaeozfdjhrmblfaxsyuu.supabase.co/functions/v1/instagram-webhook` |
+| Chave Secreta | (mascarada - você precisará copiar clicando em "Mostrar") |
 
-| Elemento | Estado Atual | Estilo Octadesk |
-|----------|--------------|-----------------|
-| Lista de conversas | Muitos badges, emojis 🤖🧠👤📥, chips coloridos | Texto + ícone canal + tempo |
-| SLA | Emojis 🟡🟠🔶🔴 | Cor discreta sem emoji |
-| Badge AI Mode | 🤖 Autopilot, 🧠 Copilot, 👤 Manual | Texto simples: "Autopilot", "Copilot", "Manual" |
-| Badge Pool | "📥 Pool" | "Pool" ou ícone Users |
-| Badge Cliente | "⭐ Cliente" + gradiente excessivo | "Cliente" simples |
-| Header do chat | Emojis + múltiplos badges | Nome + canal + ações |
-| Alertas IA off | "⚠️ IA Global está DESLIGADA" | Sem emoji, texto neutro |
-| Modo teste | "🧪 Teste" | "Teste" |
-| Conversa encerrada | "✅ Esta conversa foi encerrada" | Sem emoji |
+## Secrets a Adicionar
 
----
+| Secret | Descrição |
+|--------|-----------|
+| `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` | Deve ser exatamente `parabellum_instagram_webhook_2026` |
+| `FACEBOOK_APP_ID` | `1192784686401515` (ID do App do Instagram) |
+| `FACEBOOK_APP_SECRET` | A chave secreta (clicar em "Mostrar" para copiar) |
 
-## Componentes a Alterar
+## Fluxo Após Configuração
 
-### 1. ConversationListItem.tsx (Prioridade Alta)
-
-**Mudanças:**
-
-| Local | Antes | Depois |
-|-------|-------|--------|
-| SLA emoji (L53-108) | `emoji: "🟡"`, `"🟠"`, `"🔶"`, `"🔴"` | `emoji: ""` (todos vazios) |
-| L268 | `{sla.emoji && \`${sla.emoji} \`}` | Remover emoji do display |
-| AI Mode Badge (L324-337) | `🤖`, `🧠`, `👤` | `Autopilot`, `Copilot`, `Manual` (texto) |
-| Pool Badge (L347-349) | `📥 Pool` | `Pool` (só texto) |
-| Cliente Badge (L291-298) | Gradiente excessivo + Star icon | Badge simples "Cliente" |
-| Warning Badge (L352-356) | `⚠️` | Remover ou usar ícone AlertTriangle |
-
-**Resultado esperado:** Lista limpa como Octadesk, apenas:
-- Ícone do canal (já existe via ChannelIcon)
-- Nome do contato
-- Preview da mensagem (1 linha)
-- Tempo discreto com cor (sem emoji)
-- Badge numérica de unread (já correto)
-- Badges essenciais: departamento (opcional), responsável
-
----
-
-### 2. ChatWindow.tsx (Header + Alertas)
-
-**Mudanças:**
-
-| Local (linha) | Antes | Depois |
-|---------------|-------|--------|
-| L461 | `🧪 Teste` | `Teste` |
-| L589-590 | `⚠️ IA Global está DESLIGADA...` | `IA Global está DESLIGADA...` |
-| L608-609 | `✅ Esta conversa foi encerrada` | `Esta conversa foi encerrada` |
-| L648 | `⚠️ IA Global DESLIGADA` | `IA Global DESLIGADA` |
-
----
-
-### 3. SentimentBadge.tsx (OK — já sem emojis)
-- Usa ícones Lucide (Angry, Meh, Smile) ✅
-- Nenhuma mudança necessária
-
----
-
-### 4. Outros arquivos com emojis contextuais
-
-| Arquivo | Emoji | Ação |
-|---------|-------|------|
-| `ContactDetailsSidebar.tsx` L146 | `⚠️ Sessão não verificada` | Manter ícone AlertCircle, remover emoji |
-| `EarlyWarningWidget.tsx` L104 | `🟢🟡🔴` para saúde | Trocar por badges coloridos sem emoji |
-| `PublicQuote.tsx` L244 | `⚠️ Proposta Expirada` + `📅 Válida até` | Remover emojis |
-| `KnowledgeArticleDialog.tsx` L128, L141 | `⚠️ Conteúdo gerado por IA` | Manter AlertTriangle icon, remover emoji |
-| `TeamMemberProgressTable.tsx` L41 | `Atenção ⚠️` | `Atenção` (já tem ícone) |
-
----
-
-## Resumo de Arquivos
-
-| Arquivo | Mudanças | Impacto |
-|---------|----------|---------|
-| `ConversationListItem.tsx` | Remover ~10 emojis, simplificar badges | Alto |
-| `ChatWindow.tsx` | Remover ~5 emojis de alertas/status | Médio |
-| `ContactDetailsSidebar.tsx` | Remover 1 emoji | Baixo |
-| `EarlyWarningWidget.tsx` | Trocar emojis de saúde por cores | Baixo |
-| `PublicQuote.tsx` | Remover 2 emojis | Baixo |
-| `KnowledgeArticleDialog.tsx` | Remover 2 emojis | Baixo |
-| `TeamMemberProgressTable.tsx` | Remover 1 emoji | Baixo |
-
----
-
-## Código das Mudanças Principais
-
-### ConversationListItem.tsx — SLA sem emojis
-
-```typescript
-// ANTES (linhas 53-108):
-emoji: "🟡", emoji: "🟠", emoji: "🔶", emoji: "🔴"
-
-// DEPOIS:
-emoji: "" // Todos vazios - cor já comunica urgência
+```text
+┌─────────────────┐     GET ?hub.verify_token=...     ┌─────────────────┐
+│   Meta Server   │ ─────────────────────────────────▶│ instagram-webhook│
+└─────────────────┘                                    └────────┬────────┘
+                                                                │
+                                                   Compara com secret
+                                                   INSTAGRAM_WEBHOOK_VERIFY_TOKEN
+                                                                │
+                                          ┌─────────────────────┴─────────────────────┐
+                                          ▼                                           ▼
+                                   Match: 200 + challenge                      Mismatch: 403
+                                   (webhook validado)                          (erro atual)
 ```
 
-### ConversationListItem.tsx — AI Mode Badge
+## Passos da Implementação
 
-```typescript
-// ANTES (linhas 324-337):
-{conversation.ai_mode === 'autopilot' && "🤖"}
-{conversation.ai_mode === 'copilot' && "🧠"}
-{conversation.ai_mode === 'disabled' && "👤"}
+1. **Adicionar `INSTAGRAM_WEBHOOK_VERIFY_TOKEN`**
+   - Valor: `parabellum_instagram_webhook_2026`
 
-// DEPOIS:
-{conversation.ai_mode === 'autopilot' && "Autopilot"}
-{conversation.ai_mode === 'copilot' && "Copilot"}
-{conversation.ai_mode === 'disabled' && "Manual"}
-```
+2. **Adicionar `FACEBOOK_APP_ID`**
+   - Valor: `1192784686401515`
 
-### ConversationListItem.tsx — Pool Badge
+3. **Adicionar `FACEBOOK_APP_SECRET`**
+   - Valor: (você cola da tela do Meta clicando em "Mostrar")
 
-```typescript
-// ANTES (linha 348):
-📥 Pool
+4. **Aguardar deploy automático** (alguns segundos)
 
-// DEPOIS:
-Pool
-```
+5. **Voltar ao Meta e clicar em "Verificar e salvar"**
 
-### ConversationListItem.tsx — Cliente Badge simplificado
+## Resultado Esperado
 
-```typescript
-// ANTES (linhas 291-298): gradiente excessivo
-<Badge className="bg-gradient-to-r from-amber-100 to-yellow-100...">
-  <Star className="h-2.5 w-2.5 fill-amber-500..." />
-  Cliente
-</Badge>
-
-// DEPOIS: simples e neutro
-<Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
-  Cliente
-</Badge>
-```
-
-### ConversationListItem.tsx — Warning Badge
-
-```typescript
-// ANTES (linha 354):
-⚠️
-
-// DEPOIS: apenas ícone AlertTriangle
-<AlertTriangle className="h-3 w-3" />
-```
-
-### ChatWindow.tsx — Alertas
-
-```typescript
-// ANTES (L589):
-'⚠️ IA Global está DESLIGADA...'
-
-// DEPOIS:
-'IA Global está DESLIGADA. Esta conversa está na fila IA mas não está sendo respondida. Clique em "Assumir" para atender.'
-```
-
----
+- Meta consegue validar o webhook
+- Você pode prosseguir para o passo 3 ("Configure o login da empresa")
+- Comentários e DMs do Instagram serão recebidos pela edge function
 
 ## Seção Técnica
 
-### Padrões Octadesk a seguir:
+O código da edge function já está correto (linha 28-41):
 
-1. **Cores comunicam urgência** — emojis são redundantes
-2. **Ícones Lucide** — já existem, usar em vez de emojis
-3. **Texto neutro** — "Autopilot", não "🤖"
-4. **Badges minimalistas** — bordas finas, cores suaves
-5. **Hierarquia clara** — nome > preview > tempo
+```typescript
+const verifyToken = Deno.env.get("INSTAGRAM_WEBHOOK_VERIFY_TOKEN");
 
-### Não alterar:
-- Lógica de negócio
-- ChannelIcon (já correto)
-- SentimentBadge (já usa ícones)
-- Estrutura de dados
+if (mode === "subscribe" && token === verifyToken) {
+  console.log("[instagram-webhook] Verification successful");
+  return new Response(challenge, { 
+    status: 200,
+    headers: { "Content-Type": "text/plain" }
+  });
+}
+```
 
----
-
-## Garantias de Não-Regressão
-
-- **Zero alteração de lógica** — apenas visual
-- **Mantém todos os badges funcionais** — só remove emojis
-- **Cores de SLA intactas** — urgência comunicada por cor
-- **WhatsApp/Instagram separados** — arquitetura preservada
-
----
-
-## Critério de Aceite Visual
-
-| Elemento | Esperado |
-|----------|----------|
-| Lista de conversas | Zero emojis, texto limpo |
-| SLA | Cor + tempo (ex: "4h" em laranja) |
-| AI Mode | Badge texto: "Autopilot", "Copilot", "Manual" |
-| Pool | Badge texto: "Pool" |
-| Cliente | Badge simples: "Cliente" |
-| Alertas | Texto neutro, ícones Lucide |
-| Header do chat | Limpo, profissional |
+O problema é apenas que o secret não existe. Assim que for adicionado, a verificação funcionará.
 
