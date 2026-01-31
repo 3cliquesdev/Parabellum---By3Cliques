@@ -24,6 +24,8 @@ interface SendInstantParams {
   channel?: string;
   // NOVO: Config para WhatsApp (envio otimista)
   whatsappConfig?: WhatsAppConfig;
+  // 🆕 Nome do remetente para exibir na mensagem
+  senderName?: string;
 }
 
 /**
@@ -50,7 +52,8 @@ export function useSendMessageInstant() {
       content, 
       isInternal = false, 
       channel = 'web_chat',
-      whatsappConfig 
+      whatsappConfig,
+      senderName
     } = params;
     
     // 📊 OBSERVABILIDADE: Timestamp para medir latência
@@ -58,6 +61,9 @@ export function useSendMessageInstant() {
     
     // 1. INSTANTÂNEO: Gerar UUID local (será usado como ID real no banco)
     const localId = crypto.randomUUID();
+    
+    // 🆕 Usar nome do usuário logado se não foi passado explicitamente
+    const effectiveSenderName = senderName || user?.user_metadata?.full_name || null;
     
     console.log('[SendInstant] 📤 Enviando:', {
       t0_ms: Math.round(t0),
@@ -68,6 +74,7 @@ export function useSendMessageInstant() {
       channel,
       hasWhatsApp: !!whatsappConfig,
       whatsappProvider: whatsappConfig?.provider,
+      senderName: effectiveSenderName,
     });
     
     const optimisticMessage = {
@@ -149,6 +156,7 @@ export function useSendMessageInstant() {
                 phone_number: whatsappConfig.phoneNumber,
                 conversation_id: conversationId,
                 skip_db_save: true, // Frontend faz o insert
+                sender_name: effectiveSenderName || undefined, // 🆕 Nome do agente para prefixar mensagem
               };
 
               // Adicionar conteúdo (texto ou mídia)
