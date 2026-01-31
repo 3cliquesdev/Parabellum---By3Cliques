@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { isFeatureEnabled } from "@/config/features";
 
 // Configuração para envio WhatsApp (Meta ou Evolution)
 interface WhatsAppConfig {
@@ -31,20 +32,29 @@ interface SendInstantParams {
 /**
  * Hook para envio instantâneo de mensagens (Fire-and-Forget)
  * 
+ * ENTERPRISE V2 UPGRADES:
+ * - Usa MESMO UUID como id E client_message_id (Ajuste 1)
+ * - Envia client_message_id para edge functions (Ajuste 2)
+ * - Dedup trivial por ID único
+ * 
  * FLUXO:
- * 1. Gera UUID local
+ * 1. Gera UUID único (usado como id E client_message_id)
  * 2. Adiciona ao cache React Query com status="sending" (INSTANTÂNEO)
  * 3. Limpa input imediatamente
  * 4. Persiste no banco EM BACKGROUND (não bloqueia UI)
- * 5. Para WhatsApp: Envia via edge function ANTES de persistir
- * 6. Realtime atualiza status para "sent" quando chega confirmação
+ * 5. Para WhatsApp: Envia via edge function com client_message_id
+ * 6. Edge function faz UPDATE com provider_message_id (wamid)
+ * 7. Realtime propaga UPDATE com status delivered/read
  * 
- * LATÊNCIA PERCEBIDA: <100ms (vs 2-5 segundos do fluxo anterior para WhatsApp)
+ * LATÊNCIA PERCEBIDA: <100ms
  */
 export function useSendMessageInstant() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user, profile } = useAuth();
+  
+  // 🆕 Verificar se Enterprise V2 está ativo
+  const isEnterpriseV2 = isFeatureEnabled('INBOX_ENTERPRISE_V2');
 
   const sendInstant = useCallback((params: SendInstantParams): string => {
     const { 
@@ -59,15 +69,17 @@ export function useSendMessageInstant() {
     // 📊 OBSERVABILIDADE: Timestamp para medir latência
     const t0 = performance.now();
     
-    // 1. INSTANTÂNEO: Gerar UUID local (será usado como ID real no banco)
-    const localId = crypto.randomUUID();
+    // 🆕 ENTERPRISE V2: UM SÓ UUID (id === client_message_id)
+    // Isso simplifica dedup e permite retry com mesmo ID
+    const messageId = crypto.randomUUID();
     
     // 🆕 Usar nome do perfil do usuário logado (profile.full_name é a fonte correta)
     const effectiveSenderName = senderName || profile?.full_name || user?.user_metadata?.full_name || null;
     
     console.log('[SendInstant] 📤 Enviando:', {
       t0_ms: Math.round(t0),
-      messageId: localId,
+      messageId,
+      client_message_id: isEnterpriseV2 ? messageId : undefined,
       conversationId: conversationId.slice(0, 8),
       contentLength: content.length,
       isInternal,
@@ -75,10 +87,12 @@ export function useSendMessageInstant() {
       hasWhatsApp: !!whatsappConfig,
       whatsappProvider: whatsappConfig?.provider,
       senderName: effectiveSenderName,
+      enterpriseV2: isEnterpriseV2,
     });
     
     const optimisticMessage = {
-      id: localId,
+      id: messageId,
+      client_message_id: isEnterpriseV2 ? messageId : undefined, // 🆕 MESMO UUID
       conversation_id: conversationId,
       content: content,
       sender_type: 'user' as const,
@@ -156,6 +170,7 @@ export function useSendMessageInstant() {
                 phone_number: whatsappConfig.phoneNumber,
                 conversation_id: conversationId,
                 skip_db_save: true, // Frontend faz o insert
+                client_message_id: isEnterpriseV2 ? messageId : undefined, // 🆕 ENVIAR PARA RECONCILIAÇÃO
                 sender_name: effectiveSenderName || undefined, // 🆕 Nome do agente para prefixar mensagem
               };
 
@@ -231,7 +246,8 @@ export function useSendMessageInstant() {
         // ============================================
         // Base payload com campos obrigatórios
         const basePayload = {
-          id: localId,
+          id: messageId,
+          client_message_id: isEnterpriseV2 ? messageId : null, // 🆕 MESMO UUID
           conversation_id: conversationId,
           content: contentToSend,
           sender_type: 'user' as const,
@@ -266,7 +282,7 @@ export function useSendMessageInstant() {
         queryClient.setQueryData(
           ["messages", conversationId],
           (old: any[] = []) => old.map(m => 
-            m.id === localId ? { 
+            m.id === messageId ? { 
               ...m, 
               ...insertedMessage, 
               status: finalStatus,
@@ -283,7 +299,7 @@ export function useSendMessageInstant() {
         );
         
         console.log('[SendInstant] ✅ Persistido:', {
-          messageId: localId,
+          messageId,
           dbLatency_ms: Math.round(t2 - t1),
           totalLatency_ms: Math.round(t2 - t0),
           whatsappSuccess,
@@ -313,7 +329,7 @@ export function useSendMessageInstant() {
       } catch (error) {
         const t2 = performance.now();
         console.error('[SendInstant] ❌ Falha:', {
-          messageId: localId,
+          messageId,
           error: error instanceof Error ? error.message : 'Unknown',
           latency_ms: Math.round(t2 - t1),
         });
@@ -322,7 +338,7 @@ export function useSendMessageInstant() {
         queryClient.setQueryData(
           ["messages", conversationId],
           (old: any[] = []) => old.map(m => 
-            m.id === localId ? { ...m, status: 'failed' } : m
+            m.id === messageId ? { ...m, status: 'failed' } : m
           )
         );
         
@@ -335,8 +351,8 @@ export function useSendMessageInstant() {
     });
 
     // RETORNA IMEDIATAMENTE - não aguarda persistência
-    return localId;
-  }, [queryClient, user, profile, toast]);
+    return messageId;
+  }, [queryClient, user, profile, toast, isEnterpriseV2]);
 
   // Função para reenviar mensagens que falharam
   const retrySend = useCallback(async (messageId: string, conversationId: string) => {

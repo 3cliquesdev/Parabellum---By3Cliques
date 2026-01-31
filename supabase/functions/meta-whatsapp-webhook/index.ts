@@ -742,17 +742,33 @@ serve(async (req) => {
 
           // ============================================
           // Process Status Updates
+          // 🆕 ENTERPRISE V2: Buscar por provider_message_id + atualizar campo status
           // ============================================
           if (value.statuses && value.statuses.length > 0) {
             for (const status of value.statuses) {
               console.log("[meta-whatsapp-webhook] 📊 Status update:", status.id, "->", status.status);
 
-              // Buscar mensagem existente para atualizar metadata
-              const { data: existingMsg } = await supabase
+              // 🆕 Tentar buscar por provider_message_id PRIMEIRO (enterprise v2)
+              let existingMsg = null;
+              
+              // Busca por provider_message_id (v2)
+              const { data: msgByProvider } = await supabase
                 .from("messages")
-                .select("id, metadata")
-                .eq("external_id", status.id)
-                .single();
+                .select("id, metadata, status")
+                .eq("provider_message_id", status.id)
+                .maybeSingle();
+              
+              if (msgByProvider) {
+                existingMsg = msgByProvider;
+              } else {
+                // Fallback: buscar por external_id (v1)
+                const { data: msgByExternal } = await supabase
+                  .from("messages")
+                  .select("id, metadata, status")
+                  .eq("external_id", status.id)
+                  .maybeSingle();
+                existingMsg = msgByExternal;
+              }
 
               if (existingMsg) {
                 const updatedMetadata = {
@@ -761,14 +777,29 @@ serve(async (req) => {
                   status_timestamp: status.timestamp,
                 };
 
+                // 🆕 Mapear status do Meta para nosso status
+                const mappedStatus = 
+                  status.status === 'delivered' ? 'delivered' :
+                  status.status === 'read' ? 'read' :
+                  status.status === 'sent' ? 'sent' :
+                  status.status === 'failed' ? 'failed' :
+                  existingMsg.status;
+
                 const { error: updateError } = await supabase
                   .from("messages")
-                  .update({ metadata: updatedMetadata })
-                  .eq("external_id", status.id);
+                  .update({ 
+                    metadata: updatedMetadata,
+                    status: mappedStatus, // 🆕 Atualizar campo status real
+                  })
+                  .eq("id", existingMsg.id);
 
                 if (updateError) {
                   console.error("[meta-whatsapp-webhook] ❌ Error updating status:", updateError);
+                } else {
+                  console.log(`[meta-whatsapp-webhook] ✅ Status updated: ${existingMsg.id} -> ${mappedStatus}`);
                 }
+              } else {
+                console.log("[meta-whatsapp-webhook] ⚠️ Message not found for status update:", status.id);
               }
             }
           }

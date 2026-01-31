@@ -2,14 +2,29 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtimeHealth } from "@/hooks/useRealtimeHealth";
+import { isFeatureEnabled } from "@/config/features";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
 type Message = Tables<"messages">;
 type MessageInsert = TablesInsert<"messages">;
 
+/**
+ * Hook para gerenciamento de mensagens com Realtime
+ * 
+ * ENTERPRISE V2 UPGRADES:
+ * - Dedup por client_message_id (não content-matching)
+ * - Tratar UPDATE para status delivered/read
+ * - Polling condicional baseado em isHealthy
+ * - registerEvent para sinalizar recebimento de eventos
+ */
 export function useMessages(conversationId: string | null) {
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const { isHealthy, isDegraded, registerEvent } = useRealtimeHealth();
+  
+  // 🆕 Verificar se Enterprise V2 está ativo
+  const isEnterpriseV2 = isFeatureEnabled('INBOX_ENTERPRISE_V2');
   
   // 🛡️ PROTEÇÃO ANTI-DUPLICAÇÃO: Rastrear IDs já processados (30s window)
   const processedIdsRef = useRef(new Set<string>());
@@ -67,9 +82,13 @@ export function useMessages(conversationId: string | null) {
     gcTime: 1000 * 60 * 30, // 30 minutos - manter em cache mesmo após inativo
     refetchOnWindowFocus: true, // Recarregar ao voltar para a aba
     refetchOnReconnect: true, // Recarregar ao reconectar internet
-    // 🔄 FALLBACK POLLING: Para quando Realtime falha no publicado
-    // Não usar ref aqui - usar polling fixo de 5s como safety net
-    refetchInterval: 5000, // Poll a cada 5s como backup do Realtime
+    // 🆕 ENTERPRISE V2: Polling condicional baseado em isHealthy
+    // isHealthy = true → sem polling (realtime funcionando)
+    // isDegraded = true → polling 10s (gap detectado)
+    // !isHealthy → polling 5s (emergência)
+    refetchInterval: isEnterpriseV2 
+      ? (isHealthy ? false : isDegraded ? 10000 : 5000)
+      : 5000, // Legacy: polling fixo 5s
   });
 
   // 🔄 CATCH-UP: Buscar mensagens perdidas após reconexão
@@ -174,8 +193,11 @@ export function useMessages(conversationId: string | null) {
             filter: `conversation_id=eq.${conversationId}`,
           },
           async (payload) => {
-            const newMessage = payload.new as Message;
+            const newMessage = payload.new as Message & { client_message_id?: string; provider_message_id?: string };
             const oldMessage = payload.old as Message;
+            
+            // 🆕 ENTERPRISE V2: Registrar evento para health check
+            registerEvent();
             
             // 🛡️ PROTEÇÃO 1: Ignorar se já processado nesta sessão
             if (payload.eventType === 'INSERT' && processedIdsRef.current.has(newMessage.id)) {
@@ -194,14 +216,33 @@ export function useMessages(conversationId: string | null) {
               }
             }
             
-            console.log("[Realtime] Message changed:", payload.eventType, newMessage?.id);
+            console.log("[Realtime] Message changed:", payload.eventType, newMessage?.id, {
+              client_message_id: newMessage?.client_message_id,
+              provider_message_id: newMessage?.provider_message_id,
+            });
             
             // ✨ MERGE OTIMISTA - Sem refetch, atualiza cache diretamente
             if (payload.eventType === 'INSERT') {
               queryClient.setQueryData(
                 ["messages", conversationId],
                 (old: any[] = []) => {
-                  // 1. Verificar se já existe por ID (evitar duplicatas)
+                  // 🆕 PRIORIDADE 1 (V2): Dedup por client_message_id
+                  if (isEnterpriseV2 && newMessage.client_message_id) {
+                    const existingByClientId = old.find(m => 
+                      m.client_message_id === newMessage.client_message_id ||
+                      m.id === newMessage.client_message_id // id === client_message_id no V2
+                    );
+                    if (existingByClientId) {
+                      console.log('[Realtime] ⏭️ Reconciliando por client_message_id:', newMessage.client_message_id);
+                      return old.map(m => 
+                        (m.client_message_id === newMessage.client_message_id || m.id === newMessage.client_message_id)
+                          ? { ...m, ...newMessage, status: 'sent' } 
+                          : m
+                      );
+                    }
+                  }
+                  
+                  // PRIORIDADE 2: Dedup por id
                   const existingIndex = old.findIndex(m => m.id === newMessage.id);
                   
                   if (existingIndex !== -1) {
@@ -216,39 +257,70 @@ export function useMessages(conversationId: string | null) {
                     return updated;
                   }
                   
-                  // 🛡️ PROTEÇÃO 2: Verificar mensagem pendente com mesmo conteúdo (race condition)
-                  const pendingMatch = old.find(m => 
-                    (m.status === 'sending' || m.status === 'streaming') &&
-                    m.content === newMessage.content &&
-                    Math.abs(new Date(m.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 5000
-                  );
-                  
-                  if (pendingMatch) {
-                    console.log('[Realtime] Reconciliando mensagem pendente:', pendingMatch.id, '→', newMessage.id);
-                    return old.map(m => 
-                      m.id === pendingMatch.id 
-                        ? { ...m, ...newMessage, status: 'sent' } 
-                        : m
-                    );
+                  // 🆕 PRIORIDADE 3 (V2): Dedup por provider_message_id (wamid)
+                  if (isEnterpriseV2 && newMessage.provider_message_id) {
+                    if (old.some(m => 
+                      m.provider_message_id === newMessage.provider_message_id ||
+                      m.external_id === newMessage.provider_message_id
+                    )) {
+                      console.log('[Realtime] ⏭️ Dedup por provider_message_id:', newMessage.provider_message_id);
+                      return old;
+                    }
                   }
                   
-                  // 3. Verificar duplicata por external_id (wamid)
+                  // PRIORIDADE 4: Verificar duplicata por external_id (legacy wamid)
                   if (newMessage.external_id && old.some(m => m.external_id === newMessage.external_id)) {
-                    console.log('[Realtime] Ignorando duplicata por external_id:', newMessage.external_id);
+                    console.log('[Realtime] ⏭️ Ignorando duplicata por external_id:', newMessage.external_id);
                     return old;
                   }
                   
-                  // 4. Nova mensagem (outro usuário/cliente)
+                  // 🛡️ FALLBACK DEFENSIVO: Content matching (só edge cases - mantido para legado)
+                  if (!isEnterpriseV2) {
+                    const pendingMatch = old.find(m => 
+                      (m.status === 'sending' || m.status === 'streaming') &&
+                      m.content === newMessage.content &&
+                      Math.abs(new Date(m.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 5000
+                    );
+                    
+                    if (pendingMatch) {
+                      console.log('[Realtime] Reconciliando mensagem pendente:', pendingMatch.id, '→', newMessage.id);
+                      return old.map(m => 
+                        m.id === pendingMatch.id 
+                          ? { ...m, ...newMessage, status: 'sent' } 
+                          : m
+                      );
+                    }
+                  }
+                  
+                  // 5. Nova mensagem (outro usuário/cliente)
                   console.log('[Realtime] Nova mensagem:', newMessage.id);
                   return [...old, { ...newMessage, status: 'sent' }];
                 }
               );
             } else if (payload.eventType === 'UPDATE') {
+              // 🆕 ENTERPRISE V2: Tratar UPDATE para status delivered/read
               queryClient.setQueryData(
                 ["messages", conversationId],
-                (old: any[] = []) => old.map(m => 
-                  m.id === newMessage.id ? { ...m, ...newMessage } : m
-                )
+                (old: any[] = []) => old.map(m => {
+                  // Match por id OU client_message_id OU provider_message_id
+                  const isMatch = 
+                    m.id === newMessage.id ||
+                    (isEnterpriseV2 && m.client_message_id && m.client_message_id === newMessage.client_message_id) ||
+                    (isEnterpriseV2 && m.provider_message_id && m.provider_message_id === newMessage.provider_message_id);
+                  
+                  if (isMatch) {
+                    // 🆕 Extrair status de delivery do metadata (se disponível)
+                    const deliveryStatus = (newMessage.metadata as any)?.delivery_status;
+                    
+                    return { 
+                      ...m, 
+                      ...newMessage,
+                      // Mapear delivery_status para campo status se disponível
+                      status: deliveryStatus || newMessage.status || m.status,
+                    };
+                  }
+                  return m;
+                })
               );
             } else if (payload.eventType === 'DELETE' && oldMessage) {
               queryClient.setQueryData(

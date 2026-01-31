@@ -1,14 +1,42 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+/**
+ * Hook para monitorar saúde da conexão Realtime
+ * 
+ * ENTERPRISE V2 UPGRADES:
+ * - isHealthy: Conectado E recebeu evento nos últimos 60s
+ * - isDegraded: Conectado mas sem eventos recentes (possível gap)
+ * - registerEvent: Função para hooks filhos sinalizarem recebimento de eventos
+ */
 export function useRealtimeHealth() {
   const [isConnected, setIsConnected] = useState(true);
   const [lastPing, setLastPing] = useState<Date | null>(null);
+  const [lastEventReceived, setLastEventReceived] = useState<Date | null>(new Date()); // 🆕 Iniciar com agora
   const queryClient = useQueryClient();
   const reconnectAttempts = useRef(0);
   const lastVisibilityChange = useRef<number>(Date.now());
   const healthChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // 🆕 isHealthy = conectado E recebeu evento nos últimos 60s
+  const isHealthy = useMemo(() => {
+    if (!isConnected) return false;
+    if (!lastEventReceived) return true; // Assume healthy se acabou de iniciar
+    return (Date.now() - lastEventReceived.getTime()) < 60000;
+  }, [isConnected, lastEventReceived]);
+  
+  // 🆕 isDegraded = conectado mas sem eventos recentes (possível gap)
+  const isDegraded = useMemo(() => {
+    if (!isConnected) return false;
+    if (!lastEventReceived) return false;
+    return (Date.now() - lastEventReceived.getTime()) >= 60000;
+  }, [isConnected, lastEventReceived]);
+
+  // 🆕 Função para registrar evento recebido (chamada pelos hooks de realtime)
+  const registerEvent = useCallback(() => {
+    setLastEventReceived(new Date());
+  }, []);
 
   // Forçar refetch de dados - SEM destruir canais!
   const forceReconnect = useCallback(async () => {
@@ -21,11 +49,13 @@ export function useRealtimeHealth() {
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
     
     reconnectAttempts.current = 0;
+    setLastEventReceived(new Date()); // Reset last event
   }, [queryClient]);
 
   // Monitorar conexão com canal próprio de health check
   useEffect(() => {
     let pingInterval: NodeJS.Timeout;
+    let healthCheckInterval: NodeJS.Timeout;
 
     const setupHealthCheck = () => {
       // Remover apenas o canal de health anterior se existir
@@ -39,6 +69,7 @@ export function useRealtimeHealth() {
         .on('presence', { event: 'sync' }, () => {
           setIsConnected(true);
           setLastPing(new Date());
+          registerEvent(); // 🆕 Registrar como evento
         })
         .subscribe((status, err) => {
           console.log('[RealtimeHealth] Health channel status:', status, err);
@@ -46,6 +77,7 @@ export function useRealtimeHealth() {
           if (status === 'SUBSCRIBED') {
             setIsConnected(true);
             setLastPing(new Date());
+            registerEvent(); // 🆕 Registrar como evento
             reconnectAttempts.current = 0;
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
             setIsConnected(false);
@@ -83,14 +115,21 @@ export function useRealtimeHealth() {
       }
     }, 30000);
 
+    // 🆕 Health check interval - atualizar isHealthy/isDegraded
+    healthCheckInterval = setInterval(() => {
+      // Forçar re-render para atualizar isHealthy/isDegraded
+      setLastEventReceived(prev => prev);
+    }, 10000);
+
     return () => {
       clearInterval(pingInterval);
+      clearInterval(healthCheckInterval);
       if (healthChannelRef.current) {
         supabase.removeChannel(healthChannelRef.current);
         healthChannelRef.current = null;
       }
     };
-  }, []); // Sem dependências - roda apenas uma vez
+  }, [registerEvent]);
 
   // Reconectar quando tab volta ao foco
   useEffect(() => {
@@ -122,5 +161,13 @@ export function useRealtimeHealth() {
     };
   }, [forceReconnect]);
 
-  return { isConnected, lastPing, forceReconnect };
+  return { 
+    isConnected, 
+    isHealthy,        // 🆕 Conectado + eventos recentes
+    isDegraded,       // 🆕 Conectado mas sem eventos
+    lastPing, 
+    lastEventReceived, // 🆕
+    forceReconnect,
+    registerEvent,    // 🆕 Para hooks filhos
+  };
 }

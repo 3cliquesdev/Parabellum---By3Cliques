@@ -5214,6 +5214,7 @@ export type Database = {
           attachment_type: string | null
           attachment_url: string | null
           channel: Database["public"]["Enums"]["conversation_channel"] | null
+          client_message_id: string | null
           content: string
           conversation_id: string
           created_at: string
@@ -5225,6 +5226,7 @@ export type Database = {
           is_read: boolean | null
           message_type: string | null
           metadata: Json | null
+          provider_message_id: string | null
           quoted_message_id: string | null
           sender_id: string | null
           sender_type: Database["public"]["Enums"]["sender_type"]
@@ -5234,6 +5236,7 @@ export type Database = {
           attachment_type?: string | null
           attachment_url?: string | null
           channel?: Database["public"]["Enums"]["conversation_channel"] | null
+          client_message_id?: string | null
           content: string
           conversation_id: string
           created_at?: string
@@ -5245,6 +5248,7 @@ export type Database = {
           is_read?: boolean | null
           message_type?: string | null
           metadata?: Json | null
+          provider_message_id?: string | null
           quoted_message_id?: string | null
           sender_id?: string | null
           sender_type: Database["public"]["Enums"]["sender_type"]
@@ -5254,6 +5258,7 @@ export type Database = {
           attachment_type?: string | null
           attachment_url?: string | null
           channel?: Database["public"]["Enums"]["conversation_channel"] | null
+          client_message_id?: string | null
           content?: string
           conversation_id?: string
           created_at?: string
@@ -5265,6 +5270,7 @@ export type Database = {
           is_read?: boolean | null
           message_type?: string | null
           metadata?: Json | null
+          provider_message_id?: string | null
           quoted_message_id?: string | null
           sender_id?: string | null
           sender_type?: Database["public"]["Enums"]["sender_type"]
