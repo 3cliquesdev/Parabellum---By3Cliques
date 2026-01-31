@@ -15,7 +15,16 @@ export function UpdateAvailableBanner() {
   const [dismissed, setDismissed] = useState(false);
   const [updating, setUpdating] = useState(false);
 
-  // Verificação periódica a cada 5 minutos (sem auto-refresh)
+  const isLikelyPreviewHost = () => {
+    const h = window.location.hostname;
+    return (
+      h.includes("lovableproject.com") ||
+      h.includes("lovable.app") ||
+      h.includes("id-preview--")
+    );
+  };
+
+  // Verificação periódica (sem auto-refresh)
   useEffect(() => {
     const checkUpdate = async () => {
       const updateAvailable = await checkForUpdate();
@@ -24,11 +33,12 @@ export function UpdateAvailableBanner() {
       }
     };
 
-    // Verificar após 30 segundos do carregamento inicial
-    const initialTimeout = setTimeout(checkUpdate, 30000);
-    
-    // Verificar a cada 5 minutos
-    const interval = setInterval(checkUpdate, 5 * 60 * 1000);
+    // No preview, queremos detectar rápido para evitar ficar “preso” em build antigo.
+    const initialDelayMs = isLikelyPreviewHost() ? 3000 : 30000;
+    const intervalMs = isLikelyPreviewHost() ? 30 * 1000 : 5 * 60 * 1000;
+
+    const initialTimeout = setTimeout(checkUpdate, initialDelayMs);
+    const interval = setInterval(checkUpdate, intervalMs);
 
     return () => {
       clearTimeout(initialTimeout);

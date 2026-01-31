@@ -3,7 +3,11 @@ import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "next-themes";
 import App from "./App.tsx";
 import "./index.css";
-import { getCurrentBuildId, forceUpdate } from "./lib/build/ensureLatestBuild";
+import {
+  getCurrentBuildId,
+  forceUpdate,
+  ensureLatestBuild,
+} from "./lib/build/ensureLatestBuild";
 import { APP_SCHEMA_VERSION } from "./lib/build/schemaVersion";
 import { toast } from "sonner";
 
@@ -148,6 +152,41 @@ window.addEventListener('unhandledrejection', (event) => {
 
 // 5. Verificação de build desativada - usuário atualiza manualmente pelo SidebarVersionIndicator
 // (evita refresh automático que pode interromper o trabalho do usuário)
+
+// Porém: no PREVIEW, às vezes o navegador “volta” para um bundle antigo.
+// Para não depender de mensagens no chat, fazemos uma checagem leve e mostramos
+// uma ação manual de atualização (sem reload automático).
+const isLikelyPreviewHost = () => {
+  const h = window.location.hostname;
+  return (
+    h.includes("lovableproject.com") ||
+    h.includes("lovable.app") ||
+    h.includes("id-preview--")
+  );
+};
+
+if (isLikelyPreviewHost()) {
+  const shownKey = "app_preview_update_toast_shown";
+  setTimeout(async () => {
+    try {
+      const hasUpdate = await ensureLatestBuild();
+      if (hasUpdate && !sessionStorage.getItem(shownKey)) {
+        sessionStorage.setItem(shownKey, "1");
+        toast.warning("Preview com versão antiga", {
+          description:
+            "Detectei uma versão mais nova no servidor. Clique em Atualizar quando puder (não recarrega sozinho).",
+          duration: 20000,
+          action: {
+            label: "Atualizar",
+            onClick: () => setTimeout(() => forceUpdate(), 200),
+          },
+        });
+      }
+    } catch (e) {
+      console.warn("[Main] Erro ao checar build no preview:", e);
+    }
+  }, 2500);
+}
 
 console.log('[Main] 🚀 App iniciando');
 
