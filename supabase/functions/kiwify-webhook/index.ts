@@ -842,12 +842,79 @@ async function handlePaidOrder(
 
       console.log(`[kiwify-webhook] ✅ Deal ${saleType.toLowerCase()} fechado:`, matchingDeal.id, 'Valor:', valueFormatted);
 
+      // 🆕 CRIAR DEAL EM CS - NOVOS CLIENTES (para acompanhamento do time de CS)
+      // Só cria se o contato NÃO era cliente antes (primeira compra)
+      const wasAlreadyCustomer = existingContact && existingContact.status === 'customer';
+      let csDealCreated = false;
+      
+      if (!wasAlreadyCustomer) {
+        try {
+          const { data: csNovosPipeline } = await supabase
+            .from('pipelines')
+            .select('id')
+            .eq('name', 'CS - Novos Clientes')
+            .single();
+
+          if (csNovosPipeline) {
+            const { data: csFirstStage } = await supabase
+              .from('stages')
+              .select('id')
+              .eq('pipeline_id', csNovosPipeline.id)
+              .order('position', { ascending: true })
+              .limit(1)
+              .single();
+
+            if (csFirstStage) {
+              // Buscar produto se ainda não temos
+              let productId = null;
+              const { data: productData } = await supabase
+                .from('products')
+                .select('id')
+                .or(`external_id.eq.${Product.product_id},name.ilike.%${Product.product_name}%`)
+                .limit(1)
+                .single();
+              
+              if (productData) {
+                productId = productData.id;
+              }
+
+              const { data: csDeal, error: csDealError } = await supabase
+                .from('deals')
+                .insert({
+                  title: `CS - ${Customer.full_name}`,
+                  contact_id: matchingDeal.contact_id,
+                  pipeline_id: csNovosPipeline.id,
+                  stage_id: csFirstStage.id,
+                  status: 'open',
+                  value: kiwifyValue,
+                  is_returning_customer: false,
+                  lead_source: 'kiwify_novo_cliente',
+                  product_id: productId,
+                })
+                .select()
+                .single();
+
+              if (csDeal) {
+                console.log('[kiwify-webhook] ✅ Deal CS - Novos Clientes criado:', csDeal.id);
+                csDealCreated = true;
+              } else if (csDealError) {
+                console.error('[kiwify-webhook] ⚠️ Erro ao criar deal CS:', csDealError.message);
+              }
+            }
+          }
+        } catch (csError) {
+          console.error('[kiwify-webhook] ⚠️ Erro no fluxo CS:', csError);
+          // Não bloqueia o fluxo principal
+        }
+      }
+
       // IMPORTANTE: Retornar aqui para não criar deal/contato duplicado
       return new Response(JSON.stringify({
         success: true,
         action: 'closed_organic',
         deal_id: matchingDeal.id,
         value: kiwifyValue,
+        cs_deal_created: csDealCreated,
         message: `Deal sem vendedor fechado como venda orgânica: ${valueFormatted}`
       }), { status: 200, headers: corsHeaders });
     }
