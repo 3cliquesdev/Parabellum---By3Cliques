@@ -172,25 +172,18 @@ export function SuperComposer({
     await upload(attachment.file);
   };
 
-  const handleStartAudioRecording = async () => {
-    // For WhatsApp, ensure FFmpeg is ready BEFORE recording to avoid long post-record delays.
+  // Preload FFmpeg in background when composer mounts (for WhatsApp conversations)
+  useEffect(() => {
     if (whatsappProvider === 'meta' || whatsappInstanceId) {
-      toast({
-        title: 'Preparando áudio...',
-        description: 'Carregando conversor de áudio',
+      console.log('[SuperComposer] Preloading FFmpeg in background...');
+      preloadFFmpeg().then((ok) => {
+        console.log('[SuperComposer] FFmpeg preload result:', ok);
       });
-
-      const ok = await preloadFFmpeg();
-      if (!ok) {
-        toast({
-          title: 'Falha ao preparar áudio',
-          description: 'Não consegui carregar o conversor de áudio. Tente novamente.',
-          variant: 'destructive',
-        });
-        return;
-      }
     }
+  }, [whatsappProvider, whatsappInstanceId]);
 
+  const handleStartAudioRecording = () => {
+    // Start recording immediately - FFmpeg should already be preloaded in background
     setIsRecordingAudio(true);
   };
 
