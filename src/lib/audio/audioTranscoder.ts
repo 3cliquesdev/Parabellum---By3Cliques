@@ -20,17 +20,17 @@ let loadingPromise: Promise<FFmpeg> | null = null;
  */
 async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg && ffmpeg.loaded) {
-    console.log('[AudioTranscoder] ✅ FFmpeg already loaded');
+    console.log('[AudioTranscoder] FFmpeg already loaded');
     return ffmpeg;
   }
 
   if (loadingPromise) {
-    console.log('[AudioTranscoder] ⏳ FFmpeg loading in progress, waiting...');
+    console.log('[AudioTranscoder] FFmpeg loading in progress, waiting...');
     return loadingPromise;
   }
 
   loadingPromise = (async () => {
-    console.log('[AudioTranscoder] 🔄 Loading FFmpeg WASM...');
+    console.log('[AudioTranscoder] Loading FFmpeg WASM...');
     
     const instance = new FFmpeg();
     
@@ -66,11 +66,11 @@ async function getFFmpeg(): Promise<FFmpeg> {
         ),
       ]);
       
-      console.log('[AudioTranscoder] ✅ FFmpeg loaded successfully');
+      console.log('[AudioTranscoder] FFmpeg loaded successfully');
       ffmpeg = instance;
       return instance;
     } catch (error) {
-      console.error('[AudioTranscoder] ❌ Failed to load FFmpeg:', error);
+      console.error('[AudioTranscoder] Failed to load FFmpeg:', error);
       loadingPromise = null; // Allow retry
       throw error;
     }
@@ -112,11 +112,11 @@ export async function transcodeToOgg(
 ): Promise<{ blob: Blob; mimeType: string }> {
   // If already compatible, return as-is
   if (!needsTranscoding(originalMimeType)) {
-    console.log('[AudioTranscoder] ✅ Audio already compatible, skipping transcoding');
+    console.log('[AudioTranscoder] Audio already compatible, skipping transcoding');
     return { blob: audioBlob, mimeType: originalMimeType };
   }
 
-  console.log('[AudioTranscoder] 🔄 Starting transcoding:', {
+  console.log('[AudioTranscoder] Starting transcoding:', {
     originalType: originalMimeType,
     size: audioBlob.size,
     sizeKB: Math.round(audioBlob.size / 1024),
@@ -136,34 +136,33 @@ export async function transcodeToOgg(
     const inputFileName = `input_${Date.now()}.${inputExt}`;
     const outputFileName = `output_${Date.now()}.ogg`;
     
-    console.log('[AudioTranscoder] 📂 Files:', inputFileName, '→', outputFileName);
+    console.log('[AudioTranscoder] Files:', inputFileName, '->', outputFileName);
     
     // Write input file to FFmpeg virtual filesystem
     const inputData = await fetchFile(audioBlob);
-    console.log('[AudioTranscoder] 📥 Input data size:', inputData.byteLength);
+    console.log('[AudioTranscoder] Input data size:', inputData.byteLength);
     
     await ff.writeFile(inputFileName, inputData);
-    console.log('[AudioTranscoder] ✅ Input file written to virtual FS');
+    console.log('[AudioTranscoder] Input file written to virtual FS');
     
     // Transcode to OGG/Opus with optimal settings for voice
+    // -map 0:a:0 = CRITICAL: force audio stream mapping (prevents silent output)
     // -c:a libopus = use Opus codec
-    // -b:a 48k = 48kbps bitrate (good quality for voice)
-    // -ar 48000 = 48kHz sample rate (Opus standard)
-    // -ac 1 = mono (smaller file, good for voice)
-    console.log('[AudioTranscoder] 🎬 Starting FFmpeg exec...');
+    // -b:a 24k = 24kbps bitrate (sufficient for voice)
+    // -application voip = optimized for voice
+    console.log('[AudioTranscoder] Starting FFmpeg exec...');
     
     await ff.exec([
       '-i', inputFileName,
+      '-map', '0:a:0',        // CRITICAL: force audio stream mapping
       '-c:a', 'libopus',
-      '-b:a', '48k',
-      '-ar', '48000',
-      '-ac', '1',
+      '-b:a', '24k',          // 24k is enough for voice
       '-application', 'voip', // Optimized for voice
-      '-y', // Overwrite output
+      '-y',                   // Overwrite output
       outputFileName
     ]);
     
-    console.log('[AudioTranscoder] ✅ FFmpeg exec completed');
+    console.log('[AudioTranscoder] FFmpeg exec completed');
     
     // Read output file
     const outputData = await ff.readFile(outputFileName);
@@ -171,11 +170,11 @@ export async function transcodeToOgg(
     // Handle FileData type (can be string or Uint8Array)
     let arrayBuffer: ArrayBuffer;
     if (typeof outputData === 'string') {
-      console.log('[AudioTranscoder] 📤 Output is string, encoding...');
+      console.log('[AudioTranscoder] Output is string, encoding...');
       const encoder = new TextEncoder();
       arrayBuffer = encoder.encode(outputData).buffer as ArrayBuffer;
     } else {
-      console.log('[AudioTranscoder] 📤 Output data size:', outputData.length);
+      console.log('[AudioTranscoder] Output data size:', outputData.length);
       
       if (outputData.length === 0) {
         throw new Error('FFmpeg produced empty output');
@@ -185,6 +184,18 @@ export async function transcodeToOgg(
       arrayBuffer = new ArrayBuffer(outputData.length);
       new Uint8Array(arrayBuffer).set(outputData);
     }
+    
+    // VALIDATE OGG header (magic bytes must be "OggS")
+    const outputBytes = new Uint8Array(arrayBuffer);
+    const headerBytes = outputBytes.slice(0, 4);
+    const header = new TextDecoder().decode(headerBytes);
+    
+    if (header !== 'OggS') {
+      console.error('[AudioTranscoder] Invalid OGG header:', header);
+      throw new Error(`Transcode invalid: expected "OggS", got "${header}"`);
+    }
+    
+    console.log('[AudioTranscoder] OggS header validated');
     
     // Clean up virtual filesystem
     try {
@@ -199,7 +210,7 @@ export async function transcodeToOgg(
     
     const compressionRatio = Math.round((1 - outputBlob.size / audioBlob.size) * 100);
     
-    console.log('[AudioTranscoder] ✅ Transcoding complete:', {
+    console.log('[AudioTranscoder] Transcoding complete:', {
       inputSize: `${Math.round(audioBlob.size / 1024)}KB`,
       outputSize: `${Math.round(outputBlob.size / 1024)}KB`,
       compression: `${compressionRatio}%`,
@@ -209,11 +220,11 @@ export async function transcodeToOgg(
     return { blob: outputBlob, mimeType: 'audio/ogg' };
     
   } catch (error) {
-    console.error('[AudioTranscoder] ❌ Transcoding failed:', error);
+    console.error('[AudioTranscoder] Transcoding failed:', error);
     
-    // Fallback: Return original with warning
-    console.warn('[AudioTranscoder] ⚠️ Returning original audio - may fail on WhatsApp Meta');
-    return { blob: audioBlob, mimeType: originalMimeType };
+    // NO FALLBACK: Do not return WebM - Meta will reject it
+    // Propagate error so SuperComposer shows toast and aborts
+    throw error;
   }
 }
 

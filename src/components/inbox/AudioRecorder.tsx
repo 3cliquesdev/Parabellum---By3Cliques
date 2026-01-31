@@ -45,15 +45,33 @@ export function AudioRecorder({
   };
 
   const handleConfirm = () => {
-    if (audioBlob) {
-      const extension = audioBlob.type.includes('webm') ? 'webm' : 'ogg';
-      const file = new File(
-        [audioBlob], 
-        `audio-${Date.now()}.${extension}`, 
-        { type: audioBlob.type }
-      );
-      onRecordingComplete(file);
+    if (!audioBlob) {
+      console.error("[AudioRecorder] no blob available");
+      return;
     }
+
+    // Log obrigatorio para diagnostico
+    console.log("[AudioRecorder] blob", {
+      type: audioBlob.type,
+      size: audioBlob.size,
+      sizeKB: Math.round(audioBlob.size / 1024),
+      valid: audioBlob.size > 10000,
+    });
+
+    // Validar tamanho minimo (10KB = ~1 segundo de audio)
+    // Se menor, a gravacao falhou - ABORTAR (nao seguir adiante)
+    if (audioBlob.size < 10000) {
+      console.error("[AudioRecorder] recording failed: blob too small", audioBlob.size);
+      return;
+    }
+
+    const extension = audioBlob.type.includes('webm') ? 'webm' : 'ogg';
+    const file = new File(
+      [audioBlob], 
+      `audio-${Date.now()}.${extension}`, 
+      { type: audioBlob.type }
+    );
+    onRecordingComplete(file);
   };
 
   const handleCancel = () => {
