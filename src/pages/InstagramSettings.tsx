@@ -6,43 +6,26 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   Instagram, 
   Link2, 
   Unlink, 
   RefreshCw, 
-  Webhook, 
   Bell,
-  Copy,
   Check,
-  AlertCircle,
   Clock
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useToast } from "@/hooks/use-toast";
 
 const InstagramSettings = () => {
-  const { toast } = useToast();
-  const [copied, setCopied] = useState(false);
-  
   const { data: accounts, isLoading } = useInstagramAccounts();
   const { startOAuth, isLoading: isConnecting } = useConnectInstagram();
   const { mutate: disconnect, isPending: isDisconnecting } = useDisconnectInstagram();
   const { mutate: syncNow, isPending: isSyncing } = useSyncInstagram();
 
   const activeAccount = accounts?.find((a) => a.is_active);
-  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/instagram-webhook`;
-
-  const handleCopyWebhook = async () => {
-    await navigator.clipboard.writeText(webhookUrl);
-    setCopied(true);
-    toast({ title: "URL copiada!", description: "Cole no Meta Developer Console" });
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const handleDisconnect = () => {
     if (!activeAccount) return;
@@ -115,51 +98,6 @@ const InstagramSettings = () => {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Webhook Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Webhook className="h-5 w-5" />
-            Configuração de Webhooks
-          </CardTitle>
-          <CardDescription>
-            Configure webhooks no Meta Developer para receber eventos em tempo real
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Para receber comentários e mensagens em tempo real, configure este webhook no{" "}
-              <a
-                href="https://developers.facebook.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium underline"
-              >
-                Meta Developer Console
-              </a>
-            </AlertDescription>
-          </Alert>
-
-          <div className="space-y-2">
-            <Label>URL do Webhook</Label>
-            <div className="flex gap-2">
-              <Input value={webhookUrl} readOnly className="font-mono text-sm" />
-              <Button variant="outline" size="icon" onClick={handleCopyWebhook}>
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-muted-foreground">Eventos inscritos:</span>
-            <Badge variant="outline">comments</Badge>
-            <Badge variant="outline">messages</Badge>
-          </div>
         </CardContent>
       </Card>
 
