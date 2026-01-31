@@ -1139,6 +1139,58 @@ async function handlePaidOrder(
 
   console.log('[kiwify-webhook] ✅ Venda orgânica com deal:', organicDealId, 'Bruto R$', grossValue.toFixed(2), 'Líquido R$', netValue.toFixed(2));
 
+  // ============================================
+  // 🆕 CRIAR DEAL EM CS - NOVOS CLIENTES
+  // Para acompanhamento do time de Customer Success
+  // ============================================
+  let csDealId = null;
+  
+  const { data: csNovosPipeline } = await supabase
+    .from('pipelines')
+    .select('id')
+    .eq('name', 'CS - Novos Clientes')
+    .single();
+
+  if (csNovosPipeline) {
+    // Buscar primeira stage (Onboarding)
+    const { data: csFirstStage } = await supabase
+      .from('stages')
+      .select('id')
+      .eq('pipeline_id', csNovosPipeline.id)
+      .order('position', { ascending: true })
+      .limit(1)
+      .single();
+
+    if (csFirstStage) {
+      const { data: csDeal, error: csDealError } = await supabase
+        .from('deals')
+        .insert({
+          title: `CS - ${Customer.full_name}`,
+          contact_id: contact.id,
+          pipeline_id: csNovosPipeline.id,
+          stage_id: csFirstStage.id,
+          status: 'open', // Aberto para CS acompanhar
+          value: netValue,
+          is_returning_customer: false,
+          lead_source: 'kiwify_novo_cliente',
+          product_id: product?.id,
+        })
+        .select()
+        .single();
+
+      if (csDealError) {
+        console.error('[kiwify-webhook] ❌ Erro ao criar deal CS - Novos Clientes:', csDealError);
+      } else if (csDeal) {
+        csDealId = csDeal.id;
+        console.log('[kiwify-webhook] ✅ Deal CS - Novos Clientes criado:', csDeal.id);
+      }
+    } else {
+      console.warn('[kiwify-webhook] ⚠️ Nenhuma stage encontrada no pipeline CS - Novos Clientes');
+    }
+  } else {
+    console.warn('[kiwify-webhook] ⚠️ Pipeline CS - Novos Clientes não encontrado');
+  }
+
   // 3. Buscar produto por offer_id PRIMEIRO (se disponível), fallback para external_id
   let playbook_ids: string[] = [];
   
@@ -1425,12 +1477,12 @@ async function handleUpsellOrder(
     })
     .eq('id', existingContact.id);
 
-  // 2.5 🆕 CRIAR DEAL NO PIPELINE DE RECORRÊNCIA
-  // Buscar Pipeline de Recorrência
+  // 2.5 🆕 CRIAR DEAL NO PIPELINE CS - RECORRÊNCIA
+  // Buscar Pipeline CS - Recorrência
   const { data: recurrencePipeline } = await supabase
     .from('pipelines')
     .select('id')
-    .eq('name', 'Pipeline de Recorrência')
+    .eq('name', 'CS - Recorrência')
     .single();
 
   let upsellDealId = null;
@@ -1787,6 +1839,58 @@ async function handleSubscriptionRenewal(
 
   console.log('[kiwify-webhook] ✅ LTV updated:', newLtv);
 
+  // ============================================
+  // 🆕 CRIAR DEAL EM CS - RECORRÊNCIA
+  // Para acompanhamento de renovações pelo time de CS
+  // ============================================
+  let csRenewalDealId = null;
+
+  const { data: csRecurrencePipeline } = await supabase
+    .from('pipelines')
+    .select('id')
+    .eq('name', 'CS - Recorrência')
+    .single();
+
+  if (csRecurrencePipeline) {
+    // Buscar stage "Ganho" do pipeline CS - Recorrência
+    const { data: csWonStage } = await supabase
+      .from('stages')
+      .select('id')
+      .eq('pipeline_id', csRecurrencePipeline.id)
+      .eq('name', 'Ganho')
+      .single();
+
+    if (csWonStage) {
+      const { data: csRenewalDeal, error: csRenewalError } = await supabase
+        .from('deals')
+        .insert({
+          title: `Renovação - ${Product.product_name}`,
+          contact_id: contact.id,
+          pipeline_id: csRecurrencePipeline.id,
+          stage_id: csWonStage.id,
+          status: 'won',
+          value: renewalValue,
+          is_returning_customer: true,
+          is_organic_sale: true, // Renovação automática
+          lead_source: 'kiwify_renovacao',
+          closed_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (csRenewalError) {
+        console.error('[kiwify-webhook] ❌ Erro ao criar deal CS - Recorrência:', csRenewalError);
+      } else if (csRenewalDeal) {
+        csRenewalDealId = csRenewalDeal.id;
+        console.log('[kiwify-webhook] ✅ Deal CS - Recorrência criado:', csRenewalDeal.id);
+      }
+    } else {
+      console.warn('[kiwify-webhook] ⚠️ Stage "Ganho" não encontrada no pipeline CS - Recorrência');
+    }
+  } else {
+    console.warn('[kiwify-webhook] ⚠️ Pipeline CS - Recorrência não encontrado');
+  }
+
   // 4. Notify consultant about renewal
   if (contact.consultant_id) {
     const renewalValueFormatted = new Intl.NumberFormat('pt-BR', {
@@ -1809,7 +1913,8 @@ async function handleSubscriptionRenewal(
         contact_name: `${contact.first_name} ${contact.last_name}`,
         product_name: Product.product_name,
         renewal_value: renewalValue,
-        new_ltv: newLtv
+        new_ltv: newLtv,
+        cs_deal_id: csRenewalDealId
       },
       read: false
     });
@@ -1826,7 +1931,8 @@ async function handleSubscriptionRenewal(
     action: 'ltv_updated',
     new_ltv: newLtv,
     contact_id: contact.id,
-    message: 'Renovação processada, LTV atualizado'
+    cs_deal_id: csRenewalDealId,
+    message: `Renovação processada, LTV atualizado${csRenewalDealId ? ', deal CS - Recorrência criado' : ''}`
   };
 }
 
