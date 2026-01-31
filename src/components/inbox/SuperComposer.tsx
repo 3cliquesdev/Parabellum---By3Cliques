@@ -14,6 +14,7 @@ import { useSendMessageInstant } from "@/hooks/useSendMessageInstant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getFreshMediaUrl } from "@/hooks/useMediaUrls";
+import { needsTranscoding, transcodeToOgg } from "@/lib/audio/audioTranscoder";
 import {
   Send,
   StickyNote,
@@ -161,8 +162,38 @@ export function SuperComposer({
 
   const handleAudioComplete = async (audioFile: File) => {
     setIsRecordingAudio(false);
-    setPendingAttachments((prev) => [...prev, { file: audioFile }]);
-    await upload(audioFile);
+    
+    // Check if audio needs transcoding for WhatsApp Meta compatibility
+    let finalFile = audioFile;
+    
+    if (needsTranscoding(audioFile.type)) {
+      console.log('[SuperComposer] 🔄 Transcoding audio for Meta compatibility...');
+      toast({
+        title: "Convertendo áudio...",
+        description: "Preparando para envio ao WhatsApp",
+      });
+      
+      try {
+        const { blob, mimeType } = await transcodeToOgg(audioFile, audioFile.type);
+        finalFile = new File(
+          [blob], 
+          audioFile.name.replace(/\.(webm|wav|mp3)$/i, '.ogg'), 
+          { type: mimeType }
+        );
+        console.log('[SuperComposer] ✅ Audio transcoded:', {
+          originalType: audioFile.type,
+          newType: mimeType,
+          originalSize: audioFile.size,
+          newSize: finalFile.size,
+        });
+      } catch (error) {
+        console.error('[SuperComposer] ❌ Transcoding failed, using original:', error);
+        // Continue with original file if transcoding fails
+      }
+    }
+    
+    setPendingAttachments((prev) => [...prev, { file: finalFile }]);
+    await upload(finalFile);
   };
 
   // Helper para detectar tipo de mídia (Evolution API)
