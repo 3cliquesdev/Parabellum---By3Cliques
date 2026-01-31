@@ -44,25 +44,48 @@ async function getFFmpeg(): Promise<FFmpeg> {
     });
     
     try {
-      // Load FFmpeg with multi-threaded support
-      // CDN fallback: jsDelivr costuma ser mais estável do que unpkg em alguns ambientes
+      // Load FFmpeg WASM - the core file is ~2.5MB so needs longer timeout
       const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
       
       console.log('[AudioTranscoder] Fetching FFmpeg core from:', baseURL);
       
+      // Download both files in parallel with individual timeouts
+      const fetchWithTimeout = async (url: string, type: string, timeoutMs: number) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status} fetching ${url}`);
+          }
+          
+          const blob = await response.blob();
+          return URL.createObjectURL(blob);
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      };
+      
+      // 45 seconds timeout for each file (WASM is ~2.5MB)
+      const FETCH_TIMEOUT_MS = 45000;
+      
       const [coreURL, wasmURL] = await Promise.all([
-        toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        fetchWithTimeout(`${baseURL}/ffmpeg-core.js`, 'text/javascript', FETCH_TIMEOUT_MS),
+        fetchWithTimeout(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm', FETCH_TIMEOUT_MS),
       ]);
       
       console.log('[AudioTranscoder] Core URLs created, loading instance...');
       
-      // Evitar travar indefinidamente em ambientes onde o download do core/wasm falha.
-      const LOAD_TIMEOUT_MS = 15000;
+      // Load the FFmpeg instance - additional 30s for initialization
+      const LOAD_TIMEOUT_MS = 30000;
       await Promise.race([
         instance.load({ coreURL, wasmURL }),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('FFmpeg load timeout')), LOAD_TIMEOUT_MS)
+          setTimeout(() => reject(new Error('FFmpeg initialization timeout')), LOAD_TIMEOUT_MS)
         ),
       ]);
       

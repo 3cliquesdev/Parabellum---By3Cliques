@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { useSendMessageInstant } from "@/hooks/useSendMessageInstant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getFreshMediaUrl } from "@/hooks/useMediaUrls";
-import { needsTranscoding, transcodeToOgg } from "@/lib/audio/audioTranscoder";
+import { needsTranscoding, transcodeToOgg, preloadFFmpeg } from "@/lib/audio/audioTranscoder";
 import {
   Send,
   StickyNote,
@@ -79,6 +79,18 @@ export function SuperComposer({
   const sendMessage = useSendMessage();
   const { sendInstant } = useSendMessageInstant();
 
+  // Preload FFmpeg WASM when conversation opens (async, non-blocking)
+  useEffect(() => {
+    // Only preload if this is a WhatsApp conversation (likely to send audio)
+    if (whatsappMetaInstanceId || whatsappInstanceId) {
+      console.log('[SuperComposer] Preloading FFmpeg for WhatsApp conversation...');
+      preloadFFmpeg().then((success) => {
+        if (success) {
+          console.log('[SuperComposer] FFmpeg preloaded successfully');
+        }
+      });
+    }
+  }, [whatsappMetaInstanceId, whatsappInstanceId]);
   const { upload, isUploading, progress } = useMediaUpload({
     conversationId,
     onSuccess: (media) => {
