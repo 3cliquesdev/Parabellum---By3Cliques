@@ -1,85 +1,221 @@
 
 
-# Ajustes Visuais Finos — Composer, Bolhas e Tipografia
+# Plano: Zero Delay Inbound — Hotfix Produção (AJUSTADO)
 
-## Escopo
-Apenas mudanças em `className` / tokens Tailwind. Zero alteração em hooks, lógica, handlers ou backend.
+## Ajustes Críticos Aplicados
 
----
-
-## 1. Composer — Espaçamentos
-
-**Arquivo:** `src/components/inbox/SuperComposer.tsx`
-
-| Local | Atual | Proposta | Razão |
-|-------|-------|----------|-------|
-| Wrapper externo (L648) | `px-4 py-3` | `px-4 py-2` | Menos "pesado" |
-| Container rounded (L649) | `gap-2 p-2` | `gap-3 p-2.5` | Respiro entre botões |
-| Textarea (L702-710) | `px-3 py-2` | `px-4 py-2.5` | Mais confortável |
-| Hint (L734) | `mt-1` | `mt-1.5` | Separação sutil |
+| # | Ajuste Solicitado | Status |
+|---|-------------------|--------|
+| 1 | Refs no TOPO do hook (não dentro de queryFn) | ✅ Confirmado |
+| 2 | Evitar JSON.stringify — usar comparação leve | ✅ Aplicado |
+| 3 | registerEvent apenas quando há gap real | ✅ Mantido |
 
 ---
 
-## 2. Bolhas — Largura e Padding
+## Arquivo: `src/hooks/useMessages.tsx`
 
-**Arquivo:** `src/components/inbox/MessageBubble.tsx`
+### 1. Novos Estados/Refs (NO TOPO DO HOOK, após linha 35)
 
-| Local | Atual | Proposta | Razão |
-|-------|-------|----------|-------|
-| Bolha principal (L141) | `max-w-[78%]` | `max-w-[75%]` | Mais "WhatsApp" |
-| Bolha principal | `px-4 py-3` | `px-4 py-2.5` | Mais compacto |
-| Timestamp (L235) | `mt-1` | `mt-1.5` | Respiro visual |
+```typescript
+// Linha 35: lastMessageTimestampRef já existe
 
----
+// 🆕 HOTFIX: Rastrear visibilidade da aba
+const [isTabVisible, setIsTabVisible] = useState(true);
 
-## 3. Tipografia do Chat
+// 🆕 Rastrear último evento Realtime (anti-mascaramento)
+const lastRealtimeEventRef = useRef<number>(Date.now());
 
-**Arquivo:** `src/components/inbox/MessageBubble.tsx`
+// 🆕 Rastrear tamanho anterior para detectar novas mensagens
+const previousLengthRef = useRef<number>(0);
+```
 
-| Local | Atual | Proposta | Razão |
-|-------|-------|----------|-------|
-| Bolha (L142) | `text-[14px] leading-5` | `text-[15px] leading-relaxed` | Leitura mais confortável |
-| SafeHTML (L228-229) | `text-sm` | — (herda da bolha) | Já herda |
-| Timestamp (L235) | `text-[11px]` | `text-[11px]` | OK |
+**Por que no topo:** Se ficassem dentro do `queryFn`, seriam recriados a cada render, perdendo o valor anterior.
 
 ---
 
-## 4. Container de Mensagens
+### 2. Importar useState (linha 2)
 
-**Arquivo:** `src/components/ChatWindow.tsx` (L603-604)
+```typescript
+// ANTES:
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useCallback } from "react";
 
-| Local | Atual | Proposta | Razão |
-|-------|-------|----------|-------|
-| Container interno | `p-4 md:p-6` | `px-4 py-6 md:px-6` | Respiro vertical |
-| Max-width wrapper (L604) | `max-w-3xl` | `max-w-4xl` | Mais espaço para bolhas |
+// DEPOIS:
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useCallback, useState } from "react";
+```
 
 ---
 
-## 5. MessagesWithMedia — Spacing
+### 3. useEffect para Visibilidade (após linha 36)
 
-**Arquivo:** `src/components/inbox/MessagesWithMedia.tsx`
+```typescript
+// 🆕 HOTFIX: Detectar quando aba está visível
+useEffect(() => {
+  const handleVisibility = () => {
+    setIsTabVisible(document.visibilityState === 'visible');
+  };
+  document.addEventListener('visibilitychange', handleVisibility);
+  return () => document.removeEventListener('visibilitychange', handleVisibility);
+}, []);
+```
 
-| Local | Atual | Proposta | Razão |
-|-------|-------|----------|-------|
-| Container (L121) | `space-y-3 py-4` | `space-y-4 py-3` | Mais separação entre msgs |
+---
+
+### 4. Polling Adaptativo (linhas 89-91)
+
+```typescript
+// ANTES:
+refetchInterval: isEnterpriseV2 
+  ? (isHealthy ? false : isDegraded ? 10000 : 5000)
+  : 5000, // Legacy: polling fixo 5s
+
+// DEPOIS:
+// 🆕 HOTFIX PRODUÇÃO: Polling adaptativo
+// - Conversa ativa + aba visível: 3s (safety net)
+// - Aba em background: 10s (economia)
+// - Sem conversa: desativado
+refetchInterval: !conversationId 
+  ? false 
+  : isTabVisible 
+    ? 3000 
+    : 10000,
+```
+
+---
+
+### 5. Detecção de Inbound no queryFn (dentro do queryFn, após linha 75)
+
+```typescript
+// Linha 74-75 atual:
+if (data && data.length > 0) {
+  lastMessageTimestampRef.current = data[data.length - 1].created_at;
+}
+
+// ADICIONAR APÓS (ainda dentro do queryFn, usando as refs do TOPO):
+// 🆕 HOTFIX: Detectar novas mensagens inbound via polling
+if (data && data.length > previousLengthRef.current) {
+  const newCount = data.length - previousLengthRef.current;
+  const lastMessages = data.slice(-newCount);
+  
+  const hasNewInbound = lastMessages.some(m => m.sender_type === 'contact');
+  const realtimeGap = Date.now() - lastRealtimeEventRef.current > 5000;
+  
+  if (hasNewInbound && realtimeGap) {
+    console.log('[useMessages] 📥 Inbound detectado via polling (Realtime gap):', newCount);
+    registerEvent();
+  }
+}
+previousLengthRef.current = data?.length || 0;
+```
+
+**Nota:** As refs `previousLengthRef` e `lastRealtimeEventRef` estão no TOPO do hook, então mantêm seus valores entre renders. O `queryFn` apenas LEIA e ATUALIZA elas.
+
+---
+
+### 6. Marcar Evento Realtime (linha 200)
+
+```typescript
+// ANTES:
+registerEvent();
+
+// DEPOIS:
+registerEvent();
+lastRealtimeEventRef.current = Date.now(); // 🆕 Marcar evento Realtime
+```
+
+---
+
+### 7. _mediaUpdatedAt Condicional — SEM JSON.stringify (linhas 311-320)
+
+```typescript
+// ANTES:
+if (isMatch) {
+  const deliveryStatus = (newMessage.metadata as any)?.delivery_status;
+  
+  return { 
+    ...m, 
+    ...newMessage,
+    status: deliveryStatus || newMessage.status || m.status,
+  };
+}
+
+// DEPOIS:
+if (isMatch) {
+  const deliveryStatus = (newMessage.metadata as any)?.delivery_status;
+  
+  // 🆕 Detectar se campos de mídia mudaram (COMPARAÇÃO LEVE)
+  const mediaChanged = 
+    newMessage.attachment_url !== m.attachment_url ||
+    newMessage.attachment_type !== m.attachment_type ||
+    (newMessage.media_attachments?.length || 0) !== (m.media_attachments?.length || 0) ||
+    newMessage.media_attachments?.[0]?.storage_path !== m.media_attachments?.[0]?.storage_path ||
+    newMessage.media_attachments?.[0]?.status !== m.media_attachments?.[0]?.status;
+  
+  return { 
+    ...m, 
+    ...newMessage,
+    status: deliveryStatus || newMessage.status || m.status,
+    // 🆕 _mediaUpdatedAt APENAS quando mídia muda
+    ...(mediaChanged && { _mediaUpdatedAt: Date.now() }),
+  };
+}
+```
+
+**Por que não JSON.stringify:**
+- `JSON.stringify` é O(n) onde n é tamanho do array
+- Comparação leve é O(1) — só checa length + campos chave do primeiro item
+- Em chats grandes com muitos attachments, isso evita delay
 
 ---
 
 ## Resumo de Mudanças
 
-| Arquivo | Linhas | Tipo |
-|---------|--------|------|
-| `SuperComposer.tsx` | 648, 649, 702-710, 734 | className |
-| `MessageBubble.tsx` | 141-142, 235 | className |
-| `ChatWindow.tsx` | 603-604 | className |
-| `MessagesWithMedia.tsx` | 121 | className |
+| Local | Mudança | Risco |
+|-------|---------|-------|
+| Linha 2 | Adicionar `useState` ao import | Zero |
+| Após linha 35 | Adicionar 3 refs/states no TOPO | Zero |
+| Após linha 36 | useEffect visibilidade | Zero |
+| Linhas 89-91 | Polling adaptativo 3s/10s | Baixo |
+| Após linha 75 | Detecção de inbound no queryFn | Baixo |
+| Linha 200 | Marcar lastRealtimeEventRef | Zero |
+| Linhas 311-320 | mediaChanged com comparação leve | Baixo |
 
 ---
 
-## Garantias
+## Garantias de Não-Regressão
 
-- **Zero lógica tocada** — apenas Tailwind classes
-- **Zero hooks alterados**
-- **Zero handlers alterados**
-- **Zero imports novos**
+- **Refs no TOPO:** `previousLengthRef` e `lastRealtimeEventRef` mantêm valores entre renders
+- **Sem JSON.stringify:** Comparação leve por length + campos chave
+- **Polling 3s:** Apenas conversa ativa + aba visível
+- **registerEvent via polling:** Apenas quando há gap > 5s do Realtime
+- **Dedup por ID:** Intacto
+- **Enterprise V2 flags:** Mantidas
+- **Realtime handlers:** Apenas adições
+- **Catch-up logic:** Intacto
+
+---
+
+## Critério de Aceite
+
+| Cenário | Esperado |
+|---------|----------|
+| Cliente envia texto (conversa aberta) | Aparece em < 3s |
+| Cliente envia áudio (conversa aberta) | Aparece em < 3s com placeholder |
+| Áudio termina de processar | UI atualiza automaticamente |
+| Aba em background | Polling 10s (não 3s) |
+| Realtime funcionando | Mensagem aparece instantaneamente |
+| Realtime falha silenciosamente | Polling 3s detecta |
+| Console | Zero erros |
+
+---
+
+## Testes Pós-Implementação
+
+1. Abrir conversa no Inbox
+2. Enviar texto do WhatsApp cliente → deve aparecer instantaneamente
+3. Enviar áudio do WhatsApp cliente → deve aparecer em < 3s
+4. Minimizar aba e enviar mensagem → ao voltar, deve aparecer
+5. Verificar Console: polling 3s quando ativo, 10s quando background
+6. Verificar: não precisar trocar de conversa para ver mensagem
 
