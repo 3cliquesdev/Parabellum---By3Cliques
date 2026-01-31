@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Pencil, MessageSquare, Phone, FileText, ArrowRightLeft, Trash2, Star } from "lucide-react";
+import { Pencil, MessageSquare, Phone, FileText, ArrowRightLeft, Trash2, Star, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -22,7 +22,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useDeleteDeal } from "@/hooks/useDeals";
-import { differenceInDays } from "date-fns";
+import { differenceInDays, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import DealDialog from "./DealDialog";
 import ContactSheet from "./ContactSheet";
 import MoveToPipelineDialog from "./deals/MoveToPipelineDialog";
@@ -224,23 +225,42 @@ export default function KanbanCard({
             )}
           </div>
 
-          {/* Line 3: Sales Rep (optional) */}
-          {deal.assigned_user && (
-            <div className="flex items-center gap-1.5 pt-1">
-              <Avatar className="h-5 w-5 flex-shrink-0">
-                <AvatarImage 
-                  src={deal.assigned_user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${deal.assigned_user.full_name}`} 
-                  alt={deal.assigned_user.full_name} 
-                />
-                <AvatarFallback className="text-[9px] bg-muted text-muted-foreground">
-                  {deal.assigned_user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-xs text-muted-foreground truncate">
-                {deal.assigned_user.full_name}
-              </span>
-            </div>
-          )}
+          {/* Line 3: Sales Rep + Date */}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            {deal.assigned_user ? (
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <Avatar className="h-5 w-5 flex-shrink-0">
+                  <AvatarImage 
+                    src={deal.assigned_user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${deal.assigned_user.full_name}`} 
+                    alt={deal.assigned_user.full_name} 
+                  />
+                  <AvatarFallback className="text-[9px] bg-muted text-muted-foreground">
+                    {deal.assigned_user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-xs text-muted-foreground truncate">
+                  {deal.assigned_user.full_name}
+                </span>
+              </div>
+            ) : (
+              <div className="flex-1" />
+            )}
+            
+            {/* Data de criação */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground flex-shrink-0">
+                    <Calendar className="h-3 w-3" />
+                    {format(new Date(deal.created_at), "dd/MM/yy", { locale: ptBR })}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Criado em {format(new Date(deal.created_at), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
 
         {/* Quick Actions - hidden by default, show on hover */}
