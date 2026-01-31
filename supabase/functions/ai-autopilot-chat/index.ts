@@ -537,7 +537,8 @@ async function sendWhatsAppMessage(
   message: string,
   conversationId: string,
   whatsappId?: string | null,
-  useQueue: boolean = false
+  useQueue: boolean = false,
+  senderName?: string | null // 🆕 Nome do remetente para prefixar mensagem
 ): Promise<{ success: boolean; error?: any }> {
   try {
     if (whatsappResult.provider === 'meta') {
@@ -549,7 +550,8 @@ async function sendWhatsAppMessage(
         phoneNumberId: whatsappResult.instance.phone_number_id,
         targetNumber: targetNumber?.slice(-4),
         usedWhatsappId: !!extractWhatsAppNumber(whatsappId),
-        source: extractWhatsAppNumber(whatsappId) ? 'whatsapp_id' : 'phone'
+        source: extractWhatsAppNumber(whatsappId) ? 'whatsapp_id' : 'phone',
+        senderName: senderName || 'N/A'
       });
       
       const { data, error } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
@@ -558,7 +560,9 @@ async function sendWhatsAppMessage(
           phone_number: targetNumber, // 🆕 Usa whatsapp_id se disponível
           message,
           conversation_id: conversationId,
-          skip_db_save: true // 🆕 CRÍTICO: Quem chama já salvou a mensagem
+          skip_db_save: true, // 🆕 CRÍTICO: Quem chama já salvou a mensagem
+          sender_name: senderName || undefined, // 🆕 Nome da persona/agente
+          is_bot_message: true // 🆕 Mensagem de IA = bot message (não muda ai_mode)
         }
       });
       
@@ -577,12 +581,15 @@ async function sendWhatsAppMessage(
         phoneNumber: phoneNumber?.replace(/\D/g, '').slice(-4)
       });
       
+      // 🆕 Para Evolution, prefixar manualmente a mensagem com nome em negrito
+      const formattedMessage = senderName ? `*${senderName}*\n${message}` : message;
+      
       const { data, error } = await supabaseClient.functions.invoke('send-whatsapp-message', {
         body: {
           instance_id: whatsappResult.instance.id,
           phone_number: phoneNumber,
           whatsapp_id: whatsappId,
-          message,
+          message: formattedMessage,
           conversation_id: conversationId,
           use_queue: useQueue
         }
@@ -2330,7 +2337,9 @@ Como posso ajudar você hoje?`;
               contact.phone,
               cachedResponse.answer,
               conversationId,
-              contact.whatsapp_id
+              contact.whatsapp_id,
+              false, // useQueue
+              null // Cache response - persona not loaded yet
             );
 
             if (sendResult.success) {
@@ -3710,7 +3719,9 @@ Responda APENAS: skip ou search`
             contact.phone,
             strictResponse,
             conversationId,
-            contact.whatsapp_id
+            contact.whatsapp_id,
+            false, // useQueue
+            persona?.name || null // 🆕 Nome da persona
           );
           
           if (sendResult.success) {
@@ -6981,7 +6992,9 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
               phone_number: targetNumber, // 🆕 Usa whatsapp_id se disponível
               message: assistantMessage,
               conversation_id: conversationId,
-              skip_db_save: true // 🆕 CRÍTICO: Já salvamos na linha 7193
+              skip_db_save: true, // 🆕 CRÍTICO: Já salvamos na linha 7193
+              sender_name: persona?.name || undefined, // 🆕 Nome da persona para prefixar mensagem
+              is_bot_message: true // 🆕 Mensagem de IA = bot message
             },
           });
 
@@ -7011,12 +7024,15 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             whatsappId: contact.whatsapp_id
           });
 
+          // 🆕 Para Evolution, prefixar manualmente a mensagem com nome da persona
+          const formattedMessageEvolution = persona?.name ? `*${persona.name}*\n${assistantMessage}` : assistantMessage;
+          
           const { data: whatsappResponse, error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
             body: {
               instance_id: whatsappInstance.id,
               phone_number: contact.phone,
               whatsapp_id: contact.whatsapp_id,
-              message: assistantMessage,
+              message: formattedMessageEvolution,
             },
           });
 

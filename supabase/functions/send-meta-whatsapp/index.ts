@@ -124,6 +124,7 @@ interface SendMetaWhatsAppRequest {
   };
   conversation_id?: string;      // Para logs e tracking
   skip_db_save?: boolean;        // 🆕 Se true, não salva no banco (frontend faz insert otimista)
+  sender_name?: string;          // 🆕 Nome do remetente para prefixar mensagem (ex: "Miguel Fedes")
 }
 
 interface MetaApiResponse {
@@ -248,17 +249,24 @@ serve(async (req) => {
 
     console.log("[send-meta-whatsapp] 📱 Sending to:", toNumber);
 
+    // 🆕 Formatar mensagem com nome do remetente em negrito (se fornecido)
+    const formatMessageWithSender = (text: string, senderName?: string): string => {
+      if (!senderName || !text) return text;
+      return `*${senderName}*\n${text}`;
+    };
+
     let result: MetaApiResponse;
 
     // ============================================
     // Text Message
     // ============================================
     if (body.message && !body.template && !body.media && !body.interactive) {
+      const formattedMessage = formatMessageWithSender(body.message, body.sender_name);
       result = await sendToMetaApi(instance.phone_number_id, instance.access_token, {
         recipient_type: "individual",
         to: toNumber,
         type: "text",
-        text: { body: body.message },
+        text: { body: formattedMessage },
       });
     }
 
@@ -311,9 +319,12 @@ serve(async (req) => {
         );
       }
 
-      // Add caption for supported media types
+      // Add caption for supported media types (com nome do remetente)
       if (body.media.caption && ["image", "video", "document"].includes(body.media.type)) {
-        mediaPayload.caption = body.media.caption;
+        mediaPayload.caption = formatMessageWithSender(body.media.caption, body.sender_name);
+      } else if (body.sender_name && ["image", "video", "document"].includes(body.media.type)) {
+        // Se não tem caption mas tem sender_name, adicionar apenas o nome
+        mediaPayload.caption = `*${body.sender_name}*`;
       }
 
       // Add filename for documents
