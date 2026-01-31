@@ -125,6 +125,7 @@ interface SendMetaWhatsAppRequest {
   conversation_id?: string;      // Para logs e tracking
   skip_db_save?: boolean;        // 🆕 Se true, não salva no banco (frontend faz insert otimista)
   sender_name?: string;          // 🆕 Nome do remetente para prefixar mensagem (ex: "Miguel Fedes")
+  client_message_id?: string;    // 🆕 ENTERPRISE V2: UUID para reconciliação de status
 }
 
 interface MetaApiResponse {
@@ -361,9 +362,33 @@ serve(async (req) => {
     const messageId = result.messages?.[0]?.id;
     console.log("[send-meta-whatsapp] ✅ Message sent:", messageId);
 
+    // ============================================
+    // 🆕 ENTERPRISE V2: SEMPRE atualizar provider_message_id via client_message_id
+    // Isso funciona mesmo com skip_db_save=true
+    // ============================================
+    if (body.client_message_id && messageId) {
+      console.log(`[send-meta-whatsapp] 📝 Updating message ${body.client_message_id} with provider_message_id: ${messageId}`);
+      
+      const { error: updateError } = await supabase
+        .from("messages")
+        .update({ 
+          provider_message_id: messageId,
+          status: 'dispatched', // Novo status = enviado para Meta
+          external_id: messageId, // Manter compatibilidade com legacy
+        })
+        .eq("client_message_id", body.client_message_id);
+      
+      if (updateError) {
+        console.error("[send-meta-whatsapp] ⚠️ Failed to update provider_message_id:", updateError);
+      } else {
+        console.log("[send-meta-whatsapp] ✅ provider_message_id saved");
+      }
+    }
+
     // Salvar mensagem no banco (se conversation_id fornecido E skip_db_save não está setado)
-    // 🆕 Se skip_db_save=true, o frontend já fez insert otimista
-    if (body.conversation_id && messageId && !body.skip_db_save) {
+    // 🆕 Se skip_db_save=true E tem client_message_id, o UPDATE acima já salvou o wamid
+    // Só fazer INSERT para casos legacy (sem client_message_id)
+    if (body.conversation_id && messageId && !body.skip_db_save && !body.client_message_id) {
       const messageContent = body.message || 
                              (body.template ? `[Template: ${body.template.name}]` : "") ||
                              (body.media ? `[${body.media.type}]` : "") ||
@@ -374,6 +399,7 @@ serve(async (req) => {
         content: messageContent,
         sender_type: "user",
         external_id: messageId,
+        provider_message_id: messageId, // 🆕 Também salvar no campo novo
         metadata: {
           whatsapp_provider: "meta",
           sent_via: "send-meta-whatsapp",
@@ -381,9 +407,9 @@ serve(async (req) => {
         },
       });
       
-      console.log("[send-meta-whatsapp] 💾 Mensagem salva no banco");
+      console.log("[send-meta-whatsapp] 💾 Mensagem salva no banco (legacy path)");
     } else if (body.skip_db_save) {
-      console.log("[send-meta-whatsapp] ⏭️ skip_db_save=true - frontend fez insert");
+      console.log("[send-meta-whatsapp] ⏭️ skip_db_save=true - frontend fez insert" + (body.client_message_id ? " + UPDATE com wamid" : ""));
     }
 
     // ============================================
