@@ -167,29 +167,56 @@ export function SuperComposer({
     let finalFile = audioFile;
     
     if (needsTranscoding(audioFile.type)) {
-      console.log('[SuperComposer] 🔄 Transcoding audio for Meta compatibility...');
+      console.log('[SuperComposer] 🔄 Audio needs transcoding:', audioFile.type);
+      
+      // Show toast immediately
       toast({
         title: "Convertendo áudio...",
-        description: "Preparando para envio ao WhatsApp",
+        description: "Preparando formato compatível com WhatsApp",
       });
       
       try {
+        console.log('[SuperComposer] Starting FFmpeg WASM transcoding...');
+        const startTime = performance.now();
+        
         const { blob, mimeType } = await transcodeToOgg(audioFile, audioFile.type);
-        finalFile = new File(
-          [blob], 
-          audioFile.name.replace(/\.(webm|wav|mp3)$/i, '.ogg'), 
-          { type: mimeType }
-        );
-        console.log('[SuperComposer] ✅ Audio transcoded:', {
-          originalType: audioFile.type,
-          newType: mimeType,
-          originalSize: audioFile.size,
-          newSize: finalFile.size,
-        });
+        
+        const duration = Math.round(performance.now() - startTime);
+        
+        // Check if transcoding actually happened (mimeType changed)
+        if (mimeType !== audioFile.type) {
+          finalFile = new File(
+            [blob], 
+            audioFile.name.replace(/\.(webm|wav|mp3)$/i, '.ogg'), 
+            { type: mimeType }
+          );
+          
+          console.log('[SuperComposer] ✅ Audio transcoded successfully:', {
+            originalType: audioFile.type,
+            newType: mimeType,
+            originalSize: `${Math.round(audioFile.size / 1024)}KB`,
+            newSize: `${Math.round(finalFile.size / 1024)}KB`,
+            duration: `${duration}ms`,
+          });
+          
+          toast({
+            title: "Áudio convertido!",
+            description: `Pronto para envio (${Math.round(finalFile.size / 1024)}KB)`,
+          });
+        } else {
+          console.log('[SuperComposer] ⚠️ Transcoding returned same type, using original');
+        }
       } catch (error) {
-        console.error('[SuperComposer] ❌ Transcoding failed, using original:', error);
+        console.error('[SuperComposer] ❌ Transcoding failed:', error);
+        toast({
+          title: "Aviso",
+          description: "Não foi possível converter o áudio. Tentando enviar original.",
+          variant: "default",
+        });
         // Continue with original file if transcoding fails
       }
+    } else {
+      console.log('[SuperComposer] ✅ Audio already compatible:', audioFile.type);
     }
     
     setPendingAttachments((prev) => [...prev, { file: finalFile }]);

@@ -225,7 +225,16 @@ export function AudioPlayer({
       role="region"
       aria-label="Audio player"
     >
-      <audio ref={audioRef} src={url} preload="metadata" />
+      {/* Use source tags to help browser select correct codec */}
+      <audio ref={audioRef} preload="metadata">
+        <source src={url} type="audio/ogg" />
+        <source src={url} type="audio/opus" />
+        <source src={url} type="audio/mpeg" />
+        <source src={url} type="audio/mp4" />
+        <source src={url} type="audio/webm" />
+        <source src={url} />
+        Seu navegador não suporta reprodução de áudio.
+      </audio>
 
       {/* Play/Pause Button */}
       <Button

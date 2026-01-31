@@ -27,6 +27,8 @@ const DEFAULT_ACCEPTED_TYPES = [
   "audio/mpeg",
   "audio/mp3",
   "audio/wav",
+  "audio/webm", // Chrome/Edge record in WebM - must accept for transcoding
+  "audio/opus",
   "video/mp4",
   "video/webm",
 ];
