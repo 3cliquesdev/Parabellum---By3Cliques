@@ -600,8 +600,8 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
           )}
 
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto bg-[hsl(var(--chat-bg))]">
-            <div className="p-4 md:p-6">
-              <div className="max-w-3xl mx-auto w-full">
+            <div className="px-4 py-6 md:px-6">
+              <div className="max-w-4xl mx-auto w-full">
                 {conversation.status === "closed" && (
                   <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 text-center">
                     <p className="text-sm text-green-700 dark:text-green-400 font-medium">

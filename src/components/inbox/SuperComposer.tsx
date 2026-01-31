@@ -645,8 +645,8 @@ export function SuperComposer({
       )}
 
       {/* ========== WRAPPER ENTERPRISE (WhatsApp Web Style) ========== */}
-      <div className="max-w-[1180px] mx-auto px-4 py-3">
-        <div className="flex items-end gap-2 rounded-2xl border border-[hsl(var(--chat-border))] bg-background p-2">
+      <div className="max-w-[1180px] mx-auto px-4 py-2">
+        <div className="flex items-end gap-3 rounded-2xl border border-[hsl(var(--chat-border))] bg-background p-2.5">
           {isRecordingAudio ? (
             <AudioRecorder
               onRecordingComplete={handleAudioComplete}
@@ -711,7 +711,7 @@ export function SuperComposer({
                   className={cn(
                     "w-full resize-none bg-transparent border-0",
                     "text-[15px] leading-[22px]",
-                    "px-3 py-2",
+                    "px-4 py-2.5",
                     "min-h-[44px] max-h-[160px]",
                     "focus-visible:ring-0 focus-visible:ring-offset-0",
                     "placeholder:text-muted-foreground",
@@ -741,7 +741,7 @@ export function SuperComposer({
         </div>
 
         {/* HINT ENTERPRISE */}
-        <div className="mt-1 flex justify-end text-[11px] text-muted-foreground">
+        <div className="mt-1.5 flex justify-end text-[11px] text-muted-foreground">
           Enter envia • Shift+Enter quebra linha
         </div>
       </div>
