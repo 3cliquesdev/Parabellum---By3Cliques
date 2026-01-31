@@ -1,183 +1,109 @@
 
-# Plano: Implementar SLA Dinâmico no Inbox (Enterprise)
+# Plano: Corrigir Busca que Não Encontra Conversas Abertas
 
-## Diagnóstico Confirmado
+## Problema Confirmado
 
-### Problema Atual
-O campo `inbox_view.sla_status` é **estático** - calculado apenas no momento do INSERT/UPDATE da mensagem e **nunca é recalculado** com o passar do tempo.
+A busca client-side filtra um array (`inboxItems`) que já veio limitado a 5000 registros ordenados por `updated_at ASC` (mais antigas primeiro). Conversas abertas recentes ficam **fora do recorte**.
 
-### Impacto
-| Componente | Problema |
-|------------|----------|
-| Badge "SLA Excedido" | Sempre mostra 0 (lê `sla_status = 'critical'` estático) |
-| Lista "SLA Excedido" | Sempre vazia (filtra por `sla_status = 'critical'`) |
-| Conversas 44h+ sem resposta | Aparecem como "OK" no banco |
+## Causa Raiz
 
-### Código Problemático
-
-**Edge Function `get-inbox-counts` (linhas 227-228):**
 ```typescript
-// ❌ PROBLEMA: Usa campo estático que nunca muda
-const slaCritical = inbox.filter((i: any) => i.sla_status === "critical").length;
-const slaWarning = inbox.filter((i: any) => i.sla_status === "warning").length;
+// src/hooks/useInboxView.tsx linha 63
+let query = supabase
+  .from("inbox_view")
+  .select("*")
+  .order("updated_at", { ascending: true }) // ❌ Mais antigas primeiro
+  .limit(5000); // ❌ Corta conversas recentes
 ```
 
-**Hook `useInboxView` (linhas 149-152):**
-```typescript
-// ❌ PROBLEMA: Filtra pelo campo estático
-if (filters.slaStatus) {
-  result = result.filter(item => item.sla_status === filters.slaStatus);
-}
-```
+A busca é feita em cima desse array pré-carregado, então conversas recentes (open) não são encontradas.
 
-**Inbox.tsx (linhas 334-336):**
-```typescript
-// ❌ PROBLEMA: Filtro SLA não faz nada - só retorna tudo
-case "sla":
-  return result.filter(c => c.status !== 'closed');
-```
+## Solução: Query Dedicada para Busca
+
+Quando `hasActiveSearch === true`, a busca deve ir **direto ao banco** com uma query própria, em vez de filtrar o array já limitado.
 
 ---
 
-## Solução: SLA Calculado Dinamicamente
+## Mudanças Necessárias
 
-### Regras de SLA (Enterprise)
-```
-SLA Critical (≥4h): 
-  status = 'open' 
-  AND last_sender_type = 'contact' 
-  AND (now - last_message_at) >= 4 horas
+### Mudança 1: Criar Hook `useInboxSearch` (Query Dedicada)
 
-SLA Warning (1h-4h):
-  status = 'open'
-  AND last_sender_type = 'contact'
-  AND (now - last_message_at) >= 1 hora
-  AND (now - last_message_at) < 4 horas
-```
+**Novo arquivo:** `src/hooks/useInboxSearch.tsx`
 
----
-
-## Implementação em 4 Etapas
-
-### Etapa 1: Edge Function `get-inbox-counts` (Badge)
-
-**Arquivo:** `supabase/functions/get-inbox-counts/index.ts`
-
-Substituir cálculo estático por **SQL dinâmico** (eficiência enterprise):
+Hook que consulta diretamente o banco quando há busca ativa:
 
 ```typescript
-// DEPOIS: Queries SQL otimizadas (sem trazer dados desnecessários)
-const [slaCriticalRes, slaWarningRes] = await Promise.all([
-  // SLA Critical: ≥4h sem resposta do agente
-  supabaseAdmin
-    .from("inbox_view")
-    .select("conversation_id", { count: "exact", head: true })
-    .eq("status", "open")
-    .eq("last_sender_type", "contact")
-    .lt("last_message_at", new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()),
+export function useInboxSearch(searchTerm: string) {
+  const { user } = useAuth();
+  const debouncedSearch = useDebounce(searchTerm, 300);
   
-  // SLA Warning: 1h-4h sem resposta
-  supabaseAdmin
-    .from("inbox_view")
-    .select("conversation_id", { count: "exact", head: true })
-    .eq("status", "open")
-    .eq("last_sender_type", "contact")
-    .lt("last_message_at", new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString())
-    .gte("last_message_at", new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()),
-]);
-
-const slaCritical = slaCriticalRes.count ?? 0;
-const slaWarning = slaWarningRes.count ?? 0;
-```
-
-### Etapa 2: Criar Hook Dedicado `useSlaExceededItems`
-
-**Arquivo:** `src/hooks/useSlaExceededItems.tsx` (NOVO)
-
-Hook que consulta diretamente o banco com a mesma lógica do badge:
-
-```typescript
-export function useSlaExceededItems() {
   return useQuery({
-    queryKey: ["sla-exceeded-items", user?.id],
+    queryKey: ["inbox-search", debouncedSearch, user?.id],
     queryFn: async (): Promise<InboxViewItem[]> => {
-      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+      if (!debouncedSearch || debouncedSearch.trim().length < 2) return [];
       
+      const searchLower = debouncedSearch.toLowerCase().trim();
+      
+      // Query direta ao banco - SEM LIMIT ARTIFICIAL
+      // Ordenação: open primeiro, depois por recência
       const { data, error } = await supabase
         .from("inbox_view")
         .select("*")
-        .eq("status", "open")
-        .eq("last_sender_type", "contact")
-        .lt("last_message_at", fourHoursAgo)
-        .order("last_message_at", { ascending: true })
-        .limit(5000);
+        .or(
+          `contact_name.ilike.%${searchLower}%,` +
+          `contact_email.ilike.%${searchLower}%,` +
+          `contact_phone.ilike.%${searchLower}%,` +
+          `contact_id.ilike.%${searchLower}%,` +
+          `conversation_id.ilike.%${searchLower}%`
+        )
+        .order("status", { ascending: true }) // 'open' vem antes de 'closed' alfabeticamente
+        .order("last_message_at", { ascending: false }) // Mais recentes primeiro
+        .limit(100); // Limite razoável para resultados de busca
       
       if (error) throw error;
       return data as InboxViewItem[];
     },
     staleTime: 5000,
-    refetchInterval: 60000,
-    enabled: !!user?.id,
+    enabled: !!user?.id && debouncedSearch.length >= 2,
   });
 }
 ```
 
-### Etapa 3: Atualizar `useInboxView` - Filtro Dinâmico
-
-**Arquivo:** `src/hooks/useInboxView.tsx`
-
-Modificar a função `applyFilters` para calcular SLA dinamicamente:
-
-```typescript
-// DEPOIS (linhas 149-152): Cálculo dinâmico
-if (filters.slaStatus) {
-  const now = Date.now();
-  const ONE_HOUR_MS = 60 * 60 * 1000;
-  const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
-  
-  result = result.filter(item => {
-    // SLA só aplica a mensagens de clientes em conversas abertas
-    if (item.status === 'closed') return false;
-    if (item.last_sender_type !== 'contact') return false;
-    
-    const lastMsg = new Date(item.last_message_at).getTime();
-    const elapsed = now - lastMsg;
-    
-    if (filters.slaStatus === 'critical') {
-      return elapsed >= FOUR_HOURS_MS;
-    }
-    if (filters.slaStatus === 'warning') {
-      return elapsed >= ONE_HOUR_MS && elapsed < FOUR_HOURS_MS;
-    }
-    return true;
-  });
-}
-```
-
-### Etapa 4: Atualizar `Inbox.tsx` - Usar Hook Dedicado
+### Mudança 2: Atualizar `Inbox.tsx` para Usar Hook de Busca
 
 **Arquivo:** `src/pages/Inbox.tsx`
 
-Integrar `useSlaExceededItems` no filtro "sla":
-
 ```typescript
 // Importar
-import { useSlaExceededItems } from "@/hooks/useSlaExceededItems";
+import { useInboxSearch } from "@/hooks/useInboxSearch";
 
 // Dentro do componente
-const { data: slaExceededItems } = useSlaExceededItems();
+const { data: searchResults, isLoading: searchLoading } = useInboxSearch(filters.search || "");
 
-// No filteredConversations useMemo (logo após filter === "mine")
-if (filter === "sla") {
-  if (!slaExceededItems || slaExceededItems.length === 0) {
+// No useMemo de filteredConversations
+if (hasActiveSearch) {
+  if (!searchResults || searchResults.length === 0) {
     return [];
   }
-  return slaExceededItems.map(item => {
+  
+  // searchResults já vem do banco ordenado corretamente
+  return searchResults.map(item => {
     const fullConv = fullConversations.find(c => c.id === item.conversation_id);
     return fullConv || inboxItemToConversation(item);
   });
 }
 ```
+
+### Mudança 3: (Opcional) Inverter Ordenação Padrão
+
+Se quiser que conversas recentes apareçam na lista normal (mesmo sem busca):
+
+```typescript
+// src/hooks/useInboxView.tsx linha 63
+.order("updated_at", { ascending: false }) // DESC: mais recentes primeiro
+```
+
+**Nota**: Isso muda o comportamento do inbox. Atualmente prioriza "mais antigas = maior tempo de espera". Se mudar para DESC, prioriza "mais recentes".
 
 ---
 
@@ -185,10 +111,8 @@ if (filter === "sla") {
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/get-inbox-counts/index.ts` | Calcular slaCritical/slaWarning via SQL dinâmico |
-| `src/hooks/useSlaExceededItems.tsx` | **CRIAR** - Hook dedicado para SLA excedido |
-| `src/hooks/useInboxView.tsx` | Filtro slaStatus calculado dinamicamente |
-| `src/pages/Inbox.tsx` | Usar novo hook no filtro "sla" |
+| `src/hooks/useInboxSearch.tsx` | **CRIAR** - Hook dedicado para busca |
+| `src/pages/Inbox.tsx` | Usar `useInboxSearch` quando há busca ativa |
 
 ---
 
@@ -196,72 +120,57 @@ if (filter === "sla") {
 
 ```
 ┌─────────────────────────────────────────────────┐
-│           BADGE (get-inbox-counts)              │
+│          USUÁRIO DIGITA "fabiosou..."           │
 ├─────────────────────────────────────────────────┤
-│ SELECT count(*) FROM inbox_view                 │
-│ WHERE status = 'open'                           │
-│   AND last_sender_type = 'contact'              │
-│   AND last_message_at < now() - interval '4h'   │
-│                                                 │
-│ Resultado: slaCritical = 67 ✅                  │
+│ hasActiveSearch = true                          │
+│ useInboxSearch("fabiosou1542@gmail.com")        │
 └─────────────────────────────────────────────────┘
                       ↓
 ┌─────────────────────────────────────────────────┐
-│         LISTAGEM (useSlaExceededItems)          │
+│     QUERY DEDICADA AO BANCO (useInboxSearch)    │
 ├─────────────────────────────────────────────────┤
 │ SELECT * FROM inbox_view                        │
-│ WHERE status = 'open'                           │
-│   AND last_sender_type = 'contact'              │
-│   AND last_message_at < now() - interval '4h'   │
-│ ORDER BY last_message_at ASC                    │
+│ WHERE contact_email ILIKE '%fabiosou%'          │
+│   OR contact_name ILIKE '%fabiosou%'            │
+│   OR contact_phone ILIKE '%fabiosou%'           │
+│ ORDER BY status ASC, last_message_at DESC       │
+│ LIMIT 100                                       │
 │                                                 │
-│ Resultado: 67 conversas ✅                      │
+│ SEM dependência do array pré-carregado!         │
 └─────────────────────────────────────────────────┘
                       ↓
 ┌─────────────────────────────────────────────────┐
-│              CONSISTÊNCIA GARANTIDA             │
+│              RESULTADO NA UI                    │
 ├─────────────────────────────────────────────────┤
-│ Badge = 67                                      │
-│ Lista = 67 itens                                │
-│ ✅ MESMA QUERY = MESMA CONTAGEM                 │
+│ 1. Conversa OPEN (2614b711...) ✅ APARECE       │
+│ 2. Conversas fechadas (por recência)            │
+│                                                 │
+│ Total: 5 resultados, open no topo ✅            │
 └─────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Validação Pós-Implementação
+## Testes de Validação
 
-1. Abrir Inbox
-2. Verificar badge "SLA Excedido" mostra número > 0 (ex: 67)
-3. Clicar em "SLA Excedido"
-4. **Esperado**: Lista com exatamente N conversas (igual ao badge)
-5. **Antes do fix**: Badge = 0, Lista = vazia
+1. Buscar por `fabiosou1542@gmail.com`
+2. **Esperado**: Conversa OPEN `2614b711...` aparece no topo
+3. **Antes do fix**: Só conversas fechadas apareciam
 
 ### Testes Adicionais
-- Responder conversa com SLA crítico → sai da lista (imediatamente)
-- Nova mensagem de cliente + esperar 4h → entra na lista (dinâmico)
-- Badge e lista sempre iguais (consistência)
-- Campo `sla_status` do banco NÃO é mais usado para filtros
+- Buscar por número de telefone: `5511969656723`
+- Buscar por ID de conversa: `2614b711`
+- Buscar por nome: `Ronildo`
+- Todas devem retornar a conversa OPEN primeiro
 
 ---
 
-## Conformidade com Regras do CRM
+## Conformidade com Regras
 
 | Regra | Conformidade |
 |-------|--------------|
-| **Upgrade, não downgrade** | ✅ SLA agora é preciso em tempo real |
-| **Zero regressão** | ✅ Outros filtros continuam funcionando |
-| **Consistência** | ✅ Badge e lista usam mesma lógica SQL |
-| **Read-only** | ✅ Apenas SELECT, nunca UPDATE |
-| **Enterprise** | ✅ COUNT via SQL, não em JS |
-
----
-
-## Observação sobre Campo Estático
-
-O campo `inbox_view.sla_status` **continua existindo** por compatibilidade, mas **não será mais usado** para:
-- Badge do Inbox
-- Filtro "SLA Excedido"
-- Qualquer funcionalidade crítica de tempo
-
-A fonte de verdade passa a ser o cálculo dinâmico: `now() - last_message_at`.
+| Upgrade, não downgrade | ✅ Busca agora encontra todas as conversas |
+| Zero regressão | ✅ Lista normal (sem busca) não é afetada |
+| Consistência | ✅ Busca vai direto ao banco, sem depender de cache |
+| Read-only | ✅ Apenas SELECT, nunca UPDATE |
+| Enterprise | ✅ Query otimizada com ILIKE no banco |
