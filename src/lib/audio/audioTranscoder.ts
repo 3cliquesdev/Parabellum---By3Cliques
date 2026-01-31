@@ -45,7 +45,8 @@ async function getFFmpeg(): Promise<FFmpeg> {
     
     try {
       // Load FFmpeg with multi-threaded support
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+      // CDN fallback: jsDelivr costuma ser mais estável do que unpkg em alguns ambientes
+      const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
       
       console.log('[AudioTranscoder] Fetching FFmpeg core from:', baseURL);
       
@@ -56,7 +57,14 @@ async function getFFmpeg(): Promise<FFmpeg> {
       
       console.log('[AudioTranscoder] Core URLs created, loading instance...');
       
-      await instance.load({ coreURL, wasmURL });
+      // Evitar travar indefinidamente em ambientes onde o download do core/wasm falha.
+      const LOAD_TIMEOUT_MS = 15000;
+      await Promise.race([
+        instance.load({ coreURL, wasmURL }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('FFmpeg load timeout')), LOAD_TIMEOUT_MS)
+        ),
+      ]);
       
       console.log('[AudioTranscoder] ✅ FFmpeg loaded successfully');
       ffmpeg = instance;

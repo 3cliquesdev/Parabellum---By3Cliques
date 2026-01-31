@@ -14,7 +14,7 @@ import { useSendMessageInstant } from "@/hooks/useSendMessageInstant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getFreshMediaUrl } from "@/hooks/useMediaUrls";
-// FFmpeg WASM transcoding removed - backend handles conversion
+import { needsTranscoding, transcodeToOgg } from "@/lib/audio/audioTranscoder";
 import {
   Send,
   StickyNote,
@@ -162,23 +162,68 @@ export function SuperComposer({
 
   const handleAudioComplete = async (audioFile: File) => {
     setIsRecordingAudio(false);
-    
-    // BYPASS FFmpeg WASM: O backend (send-meta-whatsapp) já faz conversão WebM → OGG
-    // Isso evita travamentos da transcodificação client-side em alguns navegadores
-    console.log('[SuperComposer] 📤 Sending audio directly (backend will convert):', {
+
+    // ✅ WhatsApp Meta NÃO aceita WebM como áudio. Precisamos transcodificar para OGG.
+    let finalFile = audioFile;
+
+    console.log('[SuperComposer] 🎙️ Audio recorded:', {
       type: audioFile.type,
       size: `${Math.round(audioFile.size / 1024)}KB`,
       name: audioFile.name,
     });
-    
-    // Mostrar toast de progresso
+
+    if (needsTranscoding(audioFile.type)) {
+      toast({
+        title: "Convertendo áudio...",
+        description: "Preparando formato compatível com WhatsApp",
+      });
+
+      try {
+        const TRANSCODE_TIMEOUT_MS = 45000;
+        const startTime = performance.now();
+
+        const { blob, mimeType } = await Promise.race([
+          transcodeToOgg(audioFile, audioFile.type),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Transcoding timeout')), TRANSCODE_TIMEOUT_MS)
+          ),
+        ]);
+
+        // Se a conversão ocorreu de fato, gerar um File novo
+        if (mimeType !== audioFile.type) {
+          finalFile = new File(
+            [blob],
+            audioFile.name.replace(/\.(webm|wav|mp3)$/i, '.ogg'),
+            { type: mimeType }
+          );
+        }
+
+        console.log('[SuperComposer] ✅ Audio ready:', {
+          originalType: audioFile.type,
+          finalType: finalFile.type,
+          originalSizeKB: Math.round(audioFile.size / 1024),
+          finalSizeKB: Math.round(finalFile.size / 1024),
+          tookMs: Math.round(performance.now() - startTime),
+        });
+      } catch (err) {
+        console.error('[SuperComposer] ❌ Audio transcoding failed:', err);
+        toast({
+          title: "Falha ao converter áudio",
+          description: "Não consegui preparar o áudio para o WhatsApp. Tente gravar novamente.",
+          variant: "destructive",
+        });
+        // Não faz upload de WebM para WhatsApp Meta (não chega do outro lado)
+        return;
+      }
+    }
+
     toast({
       title: "Enviando áudio...",
-      description: "Preparando para envio",
+      description: "Fazendo upload",
     });
-    
-    setPendingAttachments((prev) => [...prev, { file: audioFile }]);
-    await upload(audioFile);
+
+    setPendingAttachments((prev) => [...prev, { file: finalFile }]);
+    await upload(finalFile);
   };
 
   // Helper para detectar tipo de mídia (Evolution API)
