@@ -9,6 +9,7 @@ import IntegrationsConfigCard from "@/components/settings/IntegrationsConfigCard
 import KiwifyIntegrationCard from "@/components/settings/KiwifyIntegrationCard";
 import AIModelConfigCard from "@/components/settings/AIModelConfigCard";
 import { AITrainerStatsWidget } from "@/components/settings/AITrainerStatsWidget";
+import InstagramSecretsCard from "@/components/settings/InstagramSecretsCard";
 
 export default function IntegrationsSettings() {
   const { hasPermission, loading } = useRolePermissions();
@@ -55,6 +56,7 @@ export default function IntegrationsSettings() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <AIModelConfigCard />
         <AITrainerStatsWidget />
+        <InstagramSecretsCard />
         <KiwifyIntegrationCard />
         <EmailConfigCard />
         <SecretsConfigCard />
