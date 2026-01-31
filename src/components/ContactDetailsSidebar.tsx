@@ -121,10 +121,10 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
             </h3>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                {contact.status === 'lead' ? '🎯 Lead' :
-                 contact.status === 'qualified' ? '✅ Qualificado' :
-                 contact.status === 'customer' ? '⭐ Cliente' :
-                 contact.status === 'inactive' ? '😴 Inativo' : '❌ Churned'}
+                {contact.status === 'lead' ? 'Lead' :
+                 contact.status === 'qualified' ? 'Qualificado' :
+                 contact.status === 'customer' ? 'Cliente' :
+                 contact.status === 'inactive' ? 'Inativo' : 'Churned'}
               </Badge>
               {contact.total_ltv && contact.total_ltv > 0 && (
                 <span className="text-xs font-bold text-success">

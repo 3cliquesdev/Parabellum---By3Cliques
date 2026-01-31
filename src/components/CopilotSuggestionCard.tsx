@@ -96,7 +96,7 @@ export default function CopilotSuggestionCard({
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
             <p className="text-sm font-medium text-foreground">
-              💡 Modo Copilot Ativo
+              Copilot ativo
             </p>
           </div>
           <Button 
