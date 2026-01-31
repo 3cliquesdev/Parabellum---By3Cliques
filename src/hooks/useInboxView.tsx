@@ -146,9 +146,29 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
     }
   }
 
-  // SLA status filter
+  // SLA status filter - CÁLCULO DINÂMICO (não usa campo estático sla_status)
+  // Regras: critical >= 4h, warning >= 1h && < 4h
   if (filters.slaStatus) {
-    result = result.filter(item => item.sla_status === filters.slaStatus);
+    const now = Date.now();
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+    
+    result = result.filter(item => {
+      // SLA só se aplica a mensagens de clientes em conversas abertas
+      if (item.status === 'closed') return false;
+      if (item.last_sender_type !== 'contact') return false;
+      
+      const lastMsg = new Date(item.last_message_at).getTime();
+      const elapsed = now - lastMsg;
+      
+      if (filters.slaStatus === 'critical') {
+        return elapsed >= FOUR_HOURS_MS;
+      }
+      if (filters.slaStatus === 'warning') {
+        return elapsed >= ONE_HOUR_MS && elapsed < FOUR_HOURS_MS;
+      }
+      return true;
+    });
   }
 
   // Has audio filter

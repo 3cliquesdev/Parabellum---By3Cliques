@@ -216,17 +216,51 @@ serve(async (req) => {
     const unassigned = unassignedRes.count ?? 0;
 
     // -------- Derived counts from inbox_view (unread / sla / last_sender)
-    const { data: inboxRows, error: inboxErr } = await applyVisibility(
-      supabaseAdmin.from("inbox_view").select("conversation_id, sla_status, unread_count, last_sender_type, status, assigned_to")
-    ).limit(5000);
+    // SLA é calculado DINAMICAMENTE baseado em timestamps (não usa campo estático sla_status)
+    const slaTimestamp = Date.now();
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+    const oneHourAgo = new Date(slaTimestamp - ONE_HOUR_MS).toISOString();
+    const fourHoursAgo = new Date(slaTimestamp - FOUR_HOURS_MS).toISOString();
+
+    // Queries paralelas otimizadas para SLA (COUNT direto no SQL, sem trazer dados)
+    const [
+      { data: inboxRows, error: inboxErr },
+      { count: slaCriticalCount },
+      { count: slaWarningCount },
+    ] = await Promise.all([
+      // Query principal para unread e notResponded
+      applyVisibility(
+        supabaseAdmin.from("inbox_view").select("conversation_id, unread_count, last_sender_type, status, assigned_to")
+      ).limit(5000),
+      
+      // SLA Critical: >= 4h sem resposta (COUNT direto)
+      supabaseAdmin
+        .from("inbox_view")
+        .select("conversation_id", { count: "exact", head: true })
+        .eq("status", "open")
+        .eq("last_sender_type", "contact")
+        .lt("last_message_at", fourHoursAgo),
+      
+      // SLA Warning: 1h-4h sem resposta (COUNT direto)
+      supabaseAdmin
+        .from("inbox_view")
+        .select("conversation_id", { count: "exact", head: true })
+        .eq("status", "open")
+        .eq("last_sender_type", "contact")
+        .lt("last_message_at", oneHourAgo)
+        .gte("last_message_at", fourHoursAgo),
+    ]);
     
     if (inboxErr) throw inboxErr;
     const inbox = inboxRows || [];
 
     const inboxActive = inbox.filter((i: any) => i.status !== "closed");
-    const slaCritical = inbox.filter((i: any) => i.sla_status === "critical").length;
-    const slaWarning = inbox.filter((i: any) => i.sla_status === "warning").length;
+    const slaCritical = slaCriticalCount ?? 0;
+    const slaWarning = slaWarningCount ?? 0;
     const notResponded = inboxActive.filter((i: any) => i.last_sender_type === "contact").length;
+    
+    console.log("[get-inbox-counts] SLA dinâmico calculado:", { slaCritical, slaWarning, fourHoursAgo, oneHourAgo });
     
     // Conversas do usuário atual com última mensagem do cliente (aguardando resposta do agente)
     // Query direta sem applyVisibility para garantir contagem precisa para o usuário

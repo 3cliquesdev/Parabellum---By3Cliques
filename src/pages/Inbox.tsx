@@ -4,6 +4,7 @@ import { useInboxView, useInboxCounts, type InboxFilters as InboxViewFiltersType
 import { useConversations } from "@/hooks/useConversations";
 import { useMyNotRespondedInboxItems } from "@/hooks/useMyNotRespondedInboxItems";
 import { useMyInboxItems } from "@/hooks/useMyInboxItems";
+import { useSlaExceededItems } from "@/hooks/useSlaExceededItems";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useDepartments } from "@/hooks/useDepartments";
@@ -120,6 +121,9 @@ export default function Inbox() {
   
   // 🔒 Hook dedicado para "Minhas" - consulta direta ao banco para evitar cache stale
   const { data: myInboxItems } = useMyInboxItems();
+  
+  // 🔒 Hook dedicado para "SLA Excedido" - cálculo dinâmico baseado em timestamps
+  const { data: slaExceededItems } = useSlaExceededItems();
   
   const { data: departments } = useDepartments();
   const { data: teams } = useTeams();
@@ -332,8 +336,15 @@ export default function Inbox() {
         return result.filter(c => c.assigned_to === user?.id && c.status !== 'closed');
       
       case "sla":
-        // SLA critical/warning - would need sla_status field
-        return result.filter(c => c.status !== 'closed');
+        // SLA critical - usar hook dedicado com cálculo dinâmico
+        // 🔒 NÃO usa sla_status estático - calcula (now - last_message_at) >= 4h
+        if (!slaExceededItems || slaExceededItems.length === 0) {
+          return [];
+        }
+        return slaExceededItems.map(item => {
+          const fullConv = fullConversations.find(c => c.id === item.conversation_id);
+          return fullConv || inboxItemToConversation(item);
+        });
       
       case "unassigned":
         return result.filter(c => !c.assigned_to && c.status !== 'closed');
@@ -344,7 +355,7 @@ export default function Inbox() {
       default:
         return result.filter(c => c.status !== 'closed');
     }
-  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, rawInboxItems, inboxItemToConversation, myNotRespondedItems, myInboxItems]);
+  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, rawInboxItems, inboxItemToConversation, myNotRespondedItems, myInboxItems, slaExceededItems]);
 
   // Ordenação e filtragem por tempo de espera
   const orderedConversations = useMemo(() => {
