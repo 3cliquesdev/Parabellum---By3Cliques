@@ -8,6 +8,7 @@ import {
   forceUpdate,
   hardRefresh
 } from "@/lib/build/ensureLatestBuild";
+import { APP_SCHEMA_VERSION } from "@/lib/build/schemaVersion";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -115,9 +116,12 @@ export function SidebarVersionIndicator() {
           <div className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">Versão atual:</span>
             <br />
-            <code className="text-[10px] bg-muted px-1 py-0.5 rounded">
-              {formatBuildId(buildId)}
+            <code className="text-[10px] bg-muted px-1 py-0.5 rounded font-semibold">
+              {APP_SCHEMA_VERSION}
             </code>
+            <span className="text-[9px] text-muted-foreground/70 ml-1">
+              ({formatBuildId(buildId)})
+            </span>
           </div>
           
           {hasUpdate && (
