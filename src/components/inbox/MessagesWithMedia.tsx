@@ -118,7 +118,7 @@ export function MessagesWithMedia({
   }, [retryLoad]);
 
   return (
-    <div className="space-y-3 py-4">
+    <div className="space-y-4 py-3">
       {messages.map((message) => {
         const isCustomer = message.sender_type === 'contact';
         const isSystem = message.sender_type === 'system';

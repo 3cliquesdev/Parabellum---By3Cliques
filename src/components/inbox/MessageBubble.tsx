@@ -138,8 +138,8 @@ export function MessageBubble({
         {/* Bubble */}
         <div
           className={cn(
-            "max-w-[78%] min-w-[120px] px-4 py-3",
-            "text-[14px] leading-5 shadow-sm",
+            "max-w-[75%] min-w-[120px] px-4 py-2.5",
+            "text-[15px] leading-relaxed shadow-sm",
             isCustomer
               ? "bg-slate-900 text-white rounded-2xl rounded-tl-none"
               : isAI
@@ -232,7 +232,7 @@ export function MessageBubble({
           {/* Metadata Row */}
           <div
             className={cn(
-              "text-[11px] mt-1 flex items-center gap-1.5",
+              "text-[11px] mt-1.5 flex items-center gap-1.5",
               isCustomer
                 ? "text-slate-400 dark:text-zinc-500"
                 : isAI
