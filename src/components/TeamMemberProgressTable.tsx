@@ -38,7 +38,7 @@ export function TeamMemberProgressTable({ members }: TeamMemberProgressTableProp
     return (
       <Badge variant="error" className="gap-1">
         <AlertTriangle className="w-3 h-3" />
-        Atenção ⚠️
+        Atenção
       </Badge>
     );
   };

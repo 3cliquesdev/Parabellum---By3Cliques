@@ -125,7 +125,7 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
           <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             <AlertDescription className="text-amber-800 dark:text-amber-200">
-              <strong>⚠️ Conteúdo gerado por IA — revisão obrigatória antes de publicar.</strong>
+              <strong>Conteúdo gerado por IA — revisão obrigatória antes de publicar.</strong>
               <p className="mt-1 text-sm">
                 Este rascunho foi criado automaticamente a partir de uma lacuna de conhecimento.
                 Revise e edite o conteúdo antes de publicar.
@@ -138,7 +138,7 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
           <Alert className="bg-amber-50 border-amber-200">
             <AlertTriangle className="h-4 w-4 text-amber-600" />
             <AlertDescription className="text-amber-800">
-              <strong>⚠️ Artigos similares detectados:</strong>
+              <strong>Artigos similares detectados:</strong>
               <ul className="mt-2 space-y-1 text-sm">
                 {similarArticles.map((similar) => (
                   <li key={similar.id}>

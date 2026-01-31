@@ -458,7 +458,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                   >
                     <FlaskConical className="h-3.5 w-3.5" />
                     <span className="text-xs hidden lg:inline">
-                      {isTestMode ? "🧪 Teste" : "Testar"}
+                      {isTestMode ? "Teste" : "Testar"}
                     </span>
                   </Button>
                 )}
@@ -587,8 +587,8 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                   : "text-violet-800 dark:text-violet-300"
               )}>
                 {isAutopilot && !isAIGlobalEnabled
-                  ? '⚠️ IA Global está DESLIGADA. Esta conversa está na fila IA mas não está sendo respondida. Clique em "Assumir" para atender.'
-                  : isWaitingHuman 
+                  ? 'IA Global está DESLIGADA. Esta conversa está na fila IA mas não está sendo respondida. Clique em "Assumir" para atender.'
+                  : isWaitingHuman
                     ? 'Aguardando atendimento humano. Clique em "Assumir" para atender.'
                     : !conversation?.assigned_to
                       ? 'Conversa no pool geral. Clique em "Assumir" para atender.'
@@ -605,7 +605,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                 {conversation.status === "closed" && (
                   <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 text-center">
                     <p className="text-sm text-green-700 dark:text-green-400 font-medium">
-                      ✅ Esta conversa foi encerrada
+                      Esta conversa foi encerrada
                     </p>
                   </div>
                 )}
@@ -645,9 +645,9 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                 <Bot className="h-4 w-4" />
                 <span>
                   {isAutopilot && !isAIGlobalEnabled 
-                    ? '⚠️ IA Global DESLIGADA - Conversa não atendida' 
+                    ? 'IA Global DESLIGADA - Conversa não atendida' 
                     : isWaitingHuman 
-                      ? 'Aguardando atendimento humano' 
+                      ? 'Aguardando atendimento humano'
                       : 'Modo Piloto Automático'} - Clique em "Assumir" para digitar
                 </span>
               </div>

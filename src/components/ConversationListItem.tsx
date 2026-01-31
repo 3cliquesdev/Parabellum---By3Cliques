@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChannelIcon } from "@/components/ChannelIcon";
 import { SentimentBadge } from "@/components/SentimentBadge";
-import { Star, WifiOff } from "lucide-react";
+import { WifiOff, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow, differenceInMinutes, differenceInHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -78,7 +78,7 @@ function getSLAColor(lastMessageAt: Date): {
       color: "text-yellow-600 dark:text-yellow-400 font-medium", 
       bgColor: "bg-yellow-500/10",
       urgency: "attention",
-      emoji: "🟡"
+      emoji: ""
     };
   }
   // 1-2h: Laranja - Alerta
@@ -87,7 +87,7 @@ function getSLAColor(lastMessageAt: Date): {
       color: "text-orange-500 font-medium", 
       bgColor: "bg-orange-500/10",
       urgency: "alert",
-      emoji: "🟠"
+      emoji: ""
     };
   }
   // 2-4h: Laranja escuro - Urgente
@@ -96,7 +96,7 @@ function getSLAColor(lastMessageAt: Date): {
       color: "text-orange-600 dark:text-orange-400 font-semibold", 
       bgColor: "bg-orange-500/15",
       urgency: "urgent",
-      emoji: "🔶"
+      emoji: ""
     };
   }
   // 4h+: Vermelho - Crítico (pulsante)
@@ -104,7 +104,7 @@ function getSLAColor(lastMessageAt: Date): {
     color: "text-red-500 font-bold animate-pulse", 
     bgColor: "bg-red-500/15",
     urgency: "critical",
-    emoji: "🔴"
+    emoji: ""
   };
 }
 
@@ -265,7 +265,6 @@ function ConversationListItemComponent({
               sla.color,
               sla.urgency !== "normal" && sla.bgColor
             )}>
-              {sla.emoji && `${sla.emoji} `}
               {waitTime}
             </span>
             {unreadCount > 0 && (
@@ -290,16 +289,15 @@ function ConversationListItemComponent({
         {/* Tag de Cliente Verificado */}
           {(conversation.contacts?.kiwify_validated || conversation.contacts?.status === 'customer') ? (
             <Badge 
-              variant="outline" 
-              className="bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-600 text-[10px] px-1.5 py-0 h-5 gap-0.5"
+              variant="secondary" 
+              className="text-[10px] px-1.5 py-0 h-5"
             >
-              <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
               Cliente
             </Badge>
           ) : (
             <Badge 
               variant="outline" 
-              className="bg-muted/50 text-muted-foreground border-muted text-[10px] px-1.5 py-0 h-5"
+              className="text-[10px] px-1.5 py-0 h-5"
             >
               Não Cliente
             </Badge>
@@ -330,9 +328,9 @@ function ConversationListItemComponent({
               }
               className="text-[10px] px-1.5 py-0 h-5"
             >
-              {conversation.ai_mode === 'autopilot' && "🤖"}
-              {conversation.ai_mode === 'copilot' && "🧠"}
-              {conversation.ai_mode === 'disabled' && "👤"}
+              {conversation.ai_mode === 'autopilot' && "Autopilot"}
+              {conversation.ai_mode === 'copilot' && "Copilot"}
+              {conversation.ai_mode === 'disabled' && "Manual"}
             </Badge>
           )}
 
@@ -345,13 +343,13 @@ function ConversationListItemComponent({
             </Badge>
           ) : (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 border-dashed">
-              📥 Pool
+              Pool
             </Badge>
           )}
           
           {conversation.channel === 'whatsapp' && !conversation.contacts?.email && (
             <Badge variant="warning" className="text-[10px] px-1.5 py-0 h-5">
-              ⚠️
+              <AlertTriangle className="h-3 w-3" />
             </Badge>
           )}
           

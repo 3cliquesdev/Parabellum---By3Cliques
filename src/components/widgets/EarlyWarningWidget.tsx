@@ -47,7 +47,7 @@ export default function EarlyWarningWidget() {
         <CardContent className="flex flex-col items-center justify-center h-[300px] text-center">
           <Shield className="h-12 w-12 text-green-500 mb-4" />
           <p className="text-muted-foreground">
-            Todos os clientes estão saudáveis! 🎉
+            Todos os clientes estão saudáveis!
           </p>
           <p className="text-xs text-muted-foreground mt-2">
             Nenhum risco de churn detectado
@@ -98,10 +98,10 @@ export default function EarlyWarningWidget() {
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge 
-                    variant={risk.current_health === "red" ? "destructive" : "outline"}
+                    variant={risk.current_health === "red" ? "destructive" : risk.current_health === "yellow" ? "warning" : "success"}
                     className="text-xs"
                   >
-                    Saúde: {risk.previous_health === "green" ? "🟢" : risk.previous_health === "yellow" ? "🟡" : "🔴"} → {risk.current_health === "green" ? "🟢" : risk.current_health === "yellow" ? "🟡" : "🔴"}
+                    Saúde: {risk.previous_health === "green" ? "Verde" : risk.previous_health === "yellow" ? "Atenção" : "Crítico"} → {risk.current_health === "green" ? "Verde" : risk.current_health === "yellow" ? "Atenção" : "Crítico"}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
                     {risk.days_since_contact} dias sem contato

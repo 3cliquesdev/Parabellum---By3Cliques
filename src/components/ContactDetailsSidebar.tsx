@@ -143,7 +143,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
           <Alert variant="default" className="border-yellow-600 bg-yellow-50 dark:bg-yellow-950/20 py-2">
             <AlertCircle className="h-3.5 w-3.5 text-yellow-600" />
             <AlertDescription className="text-[10px] text-yellow-700 dark:text-yellow-400">
-              ⚠️ Sessão não verificada
+              Sessão não verificada
             </AlertDescription>
           </Alert>
         )}
