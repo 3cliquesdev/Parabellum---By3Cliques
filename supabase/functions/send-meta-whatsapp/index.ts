@@ -208,6 +208,7 @@ serve(async (req) => {
       has_template: !!body.template,
       has_media: !!body.media,
       has_interactive: !!body.interactive,
+      sender_name: body.sender_name || '(não fornecido)', // 🆕 Log do nome
     });
 
     // Validação

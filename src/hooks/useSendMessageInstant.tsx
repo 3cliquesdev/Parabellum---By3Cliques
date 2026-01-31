@@ -44,7 +44,7 @@ interface SendInstantParams {
 export function useSendMessageInstant() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const sendInstant = useCallback((params: SendInstantParams): string => {
     const { 
@@ -62,8 +62,8 @@ export function useSendMessageInstant() {
     // 1. INSTANTÂNEO: Gerar UUID local (será usado como ID real no banco)
     const localId = crypto.randomUUID();
     
-    // 🆕 Usar nome do usuário logado se não foi passado explicitamente
-    const effectiveSenderName = senderName || user?.user_metadata?.full_name || null;
+    // 🆕 Usar nome do perfil do usuário logado (profile.full_name é a fonte correta)
+    const effectiveSenderName = senderName || profile?.full_name || user?.user_metadata?.full_name || null;
     
     console.log('[SendInstant] 📤 Enviando:', {
       t0_ms: Math.round(t0),
@@ -336,7 +336,7 @@ export function useSendMessageInstant() {
 
     // RETORNA IMEDIATAMENTE - não aguarda persistência
     return localId;
-  }, [queryClient, user, toast]);
+  }, [queryClient, user, profile, toast]);
 
   // Função para reenviar mensagens que falharam
   const retrySend = useCallback(async (messageId: string, conversationId: string) => {
