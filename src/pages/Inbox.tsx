@@ -5,6 +5,7 @@ import { useConversations } from "@/hooks/useConversations";
 import { useMyNotRespondedInboxItems } from "@/hooks/useMyNotRespondedInboxItems";
 import { useMyInboxItems } from "@/hooks/useMyInboxItems";
 import { useSlaExceededItems } from "@/hooks/useSlaExceededItems";
+import { useInboxSearch } from "@/hooks/useInboxSearch";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useDepartments } from "@/hooks/useDepartments";
@@ -124,6 +125,10 @@ export default function Inbox() {
   
   // 🔒 Hook dedicado para "SLA Excedido" - cálculo dinâmico baseado em timestamps
   const { data: slaExceededItems } = useSlaExceededItems();
+  
+  // 🔍 Hook dedicado para BUSCA - query direta ao banco sem limite artificial
+  // Resolve: busca client-side em array limitado não encontrava conversas recentes
+  const { data: searchResults, isLoading: searchLoading } = useInboxSearch(filters.search || "");
   
   const { data: departments } = useDepartments();
   const { data: teams } = useTeams();
@@ -254,19 +259,23 @@ export default function Inbox() {
     const fullConversations = conversations ?? [];
     const sourceInboxItems = rawInboxItems ?? inboxItems;
     
-    // 🔍 BUSCA GLOBAL - PRIORIDADE MÁXIMA
-    // Quando há busca ativa, SEMPRE usar inboxItems (que já passou pelo filtro de busca)
-    // Isso ignora qualquer filtro de categoria (mine, not_responded, etc)
-    const hasActiveSearch = filters.search && filters.search.trim().length > 0;
-    if (hasActiveSearch && inboxItems) {
-      // Construir lista diretamente de inboxItems (que já passou pelo filtro de busca)
-      const searchResults = inboxItems.map(item => {
+    // 🔍 BUSCA GLOBAL - QUERY DIRETA AO BANCO (useInboxSearch)
+    // Quando há busca ativa, usar searchResults que vem do banco
+    // com query própria (sem limite artificial de 5000 e ordenação correta)
+    const hasActiveSearch = filters.search && filters.search.trim().length >= 2;
+    if (hasActiveSearch && searchResults) {
+      // searchResults já vem do banco ordenado: open primeiro, depois por recência
+      console.log("[Inbox] Busca ativa, usando searchResults:", searchResults.length, "items");
+      return searchResults.map(item => {
         // Tentar encontrar a conversa completa na lista de conversations
         const fullConv = fullConversations.find(c => c.id === item.conversation_id);
         return fullConv || inboxItemToConversation(item);
       }).filter(Boolean);
-      
-      return searchResults;
+    }
+    
+    // Se há busca ativa mas searchResults ainda não carregou, retornar vazio
+    if (hasActiveSearch && !searchResults) {
+      return [];
     }
     
     // 🔒 FILTRO ESPECIAL: not_responded - usar hook dedicado (fonte de verdade absoluta)
@@ -355,7 +364,7 @@ export default function Inbox() {
       default:
         return result.filter(c => c.status !== 'closed');
     }
-  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, rawInboxItems, inboxItemToConversation, myNotRespondedItems, myInboxItems, slaExceededItems]);
+  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, rawInboxItems, inboxItemToConversation, myNotRespondedItems, myInboxItems, slaExceededItems, searchResults]);
 
   // Ordenação e filtragem por tempo de espera
   const orderedConversations = useMemo(() => {
@@ -381,18 +390,12 @@ export default function Inbox() {
       }
     }
     
-    // 🔍 BUSCA ATIVA: Ordenar por relevância (abertas primeiro, depois fechadas por recência)
-    const hasActiveSearch = filters.search && filters.search.trim().length > 0;
+    // 🔍 BUSCA ATIVA: Resultados já vêm ordenados do banco (useInboxSearch)
+    // open primeiro, depois por recência - NÃO reordenar aqui
+    const hasActiveSearch = filters.search && filters.search.trim().length >= 2;
     if (hasActiveSearch) {
-      result.sort((a, b) => {
-        // Prioridade 1: Conversas abertas primeiro
-        const aOpen = a.status !== 'closed';
-        const bOpen = b.status !== 'closed';
-        if (aOpen && !bOpen) return -1;
-        if (!aOpen && bOpen) return 1;
-        // Prioridade 2: Mais recentes primeiro (dentro do mesmo status)
-        return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
-      });
+      // searchResults já está ordenado corretamente pelo banco
+      // Apenas retornar como está
       return result;
     }
     
