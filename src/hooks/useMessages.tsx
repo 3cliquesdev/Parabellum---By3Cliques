@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeHealth } from "@/hooks/useRealtimeHealth";
@@ -33,6 +33,24 @@ export function useMessages(conversationId: string | null) {
   const reconnectAttemptsRef = useRef(0);
   const isConnectedRef = useRef(false);
   const lastMessageTimestampRef = useRef<string | null>(null);
+  
+  // 🆕 HOTFIX: Rastrear visibilidade da aba
+  const [isTabVisible, setIsTabVisible] = useState(true);
+  
+  // 🆕 Rastrear último evento Realtime (anti-mascaramento)
+  const lastRealtimeEventRef = useRef<number>(Date.now());
+  
+  // 🆕 Rastrear tamanho anterior para detectar novas mensagens
+  const previousLengthRef = useRef<number>(0);
+  
+  // 🆕 HOTFIX: Detectar quando aba está visível
+  useEffect(() => {
+    const handleVisibility = () => {
+      setIsTabVisible(document.visibilityState === 'visible');
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
 
   const query = useQuery({
     queryKey: ["messages", conversationId],
@@ -74,6 +92,21 @@ export function useMessages(conversationId: string | null) {
         lastMessageTimestampRef.current = data[data.length - 1].created_at;
       }
       
+      // 🆕 HOTFIX: Detectar novas mensagens inbound via polling
+      if (data && data.length > previousLengthRef.current) {
+        const newCount = data.length - previousLengthRef.current;
+        const lastMessages = data.slice(-newCount);
+        
+        const hasNewInbound = lastMessages.some(m => m.sender_type === 'contact');
+        const realtimeGap = Date.now() - lastRealtimeEventRef.current > 5000;
+        
+        if (hasNewInbound && realtimeGap) {
+          console.log('[useMessages] 📥 Inbound detectado via polling (Realtime gap):', newCount);
+          registerEvent();
+        }
+      }
+      previousLengthRef.current = data?.length || 0;
+      
       return data as any[];
     },
     enabled: !!conversationId,
@@ -82,13 +115,15 @@ export function useMessages(conversationId: string | null) {
     gcTime: 1000 * 60 * 30, // 30 minutos - manter em cache mesmo após inativo
     refetchOnWindowFocus: true, // Recarregar ao voltar para a aba
     refetchOnReconnect: true, // Recarregar ao reconectar internet
-    // 🆕 ENTERPRISE V2: Polling condicional baseado em isHealthy
-    // isHealthy = true → sem polling (realtime funcionando)
-    // isDegraded = true → polling 10s (gap detectado)
-    // !isHealthy → polling 5s (emergência)
-    refetchInterval: isEnterpriseV2 
-      ? (isHealthy ? false : isDegraded ? 10000 : 5000)
-      : 5000, // Legacy: polling fixo 5s
+    // 🆕 HOTFIX PRODUÇÃO: Polling adaptativo
+    // - Conversa ativa + aba visível: 3s (safety net)
+    // - Aba em background: 10s (economia)
+    // - Sem conversa: desativado
+    refetchInterval: !conversationId 
+      ? false 
+      : isTabVisible 
+        ? 3000 
+        : 10000,
   });
 
   // 🔄 CATCH-UP: Buscar mensagens perdidas após reconexão
@@ -198,6 +233,7 @@ export function useMessages(conversationId: string | null) {
             
             // 🆕 ENTERPRISE V2: Registrar evento para health check
             registerEvent();
+            lastRealtimeEventRef.current = Date.now(); // 🆕 Marcar evento Realtime
             
             // 🛡️ PROTEÇÃO 1: Ignorar se já processado nesta sessão
             if (payload.eventType === 'INSERT' && processedIdsRef.current.has(newMessage.id)) {
@@ -312,11 +348,23 @@ export function useMessages(conversationId: string | null) {
                     // 🆕 Extrair status de delivery do metadata (se disponível)
                     const deliveryStatus = (newMessage.metadata as any)?.delivery_status;
                     
+                    // 🆕 Detectar se campos de mídia mudaram (COMPARAÇÃO LEVE)
+                    const newMedia = (newMessage as any).media_attachments;
+                    const oldMedia = m.media_attachments;
+                    const mediaChanged = 
+                      newMessage.attachment_url !== m.attachment_url ||
+                      newMessage.attachment_type !== m.attachment_type ||
+                      (newMedia?.length || 0) !== (oldMedia?.length || 0) ||
+                      newMedia?.[0]?.storage_path !== oldMedia?.[0]?.storage_path ||
+                      newMedia?.[0]?.status !== oldMedia?.[0]?.status;
+                    
                     return { 
                       ...m, 
                       ...newMessage,
                       // Mapear delivery_status para campo status se disponível
                       status: deliveryStatus || newMessage.status || m.status,
+                      // 🆕 _mediaUpdatedAt APENAS quando mídia muda
+                      ...(mediaChanged && { _mediaUpdatedAt: Date.now() }),
                     };
                   }
                   return m;
