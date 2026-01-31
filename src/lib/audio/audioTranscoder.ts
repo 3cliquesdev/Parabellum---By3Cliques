@@ -44,51 +44,51 @@ async function getFFmpeg(): Promise<FFmpeg> {
     });
     
     try {
-      // Load FFmpeg WASM - the core file is ~2.5MB so needs longer timeout
-      const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
-      
-      console.log('[AudioTranscoder] Fetching FFmpeg core from:', baseURL);
-      
-      // Download both files in parallel with individual timeouts
-      const fetchWithTimeout = async (url: string, type: string, timeoutMs: number) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-        
-        try {
-          const response = await fetch(url, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status} fetching ${url}`);
-          }
-          
-          const blob = await response.blob();
-          return URL.createObjectURL(blob);
-        } catch (error) {
-          clearTimeout(timeoutId);
-          throw error;
-        }
+      // Load FFmpeg WASM - the core/wasm downloads can take time on slower networks.
+      // Use CDN fallback and a generous timeout to avoid false negatives.
+      const sources = [
+        'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm',
+        'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm',
+      ];
+
+      const LOAD_TOTAL_TIMEOUT_MS = 120000;
+
+      const loadFromBase = async (baseURL: string) => {
+        console.log('[AudioTranscoder] Fetching FFmpeg core from:', baseURL);
+
+        const [coreURL, wasmURL] = await Promise.all([
+          toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        ]);
+
+        console.log('[AudioTranscoder] Core URLs created, loading instance...');
+        await instance.load({ coreURL, wasmURL });
       };
-      
-      // 45 seconds timeout for each file (WASM is ~2.5MB)
-      const FETCH_TIMEOUT_MS = 45000;
-      
-      const [coreURL, wasmURL] = await Promise.all([
-        fetchWithTimeout(`${baseURL}/ffmpeg-core.js`, 'text/javascript', FETCH_TIMEOUT_MS),
-        fetchWithTimeout(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm', FETCH_TIMEOUT_MS),
-      ]);
-      
-      console.log('[AudioTranscoder] Core URLs created, loading instance...');
-      
-      // Load the FFmpeg instance - additional 30s for initialization
-      const LOAD_TIMEOUT_MS = 30000;
+
       await Promise.race([
-        instance.load({ coreURL, wasmURL }),
+        (async () => {
+          let lastError: unknown;
+          for (const baseURL of sources) {
+            try {
+              await loadFromBase(baseURL);
+              return;
+            } catch (err) {
+              lastError = err;
+              console.warn('[AudioTranscoder] FFmpeg load failed for source, trying next...', {
+                baseURL,
+                message: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+          throw lastError instanceof Error
+            ? lastError
+            : new Error(`FFmpeg load failed: ${String(lastError)}`);
+        })(),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('FFmpeg initialization timeout')), LOAD_TIMEOUT_MS)
+          setTimeout(() => reject(new Error('FFmpeg load timeout')), LOAD_TOTAL_TIMEOUT_MS)
         ),
       ]);
-      
+
       console.log('[AudioTranscoder] FFmpeg loaded successfully');
       ffmpeg = instance;
       return instance;

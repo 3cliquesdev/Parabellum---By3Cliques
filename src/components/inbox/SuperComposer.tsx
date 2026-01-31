@@ -191,7 +191,8 @@ export function SuperComposer({
       });
 
       try {
-        const TRANSCODE_TIMEOUT_MS = 45000;
+        // FFmpeg core/wasm download can be slow; allow a more generous timeout.
+        const TRANSCODE_TIMEOUT_MS = 120000;
         const startTime = performance.now();
 
         const { blob, mimeType } = await Promise.race([
