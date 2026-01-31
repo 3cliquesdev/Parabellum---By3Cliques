@@ -1,87 +1,141 @@
 
-# Correção: Página /users Não Carrega no Publicado
+# Plano: Correção Completa do Fluxo de Áudio no Chat
 
-## Problema Identificado
+## Resumo Executivo
 
-A versão publicada está rodando com **cache de código antigo** porque a `APP_SCHEMA_VERSION` não foi atualizada após as mudanças no sistema de permissões.
+O sistema tem dois problemas distintos que impedem o funcionamento correto do áudio:
 
-**Situação atual:**
-- Schema version: `2026.01.30-v1` (desatualizado)
-- Código correto: `hasFullAccess("admin")` retorna `true`
-- Mas navegador usa versão antiga cacheada
+1. **Envio**: Chrome grava em WebM, mas Meta só aceita OGG. A conversão atual é superficial (só muda MIME type, não o container real).
 
-## Solução (3 Ajustes Simples)
-
-### 1. Atualizar Schema Version
-**Arquivo:** `src/lib/build/schemaVersion.ts`
-
-```typescript
-export const APP_SCHEMA_VERSION = "2026.01.31-v1";
-```
-
-**Efeito:** Força todos os navegadores a limparem cache automaticamente.
+2. **Recebimento**: Áudios do Meta chegam sem som porque o player não especifica o codec correto.
 
 ---
 
-### 2. Verificação Redundante no ProtectedRoute
-**Arquivo:** `src/components/ProtectedRoute.tsx`
+## Correções Necessárias
 
-Adicionar checagem `hasFullAccess` ANTES de verificar permissões específicas:
+### Fase 1: Corrigir Aceitação de Tipos no Input
 
-```typescript
-// Permission-based access control (new unified system)
-if (requiredPermission) {
-  // ✅ SEGURANÇA: Roles com acesso total NUNCA devem ser bloqueados
-  if (hasFullAccess(role)) {
-    return <>{children}</>;
-  }
-  
-  // ... resto do código de permissões
-}
-```
+**Arquivo:** `src/components/inbox/FileDropZone.tsx`
 
-**Efeito:** Admin/manager/general_manager sempre passam, mesmo se permissões ainda estão carregando.
+Adicionar `audio/webm` na lista `DEFAULT_ACCEPTED_TYPES` para permitir upload de arquivos gravados pelo navegador:
 
----
-
-### 3. Log de Diagnóstico em Produção (Temporário)
-**Arquivo:** `src/hooks/useRolePermissions.tsx`
-
-Adicionar log para rastrear problema:
-
-```typescript
-const hasPermission = (key: string): boolean | undefined => {
-  // 🆕 Log de diagnóstico (remover após validação)
-  console.log(`[hasPermission] key="${key}" role="${role}" fullAccess=${hasFullAccess(role)}`);
-  
-  // Roles com acesso total sempre true
-  if (hasFullAccess(role)) return true;
-  // ...
-};
+```text
+Adicionar na linha 30:
+  "audio/webm",
 ```
 
 ---
 
-## Resumo das Mudanças
+### Fase 2: Melhorar Transcodificação FFmpeg WASM
 
-| Arquivo | Mudança | Risco |
-|---------|---------|-------|
-| `src/lib/build/schemaVersion.ts` | Atualizar para `2026.01.31-v1` | Nenhum |
-| `src/components/ProtectedRoute.tsx` | Adicionar verificação hasFullAccess antes de permissões | Nenhum |
-| `src/hooks/useRolePermissions.tsx` | Adicionar log temporário | Nenhum |
+**Arquivo:** `src/lib/audio/audioTranscoder.ts`
 
-## Validação Pós-Deploy
+1. Adicionar logs mais detalhados para debug
+2. Tratar erros de forma mais robusta
+3. Verificar se FFmpeg carregou corretamente antes de usar
 
-1. Acessar versão publicada em **janela anônima**
-2. Login com admin ou manager
-3. Navegar para `/users`
-4. Verificar console para logs de diagnóstico
-5. Confirmar que página carrega corretamente
+---
 
-## Conformidade com Base de Conhecimento
+### Fase 3: Fallback Server-Side para Transcodificação
 
-| Regra | Status |
-|-------|--------|
-| Preservação do existente | ✅ Não remove nenhuma feature |
-| Zero regressão | ✅ Apenas adiciona segurança extra |
-| Cache/Versões | ✅ Força atualização conforme documentado |
+**Novo arquivo:** `supabase/functions/transcode-audio/index.ts`
+
+Criar Edge Function que faz transcodificação real WebM → OGG usando `ffmpeg` no Deno. Isso garante que mesmo se o browser falhar, o servidor consegue converter.
+
+Fluxo:
+1. Frontend tenta FFmpeg WASM
+2. Se falhar ou for WebM, envia para Edge Function
+3. Edge Function retorna OGG real
+4. Arquivo é salvo no storage
+
+---
+
+### Fase 4: Corrigir Player de Áudio
+
+**Arquivo:** `src/components/inbox/AudioPlayer.tsx`
+
+Alterar de:
+```jsx
+<audio ref={audioRef} src={url} preload="metadata" />
+```
+
+Para:
+```jsx
+<audio ref={audioRef} preload="metadata">
+  <source src={url} type="audio/ogg" />
+  <source src={url} type="audio/mpeg" />
+  <source src={url} type="audio/webm" />
+  Seu navegador não suporta áudio.
+</audio>
+```
+
+Isso permite que o navegador escolha o codec correto baseado no conteúdo.
+
+---
+
+### Fase 5: Corrigir Edge Function send-meta-whatsapp
+
+**Arquivo:** `supabase/functions/send-meta-whatsapp/index.ts`
+
+O problema é que apenas mudar o MIME type do Blob não muda o container real. Soluções:
+
+**Opção A (Preferida)**: Chamar Edge Function de transcodificação antes de enviar para Meta
+**Opção B**: Usar biblioteca Deno para conversão real no backend
+
+---
+
+## Detalhes Técnicos
+
+### Por que Chrome não grava OGG nativo?
+
+O `MediaRecorder` do Chrome suporta:
+- `audio/webm;codecs=opus` ✅
+- `audio/webm;codecs=pcm` ✅  
+- `audio/ogg;codecs=opus` ❌ (não suportado no Chrome)
+
+Apenas Firefox suporta OGG nativo.
+
+### Por que re-wrap não funciona?
+
+WebM e OGG são containers diferentes:
+- WebM: baseado em Matroska (MKV)
+- OGG: container próprio da Xiph
+
+Ambos podem conter áudio Opus, mas os headers são incompatíveis. Mudar apenas o MIME type faz o Meta rejeitar porque ele valida os magic bytes do arquivo.
+
+### Solução Real
+
+Usar FFmpeg (WASM no browser ou nativo no Deno) para:
+1. Extrair o stream Opus do WebM
+2. Re-empacotar no container OGG
+3. Gerar arquivo válido para Meta
+
+---
+
+## Arquivos a Modificar
+
+1. `src/components/inbox/FileDropZone.tsx` - Adicionar audio/webm
+2. `src/components/inbox/AudioPlayer.tsx` - Usar source tags
+3. `src/lib/audio/audioTranscoder.ts` - Melhorar error handling
+4. `src/components/inbox/SuperComposer.tsx` - Fallback para server
+5. `supabase/functions/transcode-audio/index.ts` - Nova função
+6. `supabase/functions/send-meta-whatsapp/index.ts` - Usar transcodificação real
+7. `supabase/config.toml` - Registrar nova função
+
+---
+
+## Ordem de Implementação
+
+1. Primeiro corrigir FileDropZone (5 min)
+2. Corrigir AudioPlayer (5 min)
+3. Melhorar transcodificação WASM (10 min)
+4. Criar Edge Function transcode-audio (20 min)
+5. Integrar com send-meta-whatsapp (10 min)
+6. Testar fluxo completo
+
+---
+
+## Resultado Esperado
+
+- Gravar áudio no Chrome → Transcodificar → Enviar ao Meta → Cliente recebe
+- Cliente envia áudio → Meta entrega → Download → Player toca com som
