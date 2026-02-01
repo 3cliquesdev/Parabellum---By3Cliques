@@ -18,6 +18,21 @@ const WebhooksSettings = () => {
 
   const webhooks = [
     {
+      name: "Instagram - Meta Webhooks",
+      description: "Recebe mensagens, comentários e interações do Instagram Business",
+      url: "https://zaeozfdjhrmblfaxsyuu.supabase.co/functions/v1/instagram-webhook",
+      events: ["messages", "comments", "messaging_postbacks"],
+      instructions: [
+        "Acesse developers.facebook.com → Seu App",
+        "Vá em Products → Webhooks → Add Product",
+        "Selecione 'Instagram' como tipo de webhook",
+        "Cole a URL acima no campo Callback URL",
+        "Cole o Verify Token (definido nas Credenciais Globais)",
+        "Adicione subscrições: messages, comments, messaging_postbacks",
+        "Salve e verifique o webhook"
+      ]
+    },
+    {
       name: "Kiwify - Pagamentos",
       description: "Recebe notificações de pagamentos, reembolsos e carrinhos abandonados",
       url: "https://zaeozfdjhrmblfaxsyuu.supabase.co/functions/v1/kiwify-webhook",

@@ -39,6 +39,8 @@ export default function WebhooksConfigCard() {
 
   const getWebhookDisplay = (key: string) => {
     switch (key) {
+      case "instagram_webhook_url":
+        return { name: "Instagram - Meta Webhooks", icon: "📸", color: "text-pink-600" };
       case "kiwify_webhook_url":
         return { name: "Kiwify - Pagamentos", icon: "💳", color: "text-purple-600" };
       case "whatsapp_webhook_url":
