@@ -164,6 +164,43 @@ async function testKiwify(secrets: Record<string, string>): Promise<{ success: b
   }
 }
 
+// Test Instagram API (validate App ID via basic Graph API call)
+async function testInstagram(secrets: Record<string, string>): Promise<{ success: boolean; error?: string; details?: unknown }> {
+  const { app_id, app_secret } = secrets;
+  
+  if (!app_id) {
+    return { success: false, error: "Missing app_id" };
+  }
+
+  try {
+    // Get an app access token to validate credentials
+    const tokenUrl = `https://graph.facebook.com/oauth/access_token?client_id=${app_id}&client_secret=${app_secret}&grant_type=client_credentials`;
+    
+    const response = await fetch(tokenUrl);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      return { 
+        success: false, 
+        error: error.error?.message || `HTTP ${response.status}`,
+        details: error,
+      };
+    }
+
+    const data = await response.json();
+    
+    return { 
+      success: true, 
+      details: {
+        token_type: data.token_type || "bearer",
+        app_configured: true,
+      },
+    };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Connection failed" };
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -259,6 +296,9 @@ serve(async (req) => {
         break;
       case "kiwify":
         result = await testKiwify(secrets);
+        break;
+      case "instagram":
+        result = await testInstagram(secrets);
         break;
       default:
         result = { success: false, error: `Unknown provider: ${provider}` };

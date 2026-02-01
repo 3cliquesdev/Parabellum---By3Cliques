@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
   Instagram, Loader2, CheckCircle2, XCircle, Eye, EyeOff, 
-  Save, AlertTriangle, ExternalLink
+  Save, AlertTriangle, ExternalLink, RefreshCcw
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,21 +23,21 @@ interface InstagramSecret {
 
 const INSTAGRAM_SECRETS: InstagramSecret[] = [
   {
-    key: "FACEBOOK_APP_ID",
+    key: "app_id",
     label: "Facebook App ID",
     description: "ID do aplicativo Facebook/Instagram Business",
     placeholder: "Ex: 1192784686401515",
     type: "text",
   },
   {
-    key: "FACEBOOK_APP_SECRET",
+    key: "app_secret",
     label: "Facebook App Secret",
     description: "Chave secreta do aplicativo (obtida no Meta Developer Console)",
     placeholder: "Chave secreta...",
     type: "password",
   },
   {
-    key: "INSTAGRAM_WEBHOOK_VERIFY_TOKEN",
+    key: "webhook_verify_token",
     label: "Webhook Verify Token",
     description: "Token usado para validar o webhook no Meta (você define esse valor)",
     placeholder: "Ex: meu_token_secreto_2026",
@@ -53,50 +53,97 @@ export default function InstagramSecretsCard() {
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [isEditing, setIsEditing] = useState(false);
 
-  // Fetch current configuration status from system_configurations
-  const { data: configStatus, isLoading } = useQuery({
-    queryKey: ["instagram-secrets-status"],
+  // Fetch current configuration from integrations-get
+  const { data: integration, isLoading, refetch } = useQuery({
+    queryKey: ["instagram-integration-status"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("system_configurations")
-        .select("key, value")
-        .in("key", INSTAGRAM_SECRETS.map(s => `instagram_${s.key.toLowerCase()}`));
-      
-      const status: Record<string, boolean> = {};
-      INSTAGRAM_SECRETS.forEach(secret => {
-        const configKey = `instagram_${secret.key.toLowerCase()}`;
-        const config = data?.find(d => d.key === configKey);
-        status[secret.key] = config?.value === "configured";
+      const { data, error } = await supabase.functions.invoke("integrations-get", {
+        body: null,
+        method: "GET",
+        headers: {},
       });
-      
-      return status;
+
+      // Use fetch directly since invoke doesn't support query params well
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/integrations-get?provider=instagram`,
+        {
+          headers: {
+            "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch integration status");
+      }
+
+      return response.json();
     },
     enabled: isAdmin,
   });
 
-  // Save configuration mutation
+  // Save configuration mutation using integrations-set
   const saveMutation = useMutation({
     mutationFn: async (secrets: Record<string, string>) => {
-      const { data, error } = await supabase.functions.invoke("update-instagram-secrets", {
-        body: { secrets },
+      const { data, error } = await supabase.functions.invoke("integrations-set", {
+        body: { 
+          provider: "instagram",
+          secrets,
+        },
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["instagram-secrets-status"] });
+      queryClient.invalidateQueries({ queryKey: ["instagram-integration-status"] });
       setEditedValues({});
       setIsEditing(false);
       toast({
         title: "Credenciais atualizadas",
-        description: "As credenciais do Instagram foram salvas com sucesso. Pode levar alguns segundos para o deploy.",
+        description: "As credenciais do Instagram foram salvas e criptografadas com sucesso.",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Erro ao salvar",
         description: error.message || "Não foi possível salvar as credenciais",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Test configuration mutation
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("integrations-test", {
+        body: { provider: "instagram" },
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["instagram-integration-status"] });
+      if (data.success) {
+        toast({
+          title: "Conexão válida",
+          description: "As credenciais do Instagram estão funcionando corretamente.",
+        });
+      } else {
+        toast({
+          title: "Erro na validação",
+          description: data.error || "As credenciais não são válidas",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao testar",
+        description: error.message || "Não foi possível testar as credenciais",
         variant: "destructive",
       });
     },
@@ -133,8 +180,9 @@ export default function InstagramSecretsCard() {
     return null;
   }
 
-  const configuredCount = Object.values(configStatus || {}).filter(Boolean).length;
-  const allConfigured = configuredCount === INSTAGRAM_SECRETS.length;
+  const isConfigured = integration?.is_configured || integration?.status === "active";
+  const secretsMasked = integration?.secrets_masked || {};
+  const hasAnySecret = Object.keys(secretsMasked).length > 0;
 
   return (
     <Card className="border-primary/20">
@@ -142,15 +190,20 @@ export default function InstagramSecretsCard() {
         <CardTitle className="flex items-center gap-2">
           <Instagram className="h-5 w-5 text-primary" />
           Credenciais Instagram Business
-          {allConfigured ? (
+          {isConfigured ? (
             <Badge variant="default" className="ml-2">
               <CheckCircle2 className="h-3 w-3 mr-1" />
               Configurado
             </Badge>
-          ) : (
+          ) : hasAnySecret ? (
             <Badge variant="secondary" className="ml-2">
               <AlertTriangle className="h-3 w-3 mr-1" />
-              {configuredCount}/{INSTAGRAM_SECRETS.length}
+              Parcial
+            </Badge>
+          ) : (
+            <Badge variant="destructive" className="ml-2">
+              <XCircle className="h-3 w-3 mr-1" />
+              Não Configurado
             </Badge>
           )}
         </CardTitle>
@@ -166,22 +219,23 @@ export default function InstagramSecretsCard() {
         ) : (
           <div className="space-y-4">
             {INSTAGRAM_SECRETS.map((secret) => {
-              const isConfigured = configStatus?.[secret.key];
+              const maskedValue = secretsMasked[secret.key];
               const showValue = showSecrets[secret.key];
               const currentValue = editedValues[secret.key] ?? "";
+              const hasValue = !!maskedValue;
 
               return (
                 <div key={secret.key} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor={secret.key} className="flex items-center gap-2">
-                      {isConfigured ? (
+                      {hasValue ? (
                         <CheckCircle2 className="h-4 w-4 text-primary" />
                       ) : (
                         <XCircle className="h-4 w-4 text-destructive" />
                       )}
                       {secret.label}
                     </Label>
-                    <span className="text-xs text-muted-foreground font-mono">
+                    <span className="text-xs text-muted-foreground font-mono uppercase">
                       {secret.key}
                     </span>
                   </div>
@@ -189,7 +243,7 @@ export default function InstagramSecretsCard() {
                     <Input
                       id={secret.key}
                       type={secret.type === "password" && !showValue ? "password" : "text"}
-                      placeholder={isConfigured ? "••••••••••••••••" : secret.placeholder}
+                      placeholder={hasValue ? maskedValue : secret.placeholder}
                       value={currentValue}
                       onChange={(e) => handleValueChange(secret.key, e.target.value)}
                       className="font-mono"
@@ -210,7 +264,7 @@ export default function InstagramSecretsCard() {
               );
             })}
 
-            <div className="flex items-center justify-between pt-4 border-t">
+            <div className="flex items-center justify-between pt-4 border-t gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -220,17 +274,34 @@ export default function InstagramSecretsCard() {
                 Meta Developer Console
               </Button>
 
-              <Button
-                onClick={handleSave}
-                disabled={!isEditing || saveMutation.isPending}
-              >
-                {saveMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
+              <div className="flex gap-2">
+                {isConfigured && (
+                  <Button
+                    variant="outline"
+                    onClick={() => testMutation.mutate()}
+                    disabled={testMutation.isPending}
+                  >
+                    {testMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCcw className="h-4 w-4 mr-2" />
+                    )}
+                    Testar
+                  </Button>
                 )}
-                Salvar Credenciais
-              </Button>
+
+                <Button
+                  onClick={handleSave}
+                  disabled={!isEditing || saveMutation.isPending}
+                >
+                  {saveMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Salvar Credenciais
+                </Button>
+              </div>
             </div>
 
             <div className="rounded-lg border bg-muted/50 p-3 mt-4">
@@ -240,7 +311,7 @@ export default function InstagramSecretsCard() {
                   <p className="font-medium text-foreground mb-1">Apenas para Super Admins</p>
                   <p>
                     Estas credenciais são sensíveis e controlam a integração com o Instagram. 
-                    Alterações levam alguns segundos para entrar em vigor após o deploy automático.
+                    São armazenadas com criptografia AES-256 e nunca expostas em texto plano.
                   </p>
                 </div>
               </div>
