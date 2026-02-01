@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import InstagramCredentialsCard from "@/components/settings/InstagramCredentialsCard";
 
 const InstagramSettings = () => {
   const { data: accounts, isLoading } = useInstagramAccounts();
@@ -41,6 +42,9 @@ const InstagramSettings = () => {
 
   return (
     <div className="space-y-6 max-w-3xl">
+      {/* Credentials Configuration */}
+      <InstagramCredentialsCard />
+
       {/* Connect Account */}
       <Card>
         <CardHeader>

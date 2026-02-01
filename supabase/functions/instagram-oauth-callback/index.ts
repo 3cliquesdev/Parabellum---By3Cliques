@@ -9,15 +9,52 @@ const corsHeaders = {
 const GRAPH_API_VERSION = "v21.0";
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
+// Helper to get Instagram secrets from encrypted storage or env fallback
+async function getInstagramSecrets(supabaseUrl: string, serviceRoleKey: string): Promise<{
+  appId: string;
+  appSecret: string;
+}> {
+  // Try to get from encrypted storage first
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/integration-decrypt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": serviceRoleKey,
+      },
+      body: JSON.stringify({ provider: "instagram" }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.secrets) {
+        console.log("[instagram-oauth-callback] Using encrypted credentials");
+        return {
+          appId: data.secrets.app_id,
+          appSecret: data.secrets.app_secret,
+        };
+      }
+    }
+  } catch (e) {
+    console.log("[instagram-oauth-callback] Encrypted storage not available, using env");
+  }
+
+  // Fallback to environment variables
+  return {
+    appId: Deno.env.get("FACEBOOK_APP_ID") || "",
+    appSecret: Deno.env.get("FACEBOOK_APP_SECRET") || "",
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
@@ -29,32 +66,30 @@ serve(async (req) => {
   const redirectBase = `${frontendUrl}/instagram/settings`;
 
   if (error) {
-    console.error("[instagram-oauth] Auth error:", error, errorDescription);
+    console.error("[instagram-oauth-callback] Auth error:", error, errorDescription);
     return Response.redirect(`${redirectBase}?error=${encodeURIComponent(errorDescription || error)}`);
   }
 
   if (!code) {
-    console.error("[instagram-oauth] No authorization code received");
+    console.error("[instagram-oauth-callback] No authorization code received");
     return Response.redirect(`${redirectBase}?error=no_code`);
   }
 
   try {
-    const clientId = Deno.env.get("FACEBOOK_APP_ID");
-    const clientSecret = Deno.env.get("FACEBOOK_APP_SECRET");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const secrets = await getInstagramSecrets(supabaseUrl, serviceRoleKey);
     const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
-    if (!clientId || !clientSecret) {
+    if (!secrets.appId || !secrets.appSecret) {
       throw new Error("Facebook App credentials not configured");
     }
 
-    console.log("[instagram-oauth] Exchanging code for access token...");
+    console.log("[instagram-oauth-callback] Exchanging code for access token...");
 
     // 1. Exchange code for short-lived access token
     const tokenResponse = await fetch(
       `${GRAPH_API_BASE}/oauth/access_token?` +
-      `client_id=${clientId}` +
-      `&client_secret=${clientSecret}` +
+      `client_id=${secrets.appId}` +
+      `&client_secret=${secrets.appSecret}` +
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&code=${code}`
     );
@@ -67,14 +102,14 @@ serve(async (req) => {
     const tokenData = await tokenResponse.json();
     const shortLivedToken = tokenData.access_token;
 
-    console.log("[instagram-oauth] Got short-lived token, exchanging for long-lived...");
+    console.log("[instagram-oauth-callback] Got short-lived token, exchanging for long-lived...");
 
     // 2. Exchange for long-lived token (60 days)
     const longLivedResponse = await fetch(
       `${GRAPH_API_BASE}/oauth/access_token?` +
       `grant_type=fb_exchange_token` +
-      `&client_id=${clientId}` +
-      `&client_secret=${clientSecret}` +
+      `&client_id=${secrets.appId}` +
+      `&client_secret=${secrets.appSecret}` +
       `&fb_exchange_token=${shortLivedToken}`
     );
 

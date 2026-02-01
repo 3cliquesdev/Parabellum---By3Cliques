@@ -6,16 +6,44 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper to get Instagram verify token from encrypted storage or env fallback
+async function getVerifyToken(supabaseUrl: string, serviceRoleKey: string): Promise<string> {
+  // Try to get from encrypted storage first
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/integration-decrypt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": serviceRoleKey,
+      },
+      body: JSON.stringify({ provider: "instagram" }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.secrets?.webhook_verify_token) {
+        console.log("[instagram-webhook] Using encrypted verify token");
+        return data.secrets.webhook_verify_token;
+      }
+    }
+  } catch (e) {
+    console.log("[instagram-webhook] Encrypted storage not available, using env");
+  }
+
+  // Fallback to environment variable
+  return Deno.env.get("INSTAGRAM_WEBHOOK_VERIFY_TOKEN") || "";
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   const url = new URL(req.url);
 
@@ -25,9 +53,9 @@ serve(async (req) => {
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
 
-    const verifyToken = Deno.env.get("INSTAGRAM_WEBHOOK_VERIFY_TOKEN");
+    const verifyToken = await getVerifyToken(supabaseUrl, serviceRoleKey);
 
-    console.log("[instagram-webhook] Verification request:", { mode, token, challenge });
+    console.log("[instagram-webhook] Verification request:", { mode, token, challenge, hasVerifyToken: !!verifyToken });
 
     if (mode === "subscribe" && token === verifyToken) {
       console.log("[instagram-webhook] Verification successful");
