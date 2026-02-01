@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { useInstagramAccounts, useConnectInstagram, useDisconnectInstagram, useSyncInstagram } from "@/hooks/instagram";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   Instagram, 
   Link2, 
@@ -14,17 +16,39 @@ import {
   RefreshCw, 
   Bell,
   Check,
-  Clock
+  Clock,
+  AlertTriangle,
+  CheckCircle2
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import InstagramCredentialsCard from "@/components/settings/InstagramCredentialsCard";
 
 const InstagramSettings = () => {
   const { data: accounts, isLoading } = useInstagramAccounts();
   const { startOAuth, isLoading: isConnecting } = useConnectInstagram();
   const { mutate: disconnect, isPending: isDisconnecting } = useDisconnectInstagram();
   const { mutate: syncNow, isPending: isSyncing } = useSyncInstagram();
+
+  // Fetch integration status (credentials configured by Super Admin)
+  const { data: integrationStatus } = useQuery({
+    queryKey: ["integration-status", "instagram"],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return { is_configured: false };
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/integration-status?provider=instagram`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+      
+      if (!response.ok) return { is_configured: false };
+      return response.json();
+    },
+  });
 
   const activeAccount = accounts?.find((a) => a.is_active);
 
@@ -40,10 +64,27 @@ const InstagramSettings = () => {
     syncNow(activeAccount.id);
   };
 
+  const isConfigured = integrationStatus?.is_configured || false;
+
   return (
     <div className="space-y-6 max-w-3xl">
-      {/* Credentials Configuration */}
-      <InstagramCredentialsCard />
+      {/* Integration Status Banner */}
+      {isConfigured ? (
+        <Alert className="border-primary/50 bg-primary/5">
+          <CheckCircle2 className="h-4 w-4 text-primary" />
+          <AlertDescription className="text-primary">
+            Integração Instagram configurada e pronta para uso.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert className="border-destructive/50 bg-destructive/5">
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+          <AlertDescription className="text-destructive">
+            As credenciais do Instagram não estão configuradas. 
+            Entre em contato com o administrador do sistema para configurar na Central de Integrações.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Connect Account */}
       <Card>
