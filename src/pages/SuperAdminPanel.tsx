@@ -1,13 +1,17 @@
-import { Crown, Shield } from "lucide-react";
+import { Crown, Shield, Settings2, Users, BarChart3 } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Navigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SystemMetricsCard } from "@/components/super-admin/SystemMetricsCard";
 import { QuickUserManagement } from "@/components/super-admin/QuickUserManagement";
 import { IntegrationStatusCard } from "@/components/super-admin/IntegrationStatusCard";
 import { RecentAuditLogs } from "@/components/super-admin/RecentAuditLogs";
 import { DataManagementCard } from "@/components/super-admin/DataManagementCard";
 import { PermissionsSummaryCard } from "@/components/super-admin/PermissionsSummaryCard";
+import InstagramSecretsCard from "@/components/settings/InstagramSecretsCard";
+import SecretsConfigCard from "@/components/settings/SecretsConfigCard";
+import WebhooksConfigCard from "@/components/settings/WebhooksConfigCard";
 
 export default function SuperAdminPanel() {
   const { isAdmin, loading } = useUserRole();
@@ -48,26 +52,50 @@ export default function SuperAdminPanel() {
         </div>
       </div>
 
-      {/* Grid de Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Métricas do Sistema */}
-        <SystemMetricsCard />
+      {/* Tabs de navegação */}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex">
+          <TabsTrigger value="overview" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Visão Geral
+          </TabsTrigger>
+          <TabsTrigger value="credentials" className="flex items-center gap-2">
+            <Settings2 className="h-4 w-4" />
+            Credenciais Globais
+          </TabsTrigger>
+          <TabsTrigger value="users" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Usuários
+          </TabsTrigger>
+        </TabsList>
 
-        {/* Gestão de Usuários */}
-        <QuickUserManagement />
+        {/* Tab: Visão Geral */}
+        <TabsContent value="overview">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <SystemMetricsCard />
+            <IntegrationStatusCard />
+            <PermissionsSummaryCard />
+            <RecentAuditLogs />
+            <DataManagementCard />
+          </div>
+        </TabsContent>
 
-        {/* Resumo de Permissões */}
-        <PermissionsSummaryCard />
+        {/* Tab: Credenciais Globais */}
+        <TabsContent value="credentials">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <InstagramSecretsCard />
+            <SecretsConfigCard />
+            <WebhooksConfigCard />
+          </div>
+        </TabsContent>
 
-        {/* Status das Integrações */}
-        <IntegrationStatusCard />
-
-        {/* Logs de Auditoria Recentes */}
-        <RecentAuditLogs />
-
-        {/* Gestão de Dados */}
-        <DataManagementCard />
-      </div>
+        {/* Tab: Usuários */}
+        <TabsContent value="users">
+          <div className="grid grid-cols-1 gap-6">
+            <QuickUserManagement />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -371,3 +371,21 @@ region = "us-east-1"
 
 [functions.broadcast-ai-queue]
 verify_jwt = true
+
+[functions.integration-encrypt]
+verify_jwt = true
+
+[functions.integration-decrypt]
+verify_jwt = true
+
+[functions.integration-status]
+verify_jwt = true
+
+[functions.integrations-get]
+verify_jwt = true
+
+[functions.integrations-set]
+verify_jwt = true
+
+[functions.integrations-test]
+verify_jwt = true
