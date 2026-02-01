@@ -30,7 +30,7 @@ const InstagramSettings = () => {
   const { mutate: syncNow, isPending: isSyncing } = useSyncInstagram();
 
   // Fetch integration status (credentials configured by Super Admin)
-  const { data: integrationStatus } = useQuery({
+  const { data: integrationStatus, isLoading: isLoadingStatus } = useQuery({
     queryKey: ["integration-status", "instagram"],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -41,6 +41,7 @@ const InstagramSettings = () => {
         {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
         }
       );
