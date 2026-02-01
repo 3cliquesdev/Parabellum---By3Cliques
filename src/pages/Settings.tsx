@@ -268,24 +268,6 @@ export default function Settings() {
               description="Todas integrações"
               onClick={() => navigate('/settings/integrations-central')}
             />
-            {hasPermission("settings.whatsapp") && (
-              <SettingsCard
-                icon={Smartphone}
-                iconBgColor="bg-green-500"
-                title="WhatsApp Meta API"
-                description="API oficial do WhatsApp"
-                onClick={() => navigate('/settings/whatsapp-meta')}
-              />
-            )}
-            {hasPermission("settings.integrations") && (
-              <SettingsCard
-                icon={Instagram}
-                iconBgColor="bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400"
-                title="Instagram"
-                description="Conectar conta"
-                onClick={() => navigate('/settings/instagram')}
-              />
-            )}
             <SettingsCard
               icon={Webhook}
               iconBgColor="bg-cyan-600"
