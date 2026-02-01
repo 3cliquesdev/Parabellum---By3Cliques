@@ -4069,10 +4069,12 @@ export type Database = {
           instagram_user_id: string
           is_active: boolean | null
           last_sync_at: string | null
+          page_id: string | null
           profile_picture_url: string | null
           token_expires_at: string | null
           updated_at: string | null
           username: string
+          workspace_id: string
         }
         Insert: {
           access_token: string
@@ -4082,10 +4084,12 @@ export type Database = {
           instagram_user_id: string
           is_active?: boolean | null
           last_sync_at?: string | null
+          page_id?: string | null
           profile_picture_url?: string | null
           token_expires_at?: string | null
           updated_at?: string | null
           username: string
+          workspace_id: string
         }
         Update: {
           access_token?: string
@@ -4095,10 +4099,12 @@ export type Database = {
           instagram_user_id?: string
           is_active?: boolean | null
           last_sync_at?: string | null
+          page_id?: string | null
           profile_picture_url?: string | null
           token_expires_at?: string | null
           updated_at?: string | null
           username?: string
+          workspace_id?: string
         }
         Relationships: []
       }
@@ -8493,6 +8499,48 @@ export type Database = {
           updated_at?: string | null
           verify_token?: string
           webhook_verified?: boolean | null
+        }
+        Relationships: []
+      }
+      workspace_integrations: {
+        Row: {
+          created_at: string | null
+          encrypted_secrets: string
+          id: string
+          last_checked_at: string | null
+          last_error: string | null
+          provider: string
+          public_config: Json
+          status: string
+          updated_at: string | null
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          encrypted_secrets?: string
+          id?: string
+          last_checked_at?: string | null
+          last_error?: string | null
+          provider: string
+          public_config?: Json
+          status?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string | null
+          encrypted_secrets?: string
+          id?: string
+          last_checked_at?: string | null
+          last_error?: string | null
+          provider?: string
+          public_config?: Json
+          status?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          workspace_id?: string
         }
         Relationships: []
       }
