@@ -35,6 +35,23 @@ function escapeCSV(value: unknown): string {
   return str;
 }
 
+interface KPIData {
+  total_conversations: number;
+  total_open: number;
+  total_closed: number;
+  total_without_tag: number;
+  avg_csat: number | null;
+  avg_waiting_seconds: number | null;
+  avg_duration_seconds: number | null;
+}
+
+interface PivotRow {
+  department_id: string;
+  department_name: string;
+  category: string;
+  conversation_count: number;
+}
+
 export function useExportCommercialConversationsCSV() {
   const [isExporting, setIsExporting] = useState(false);
 
@@ -42,24 +59,111 @@ export function useExportCommercialConversationsCSV() {
     setIsExporting(true);
     
     try {
-      const { data, error } = await supabase.rpc("get_commercial_conversations_report", {
-        p_start: filters.startDate.toISOString(),
-        p_end: filters.endDate.toISOString(),
-        p_department_id: filters.departmentId || null,
-        p_agent_id: filters.agentId || null,
-        p_status: filters.status || null,
-        p_channel: filters.channel || null,
-        p_search: filters.search || null,
-        p_limit: MAX_EXPORT_ROWS,
-        p_offset: 0,
-      });
+      // Buscar KPIs, Pivot e Detalhado em paralelo
+      const [kpisResult, pivotResult, reportResult] = await Promise.all([
+        supabase.rpc("get_commercial_conversations_kpis", {
+          p_start: filters.startDate.toISOString(),
+          p_end: filters.endDate.toISOString(),
+          p_department_id: filters.departmentId || null,
+          p_agent_id: filters.agentId || null,
+          p_status: filters.status || null,
+          p_channel: filters.channel || null,
+        }),
+        supabase.rpc("get_commercial_conversations_pivot", {
+          p_start: filters.startDate.toISOString(),
+          p_end: filters.endDate.toISOString(),
+          p_department_id: filters.departmentId || null,
+          p_agent_id: filters.agentId || null,
+          p_status: filters.status || null,
+          p_channel: filters.channel || null,
+        }),
+        supabase.rpc("get_commercial_conversations_report", {
+          p_start: filters.startDate.toISOString(),
+          p_end: filters.endDate.toISOString(),
+          p_department_id: filters.departmentId || null,
+          p_agent_id: filters.agentId || null,
+          p_status: filters.status || null,
+          p_channel: filters.channel || null,
+          p_search: filters.search || null,
+          p_limit: MAX_EXPORT_ROWS,
+          p_offset: 0,
+        }),
+      ]);
 
-      if (error) throw error;
+      if (reportResult.error) throw reportResult.error;
 
-      if (!data || data.length === 0) {
+      const kpis: KPIData = kpisResult.data?.[0] || {
+        total_conversations: 0,
+        total_open: 0,
+        total_closed: 0,
+        total_without_tag: 0,
+        avg_csat: null,
+        avg_waiting_seconds: null,
+        avg_duration_seconds: null,
+      };
+
+      const pivotData: PivotRow[] = pivotResult.data || [];
+      const reportData = reportResult.data || [];
+
+      if (reportData.length === 0) {
         toast.warning("Nenhum registro encontrado para exportar");
         return;
       }
+
+      const lines: string[] = [];
+      const BOM = "\uFEFF";
+
+      // ===== SEÇÃO 1: KPIs =====
+      lines.push("=== RESUMO EXECUTIVO ===");
+      lines.push("");
+      lines.push(`Período;${format(filters.startDate, "dd/MM/yyyy")} a ${format(filters.endDate, "dd/MM/yyyy")}`);
+      lines.push("");
+      lines.push("Indicador;Valor");
+      lines.push(`Total de Conversas;${kpis.total_conversations}`);
+      lines.push(`Conversas Abertas;${kpis.total_open}`);
+      lines.push(`Conversas Fechadas;${kpis.total_closed}`);
+      lines.push(`Sem Tag;${kpis.total_without_tag}`);
+      lines.push(`CSAT Médio;${kpis.avg_csat ? kpis.avg_csat.toFixed(1).replace(".", ",") : "-"}`);
+      lines.push(`Tempo Médio de Espera;${formatDuration(kpis.avg_waiting_seconds) || "-"}`);
+      lines.push(`Duração Média;${formatDuration(kpis.avg_duration_seconds) || "-"}`);
+      lines.push("");
+      lines.push("");
+
+      // ===== SEÇÃO 2: PIVOT =====
+      if (pivotData.length > 0) {
+        lines.push("=== MATRIZ DEPARTAMENTO x CATEGORIA ===");
+        lines.push("");
+        
+        // Agrupar por departamento e categoria
+        const deptMap = new Map<string, Map<string, number>>();
+        const allCategories = new Set<string>();
+        
+        pivotData.forEach((row) => {
+          if (!deptMap.has(row.department_name)) {
+            deptMap.set(row.department_name, new Map());
+          }
+          deptMap.get(row.department_name)!.set(row.category, row.conversation_count);
+          allCategories.add(row.category);
+        });
+        
+        const categories = Array.from(allCategories).sort();
+        
+        // Header do pivot
+        lines.push(["Departamento", ...categories].join(";"));
+        
+        // Linhas do pivot
+        deptMap.forEach((catMap, deptName) => {
+          const values = categories.map((cat) => catMap.get(cat) || 0);
+          lines.push([escapeCSV(deptName), ...values].join(";"));
+        });
+        
+        lines.push("");
+        lines.push("");
+      }
+
+      // ===== SEÇÃO 3: DETALHADO =====
+      lines.push("=== CONVERSAS DETALHADAS ===");
+      lines.push("");
 
       const headers = [
         "ID Curto",
@@ -88,36 +192,39 @@ export function useExportCommercialConversationsCSV() {
         "Tempo Espera pós Atribuição",
       ];
 
-      const rows = data.map((row: any) => [
-        escapeCSV(row.short_id),
-        escapeCSV(row.conversation_id),
-        escapeCSV(row.status),
-        escapeCSV(row.contact_name),
-        escapeCSV(row.contact_email),
-        escapeCSV(row.contact_phone),
-        escapeCSV(row.contact_organization),
-        row.created_at ? format(new Date(row.created_at), "dd/MM/yyyy HH:mm") : "",
-        row.closed_at ? format(new Date(row.closed_at), "dd/MM/yyyy HH:mm") : "",
-        formatDuration(row.waiting_time_seconds),
-        formatDuration(row.duration_seconds),
-        escapeCSV(row.assigned_agent_name),
-        escapeCSV(row.participants),
-        escapeCSV(row.department_name),
-        String(row.interactions_count || 0),
-        escapeCSV(row.origin),
-        row.csat_score ? String(row.csat_score) : "",
-        escapeCSV(row.csat_comment),
-        escapeCSV(row.ticket_id),
-        escapeCSV(row.bot_flow),
-        escapeCSV(row.tags_all),
-        escapeCSV(row.last_conversation_tag),
-        escapeCSV(row.first_customer_message),
-        formatDuration(row.waiting_after_assignment_seconds),
-      ].join(";"));
+      lines.push(headers.join(";"));
 
-      const BOM = "\uFEFF";
-      // Formato brasileiro: separador ponto-e-vírgula
-      const csvContent = BOM + headers.join(";") + "\n" + rows.join("\n");
+      reportData.forEach((row: any) => {
+        const rowValues = [
+          escapeCSV(row.short_id),
+          escapeCSV(row.conversation_id),
+          escapeCSV(row.status),
+          escapeCSV(row.contact_name),
+          escapeCSV(row.contact_email),
+          escapeCSV(row.contact_phone),
+          escapeCSV(row.contact_organization),
+          row.created_at ? format(new Date(row.created_at), "dd/MM/yyyy HH:mm") : "",
+          row.closed_at ? format(new Date(row.closed_at), "dd/MM/yyyy HH:mm") : "",
+          formatDuration(row.waiting_time_seconds),
+          formatDuration(row.duration_seconds),
+          escapeCSV(row.assigned_agent_name),
+          escapeCSV(row.participants),
+          escapeCSV(row.department_name),
+          String(row.interactions_count || 0),
+          escapeCSV(row.origin),
+          row.csat_score ? String(row.csat_score) : "",
+          escapeCSV(row.csat_comment),
+          escapeCSV(row.ticket_id),
+          escapeCSV(row.bot_flow),
+          escapeCSV(row.tags_all),
+          escapeCSV(row.last_conversation_tag),
+          escapeCSV(row.first_customer_message),
+          formatDuration(row.waiting_after_assignment_seconds),
+        ];
+        lines.push(rowValues.join(";"));
+      });
+
+      const csvContent = BOM + lines.join("\n");
       
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -129,11 +236,11 @@ export function useExportCommercialConversationsCSV() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      const totalCount = data[0]?.total_count || data.length;
+      const totalCount = reportData[0]?.total_count || reportData.length;
       if (totalCount > MAX_EXPORT_ROWS) {
         toast.success(`Exportados ${MAX_EXPORT_ROWS} de ${totalCount} registros (limite máximo)`);
       } else {
-        toast.success(`Exportados ${data.length} registros com sucesso`);
+        toast.success(`Exportados ${reportData.length} registros com sucesso`);
       }
     } catch (error: any) {
       console.error("Erro ao exportar CSV:", error);
