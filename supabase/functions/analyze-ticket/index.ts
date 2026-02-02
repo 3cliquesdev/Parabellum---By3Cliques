@@ -1,19 +1,23 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 // Helper: Buscar modelo AI configurado no banco
 async function getConfiguredAIModel(): Promise<string> {
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    // Se as envs não existirem, não tentar inicializar client (evita falha no boot)
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.warn('[analyze-ticket] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY; using default model');
+      return 'openai/gpt-5-mini';
+    }
+
+    const supabaseClient = createClient(supabaseUrl, serviceRoleKey);
     
     const { data } = await supabaseClient
       .from('system_configurations')
@@ -28,7 +32,7 @@ async function getConfiguredAIModel(): Promise<string> {
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
