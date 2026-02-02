@@ -1,237 +1,292 @@
 
-# Plano: Sistema de Emails Transacionais com Triggers Kiwify
+# Plano: Corrigir Preview V2 + Completar Tracking de Emails
 
-## Visao Geral
+## Resumo das Correções
 
-Implementar um sistema completo de disparo automatico de emails baseado em eventos Kiwify, dando **autonomia total** para ligar/desligar templates por trigger sem precisar de desenvolvedor.
+### Parte 1: Preview V2 (4 correções)
 
----
-
-## Arquitetura Atual
-
-### O que ja existe:
-- **Tabela `email_templates`** com campo `trigger_type` e `is_active`
-- **Edge Function `send-email`** que envia via Resend com branding
-- **Edge Function `get-email-template`** que busca template por trigger
-- **Triggers existentes**: `deal_won`, `deal_lost`, `deal_created`, `contact_created`, `playbook_step`, `manual`
-
-### O que falta:
-- Triggers especificos para eventos Kiwify
-- Integracao no webhook para disparar emails automaticamente
-- UI para gerenciar triggers (ligar/desligar)
+### Parte 2: Webhook Tracking (atualizar `email_sends`)
 
 ---
 
-## Novos Triggers a Implementar
+## Parte 1: Correções no Preview V2
 
-| Trigger Type | Evento Kiwify | Descricao | Variaveis Disponiveis |
-|--------------|---------------|-----------|----------------------|
-| `order_paid` | `paid` / `order_approved` | Primeira compra aprovada | cliente, produto, valor, order_id |
-| `subscription_renewed` | `subscription_renewed` | Renovacao de assinatura | cliente, produto, valor, ltv |
-| `cart_abandoned` | `cart_abandoned` | Carrinho abandonado | cliente, produto, valor, link_recuperacao |
-| `payment_refused` | `refused` / `payment_refused` | Cartao recusado | cliente, produto, valor, motivo |
-| `subscription_card_declined` | `subscription_card_declined` | Cartao da assinatura recusado | cliente, produto, dias_atraso |
-| `subscription_late` | `subscription_late` | Assinatura em atraso | cliente, produto, dias_atraso |
-| `upsell_paid` | paid (cliente existente) | Upsell aprovado | cliente, produto, valor, ltv_novo |
-| `refunded` | `refunded` | Reembolso processado | cliente, produto, valor |
-| `churned` | `chargedback` / `subscription_canceled` | Churn/Cancelamento | cliente, produto, motivo |
+### 1.1 PreviewPanel.tsx - Detectar Template Migrado
+
+**Arquivo:** `src/components/email-builder-v2/PreviewPanel.tsx`
+
+**Linha 55-58 (substituir):**
+
+```typescript
+const generatedHtml = useMemo(() => {
+  const safeBlocks = Array.isArray(blocks) ? blocks : [];
+
+  // Detectar template migrado (HTML completo em bloco único)
+  if (safeBlocks.length === 1 && safeBlocks[0]?.block_type === "html") {
+    const htmlContent =
+      safeBlocks[0]?.content?.html ||
+      safeBlocks[0]?.content?.value ||
+      "";
+
+    const s = htmlContent.trimStart().toLowerCase();
+    const isFullDocument = s.startsWith("<!doctype") || s.startsWith("<html");
+
+    if (isFullDocument) {
+      // Template migrado - renderizar direto
+      return replaceVariables(htmlContent, sampleData);
+    }
+  }
+
+  // Fluxo normal para templates V2 nativos
+  const rawHtml = generateEmailHTML(safeBlocks, { preheader, subject });
+  return replaceVariables(rawHtml, sampleData);
+}, [blocks, preheader, subject, sampleData]);
+```
 
 ---
 
-## Implementacao Tecnica
+### 1.2 emailHtmlGenerator.ts - Fallback para Blocos Vazios (SEM EMOJI)
 
-### Etapa 1: Criar Edge Function `send-triggered-email`
+**Arquivo:** `src/utils/emailHtmlGenerator.ts`
 
-Nova funcao dedicada para disparar emails baseados em trigger_type:
+**Inserir após linha 426 (dentro da função `generateEmailHTML`):**
 
-```text
-supabase/functions/send-triggered-email/index.ts
+```typescript
+export function generateEmailHTML(
+  blocks: EmailBlock[],
+  options: GenerateOptions = {}
+): string {
+  const { branding, preheader, subject } = options;
 
-Entrada:
-{
-  trigger_type: string,          // Ex: "order_paid"
-  contact_id: string,            // ID do contato
-  variables: {                   // Variaveis dinamicas
-    customer_name: string,
-    product_name: string,
-    order_value: number,
-    order_id: string,
-    ...
+  // Fallback para preview vazio (sem emojis - padrão visual Octadesk)
+  if (!blocks || blocks.length === 0) {
+    return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview</title>
+</head>
+<body style="margin: 0; padding: 40px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <div style="text-align: center; color: #64748b; padding: 60px 20px;">
+    <h2 style="margin: 0 0 8px 0; color: #334155;">Nenhum bloco adicionado</h2>
+    <p style="margin: 0; font-size: 14px;">Arraste blocos da barra lateral para montar seu email.</p>
+  </div>
+</body>
+</html>
+    `.trim();
+  }
+
+  // ... resto do código existente
+```
+
+---
+
+### 1.3 emailHtmlGenerator.ts - Safe Access para Styles em TODAS as Funções
+
+**Padrão a aplicar em cada função `generate*BlockHtml`:**
+
+```typescript
+// ANTES (linha 70):
+const padding = parsePadding(block.styles.padding);
+
+// DEPOIS:
+const styles = block.styles ?? {};
+const content = block.content ?? {};
+const padding = parsePadding(styles.padding);
+```
+
+**Funções a modificar (10 no total):**
+
+| Função | Linha | Campos a proteger |
+|--------|-------|-------------------|
+| `generateTextBlockHtml` | 69 | `styles.padding`, `styles.textAlign`, `styles.fontSize`, `styles.color`, `styles.backgroundColor` |
+| `generateImageBlockHtml` | 90 | `styles.padding`, `styles.textAlign`, `styles.borderRadius`, `styles.backgroundColor` |
+| `generateButtonBlockHtml` | 145 | `styles.padding`, `styles.textAlign`, `styles.backgroundColor`, `styles.color`, `styles.borderRadius`, `styles.fontSize`, `styles.fontWeight` |
+| `generateSpacerBlockHtml` | 192 | `content.height`, `styles.backgroundColor` |
+| `generateDividerBlockHtml` | 208 | `styles.padding`, `styles.color` |
+| `generateBannerBlockHtml` | 224 | `styles.padding`, `styles.backgroundColor`, `styles.color`, `styles.textAlign` |
+| `generateSignatureBlockHtml` | 251 | `styles.padding`, `styles.textAlign`, `styles.color`, `styles.backgroundColor` |
+| `generateSocialBlockHtml` | 282 | `styles.padding`, `styles.textAlign`, `styles.backgroundColor` |
+| `generateHtmlBlockHtml` | 350 | `styles.padding`, `styles.backgroundColor` |
+| `generateColumnsBlockHtml` | 366 | `styles.padding`, `styles.backgroundColor` |
+
+---
+
+### 1.4 emailHtmlGenerator.ts - Normalizar buttonText (Linha 179)
+
+**Antes:**
+```typescript
+${block.content.buttonText || "Clique aqui"}
+```
+
+**Depois:**
+```typescript
+${content.buttonText || content.text || "Clique aqui"}
+```
+
+---
+
+## Parte 2: Webhook - Atualizar `email_sends`
+
+### Situação Atual
+
+- Tabela `email_sends` **já possui** os campos: `opened_at`, `clicked_at`, `bounced_at`, `sent_at`
+- Tabela `email_sends` **já possui** campo `resend_email_id` (mas sem índice único)
+- Webhook `email-webhook` **só insere em `interactions`** - não atualiza `email_sends`
+
+### 2.1 Criar Índice Único (Migration)
+
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS email_sends_resend_email_id_uidx 
+  ON public.email_sends(resend_email_id) 
+  WHERE resend_email_id IS NOT NULL;
+```
+
+---
+
+### 2.2 Atualizar Webhook `email-webhook/index.ts`
+
+**Modificações:**
+
+1. Processar **todos** os eventos relevantes (não só opened/clicked)
+2. Atualizar `email_sends` além de criar interações
+3. Fazer update idempotente (usar `MIN` para timestamps)
+
+**Arquivo:** `supabase/functions/email-webhook/index.ts`
+
+**Adicionar após a inserção de interação (linha 190):**
+
+```typescript
+// Atualizar email_sends para consulta rápida
+const updateField = eventType === 'email.opened' 
+  ? 'opened_at' 
+  : eventType === 'email.clicked'
+    ? 'clicked_at'
+    : eventType === 'email.bounced'
+      ? 'bounced_at'
+      : eventType === 'email.delivered'
+        ? 'delivered_at'
+        : null;
+
+if (updateField) {
+  // Usar COALESCE para manter o primeiro timestamp (idempotência)
+  const { error: updateError } = await supabase
+    .from('email_sends')
+    .update({ [updateField]: payload.created_at })
+    .eq('resend_email_id', emailId)
+    .is(updateField, null); // Só atualiza se ainda estiver NULL
+
+  if (updateError) {
+    console.warn('[email-webhook] Warning: Failed to update email_sends:', updateError);
+  } else {
+    console.log('[email-webhook] email_sends updated:', updateField);
   }
 }
-
-Logica:
-1. Buscar template ativo com trigger_type correspondente
-2. Se nao encontrar template ativo, retornar silenciosamente (sem erro)
-3. Substituir variaveis no subject e html_body
-4. Chamar send-email com o conteudo processado
 ```
 
-### Etapa 2: Integrar no Webhook Kiwify
+**Também modificar linha 114-124 para processar mais eventos:**
 
-Modificar `kiwify-webhook/index.ts` para chamar `send-triggered-email` em cada evento:
+```typescript
+// ANTES:
+if (eventType !== 'email.opened' && eventType !== 'email.clicked') {
 
-```text
-Eventos e triggers:
-
-case 'paid' / 'order_approved':
-  - Se novo cliente: trigger = 'order_paid'
-  - Se cliente existente: trigger = 'upsell_paid'
-
-case 'subscription_renewed':
-  - trigger = 'subscription_renewed'
-
-case 'cart_abandoned':
-  - trigger = 'cart_abandoned'
-
-case 'refused' / 'payment_refused':
-  - trigger = 'payment_refused'
-
-case 'subscription_card_declined':
-  - trigger = 'subscription_card_declined'
-
-case 'subscription_late':
-  - trigger = 'subscription_late'
-
-case 'refunded':
-  - trigger = 'refunded'
-
-case 'chargedback' / 'subscription_canceled':
-  - trigger = 'churned'
-```
-
-### Etapa 3: Atualizar UI de Templates
-
-Modificar `EmailTemplateDialog.tsx` para incluir novos triggers:
-
-```text
-Adicionar ao SelectContent de trigger_type:
-
-// === EVENTOS KIWIFY ===
-<SelectItem value="order_paid">Compra Aprovada (Kiwify)</SelectItem>
-<SelectItem value="subscription_renewed">Assinatura Renovada</SelectItem>
-<SelectItem value="cart_abandoned">Carrinho Abandonado</SelectItem>
-<SelectItem value="payment_refused">Cartao Recusado</SelectItem>
-<SelectItem value="subscription_card_declined">Cartao Assinatura Recusado</SelectItem>
-<SelectItem value="subscription_late">Assinatura em Atraso</SelectItem>
-<SelectItem value="upsell_paid">Upsell Aprovado</SelectItem>
-<SelectItem value="refunded">Reembolso Processado</SelectItem>
-<SelectItem value="churned">Churn/Cancelamento</SelectItem>
-```
-
-### Etapa 4: Adicionar Variaveis Especificas
-
-Expandir `AVAILABLE_VARIABLES` no dialog:
-
-```text
-Novas variaveis para templates Kiwify:
-
-kiwify: [
-  { key: "[PRODUCT_NAME]", description: "Nome do produto" },
-  { key: "[ORDER_VALUE]", description: "Valor do pedido" },
-  { key: "[ORDER_ID]", description: "ID do pedido Kiwify" },
-  { key: "[CUSTOMER_LTV]", description: "LTV total do cliente" },
-  { key: "[RECOVERY_LINK]", description: "Link de recuperacao" },
-  { key: "[PAYMENT_REASON]", description: "Motivo da recusa" },
-  { key: "[SUBSCRIPTION_DAYS_LATE]", description: "Dias em atraso" },
-]
+// DEPOIS:
+const TRACKED_EVENTS = ['email.opened', 'email.clicked', 'email.bounced', 'email.delivered'];
+if (!TRACKED_EVENTS.includes(eventType)) {
 ```
 
 ---
 
-## Fluxo de Autonomia
+### 2.3 Atualizar `send-email/index.ts` - Salvar em `email_sends`
 
-### Como o usuario ativa/desativa:
+**Adicionar após linha 252 (após `resendData`):**
 
-```text
-1. Acessar: Configuracoes → Templates de Email
-2. Criar novo template OU editar existente
-3. Selecionar Trigger: Ex: "Carrinho Abandonado"
-4. Switch "Template Ativo": ON/OFF
-5. Salvar
+```typescript
+// Registrar em email_sends para tracking completo
+if (customer_id && !isTest) {
+  const { error: sendError } = await supabase
+    .from('email_sends')
+    .insert({
+      contact_id: customer_id,
+      resend_email_id: resendData.id,
+      subject,
+      recipient_email: to,
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+      variables_used: { to_name: recipientName, branding: brandName }
+    });
 
-Pronto! O sistema automaticamente:
-- Se ON: Dispara email quando evento ocorre
-- Se OFF: Nao dispara (silencioso)
-```
-
-### Regras de Negocio:
-
-- Apenas 1 template ativo por trigger_type (evitar duplicidade)
-- Se template inativo, evento passa sem enviar email
-- Logs registrados em `email_tracking_events` para auditoria
-
----
-
-## Arquivos a Criar/Modificar
-
-| Arquivo | Acao | Descricao |
-|---------|------|-----------|
-| `supabase/functions/send-triggered-email/index.ts` | CRIAR | Nova edge function |
-| `supabase/functions/kiwify-webhook/index.ts` | MODIFICAR | Integrar disparo de emails |
-| `src/components/EmailTemplateDialog.tsx` | MODIFICAR | Adicionar novos triggers e variaveis |
-| `src/pages/EmailTemplates.tsx` | MODIFICAR | Atualizar labels de triggers |
-
----
-
-## Variaveis por Trigger
-
-| Trigger | Variaveis Obrigatorias |
-|---------|------------------------|
-| `order_paid` | CUSTOMER_*, PRODUCT_NAME, ORDER_VALUE, ORDER_ID |
-| `subscription_renewed` | CUSTOMER_*, PRODUCT_NAME, ORDER_VALUE, CUSTOMER_LTV |
-| `cart_abandoned` | CUSTOMER_*, PRODUCT_NAME, ORDER_VALUE, RECOVERY_LINK |
-| `payment_refused` | CUSTOMER_*, PRODUCT_NAME, ORDER_VALUE, PAYMENT_REASON |
-| `subscription_card_declined` | CUSTOMER_*, PRODUCT_NAME, SUBSCRIPTION_DAYS_LATE |
-| `subscription_late` | CUSTOMER_*, PRODUCT_NAME, SUBSCRIPTION_DAYS_LATE |
-| `upsell_paid` | CUSTOMER_*, PRODUCT_NAME, ORDER_VALUE, CUSTOMER_LTV |
-| `refunded` | CUSTOMER_*, PRODUCT_NAME, ORDER_VALUE |
-| `churned` | CUSTOMER_*, PRODUCT_NAME |
-
----
-
-## Exemplo de Template Pre-Criado
-
-### Carrinho Abandonado
-
-```text
-Nome: Recuperacao - Carrinho Abandonado
-Trigger: cart_abandoned
-Assunto: [CUSTOMER_FIRST_NAME], voce esqueceu algo! 🛒
-
-Corpo:
-<h2>Ola [CUSTOMER_FIRST_NAME]!</h2>
-<p>Notamos que voce nao finalizou sua compra de <strong>[PRODUCT_NAME]</strong>.</p>
-<p>O valor de <strong>R$ [ORDER_VALUE]</strong> ainda esta disponivel!</p>
-<p style="margin: 24px 0;">
-  <a href="[RECOVERY_LINK]" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">
-    Finalizar Compra
-  </a>
-</p>
+  if (sendError) {
+    console.warn('[send-email] Warning: Failed to insert email_sends:', sendError);
+  }
+}
 ```
 
 ---
 
-## Resumo da Autonomia
+## Resumo de Arquivos a Modificar
 
-| Acao | Quem Faz | Como |
-|------|----------|------|
-| Criar template | Usuario | Interface Templates de Email |
-| Ativar/Desativar | Usuario | Switch na edicao do template |
-| Mudar conteudo | Usuario | Editor de templates |
-| Adicionar variaveis | Usuario | Painel lateral de variaveis |
-| Ver historico | Usuario | Email Tracking Events |
-
-**Zero dependencia de desenvolvedor para operacao diaria.**
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/components/email-builder-v2/PreviewPanel.tsx` | Detectar e renderizar HTML migrado |
+| `src/utils/emailHtmlGenerator.ts` | Fallback vazio + safe access + buttonText |
+| `supabase/functions/email-webhook/index.ts` | Atualizar `email_sends` + mais eventos |
+| `supabase/functions/send-email/index.ts` | Inserir em `email_sends` ao enviar |
+| **Migration SQL** | Índice único em `resend_email_id` |
 
 ---
 
-## Ordem de Implementacao
+## Fluxo Final de Tracking
 
 ```text
-1. Criar edge function send-triggered-email
-2. Modificar webhook Kiwify para chamar a funcao
-3. Atualizar UI com novos triggers e variaveis
-4. Criar templates padrao (opcionais) para cada trigger
-5. Testar fluxo completo
+1. Envia email (send-email ou send-triggered-email)
+   → Grava em email_sends: resend_email_id, contact_id, sent_at
+   → Grava em email_tracking_events: event_type='sent'
+   → Grava em interactions: type='email_sent'
+
+2. Resend dispara webhook (delivered/opened/clicked/bounced)
+   → email-webhook recebe
+   → Atualiza email_sends: opened_at, clicked_at, etc.
+   → Grava em email_tracking_events
+   → Grava em interactions
+
+3. Consulta no onboarding/playbook:
+   SELECT opened_at, clicked_at FROM email_sends 
+   WHERE contact_id = :id ORDER BY sent_at DESC
 ```
+
+---
+
+## Consultas Úteis para Playbook/Onboarding
+
+```sql
+-- Cliente abriu o email?
+SELECT opened_at IS NOT NULL AS abriu
+FROM email_sends 
+WHERE contact_id = :contact_id 
+ORDER BY sent_at DESC LIMIT 1;
+
+-- Cliente clicou?
+SELECT clicked_at IS NOT NULL AS clicou
+FROM email_sends 
+WHERE contact_id = :contact_id 
+ORDER BY sent_at DESC LIMIT 1;
+
+-- Histórico completo
+SELECT subject, sent_at, opened_at, clicked_at, bounced_at
+FROM email_sends 
+WHERE contact_id = :contact_id 
+ORDER BY sent_at DESC;
+```
+
+---
+
+## Testes Necessários
+
+1. Abrir template V2 criado do zero - verificar preview
+2. Abrir template migrado do V1 - verificar preview (HTML completo)
+3. Criar template novo sem blocos - verificar mensagem placeholder
+4. Enviar email de teste e verificar se grava em `email_sends`
+5. Simular webhook `opened` e verificar se atualiza `opened_at`
