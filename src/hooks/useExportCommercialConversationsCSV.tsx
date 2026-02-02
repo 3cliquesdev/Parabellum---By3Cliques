@@ -27,8 +27,9 @@ function formatDuration(seconds: number | null): string {
 
 function escapeCSV(value: unknown): string {
   if (value === null || value === undefined) return "";
-  const str = Array.isArray(value) ? value.join("; ") : String(value);
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+  const str = Array.isArray(value) ? value.join(", ") : String(value);
+  // Para formato brasileiro (separador ;), escapar se contiver ; ou " ou quebra de linha
+  if (str.includes(";") || str.includes('"') || str.includes("\n")) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
@@ -112,10 +113,11 @@ export function useExportCommercialConversationsCSV() {
         escapeCSV(row.last_conversation_tag),
         escapeCSV(row.first_customer_message),
         formatDuration(row.waiting_after_assignment_seconds),
-      ].join(","));
+      ].join(";"));
 
       const BOM = "\uFEFF";
-      const csvContent = BOM + headers.join(",") + "\n" + rows.join("\n");
+      // Formato brasileiro: separador ponto-e-vírgula
+      const csvContent = BOM + headers.join(";") + "\n" + rows.join("\n");
       
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
