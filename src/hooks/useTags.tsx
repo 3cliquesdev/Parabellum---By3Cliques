@@ -178,14 +178,13 @@ export function useAddConversationTag() {
 
   return useMutation({
     mutationFn: async ({ conversationId, tagId }: { conversationId: string; tagId: string }) => {
-      const { data, error } = await supabase
+      // Avoid extra roundtrip/row materialization (can contribute to timeouts under load)
+      const { error } = await supabase
         .from("conversation_tags")
-        .insert({ conversation_id: conversationId, tag_id: tagId })
-        .select()
-        .single();
+        .insert({ conversation_id: conversationId, tag_id: tagId });
 
       if (error) throw error;
-      return data;
+      return { conversationId, tagId };
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["conversation-tags", variables.conversationId] });
