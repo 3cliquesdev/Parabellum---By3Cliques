@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -13,6 +13,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+// Função timezone-safe para comparar datas por dia
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
 
 // Normaliza range DURANTE seleção - NÃO força to quando não definido
 const normalizePartialRange = (range: DateRange | undefined): DateRange | undefined => {
@@ -139,6 +145,30 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
   // Estado interno para seleção em progresso - evita re-render do pai durante seleção
   const [draftRange, setDraftRange] = useState<DateRange | undefined>(value);
 
+  // Detecta automaticamente o preset baseado no value
+  const detectPresetFromValue = useCallback((range: DateRange | undefined): PresetKey => {
+    if (!range?.from || !range?.to) return 'custom';
+    
+    for (const key of presetOrder) {
+      const presetRange = presets[key].getRange();
+      if (
+        sameDay(range.from, presetRange.from) &&
+        sameDay(range.to, presetRange.to)
+      ) {
+        return key;
+      }
+    }
+    return 'custom';
+  }, []);
+
+  // Sincronizar quando value muda externamente
+  useEffect(() => {
+    const detected = detectPresetFromValue(value);
+    if (detected !== activePreset) {
+      setActivePreset(detected);
+    }
+  }, [value, detectPresetFromValue]);
+
   const handlePresetChange = (preset: PresetKey) => {
     setActivePreset(preset);
     if (preset !== 'custom') {
@@ -181,9 +211,27 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
   };
 
   const getDisplayLabel = () => {
-    if (activePreset === 'custom' && value?.from && value?.to) {
+    // Se é custom, sempre mostrar datas
+    if (activePreset === 'custom') {
+      if (value?.from && value?.to) {
+        return `${format(value.from, "dd/MM/yyyy", { locale: ptBR })} - ${format(value.to, "dd/MM/yyyy", { locale: ptBR })}`;
+      }
+      return "Personalizado";
+    }
+    
+    // Se não é custom mas temos value, verificar se corresponde ao preset
+    if (value?.from && value?.to) {
+      const presetRange = presets[activePreset].getRange();
+      if (
+        sameDay(value.from, presetRange.from) &&
+        sameDay(value.to, presetRange.to)
+      ) {
+        return presets[activePreset].label;
+      }
+      // Não corresponde - mostrar datas formatadas
       return `${format(value.from, "dd/MM/yyyy", { locale: ptBR })} - ${format(value.to, "dd/MM/yyyy", { locale: ptBR })}`;
     }
+    
     return presets[activePreset].label;
   };
 

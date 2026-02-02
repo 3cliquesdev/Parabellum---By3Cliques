@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { ChevronLeft, ChevronRight, Download, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ExternalLink, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ReportRow } from "@/hooks/useCommercialConversationsReport";
@@ -21,6 +21,8 @@ import { ReportRow } from "@/hooks/useCommercialConversationsReport";
 interface CommercialDetailedTableProps {
   data: ReportRow[] | undefined;
   isLoading: boolean;
+  isError?: boolean;
+  error?: Error | null;
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
@@ -39,6 +41,8 @@ function formatDuration(seconds: number | null): string {
 export function CommercialDetailedTable({
   data,
   isLoading,
+  isError,
+  error,
   page,
   pageSize,
   onPageChange,
@@ -77,6 +81,29 @@ export function CommercialDetailedTable({
             {Array.from({ length: 10 }).map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Conversas Detalhadas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              <p className="text-red-600 dark:text-red-400 text-sm font-medium">
+                Erro ao carregar conversas. Por favor, tente novamente.
+              </p>
+            </div>
+            {error?.message && (
+              <p className="text-red-500 dark:text-red-500 text-xs mt-1 ml-7">{error.message}</p>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -197,7 +197,12 @@ export default function CommercialConversationsReport() {
         </TabsList>
 
         <TabsContent value="resumo" className="space-y-6">
-          <CommercialKPICards data={kpisQuery.data} isLoading={kpisQuery.isLoading} />
+          <CommercialKPICards 
+            data={kpisQuery.data} 
+            isLoading={kpisQuery.isLoading}
+            isError={kpisQuery.isError}
+            error={kpisQuery.error as Error | null}
+          />
           <CommercialPivotTable
             data={pivotQuery.data}
             isLoading={pivotQuery.isLoading}
@@ -209,6 +214,8 @@ export default function CommercialConversationsReport() {
           <CommercialDetailedTable
             data={reportQuery.data}
             isLoading={reportQuery.isLoading}
+            isError={reportQuery.isError}
+            error={reportQuery.error as Error | null}
             page={page}
             pageSize={PAGE_SIZE}
             onPageChange={setPage}

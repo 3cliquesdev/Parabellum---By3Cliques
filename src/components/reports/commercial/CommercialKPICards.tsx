@@ -1,11 +1,13 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MessageSquare, Clock, Star, Tag, CheckCircle, XCircle } from "lucide-react";
+import { MessageSquare, Clock, Star, Tag, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { KPIData } from "@/hooks/useCommercialConversationsKPIs";
 
 interface CommercialKPICardsProps {
   data: KPIData | undefined;
   isLoading: boolean;
+  isError?: boolean;
+  error?: Error | null;
 }
 
 function formatDuration(seconds: number | null): string {
@@ -16,7 +18,7 @@ function formatDuration(seconds: number | null): string {
   return `${minutes}m`;
 }
 
-export function CommercialKPICards({ data, isLoading }: CommercialKPICardsProps) {
+export function CommercialKPICards({ data, isLoading, isError, error }: CommercialKPICardsProps) {
   const kpis = [
     {
       label: "Total Conversas",
@@ -81,6 +83,22 @@ export function CommercialKPICards({ data, isLoading }: CommercialKPICardsProps)
             </CardContent>
           </Card>
         ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+          <p className="text-red-600 dark:text-red-400 text-sm font-medium">
+            Erro ao carregar KPIs. Por favor, tente novamente.
+          </p>
+        </div>
+        {error?.message && (
+          <p className="text-red-500 dark:text-red-500 text-xs mt-1 ml-7">{error.message}</p>
+        )}
       </div>
     );
   }

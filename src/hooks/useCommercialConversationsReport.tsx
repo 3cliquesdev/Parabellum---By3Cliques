@@ -45,6 +45,18 @@ export function useCommercialConversationsReport(filters: ReportFilters) {
   return useQuery({
     queryKey: ["commercial-conversations-report", filters],
     queryFn: async () => {
+      console.log('[Report] Calling with filters:', {
+        p_start: filters.startDate.toISOString(),
+        p_end: filters.endDate.toISOString(),
+        p_department_id: filters.departmentId,
+        p_agent_id: filters.agentId,
+        p_status: filters.status,
+        p_channel: filters.channel,
+        p_search: filters.search,
+        p_limit: filters.limit,
+        p_offset: filters.offset,
+      });
+
       const { data, error } = await supabase.rpc("get_commercial_conversations_report", {
         p_start: filters.startDate.toISOString(),
         p_end: filters.endDate.toISOString(),
@@ -57,7 +69,12 @@ export function useCommercialConversationsReport(filters: ReportFilters) {
         p_offset: filters.offset || 0,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Report] RPC Error:', error);
+        throw error;
+      }
+      
+      console.log('[Report] Result count:', data?.length);
       return (data || []) as ReportRow[];
     },
     staleTime: 30 * 1000,
