@@ -1,180 +1,245 @@
 
+# Plano: Correção do Filtro de Datas no Relatório de Conversas Comerciais
 
-# Plano: Corrigir Erro de Exportação do Relatório Comercial
+## Resumo Executivo
 
-## Problema Identificado
-
-Ao exportar o relatório de conversas comerciais na versão publicada, aparece "Erro ao exportar relatório" sem detalhes.
-
-### Causa Raiz
-
-Analisando o código de `useExportCommercialConversationsCSV.tsx`, identifiquei **3 problemas**:
-
-1. **Tratamento de erro incompleto**: Apenas `reportResult.error` é verificado, mas erros em `kpisResult` ou `pivotResult` são ignorados silenciosamente
-2. **Mensagem de erro genérica**: O toast mostra apenas "Erro ao exportar relatório" sem contexto
-3. **Sem logging adequado**: O `console.error` não inclui detalhes suficientes para diagnóstico
-
-### Código Atual (Problema - Linhas 84-97)
-
-```typescript
-if (reportResult.error) throw reportResult.error;
-
-const kpis: KPIData = kpisResult.data?.[0] || { /* defaults */ };
-const pivotData: PivotRow[] = pivotResult.data || [];
-```
-
-**Problema**: Se `kpisResult.error` ou `pivotResult.error` existir, é ignorado e o código continua com dados vazios/parciais.
+Corrigir os problemas de sincronização entre o label do DateRangePicker e o período real selecionado, além de adicionar tratamento de erro visível quando KPIs/Report falharem (evitando "0 silencioso").
 
 ---
 
-## Solução Proposta
+## Arquivos a Modificar
 
-### 1. Verificar TODOS os erros das queries paralelas
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/components/DateRangePicker.tsx` | Sincronização automática do activePreset + comparação timezone-safe |
+| `src/hooks/useCommercialConversationsKPIs.tsx` | Adicionar logs de debug e não mascarar erro |
+| `src/hooks/useCommercialConversationsReport.tsx` | Adicionar logs de debug |
+| `src/components/reports/commercial/CommercialKPICards.tsx` | Mostrar erro visível na UI |
+| `src/components/reports/commercial/CommercialDetailedTable.tsx` | Mostrar erro visível na UI |
 
-Antes de processar os dados, verificar se qualquer uma das 3 queries retornou erro:
+---
+
+## Mudanças Detalhadas
+
+### 1. DateRangePicker.tsx - Sincronização Automática
+
+**Problema**: O estado interno `activePreset` não se sincroniza quando o `value` muda externamente.
+
+**Solucao**:
+- Implementar `sameDay()` para comparação timezone-safe (evita bugs de toDateString)
+- Implementar `detectPresetFromValue()` para identificar qual preset corresponde ao value atual
+- Usar `useEffect` para sincronizar activePreset quando value mudar
+- Atualizar `getDisplayLabel()` para mostrar datas formatadas quando nao bater com preset
 
 ```typescript
-// Verificar TODOS os erros (KPIs, Pivot e Report)
-if (kpisResult.error) {
-  console.error("Erro KPIs:", kpisResult.error);
-  throw new Error(`Erro ao buscar KPIs: ${kpisResult.error.message}`);
-}
-if (pivotResult.error) {
-  console.error("Erro Pivot:", pivotResult.error);
-  throw new Error(`Erro ao buscar Pivot: ${pivotResult.error.message}`);
-}
-if (reportResult.error) {
-  console.error("Erro Report:", reportResult.error);
-  throw new Error(`Erro ao buscar Relatório: ${reportResult.error.message}`);
-}
+// Função timezone-safe para comparar datas por dia
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+// Detecta automaticamente o preset baseado no value
+const detectPresetFromValue = useCallback((range: DateRange | undefined): PresetKey => {
+  if (!range?.from || !range?.to) return 'custom';
+  
+  for (const key of presetOrder) {
+    const presetRange = presets[key].getRange();
+    if (
+      sameDay(range.from, presetRange.from) &&
+      sameDay(range.to, presetRange.to)
+    ) {
+      return key;
+    }
+  }
+  return 'custom';
+}, []);
+
+// Sincronizar quando value muda externamente
+useEffect(() => {
+  const detected = detectPresetFromValue(value);
+  if (detected !== activePreset) {
+    setActivePreset(detected);
+  }
+}, [value, detectPresetFromValue, activePreset]);
 ```
 
-### 2. Melhorar mensagem de erro no toast
+---
 
-Mostrar o motivo real do erro ao invés de mensagem genérica:
+### 2. useCommercialConversationsKPIs.tsx - Logs e Erro Real
+
+**Problema**: Erro da RPC é silenciado com `data?.[0] || defaultKPIs`, mascarando falhas.
+
+**Solucao**:
+- Adicionar logs de debug com parametros enviados
+- Logar erro antes de throw
+- Manter throw error para que React Query capture o isError
 
 ```typescript
-} catch (error: any) {
-  console.error("Erro ao exportar:", error);
-  
-  // Extrair mensagem de erro mais específica
-  const errorMessage = error?.message || error?.details || "Erro desconhecido";
-  
-  toast.error("Erro ao exportar relatório", {
-    description: errorMessage.length > 100 
-      ? errorMessage.substring(0, 100) + "..." 
-      : errorMessage,
+queryFn: async () => {
+  console.log('[KPIs] Calling with filters:', {
+    p_start: filters.startDate.toISOString(),
+    p_end: filters.endDate.toISOString(),
+    p_department_id: filters.departmentId,
+    p_agent_id: filters.agentId,
+    p_status: filters.status,
+    p_channel: filters.channel,
   });
-} finally {
-```
+  
+  const { data, error } = await supabase.rpc("get_commercial_conversations_kpis", {...});
 
-### 3. Adicionar try-catch específico para geração do Excel
-
-Separar erros de busca de dados vs erros de geração do arquivo:
-
-```typescript
-// Buscar dados
-const [kpisResult, pivotResult, reportResult] = await Promise.all([...]);
-
-// Verificar erros de busca
-if (kpisResult.error || pivotResult.error || reportResult.error) {
-  throw new Error("Erro ao buscar dados: " + 
-    (kpisResult.error?.message || pivotResult.error?.message || reportResult.error?.message));
-}
-
-// Gerar Excel (try-catch separado)
-try {
-  const wb = XLSX.utils.book_new();
-  // ... resto do código de geração
-} catch (xlsxError) {
-  console.error("Erro ao gerar Excel:", xlsxError);
-  throw new Error("Erro ao gerar arquivo Excel");
-}
+  if (error) {
+    console.error('[KPIs] RPC Error:', error);
+    throw error;
+  }
+  
+  console.log('[KPIs] Result:', data);
+  return (data?.[0] || defaultKPIs) as KPIData;
+},
 ```
 
 ---
 
-## Alterações Detalhadas
+### 3. useCommercialConversationsReport.tsx - Logs
 
-### Arquivo: `src/hooks/useExportCommercialConversationsCSV.tsx`
+**Problema**: Falta visibilidade dos parametros enviados para debug.
 
-**Linhas 82-102**: Adicionar verificação de erros completa
-
-```typescript
-// 🆕 Verificar TODOS os erros das queries paralelas
-if (kpisResult.error) {
-  console.error("[Export] Erro ao buscar KPIs:", kpisResult.error);
-  throw new Error(`Erro ao buscar KPIs: ${kpisResult.error.message || 'Erro desconhecido'}`);
-}
-
-if (pivotResult.error) {
-  console.error("[Export] Erro ao buscar Pivot:", pivotResult.error);
-  throw new Error(`Erro ao buscar Pivot: ${pivotResult.error.message || 'Erro desconhecido'}`);
-}
-
-if (reportResult.error) {
-  console.error("[Export] Erro ao buscar Relatório:", reportResult.error);
-  throw new Error(`Erro ao buscar Relatório: ${reportResult.error.message || 'Erro desconhecido'}`);
-}
-```
-
-**Linhas 254-260**: Melhorar catch com mensagem detalhada
+**Solucao**:
+- Adicionar logs de debug similares ao KPIs
 
 ```typescript
-} catch (error: any) {
-  console.error("[Export] Erro ao exportar:", error);
-  
-  // Extrair mensagem de erro mais específica
-  const errorMessage = error?.message 
-    || error?.details 
-    || (typeof error === 'string' ? error : 'Erro desconhecido');
-  
-  toast.error("Erro ao exportar relatório", {
-    description: errorMessage.length > 150 
-      ? errorMessage.substring(0, 150) + "..." 
-      : errorMessage,
+queryFn: async () => {
+  console.log('[Report] Calling with filters:', {
+    p_start: filters.startDate.toISOString(),
+    p_end: filters.endDate.toISOString(),
+    p_department_id: filters.departmentId,
+    p_limit: filters.limit,
+    p_offset: filters.offset,
   });
+  
+  const { data, error } = await supabase.rpc(...);
+
+  if (error) {
+    console.error('[Report] RPC Error:', error);
+    throw error;
+  }
+  
+  console.log('[Report] Result count:', data?.length);
+  return (data || []) as ReportRow[];
+},
+```
+
+---
+
+### 4. CommercialKPICards.tsx - Erro Visivel
+
+**Problema**: Quando query falha, mostra "0" silencioso.
+
+**Solucao**:
+- Adicionar prop `isError` e `error`
+- Mostrar mensagem de erro na UI
+
+```tsx
+interface CommercialKPICardsProps {
+  data: KPIData | undefined;
+  isLoading: boolean;
+  isError?: boolean;
+  error?: Error | null;
+}
+
+// No componente:
+if (isError) {
+  return (
+    <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+      <p className="text-red-600 dark:text-red-400 text-sm font-medium">
+        Erro ao carregar KPIs. Por favor, tente novamente.
+      </p>
+      {error?.message && (
+        <p className="text-red-500 dark:text-red-500 text-xs mt-1">{error.message}</p>
+      )}
+    </div>
+  );
 }
 ```
 
 ---
 
-## Impacto
+### 5. CommercialDetailedTable.tsx - Erro Visivel
 
-| Área | Impacto |
-|------|---------|
-| Diagnóstico | Melhorado - Erro real aparece no toast e console |
-| UX | Melhorado - Usuário sabe qual parte falhou |
-| Estabilidade | Melhorado - Não continua com dados parciais |
-| Regressão | Zero - Apenas adiciona verificações, não remove lógica |
+**Problema**: Quando query falha, mostra "Nenhuma conversa encontrada".
+
+**Solucao**:
+- Adicionar props `isError` e `error`
+- Mostrar mensagem de erro diferenciada
+
+```tsx
+interface CommercialDetailedTableProps {
+  data: ReportRow[] | undefined;
+  isLoading: boolean;
+  isError?: boolean;
+  error?: Error | null;
+  // ... rest
+}
+
+// No componente, antes do check de data vazia:
+if (isError) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Conversas Detalhadas</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <p className="text-red-600 dark:text-red-400 text-sm font-medium">
+            Erro ao carregar conversas. Por favor, tente novamente.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
 
 ---
 
-## Critérios de Aceite
+### 6. CommercialConversationsReport.tsx - Passar isError
 
-| # | Cenário | Esperado |
-|---|---------|----------|
-| 1 | Erro na RPC KPIs | Toast mostra "Erro ao buscar KPIs: [motivo]" |
-| 2 | Erro na RPC Pivot | Toast mostra "Erro ao buscar Pivot: [motivo]" |
-| 3 | Erro na RPC Report | Toast mostra "Erro ao buscar Relatório: [motivo]" |
-| 4 | Exportação bem sucedida | Toast verde com total de registros |
-| 5 | Nenhum registro | Toast warning "Nenhum registro encontrado" |
+**Ajuste**: Passar isError/error para os componentes filhos.
+
+```tsx
+<CommercialKPICards 
+  data={kpisQuery.data} 
+  isLoading={kpisQuery.isLoading}
+  isError={kpisQuery.isError}
+  error={kpisQuery.error as Error | null}
+/>
+
+<CommercialDetailedTable
+  data={reportQuery.data}
+  isLoading={reportQuery.isLoading}
+  isError={reportQuery.isError}
+  error={reportQuery.error as Error | null}
+  // ... rest
+/>
+```
 
 ---
 
-## Seção Técnica
+## Consistencia do p_end Exclusivo
 
-### Arquivo Modificado
-`src/hooks/useExportCommercialConversationsCSV.tsx`
+**Status**: JA IMPLEMENTADO
 
-### Linhas Afetadas
-- 82-102: Adicionar verificação de erros das 3 queries
-- 254-260: Melhorar tratamento do catch
+A pagina `CommercialConversationsReport.tsx` ja faz na linha 74:
+```typescript
+endDate: addDays(dateRange?.to || endOfMonth(new Date()), 1), // End exclusive
+```
 
-### Verificações Adicionais
+Isso garante que quando o usuario seleciona 01/01-31/01, o `p_end` enviado sera 01/02 00:00:00, compativel com o SQL `created_at < p_end`.
 
-Após implementar, testar nos cenários:
-1. Exportar com filtros válidos → sucesso
-2. Exportar período sem dados → aviso "Nenhum registro"
-3. Simular erro (desconectar internet) → mensagem de erro clara
+---
 
+## Resultado Esperado
+
+1. **Label sincronizado**: Quando usuario seleciona "Mes Passado" ou qualquer preset, o label sempre reflete o periodo real
+2. **Erro visivel**: Se KPI ou Report falhar, usuario ve mensagem de erro (nao "0" silencioso)
+3. **Debug facilitado**: Logs no console mostram exatamente quais parametros estao sendo enviados
+4. **Timezone-safe**: Comparacao por dia evita bugs de horario/timezone
