@@ -64,28 +64,33 @@ export function FormPreviewModal({ open, onOpenChange, schema, name, title, desc
           {/* Preview Container */}
           {device === "mobile" ? (
             <div 
-              className="flex-1 min-h-0 overflow-y-auto bg-muted/50 flex items-start justify-center p-8"
+              className="flex-1 min-h-0 overflow-y-auto bg-slate-200 dark:bg-slate-800 flex items-start justify-center p-8"
             >
               <div 
-                className="shrink-0 bg-background rounded-[40px] border-[8px] border-foreground/20 shadow-2xl overflow-y-auto"
+                className="shrink-0 rounded-[40px] border-[8px] border-slate-400 dark:border-slate-600 shadow-2xl overflow-hidden"
                 style={{ width: MOBILE_WIDTH, height: MOBILE_HEIGHT }}
               >
-                <PublicFormV2 
-                  schema={schema} 
-                  isPreview 
-                  formName={name} 
-                  formTitle={title} 
-                  formDescription={description}
-                />
+                <div className="h-full overflow-y-auto bg-white dark:bg-slate-900">
+                  <PublicFormV2 
+                    schema={schema} 
+                    isPreview 
+                    formName={name} 
+                    formTitle={title} 
+                    formDescription={description}
+                  />
+                </div>
               </div>
             </div>
           ) : (
-            <div className="flex-1 min-h-0 bg-muted/50 p-8 flex items-start justify-center overflow-hidden">
+            <div className="flex-1 min-h-0 bg-slate-200 dark:bg-slate-800 p-8 flex items-start justify-center overflow-hidden">
               <div 
-                className="w-full max-w-4xl bg-background rounded-lg shadow-lg overflow-hidden"
+                className="w-full max-w-4xl rounded-lg shadow-lg overflow-hidden"
                 style={{ maxHeight: 'calc(90vh - 120px)' }}
               >
-                <div className="h-full overflow-y-auto scrollbar-thin" style={{ maxHeight: 'calc(90vh - 120px)' }}>
+                <div 
+                  className="h-full overflow-y-auto scrollbar-thin bg-white dark:bg-slate-900" 
+                  style={{ maxHeight: 'calc(90vh - 120px)' }}
+                >
                   <PublicFormV2 
                     schema={schema} 
                     isPreview 
