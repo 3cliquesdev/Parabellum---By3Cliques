@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import * as XLSX from "xlsx";
 
 export interface ExportFilters {
   startDate: Date;
@@ -23,16 +24,6 @@ function formatDuration(seconds: number | null): string {
   if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
   if (minutes > 0) return `${minutes}m ${secs}s`;
   return `${secs}s`;
-}
-
-function escapeCSV(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  const str = Array.isArray(value) ? value.join(", ") : String(value);
-  // Para formato brasileiro (separador ;), escapar se contiver ; ou " ou quebra de linha
-  if (str.includes(";") || str.includes('"') || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
 }
 
 interface KPIData {
@@ -110,30 +101,30 @@ export function useExportCommercialConversationsCSV() {
         return;
       }
 
-      const lines: string[] = [];
-      const BOM = "\uFEFF";
+      // Criar workbook
+      const wb = XLSX.utils.book_new();
 
-      // ===== SEÇÃO 1: KPIs =====
-      lines.push("=== RESUMO EXECUTIVO ===");
-      lines.push("");
-      lines.push(`Período;${format(filters.startDate, "dd/MM/yyyy")} a ${format(filters.endDate, "dd/MM/yyyy")}`);
-      lines.push("");
-      lines.push("Indicador;Valor");
-      lines.push(`Total de Conversas;${kpis.total_conversations}`);
-      lines.push(`Conversas Abertas;${kpis.total_open}`);
-      lines.push(`Conversas Fechadas;${kpis.total_closed}`);
-      lines.push(`Sem Tag;${kpis.total_without_tag}`);
-      lines.push(`CSAT Médio;${kpis.avg_csat ? kpis.avg_csat.toFixed(1).replace(".", ",") : "-"}`);
-      lines.push(`Tempo Médio de Espera;${formatDuration(kpis.avg_waiting_seconds) || "-"}`);
-      lines.push(`Duração Média;${formatDuration(kpis.avg_duration_seconds) || "-"}`);
-      lines.push("");
-      lines.push("");
+      // ===== ABA 1: RESUMO =====
+      const resumoData = [
+        ["RESUMO EXECUTIVO"],
+        [],
+        ["Período", `${format(filters.startDate, "dd/MM/yyyy")} a ${format(filters.endDate, "dd/MM/yyyy")}`],
+        [],
+        ["Indicador", "Valor"],
+        ["Total de Conversas", kpis.total_conversations],
+        ["Conversas Abertas", kpis.total_open],
+        ["Conversas Fechadas", kpis.total_closed],
+        ["Sem Tag", kpis.total_without_tag],
+        ["CSAT Médio", kpis.avg_csat ? Number(kpis.avg_csat.toFixed(1)) : "-"],
+        ["Tempo Médio de Espera", formatDuration(kpis.avg_waiting_seconds) || "-"],
+        ["Duração Média", formatDuration(kpis.avg_duration_seconds) || "-"],
+      ];
+      const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
+      wsResumo["!cols"] = [{ wch: 25 }, { wch: 30 }];
+      XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
 
-      // ===== SEÇÃO 2: PIVOT =====
+      // ===== ABA 2: PIVOT =====
       if (pivotData.length > 0) {
-        lines.push("=== MATRIZ DEPARTAMENTO x CATEGORIA ===");
-        lines.push("");
-        
         // Agrupar por departamento e categoria
         const deptMap = new Map<string, Map<string, number>>();
         const allCategories = new Set<string>();
@@ -148,23 +139,38 @@ export function useExportCommercialConversationsCSV() {
         
         const categories = Array.from(allCategories).sort();
         
-        // Header do pivot
-        lines.push(["Departamento", ...categories].join(";"));
+        // Montar dados do pivot
+        const pivotSheetData: (string | number)[][] = [];
+        pivotSheetData.push(["Departamento", ...categories, "Total"]);
         
-        // Linhas do pivot
         deptMap.forEach((catMap, deptName) => {
           const values = categories.map((cat) => catMap.get(cat) || 0);
-          lines.push([escapeCSV(deptName), ...values].join(";"));
+          const total = values.reduce((a, b) => a + b, 0);
+          pivotSheetData.push([deptName, ...values, total]);
         });
-        
-        lines.push("");
-        lines.push("");
+
+        // Linha de totais
+        const totalsRow: (string | number)[] = ["TOTAL"];
+        categories.forEach((cat) => {
+          let catTotal = 0;
+          deptMap.forEach((catMap) => {
+            catTotal += catMap.get(cat) || 0;
+          });
+          totalsRow.push(catTotal);
+        });
+        totalsRow.push(totalsRow.slice(1).reduce((a: number, b) => a + (b as number), 0));
+        pivotSheetData.push(totalsRow);
+
+        const wsPivot = XLSX.utils.aoa_to_sheet(pivotSheetData);
+        wsPivot["!cols"] = [{ wch: 25 }, ...categories.map(() => ({ wch: 15 })), { wch: 12 }];
+        XLSX.utils.book_append_sheet(wb, wsPivot, "Pivot");
+      } else {
+        // Aba vazia se não houver dados
+        const wsPivot = XLSX.utils.aoa_to_sheet([["Sem dados de pivot para o período selecionado"]]);
+        XLSX.utils.book_append_sheet(wb, wsPivot, "Pivot");
       }
 
-      // ===== SEÇÃO 3: DETALHADO =====
-      lines.push("=== CONVERSAS DETALHADAS ===");
-      lines.push("");
-
+      // ===== ABA 3: DETALHADO =====
       const headers = [
         "ID Curto",
         "ID Conversa",
@@ -192,45 +198,48 @@ export function useExportCommercialConversationsCSV() {
         "Tempo Espera pós Atribuição",
       ];
 
-      lines.push(headers.join(";"));
+      const detailData: (string | number)[][] = [headers];
 
       reportData.forEach((row: any) => {
-        const rowValues = [
-          escapeCSV(row.short_id),
-          escapeCSV(row.conversation_id),
-          escapeCSV(row.status),
-          escapeCSV(row.contact_name),
-          escapeCSV(row.contact_email),
-          escapeCSV(row.contact_phone),
-          escapeCSV(row.contact_organization),
+        detailData.push([
+          row.short_id || "",
+          row.conversation_id || "",
+          row.status || "",
+          row.contact_name || "",
+          row.contact_email || "",
+          row.contact_phone || "",
+          row.contact_organization || "",
           row.created_at ? format(new Date(row.created_at), "dd/MM/yyyy HH:mm") : "",
           row.closed_at ? format(new Date(row.closed_at), "dd/MM/yyyy HH:mm") : "",
           formatDuration(row.waiting_time_seconds),
           formatDuration(row.duration_seconds),
-          escapeCSV(row.assigned_agent_name),
-          escapeCSV(row.participants),
-          escapeCSV(row.department_name),
-          String(row.interactions_count || 0),
-          escapeCSV(row.origin),
-          row.csat_score ? String(row.csat_score) : "",
-          escapeCSV(row.csat_comment),
-          escapeCSV(row.ticket_id),
-          escapeCSV(row.bot_flow),
-          escapeCSV(row.tags_all),
-          escapeCSV(row.last_conversation_tag),
-          escapeCSV(row.first_customer_message),
+          row.assigned_agent_name || "",
+          Array.isArray(row.participants) ? row.participants.join(", ") : (row.participants || ""),
+          row.department_name || "",
+          row.interactions_count || 0,
+          row.origin || "",
+          row.csat_score || "",
+          row.csat_comment || "",
+          row.ticket_id || "",
+          row.bot_flow || "",
+          Array.isArray(row.tags_all) ? row.tags_all.join(", ") : (row.tags_all || ""),
+          row.last_conversation_tag || "",
+          row.first_customer_message || "",
           formatDuration(row.waiting_after_assignment_seconds),
-        ];
-        lines.push(rowValues.join(";"));
+        ]);
       });
 
-      const csvContent = BOM + lines.join("\n");
-      
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+      const wsDetail = XLSX.utils.aoa_to_sheet(detailData);
+      wsDetail["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 12) }));
+      XLSX.utils.book_append_sheet(wb, wsDetail, "Detalhado");
+
+      // Gerar arquivo e download
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `conversas_comerciais_${format(new Date(), "yyyy-MM-dd")}.csv`;
+      link.download = `conversas_comerciais_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -243,7 +252,7 @@ export function useExportCommercialConversationsCSV() {
         toast.success(`Exportados ${reportData.length} registros com sucesso`);
       }
     } catch (error: any) {
-      console.error("Erro ao exportar CSV:", error);
+      console.error("Erro ao exportar:", error);
       toast.error("Erro ao exportar relatório");
     } finally {
       setIsExporting(false);
