@@ -8725,36 +8725,62 @@ export type Database = {
         Args: { p_end: string; p_start: string }
         Returns: number
       }
-      get_commercial_conversations_drilldown: {
-        Args: {
-          p_agent_id?: string
-          p_category_id?: string
-          p_channel?: string
-          p_department_id?: string
-          p_end: string
-          p_limit?: number
-          p_no_tag?: boolean
-          p_offset?: number
-          p_search?: string
-          p_start: string
-          p_status?: string
-        }
-        Returns: {
-          agent_name: string
-          category_color: string
-          category_name: string
-          channel: string
-          closed_at: string
-          contact_name: string
-          contact_phone: string
-          conversation_id: string
-          created_at: string
-          department_name: string
-          short_id: string
-          status: string
-          total_count: number
-        }[]
-      }
+      get_commercial_conversations_drilldown:
+        | {
+            Args: {
+              p_agent_id?: string
+              p_category_id?: string
+              p_channel?: string
+              p_department_id?: string
+              p_end: string
+              p_limit?: number
+              p_no_tag?: boolean
+              p_offset?: number
+              p_search?: string
+              p_start: string
+              p_status?: string
+            }
+            Returns: {
+              agent_name: string
+              category_color: string
+              category_name: string
+              channel: string
+              closed_at: string
+              contact_name: string
+              contact_phone: string
+              conversation_id: string
+              created_at: string
+              department_name: string
+              short_id: string
+              status: string
+              total_count: number
+            }[]
+          }
+        | {
+            Args: {
+              p_agent_id?: string
+              p_category: string
+              p_channel?: string
+              p_department_id: string
+              p_end: string
+              p_limit?: number
+              p_offset?: number
+              p_start: string
+              p_status?: string
+            }
+            Returns: {
+              assigned_agent_name: string
+              closed_at: string
+              contact_name: string
+              contact_phone: string
+              conversation_id: string
+              created_at: string
+              short_id: string
+              status: string
+              tag_name: string
+              total_count: number
+            }[]
+          }
       get_commercial_conversations_kpis: {
         Args: {
           p_agent_id?: string
@@ -8784,12 +8810,10 @@ export type Database = {
           p_status?: string
         }
         Returns: {
-          category_color: string
-          category_id: string
-          category_name: string
+          category: string
+          conversation_count: number
           department_id: string
           department_name: string
-          total: number
         }[]
       }
       get_commercial_conversations_report: {

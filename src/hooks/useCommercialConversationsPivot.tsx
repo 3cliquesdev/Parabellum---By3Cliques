@@ -11,12 +11,10 @@ export interface CommercialPivotFilters {
 }
 
 export interface PivotRow {
-  department_id: string | null;
+  department_id: string;
   department_name: string;
-  category_id: string | null;
-  category_name: string;
-  category_color: string | null;
-  total: number;
+  category: string;
+  conversation_count: number;
 }
 
 export function useCommercialConversationsPivot(filters: CommercialPivotFilters) {
