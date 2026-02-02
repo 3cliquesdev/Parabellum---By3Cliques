@@ -3063,13 +3063,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "email_sends_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "email_templates_v2"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "email_sends_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
