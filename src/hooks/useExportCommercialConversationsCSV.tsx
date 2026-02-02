@@ -81,7 +81,21 @@ export function useExportCommercialConversationsCSV() {
         }),
       ]);
 
-      if (reportResult.error) throw reportResult.error;
+      // 🆕 Verificar TODOS os erros das queries paralelas
+      if (kpisResult.error) {
+        console.error("[Export] Erro ao buscar KPIs:", kpisResult.error);
+        throw new Error(`Erro ao buscar KPIs: ${kpisResult.error.message || 'Erro desconhecido'}`);
+      }
+
+      if (pivotResult.error) {
+        console.error("[Export] Erro ao buscar Pivot:", pivotResult.error);
+        throw new Error(`Erro ao buscar Pivot: ${pivotResult.error.message || 'Erro desconhecido'}`);
+      }
+
+      if (reportResult.error) {
+        console.error("[Export] Erro ao buscar Relatório:", reportResult.error);
+        throw new Error(`Erro ao buscar Relatório: ${reportResult.error.message || 'Erro desconhecido'}`);
+      }
 
       const kpis: KPIData = kpisResult.data?.[0] || {
         total_conversations: 0,
@@ -252,8 +266,18 @@ export function useExportCommercialConversationsCSV() {
         toast.success(`Exportados ${reportData.length} registros com sucesso`);
       }
     } catch (error: any) {
-      console.error("Erro ao exportar:", error);
-      toast.error("Erro ao exportar relatório");
+      console.error("[Export] Erro ao exportar:", error);
+      
+      // Extrair mensagem de erro mais específica
+      const errorMessage = error?.message 
+        || error?.details 
+        || (typeof error === 'string' ? error : 'Erro desconhecido');
+      
+      toast.error("Erro ao exportar relatório", {
+        description: errorMessage.length > 150 
+          ? errorMessage.substring(0, 150) + "..." 
+          : errorMessage,
+      });
     } finally {
       setIsExporting(false);
     }
