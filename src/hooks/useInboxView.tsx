@@ -244,6 +244,22 @@ export function useInboxView(filters?: InboxFilters) {
   const departmentIdsRef = useRef(departmentIds);
   departmentIdsRef.current = departmentIds;
 
+  // ✅ FIX 4: QueryKey estável - serializar departmentIds e filters para evitar mismatch
+  const deptKey = useMemo(() => 
+    departmentIds ? [...departmentIds].sort().join(',') : 'all',
+    [departmentIds]
+  );
+  const filtersKey = useMemo(() => 
+    filters ? JSON.stringify(filters) : 'default',
+    [filters]
+  );
+
+  // Refs para uso no realtime (sem resubscrição)
+  const deptKeyRef = useRef(deptKey);
+  deptKeyRef.current = deptKey;
+  const filtersKeyRef = useRef(filtersKey);
+  filtersKeyRef.current = filtersKey;
+
   // Memoizar opções de fetch para evitar recriações desnecessárias
   const fetchOptions = useMemo(() => ({
     userId: user?.id,
@@ -256,7 +272,7 @@ export function useInboxView(filters?: InboxFilters) {
   fetchOptionsRef.current = fetchOptions;
 
   const query = useQuery({
-    queryKey: [...QUERY_KEY, user?.id, role, departmentIds, filters],
+    queryKey: [...QUERY_KEY, user?.id, role, deptKey, filtersKey],
     queryFn: async () => {
       const data = await fetchInboxData(fetchOptions);
       
@@ -307,30 +323,66 @@ export function useInboxView(filters?: InboxFilters) {
           table: "inbox_view",
         },
         (payload) => {
-          console.log("[Realtime] inbox_view change:", payload.eventType);
+          // ✅ FIX 3: Logs com feature flag localStorage.inboxDebug
+          const DEBUG = typeof window !== 'undefined' && 
+            (window.localStorage?.getItem('inboxDebug') === '1' || import.meta.env.DEV);
           
           const row = (payload.new || payload.old) as InboxViewItem;
           if (!row?.conversation_id) return;
 
+          const userId = user?.id;
+          if (!userId) return;
+
           // Usar refs para valores atuais (sem recriar canal)
           const currentRole = roleRef.current;
-          const currentDeptIds = departmentIdsRef.current;
-          const currentFilters = filtersRef.current;
+          const currentDeptIds = departmentIdsRef.current || [];
+          const hasFullAccess = hasFullInboxAccess(currentRole);
 
-          // Verificar se a conversa deve ser visível para este role/departamento
-          // Incluir conversas sem departamento (pool geral) para roles operacionais
-          const isInAllowedDepartment = currentDeptIds?.includes(row.department || "") || row.department === null;
-          const shouldShow = hasFullInboxAccess(currentRole) || 
-            row.assigned_to === user?.id ||
-            (row.assigned_to === null && isInAllowedDepartment);
+          // ✅ AJUSTE A: dept=null NÃO conta como "meu departamento" para colega
+          const isInAllowedDepartment = 
+            row.department !== null && currentDeptIds.includes(row.department);
 
-          // Merge incremental no cache
+          const isAssignedToMe = row.assigned_to === userId;
+
+          // ✅ AJUSTE A: dept=null só aparece se unassigned (pool)
+          const isUnassignedAllowed = 
+            row.assigned_to === null && 
+            (row.department === null || isInAllowedDepartment);
+
+          // ✅ FIX 1: Colega do MESMO dept - só quando dept !== null
+          const isAssignedToColleagueInMyDept = 
+            row.assigned_to !== null && 
+            row.assigned_to !== userId && 
+            row.department !== null && 
+            isInAllowedDepartment;
+
+          const shouldShow = hasFullAccess || 
+            isAssignedToMe || 
+            isUnassignedAllowed ||
+            isAssignedToColleagueInMyDept;
+
+          if (DEBUG) {
+            console.log(`[Inbox-Debug] ${new Date().toISOString()} | EVENT=${payload.eventType} | conv=${row.conversation_id.slice(0, 8)}`);
+            console.log(`[Inbox-Debug] shouldShow=${shouldShow} | me=${isAssignedToMe} | unassignedAllowed=${isUnassignedAllowed} | colleagueSameDept=${isAssignedToColleagueInMyDept} | dept=${row.department ?? 'null'}`);
+          }
+
+          // ✅ FIX 4: Merge incremental no cache - queryKey estável
           queryClient.setQueryData<InboxViewItem[]>(
-            [...QUERY_KEY, user?.id, currentRole, currentDeptIds, currentFilters],
+            [...QUERY_KEY, userId, currentRole, deptKeyRef.current, filtersKeyRef.current],
             (prev = []) => {
-              if (payload.eventType === "DELETE" || !shouldShow) {
+              // ✅ FIX 2: Só remove em DELETE explícito
+              if (payload.eventType === "DELETE") {
+                if (DEBUG) console.warn(`[Inbox-Debug] ⚠️ REMOVED (DELETE): ${row.conversation_id.slice(0, 8)}`);
                 return prev.filter(item => item.conversation_id !== row.conversation_id);
               }
+
+              // ✅ FIX 2: UPDATE com shouldShow=false -> ignora, NÃO destrói cache
+              if (!shouldShow) {
+                if (DEBUG) console.log(`[Inbox-Debug] ⏭️ IGNORED (shouldShow=false): ${row.conversation_id.slice(0, 8)}`);
+                return prev;
+              }
+
+              if (DEBUG) console.log(`[Inbox-Debug] ✅ MERGED: ${row.conversation_id.slice(0, 8)}`);
               return mergeInboxItems(prev, [row as InboxViewItem]);
             }
           );
@@ -359,7 +411,7 @@ export function useInboxView(filters?: InboxFilters) {
               console.log("[Realtime] Catch-up found", catchUpData.length, "new records");
               const currentFilters = filtersRef.current;
               queryClient.setQueryData<InboxViewItem[]>(
-                [...QUERY_KEY, user?.id, roleRef.current, departmentIdsRef.current, currentFilters],
+                [...QUERY_KEY, user?.id, roleRef.current, deptKeyRef.current, filtersKeyRef.current],
                 (prev = []) => mergeInboxItems(prev, catchUpData)
               );
               // catchUpData vem ordenado ASC; último é o mais recente
@@ -505,7 +557,7 @@ export function useInboxView(filters?: InboxFilters) {
         fetchInboxData({ cursor: lastSeenRef.current, ...fetchOptionsRef.current }).then(data => {
           if (data.length > 0) {
             queryClient.setQueryData<InboxViewItem[]>(
-              [...QUERY_KEY, user?.id, roleRef.current, departmentIdsRef.current, filtersRef.current],
+              [...QUERY_KEY, user?.id, roleRef.current, deptKeyRef.current, filtersKeyRef.current],
               (prev = []) => mergeInboxItems(prev, data)
             );
             lastSeenRef.current = data[0].updated_at;
@@ -527,7 +579,7 @@ export function useInboxView(filters?: InboxFilters) {
       });
       // Atualização otimista no cache usando refs
       queryClient.setQueryData<InboxViewItem[]>(
-        [...QUERY_KEY, user?.id, roleRef.current, departmentIdsRef.current, filtersRef.current],
+        [...QUERY_KEY, user?.id, roleRef.current, deptKeyRef.current, filtersKeyRef.current],
         (prev = []) => prev.map(item => 
           item.conversation_id === conversationId 
             ? { ...item, unread_count: 0 } 
