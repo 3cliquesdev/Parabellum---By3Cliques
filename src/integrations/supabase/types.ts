@@ -8725,6 +8725,65 @@ export type Database = {
         Args: { p_end: string; p_start: string }
         Returns: number
       }
+      get_commercial_conversations_kpis: {
+        Args: {
+          p_agent_id?: string
+          p_channel?: string
+          p_department_id?: string
+          p_end: string
+          p_start: string
+          p_status?: string
+        }
+        Returns: {
+          avg_csat: number
+          avg_duration_seconds: number
+          avg_waiting_seconds: number
+          total_closed: number
+          total_conversations: number
+          total_open: number
+          total_without_tag: number
+        }[]
+      }
+      get_commercial_conversations_report: {
+        Args: {
+          p_agent_id?: string
+          p_channel?: string
+          p_department_id?: string
+          p_end: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_start: string
+          p_status?: string
+        }
+        Returns: {
+          assigned_agent_name: string
+          bot_flow: string
+          closed_at: string
+          contact_email: string
+          contact_name: string
+          contact_organization: string
+          contact_phone: string
+          conversation_id: string
+          created_at: string
+          csat_comment: string
+          csat_score: number
+          department_name: string
+          duration_seconds: number
+          first_customer_message: string
+          interactions_count: number
+          last_conversation_tag: string
+          origin: string
+          participants: string
+          short_id: string
+          status: string
+          tags_all: string[]
+          ticket_id: string
+          total_count: number
+          waiting_after_assignment_seconds: number
+          waiting_time_seconds: number
+        }[]
+      }
       get_consultant_contact_ids: {
         Args: { consultant_user_id: string }
         Returns: string[]
