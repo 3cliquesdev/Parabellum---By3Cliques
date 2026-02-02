@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 export function useCustomerTags(customerId: string | null) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const query = useQuery({
     queryKey: ["customer-tags", customerId],
@@ -25,10 +27,11 @@ export function useCustomerTags(customerId: string | null) {
   const addTag = useMutation({
     mutationFn: async (tagId: string) => {
       if (!customerId) throw new Error("Customer ID is required");
+      if (!user?.id) throw new Error("Usuário não autenticado");
       
       const { data, error } = await supabase
         .from("customer_tags")
-        .insert({ customer_id: customerId, tag_id: tagId })
+        .insert({ customer_id: customerId, tag_id: tagId, created_by: user.id })
         .select()
         .single();
 
