@@ -1,207 +1,197 @@
 
+# Plano: PATCH 1-SHOT — Remocao Total PWA + Purge Definitivo
 
-# Plano: Correção de Filtros de Deals e Políticas do Inbox
+## Resumo das Alteracoes
 
-## Resumo dos Problemas Identificados
-
-### 1. Filtro de Origem "Formulário" nos Deals ✅ JÁ EXISTE
-- `DealFilterPopover.tsx` linha 44: `{ value: "formulario", label: "Formulário" }`
-- `SourceMultiSelect.tsx` linha 26: `{ value: "formulario", label: "Formulário", Icon: FileText }`
-- **Existem 541 deals com `lead_source = 'formulario'` no banco**
-
-O filtro já existe e funciona. Se não está aparecendo, pode ser um problema de cache do navegador.
-
----
-
-### 2. Busca no Inbox - Gerentes/Admin sem acesso master 🔴 CRÍTICO
-
-**Problema**: As políticas RLS do `inbox_view` estão incompletas para alguns roles de gestão.
-
-**Políticas Atuais**:
-| Role | Política | Problema |
-|------|----------|----------|
-| admin | `admin_manager_full_access_inbox_view` | ✅ OK |
-| manager | `admin_manager_full_access_inbox_view` | ✅ OK |
-| general_manager | `general_manager_view_inbox` | ✅ OK |
-| cs_manager | `cs_manager_view_inbox` | ✅ OK |
-| support_manager | `support_manager_view_inbox` | ✅ OK |
-| financial_manager | ❌ FALTA | 🔴 Não vê nada |
-| financial_agent | ❌ FALTA | 🔴 Não vê nada |
-
-**Solução**: Adicionar políticas RLS para `financial_manager` e `financial_agent`.
-
----
-
-### 3. Agentes de Departamento não encontram suas conversas 🔴 CRÍTICO
-
-**Problema**: As políticas de `sales_rep` e `support_agent` têm a condição `status = 'open'` para conversas não atribuídas, mas **também excluem conversas atribuídas a eles que estão fechadas** (histórico).
-
-**Política Atual de `sales_rep`**:
-```sql
-has_role(auth.uid(), 'sales_rep') AND (
-  assigned_to = auth.uid() 
-  OR 
-  (status = 'open' AND assigned_to IS NULL AND department IN (Comercial/Vendas))
-)
-```
-
-A política parece correta (`assigned_to = auth.uid()` deveria incluir fechadas), mas precisa de verificação.
-
-**Política Atual de `support_agent`**:
-```sql
-has_role(auth.uid(), 'support_agent') AND (
-  assigned_to = auth.uid() 
-  OR 
-  (status = 'open' AND assigned_to IS NULL AND department = Suporte)
-)
-```
-
----
-
-### 4. Deals de Formulários indo para Pipeline correta ✅ CONFIRMADO
-
-**Dados do banco**:
-| Pipeline | Deals de Formulário |
-|----------|---------------------|
-| Vendas - Nacional | 478 |
-| Vendas - Internacional | 37 |
-| Vendas - Híbrido | 23 |
-| Recuperação - Nacional | 3 |
-
-Os formulários estão direcionando corretamente para pipelines de Vendas.
-
----
-
-## Correções Necessárias
-
-### Migration SQL: Políticas do inbox_view
-
-```sql
--- 1. Adicionar política para financial_manager (acesso total)
-CREATE POLICY financial_manager_view_inbox
-ON public.inbox_view
-FOR SELECT
-TO authenticated
-USING (has_role(auth.uid(), 'financial_manager'::app_role));
-
--- 2. Adicionar política para financial_agent (seu departamento)
-CREATE POLICY financial_agent_view_inbox
-ON public.inbox_view
-FOR SELECT
-TO authenticated
-USING (
-  has_role(auth.uid(), 'financial_agent'::app_role) AND (
-    assigned_to = auth.uid() 
-    OR (
-      status = 'open' 
-      AND assigned_to IS NULL 
-      AND department IN (
-        SELECT id FROM departments 
-        WHERE name IN ('Financeiro', 'Finance', 'Financial')
-      )
-    )
-  )
-);
-```
-
-### Migration SQL: Políticas de conversations (consistência)
-
-```sql
--- 1. Adicionar política para financial_manager (SELECT)
-CREATE POLICY financial_manager_can_view_all_conversations
-ON public.conversations
-FOR SELECT
-TO authenticated
-USING (has_role(auth.uid(), 'financial_manager'::app_role));
-
--- 2. Adicionar política para financial_manager (UPDATE)
-CREATE POLICY financial_manager_can_update_conversations
-ON public.conversations
-FOR UPDATE
-TO authenticated
-USING (has_role(auth.uid(), 'financial_manager'::app_role))
-WITH CHECK (has_role(auth.uid(), 'financial_manager'::app_role));
-
--- 3. Adicionar política para financial_agent (SELECT)
-CREATE POLICY financial_agent_can_view_assigned_conversations
-ON public.conversations
-FOR SELECT
-TO authenticated
-USING (
-  has_role(auth.uid(), 'financial_agent'::app_role) AND (
-    assigned_to = auth.uid() 
-    OR (
-      status = 'open' 
-      AND assigned_to IS NULL 
-      AND department IN (
-        SELECT id FROM departments 
-        WHERE name IN ('Financeiro', 'Finance', 'Financial')
-      )
-    )
-  )
-);
-```
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Ação |
+| Arquivo | Acao |
 |---------|------|
-| Nova migration SQL | Adicionar políticas RLS para financial_manager e financial_agent |
+| `index.html` | Remover theme-color + Substituir script anti-cache por PWA NUKER completo |
+| `src/main.tsx` | Adicionar limpeza por BUILD_ID (async/IIFE seguro) |
+| `src/lib/build/schemaVersion.ts` | Incrementar para `2026.02.03-v1` |
+| `src/components/settings/SystemMaintenanceCard.tsx` | Criar novo componente |
+| `src/pages/Settings.tsx` | Integrar card na secao Seguranca e Admin |
+
+---
+
+## Etapa 1 — index.html
+
+### 1.1 Remover theme-color (linhas 22-24)
+
+Remover completamente:
+```html
+<!-- Theme Color -->
+<meta name="theme-color" content="#2563EB" />
+```
+
+### 1.2 Substituir script anti-cache (linhas 44-66)
+
+Substituir pelo PWA NUKER que:
+- Limpa CacheStorage MESMO se nao tiver SW
+- Desregistra todos os SWs
+- Reload 1x com guard
+
+```javascript
+(function () {
+  try {
+    var GUARD = "pwa_nuker_v1_done";
+    if (sessionStorage.getItem(GUARD)) return;
+    sessionStorage.setItem(GUARD, "1");
+
+    var controlled = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+
+    var unregisterSW = Promise.resolve();
+    if ("serviceWorker" in navigator && navigator.serviceWorker.getRegistrations) {
+      unregisterSW = navigator.serviceWorker.getRegistrations().then(function (regs) {
+        return Promise.all(regs.map(function (r) { return r.unregister(); }));
+      });
+    }
+
+    var clearCaches = Promise.resolve();
+    if ("caches" in window && caches.keys) {
+      clearCaches = caches.keys().then(function (keys) {
+        return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+      });
+    }
+
+    Promise.all([unregisterSW, clearCaches]).finally(function () {
+      if (controlled) setTimeout(function(){ location.reload(); }, 80);
+    });
+  } catch (e) {}
+})();
+```
+
+---
+
+## Etapa 2 — src/main.tsx
+
+Adicionar IIFE async para limpeza por BUILD_ID ANTES do check de SCHEMA_VERSION (apos imports, antes da linha 14):
+
+```typescript
+// ============================================
+// LIMPEZA POR BUILD_ID - Limpa CacheStorage quando build muda
+// ============================================
+(async () => {
+  try {
+    const BUILD_ID_KEY = "app_last_build_id";
+    const currentBuild = getCurrentBuildId();
+    const lastSeenBuild = localStorage.getItem(BUILD_ID_KEY);
+
+    if (lastSeenBuild && lastSeenBuild !== currentBuild) {
+      console.log("[Main] 🔄 Novo build detectado, limpando CacheStorage...");
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+        console.log("[Main] ✅ CacheStorage limpo:", keys.length, "caches removidos");
+      }
+    }
+
+    localStorage.setItem(BUILD_ID_KEY, currentBuild);
+  } catch (e) {
+    console.warn("[Main] ⚠️ Build purge failed:", e);
+  }
+})();
+```
+
+---
+
+## Etapa 3 — src/lib/build/schemaVersion.ts
+
+Incrementar versao para forcar cleanup global:
+
+```typescript
+// Antes
+export const APP_SCHEMA_VERSION = "2026.01.31-v1";
+
+// Depois
+export const APP_SCHEMA_VERSION = "2026.02.03-v1";
+```
+
+---
+
+## Etapa 4 — Criar SystemMaintenanceCard.tsx
+
+Novo arquivo `src/components/settings/SystemMaintenanceCard.tsx`:
+
+```typescript
+import { useState } from "react";
+import { Trash2, RefreshCw, HardDrive } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { hardRefresh } from "@/lib/build/ensureLatestBuild";
+import { APP_SCHEMA_VERSION } from "@/lib/build/schemaVersion";
+import { toast } from "sonner";
+
+export function SystemMaintenanceCard() {
+  const [clearing, setClearing] = useState(false);
+
+  const handleReset = async () => {
+    setClearing(true);
+    toast.info("Limpando todos os caches...", {
+      description: "Voce permanecera logado."
+    });
+    await new Promise(r => setTimeout(r, 500));
+    await hardRefresh();
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-3 p-4 rounded-xl border bg-card">
+      <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-slate-500">
+        <HardDrive className="h-6 w-6 text-white" />
+      </div>
+      
+      <div className="text-center space-y-1">
+        <span className="font-medium text-sm text-foreground block">Manutencao</span>
+        <span className="text-xs text-muted-foreground">v{APP_SCHEMA_VERSION}</span>
+      </div>
+
+      <Button
+        variant="destructive"
+        size="sm"
+        onClick={handleReset}
+        disabled={clearing}
+        className="w-full"
+      >
+        {clearing ? (
+          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Trash2 className="mr-2 h-4 w-4" />
+        )}
+        {clearing ? "Limpando..." : "Limpar Cache"}
+      </Button>
+    </div>
+  );
+}
+```
+
+---
+
+## Etapa 5 — Integrar em Settings.tsx
+
+1. Adicionar import:
+```typescript
+import { SystemMaintenanceCard } from "@/components/settings/SystemMaintenanceCard";
+```
+
+2. Adicionar card na secao "Seguranca e Admin" (apos linha 307):
+```tsx
+<SystemMaintenanceCard />
+```
 
 ---
 
 ## Resultado Esperado
 
-1. **Gerentes/Admin**: Acesso total ao Inbox (busca retorna TODAS as conversas)
-2. **Financial Manager**: Vê todas as conversas do sistema
-3. **Financial Agent**: Vê conversas atribuídas a ele + não atribuídas do departamento Financeiro
-4. **Histórico de Agentes**: Agentes continuam vendo suas conversas fechadas (já funciona com `assigned_to = auth.uid()`)
-5. **Formulários**: Já estão funcionando corretamente
+1. PWA NUKER limpa SW + CacheStorage no primeiro acesso (1x por sessao)
+2. Limpeza automatica de CacheStorage quando BUILD_ID muda
+3. Schema version incrementado forca cleanup global para todos
+4. Card de manutencao visivel em /settings para reset manual
+5. Chrome normal fica igual ao anonimo (sem lentidao)
 
 ---
 
-## Seção Técnica
+## Criterios de Aceite
 
-### Verificação do Frontend (useDepartmentsByRole.tsx)
-
-O hook `useDepartmentsByRole` já contempla `financial_agent`:
-```typescript
-case "financial_agent":
-case "financial_manager":
-  return departments
-    .filter((d) =>
-      ["Financeiro", "Finance", "Financial"].some(
-        (name) => d.name.toLowerCase() === name.toLowerCase()
-      )
-    )
-    .map((d) => d.id);
-```
-
-Porém o `hasFullInboxAccess` não inclui `financial_manager`:
-```typescript
-export const FULL_ACCESS_ROLES = [
-  "admin",
-  "manager",
-  "general_manager",
-  "support_manager",
-  "cs_manager",
-] as const; // ← falta financial_manager
-```
-
-### Ajuste Adicional: src/config/roles.ts
-
-```typescript
-export const FULL_ACCESS_ROLES = [
-  "admin",
-  "manager",
-  "general_manager",
-  "support_manager",
-  "cs_manager",
-  "financial_manager", // ← ADICIONAR
-] as const;
-```
-
-Isso garante que `financial_manager` não tenha filtros de departamento aplicados no frontend.
-
+- DevTools > Application > Service Workers: nenhum ativo
+- DevTools > Application > Cache Storage: vazio
+- Chrome normal sem lentidao/funcoes reduzidas
+- Card de manutencao aparece em /settings
+- Console mostra logs de limpeza no primeiro acesso
