@@ -12,6 +12,30 @@ import { APP_SCHEMA_VERSION } from "./lib/build/schemaVersion";
 import { toast } from "sonner";
 
 // ============================================
+// LIMPEZA POR BUILD_ID - Limpa CacheStorage quando build muda
+// ============================================
+(async () => {
+  try {
+    const BUILD_ID_KEY = "app_last_build_id";
+    const currentBuild = getCurrentBuildId();
+    const lastSeenBuild = localStorage.getItem(BUILD_ID_KEY);
+
+    if (lastSeenBuild && lastSeenBuild !== currentBuild) {
+      console.log("[Main] 🔄 Novo build detectado, limpando CacheStorage...");
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+        console.log("[Main] ✅ CacheStorage limpo:", keys.length, "caches removidos");
+      }
+    }
+
+    localStorage.setItem(BUILD_ID_KEY, currentBuild);
+  } catch (e) {
+    console.warn("[Main] ⚠️ Build purge failed:", e);
+  }
+})();
+
+// ============================================
 // SISTEMA DE VERSIONAMENTO DE SCHEMA
 // ============================================
 

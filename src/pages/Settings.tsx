@@ -29,6 +29,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { SettingsCategory } from "@/components/settings/SettingsCategory";
 import { SettingsCard } from "@/components/settings/SettingsCard";
+import { SystemMaintenanceCard } from "@/components/settings/SystemMaintenanceCard";
 
 export default function Settings() {
   const { hasPermission, loading } = useRolePermissions();
@@ -305,6 +306,7 @@ export default function Settings() {
             description="Histórico de mudanças"
             onClick={() => navigate('/settings/audit-logs')}
           />
+          <SystemMaintenanceCard />
         </SettingsCategory>
       </div>
 
