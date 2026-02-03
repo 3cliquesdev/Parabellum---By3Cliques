@@ -8,6 +8,7 @@ export const FULL_ACCESS_ROLES = [
   "general_manager",
   "support_manager",
   "cs_manager",
+  "financial_manager",
 ] as const;
 
 export type FullAccessRole = typeof FULL_ACCESS_ROLES[number];
