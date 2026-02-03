@@ -432,24 +432,52 @@ async function executeTaskNode(supabase: any, item: QueueItem, contact: any) {
   if (!assignedTo) {
     console.log('No assigned_to or consultant_id, fetching available agent via round-robin...');
     
-    // Get an available support agent or consultant
-    const { data: agents } = await supabase
-      .from('profiles')
-      .select('id')
-      .in('id', 
-        supabase
-          .from('user_roles')
-          .select('user_id')
-          .in('role', ['consultant', 'support_agent'])
-      )
-      .eq('status', 'online')
-      .limit(1);
+    // 1. Buscar IDs de usuarios com roles corretas (query separada para evitar erro de nested query)
+    const { data: roleUsers, error: roleError } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .in('role', ['consultant', 'support_agent']);
     
-    if (agents && agents.length > 0) {
-      assignedTo = agents[0].id;
-      console.log('Assigned to available agent:', assignedTo);
-    } else {
-      // Fallback: get any consultant or admin
+    if (roleError) {
+      console.error('Failed to fetch role users:', roleError);
+    }
+    
+    const userIds = roleUsers?.map((r: any) => r.user_id) || [];
+    console.log(`Found ${userIds.length} users with consultant/support_agent roles`);
+    
+    if (userIds.length > 0) {
+      // 2. Buscar perfil online dentre esses usuarios
+      const { data: agents, error: agentsError } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('id', userIds)
+        .eq('status', 'online')
+        .limit(1);
+      
+      if (agentsError) {
+        console.error('Failed to fetch online agents:', agentsError);
+      }
+      
+      if (agents && agents.length > 0) {
+        assignedTo = agents[0].id;
+        console.log('Assigned to available online agent:', assignedTo);
+      } else {
+        // Nenhum online, pegar o primeiro disponível (sem filtro de status)
+        const { data: anyAgents } = await supabase
+          .from('profiles')
+          .select('id')
+          .in('id', userIds)
+          .limit(1);
+        
+        if (anyAgents && anyAgents.length > 0) {
+          assignedTo = anyAgents[0].id;
+          console.log('Assigned to available (offline) agent:', assignedTo);
+        }
+      }
+    }
+    
+    // Fallback se ainda não tem agente
+    if (!assignedTo) {
       const { data: fallbackAgents } = await supabase
         .from('user_roles')
         .select('user_id')
@@ -463,9 +491,10 @@ async function executeTaskNode(supabase: any, item: QueueItem, contact: any) {
     }
   }
 
+  // Se ainda não tem agente, criar task sem atribuição (será atribuído manualmente depois)
   if (!assignedTo) {
-    console.error('No agent available to assign task');
-    return { success: false, error: 'Nenhum agente disponível para atribuir tarefa' };
+    console.warn('No agent available, creating task without assignment - will need manual assignment');
+    // Continuar mesmo sem assignedTo - task fica sem dono
   }
 
   // Create activity for assigned person

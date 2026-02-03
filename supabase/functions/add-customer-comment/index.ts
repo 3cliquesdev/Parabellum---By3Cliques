@@ -47,7 +47,7 @@ serve(async (req) => {
     // Verify the ticket belongs to this customer
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
-      .select('id, customer_id, status, subject')
+      .select('id, customer_id, status, subject, assigned_to, ticket_number')
       .eq('id', ticket_id)
       .single();
 
@@ -99,8 +99,11 @@ serve(async (req) => {
       .update({ updated_at: new Date().toISOString() })
       .eq('id', ticket_id);
 
-    // If ticket was resolved, reopen it
-    if (ticket.status === 'resolved') {
+    // Reabrir ticket se estava em status de aguardando
+    const reopenableStatuses = ['resolved', 'waiting_customer', 'pending'];
+    const previousStatus = ticket.status;
+    
+    if (reopenableStatuses.includes(ticket.status)) {
       await supabase
         .from('tickets')
         .update({ 
@@ -109,7 +112,40 @@ serve(async (req) => {
         })
         .eq('id', ticket_id);
       
-      console.log('[add-customer-comment] Ticket reopened due to customer response');
+      console.log('[add-customer-comment] Ticket reopened from', ticket.status, 'to open');
+      
+      // Notificar agente atribuído via notify-ticket-event
+      if (ticket.assigned_to) {
+        try {
+          await supabase.functions.invoke('notify-ticket-event', {
+            body: {
+              ticket_id,
+              event_type: 'status_changed',
+              actor_id: null, // Cliente (externo)
+              old_value: previousStatus,
+              new_value: 'open',
+              metadata: { reason: 'customer_reply' }
+            }
+          });
+          console.log('[add-customer-comment] Agent notified via notify-ticket-event');
+        } catch (notifyError) {
+          console.warn('[add-customer-comment] Failed to notify via edge function:', notifyError);
+        }
+      }
+    }
+
+    // Notificar agente sobre nova resposta do cliente (sempre que tem assigned_to)
+    if (ticket.assigned_to) {
+      const ticketRef = ticket.ticket_number || ticket_id.slice(0, 8);
+      await supabase.from('notifications').insert({
+        user_id: ticket.assigned_to,
+        title: 'Nova resposta do cliente',
+        message: `Cliente respondeu ao ticket #${ticketRef}`,
+        type: 'ticket_reply',
+        reference_id: ticket_id,
+        read: false
+      });
+      console.log('[add-customer-comment] Notification created for agent:', ticket.assigned_to);
     }
 
     console.log('[add-customer-comment] Comment added successfully:', comment.id);
