@@ -1,62 +1,74 @@
 
-## Plano: Permitir Visibilidade de Conversas do Departamento para Agentes
+## Plano: Corrigir Visibilidade de Conversas - Sincronizar Query em useConversations
 
-### ✅ IMPLEMENTADO
+### Problema Identificado
 
----
+A contagem está correta (34 conversas em "Suporte Sistema") porque `get-inbox-counts` e `useInboxView` foram atualizados. Porém, a lista de conversas ainda mostra apenas 5 porque:
 
-### Mudança 1: Usar departamento do PERFIL ao invés de filtro por nome
+1. **`useInboxView.tsx`** (CORRETO): Query inclui conversas de colegas do departamento
+2. **`useConversations.tsx`** (DESATUALIZADO): Query ainda restringe a conversas não atribuídas
 
-**Arquivo:** `src/hooks/useDepartmentsByRole.tsx`
-
-- Removido filtro por nomes hardcoded ("Suporte", "Support", etc.)
-- Agora usa `userDepartmentId` do perfil do usuário como fonte única da verdade
-- Se usuário não tem departamento configurado, retorna array vazio (só vê conversas atribuídas a ele)
+O `Inbox.tsx` prioriza `conversations` (do hook antigo) sobre `inboxItems` (do hook correto) na linha 319-320.
 
 ---
 
-### Mudança 2: Adicionar visibilidade de conversas de colegas
+### Mudança Necessária
 
-**Arquivo:** `src/hooks/useInboxView.tsx`
+**Arquivo:** `src/hooks/useConversations.tsx` (linhas 159-170)
 
-Query alterada de:
+| Antes | Depois |
+|-------|--------|
+| `assigned_to.eq.${user.id},and(assigned_to.is.null,department.in.(...))` | `assigned_to.eq.${user.id},department.in.(...),and(assigned_to.is.null,department.is.null)` |
+
+**Query atualizada:**
 ```javascript
-query.or(`assigned_to.eq.${userId},and(assigned_to.is.null,department.in.(${departmentIds.join(",")}))`);
+// ANTES (só vê não atribuídas do departamento)
+query = query.or(
+  `assigned_to.eq.${user.id},and(assigned_to.is.null,department.in.(${departmentIds.join(",")})),and(assigned_to.is.null,department.is.null)`
+);
+
+// DEPOIS (vê TODAS do departamento, incluindo de colegas)
+query = query.or(
+  `assigned_to.eq.${user.id},department.in.(${departmentIds.join(",")}),and(assigned_to.is.null,department.is.null)`
+);
 ```
 
-Para:
-```javascript
-query.or(`assigned_to.eq.${userId},department.in.(${departmentIds.join(",")}),and(assigned_to.is.null,department.is.null)`);
+---
+
+### Arquivos a Modificar
+
+| Arquivo | Linha | Mudança |
+|---------|-------|---------|
+| `src/hooks/useConversations.tsx` | 162-164 | Alterar query para incluir conversas de colegas do departamento |
+
+---
+
+### Impacto
+
+| Aspecto | Resultado |
+|---------|-----------|
+| Miguel verá 34 conversas | As mesmas que a contagem mostra |
+| Retrocompatível | Sim, apenas expande visibilidade |
+| Não afeta outros departamentos | Mantém isolamento |
+
+---
+
+### Por que funcionou no counts mas não na lista
+
+```text
++------------------------+-------------------------------------------+
+|  Componente            |  Query usada                              |
++------------------------+-------------------------------------------+
+| Sidebar (counts)       | get-inbox-counts → CORRIGIDO              |
+| useInboxView           | inbox_view → CORRIGIDO                    |
+| useConversations       | conversations → ❌ DESATUALIZADO          |
+| Lista final (Inbox)    | Prioriza conversations → ❌ RESTRITO      |
++------------------------+-------------------------------------------+
 ```
 
-Agora agentes veem TODAS as conversas do seu departamento, incluindo as atribuídas a colegas.
-
----
-
-### Mudança 3: Atualizar edge function get-inbox-counts
-
-**Arquivo:** `supabase/functions/get-inbox-counts/index.ts`
-
-- Busca `userDepartmentId` do perfil do usuário
-- Aplica mesma lógica de visibilidade: `department.eq.${userDepartmentId}` ao invés de filtro por nome
-- Removidos filtros hardcoded por nome de departamento
-
----
-
-### Arquivos Modificados
-
-| Arquivo | Status |
-|---------|--------|
-| `src/hooks/useDepartmentsByRole.tsx` | ✅ Atualizado |
-| `src/hooks/useInboxView.tsx` | ✅ Atualizado |
-| `src/hooks/useConversations.tsx` | ✅ Atualizado |
-| `supabase/functions/get-inbox-counts/index.ts` | ✅ Atualizado e deployed |
-
----
-
-### Resultado Esperado
-
-Miguel Fedes (e outros agentes do "Suporte Sistema") agora devem ver:
-- Suas próprias conversas atribuídas
-- Conversas atribuídas a colegas do mesmo departamento (ex: Mabile Silva)
-- Conversas não atribuídas do pool geral
+Após a correção:
+```text
++------------------------+-------------------------------------------+
+| Lista final (Inbox)    | Prioriza conversations → ✅ 34 conversas  |
++------------------------+-------------------------------------------+
+```
