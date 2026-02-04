@@ -369,6 +369,9 @@ verify_jwt = false
 schedule = "0 6 * * *"
 region = "us-east-1"
 
+[functions.search-contacts-for-ticket]
+verify_jwt = false
+
 [functions.broadcast-ai-queue]
 verify_jwt = true
 

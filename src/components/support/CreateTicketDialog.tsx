@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useCreateTicket } from "@/hooks/useCreateTicket";
-import { useContacts } from "@/hooks/useContacts";
+import { useSearchContactsForTicket } from "@/hooks/useSearchContactsForTicket";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTicketCategories, useCreateTicketCategory } from "@/hooks/useTicketCategories";
 import { useUsers } from "@/hooks/useUsers";
@@ -80,10 +80,8 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   // Debounce search to avoid query on every keystroke
   const debouncedSearch = useDebouncedValue(customerSearch, 300);
   
-  // Server-side search - only query when there's a search term
-  const { data: contacts = [] } = useContacts(
-    debouncedSearch.length >= 2 ? { searchQuery: debouncedSearch } : undefined
-  );
+  // Optimized search via Edge Function (bypasses RLS for performance)
+  const { data: contacts = [] } = useSearchContactsForTicket(debouncedSearch);
 
   const { data: users = [] } = useUsers();
   
