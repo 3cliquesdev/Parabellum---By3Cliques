@@ -44,16 +44,16 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
   return useQuery({
     queryKey: ["deals", pipelineId, filters, user?.id, role],
     queryFn: async () => {
+      // Query com relacionamentos essenciais
+      // A otimização principal está nas RLS policies (EXISTS vs has_role)
       let query = supabase
         .from("deals")
-        .select(
-          `
+        .select(`
           *,
           contacts (id, first_name, last_name, email, phone, company),
           organizations (name),
           assigned_user:profiles!deals_assigned_to_fkey (id, full_name, avatar_url)
-        `
-        );
+        `);
 
       // Filter by pipeline
       if (pipelineId) {
@@ -161,9 +161,9 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
         query = query.order("created_at", { ascending: false });
       }
 
-      // Limite otimizado: 200 deals por página (reduzido de 1000)
-      // Suficiente para visualização e evita timeouts com RLS em tabelas grandes
-      query = query.limit(200);
+      // Limite otimizado: 50 deals por página
+      // Com RLS otimizada (EXISTS vs has_role), queries são muito mais rápidas
+      query = query.limit(50);
 
       const { data, error } = await query;
       if (error) throw error;
