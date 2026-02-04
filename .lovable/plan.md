@@ -1,92 +1,108 @@
 
-## Plano: Completar Importação Kiwify e Corrigir Busca de Clientes
+# Plano: Corrigir Busca de Clientes para Criar Tickets
 
-### Situação Atual
+## Problema Identificado
 
-**Importação Kiwify:**
-| Métrica | Valor |
-|---------|-------|
-| Clientes únicos nos webhooks | 5.739 |
-| Já existem no banco | 5.694 (99.2%) |
-| Faltando importar | 50 |
+A busca de clientes no modal "Criar Novo Ticket" está falhando com **timeout** (erro 57014). 
 
-A importação via API (`import-kiwify-contacts`) está travando por timeout. A maioria dos clientes já foi importada via CSV ou webhooks anteriores.
+**Causa raiz:**
+- A query de busca está fazendo ILIKE em 4 campos (first_name, last_name, email, phone) sem índice otimizado para email
+- A tabela `contacts` tem **14.817 registros**
+- A execução leva ~673ms apenas para email ILIKE, multiplicando quando combinada com outros campos
+- A política RLS para `consultant` adiciona overhead de verificação
+- O timeout padrão do Supabase (8s) é ultrapassado
 
-**Problema da Busca:**
-O cliente `juh.naiara@gmail.com` **existe no banco** (JULIA NAIARA FREITAS COUTINHO, status: customer). O problema é que a busca no modal de criação de tickets não encontrou porque:
-- A busca funciona corretamente via service role (backend)
-- Pode haver um problema de case-sensitivity ou cache no frontend
+## Solução Proposta
 
----
+Criar uma **Edge Function** `search-contacts-for-ticket` que:
+1. Usa `SERVICE_ROLE_KEY` para bypassar RLS (é segura pois apenas retorna dados mínimos)
+2. Faz busca otimizada usando os índices trigram existentes
+3. Prioriza busca por email exato primeiro (mais rápido)
+4. Limita resultados a 20 registros
+5. Retorna apenas campos necessários (id, nome, email)
 
-### Ações Planejadas
+## Arquitetura
 
-#### 1. Importar os 50 contatos faltantes via SQL direto
-Executar uma inserção direta usando os dados dos webhooks Kiwify já existentes na tabela `kiwify_events`:
-
-```sql
-INSERT INTO contacts (email, first_name, last_name, phone, document, source, status, blocked)
-SELECT DISTINCT ON (lower((payload->'Customer'->>'email')::text))
-  lower((payload->'Customer'->>'email')::text) as email,
-  COALESCE(
-    (payload->'Customer'->>'first_name')::text, 
-    split_part((payload->'Customer'->>'full_name')::text, ' ', 1),
-    'Cliente'
-  ) as first_name,
-  COALESCE(
-    (payload->'Customer'->>'last_name')::text,
-    CASE 
-      WHEN array_length(string_to_array((payload->'Customer'->>'full_name')::text, ' '), 1) > 1 
-      THEN array_to_string((string_to_array((payload->'Customer'->>'full_name')::text, ' '))[2:], ' ')
-      ELSE NULL
-    END
-  ) as last_name,
-  COALESCE(
-    (payload->'Customer'->>'mobile')::text, 
-    (payload->'Customer'->>'mobile_phone')::text
-  ) as phone,
-  COALESCE(
-    (payload->'Customer'->>'CPF')::text, 
-    (payload->'Customer'->>'cpf')::text
-  ) as document,
-  'kiwify_import' as source,
-  'customer' as status,
-  false as blocked
-FROM kiwify_events 
-WHERE event_type IN ('paid', 'order_approved')
-  AND (payload->'Customer'->>'email') IS NOT NULL
-  AND lower((payload->'Customer'->>'email')::text) NOT IN (
-    SELECT lower(email) FROM contacts WHERE email IS NOT NULL
-  )
-ORDER BY lower((payload->'Customer'->>'email')::text), created_at DESC;
+```text
++-------------------+     +------------------------+     +------------+
+|  CreateTicket     | --> | search-contacts-       | --> |  contacts  |
+|  Dialog           |     | for-ticket (Edge)      |     |  (table)   |
++-------------------+     +------------------------+     +------------+
+        |                         |                           |
+        |  searchTerm             |  SERVICE_ROLE             |
+        |------------------------>|  (bypasses RLS)           |
+        |                         |-------------------------->|
+        |                         |                           |
+        |  contacts[]             |  optimized query          |
+        |<------------------------|  with LIMIT 20            |
+        |                         |<--------------------------|
 ```
 
-#### 2. Cancelar jobs de importação travados
-Limpar a fila de importação para evitar processamento desnecessário:
+## Mudanças Técnicas
 
-```sql
-UPDATE kiwify_import_queue SET status = 'cancelled' WHERE status IN ('pending', 'processing');
-UPDATE sync_jobs SET status = 'cancelled', completed_at = NOW() WHERE status = 'running' AND job_type = 'kiwify_contacts_import';
+### 1. Nova Edge Function: `search-contacts-for-ticket`
+
+| Aspecto | Detalhe |
+|---------|---------|
+| Endpoint | `/functions/v1/search-contacts-for-ticket` |
+| Método | POST |
+| Autenticação | JWT obrigatório (qualquer usuário autenticado) |
+| Input | `{ searchTerm: string }` |
+| Output | `{ contacts: [{ id, first_name, last_name, email }] }` |
+
+**Lógica de busca otimizada:**
+1. Se `searchTerm` contém `@` → busca prioritária por email
+2. Senão → busca por nome usando índices trigram
+3. LIMIT 20 para garantir resposta rápida
+
+### 2. Novo Hook: `useSearchContactsForTicket`
+
+Substituirá o uso de `useContacts` no `CreateTicketDialog.tsx`:
+- Chama a Edge Function via `supabase.functions.invoke`
+- Debounce de 300ms mantido
+- Tratamento de erros robusto
+
+### 3. Atualizar `CreateTicketDialog.tsx`
+
+Substituir:
+```typescript
+const { data: contacts = [] } = useContacts(
+  debouncedSearch.length >= 2 ? { searchQuery: debouncedSearch } : undefined
+);
 ```
 
----
+Por:
+```typescript
+const { data: contacts = [] } = useSearchContactsForTicket(debouncedSearch);
+```
 
-### Resultado Esperado
+## Arquivos a Modificar
+
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/search-contacts-for-ticket/index.ts` | Criar |
+| `supabase/config.toml` | Adicionar função |
+| `src/hooks/useSearchContactsForTicket.tsx` | Criar |
+| `src/components/support/CreateTicketDialog.tsx` | Atualizar import e uso |
+
+## Benefícios
 
 | Antes | Depois |
 |-------|--------|
-| 5.694 contatos Kiwify | 5.744 contatos Kiwify |
-| 50 faltando | 0 faltando |
-| Busca não encontra alguns clientes | Todos os clientes da Kiwify disponíveis para busca |
+| Timeout após ~8s | Resposta em ~200ms |
+| Usuários não conseguem buscar | Busca funciona para todos |
+| Query pesada com RLS | Bypass seguro com dados mínimos |
 
----
+## Segurança
 
-### Arquivos a Modificar
+- Edge Function requer JWT válido (usuário autenticado)
+- Retorna apenas dados públicos de contato (id, nome, email)
+- Não expõe dados sensíveis (telefone, documentos, etc.)
+- Logging para auditoria
 
-Nenhum arquivo precisa ser modificado - apenas execução de SQL no banco.
+## Testes Necessários
 
----
-
-### Seção Técnica
-
-A importação via API da Kiwify (`process-kiwify-import-queue`) está dando timeout devido ao rate limiting da API externa. A solução mais eficiente é usar os dados já coletados via webhooks (`kiwify_events`) que contêm 8.630 registros de vendas com dados completos dos clientes.
+1. Buscar cliente por email exato: `juh.naiara@gmail.com`
+2. Buscar cliente por nome parcial: `Julia`
+3. Buscar cliente inexistente
+4. Verificar resposta rápida (<500ms)
