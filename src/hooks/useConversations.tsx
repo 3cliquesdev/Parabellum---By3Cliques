@@ -41,10 +41,10 @@ export interface ConversationFilters {
 const SLA_HOURS = 4; // Configurable SLA threshold
 
 export function useConversations(filters?: ConversationFilters) {
-  const { user } = useAuth();
+  const { user, department: userDepartmentId } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
   const queryClient = useQueryClient();
-  const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role);
+  const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role, userDepartmentId);
 
   // Refs estáveis para evitar resubscrição do realtime a cada render
   const filtersRef = useRef(filters);

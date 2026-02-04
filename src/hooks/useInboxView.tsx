@@ -67,11 +67,12 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
   if (role && userId && !hasFullInboxAccess(role)) {
     if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
       if (departmentIds && departmentIds.length > 0) {
+        // ✅ MUDANÇA: Agentes veem TODAS as conversas do departamento (incluindo de colegas)
         // Conversa atribuída ao usuário OU 
-        // (não atribuída E do departamento permitido) OU
+        // (qualquer conversa do departamento permitido) OU
         // (não atribuída E sem departamento definido - pool geral da IA)
         query = query.or(
-          `assigned_to.eq.${userId},and(assigned_to.is.null,department.in.(${departmentIds.join(",")})),and(assigned_to.is.null,department.is.null)`
+          `assigned_to.eq.${userId},department.in.(${departmentIds.join(",")}),and(assigned_to.is.null,department.is.null)`
         );
       } else {
         // Sem departamentos configurados: atribuídas ao usuário OU sem departamento (pool geral)
@@ -230,9 +231,10 @@ function sortInboxItemsByPriority(items: InboxViewItem[]): InboxViewItem[] {
 }
 
 export function useInboxView(filters?: InboxFilters) {
-  const { user } = useAuth();
+  const { user, department: userDepartmentId } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
-  const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role);
+  // ✅ MUDANÇA: Passar departamento do perfil do usuário para useDepartmentsByRole
+  const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role, userDepartmentId);
   const queryClient = useQueryClient();
   const lastSeenRef = useRef<string | null>(null);
   
@@ -616,7 +618,8 @@ export interface InboxCounts {
 
 export function useInboxCounts(userId?: string) {
   const { role, loading: roleLoading } = useUserRole();
-  const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role);
+  const { department: userDepartmentId } = useAuth();
+  const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role, userDepartmentId);
 
   // IMPORTANTE: Só executar a query quando o role estiver REALMENTE carregado
   // Para evitar que admin veja dados filtrados como "user"

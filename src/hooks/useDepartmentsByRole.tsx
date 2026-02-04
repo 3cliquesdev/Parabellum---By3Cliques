@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useDepartments } from "./useDepartments";
 import { FULL_ACCESS_ROLES, hasFullAccess } from "@/config/roles";
 
 // Re-exportar para compatibilidade com código existente
@@ -7,73 +6,42 @@ export { FULL_ACCESS_ROLES };
 
 /**
  * Hook para retornar IDs de departamentos permitidos baseado no role do usuário
- * Usado para filtrar conversas/tickets por departamento de forma consistente
+ * 
+ * MUDANÇA V2: Usa departamento do PERFIL do usuário como fonte única da verdade
+ * ao invés de filtrar por nomes hardcoded.
+ * 
+ * @param role - Role do usuário
+ * @param userDepartmentId - Departamento do perfil do usuário (da tabela profiles)
  */
-export function useDepartmentsByRole(role: string | null) {
-  const { data: departments, isLoading } = useDepartments({ activeOnly: true });
-
+export function useDepartmentsByRole(role: string | null, userDepartmentId?: string | null) {
   const departmentIds = useMemo(() => {
-    if (!departments || !role) return null;
+    if (!role) return null;
 
+    // Roles com acesso total (sem restrição de departamento)
+    if (hasFullAccess(role)) {
+      return null;
+    }
+
+    // Roles operacionais: usar departamento do próprio perfil
+    // Se não tiver departamento configurado, retorna array vazio (só vê conversas atribuídas a ele)
     switch (role) {
       case "sales_rep":
-        // Vendedor: departamentos comerciais
-        return departments
-          .filter((d) =>
-            ["Comercial", "Vendas", "Sales"].some(
-              (name) => d.name.toLowerCase() === name.toLowerCase()
-            )
-          )
-          .map((d) => d.id);
-
       case "support_agent":
-        // Suporte: departamento de suporte
-        return departments
-          .filter((d) =>
-            ["Suporte", "Support", "Atendimento"].some(
-              (name) => d.name.toLowerCase() === name.toLowerCase()
-            )
-          )
-          .map((d) => d.id);
-
       case "financial_agent":
-      case "financial_manager":
-        // Financeiro: departamento financeiro
-        return departments
-          .filter((d) =>
-            ["Financeiro", "Finance", "Financial"].some(
-              (name) => d.name.toLowerCase() === name.toLowerCase()
-            )
-          )
-          .map((d) => d.id);
-
       case "consultant":
       case "cs_manager":
-        // CS: departamento de customer success
-        return departments
-          .filter((d) =>
-            ["CS", "Customer Success", "Sucesso do Cliente"].some(
-              (name) => d.name.toLowerCase() === name.toLowerCase()
-            )
-          )
-          .map((d) => d.id);
-
-      // Roles com acesso total (sem restrição de departamento)
-      case "admin":
-      case "manager":
-      case "general_manager":
-      case "support_manager":
-        return null;
+        // Retorna departamento do perfil do usuário
+        return userDepartmentId ? [userDepartmentId] : [];
 
       default:
-        // Role genérico 'user' ou desconhecido: sem acesso especial
+        // Role genérico 'user' ou desconhecido: sem acesso a departamentos
         return [];
     }
-  }, [departments, role]);
+  }, [role, userDepartmentId]);
 
   return {
     departmentIds,
-    isLoading,
+    isLoading: false, // Não precisa mais carregar departamentos do banco
     // Helper para verificar se um departamento está na lista permitida
     isDepartmentAllowed: (deptId: string | null) => {
       if (departmentIds === null) return true; // Acesso total

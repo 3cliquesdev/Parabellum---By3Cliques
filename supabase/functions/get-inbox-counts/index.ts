@@ -136,8 +136,18 @@ serve(async (req) => {
     const departments = (deptsData || []) as Array<{ id: string; name: string; color: string | null }>;
     const tags = (tagsData || []) as Array<{ id: string; name: string; color: string | null }>;
 
+    // Buscar departamento do perfil do usuário para visibilidade baseada em departamento
+    const { data: userProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("department")
+      .eq("id", userId)
+      .maybeSingle();
+    
+    const userDepartmentId = userProfile?.department ?? null;
+
     // Helper to apply non-management visibility constraints.
     // IMPORTANT: query must already have .select() called before passing to this function
+    // ✅ MUDANÇA: Usar departamento do perfil do usuário ao invés de nomes hardcoded
     const applyVisibility = (query: any) => {
       if (isManager) return query;
 
@@ -146,31 +156,19 @@ serve(async (req) => {
         return query.eq("assigned_to", userId);
       }
 
-      if (role === "sales_rep") {
-        // assigned OR (unassigned AND open AND (dept in Sales OR dept null))
-        const salesDeptIds = departments
-          .filter((d) => d.name === "Comercial" || d.name === "Vendas")
-          .map((d) => d.id);
-
-        if (salesDeptIds.length > 0) {
+      // ✅ MUDANÇA: sales_rep, support_agent, financial_agent veem TODAS as conversas do departamento
+      if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
+        if (userDepartmentId) {
+          // Agente vê: suas conversas OU todas do seu departamento OU pool geral (sem dept e sem assigned)
           return query.or(
-            `assigned_to.eq.${userId},and(status.eq.open,assigned_to.is.null,department.in.(${salesDeptIds.join(",")})),and(status.eq.open,assigned_to.is.null,department.is.null)`
+            `assigned_to.eq.${userId},department.eq.${userDepartmentId},and(assigned_to.is.null,department.is.null)`
           );
         }
-        return query.or(`assigned_to.eq.${userId},and(status.eq.open,assigned_to.is.null,department.is.null)`);
+        // Sem departamento configurado: apenas atribuídas ao usuário OU pool geral
+        return query.or(`assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null)`);
       }
 
-      if (role === "support_agent") {
-        const supportDeptIds = departments.filter((d) => d.name === "Suporte").map((d) => d.id);
-        if (supportDeptIds.length > 0) {
-          return query.or(
-            `assigned_to.eq.${userId},and(status.eq.open,assigned_to.is.null,department.in.(${supportDeptIds.join(",")})),and(status.eq.open,assigned_to.is.null,department.is.null)`
-          );
-        }
-        return query.or(`assigned_to.eq.${userId},and(status.eq.open,assigned_to.is.null,department.is.null)`);
-      }
-
-      // financial_agent or other operational: assigned only
+      // Outros roles operacionais: assigned only
       return query.eq("assigned_to", userId);
     };
 
