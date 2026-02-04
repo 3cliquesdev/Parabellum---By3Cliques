@@ -161,8 +161,9 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
         query = query.order("created_at", { ascending: false });
       }
 
-      // Aplicar limite para otimização de performance (paginação infinita pode ser adicionada depois)
-      query = query.limit(1000);
+      // Limite otimizado: 200 deals por página (reduzido de 1000)
+      // Suficiente para visualização e evita timeouts com RLS em tabelas grandes
+      query = query.limit(200);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -170,6 +171,10 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
     },
     enabled: !roleLoading,
     placeholderData: keepPreviousData,
+    // Cache agressivo: 30s staleTime para reduzir queries ao banco
+    staleTime: 30 * 1000,
+    // Manter dados antigos por 5 min mesmo após navegação
+    gcTime: 5 * 60 * 1000,
   });
 }
 
