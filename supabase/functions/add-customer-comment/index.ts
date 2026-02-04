@@ -47,7 +47,7 @@ serve(async (req) => {
     // Verify the ticket belongs to this customer
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
-      .select('id, customer_id, status, subject, assigned_to, ticket_number')
+      .select('id, customer_id, status, subject, assigned_to, ticket_number, created_by')
       .eq('id', ticket_id)
       .single();
 
@@ -135,9 +135,11 @@ serve(async (req) => {
     }
 
     // Notificar agente sobre nova resposta do cliente (sempre que tem assigned_to)
+    const ticketRef = ticket.ticket_number || ticket_id.slice(0, 8);
+    const notificationsToInsert = [];
+    
     if (ticket.assigned_to) {
-      const ticketRef = ticket.ticket_number || ticket_id.slice(0, 8);
-      await supabase.from('notifications').insert({
+      notificationsToInsert.push({
         user_id: ticket.assigned_to,
         title: 'Nova resposta do cliente',
         message: `Cliente respondeu ao ticket #${ticketRef}`,
@@ -145,7 +147,26 @@ serve(async (req) => {
         reference_id: ticket_id,
         read: false
       });
-      console.log('[add-customer-comment] Notification created for agent:', ticket.assigned_to);
+      console.log('[add-customer-comment] Notification queued for agent:', ticket.assigned_to);
+    }
+    
+    // Notificar também o criador do ticket se for diferente do agente atribuído
+    if (ticket.created_by && ticket.created_by !== ticket.assigned_to) {
+      notificationsToInsert.push({
+        user_id: ticket.created_by,
+        title: 'Nova resposta do cliente',
+        message: `Cliente respondeu ao ticket #${ticketRef} que você criou`,
+        type: 'ticket_reply',
+        reference_id: ticket_id,
+        read: false
+      });
+      console.log('[add-customer-comment] Notification queued for creator:', ticket.created_by);
+    }
+    
+    // Inserir todas as notificações de uma vez
+    if (notificationsToInsert.length > 0) {
+      await supabase.from('notifications').insert(notificationsToInsert);
+      console.log('[add-customer-comment] Notifications created:', notificationsToInsert.length);
     }
 
     console.log('[add-customer-comment] Comment added successfully:', comment.id);
