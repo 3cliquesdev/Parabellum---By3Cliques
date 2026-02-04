@@ -1,257 +1,387 @@
 
-# Plano: PATCH DEFINITIVO - Fim dos Problemas de Permissão
+# Plano: PATCH 1-SHOT - Seguranca + Auditoria + Debug
 
-## Diagnóstico Confirmado
+## Resumo Executivo
 
-| Usuário | Problema | Causa Raiz |
-|---------|----------|------------|
-| Marco Cruz (cs_manager) | Não consegue criar usuários | `users.manage = FALSE` na tabela `role_permissions` |
-| Loriani Vitoria (sales_rep) | Erro ao transferir conversas | `useTakeControl` faz UPDATE direto com `assigned_to = user.id` - a política WITH CHECK do sales_rep valida que após update `assigned_to` ainda seja dele (impossível quando assume conversa de outro) |
-| Caroline Lamonica (support_agent) | Erro ao transferir tickets | `useTicketTransfer` faz UPDATE direto - a política WITH CHECK exige `assigned_to = auth.uid()` após update (impossível quando transfere para outro agente) |
+Este patch resolve 3 problemas criticos em uma unica entrega:
 
----
-
-## Correções a Aplicar
-
-### Correção 1: Habilitar `users.manage` para CS Manager
-
-**Tipo**: Atualização de dados (role_permissions)
-
-```sql
-UPDATE role_permissions
-SET enabled = true, updated_at = now()
-WHERE role = 'cs_manager' AND permission_key = 'users.manage';
-```
+1. **Brecha de Seguranca**: role `user` tem `inbox.transfer = TRUE` (precisa ser FALSE)
+2. **Auditoria Executavel**: Pagina `/admin/permissions-audit` com RPCs agregadas
+3. **Debug Estruturado**: Logs detalhados para rastrear erros de permissao
 
 ---
 
-### Correção 2: Criar RPC `transfer_ticket_secure` (SECURITY DEFINER)
+## 1) MIGRATION SQL - Fechar Brechas e Criar RPCs
 
-**Tipo**: Migration SQL
-
-Esta RPC bypassa RLS com validação explícita, seguindo o mesmo padrão do `transfer_conversation_secure`.
+### SQL Completo (Migration Unica)
 
 ```sql
-CREATE OR REPLACE FUNCTION public.transfer_ticket_secure(
-  p_ticket_id UUID,
-  p_department_id UUID,
-  p_assigned_to UUID DEFAULT NULL,
-  p_internal_note TEXT DEFAULT NULL
+BEGIN;
+
+-- =============================================
+-- PARTE 1: FECHAR BRECHAS DE SEGURANCA
+-- =============================================
+
+-- 1) role 'user' nunca pode transferir conversa/ticket ou gerenciar usuarios
+UPDATE public.role_permissions
+SET enabled = false, updated_at = now()
+WHERE role = 'user'
+  AND permission_key IN ('inbox.transfer', 'tickets.assign', 'users.manage');
+
+-- 2) Corrigir GRANT perigoso em transfer_conversation_secure (todas as overloads)
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS proc
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'transfer_conversation_secure'
+  LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC;', r.proc);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated;', r.proc);
+  END LOOP;
+END$$;
+
+-- =============================================
+-- PARTE 2: RPCs DE AUDITORIA (EVITAR N+1)
+-- =============================================
+
+-- RPC A: Busca usuarios com roles agregadas
+CREATE OR REPLACE FUNCTION public.audit_search_users(
+  p_search_term TEXT DEFAULT NULL
 )
+RETURNS TABLE(
+  user_id UUID,
+  full_name TEXT,
+  email TEXT,
+  roles TEXT[]
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id AS user_id,
+    p.full_name,
+    u.email,
+    COALESCE(ARRAY_AGG(ur.role::TEXT ORDER BY ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}') AS roles
+  FROM profiles p
+  LEFT JOIN auth.users u ON u.id = p.id
+  LEFT JOIN user_roles ur ON ur.user_id = p.id
+  WHERE 
+    p_search_term IS NULL
+    OR p.full_name ILIKE '%' || p_search_term || '%'
+    OR u.email ILIKE '%' || p_search_term || '%'
+    OR p.id::TEXT = p_search_term
+  GROUP BY p.id, p.full_name, u.email
+  ORDER BY p.full_name NULLS LAST
+  LIMIT 50;
+END;
+$$;
+
+-- RPC B: Permissoes efetivas de um usuario
+CREATE OR REPLACE FUNCTION public.audit_user_effective_permissions(
+  p_user_id UUID
+)
+RETURNS TABLE(
+  permission_key TEXT,
+  allowed BOOLEAN,
+  granted_by_roles TEXT[]
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    rp.permission_key::TEXT,
+    BOOL_OR(rp.enabled) AS allowed,
+    ARRAY_AGG(DISTINCT rp.role::TEXT) FILTER (WHERE rp.enabled) AS granted_by_roles
+  FROM user_roles ur
+  JOIN role_permissions rp ON rp.role::TEXT = ur.role::TEXT
+  WHERE ur.user_id = p_user_id
+  GROUP BY rp.permission_key
+  ORDER BY rp.permission_key;
+END;
+$$;
+
+-- RPC C: Security checks (RLS + Security Definer + Grants)
+CREATE OR REPLACE FUNCTION public.audit_security_checks()
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_caller_id UUID := auth.uid();
-  v_ticket RECORD;
-  v_is_authorized BOOLEAN := false;
+  v_tables JSONB;
+  v_rpcs JSONB;
 BEGIN
-  -- 1. Buscar ticket
-  SELECT id, assigned_to, created_by, department_id
-  INTO v_ticket
-  FROM tickets
-  WHERE id = p_ticket_id;
+  -- Verificar RLS nas tabelas criticas
+  SELECT jsonb_agg(jsonb_build_object(
+    'table_name', c.relname,
+    'rls_enabled', c.relrowsecurity,
+    'rls_forced', c.relforcerowsecurity
+  ))
+  INTO v_tables
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relname IN ('tickets', 'conversations', 'contacts', 'profiles', 'user_roles', 'role_permissions');
 
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Ticket não encontrado');
-  END IF;
-
-  -- 2. Verificar autorização:
-  -- - admin/manager/general_manager/cs_manager/support_manager/financial_manager: pode tudo
-  -- - support_agent: só se ticket atribuído a ele, criado por ele, ou unassigned
-  IF has_role(v_caller_id, 'admin') 
-     OR has_role(v_caller_id, 'manager')
-     OR has_role(v_caller_id, 'general_manager')
-     OR has_role(v_caller_id, 'cs_manager')
-     OR has_role(v_caller_id, 'support_manager')
-     OR has_role(v_caller_id, 'financial_manager')
-  THEN
-    v_is_authorized := true;
-  ELSIF has_role(v_caller_id, 'support_agent') 
-        OR has_role(v_caller_id, 'financial_agent')
-        OR has_role(v_caller_id, 'ecommerce_analyst')
-  THEN
-    v_is_authorized := (
-      v_ticket.assigned_to = v_caller_id 
-      OR v_ticket.created_by = v_caller_id 
-      OR v_ticket.assigned_to IS NULL
-    );
-  END IF;
-
-  IF NOT v_is_authorized THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Sem permissão para transferir este ticket');
-  END IF;
-
-  -- 3. Executar transferência
-  UPDATE tickets
-  SET 
-    department_id = p_department_id,
-    assigned_to = p_assigned_to,
-    status = CASE 
-      WHEN p_assigned_to IS NOT NULL THEN 'in_progress'
-      ELSE 'open'
-    END,
-    updated_at = now()
-  WHERE id = p_ticket_id;
-
-  -- 4. Criar comentário interno se nota fornecida
-  IF p_internal_note IS NOT NULL AND p_internal_note != '' THEN
-    INSERT INTO ticket_comments (ticket_id, content, is_internal, created_by)
-    VALUES (p_ticket_id, p_internal_note, true, v_caller_id);
-  END IF;
+  -- Verificar RPCs criticas
+  SELECT jsonb_agg(jsonb_build_object(
+    'function_name', p.proname,
+    'security_definer', p.prosecdef,
+    'owner', pg_get_userbyid(p.proowner),
+    'signature', p.oid::regprocedure::TEXT
+  ))
+  INTO v_rpcs
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public'
+    AND p.proname IN ('transfer_ticket_secure', 'transfer_conversation_secure', 'take_control_secure');
 
   RETURN jsonb_build_object(
-    'success', true,
-    'ticket_id', p_ticket_id,
-    'department_id', p_department_id,
-    'assigned_to', p_assigned_to
+    'tables', COALESCE(v_tables, '[]'::jsonb),
+    'rpcs', COALESCE(v_rpcs, '[]'::jsonb),
+    'checked_at', now()
   );
 END;
 $$;
 
--- Revogar acesso público e conceder apenas para authenticated
-REVOKE ALL ON FUNCTION public.transfer_ticket_secure(UUID, UUID, UUID, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.transfer_ticket_secure(UUID, UUID, UUID, TEXT) TO authenticated;
+-- Conceder permissoes para as RPCs de auditoria (apenas authenticated)
+GRANT EXECUTE ON FUNCTION public.audit_search_users(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.audit_user_effective_permissions(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.audit_security_checks() TO authenticated;
+
+COMMIT;
 ```
 
 ---
 
-### Correção 3: Criar RPC `take_control_secure` (SECURITY DEFINER)
+## 2) PAGINA /admin/permissions-audit
 
-**Tipo**: Migration SQL
+### Arquivos a Criar
 
-Para o useTakeControl, criar RPC que valida e executa a tomada de controle:
+| Arquivo | Descricao |
+|---------|-----------|
+| `src/pages/PermissionsAudit.tsx` | Pagina principal de auditoria |
+| `src/hooks/usePermissionsAudit.tsx` | Hook para RPCs de auditoria |
 
-```sql
-CREATE OR REPLACE FUNCTION public.take_control_secure(
-  p_conversation_id UUID
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_caller_id UUID := auth.uid();
-  v_conversation RECORD;
-  v_profile RECORD;
-  v_is_authorized BOOLEAN := false;
-BEGIN
-  -- 1. Buscar conversa
-  SELECT c.*, d.name as dept_name
-  INTO v_conversation
-  FROM conversations c
-  LEFT JOIN departments d ON d.id = c.department
-  WHERE c.id = p_conversation_id;
+### Adicionar Rota ao App.tsx
 
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Conversa não encontrada');
-  END IF;
-
-  -- 2. Buscar perfil do usuário
-  SELECT id, full_name, availability_status
-  INTO v_profile
-  FROM profiles
-  WHERE id = v_caller_id;
-
-  -- 3. Verificar se é manager/admin (não precisa estar online)
-  IF has_role(v_caller_id, 'admin') 
-     OR has_role(v_caller_id, 'manager')
-     OR has_role(v_caller_id, 'general_manager')
-     OR has_role(v_caller_id, 'cs_manager')
-     OR has_role(v_caller_id, 'support_manager')
-     OR has_role(v_caller_id, 'financial_manager')
-  THEN
-    v_is_authorized := true;
-  ELSE
-    -- Agentes precisam estar online
-    IF v_profile.availability_status != 'online' THEN
-      RETURN jsonb_build_object('success', false, 'error', 'Altere seu status para Online para assumir conversas');
-    END IF;
-    
-    -- Conversa não atribuída (IA) pode ser assumida por qualquer agente
-    IF v_conversation.assigned_to IS NULL THEN
-      v_is_authorized := true;
-    -- Conversa atribuída ao próprio usuário
-    ELSIF v_conversation.assigned_to = v_caller_id THEN
-      v_is_authorized := true;
-    END IF;
-  END IF;
-
-  IF NOT v_is_authorized THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Sem permissão para assumir esta conversa');
-  END IF;
-
-  -- 4. Executar takeover
-  UPDATE conversations
-  SET 
-    ai_mode = 'copilot',
-    assigned_to = v_caller_id
-  WHERE id = p_conversation_id;
-
-  -- 5. Inserir mensagem de sistema
-  INSERT INTO messages (conversation_id, content, sender_type, sender_id, is_ai_generated)
-  VALUES (
-    p_conversation_id,
-    format('O atendente **%s** entrou na conversa.', COALESCE(v_profile.full_name, 'Suporte')),
-    'system',
-    v_caller_id,
-    false
-  );
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'conversation_id', p_conversation_id,
-    'assigned_to', v_caller_id,
-    'ai_mode', 'copilot'
-  );
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public.take_control_secure(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.take_control_secure(UUID) TO authenticated;
-```
-
----
-
-### Correção 4: Atualizar Hooks do Frontend
-
-**Arquivos a modificar:**
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/useTicketTransfer.tsx` | Substituir `supabase.from('tickets').update()` por `supabase.rpc('transfer_ticket_secure')` |
-| `src/hooks/useBulkTransferTickets.tsx` | Usar loop de `supabase.rpc('transfer_ticket_secure')` para cada ticket |
-| `src/hooks/useTakeControl.tsx` | Substituir `supabase.from('conversations').update()` por `supabase.rpc('take_control_secure')` |
-
-**Exemplo - useTicketTransfer.tsx:**
+Inserir antes da rota catch-all (linha 270):
 
 ```typescript
-// ANTES (UPDATE direto - falha no RLS)
-const { data, error } = await supabase
-  .from("tickets")
-  .update({
-    department_id,
-    status: newStatus,
-    assigned_to: assigned_to ?? null,
-  })
-  .eq("id", ticket_id)
-  .select()
-  .single();
+const PermissionsAudit = lazy(() => import("./pages/PermissionsAudit"));
 
-// DEPOIS (RPC SECURITY DEFINER - bypassa RLS com validação)
-const { data: result, error } = await supabase
-  .rpc('transfer_ticket_secure', {
-    p_ticket_id: ticket_id,
-    p_department_id: department_id,
-    p_assigned_to: assigned_to ?? null,
-    p_internal_note: internal_note
+// Na secao de rotas (antes de /* Catch-all route */)
+<Route 
+  path="/admin/permissions-audit" 
+  element={
+    <ProtectedRoute requiredPermission="users.manage">
+      <Layout><PermissionsAudit /></Layout>
+    </ProtectedRoute>
+  } 
+/>
+```
+
+### Funcionalidades da Pagina
+
+```text
++------------------------------------------------------+
+|  Auditoria de Permissoes                             |
++------------------------------------------------------+
+|                                                      |
+|  [Buscar usuario: _______________] [Buscar]          |
+|                                                      |
+|  +-- Card: Usuario Selecionado --+                   |
+|  | Nome: Marco Cruz                                  |
+|  | Email: marco.cruz@3cliques.net                    |
+|  | Roles: [cs_manager]                               |
+|  +----------------------------------------------+    |
+|                                                      |
+|  +-- Card: Permissoes Efetivas --+                   |
+|  | users.manage    [TRUE]  via: cs_manager           |
+|  | inbox.transfer  [TRUE]  via: cs_manager           |
+|  | tickets.assign  [TRUE]  via: cs_manager           |
+|  +----------------------------------------------+    |
+|                                                      |
+|  +-- Card: Security Checks --+                       |
+|  | Tabelas Criticas:                                 |
+|  | - tickets: RLS=ON, Force=OFF                      |
+|  | - conversations: RLS=ON, Force=OFF                |
+|  |                                                   |
+|  | RPCs SECURITY DEFINER:                            |
+|  | - transfer_ticket_secure: owner=postgres [OK]     |
+|  | - transfer_conversation_secure: owner=postgres    |
+|  | - take_control_secure: owner=postgres [OK]        |
+|  +----------------------------------------------+    |
+|                                                      |
+|  [Export Users CSV] [Export Permissions CSV]         |
++------------------------------------------------------+
+```
+
+### Hook usePermissionsAudit.tsx (Estrutura)
+
+```typescript
+import { supabase } from "@/integrations/supabase/client";
+
+export interface AuditUser {
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+  roles: string[];
+}
+
+export interface EffectivePermission {
+  permission_key: string;
+  allowed: boolean;
+  granted_by_roles: string[] | null;
+}
+
+export interface SecurityChecks {
+  tables: { table_name: string; rls_enabled: boolean; rls_forced: boolean }[];
+  rpcs: { function_name: string; security_definer: boolean; owner: string; signature: string }[];
+  checked_at: string;
+}
+
+export const usePermissionsAudit = () => {
+  const searchUsers = async (searchTerm: string): Promise<AuditUser[]> => {
+    const { data, error } = await supabase.rpc('audit_search_users', { 
+      p_search_term: searchTerm 
+    });
+    if (error) throw error;
+    return data || [];
+  };
+
+  const getEffectivePermissions = async (userId: string): Promise<EffectivePermission[]> => {
+    const { data, error } = await supabase.rpc('audit_user_effective_permissions', { 
+      p_user_id: userId 
+    });
+    if (error) throw error;
+    return data || [];
+  };
+
+  const getSecurityChecks = async (): Promise<SecurityChecks> => {
+    const { data, error } = await supabase.rpc('audit_security_checks');
+    if (error) throw error;
+    return data as SecurityChecks;
+  };
+
+  return { searchUsers, getEffectivePermissions, getSecurityChecks };
+};
+```
+
+---
+
+## 3) DEBUG COM LOGS ESTRUTURADOS
+
+### A) Edge Function create-user (Adicionar Logs)
+
+Arquivo: `supabase/functions/create-user/index.ts`
+
+Adicionar apos linha 111 (apos `const hasPermission = ...`):
+
+```typescript
+// Log estruturado para debug de permissao
+console.log('[create-user] Permission check:', {
+  caller_id: user.id,
+  caller_role: userRole?.role,
+  permission_key: 'users.manage',
+  permission_enabled: permission?.enabled,
+  is_admin: isAdmin,
+  has_permission: hasPermission
+});
+
+if (!hasPermission) {
+  console.error('[create-user] DENIED:', {
+    caller_id: user.id,
+    caller_role: userRole?.role,
+    reason: 'users.manage not enabled for this role'
   });
+}
+```
 
-if (!result?.success) {
-  throw new Error(result?.error || 'Erro ao transferir ticket');
+### B) Hook useTransferConversation (Logs Detalhados)
+
+Arquivo: `src/hooks/useTransferConversation.tsx`
+
+Modificar linha 112-114 (bloco de erro):
+
+```typescript
+if (rpcError) {
+  console.error("[useTransferConversation] RPC error details:", {
+    code: rpcError.code,
+    message: rpcError.message,
+    details: rpcError.details,
+    hint: rpcError.hint,
+    conversationId,
+    toUserId: finalToUserId,
+    departmentId
+  });
+  throw rpcError;
+}
+```
+
+### C) Hook useTicketTransfer (Logs Detalhados)
+
+Arquivo: `src/hooks/useTicketTransfer.tsx`
+
+Modificar linha 35-37 (bloco de erro):
+
+```typescript
+if (error) {
+  console.error('[useTicketTransfer] RPC error details:', {
+    code: error.code,
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+    ticket_id,
+    department_id,
+    assigned_to
+  });
+  throw error;
+}
+```
+
+### D) UserDialog.tsx (Logs no Catch)
+
+Arquivo: `src/components/UserDialog.tsx`
+
+Modificar linha 269-284 (bloco catch):
+
+```typescript
+} catch (error) {
+  // Log estruturado para debug
+  console.error("[UserDialog] Create/Update failed:", {
+    mode: isEditMode ? 'edit' : 'create',
+    error: error instanceof Error ? {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    } : error,
+    payload: { email, role, department, fullName }
+  });
+  
+  if (error instanceof z.ZodError) {
+    toast({
+      variant: "destructive",
+      title: "Erro de validacao",
+      description: error.errors[0].message,
+    });
+  } else if (error instanceof Error) {
+    toast({
+      variant: "destructive",
+      title: isEditMode ? "Erro ao atualizar usuario" : "Erro ao criar usuario",
+      description: `${error.message} (verifique o console para detalhes)`,
+    });
+  }
 }
 ```
 
@@ -259,35 +389,63 @@ if (!result?.success) {
 
 ## Resumo de Arquivos
 
-| Arquivo | Ação |
+| Arquivo | Acao |
 |---------|------|
-| Migration SQL | 1. Habilitar users.manage para cs_manager |
-| Migration SQL | 2. Criar transfer_ticket_secure RPC |
-| Migration SQL | 3. Criar take_control_secure RPC |
-| `src/hooks/useTicketTransfer.tsx` | Usar RPC ao invés de UPDATE direto |
-| `src/hooks/useBulkTransferTickets.tsx` | Usar RPC ao invés de UPDATE direto |
-| `src/hooks/useTakeControl.tsx` | Usar RPC ao invés de UPDATE direto |
+| Migration SQL | Fechar brecha + criar 3 RPCs de auditoria |
+| `src/pages/PermissionsAudit.tsx` | Criar pagina nova |
+| `src/hooks/usePermissionsAudit.tsx` | Criar hook de auditoria |
+| `src/App.tsx` (linha 77 + linha 269) | Importar lazy + adicionar rota |
+| `supabase/functions/create-user/index.ts` (linha 111) | Adicionar logs estruturados |
+| `src/hooks/useTransferConversation.tsx` (linha 112) | Adicionar logs detalhados |
+| `src/hooks/useTicketTransfer.tsx` (linha 35) | Adicionar logs detalhados |
+| `src/components/UserDialog.tsx` (linha 269) | Adicionar logs no catch |
 
 ---
 
-## Por que esta solução é definitiva?
+## Criterios de Aceite
 
-1. **Zero UPDATE direto em campos sensíveis** - Todas as operações de transferência/atribuição passam por RPC
-
-2. **Validação centralizada na RPC** - Regras de negócio ficam no banco, não espalhadas pelo frontend
-
-3. **SECURITY DEFINER bypassa RLS** - A função executa com privilégios do owner, não do caller
-
-4. **Auditoria mantida** - RPCs ainda criam logs/comentários internos
-
-5. **Padrão consistente** - Mesma arquitetura do `transfer_conversation_secure` que já funciona
+| Criterio | Status Esperado |
+|----------|-----------------|
+| role=user com inbox.transfer | FALSE |
+| role=user com tickets.assign | FALSE |
+| role=user com users.manage | FALSE |
+| transfer_conversation_secure GRANT | authenticated (nao PUBLIC) |
+| Pagina /admin/permissions-audit | Acessivel com users.manage |
+| Busca usuario mostra roles + permissoes | Funcional (1 chamada RPC) |
+| Security Checks mostra RLS + DEFINER | Visivel |
+| Export CSV | Funcional |
+| Logs de permissao no console | Estruturados com payload |
+| Erros nunca mascarados | Toast mostra message + hint |
 
 ---
 
-## Checklist de Validação Pós-Deploy
+## Secao Tecnica: Export CSV
 
-- [ ] Marco Cruz (cs_manager) consegue criar usuários
-- [ ] Loriani (sales_rep) consegue assumir conversas da IA
-- [ ] Caroline (support_agent) consegue transferir tickets para outros agentes
-- [ ] Buscar no código: `from('tickets').update({ assigned_to` → 0 resultados
-- [ ] Buscar no código: `from('conversations').update({ assigned_to` → 0 resultados (exceto RPC)
+```typescript
+const exportToCSV = (data: any[], filename: string) => {
+  if (data.length === 0) return;
+  
+  const headers = Object.keys(data[0]);
+  const csv = [
+    headers.join(','),
+    ...data.map(row => 
+      headers.map(h => {
+        const val = row[h];
+        if (Array.isArray(val)) return `"${val.join(', ')}"`;
+        if (typeof val === 'string' && val.includes(',')) return `"${val}"`;
+        return val ?? '';
+      }).join(',')
+    )
+  ].join('\n');
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+```
