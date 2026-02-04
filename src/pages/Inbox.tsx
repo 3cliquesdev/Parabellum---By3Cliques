@@ -307,18 +307,27 @@ export default function Inbox() {
       });
     }
 
-    // Para outros filtros, se conversations ainda não carregou mas temos inboxItems,
-    // usar inboxItems para não "sumir" a lista
-    let result: Conversation[];
-    
-    if (fullConversations.length === 0 && sourceInboxItems && sourceInboxItems.length > 0) {
-      // Fallback: construir lista mínima de inboxItems para não ficar vazia
-      result = sourceInboxItems
-        .filter(item => item.status !== 'closed')
-        .map(inboxItemToConversation);
-    } else {
-      result = fullConversations;
-    }
+     // ✅ IMPORTANTE (upgrade, sem regressão):
+     // A lista do Inbox deve ser baseada no `inbox_view` (fonte de verdade de visibilidade).
+     // Motivo: `useConversations` pode retornar apenas conversas atribuídas ao próprio usuário
+     // devido a RLS, mesmo quando o usuário tem permissão de colaborar no departamento.
+     // Se usarmos `fullConversations` como fonte primária, a lista fica “presa” em 5 (Minhas)
+     // enquanto os counts e `inbox_view` mostram 34.
+     let result: Conversation[];
+
+     if (sourceInboxItems && sourceInboxItems.length > 0) {
+       // Fonte primária: inbox_view (já vem filtrado por role + dept/tag + filtros client-side)
+       result = sourceInboxItems
+         // `applyFilters` já remove fechadas por padrão, mas mantemos a proteção aqui
+         .filter(item => item.status !== 'closed')
+         .map(item => {
+           const fullConv = fullConversations.find(c => c.id === item.conversation_id);
+           return fullConv || inboxItemToConversation(item);
+         });
+     } else {
+       // Fallback: se inbox_view ainda não carregou, usar conversations (comportamento antigo)
+       result = fullConversations;
+     }
 
     // Apply department filter
     if (departmentFilter) {
