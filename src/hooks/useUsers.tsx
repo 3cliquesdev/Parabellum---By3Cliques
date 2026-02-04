@@ -32,16 +32,37 @@ export function useUsers() {
   return useQuery({
     queryKey: ["users"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('get-users');
-      
-      if (error) throw error;
-      return data.users as UserWithRole[];
+      const { data, error } = await supabase.functions.invoke("get-users");
+
+      // BOOT_ERROR (503) pode ocorrer de forma intermitente no cold start da função.
+      // Para evitar tela em branco, tratamos como fallback seguro.
+      if (error) {
+        const status = (error as any)?.status;
+        const message = (error as any)?.message || "";
+        const isBootError = status === 503 || message.includes("BOOT_ERROR");
+
+        if (isBootError) return [] as UserWithRole[];
+        throw error;
+      }
+
+      return (data as any)?.users as UserWithRole[];
     },
     // Evita tela em branco quando a função falha intermitentemente.
     // Componentes que fazem `users.map(...)` continuam funcionando com array vazio.
     placeholderData: [] as UserWithRole[],
-    retry: 2,
-    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+    retry: (failureCount, error: any) => {
+      // Só faz retries agressivos para BOOT_ERROR/503; outros erros mantém baixo.
+      const status = error?.status;
+      const message = error?.message || "";
+      const isBootError = status === 503 || String(message).includes("BOOT_ERROR");
+      return isBootError ? failureCount < 5 : failureCount < 2;
+    },
+    retryDelay: (attempt) => {
+      // Backoff com teto curto para não travar telas que dependem disso.
+      const base = Math.min(750 * 2 ** attempt, 6000);
+      const jitter = Math.floor(Math.random() * 250);
+      return base + jitter;
+    },
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 20,
   });
