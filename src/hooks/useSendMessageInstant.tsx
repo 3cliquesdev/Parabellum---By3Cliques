@@ -328,25 +328,45 @@ export function useSendMessageInstant() {
 
       } catch (error) {
         const t2 = performance.now();
+        const errorMessage = error instanceof Error ? error.message : 'Unknown';
+        const isRlsError = errorMessage.toLowerCase().includes('row-level security') ||
+                          errorMessage.toLowerCase().includes('rls');
+        
         console.error('[SendInstant] ❌ Falha:', {
           messageId,
-          error: error instanceof Error ? error.message : 'Unknown',
+          error: errorMessage,
+          isRlsError,
           latency_ms: Math.round(t2 - t1),
         });
         
-        // Marcar como falhou no cache
+        // Marcar como falhou no cache (NÃO remover - manter visível com status failed)
         queryClient.setQueryData(
           ["messages", conversationId],
           (old: any[] = []) => old.map(m => 
-            m.id === messageId ? { ...m, status: 'failed' } : m
+            m.id === messageId ? { 
+              ...m, 
+              status: 'failed',
+              delivery_error: isRlsError 
+                ? 'Sem permissão para enviar nesta conversa'
+                : errorMessage,
+            } : m
           )
         );
         
-        toast({
-          title: "Erro ao enviar mensagem",
-          description: error instanceof Error ? error.message : 'Erro desconhecido',
-          variant: "destructive",
-        });
+        // Toast com mensagem específica para erro de RLS
+        if (isRlsError) {
+          toast({
+            title: "Sem permissão para enviar",
+            description: "Você precisa assumir esta conversa antes de enviar mensagens. Clique em 'Assumir' ou peça a um gestor.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Erro ao enviar mensagem",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        }
       }
     });
 
