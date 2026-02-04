@@ -1,142 +1,120 @@
 
-# Plano: Corrigir Visibilidade Admin no inbox_view
+Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Problema Identificado
+## 1) Diagnóstico (por que “ninguém acha conversa” e quando “só aparece encerrada”)
 
-A política RLS `optimized_inbox_select` em `public.inbox_view` usa uma subquery `EXISTS` para verificar roles em `public.user_roles`. Essa subquery está bloqueada pela própria RLS da tabela `user_roles` quando executada dentro de outra policy (recursão de RLS).
+### 1.1 Busca no Inbox hoje (fluxo real)
+- O campo “Buscar por nome, email, telefone, ID...” (InboxFilterPopover) alimenta `filters.search`.
+- Quando `filters.search.trim().length >= 2`, a tela `/inbox` usa **`useInboxSearch(filters.search)`** como fonte de verdade (não usa o array do inbox carregado).
+- `useInboxSearch` consulta `public.inbox_view` com `.limit(100)` e ordena:
 
-**Resultado:** O admin vê o contador (156 via Edge Function que usa service role), mas a query da lista via API autenticada retorna `[]` porque a verificação de role falha silenciosamente.
-
-## Causa Raiz Técnica
-
-```sql
--- Dentro de optimized_inbox_select:
-EXISTS (
-  SELECT 1 FROM public.user_roles ur  -- RLS bloqueia essa subquery!
-  WHERE ur.user_id = auth.uid()
-    AND ur.role IN ('admin',...)
-)
+```ts
+.order("status", { ascending: true })
+.order("last_message_at", { ascending: false })
 ```
 
-O Postgres não permite que uma policy RLS acesse outra tabela que também tem RLS ativa, a menos que use SECURITY DEFINER.
+### 1.2 Bug principal: ordenação por status está invertida na prática
+O comentário do código assume que `status ASC` coloca “open” antes de “closed”, mas alfabeticamente:
+- `"closed"` vem antes de `"open"`
 
-## Solução: Usar Função SECURITY DEFINER
+Então, com `limit(100)`, se houver muitas fechadas, a busca devolve **majoritariamente fechadas**, dando a impressão de que “só aparece encerrada” e “não acha as ativas”.
 
-### Fase 1: Verificar função existente
+### 1.3 Gap funcional: busca por ID não está implementada no banco
+`useInboxSearch` atualmente busca apenas por:
+- `contact_name`, `contact_email`, `contact_phone`
 
-A função `has_role()` já existe e é SECURITY DEFINER:
+Mas a UI promete buscar por “ID…”, e a regra do negócio pede localizar por:
+- **UUID da conversa** (`conversation_id` na view)
+- **UUID do contato** (`contact_id` na view)
 
-```sql
-CREATE FUNCTION public.has_role(_user_id uuid, _role app_role)
-RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER
-```
+Isso explica “nenhum jeito funciona” quando tentam buscar por ID.
 
-**Porém**, essa função verifica UM role por vez. Precisamos de uma nova função que verifique MÚLTIPLOS roles de uma vez (mais eficiente).
+### 1.4 Robustez: números/telefones com formatação
+Os usuários costumam digitar telefone com `+55`, espaços, parênteses, hífen etc. A busca atual não normaliza o termo, então pode falhar mesmo quando existe a conversa.
 
-### Fase 2: Criar função otimizada
+## 2) Objetivo da correção definitiva (upgrade, sem regressão)
+1) Garantir que a busca encontre conversas **ativas** com prioridade.
+2) Suportar busca por **UUID de conversa/contato** (sem usar ILIKE em UUID para não quebrar).
+3) Tornar busca por telefone **tolerante** a formatação.
+4) Manter a segurança: busca respeita as políticas RLS já implementadas (admin/manager vê tudo; agentes veem o que podem ver).
 
-```sql
-CREATE OR REPLACE FUNCTION public.has_any_role(_user_id uuid, _roles app_role[])
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.user_roles
-    WHERE user_id = _user_id
-      AND role = ANY(_roles)
-  )
-$$;
-```
+## 3) Mudanças propostas (frontend) — sem alterar comportamento existente fora da busca
 
-### Fase 3: Reescrever policy de inbox_view
+### 3.1 Ajustar `src/hooks/useInboxSearch.tsx`
+Implementar uma busca “inteligente” por tipo de termo:
 
-```sql
-DROP POLICY IF EXISTS optimized_inbox_select ON public.inbox_view;
+**(A) Detectar UUID**
+- Se o termo bater com regex de UUID, fazer match por igualdade:
+  - `conversation_id.eq.<uuid>` OR `contact_id.eq.<uuid>`
+- Em paralelo, ainda permitir nome/email/telefone (opcional), mas o essencial é `eq`.
 
-CREATE POLICY optimized_inbox_select
-ON public.inbox_view
-FOR SELECT
-TO authenticated
-USING (
-  -- Managers: acesso total (via SECURITY DEFINER)
-  public.has_any_role(
-    auth.uid(), 
-    ARRAY['admin','manager','general_manager','support_manager','cs_manager','financial_manager']::app_role[]
-  )
-  OR
-  -- Assigned to me
-  (assigned_to = auth.uid())
-  OR
-  -- Agentes: mesmo departamento ou pool global
-  (
-    public.has_any_role(
-      auth.uid(),
-      ARRAY['sales_rep','support_agent','financial_agent','consultant']::app_role[]
-    )
-    AND (
-      department = (SELECT department FROM public.profiles WHERE id = auth.uid())
-      OR (assigned_to IS NULL AND department IS NULL)
-    )
-  )
-);
-```
+**(B) Detectar email**
+- Se contiver `@`, priorizar `contact_email.ilike.%term%`.
 
-## Impacto
+**(C) Detectar número/telefone**
+- Normalizar: remover tudo que não é dígito.
+- Buscar por `contact_phone.ilike.%<digits>%`.
+- (Opcional) tentar variações removendo prefixo país (ex.: se começa com `55`, também buscar sem `55`) para tolerância.
 
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Admin vê conversas | Não | Sim |
-| Subquery em user_roles | Bloqueada por RLS | Bypassa via SECURITY DEFINER |
-| Compatibilidade | Quebrada | Restaurada |
+**(D) Ordenação correta (corrigindo o bug do status)**
+- Remover a ordenação por `status` no banco (pois é lexical e enganosa).
+- Ordenar no banco por `last_message_at DESC` (mais recente primeiro).
+- Depois **reordenar no client** com prioridade:
+  1. status `open`
+  2. status `pending` (ou equivalentes abertos do seu enum)
+  3. status `closed`
+- Dentro de cada grupo, manter `last_message_at DESC`.
 
-## Checklist de Validação
+**(E) Ajustar `limit`**
+- Subir `limit` de 100 para 300 (ou 200) para reduzir “falso negativo” quando há muitas fechadas.
+- Como a busca já é debounced e `enabled` só com >=2 chars, isso é um upgrade de usabilidade. (Se performance ficar sensível, retornamos a 100.)
 
-```sql
--- 1. Confirmar que admin vê conversas
-SELECT count(*) FROM inbox_view; -- Deve retornar >0
+**(F) Logs de diagnóstico opcionais**
+- Logar no console apenas em DEV (ou com flag localStorage, como já existe no inbox realtime) o “modo” da busca (uuid/email/phone/text) e quantidade retornada.
 
--- 2. Confirmar função criada
-SELECT has_any_role(
-  '697a5d4e-9637-4b85-b7a0-bd880151648b'::uuid,
-  ARRAY['admin']::app_role[]
-); -- Deve retornar true
-```
+### 3.2 Pequeno ajuste de UX (Inbox.tsx)
+Hoje, quando há busca ativa e `searchResults` ainda não carregou, o código retorna `[]` (linha ~276-279), causando sensação de “sumiu tudo”.
+Upgrade sem regressão:
+- Exibir estado de loading (passar `isLoading={searchLoading}` para `ConversationList`) quando busca ativa.
+- Manter lista vazia, mas com skeleton/loading para deixar claro que está buscando.
 
-## Rollback (se necessário)
+## 4) Checagem de backend/políticas (somente validação, sem mudanças)
+Como `useInboxSearch` consulta `inbox_view`, a visibilidade depende de:
+- `policy optimized_inbox_select` em `public.inbox_view` (já está usando `has_any_role(...)` SECURITY DEFINER)
+- Isso deve permitir Admin/Manager ver tudo e agentes verem suas regras.
 
-```sql
--- Recriar policy com EXISTS (comportamento anterior)
-DROP POLICY IF EXISTS optimized_inbox_select ON public.inbox_view;
-CREATE POLICY optimized_inbox_select ON public.inbox_view
-FOR SELECT TO authenticated
-USING (
-  EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = ANY(ARRAY['admin'::app_role,...]))
-  OR assigned_to = auth.uid()
-  ...
-);
-```
+Vamos apenas validar com leitura:
+- Para Admin: `select count(*) from inbox_view` e testar uma query com `conversation_id.eq.<uuid>` via API (observando no Network tab).
 
-## Seção Técnica
+## 5) Testes obrigatórios (antes de entregar)
+1) **Console sem erros** ao buscar por:
+   - nome
+   - email
+   - telefone com formatação (`+55 (61) 9....`)
+   - UUID completo de conversa
+   - UUID completo de contato
+2) **Preview e Published**: repetir os testes acima nos dois ambientes.
+3) **Regressão**:
+   - Filtros “Minhas”, “Não respondidas”, “SLA Excedido”, “Fila IA/Humana” continuam funcionando.
+   - Realtime não “pisca” nem remove conversas indevidamente.
+4) **Performance**:
+   - Busca não travar; debounce mantendo fluidez.
+5) **Edge cases**:
+   - Termos curtos (<2) não disparam busca.
+   - Sem internet: UI não quebra (exibe erro/estado vazio apropriado).
+   - Permissões: agente comum não consegue achar conversa fora da visibilidade dele.
 
-### Por que EXISTS falha dentro de policy?
+## 6) Rollback rápido
+- Reverter `useInboxSearch` para a versão anterior (mantendo o arquivo antigo como referência via git history do Lovable).
+- Reverter o comportamento de loading no `Inbox.tsx` (voltar a render vazio durante carregamento).
 
-Quando uma policy RLS contém uma subquery para outra tabela com RLS, o Postgres entra em um estado de "RLS recursion block" para evitar loops infinitos. A subquery silenciosamente retorna zero linhas.
+## 7) Arquivos que serão alterados
+- `src/hooks/useInboxSearch.tsx` (principal: lógica + ordenação + suporte a UUID/telefone)
+- `src/pages/Inbox.tsx` (ajuste de loading quando busca ativa)
+- (Opcional) `src/components/ConversationList.tsx` apenas se precisarmos melhorar mensagem/skeleton em busca ativa (preferência: reutilizar `isLoading` já existente)
 
-### Por que SECURITY DEFINER resolve?
-
-Funções com SECURITY DEFINER executam com as permissões do owner (geralmente `postgres`), que bypassa RLS. Isso permite que a verificação de roles funcione independentemente do contexto RLS da query externa.
-
-### Por que has_any_role em vez de has_role?
-
-A função `has_role` verifica um role por vez. Para verificar múltiplos roles, precisaríamos chamá-la várias vezes com OR:
-
-```sql
-has_role(uid, 'admin') OR has_role(uid, 'manager') OR ...
-```
-
-Isso é ineficiente. A nova `has_any_role` aceita um array e faz UMA query.
+## 8) Critérios de aceite (“correção definitiva”)
+- Admin consegue localizar conversa ativa por: telefone, email, nome e UUID.
+- A busca não fica “presa” mostrando só encerradas quando existem abertas.
+- “156 em todas” passa a ter correspondência visível ao buscar (quando o termo existe).
+- Sem regressões nas regras críticas já existentes (kill switch, shadow mode, distribuição, CSAT guard, cache/realtime).
