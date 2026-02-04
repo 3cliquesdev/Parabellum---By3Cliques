@@ -158,9 +158,9 @@ export function useConversations(filters?: ConversationFilters) {
         // Roles operacionais: ver apenas conversas atribuídas a eles OU não atribuídas do seu departamento OU pool geral (sem departamento)
         if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
           if (departmentIds && departmentIds.length > 0) {
-            // Conversa atribuída ao usuário OU (não atribuída E do departamento permitido) OU (não atribuída E sem departamento - pool geral)
+            // Conversa atribuída ao usuário OU do departamento (inclui colegas) OU pool geral (sem departamento)
             query = query.or(
-              `assigned_to.eq.${user.id},and(assigned_to.is.null,department.in.(${departmentIds.join(",")})),and(assigned_to.is.null,department.is.null)`
+              `assigned_to.eq.${user.id},department.in.(${departmentIds.join(",")}),and(assigned_to.is.null,department.is.null)`
             );
           } else {
             // Se não há departamentos configurados, ver atribuídas ao usuário OU pool geral (sem departamento)
