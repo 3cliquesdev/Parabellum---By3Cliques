@@ -100,6 +100,15 @@ export function useTransferConversation() {
         }
       }
 
+      // Log antes da chamada RPC
+      console.log('[useTransferConversation] RPC call:', {
+        conversationId,
+        fromUserId,
+        toUserId: finalToUserId,
+        departmentId,
+        autoDistribute
+      });
+
       // Usar função SECURITY DEFINER para transferir (bypassa RLS com validação)
       const { data: result, error: rpcError } = await supabase
         .rpc('transfer_conversation_secure', {
@@ -110,7 +119,15 @@ export function useTransferConversation() {
         });
 
       if (rpcError) {
-        console.error("[useTransferConversation] RPC error:", rpcError);
+        console.error("[useTransferConversation] RPC error details:", {
+          code: rpcError.code,
+          message: rpcError.message,
+          details: rpcError.details,
+          hint: rpcError.hint,
+          conversationId,
+          toUserId: finalToUserId,
+          departmentId
+        });
         throw rpcError;
       }
 

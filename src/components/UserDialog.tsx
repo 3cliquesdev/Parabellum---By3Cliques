@@ -267,7 +267,16 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
         onSuccess();
       }
     } catch (error) {
-      console.error("Error submitting user:", error);
+      // Log estruturado para debug de permissões
+      console.error("[UserDialog] Create/Update failed:", {
+        mode: isEditMode ? 'edit' : 'create',
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        payload: { email, role, department, fullName }
+      });
       
       if (error instanceof z.ZodError) {
         toast({
@@ -279,7 +288,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
         toast({
           variant: "destructive",
           title: isEditMode ? "Erro ao atualizar usuário" : "Erro ao criar usuário",
-          description: error.message,
+          description: `${error.message} (verifique o console para detalhes)`,
         });
       }
     } finally {

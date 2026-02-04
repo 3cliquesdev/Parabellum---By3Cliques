@@ -21,7 +21,12 @@ export function useTicketTransfer() {
 
   return useMutation({
     mutationFn: async ({ ticket_id, department_id, internal_note, assigned_to }: TransferData) => {
-      console.log('[useTicketTransfer] Transferindo ticket via RPC:', { ticket_id, department_id, assigned_to });
+      console.log('[useTicketTransfer] RPC call:', {
+        ticket_id,
+        department_id,
+        assigned_to,
+        internal_note: internal_note?.substring(0, 50)
+      });
 
       // Chamar RPC SECURITY DEFINER - bypassa RLS com validação
       const { data: result, error } = await supabase
@@ -33,7 +38,15 @@ export function useTicketTransfer() {
         });
 
       if (error) {
-        console.error('[useTicketTransfer] RPC error:', error);
+        console.error('[useTicketTransfer] RPC error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          ticket_id,
+          department_id,
+          assigned_to
+        });
         throw error;
       }
 

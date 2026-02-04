@@ -8559,6 +8559,24 @@ export type Database = {
       }
     }
     Functions: {
+      audit_search_users: {
+        Args: { p_search_term?: string }
+        Returns: {
+          email: string
+          full_name: string
+          roles: string[]
+          user_id: string
+        }[]
+      }
+      audit_security_checks: { Args: never; Returns: Json }
+      audit_user_effective_permissions: {
+        Args: { p_user_id: string }
+        Returns: {
+          allowed: boolean
+          granted_by_roles: string[]
+          permission_key: string
+        }[]
+      }
       backfill_emails_from_messages: {
         Args: never
         Returns: {

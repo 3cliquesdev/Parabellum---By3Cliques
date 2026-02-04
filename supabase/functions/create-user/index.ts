@@ -110,8 +110,22 @@ serve(async (req) => {
 
     const hasPermission = isAdmin || permission?.enabled === true;
 
+    // Log estruturado para debug de permissão
+    console.log('[create-user] Permission check:', {
+      caller_id: user.id,
+      caller_role: userRole?.role,
+      permission_key: 'users.manage',
+      permission_enabled: permission?.enabled,
+      is_admin: isAdmin,
+      has_permission: hasPermission
+    });
+
     if (!hasPermission) {
-      console.error('Permission denied for role:', userRole?.role);
+      console.error('[create-user] DENIED:', {
+        caller_id: user.id,
+        caller_role: userRole?.role,
+        reason: 'users.manage not enabled for this role'
+      });
       return new Response(
         JSON.stringify({ error: 'Forbidden: Você não tem permissão para criar usuários' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
