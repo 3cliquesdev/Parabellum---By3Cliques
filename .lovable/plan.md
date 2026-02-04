@@ -1,238 +1,293 @@
 
-# Plano: Correcao de 3 Problemas Criticos
+# Plano: PATCH DEFINITIVO - Fim dos Problemas de Permissão
 
-## Resumo dos Problemas Identificados
+## Diagnóstico Confirmado
 
-| Problema | Causa Raiz | Impacto |
-|----------|------------|---------|
-| 1. Usuarios nao veem tickets criados | Politica RLS do sales_rep NAO inclui `created_by = auth.uid()` | sales_rep cria ticket e depois nao consegue ver |
-| 2. Ticket nao reabre quando cliente responde | Funcao `add-customer-comment` so reabre `resolved`, ignora `waiting_customer` | Tickets ficam presos em "aguardando cliente" |
-| 3. Playbook trava ao iniciar | Query aninhada invalida no `executeTaskNode` - Supabase nao suporta `.in('id', supabase.from(...))` | Erro: "object is not iterable" |
+| Usuário | Problema | Causa Raiz |
+|---------|----------|------------|
+| Marco Cruz (cs_manager) | Não consegue criar usuários | `users.manage = FALSE` na tabela `role_permissions` |
+| Loriani Vitoria (sales_rep) | Erro ao transferir conversas | `useTakeControl` faz UPDATE direto com `assigned_to = user.id` - a política WITH CHECK do sales_rep valida que após update `assigned_to` ainda seja dele (impossível quando assume conversa de outro) |
+| Caroline Lamonica (support_agent) | Erro ao transferir tickets | `useTicketTransfer` faz UPDATE direto - a política WITH CHECK exige `assigned_to = auth.uid()` após update (impossível quando transfere para outro agente) |
 
 ---
 
-## Correcao 1: Politica RLS do sales_rep
+## Correções a Aplicar
 
-**Arquivo**: Nova migration SQL
+### Correção 1: Habilitar `users.manage` para CS Manager
 
-**Problema Atual**:
-```sql
--- sales_rep so ve tickets de contatos atribuidos a ele
--- NAO ve tickets que ele mesmo criou
-sales_rep_can_view_tickets_of_assigned_contacts:
-  customer_id IN (SELECT id FROM contacts WHERE assigned_to = auth.uid())
-```
-
-**Solucao**: Adicionar `OR created_by = auth.uid()` a politica
+**Tipo**: Atualização de dados (role_permissions)
 
 ```sql
-DROP POLICY IF EXISTS sales_rep_can_view_tickets_of_assigned_contacts ON tickets;
-
-CREATE POLICY sales_rep_can_view_tickets ON tickets
-FOR SELECT TO authenticated
-USING (
-  has_role(auth.uid(), 'sales_rep'::app_role) 
-  AND (
-    customer_id IN (SELECT id FROM contacts WHERE assigned_to = auth.uid())
-    OR created_by = auth.uid()
-  )
-);
+UPDATE role_permissions
+SET enabled = true, updated_at = now()
+WHERE role = 'cs_manager' AND permission_key = 'users.manage';
 ```
 
 ---
 
-## Correcao 2: Reabertura de Ticket + Notificacao
+### Correção 2: Criar RPC `transfer_ticket_secure` (SECURITY DEFINER)
 
-**Arquivo**: `supabase/functions/add-customer-comment/index.ts`
+**Tipo**: Migration SQL
 
-**Problema Atual** (linhas 102-113):
-- So reabre se status = `resolved`
-- Nao reabre `waiting_customer` (status mais comum para aguardar resposta)
-- Nao notifica o agente atribuido quando ticket reabre
+Esta RPC bypassa RLS com validação explícita, seguindo o mesmo padrão do `transfer_conversation_secure`.
 
-**Solucao**: Expandir logica de reabertura + notificar via edge function
+```sql
+CREATE OR REPLACE FUNCTION public.transfer_ticket_secure(
+  p_ticket_id UUID,
+  p_department_id UUID,
+  p_assigned_to UUID DEFAULT NULL,
+  p_internal_note TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+  v_ticket RECORD;
+  v_is_authorized BOOLEAN := false;
+BEGIN
+  -- 1. Buscar ticket
+  SELECT id, assigned_to, created_by, department_id
+  INTO v_ticket
+  FROM tickets
+  WHERE id = p_ticket_id;
 
-```typescript
-// ANTES: So reabria 'resolved'
-if (ticket.status === 'resolved') { ... }
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Ticket não encontrado');
+  END IF;
 
-// DEPOIS: Reabrir qualquer status de "aguardando"
-const reopenableStatuses = ['resolved', 'waiting_customer', 'pending'];
-if (reopenableStatuses.includes(ticket.status)) {
-  await supabase
-    .from('tickets')
-    .update({ 
-      status: 'open',
-      resolved_at: null 
-    })
-    .eq('id', ticket_id);
-  
-  console.log('[add-customer-comment] Ticket reopened from', ticket.status);
-  
-  // Notificar agente atribuido via notify-ticket-event
-  if (ticket.assigned_to) {
-    await supabase.functions.invoke('notify-ticket-event', {
-      body: {
-        ticket_id,
-        event_type: 'status_changed',
-        actor_id: null, // Cliente (externo)
-        old_value: ticket.status,
-        new_value: 'open',
-        metadata: { reason: 'customer_reply' }
-      }
-    });
-  }
-}
+  -- 2. Verificar autorização:
+  -- - admin/manager/general_manager/cs_manager/support_manager/financial_manager: pode tudo
+  -- - support_agent: só se ticket atribuído a ele, criado por ele, ou unassigned
+  IF has_role(v_caller_id, 'admin') 
+     OR has_role(v_caller_id, 'manager')
+     OR has_role(v_caller_id, 'general_manager')
+     OR has_role(v_caller_id, 'cs_manager')
+     OR has_role(v_caller_id, 'support_manager')
+     OR has_role(v_caller_id, 'financial_manager')
+  THEN
+    v_is_authorized := true;
+  ELSIF has_role(v_caller_id, 'support_agent') 
+        OR has_role(v_caller_id, 'financial_agent')
+        OR has_role(v_caller_id, 'ecommerce_analyst')
+  THEN
+    v_is_authorized := (
+      v_ticket.assigned_to = v_caller_id 
+      OR v_ticket.created_by = v_caller_id 
+      OR v_ticket.assigned_to IS NULL
+    );
+  END IF;
+
+  IF NOT v_is_authorized THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Sem permissão para transferir este ticket');
+  END IF;
+
+  -- 3. Executar transferência
+  UPDATE tickets
+  SET 
+    department_id = p_department_id,
+    assigned_to = p_assigned_to,
+    status = CASE 
+      WHEN p_assigned_to IS NOT NULL THEN 'in_progress'
+      ELSE 'open'
+    END,
+    updated_at = now()
+  WHERE id = p_ticket_id;
+
+  -- 4. Criar comentário interno se nota fornecida
+  IF p_internal_note IS NOT NULL AND p_internal_note != '' THEN
+    INSERT INTO ticket_comments (ticket_id, content, is_internal, created_by)
+    VALUES (p_ticket_id, p_internal_note, true, v_caller_id);
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'ticket_id', p_ticket_id,
+    'department_id', p_department_id,
+    'assigned_to', p_assigned_to
+  );
+END;
+$$;
+
+-- Revogar acesso público e conceder apenas para authenticated
+REVOKE ALL ON FUNCTION public.transfer_ticket_secure(UUID, UUID, UUID, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.transfer_ticket_secure(UUID, UUID, UUID, TEXT) TO authenticated;
 ```
 
-Tambem adicionar notificacao imediata ao agente (via tabela notifications):
+---
+
+### Correção 3: Criar RPC `take_control_secure` (SECURITY DEFINER)
+
+**Tipo**: Migration SQL
+
+Para o useTakeControl, criar RPC que valida e executa a tomada de controle:
+
+```sql
+CREATE OR REPLACE FUNCTION public.take_control_secure(
+  p_conversation_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+  v_conversation RECORD;
+  v_profile RECORD;
+  v_is_authorized BOOLEAN := false;
+BEGIN
+  -- 1. Buscar conversa
+  SELECT c.*, d.name as dept_name
+  INTO v_conversation
+  FROM conversations c
+  LEFT JOIN departments d ON d.id = c.department
+  WHERE c.id = p_conversation_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Conversa não encontrada');
+  END IF;
+
+  -- 2. Buscar perfil do usuário
+  SELECT id, full_name, availability_status
+  INTO v_profile
+  FROM profiles
+  WHERE id = v_caller_id;
+
+  -- 3. Verificar se é manager/admin (não precisa estar online)
+  IF has_role(v_caller_id, 'admin') 
+     OR has_role(v_caller_id, 'manager')
+     OR has_role(v_caller_id, 'general_manager')
+     OR has_role(v_caller_id, 'cs_manager')
+     OR has_role(v_caller_id, 'support_manager')
+     OR has_role(v_caller_id, 'financial_manager')
+  THEN
+    v_is_authorized := true;
+  ELSE
+    -- Agentes precisam estar online
+    IF v_profile.availability_status != 'online' THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Altere seu status para Online para assumir conversas');
+    END IF;
+    
+    -- Conversa não atribuída (IA) pode ser assumida por qualquer agente
+    IF v_conversation.assigned_to IS NULL THEN
+      v_is_authorized := true;
+    -- Conversa atribuída ao próprio usuário
+    ELSIF v_conversation.assigned_to = v_caller_id THEN
+      v_is_authorized := true;
+    END IF;
+  END IF;
+
+  IF NOT v_is_authorized THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Sem permissão para assumir esta conversa');
+  END IF;
+
+  -- 4. Executar takeover
+  UPDATE conversations
+  SET 
+    ai_mode = 'copilot',
+    assigned_to = v_caller_id
+  WHERE id = p_conversation_id;
+
+  -- 5. Inserir mensagem de sistema
+  INSERT INTO messages (conversation_id, content, sender_type, sender_id, is_ai_generated)
+  VALUES (
+    p_conversation_id,
+    format('O atendente **%s** entrou na conversa.', COALESCE(v_profile.full_name, 'Suporte')),
+    'system',
+    v_caller_id,
+    false
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'conversation_id', p_conversation_id,
+    'assigned_to', v_caller_id,
+    'ai_mode', 'copilot'
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.take_control_secure(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.take_control_secure(UUID) TO authenticated;
+```
+
+---
+
+### Correção 4: Atualizar Hooks do Frontend
+
+**Arquivos a modificar:**
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/hooks/useTicketTransfer.tsx` | Substituir `supabase.from('tickets').update()` por `supabase.rpc('transfer_ticket_secure')` |
+| `src/hooks/useBulkTransferTickets.tsx` | Usar loop de `supabase.rpc('transfer_ticket_secure')` para cada ticket |
+| `src/hooks/useTakeControl.tsx` | Substituir `supabase.from('conversations').update()` por `supabase.rpc('take_control_secure')` |
+
+**Exemplo - useTicketTransfer.tsx:**
 
 ```typescript
-// Notificar agente sobre nova resposta do cliente
-if (ticket.assigned_to) {
-  await supabase.from('notifications').insert({
-    user_id: ticket.assigned_to,
-    title: 'Nova resposta do cliente',
-    message: `Cliente respondeu ao ticket #${ticket.ticket_number || ticket.id.slice(0,8)}`,
-    type: 'ticket_reply',
-    reference_id: ticket_id,
-    read: false
+// ANTES (UPDATE direto - falha no RLS)
+const { data, error } = await supabase
+  .from("tickets")
+  .update({
+    department_id,
+    status: newStatus,
+    assigned_to: assigned_to ?? null,
+  })
+  .eq("id", ticket_id)
+  .select()
+  .single();
+
+// DEPOIS (RPC SECURITY DEFINER - bypassa RLS com validação)
+const { data: result, error } = await supabase
+  .rpc('transfer_ticket_secure', {
+    p_ticket_id: ticket_id,
+    p_department_id: department_id,
+    p_assigned_to: assigned_to ?? null,
+    p_internal_note: internal_note
   });
+
+if (!result?.success) {
+  throw new Error(result?.error || 'Erro ao transferir ticket');
 }
 ```
 
 ---
 
-## Correcao 3: Playbook - Query Aninhada Invalida
+## Resumo de Arquivos
 
-**Arquivo**: `supabase/functions/process-playbook-queue/index.ts`
-
-**Problema** (linhas 436-446): A sintaxe `.in('id', supabase.from(...))` NAO funciona no Supabase client. O segundo argumento precisa ser um array, nao uma query builder.
-
-```typescript
-// CODIGO BUGADO (nao funciona)
-const { data: agents } = await supabase
-  .from('profiles')
-  .select('id')
-  .in('id', 
-    supabase        // ← Isso retorna um QueryBuilder, nao um array!
-      .from('user_roles')
-      .select('user_id')
-      .in('role', ['consultant', 'support_agent'])
-  )
-```
-
-**Solucao**: Fazer duas queries separadas ou usar RPC
-
-```typescript
-// CORREÇÃO: Duas queries separadas
-async function executeTaskNode(supabase: any, item: QueueItem, contact: any) {
-  // ... codigo existente ...
-
-  let assignedTo = contact.assigned_to || contact.consultant_id;
-  
-  if (!assignedTo) {
-    console.log('No assigned_to or consultant_id, fetching available agent...');
-    
-    // 1. Buscar IDs de usuarios com roles corretas
-    const { data: roleUsers } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .in('role', ['consultant', 'support_agent']);
-    
-    const userIds = roleUsers?.map((r: any) => r.user_id) || [];
-    
-    if (userIds.length > 0) {
-      // 2. Buscar perfil online dentre esses usuarios
-      const { data: agents } = await supabase
-        .from('profiles')
-        .select('id')
-        .in('id', userIds)
-        .eq('status', 'online')
-        .limit(1);
-      
-      if (agents && agents.length > 0) {
-        assignedTo = agents[0].id;
-        console.log('Assigned to available agent:', assignedTo);
-      }
-    }
-    
-    // Fallback se ninguem online
-    if (!assignedTo) {
-      const { data: fallbackAgents } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .in('role', ['consultant', 'admin', 'manager'])
-        .limit(1);
-      
-      if (fallbackAgents && fallbackAgents.length > 0) {
-        assignedTo = fallbackAgents[0].user_id;
-        console.log('Assigned to fallback agent:', assignedTo);
-      }
-    }
-  }
-
-  // Se ainda nao tem agente, retornar sucesso mesmo assim (task criada, agente sera atribuido depois)
-  if (!assignedTo) {
-    console.warn('No agent available, creating task without assignment');
-    // Continuar sem atribuicao - task fica "unassigned"
-  }
-
-  // ... resto do codigo ...
-}
-```
-
----
-
-## Resumo de Arquivos a Modificar
-
-| Arquivo | Acao |
+| Arquivo | Ação |
 |---------|------|
-| Nova migration SQL | Adicionar `created_by` na politica do sales_rep |
-| `supabase/functions/add-customer-comment/index.ts` | Expandir reabertura + notificar agente |
-| `supabase/functions/process-playbook-queue/index.ts` | Corrigir query aninhada no executeTaskNode |
+| Migration SQL | 1. Habilitar users.manage para cs_manager |
+| Migration SQL | 2. Criar transfer_ticket_secure RPC |
+| Migration SQL | 3. Criar take_control_secure RPC |
+| `src/hooks/useTicketTransfer.tsx` | Usar RPC ao invés de UPDATE direto |
+| `src/hooks/useBulkTransferTickets.tsx` | Usar RPC ao invés de UPDATE direto |
+| `src/hooks/useTakeControl.tsx` | Usar RPC ao invés de UPDATE direto |
 
 ---
 
-## Resultado Esperado
+## Por que esta solução é definitiva?
 
-1. **Tickets**: sales_rep ve tickets que criou + tickets de contatos atribuidos
-2. **Reabertura**: Ticket volta para "open" quando cliente responde (de resolved, waiting_customer ou pending)
-3. **Notificacao**: Agente atribuido recebe notificacao quando cliente responde
-4. **Playbook**: Nao trava mais no no de task - executa normalmente
+1. **Zero UPDATE direto em campos sensíveis** - Todas as operações de transferência/atribuição passam por RPC
+
+2. **Validação centralizada na RPC** - Regras de negócio ficam no banco, não espalhadas pelo frontend
+
+3. **SECURITY DEFINER bypassa RLS** - A função executa com privilégios do owner, não do caller
+
+4. **Auditoria mantida** - RPCs ainda criam logs/comentários internos
+
+5. **Padrão consistente** - Mesma arquitetura do `transfer_conversation_secure` que já funciona
 
 ---
 
-## Secao Tecnica
+## Checklist de Validação Pós-Deploy
 
-### Politica RLS Completa
-
-```sql
--- Corrigir sales_rep para ver tickets criados por ele
-DROP POLICY IF EXISTS "sales_rep_can_view_tickets_of_assigned_contacts" ON public.tickets;
-
-CREATE POLICY "sales_rep_can_view_tickets"
-ON public.tickets
-FOR SELECT
-TO authenticated
-USING (
-  has_role(auth.uid(), 'sales_rep'::app_role) AND (
-    customer_id IN (
-      SELECT id FROM contacts WHERE assigned_to = auth.uid()
-    )
-    OR created_by = auth.uid()
-  )
-);
-```
-
-### Sobre Items Travados na Fila
-
-Existem ~10 items com status `processing` desde janeiro/2026 que precisam ser resetados:
-
-```sql
--- Limpar items travados na fila (opcional, executar manualmente)
-UPDATE playbook_execution_queue
-SET status = 'pending', retry_count = 0
-WHERE status = 'processing'
-AND created_at < NOW() - INTERVAL '7 days';
-```
+- [ ] Marco Cruz (cs_manager) consegue criar usuários
+- [ ] Loriani (sales_rep) consegue assumir conversas da IA
+- [ ] Caroline (support_agent) consegue transferir tickets para outros agentes
+- [ ] Buscar no código: `from('tickets').update({ assigned_to` → 0 resultados
+- [ ] Buscar no código: `from('conversations').update({ assigned_to` → 0 resultados (exceto RPC)
