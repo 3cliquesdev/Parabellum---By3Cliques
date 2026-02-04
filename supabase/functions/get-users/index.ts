@@ -5,21 +5,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// Validar variáveis de ambiente no boot (previne crash silencioso)
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('[get-users] Missing required environment variables');
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    // Validar variáveis de ambiente dentro do handler (mais seguro)
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('[get-users] Missing required environment variables');
       return new Response(
         JSON.stringify({ error: 'Configuração do servidor incompleta' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -57,7 +54,7 @@ Deno.serve(async (req) => {
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (!roleData) {
       return new Response(
@@ -85,8 +82,14 @@ Deno.serve(async (req) => {
       ]);
 
     if (rolesError) throw rolesError;
+    if (!rolesData || rolesData.length === 0) {
+      return new Response(
+        JSON.stringify({ users: [] }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Buscar apenas os profiles dos usuários com roles (evita limite de 1000 registros)
+    // Buscar apenas os profiles dos usuários com roles
     const userIds = rolesData.map(r => r.user_id);
     const { data: profilesData } = await supabaseAdmin
       .from('profiles')
@@ -95,40 +98,52 @@ Deno.serve(async (req) => {
 
     const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
 
-    // Buscar emails dos usuários via Admin API
-    const usersWithDetails = await Promise.all(
-      rolesData.map(async (role) => {
-        const { data: { user: userData }, error: userError } = await supabaseAdmin.auth.admin.getUserById(role.user_id);
-        
-        if (userError || !userData) {
-          console.error('Erro ao buscar usuário:', role.user_id, userError);
-          return null;
-        }
+    // Buscar emails dos usuários via Admin API (com limite de concorrência)
+    const batchSize = 10;
+    const usersWithDetails: any[] = [];
+    
+    for (let i = 0; i < rolesData.length; i += batchSize) {
+      const batch = rolesData.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(async (role) => {
+          try {
+            const { data: { user: userData }, error: userError } = await supabaseAdmin.auth.admin.getUserById(role.user_id);
+            
+            if (userError || !userData) {
+              console.warn('[get-users] Erro ao buscar usuário:', role.user_id);
+              return null;
+            }
 
-        const profile = profilesMap.get(role.user_id);
+            const profile = profilesMap.get(role.user_id);
 
-        return {
-          id: role.user_id,
-          email: userData.email || 'N/A',
-          created_at: role.created_at,
-          role: role.role,
-          full_name: profile?.full_name,
-          job_title: profile?.job_title,
-          avatar_url: profile?.avatar_url,
-          department: profile?.department,
-          is_blocked: profile?.is_blocked || false,
-          blocked_at: profile?.blocked_at,
-          block_reason: profile?.block_reason,
-          is_archived: profile?.is_archived || false,
-          archived_at: profile?.archived_at,
-          availability_status: profile?.availability_status || 'offline',
-        };
-      })
-    );
+            return {
+              id: role.user_id,
+              email: userData.email || 'N/A',
+              created_at: role.created_at,
+              role: role.role,
+              full_name: profile?.full_name,
+              job_title: profile?.job_title,
+              avatar_url: profile?.avatar_url,
+              department: profile?.department,
+              is_blocked: profile?.is_blocked || false,
+              blocked_at: profile?.blocked_at,
+              block_reason: profile?.block_reason,
+              is_archived: profile?.is_archived || false,
+              archived_at: profile?.archived_at,
+              availability_status: profile?.availability_status || 'offline',
+            };
+          } catch (err) {
+            console.warn('[get-users] Erro ao processar usuário:', role.user_id, err);
+            return null;
+          }
+        })
+      );
+      usersWithDetails.push(...batchResults);
+    }
 
-    // Retornar TODOS os usuários (incluindo bloqueados e arquivados)
-    // A filtragem será feita no frontend por aba (Ativos, Bloqueados, Arquivados)
     const users = usersWithDetails.filter(u => u !== null);
+
+    console.log('[get-users] Retornando', users.length, 'usuários');
 
     return new Response(
       JSON.stringify({ users }),
@@ -136,7 +151,7 @@ Deno.serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Erro na função get-users:', error);
+    console.error('[get-users] Erro:', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Erro desconhecido' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
