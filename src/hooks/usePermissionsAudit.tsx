@@ -32,6 +32,16 @@ export interface SecurityChecks {
   checked_at: string;
 }
 
+export interface RLSHealthItem {
+  table_name: string;
+  total_policies: number;
+  has_role_policies: number;
+  select_policies: number;
+  update_policies: number;
+  insert_policies: number;
+  delete_policies: number;
+}
+
 export const usePermissionsAudit = () => {
   const searchUsers = async (searchTerm: string): Promise<AuditUser[]> => {
     console.log('[usePermissionsAudit] searchUsers:', { searchTerm });
@@ -128,10 +138,30 @@ export const usePermissionsAudit = () => {
     console.log('[usePermissionsAudit] exportToCSV:', { filename, rows: data.length });
   };
 
+  const getRLSHealth = async (): Promise<RLSHealthItem[]> => {
+    console.log('[usePermissionsAudit] getRLSHealth');
+    
+    const { data, error } = await supabase.rpc('audit_rls_health');
+    
+    if (error) {
+      console.error('[usePermissionsAudit] getRLSHealth error:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      throw error;
+    }
+    
+    console.log('[usePermissionsAudit] getRLSHealth result:', { count: data?.length });
+    return (data || []) as RLSHealthItem[];
+  };
+
   return { 
     searchUsers, 
     getEffectivePermissions, 
     getSecurityChecks,
+    getRLSHealth,
     exportToCSV 
   };
 };

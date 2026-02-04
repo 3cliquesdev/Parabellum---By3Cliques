@@ -7045,6 +7045,39 @@ export type Database = {
           },
         ]
       }
+      rls_policy_backup: {
+        Row: {
+          backed_up_at: string | null
+          cmd: string | null
+          id: number
+          policyname: string | null
+          qual: string | null
+          schemaname: string | null
+          tablename: string | null
+          with_check: string | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          cmd?: string | null
+          id?: number
+          policyname?: string | null
+          qual?: string | null
+          schemaname?: string | null
+          tablename?: string | null
+          with_check?: string | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          cmd?: string | null
+          id?: number
+          policyname?: string | null
+          qual?: string | null
+          schemaname?: string | null
+          tablename?: string | null
+          with_check?: string | null
+        }
+        Relationships: []
+      }
       role_permissions: {
         Row: {
           created_at: string | null
@@ -8559,6 +8592,18 @@ export type Database = {
       }
     }
     Functions: {
+      audit_rls_health: {
+        Args: never
+        Returns: {
+          delete_policies: number
+          has_role_policies: number
+          insert_policies: number
+          select_policies: number
+          table_name: string
+          total_policies: number
+          update_policies: number
+        }[]
+      }
       audit_search_users: {
         Args: { p_search_term?: string }
         Returns: {

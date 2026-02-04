@@ -5,14 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { usePermissionsAudit, AuditUser, EffectivePermission, SecurityChecks } from "@/hooks/usePermissionsAudit";
-import { Search, Shield, ShieldCheck, ShieldX, Download, User, CheckCircle2, XCircle, AlertTriangle, Database, Lock } from "lucide-react";
+import { usePermissionsAudit, AuditUser, EffectivePermission, SecurityChecks, RLSHealthItem } from "@/hooks/usePermissionsAudit";
+import { Search, Shield, ShieldCheck, ShieldX, Download, User, CheckCircle2, XCircle, AlertTriangle, Database, Lock, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function PermissionsAudit() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUser, setSelectedUser] = useState<AuditUser | null>(null);
-  const { searchUsers, getEffectivePermissions, getSecurityChecks, exportToCSV } = usePermissionsAudit();
+  const { searchUsers, getEffectivePermissions, getSecurityChecks, getRLSHealth, exportToCSV } = usePermissionsAudit();
   const { toast } = useToast();
 
   // Query para buscar usuários
@@ -35,6 +35,13 @@ export default function PermissionsAudit() {
   const { data: securityChecks, isLoading: loadingSecurityChecks } = useQuery({
     queryKey: ["audit-security-checks"],
     queryFn: getSecurityChecks,
+    staleTime: 60000,
+  });
+
+  // Query para RLS health check
+  const { data: rlsHealth, isLoading: loadingRLSHealth } = useQuery({
+    queryKey: ["audit-rls-health"],
+    queryFn: getRLSHealth,
     staleTime: 60000,
   });
 
@@ -105,6 +112,24 @@ export default function PermissionsAudit() {
     
     exportToCSV([...tablesData, ...rpcsData], "security-checks");
     toast({ title: "Exportado", description: "Verificações de segurança exportadas." });
+  };
+
+  const handleExportRLSHealth = () => {
+    if (!rlsHealth) return;
+    
+    exportToCSV(
+      rlsHealth.map(item => ({
+        table_name: item.table_name,
+        total_policies: item.total_policies,
+        has_role_policies: item.has_role_policies,
+        select_policies: item.select_policies,
+        update_policies: item.update_policies,
+        insert_policies: item.insert_policies,
+        delete_policies: item.delete_policies
+      })),
+      "rls-health-check"
+    );
+    toast({ title: "Exportado", description: "RLS Health Check exportado." });
   };
 
   return (
@@ -261,6 +286,90 @@ export default function PermissionsAudit() {
           </CardContent>
         </Card>
       )}
+
+      <Separator />
+
+      {/* RLS Health Check */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                RLS Health Check
+              </CardTitle>
+              <CardDescription>
+                Status de performance das políticas RLS por tabela
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleExportRLSHealth} disabled={!rlsHealth}>
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingRLSHealth && (
+            <div className="text-sm text-muted-foreground">Carregando health check...</div>
+          )}
+          
+          {rlsHealth && (
+            <div className="grid gap-2 max-h-[400px] overflow-y-auto">
+              {rlsHealth.map((item) => (
+                <div
+                  key={item.table_name}
+                  className="flex items-center justify-between p-3 rounded-lg border"
+                >
+                  <div className="flex items-center gap-2">
+                    {item.has_role_policies > 0 ? (
+                      <AlertTriangle className="h-4 w-4 text-warning" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 text-success" />
+                    )}
+                    <code className="font-mono text-sm">{item.table_name}</code>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Total:</span>
+                      <Badge variant="outline">{item.total_policies}</Badge>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">has_role():</span>
+                      <Badge variant={item.has_role_policies > 0 ? "warning" : "success"}>
+                        {item.has_role_policies}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <span>S:{item.select_policies}</span>
+                      <span>U:{item.update_policies}</span>
+                      <span>I:{item.insert_policies}</span>
+                      <span>D:{item.delete_policies}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {rlsHealth.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma tabela com políticas RLS encontrada.
+                </p>
+              )}
+            </div>
+          )}
+          
+          {rlsHealth && rlsHealth.some(item => item.has_role_policies > 0) && (
+            <div className="mt-4 p-3 rounded-lg bg-warning/10 border border-warning/20">
+              <p className="text-sm text-warning flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                <span>
+                  Tabelas com <code className="font-mono">has_role()</code> podem causar timeout em queries grandes. 
+                  Considere migrar para <code className="font-mono">has_any_role()</code> SECURITY DEFINER.
+                </span>
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Separator />
 
