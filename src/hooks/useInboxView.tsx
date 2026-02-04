@@ -60,6 +60,7 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
   let query = supabase
     .from("inbox_view")
     .select("*")
+    .neq("status", "closed") // ✅ FIX: Filtrar conversas fechadas NO BANCO, não no JS
     .order("updated_at", { ascending: true })
     .limit(500); // REDUZIDO de 5000 para 500 para aliviar carga no banco durante timeouts
 
