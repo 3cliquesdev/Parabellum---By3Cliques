@@ -17,18 +17,12 @@ const corsHeaders = {
  */
 
 // Função auxiliar: Extrair rating (1-5) da mensagem
+// ✅ STRICT: Apenas texto puro "1", "2", "3", "4" ou "5" - NADA MAIS
+// Ignora: "nota 5", "5 estrelas", "⭐⭐⭐⭐⭐", "1.", etc.
 function extractRating(message: string): number | null {
   const normalized = message.trim();
-  
-  // Detectar número direto: "1", "2", "3", "4", "5"
   const numMatch = normalized.match(/^[1-5]$/);
-  if (numMatch) return parseInt(numMatch[0]);
-  
-  // Detectar estrelas emoji: "⭐⭐⭐⭐⭐"
-  const starCount = (message.match(/⭐/g) || []).length;
-  if (starCount >= 1 && starCount <= 5) return starCount;
-  
-  return null;
+  return numMatch ? parseInt(numMatch[0]) : null;
 }
 // Função para formatar opções do ask_options como texto com emojis numéricos
 function formatOptionsAsText(options: Array<{label: string; value?: string; id?: string}> | null | undefined): string {
@@ -308,15 +302,35 @@ serve(async (req) => {
               // PRÉ-VERIFICAÇÃO CSAT - ANTES de criar conversa nova
               // Se cliente respondeu avaliação, processar e MANTER fechada
               // ============================================
-              const { data: csatConversation } = await supabase
-                .from("conversations")
-                .select("id, awaiting_rating, status, whatsapp_meta_instance_id")
-                .eq("contact_id", contact.id)
-                .eq("awaiting_rating", true)
-                .eq("status", "closed")
-                .order("closed_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
+              
+              // 🆕 Validar instance.id antes de rodar guard (segurança multi-instância)
+              let csatConversation = null;
+              if (instance?.id) {
+                // Janela de 24h usando Date.now() - defensivo e sem timezone issues
+                const CSAT_WINDOW_HOURS = 24;
+                const csatWindowLimitIso = new Date(Date.now() - CSAT_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
+                
+                const { data: csatResult, error: csatError } = await supabase
+                  .from("conversations")
+                  .select("id, awaiting_rating, status, whatsapp_meta_instance_id, rating_sent_at")
+                  .eq("contact_id", contact.id)
+                  .eq("awaiting_rating", true)
+                  .eq("status", "closed")
+                  .eq("whatsapp_meta_instance_id", instance.id) // 🆕 Filtrar pela instância atual
+                  .not("rating_sent_at", "is", null)            // 🆕 Garantir que CSAT foi enviado
+                  .gte("rating_sent_at", csatWindowLimitIso)    // 🆕 Apenas últimas 24h DESDE ENVIO
+                  .order("rating_sent_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                
+                if (csatError) {
+                  console.error("[meta-whatsapp-webhook] ⚠️ CSAT Guard query error:", csatError);
+                } else {
+                  csatConversation = csatResult;
+                }
+              } else {
+                console.warn("[meta-whatsapp-webhook] ⚠️ CSAT Guard skipped: no instance.id");
+              }
 
               if (csatConversation && csatConversation.awaiting_rating) {
                 const csatRating = extractRating(messageContent);
@@ -331,7 +345,7 @@ serve(async (req) => {
                     .eq("id", csatConversation.id)
                     .single();
 
-                  // Salvar rating
+                  // 🆕 IDEMPOTÊNCIA ATÔMICA: Tentar inserir rating (unique constraint protege)
                   const { error: ratingError } = await supabase
                     .from("conversation_ratings")
                     .insert({
@@ -341,6 +355,17 @@ serve(async (req) => {
                       feedback_text: messageContent,
                       department_id: convForDept?.department || null,
                     });
+                  
+                  // Verificar se é erro de duplicação (evento reenviado pelo webhook)
+                  const isDuplicateError = ratingError?.code === "23505" || 
+                                           ratingError?.message?.includes("duplicate") ||
+                                           ratingError?.message?.includes("unique");
+                  
+                  if (isDuplicateError) {
+                    // Evento duplicado - ignorar silenciosamente (idempotência)
+                    console.log("[meta-whatsapp-webhook] ⚠️ CSAT já registrado (duplicado) - ignorando");
+                    continue; // Pular para próxima mensagem
+                  }
                   
                   if (ratingError) {
                     console.error("[meta-whatsapp-webhook] ❌ Error saving CSAT rating:", ratingError);
@@ -371,7 +396,7 @@ serve(async (req) => {
                         message: thankYouMessage,
                         conversation_id: csatConversation.id,
                         skip_db_save: true,
-                        is_bot_message: true, // 🆕 Agradecimento automático - NÃO mudar ai_mode
+                        is_bot_message: true, // Agradecimento automático - NÃO mudar ai_mode
                       },
                     });
                     

@@ -523,15 +523,35 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   // 🔍 PRÉ-VERIFICAÇÃO CSAT - ANTES de reabrir conversa
   // Se cliente está respondendo avaliação, processar e manter conversa FECHADA
   // ============================================================
-  const { data: csatConversation } = await supabase
-    .from('conversations')
-    .select('id, awaiting_rating, status')
-    .eq('contact_id', contactId)
-    .eq('awaiting_rating', true)
-    .eq('status', 'closed')
-    .order('closed_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  
+  // 🆕 Validar instance.id antes de rodar guard (segurança multi-instância)
+  let csatConversation = null;
+  if (instance?.id) {
+    // Janela de 24h usando Date.now() - defensivo e sem timezone issues
+    const CSAT_WINDOW_HOURS = 24;
+    const csatWindowLimitIso = new Date(Date.now() - CSAT_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
+    
+    const { data: csatResult, error: csatError } = await supabase
+      .from('conversations')
+      .select('id, awaiting_rating, status, whatsapp_instance_id, rating_sent_at')
+      .eq('contact_id', contactId)
+      .eq('awaiting_rating', true)
+      .eq('status', 'closed')
+      .eq('whatsapp_instance_id', instance.id) // 🆕 Filtrar pela instância atual (Evolution)
+      .not('rating_sent_at', 'is', null)       // 🆕 Garantir que CSAT foi enviado
+      .gte('rating_sent_at', csatWindowLimitIso) // 🆕 Apenas últimas 24h DESDE ENVIO
+      .order('rating_sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (csatError) {
+      console.error('[handle-whatsapp-event] ⚠️ CSAT Guard query error:', csatError);
+    } else {
+      csatConversation = csatResult;
+    }
+  } else {
+    console.warn('[handle-whatsapp-event] ⚠️ CSAT Guard skipped: no instance.id');
+  }
 
   if (csatConversation && csatConversation.awaiting_rating) {
     const csatRating = extractRating(messageText);
@@ -546,7 +566,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         .eq('id', csatConversation.id)
         .single();
 
-      // Salvar rating na tabela conversation_ratings com department_id
+      // 🆕 IDEMPOTÊNCIA ATÔMICA: Tentar inserir rating (unique constraint protege)
       const { error: ratingError } = await supabase
         .from('conversation_ratings')
         .insert({
@@ -556,6 +576,17 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           feedback_text: messageText,
           department_id: convForDept?.department || null,
         });
+      
+      // Verificar se é erro de duplicação (evento reenviado pelo webhook)
+      const isDuplicateError = ratingError?.code === '23505' || 
+                               ratingError?.message?.includes('duplicate') ||
+                               ratingError?.message?.includes('unique');
+      
+      if (isDuplicateError) {
+        // Evento duplicado - ignorar silenciosamente (idempotência)
+        console.log('[handle-whatsapp-event] ⚠️ CSAT já registrado (duplicado) - ignorando');
+        return; // Sair sem processar novamente
+      }
       
       if (ratingError) {
         console.error('[handle-whatsapp-event] Error saving CSAT rating:', ratingError);
@@ -1497,20 +1528,12 @@ async function handleOTPValidation(
 }
 
 // 📊 Função auxiliar: Extrair rating (1-5) da mensagem
-// ✅ SIMPLIFICADO: Apenas números 1-5 (determinístico, sem IA)
+// ✅ STRICT: Apenas texto puro "1", "2", "3", "4" ou "5" - NADA MAIS
+// Ignora: "nota 5", "5 estrelas", "⭐⭐⭐⭐⭐", "1.", etc.
 function extractRating(message: string): number | null {
   const normalized = message.trim();
-  
-  // Detectar número direto: "1", "2", "3", "4", "5"
   const numMatch = normalized.match(/^[1-5]$/);
-  if (numMatch) return parseInt(numMatch[0]);
-  
-  // Detectar estrelas emoji: "⭐⭐⭐⭐⭐" (fallback visual)
-  const starCount = (message.match(/⭐/g) || []).length;
-  if (starCount >= 1 && starCount <= 5) return starCount;
-  
-  // Não interpretar texto - comportamento determinístico
-  return null;
+  return numMatch ? parseInt(numMatch[0]) : null;
 }
 
 // 📸 Função auxiliar: Detectar tipo de mídia na mensagem
