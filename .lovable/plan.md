@@ -1,138 +1,125 @@
 
 
-# Plano: Corrigir Sistema de Filtros do Time Comercial
+# Plano: Corrigir Exibição de Deals Ganhos/Perdidos com Filtros de Data
 
-## Diagnóstico
+## Diagnóstico Detalhado
 
-### Problema Principal
-O usuário aplicou filtro "Previsão de Fechamento: 01/01/2026 - 31/01/2026" e o pipeline mostra **0 negócios**. Isso ocorre porque:
+### Contexto do Problema
+- **Usuário:** Thaynara da Silva (vendedora - sales_rep)
+- **Filtro aplicado:** "Criado: 25/01/2026 - 31/01/2026"
+- **Comportamento observado:** Colunas "Ganho" e "Perdido" mostram 0
 
-- **ZERO deals** na base de dados têm a coluna `expected_close_date` preenchida
-- O banco possui **18.376 deals totais**, mas todos têm `expected_close_date = NULL`
-- Portanto, qualquer filtro nessa coluna retorna 0 resultados
+### Causa Raiz
+O sistema está funcionando corretamente, mas há uma **inconsistência de UX**:
+
+| Dados no banco | Filtro atual | Resultado |
+|----------------|--------------|-----------|
+| Thaynara tem 36 deals OPEN criados no período | `created_at` entre 25-31/jan | 36 deals abertos |
+| Thaynara tem 0 deals WON criados no período | `created_at` entre 25-31/jan | 0 deals ganhos |
+| Thaynara tem 0 deals LOST criados no período | `created_at` entre 25-31/jan | 0 deals perdidos |
+
+**Expectativa do usuário:** Ver deals que foram **fechados** (ganhos/perdidos) no período  
+**Comportamento atual:** Mostra deals que foram **criados** no período
 
 ### Problemas Secundários Identificados
 
-| Problema | Impacto |
-|----------|---------|
-| Função `clearAllFilters()` incompleta | Não limpa campos de data, status, etapas, probabilidade |
-| Função `generateDealFilterChips()` incompleta | Não exibe chips para `updatedDateRange`, `status`, `stageIds`, `probability` |
-| Label confuso "Fechamento" | Usuários podem confundir com data real de fechamento (`closed_at`) |
+1. **Limite de 50 deals no useDeals**: Pode cortar resultados em períodos com muitos deals
+2. **Métricas de header inconsistentes**: O componente `useDealsMetrics` filtra corretamente ganhos/perdas por `closed_at`, mas as colunas Ganho/Perdido mostram dados filtrados por `created_at`
+3. **Falta de filtro por `closed_at`**: Não existe opção de filtrar por "Data de Fechamento"
 
 ---
 
-## Solução
+## Solução Proposta
 
-### 1. Corrigir `clearAllFilters()` em `Deals.tsx`
+### 1. Adicionar Filtro "Data de Fechamento" (closedDateRange)
 
-**Arquivo:** `src/pages/Deals.tsx` (linha 159-161)
+**Arquivo:** `src/hooks/useDeals.tsx`
 
-**Antes:**
+Adicionar novo campo no tipo `DealFilters`:
+
 ```typescript
-const clearAllFilters = () => {
-  setDealFilters({ search: "", leadSource: [], assignedTo: [] });
-};
+export interface DealFilters {
+  // ... campos existentes ...
+  closedDateRange?: DateRange; // NOVO: filtra por closed_at
+}
 ```
 
-**Depois:**
+Adicionar lógica de filtro na query:
+
 ```typescript
-const clearAllFilters = () => {
-  setDealFilters({
-    search: "",
-    leadSource: [],
-    assignedTo: [],
-    status: [],
-    stageIds: [],
-    sortBy: "created_at_desc",
-    createdDateRange: undefined,
-    expectedCloseDateRange: undefined,
-    updatedDateRange: undefined,
-    valueMin: undefined,
-    valueMax: undefined,
-    probabilityMin: undefined,
-    probabilityMax: undefined,
-  });
-};
+// Closed date range (para filtrar ganhos/perdidos)
+if (filters.closedDateRange?.from) {
+  query = query.gte("closed_at", filters.closedDateRange.from.toISOString());
+}
+if (filters.closedDateRange?.to) {
+  const endDate = new Date(filters.closedDateRange.to);
+  endDate.setHours(23, 59, 59, 999);
+  query = query.lte("closed_at", endDate.toISOString());
+}
 ```
 
-### 2. Completar `generateDealFilterChips()` em `active-filter-chips.tsx`
+### 2. Adicionar Campo no Modal de Filtros Avançados
+
+**Arquivo:** `src/components/deals/AdvancedDealFiltersModal.tsx`
+
+Adicionar seletor de "Data de Fechamento" ao lado do "Data de Criação" e "Prev. Fechamento":
+
+```tsx
+<div className="space-y-2">
+  <Label>Data de Fechamento (Ganhos/Perdidos)</Label>
+  <DatePickerWithRange
+    date={filters.closedDateRange}
+    onSelect={(range) => updateFilters({ closedDateRange: range })}
+  />
+</div>
+```
+
+### 3. Gerar Chip para o Novo Filtro
 
 **Arquivo:** `src/components/ui/active-filter-chips.tsx`
 
-Adicionar chips faltantes para:
-- `updatedDateRange` (Última Atualização)
-- `status` (Status: Aberto/Ganho/Perdido)
-- `stageIds` (Etapas do Pipeline)
-- `probabilityMin/Max` (Probabilidade)
-
-**Código a adicionar após linha 91:**
+Adicionar na interface:
 ```typescript
-// Última atualização
-if (filters.updatedDateRange?.from) {
-  const label = filters.updatedDateRange.to 
-    ? `Atualizado: ${formatDate(filters.updatedDateRange.from)} - ${formatDate(filters.updatedDateRange.to)}`
-    : `Atualizado desde: ${formatDate(filters.updatedDateRange.from)}`;
-  chips.push({ key: "updatedDateRange", label });
-}
+closedDateRange?: { from?: Date; to?: Date };
+```
 
-// Status
-if (filters.status && filters.status.length > 0) {
-  const statusLabels: Record<string, string> = {
-    open: "Aberto",
-    won: "Ganho",
-    lost: "Perdido"
-  };
-  const labels = filters.status.map(s => statusLabels[s] || s).join(", ");
-  chips.push({ key: "status", label: `Status: ${labels}` });
-}
-
-// Probabilidade
-if (filters.probabilityMin !== undefined || filters.probabilityMax !== undefined) {
-  const min = filters.probabilityMin ?? 0;
-  const max = filters.probabilityMax ?? 100;
-  chips.push({ key: "probability", label: `Probabilidade: ${min}% - ${max}%` });
-}
-
-// Etapas (se implementado)
-if (filters.stageIds && filters.stageIds.length > 0) {
-  chips.push({ key: "stageIds", label: `${filters.stageIds.length} etapa(s) selecionada(s)` });
+Adicionar geração do chip:
+```typescript
+if (filters.closedDateRange?.from) {
+  const label = filters.closedDateRange.to 
+    ? `Fechado: ${formatDate(filters.closedDateRange.from)} - ${formatDate(filters.closedDateRange.to)}`
+    : `Fechado desde: ${formatDate(filters.closedDateRange.from)}`;
+  chips.push({ key: "closedDateRange", label });
 }
 ```
 
-### 3. Atualizar interface do `generateDealFilterChips`
-
-A interface de entrada precisa ser expandida para incluir os novos campos.
-
-### 4. Corrigir `handleRemoveFilterChip` para arrays
+### 4. Atualizar clearAllFilters e handleRemoveFilterChip
 
 **Arquivo:** `src/pages/Deals.tsx`
 
-Adicionar tratamento para campos de array como `status` e `stageIds`:
-
 ```typescript
-} else if (key === "status") {
-  setDealFilters({ ...dealFilters, status: [] });
-} else if (key === "stageIds") {
-  setDealFilters({ ...dealFilters, stageIds: [] });
-} else if (key === "probability") {
-  setDealFilters({ ...dealFilters, probabilityMin: undefined, probabilityMax: undefined });
-} else {
-  setDealFilters({ ...dealFilters, [key]: undefined });
+// Em clearAllFilters
+closedDateRange: undefined,
+
+// Em handleRemoveFilterChip
+} else if (key === "closedDateRange") {
+  setDealFilters({ ...dealFilters, closedDateRange: undefined });
 }
 ```
 
-### 5. (Opcional) Melhorar label do chip de "Fechamento"
+### 5. Aumentar Limite de Deals para Filtros com Data
 
-Mudar de "Fechamento" para "Prev. Fechamento" para evitar confusão com `closed_at`:
+**Arquivo:** `src/hooks/useDeals.tsx`
+
+Quando filtros de data estão ativos, aumentar o limite para 200 deals:
 
 ```typescript
-// Em generateDealFilterChips
-if (filters.expectedCloseDateRange?.from) {
-  const label = filters.expectedCloseDateRange.to 
-    ? `Prev. Fechamento: ${formatDate(filters.expectedCloseDateRange.from)} - ${formatDate(filters.expectedCloseDateRange.to)}`
-    : `Prev. Fechamento desde: ${formatDate(filters.expectedCloseDateRange.from)}`;
-  chips.push({ key: "expectedCloseDateRange", label });
-}
+// Limite dinâmico baseado em filtros ativos
+const hasDateFilter = filters?.createdDateRange?.from || 
+                      filters?.closedDateRange?.from ||
+                      filters?.expectedCloseDateRange?.from;
+const limit = hasDateFilter ? 200 : 50;
+query = query.limit(limit);
 ```
 
 ---
@@ -141,35 +128,39 @@ if (filters.expectedCloseDateRange?.from) {
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/pages/Deals.tsx` | `clearAllFilters()` completo + `handleRemoveFilterChip()` para arrays |
-| `src/components/ui/active-filter-chips.tsx` | `generateDealFilterChips()` com todos os chips + interface expandida |
+| `src/hooks/useDeals.tsx` | Adicionar `closedDateRange` no tipo e na query |
+| `src/components/deals/AdvancedDealFiltersModal.tsx` | Adicionar campo de Data de Fechamento |
+| `src/components/ui/active-filter-chips.tsx` | Adicionar chip para `closedDateRange` |
+| `src/pages/Deals.tsx` | Atualizar `clearAllFilters` e `handleRemoveFilterChip` |
+
+---
+
+## Impacto
+
+| Antes | Depois |
+|-------|--------|
+| Não era possível filtrar por data de fechamento | Filtro "Fechado" disponível para vendas no período |
+| Usuário confuso sobre ganhos zerados | Pode escolher filtrar por "Criado" OU "Fechado" |
+| Limite fixo de 50 deals cortava resultados | Limite aumentado para 200 quando há filtros de data |
+| Nenhuma funcionalidade existente é perdida | Todos os filtros continuam funcionando |
 
 ---
 
 ## Seção Técnica
 
-### Por que `expected_close_date` está vazio?
+### Por que não mudar o comportamento padrão?
 
-- A coluna existe e é do tipo `DATE` (nullable)
-- **Nenhum deal** teve previsão de fechamento cadastrada
-- Isso é um problema de dados, não de código
-- Sugestão: preencher automaticamente com `created_at + 30 dias` para deals novos
+Alterar o filtro "Criado" para também afetar `closed_at` quebraria casos de uso existentes onde o usuário quer ver "leads que entraram no período" independente do status atual.
 
-### Impacto
+### Sobre o limite de 50 vs 200
 
-| Antes | Depois |
-|-------|--------|
-| Limpar filtros não limpa datas | Todos os filtros são limpos corretamente |
-| Chips não mostram todos os filtros ativos | Todos os filtros têm visualização |
-| Filtro "Fechamento" confuso | Label "Prev. Fechamento" mais claro |
-| Ao remover chip de status/etapas, comportamento incorreto | Arrays são limpos corretamente |
+O limite de 50 foi implementado para performance em cenários sem filtro. Com filtros de data ativos, o conjunto é naturalmente menor, então 200 é seguro.
 
 ### Validação Pós-Deploy
 
-1. Abrir página de Deals
-2. Aplicar filtro "Previsão de Fechamento" → verificar que chip aparece
-3. Aplicar filtro "Data de Criação: Janeiro 2026" → verificar que deals aparecem
-4. Clicar em "Limpar Tudo" → verificar que TODOS os filtros são removidos
-5. Clicar no X de cada chip → verificar que remove corretamente
-6. Aplicar filtro de Status (Aberto/Ganho/Perdido) → verificar que chip aparece
+1. Aplicar filtro "Fechado: 01/01/2026 - 31/01/2026"
+2. Verificar que coluna "Ganho" mostra deals fechados no período
+3. Verificar que chip "Fechado: ..." aparece
+4. Clicar em "Limpar Tudo" e confirmar que o filtro é removido
+5. Testar como vendedor (sales_rep) para confirmar que só vê seus próprios deals
 
