@@ -40,6 +40,7 @@ function countActiveFilters(filters: DealFilters): number {
   if (filters.probabilityMin !== undefined || filters.probabilityMax !== undefined) count++;
   if (filters.createdDateRange?.from || filters.createdDateRange?.to) count++;
   if (filters.expectedCloseDateRange?.from || filters.expectedCloseDateRange?.to) count++;
+  if (filters.closedDateRange?.from || filters.closedDateRange?.to) count++;
   if (filters.updatedDateRange?.from || filters.updatedDateRange?.to) count++;
   if (filters.leadSource && filters.leadSource.length > 0) count++;
   if (filters.assignedTo && filters.assignedTo.length > 0) count++;
@@ -81,6 +82,7 @@ export function AdvancedDealFiltersModal({
       sortBy: "created_at_desc",
       createdDateRange: undefined,
       expectedCloseDateRange: undefined,
+      closedDateRange: undefined,
       updatedDateRange: undefined,
       valueMin: undefined,
       valueMax: undefined,
@@ -236,6 +238,18 @@ export function AdvancedDealFiltersModal({
                     <DatePickerWithRange
                       date={localFilters.expectedCloseDateRange}
                       onDateChange={(range) => setLocalFilters({ ...localFilters, expectedCloseDateRange: range })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Data de Fechamento (Ganhos/Perdidos)</Label>
+                    <DatePresetButtons
+                      value={localFilters.closedDateRange}
+                      onChange={(range) => setLocalFilters({ ...localFilters, closedDateRange: range })}
+                      mode="past"
+                    />
+                    <DatePickerWithRange
+                      date={localFilters.closedDateRange}
+                      onDateChange={(range) => setLocalFilters({ ...localFilters, closedDateRange: range })}
                     />
                   </div>
                   <div className="space-y-2">

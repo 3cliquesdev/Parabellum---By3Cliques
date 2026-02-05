@@ -58,6 +58,7 @@ export function generateDealFilterChips(
     valueMax?: number;
     createdDateRange?: { from?: Date; to?: Date };
     expectedCloseDateRange?: { from?: Date; to?: Date };
+    closedDateRange?: { from?: Date; to?: Date };
     updatedDateRange?: { from?: Date; to?: Date };
     activityStatus?: string;
     leadSource: string[];
@@ -94,6 +95,14 @@ export function generateDealFilterChips(
       ? `Prev. Fechamento: ${formatDate(filters.expectedCloseDateRange.from)} - ${formatDate(filters.expectedCloseDateRange.to)}`
       : `Prev. Fechamento desde: ${formatDate(filters.expectedCloseDateRange.from)}`;
     chips.push({ key: "expectedCloseDateRange", label });
+  }
+
+  // Chip para data de fechamento real (closed_at)
+  if (filters.closedDateRange?.from) {
+    const label = filters.closedDateRange.to 
+      ? `Fechado: ${formatDate(filters.closedDateRange.from)} - ${formatDate(filters.closedDateRange.to)}`
+      : `Fechado desde: ${formatDate(filters.closedDateRange.from)}`;
+    chips.push({ key: "closedDateRange", label });
   }
 
   if (filters.updatedDateRange?.from) {

@@ -159,6 +159,8 @@ export default function Deals() {
       setDealFilters({ ...dealFilters, stageIds: [] });
     } else if (key === "probability") {
       setDealFilters({ ...dealFilters, probabilityMin: undefined, probabilityMax: undefined });
+    } else if (key === "closedDateRange") {
+      setDealFilters({ ...dealFilters, closedDateRange: undefined });
     } else {
       setDealFilters({ ...dealFilters, [key]: undefined });
     }
@@ -174,6 +176,7 @@ export default function Deals() {
       sortBy: "created_at_desc",
       createdDateRange: undefined,
       expectedCloseDateRange: undefined,
+      closedDateRange: undefined,
       updatedDateRange: undefined,
       valueMin: undefined,
       valueMax: undefined,

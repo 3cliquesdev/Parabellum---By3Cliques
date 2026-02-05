@@ -23,6 +23,7 @@ export interface DealFilters {
   valueMax?: number;
   createdDateRange?: DateRange;
   expectedCloseDateRange?: DateRange;
+  closedDateRange?: DateRange;  // NEW: filtra por closed_at (data de fechamento real)
   activityStatus?: string;
   leadSource: string[];
   assignedTo?: string[];
@@ -121,6 +122,16 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
           query = query.lte("updated_at", endDate.toISOString());
         }
 
+        // Closed date range (para filtrar ganhos/perdidos por data de fechamento)
+        if (filters.closedDateRange?.from) {
+          query = query.gte("closed_at", filters.closedDateRange.from.toISOString());
+        }
+        if (filters.closedDateRange?.to) {
+          const endDate = new Date(filters.closedDateRange.to);
+          endDate.setHours(23, 59, 59, 999);
+          query = query.lte("closed_at", endDate.toISOString());
+        }
+
         // Lead source (multi-select)
         if (filters.leadSource.length > 0) {
           query = query.in("lead_source", filters.leadSource);
@@ -161,9 +172,14 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
         query = query.order("created_at", { ascending: false });
       }
 
-      // Limite otimizado: 50 deals por página
-      // Com RLS otimizada (EXISTS vs has_role), queries são muito mais rápidas
-      query = query.limit(50);
+      // Limite dinâmico baseado em filtros ativos
+      // Com filtros de data, aumentar limite pois o conjunto é naturalmente menor
+      const hasDateFilter = filters?.createdDateRange?.from || 
+                            filters?.closedDateRange?.from ||
+                            filters?.expectedCloseDateRange?.from ||
+                            filters?.updatedDateRange?.from;
+      const limit = hasDateFilter ? 200 : 50;
+      query = query.limit(limit);
 
       const { data, error } = await query;
       if (error) throw error;
