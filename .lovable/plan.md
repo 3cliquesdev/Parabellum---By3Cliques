@@ -1,88 +1,128 @@
 
-
-# Plano: Corrigir Lista Vazia do Inbox (Filtro de Status no SQL)
+# Plano: Corrigir Erro "updated_at column does not exist" em take_control_secure
 
 ## Diagnóstico
 
-### Problema Identificado
-A lista do Inbox aparece vazia mesmo com badges mostrando números corretos.
+### Problema Reportado
+Admin Pamela recebe o erro: **"column 'updated_at' of relation 'conversations' does not exist"** ao clicar em "Assumir" conversa.
 
 ### Causa Raiz
-A query em `useInboxView` busca 500 registros ordenados por `updated_at ASC` (mais antigos primeiro), **sem filtrar por status**. Como existem 3142 conversas fechadas (mais antigas), as 500 primeiras buscadas são todas `closed`. O filtro `status !== 'closed'` é aplicado DEPOIS no JavaScript, resultando em 0 conversas.
+A RPC `take_control_secure` contém uma linha incorreta:
 
-**Fluxo atual quebrado:**
+```sql
+UPDATE conversations
+SET 
+  ai_mode = 'copilot',
+  assigned_to = v_caller_id,
+  updated_at = now()  -- ❌ ESTA COLUNA NÃO EXISTE!
+WHERE id = p_conversation_id;
 ```
-SQL: SELECT * FROM inbox_view ORDER BY updated_at ASC LIMIT 500
-     → Retorna 500 conversas (todas 'closed' porque são mais antigas)
-JS:  filteredConversations.filter(c => c.status !== 'closed')
-     → Retorna 0 conversas
-```
+
+### Evidência
+- Tabela `conversations` **não possui** coluna `updated_at`
+- Tabela `conversations` usa `last_message_at` para rastrear atividade
+- Tabela `inbox_view` (separada) possui `updated_at` e é atualizada por triggers
+
+---
 
 ## Solução
 
-Adicionar filtro `.neq("status", "closed")` **ANTES do LIMIT** na query SQL para que as 500 conversas retornadas sejam todas ativas.
+Criar migration SQL para recriar a função `take_control_secure` **removendo** a referência à coluna inexistente.
 
-**Fluxo corrigido:**
-```
-SQL: SELECT * FROM inbox_view WHERE status != 'closed' ORDER BY updated_at ASC LIMIT 500
-     → Retorna 500 conversas (todas 'open')
-JS:  Nenhum filtro necessário
-     → 128 conversas ativas exibidas
+### Código Corrigido
+
+```sql
+CREATE OR REPLACE FUNCTION public.take_control_secure(p_conversation_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+  v_conversation RECORD;
+  v_profile RECORD;
+  v_is_authorized BOOLEAN := false;
+BEGIN
+  -- 1. Buscar conversa
+  SELECT c.*, d.name as dept_name
+  INTO v_conversation
+  FROM conversations c
+  LEFT JOIN departments d ON d.id = c.department
+  WHERE c.id = p_conversation_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Conversa não encontrada');
+  END IF;
+
+  -- 2. Buscar perfil do usuário
+  SELECT id, full_name, availability_status
+  INTO v_profile
+  FROM profiles
+  WHERE id = v_caller_id;
+
+  -- 3. Verificar se é manager/admin (não precisa estar online)
+  IF has_role(v_caller_id, 'admin'::app_role) 
+     OR has_role(v_caller_id, 'manager'::app_role)
+     OR has_role(v_caller_id, 'general_manager'::app_role)
+     OR has_role(v_caller_id, 'cs_manager'::app_role)
+     OR has_role(v_caller_id, 'support_manager'::app_role)
+     OR has_role(v_caller_id, 'financial_manager'::app_role)
+  THEN
+    v_is_authorized := true;
+  ELSE
+    -- Agentes precisam estar online
+    IF v_profile.availability_status != 'online' THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Altere seu status para Online');
+    END IF;
+    
+    -- Conversa não atribuída pode ser assumida por qualquer agente
+    IF v_conversation.assigned_to IS NULL THEN
+      v_is_authorized := true;
+    -- Conversa atribuída ao próprio usuário
+    ELSIF v_conversation.assigned_to = v_caller_id THEN
+      v_is_authorized := true;
+    END IF;
+  END IF;
+
+  IF NOT v_is_authorized THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Sem permissão');
+  END IF;
+
+  -- 4. Executar takeover (SEM updated_at)
+  UPDATE conversations
+  SET 
+    ai_mode = 'copilot',
+    assigned_to = v_caller_id
+  WHERE id = p_conversation_id;
+
+  -- 5. Inserir mensagem de sistema
+  INSERT INTO messages (conversation_id, content, sender_type, sender_id, is_ai_generated)
+  VALUES (
+    p_conversation_id,
+    format('O atendente **%s** entrou na conversa.', COALESCE(v_profile.full_name, 'Suporte')),
+    'system',
+    v_caller_id,
+    false
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'conversation_id', p_conversation_id,
+    'assigned_to', v_caller_id,
+    'ai_mode', 'copilot'
+  );
+END;
+$$;
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-### 1. `src/hooks/useInboxView.tsx`
+### 1. Nova Migration SQL (via Supabase migration tool)
 
-**Linha ~60-64** - Adicionar filtro de status na query:
-
-```typescript
-let query = supabase
-  .from("inbox_view")
-  .select("*")
-  .neq("status", "closed")  // ← ADICIONAR ESTA LINHA
-  .order("updated_at", { ascending: true })
-  .limit(500);
-```
-
-**Justificativa:**
-- O filtro é aplicado NO BANCO, não no JavaScript
-- As 500 primeiras serão conversas ativas
-- Mantém a ordem de prioridade (mais antigas primeiro)
-- Performance: índice em `status` já existe
-
-### 2. Caso Especial: Filtro "Encerradas"
-
-Para o filtro `archived` funcionar, precisamos de uma query separada ou lógica condicional.
-
-**Opção A (mais simples):** Quando `filter === 'archived'`, inverter a lógica:
-
-```typescript
-// No fetchInboxData, receber um parâmetro includeClosedOnly
-async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem[]> {
-  const { cursor, userId, role, departmentIds, includeClosedOnly = false } = options;
-
-  let query = supabase
-    .from("inbox_view")
-    .select("*");
-
-  // Filtro de status baseado no contexto
-  if (includeClosedOnly) {
-    query = query.eq("status", "closed");
-  } else {
-    query = query.neq("status", "closed");
-  }
-  
-  query = query.order("updated_at", { ascending: true }).limit(500);
-  // ... resto da lógica
-}
-```
-
-**Opção B (hook dedicado):** Criar `useArchivedInboxItems` similar aos outros hooks especializados.
-
-**Recomendação:** Opção A é suficiente e mantém a simplicidade.
+A função será recriada com `CREATE OR REPLACE FUNCTION`, mantendo todas as permissões.
 
 ---
 
@@ -90,30 +130,24 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
 
 | Antes | Depois |
 |-------|--------|
-| Lista vazia em Todas/IA/Humano | 128 conversas ativas visíveis |
-| Filtro "Minhas" sempre zerado | Mostra conversas atribuídas |
-| Badges mostram números, lista vazia | Badges e lista sincronizados |
+| Erro ao assumir qualquer conversa | Assumir funciona normalmente |
+| Admin/Manager bloqueado | Pode assumir sem restrições |
+| Agentes bloqueados | Podem assumir se online |
 
 ---
 
 ## Seção Técnica
 
-### Por que a ordem era ASC?
-A ordem `updated_at ASC` (mais antigas primeiro) é intencional para priorização SLA - conversas esperando há mais tempo aparecem no topo.
+### Por que não adicionar updated_at na tabela conversations?
 
-### Por que o limite de 500?
-Reduzido de 5000 para 500 durante período de stress de performance. Pode ser aumentado após a estabilização do RLS.
+1. **Padrão existente:** O sistema usa `last_message_at` para rastrear atividade
+2. **Triggers funcionando:** `inbox_view` já sincroniza via triggers e tem seu próprio `updated_at`
+3. **Menor risco:** Alterar estrutura de tabela pode quebrar outras queries
 
-### O filtro `applyFilters` ainda é necessário?
-Sim, para outros filtros client-side (channels, dateRange, tags). Mas o filtro de status agora é redundante e pode ser removido como otimização futura.
+### Validação Pós-Deploy
 
----
-
-## Validação Pós-Deploy
-
-1. Acessar `/inbox?filter=all` → deve mostrar conversas abertas
-2. Acessar `/inbox?filter=ai_queue` → deve mostrar 58 conversas em autopilot
-3. Acessar `/inbox?filter=human_queue` → deve mostrar 70 conversas
-4. Acessar `/inbox?filter=archived` → deve mostrar conversas fechadas
-5. Console sem erros
-
+1. Login como admin (Pamela)
+2. Ir para Inbox
+3. Selecionar conversa em "Não atribuídas" ou "Fila IA"
+4. Clicar em "Assumir"
+5. Verificar: ai_mode muda para copilot, composer habilitado, sem erro
