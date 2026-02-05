@@ -1,166 +1,80 @@
 
+# Plano de Refinamento do CSAT Guard e Idempotência
 
-# Plano: Corrigir Exibição de Deals Ganhos/Perdidos com Filtros de Data
+Analisando as instruções, o objetivo é tornar o sistema de avaliação (CSAT) via WhatsApp extremamente rigoroso, evitando capturas indevidas e garantindo que cada conversa tenha apenas uma avaliação registrada, mesmo em caso de reprocessamento de eventos.
 
-## Diagnóstico Detalhado
+## Diagnóstico e Melhorias
 
-### Contexto do Problema
-- **Usuário:** Thaynara da Silva (vendedora - sales_rep)
-- **Filtro aplicado:** "Criado: 25/01/2026 - 31/01/2026"
-- **Comportamento observado:** Colunas "Ganho" e "Perdido" mostram 0
+### 1. Validação Estrita de Mensagem
+O extrator atual aceita emojis de estrela. Seguindo a nova regra, aceitaremos **apenas texto puro** contendo exatamente um dígito de 1 a 5. Qualquer outra variação ("nota 5", "5 estrelas") será ignorada pelo Guard, permitindo que a mensagem siga para o fluxo normal (reabrindo a conversa ou disparando o menu).
 
-### Causa Raiz
-O sistema está funcionando corretamente, mas há uma **inconsistência de UX**:
+### 2. Idempotência Atômica
+Para evitar que múltiplos disparos do webhook registrem a mesma avaliação várias vezes:
+- Adicionaremos uma restrição de unicidade (`UNIQUE`) na coluna `conversation_id` da tabela `conversation_ratings`.
+- O código tratará a falha de inserção (conflito) silenciosamente, garantindo que o processamento do webhook não falhe, mas que a lógica de "agradecimento" e "desligamento da flag" ocorra apenas uma vez (ou seja ignorada se já processada).
 
-| Dados no banco | Filtro atual | Resultado |
-|----------------|--------------|-----------|
-| Thaynara tem 36 deals OPEN criados no período | `created_at` entre 25-31/jan | 36 deals abertos |
-| Thaynara tem 0 deals WON criados no período | `created_at` entre 25-31/jan | 0 deals ganhos |
-| Thaynara tem 0 deals LOST criados no período | `created_at` entre 25-31/jan | 0 deals perdidos |
-
-**Expectativa do usuário:** Ver deals que foram **fechados** (ganhos/perdidos) no período  
-**Comportamento atual:** Mostra deals que foram **criados** no período
-
-### Problemas Secundários Identificados
-
-1. **Limite de 50 deals no useDeals**: Pode cortar resultados em períodos com muitos deals
-2. **Métricas de header inconsistentes**: O componente `useDealsMetrics` filtra corretamente ganhos/perdas por `closed_at`, mas as colunas Ganho/Perdido mostram dados filtrados por `created_at`
-3. **Falta de filtro por `closed_at`**: Não existe opção de filtrar por "Data de Fechamento"
+### 3. Refinamento do Guard
+A busca pela conversa que aguarda avaliação será protegida por:
+- Filtro obrigatório de `instance_id` para evitar conflitos entre diferentes números de WhatsApp.
+- Janela de tempo baseada em `rating_sent_at` (quando o pedido foi enviado) em vez de `closed_at`.
+- Uso de `Date.now()` para cálculos de tempo, evitando problemas de fuso horário.
 
 ---
 
-## Solução Proposta
+## Passos da Implementação
 
-### 1. Adicionar Filtro "Data de Fechamento" (closedDateRange)
+### Passo 1: Mudanças no Banco de Dados (SQL Migration)
+1.  **Restrição de Unicidade**: Garantir que `conversation_id` seja único em `conversation_ratings`.
+2.  **Índice Parcial**: Criar o índice `idx_conversations_csat_guard` otimizado para a query do webhook.
+3.  **Limpeza do Backlog**: Rodar o script de limpeza para resetar `awaiting_rating` em conversas expiradas (> 48h).
 
-**Arquivo:** `src/hooks/useDeals.tsx`
+### Passo 2: Atualização da Edge Function `meta-whatsapp-webhook`
+1.  **Refinar `extractRating`**: Remover suporte a estrelas, manter apenas regex `^[1-5]$`.
+2.  **Refinar Guard Query**: Implementar a lógica com `rating_sent_at`, `instance.id` e janela de 24h.
+3.  **Tratar Inserção do Rating**: Adicionar bloco try/catch ou verificação de erro para tratar o conflito de unicidade (idempotência).
 
-Adicionar novo campo no tipo `DealFilters`:
+### Passo 3: Atualização da Edge Function `handle-whatsapp-event`
+1.  Aplicar as mesmas melhorias de validação e query, adaptando para os campos específicos do provider Evolution (`whatsapp_instance_id`).
 
+---
+
+## Detalhes Técnicos
+
+### Validação Strict
 ```typescript
-export interface DealFilters {
-  // ... campos existentes ...
-  closedDateRange?: DateRange; // NOVO: filtra por closed_at
+function extractRating(message: string): number | null {
+  const normalized = message.trim();
+  const numMatch = normalized.match(/^[1-5]$/);
+  return numMatch ? parseInt(numMatch[0]) : null;
 }
 ```
 
-Adicionar lógica de filtro na query:
-
+### Query Otimizada
 ```typescript
-// Closed date range (para filtrar ganhos/perdidos)
-if (filters.closedDateRange?.from) {
-  query = query.gte("closed_at", filters.closedDateRange.from.toISOString());
-}
-if (filters.closedDateRange?.to) {
-  const endDate = new Date(filters.closedDateRange.to);
-  endDate.setHours(23, 59, 59, 999);
-  query = query.lte("closed_at", endDate.toISOString());
-}
-```
+const CSAT_WINDOW_HOURS = 24;
+const csatWindowLimitIso = new Date(Date.now() - CSAT_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
 
-### 2. Adicionar Campo no Modal de Filtros Avançados
-
-**Arquivo:** `src/components/deals/AdvancedDealFiltersModal.tsx`
-
-Adicionar seletor de "Data de Fechamento" ao lado do "Data de Criação" e "Prev. Fechamento":
-
-```tsx
-<div className="space-y-2">
-  <Label>Data de Fechamento (Ganhos/Perdidos)</Label>
-  <DatePickerWithRange
-    date={filters.closedDateRange}
-    onSelect={(range) => updateFilters({ closedDateRange: range })}
-  />
-</div>
-```
-
-### 3. Gerar Chip para o Novo Filtro
-
-**Arquivo:** `src/components/ui/active-filter-chips.tsx`
-
-Adicionar na interface:
-```typescript
-closedDateRange?: { from?: Date; to?: Date };
-```
-
-Adicionar geração do chip:
-```typescript
-if (filters.closedDateRange?.from) {
-  const label = filters.closedDateRange.to 
-    ? `Fechado: ${formatDate(filters.closedDateRange.from)} - ${formatDate(filters.closedDateRange.to)}`
-    : `Fechado desde: ${formatDate(filters.closedDateRange.from)}`;
-  chips.push({ key: "closedDateRange", label });
-}
-```
-
-### 4. Atualizar clearAllFilters e handleRemoveFilterChip
-
-**Arquivo:** `src/pages/Deals.tsx`
-
-```typescript
-// Em clearAllFilters
-closedDateRange: undefined,
-
-// Em handleRemoveFilterChip
-} else if (key === "closedDateRange") {
-  setDealFilters({ ...dealFilters, closedDateRange: undefined });
-}
-```
-
-### 5. Aumentar Limite de Deals para Filtros com Data
-
-**Arquivo:** `src/hooks/useDeals.tsx`
-
-Quando filtros de data estão ativos, aumentar o limite para 200 deals:
-
-```typescript
-// Limite dinâmico baseado em filtros ativos
-const hasDateFilter = filters?.createdDateRange?.from || 
-                      filters?.closedDateRange?.from ||
-                      filters?.expectedCloseDateRange?.from;
-const limit = hasDateFilter ? 200 : 50;
-query = query.limit(limit);
+const { data: csatConversation } = await supabase
+  .from("conversations")
+  .select("id, awaiting_rating, status, whatsapp_meta_instance_id, rating_sent_at")
+  .eq("contact_id", contact.id)
+  .eq("awaiting_rating", true)
+  .eq("status", "closed")
+  .eq("whatsapp_meta_instance_id", instance.id) // Segurança multi-instância
+  .not("rating_sent_at", "is", null)
+  .gte("rating_sent_at", csatWindowLimitIso)
+  .order("rating_sent_at", { ascending: false })
+  .limit(1)
+  .maybeSingle();
 ```
 
 ---
 
-## Arquivos a Modificar
+## Verificação de Não Regressão
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/useDeals.tsx` | Adicionar `closedDateRange` no tipo e na query |
-| `src/components/deals/AdvancedDealFiltersModal.tsx` | Adicionar campo de Data de Fechamento |
-| `src/components/ui/active-filter-chips.tsx` | Adicionar chip para `closedDateRange` |
-| `src/pages/Deals.tsx` | Atualizar `clearAllFilters` e `handleRemoveFilterChip` |
-
----
-
-## Impacto
-
-| Antes | Depois |
-|-------|--------|
-| Não era possível filtrar por data de fechamento | Filtro "Fechado" disponível para vendas no período |
-| Usuário confuso sobre ganhos zerados | Pode escolher filtrar por "Criado" OU "Fechado" |
-| Limite fixo de 50 deals cortava resultados | Limite aumentado para 200 quando há filtros de data |
-| Nenhuma funcionalidade existente é perdida | Todos os filtros continuam funcionando |
-
----
-
-## Seção Técnica
-
-### Por que não mudar o comportamento padrão?
-
-Alterar o filtro "Criado" para também afetar `closed_at` quebraria casos de uso existentes onde o usuário quer ver "leads que entraram no período" independente do status atual.
-
-### Sobre o limite de 50 vs 200
-
-O limite de 50 foi implementado para performance em cenários sem filtro. Com filtros de data ativos, o conjunto é naturalmente menor, então 200 é seguro.
-
-### Validação Pós-Deploy
-
-1. Aplicar filtro "Fechado: 01/01/2026 - 31/01/2026"
-2. Verificar que coluna "Ganho" mostra deals fechados no período
-3. Verificar que chip "Fechado: ..." aparece
-4. Clicar em "Limpar Tudo" e confirmar que o filtro é removido
-5. Testar como vendedor (sales_rep) para confirmar que só vê seus próprios deals
+- [ ] **Teste de Texto Sujo**: Mandar "Nota 5" ou "5 estrelas" -> Deve iniciar novo atendimento (não capturar como CSAT).
+- [ ] **Teste de Emoji**: Mandar "⭐⭐⭐⭐⭐" -> Deve iniciar novo atendimento.
+- [ ] **Teste de Duplicação**: Simular 2 envios do mesmo webhook -> Apenas 1 registro deve ser salvo no banco.
+- [ ] **Teste de Instância**: Cliente manda "5" para uma instância A enquanto tem uma conversa esperando avaliação na instância B -> Não deve capturar (se o contato for compartilhado).
+- [ ] **Teste de Janela**: Cliente manda "5" após 25 horas do envio -> Deve iniciar novo atendimento.
 
