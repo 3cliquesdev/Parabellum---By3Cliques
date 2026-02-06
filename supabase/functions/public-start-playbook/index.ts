@@ -23,9 +23,86 @@ interface PlaybookNode {
   position?: { x: number; y: number };
 }
 
+interface PlaybookEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+}
+
 interface PlaybookFlow {
   nodes: PlaybookNode[];
-  edges: Array<{ source: string; target: string }>;
+  edges: PlaybookEdge[];
+}
+
+// ============ Graph Traversal Helpers ============
+
+function getOutgoingEdges(edges: PlaybookEdge[], sourceId: string): PlaybookEdge[] {
+  return edges.filter(e => e.source === sourceId);
+}
+
+function getNodeById(nodes: PlaybookNode[], id: string): PlaybookNode | null {
+  return nodes.find(n => n.id === id) || null;
+}
+
+function pickDefaultEdge(outgoing: PlaybookEdge[]): PlaybookEdge | null {
+  if (!outgoing.length) return null;
+  
+  const byHandle = (h: string) => outgoing.find(e => e.sourceHandle === h) || null;
+  
+  return (
+    byHandle("default") ||
+    byHandle("true") ||
+    outgoing.find(e => e.sourceHandle == null || e.sourceHandle === "") ||
+    outgoing[0]
+  );
+}
+
+function findStartNode(nodes: PlaybookNode[], edges: PlaybookEdge[]): PlaybookNode | null {
+  const incomingTargets = new Set(edges.map(e => e.target));
+  const candidates = nodes.filter(n => !incomingTargets.has(n.id));
+  
+  if (candidates.length > 1) {
+    console.warn("[public-start-playbook] Multiple start nodes found:", candidates.map(c => c.id));
+  }
+  
+  return candidates[0] || null;
+}
+
+function collectVisualNodes(nodes: PlaybookNode[], edges: PlaybookEdge[]): PlaybookNode[] {
+  const visual: PlaybookNode[] = [];
+  const visited = new Set<string>();
+  
+  let current = findStartNode(nodes, edges);
+  let safety = 0;
+  
+  while (current && !visited.has(current.id) && safety < 200) {
+    visited.add(current.id);
+    
+    // Adicionar forms e tasks como steps visuais
+    if (current.type === "task" || current.type === "form") {
+      visual.push(current);
+    }
+    
+    const outgoing = getOutgoingEdges(edges, current.id);
+    if (!outgoing.length) break;
+    
+    // Para conditions/switch: seguir a edge default
+    const chosen = (current.type === "condition" || current.type === "switch")
+      ? pickDefaultEdge(outgoing)
+      : outgoing[0];
+    
+    if (!chosen) break;
+    
+    current = getNodeById(nodes, chosen.target);
+    safety++;
+  }
+  
+  if (safety >= 200) {
+    console.warn("[public-start-playbook] Safety stop reached (possible loop).");
+  }
+  
+  return visual;
 }
 
 Deno.serve(async (req) => {
@@ -144,6 +221,7 @@ Deno.serve(async (req) => {
 
     const flow = playbook.flow_definition as PlaybookFlow;
     const nodes = flow?.nodes || [];
+    const edges = flow?.edges || [];
 
     if (nodes.length === 0) {
       return new Response(
@@ -190,30 +268,31 @@ Deno.serve(async (req) => {
       console.log(`[public-start-playbook] Journey steps reset for contact ${contact.id}`);
     }
 
-    // Create customer_journey_steps from playbook task AND form nodes
-    // Filter nodes up to the first switch node (the rest will be added after form submission)
-    const visualNodes: PlaybookNode[] = [];
-    for (const node of nodes) {
-      if (node.type === 'switch' || node.type === 'condition') {
-        // Stop at branching nodes - the rest will be added dynamically after form submit
-        break;
-      }
-      if (node.type === 'task' || node.type === 'form') {
-        visualNodes.push(node);
-      }
-    }
+    // Create customer_journey_steps by traversing the flow graph
+    // This properly follows edges and traverses condition/switch nodes
+    const visualNodes = collectVisualNodes(nodes, edges);
     
-    console.log(`[public-start-playbook] Creating ${visualNodes.length} journey steps (tasks + forms)`);
+    // Fallback: se não houver forms/tasks, criar step placeholder
+    // (evita UI travada em "Preparando seu onboarding...")
+    const effectiveNodes: PlaybookNode[] = visualNodes.length > 0 
+      ? visualNodes 
+      : [{
+          id: 'placeholder-auto',
+          type: 'placeholder',
+          data: { label: 'Acompanhamento Automático' }
+        }];
+    
+    console.log(`[public-start-playbook] Creating ${effectiveNodes.length} journey steps (${visualNodes.length} from flow, placeholder: ${visualNodes.length === 0})`);
 
-    for (let i = 0; i < visualNodes.length; i++) {
-      const node = visualNodes[i];
+    for (let i = 0; i < effectiveNodes.length; i++) {
+      const node = effectiveNodes[i];
       const nodeData = node.data || {};
 
       const stepData: Record<string, any> = {
         contact_id: contact.id,
         step_name: nodeData.label || `Etapa ${i + 1}`,
         position: i + 1,
-        step_type: node.type, // 'task' or 'form'
+        step_type: node.type, // 'task', 'form', or 'placeholder'
         completed: false,
       };
 
@@ -234,6 +313,12 @@ Deno.serve(async (req) => {
       if (node.type === 'form') {
         stepData.form_id = nodeData.form_id || null;
         stepData.is_critical = true; // Forms are always critical to progress
+      }
+
+      // Placeholder steps are not critical (just informative)
+      if (node.type === 'placeholder') {
+        stepData.is_critical = false;
+        stepData.notes = 'Este onboarding é composto apenas por automações (ex.: e-mails).';
       }
 
       const { error: stepError } = await supabaseClient
