@@ -2,12 +2,11 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Clock, Mail, CheckSquare, Phone, GitBranch, UserCheck, FastForward, Eye, Lock, CheckCircle, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDelayDisplay, convertDelayToSeconds, normalizeDelayData } from "@/lib/utils";
 import { Node } from "reactflow";
 import { PlaybookStepViewer } from "./PlaybookStepViewer";
 import { EmailPreviewModal } from "./EmailPreviewModal";
 import { useToast } from "@/hooks/use-toast";
-
 interface SimulatorStepRendererProps {
   node: Node;
   emailTemplates?: any[];
@@ -113,16 +112,18 @@ export function SimulatorStepRenderer({
 
   // DELAY NODE
   if (node.type === "delay") {
-    const days = node.data.duration_days || 1;
+    const normalized = normalizeDelayData(node.data);
+    const seconds = convertDelayToSeconds(normalized.delay_type, normalized.delay_value);
+    const displayText = formatDelayDisplay(normalized.delay_type, normalized.delay_value);
 
     return (
       <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-6">
         <div className="flex items-center gap-3 mb-4">
           <Clock className="h-8 w-8 text-amber-600" />
           <div>
-            <h3 className="font-semibold text-lg">⏳ Aguardando {days} {days === 1 ? "dia" : "dias"}...</h3>
+            <h3 className="font-semibold text-lg">⏳ {displayText}...</h3>
             <p className="text-sm text-muted-foreground">
-              Em produção, o próximo passo executaria após este período.
+              ({seconds} segundos - Em produção, o próximo passo executaria após este período.)
             </p>
           </div>
         </div>
