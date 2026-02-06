@@ -437,14 +437,28 @@ async function executeEmailNode(supabase: any, item: QueueItem, contact: any, ex
     }
     
     // 2. Substituir variáveis no template
+    const today = new Date().toLocaleDateString('pt-BR');
     htmlContent = (template.html_body || '')
+      // Variáveis em inglês (backward compatibility)
       .replace(/\{\{first_name\}\}/gi, contact.first_name || 'Cliente')
       .replace(/\{\{last_name\}\}/gi, contact.last_name || '')
-      .replace(/\{\{nome\}\}/gi, contact.first_name || 'Cliente')
-      .replace(/\{\{email\}\}/gi, contact.email || '')
       .replace(/\{\{phone\}\}/gi, contact.phone || '')
       .replace(/\{\{document\}\}/gi, contact.document || '')
-      .replace(/\{\{company\}\}/gi, contact.company || '');
+      .replace(/\{\{company\}\}/gi, contact.company || '')
+      // Variáveis em português (alinhadas com EmailBuilderV2)
+      .replace(/\{\{nome\}\}/gi, contact.first_name || 'Cliente')
+      .replace(/\{\{primeiro_nome\}\}/gi, contact.first_name || 'Cliente')
+      .replace(/\{\{sobrenome\}\}/gi, contact.last_name || '')
+      .replace(/\{\{email\}\}/gi, contact.email || '')
+      .replace(/\{\{telefone\}\}/gi, contact.phone || '')
+      .replace(/\{\{empresa\}\}/gi, contact.company || '')
+      .replace(/\{\{data\}\}/gi, today);
+    
+    // Também substituir variáveis no subject
+    subject = subject
+      .replace(/\{\{primeiro_nome\}\}/gi, contact.first_name || 'Cliente')
+      .replace(/\{\{nome\}\}/gi, contact.first_name || 'Cliente')
+      .replace(/\{\{email\}\}/gi, contact.email || '');
     
   } else {
     // Fallback para body ou message do node
