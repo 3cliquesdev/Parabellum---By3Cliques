@@ -8194,7 +8194,7 @@ export type Database = {
           conversation_id: string | null
           created_at: string
           created_by: string | null
-          customer_id: string
+          customer_id: string | null
           department_id: string | null
           description: string
           due_date: string | null
@@ -8223,7 +8223,7 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           created_by?: string | null
-          customer_id: string
+          customer_id?: string | null
           department_id?: string | null
           description: string
           due_date?: string | null
@@ -8252,7 +8252,7 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           created_by?: string | null
-          customer_id?: string
+          customer_id?: string | null
           department_id?: string | null
           description?: string
           due_date?: string | null

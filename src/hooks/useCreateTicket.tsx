@@ -7,7 +7,7 @@ interface CreateTicketData {
   description: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   category?: string;
-  customer_id: string;
+  customer_id?: string;
   assigned_to?: string;
   conversation_id?: string;
   attachments?: any[];
@@ -31,6 +31,7 @@ export function useCreateTicket() {
         .from("tickets")
         .insert({
           ...ticketPayload,
+          customer_id: ticketPayload.customer_id || undefined, // NULL ao invés de string vazia
           created_by: user?.id,
         } as any)
         .select()

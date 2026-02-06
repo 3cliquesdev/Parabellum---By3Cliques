@@ -160,14 +160,14 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!subject.trim() || !customerId) return;
+    if (!subject.trim()) return;
 
     await createTicket.mutateAsync({
       subject: subject.trim(),
       description: description.trim(),
       priority,
       category,
-      customer_id: customerId,
+      customer_id: customerId || undefined, // NULL ao invés de string vazia
       department_id: departmentId || undefined,
       assigned_to: assignedTo || undefined,
       attachments: uploadedAttachment ? [uploadedAttachment] : [],
@@ -193,7 +193,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
   const activeDepartments = departments?.filter((d) => d.is_active) || [];
 
-  const canSubmit = customerId && subject.trim() && !createTicket.isPending;
+  const canSubmit = subject.trim() && !createTicket.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
@@ -211,7 +211,10 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Customer Search */}
           <div className="space-y-2">
-            <Label htmlFor="customer">Cliente *</Label>
+            <Label htmlFor="customer">
+              Cliente
+              <span className="text-xs text-muted-foreground font-normal ml-1">(opcional)</span>
+            </Label>
             {selectedContact ? (
               <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
                 <div>

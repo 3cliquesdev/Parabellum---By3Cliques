@@ -515,7 +515,21 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
         )}
 
         {/* Customer Info */}
-        {ticket.customer && <CustomerInfoCard customer={ticket.customer} />}
+        {ticket.customer ? (
+          <CustomerInfoCard customer={ticket.customer} />
+        ) : (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Cliente
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">Sem cliente vinculado</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Attachments/Evidence Section */}
         <TicketAttachments
