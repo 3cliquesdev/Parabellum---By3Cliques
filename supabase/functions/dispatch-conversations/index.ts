@@ -474,13 +474,18 @@ async function findEligibleAgent(
 
   console.log(`[findEligibleAgent] Searching in dept: ${departmentId} (attempt ${attemptedDepts.length})`);
 
-  // 2. Get online profiles in department with capacity info
+  // 2. Get online profiles in department with capacity info (using agent_departments N:N)
   const { data: profiles, error: profilesError } = await supabase
     .from('profiles')
-    .select('id, full_name, last_status_change')
+    .select(`
+      id, 
+      full_name, 
+      last_status_change,
+      agent_departments!inner(department_id)
+    `)
     .eq('availability_status', 'online')
     .eq('is_blocked', false)
-    .eq('department', departmentId)
+    .eq('agent_departments.department_id', departmentId)
     .in('id', eligibleUserIds);
 
   // If we found agents in this department, process them
@@ -605,11 +610,11 @@ async function checkDepartmentHasAgents(
 
   const eligibleUserIds = eligibleUserRoles.map((r: { user_id: string }) => r.user_id);
 
-  // Count profiles in department with eligible roles (any status)
+  // Count profiles in department with eligible roles (any status) - using agent_departments N:N
   const { count, error } = await supabase
     .from('profiles')
-    .select('id', { count: 'exact', head: true })
-    .eq('department', departmentId)
+    .select('id, agent_departments!inner(department_id)', { count: 'exact', head: true })
+    .eq('agent_departments.department_id', departmentId)
     .in('id', eligibleUserIds);
 
   if (error) {

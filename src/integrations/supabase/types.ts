@@ -168,6 +168,45 @@ export type Database = {
           },
         ]
       }
+      agent_departments: {
+        Row: {
+          created_at: string
+          department_id: string
+          id: string
+          is_primary: boolean
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          id?: string
+          is_primary?: boolean
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          id?: string
+          is_primary?: boolean
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_departments_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_departments_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_quality_metrics: {
         Row: {
           agent_id: string
@@ -9163,6 +9202,14 @@ export type Database = {
           similarity: number
           title: string
         }[]
+      }
+      set_agent_departments: {
+        Args: {
+          p_additional_department_ids?: string[]
+          p_primary_department_id: string
+          p_profile_id: string
+        }
+        Returns: Json
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

@@ -446,7 +446,14 @@ serve(async (req) => {
           if (skillSiblingDepartmentIds.length > 0) {
             skillDeptIds.push(...skillSiblingDepartmentIds);
           }
-          onlineAgents = agentsWithChannel.filter(a => skillDeptIds.includes(a.department));
+          // N:N: Filter agents by department using agent_departments
+          onlineAgents = agentsWithChannel.filter(a => {
+            // a.agent_departments pode ser array ou single object (PostgREST inlining)
+            const agentDepts = Array.isArray(a.agent_departments) 
+              ? a.agent_departments.map((d: any) => d.department_id)
+              : [a.agent_departments?.department_id].filter(Boolean);
+            return skillDeptIds.some(d => agentDepts.includes(d));
+          });
           
           // 🆕 Ordenar: alvo > filhos > pai > irmãos
           if ((skillParentDepartmentId || skillSiblingDepartmentIds.length > 0 || skillChildDepartmentIds.length > 0) && onlineAgents.length > 0) {
@@ -560,6 +567,7 @@ serve(async (req) => {
             full_name, 
             availability_status, 
             department,
+            agent_departments(department_id),
             agent_support_channels(channel_id)
           `)
           .eq('availability_status', 'online')
@@ -581,7 +589,8 @@ serve(async (req) => {
             deptIds.push(...siblingDepartmentIds);
           }
           console.log(`[route-conversation] 📂 Searching in departments: [target, children, parent, siblings] = ${deptIds.length} total`);
-          agentsQuery = agentsQuery.in('department', deptIds);
+          // N:N: Filter by department using agent_departments
+          agentsQuery = agentsQuery.overlaps('agent_departments.department_id', deptIds);
         }
 
         const result = await agentsQuery;

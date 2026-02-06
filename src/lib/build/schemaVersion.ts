@@ -9,4 +9,4 @@
  * 
  * Formato: "YYYY.MM.DD-vX" onde X é incrementado para múltiplos deploys no mesmo dia
  */
-export const APP_SCHEMA_VERSION = "2026.02.04-v2";
+export const APP_SCHEMA_VERSION = "2026.02.06-v1";

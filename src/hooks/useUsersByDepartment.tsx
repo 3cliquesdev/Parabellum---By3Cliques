@@ -40,11 +40,14 @@ export function useUsersByDepartment(departmentId?: string, options: UseUsersByD
       
       if (internalUserIds.length === 0) return [];
       
-      // 2. Buscar profiles que são internos E pertencem ao departamento
+      // 2. Buscar profiles que são internos E pertencem ao departamento via agent_departments (N:N)
       let query = supabase
         .from("profiles")
-        .select("id, full_name, job_title, avatar_url, department, availability_status")
-        .eq("department", departmentId)
+        .select(`
+          id, full_name, job_title, avatar_url, department, availability_status,
+          agent_departments!inner(department_id)
+        `)
+        .eq("agent_departments.department_id", departmentId)
         .in("id", internalUserIds);
       
       // 3. Filtrar apenas online se solicitado

@@ -12,8 +12,11 @@ import { useProfileSkills } from "@/hooks/useProfileSkills";
 import { useUpdateProfileSkills } from "@/hooks/useUpdateProfileSkills";
 import { useAgentSupportChannels } from "@/hooks/useAgentSupportChannels";
 import { useUpdateAgentChannels } from "@/hooks/useUpdateAgentChannels";
+import { useAgentDepartments } from "@/hooks/useAgentDepartments";
+import { useUpdateAgentDepartments } from "@/hooks/useUpdateAgentDepartments";
 import AvatarUploader from "@/components/AvatarUploader";
 import SkillsMultiSelect from "@/components/SkillsMultiSelect";
+import DepartmentsMultiSelect from "@/components/DepartmentsMultiSelect";
 import { SupportChannelsMultiSelect } from "@/components/SupportChannelsMultiSelect";
 import { PremiumInput } from "@/components/ui/premium-input";
 import { PasswordStrength, usePasswordStrength } from "@/components/ui/password-strength";
@@ -77,6 +80,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  const [additionalDepartments, setAdditionalDepartments] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   
@@ -88,6 +92,8 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
   const updateProfileSkills = useUpdateProfileSkills();
   const { data: agentChannels } = useAgentSupportChannels(editUser?.id);
   const updateAgentChannels = useUpdateAgentChannels();
+  const { data: agentDepts } = useAgentDepartments(editUser?.id);
+  const updateAgentDepartments = useUpdateAgentDepartments();
   const { strength: passwordStrength } = usePasswordStrength(password);
 
   const isEditMode = !!editUser;
@@ -123,6 +129,12 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
         setDepartment(freshProfile?.department || editUser.department || "");
         setSelectedSkills(profileSkills?.map(ps => ps.skill_id) || []);
         setSelectedChannels(agentChannels?.map(ac => ac.channel_id) || []);
+        
+        // Carregar departamentos adicionais
+        const extras = agentDepts
+          ?.filter(ad => !ad.is_primary)
+          .map(ad => ad.department_id) || [];
+        setAdditionalDepartments(extras);
       } else if (!open) {
         // Reset form when dialog closes
         setEmail("");
@@ -133,12 +145,13 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
         setDepartment("");
         setSelectedSkills([]);
         setSelectedChannels([]);
+        setAdditionalDepartments([]);
         setTouched({});
       }
     };
     
     populateForm();
-  }, [editUser, open, profileSkills, agentChannels]);
+  }, [editUser, open, profileSkills, agentChannels, agentDepts]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,6 +200,13 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
             channelIds: selectedChannels,
           });
         }
+
+        // Salvar departamentos via RPC transacional (N:N)
+        await updateAgentDepartments.mutateAsync({
+          profileId: editUser.id,
+          primaryDepartmentId: department || null,
+          additionalDepartmentIds: additionalDepartments,
+        });
 
         toast({
           title: "Usuário atualizado!",
@@ -262,6 +282,7 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
         setJobTitle("");
         setDepartment("");
         setAvatarFile(null);
+        setAdditionalDepartments([]);
         setTouched({});
         onOpenChange(false);
         onSuccess();
@@ -491,6 +512,24 @@ export default function UserDialog({ open, onOpenChange, onSuccess, editUser }: 
               <SkillsMultiSelect
                 selectedSkillIds={selectedSkills}
                 onSelectionChange={setSelectedSkills}
+              />
+            </div>
+          )}
+
+          {/* Departamentos Adicionais - Apenas no modo edição */}
+          {isEditMode && editUser && (
+            <div className="space-y-2 p-4 rounded-xl bg-muted/30 border border-border">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-primary" />
+                Departamentos Adicionais
+              </Label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Selecione departamentos extras que este agente pode atender além do primário
+              </p>
+              <DepartmentsMultiSelect
+                selectedDepartmentIds={additionalDepartments}
+                onSelectionChange={setAdditionalDepartments}
+                excludeId={department || undefined}
               />
             </div>
           )}
