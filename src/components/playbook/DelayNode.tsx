@@ -2,16 +2,18 @@ import { memo } from "react";
 import { Clock } from "lucide-react";
 import { WorkflowNodeWrapper } from "./WorkflowNodeWrapper";
 import { NodeProps } from "reactflow";
+import { formatDelayDisplay, normalizeDelayData } from "@/lib/utils";
 
 interface DelayNodeData {
   label: string;
-  duration_days?: number;
+  delay_type?: 'minutes' | 'hours' | 'days';
+  delay_value?: number;
+  duration_days?: number; // legacy fallback
 }
 
 export const DelayNode = memo(({ data, selected }: NodeProps<DelayNodeData>) => {
-  const subtitle = data.duration_days
-    ? `Aguardar ${data.duration_days} ${data.duration_days === 1 ? "dia" : "dias"}`
-    : undefined;
+  const normalized = normalizeDelayData(data);
+  const subtitle = formatDelayDisplay(normalized.delay_type, normalized.delay_value);
 
   return (
     <WorkflowNodeWrapper

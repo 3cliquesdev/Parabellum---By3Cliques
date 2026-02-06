@@ -1,9 +1,7 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+/**
+ * Shared delay utilities for playbook delay nodes
+ * Used by both Edge Functions and frontend (via mirrored copy in src/lib/utils.ts)
+ */
 
 /**
  * Converts delay (type + value) to seconds

@@ -108,7 +108,7 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
       data: {
         label: `Novo ${type}`,
         ...(type === "email" && { subject: "Assunto do email" }),
-        ...(type === "delay" && { duration_days: 1 }),
+        ...(type === "delay" && { delay_type: 'days', delay_value: 1, duration_days: 1 }),
         ...(type === "task" && { 
           task_type: "task", 
           description: "Descrição da tarefa",
@@ -362,13 +362,65 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving }: Playbo
               </>
             )}
             {selectedNode.type === "delay" && (
-              <div>
-                <Label>Dias de espera</Label>
-                <Input
-                  type="number"
-                  value={selectedNode.data.duration_days || 1}
-                  onChange={(e) => updateNodeData("duration_days", parseInt(e.target.value))}
-                />
+              <div className="space-y-4">
+                <div>
+                  <Label>Unidade de Tempo</Label>
+                  <Select 
+                    value={selectedNode.data.delay_type || 'days'}
+                    onValueChange={(value) => {
+                      const currentValue = selectedNode.data.delay_value || 1;
+                      // Calculate duration_days for backward compatibility
+                      const seconds = value === 'minutes' ? currentValue * 60 
+                        : value === 'hours' ? currentValue * 3600 
+                        : currentValue * 86400;
+                      const durationDays = seconds / 86400;
+                      
+                      updateNodeDataMultiple({
+                        delay_type: value,
+                        delay_value: currentValue,
+                        duration_days: durationDays
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="bg-background text-foreground">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
+                      <SelectItem value="minutes">Minutos</SelectItem>
+                      <SelectItem value="hours">Horas</SelectItem>
+                      <SelectItem value="days">Dias</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label>Quantidade</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max={selectedNode.data.delay_type === 'days' ? 365 : undefined}
+                    value={selectedNode.data.delay_value || 1}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 1;
+                      const delayType = selectedNode.data.delay_type || 'days';
+                      // Calculate duration_days for backward compatibility
+                      const seconds = delayType === 'minutes' ? value * 60 
+                        : delayType === 'hours' ? value * 3600 
+                        : value * 86400;
+                      const durationDays = seconds / 86400;
+                      
+                      updateNodeDataMultiple({
+                        delay_value: value,
+                        duration_days: durationDays
+                      });
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {selectedNode.data.delay_type === 'minutes' && 'Ex: 30 minutos'}
+                    {selectedNode.data.delay_type === 'hours' && 'Ex: 2 horas'}
+                    {(selectedNode.data.delay_type === 'days' || !selectedNode.data.delay_type) && 'Máximo: 365 dias'}
+                  </p>
+                </div>
               </div>
             )}
             {selectedNode.type === "task" && (

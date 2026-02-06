@@ -358,10 +358,15 @@ async function executeEmailNode(supabase: any, item: QueueItem, contact: any, ex
 async function executeDelayNode(supabase: any, item: QueueItem, flow: PlaybookFlow, execution: PlaybookExecution) {
   console.log(`Executing delay node: ${item.node_id}`);
   
-  const durationDays = item.node_data.duration_days || 1;
-  const nextExecutionTime = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+  // Import shared delay utilities
+  const { convertDelayToSeconds, normalizeDelayData } = await import('../_shared/delay.ts');
+  
+  // Normalize delay data with backward compatibility
+  const normalized = normalizeDelayData(item.node_data);
+  const seconds = convertDelayToSeconds(normalized.delay_type, normalized.delay_value);
+  const nextExecutionTime = new Date(Date.now() + seconds * 1000);
 
-  console.log(`Delay of ${durationDays} days, next execution: ${nextExecutionTime.toISOString()}`);
+  console.log(`Delay: ${normalized.delay_value} ${normalized.delay_type} (${seconds}s), next execution: ${nextExecutionTime.toISOString()}`);
 
   // Queue next node with delay
   const nextNodeId = findNextNode(item.node_id, flow);
@@ -394,7 +399,7 @@ async function executeDelayNode(supabase: any, item: QueueItem, flow: PlaybookFl
     console.log(`Playbook execution completed: ${execution.id}`);
   }
 
-  return { success: true, delay_days: durationDays };
+  return { success: true, delay_days: normalized.duration_days };
 }
 
 async function executeTaskNode(supabase: any, item: QueueItem, contact: any) {
