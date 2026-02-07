@@ -1,97 +1,69 @@
 
-# Correção: Variáveis de E-mail Não Substituídas
+# Correção: Email do Playbook Duplicando Header/Footer
 
 ## Problema Identificado
 
-**Sintoma:** O e-mail chegou com `{{primeiro_nome}}` não substituído (visível na imagem).
+O email chegou com **header e footer duplicados** porque:
 
-**Causa raiz:** Há um **desalinhamento** entre as variáveis oferecidas no editor de e-mail e as que são substituídas no backend.
-
-### No Frontend (EmailBuilderV2 - mergeTags):
-- `{{nome}}`
-- `{{email}}`
-- `{{telefone}}`
-- `{{empresa}}`
-- `{{primeiro_nome}}` ← Oferecido
-- `{{sobrenome}}` ← Oferecido
-- `{{data}}`
-- `{{ticket_numero}}`
-- `{{assunto}}`
-
-### No Backend (process-playbook-queue linhas 440-447):
-```typescript
-htmlContent = (template.html_body || '')
-  .replace(/\{\{first_name\}\}/gi, contact.first_name || 'Cliente')  // ✅ Inglês
-  .replace(/\{\{last_name\}\}/gi, contact.last_name || '')           // ✅ Inglês
-  .replace(/\{\{nome\}\}/gi, contact.first_name || 'Cliente')        // ✅ Português
-  .replace(/\{\{email\}\}/gi, contact.email || '')
-  .replace(/\{\{phone\}\}/gi, contact.phone || '')
-  .replace(/\{\{document\}\}/gi, contact.document || '')
-  .replace(/\{\{company\}\}/gi, contact.company || '');
-```
-
-**Variáveis FALTANDO no backend:**
-- `{{primeiro_nome}}` ← NÃO substituída!
-- `{{sobrenome}}` ← NÃO substituída!
-- `{{telefone}}` ← NÃO substituída (só `{{phone}}`)
-- `{{empresa}}` ← NÃO substituída (só `{{company}}`)
-- `{{data}}` ← NÃO substituída
-
-## Isso É Esperado Para Teste?
-
-**NÃO.** O e-mail de teste deveria substituir as variáveis normalmente. O problema é que a variável `{{primeiro_nome}}` simplesmente não está na lista de substituições do backend.
+1. O template é salvo no banco com **seu próprio layout HTML completo** (header "SEUARMAZÉMDROP", footer, etc.)
+2. Quando o `process-playbook-queue` envia esse template para `send-email`, **não passa `useRawHtml: true`**
+3. O `send-email` então aplica **OUTRO** wrapper de branding, resultando em:
+   - Header do branding do sistema
+   - Conteúdo do template (que já tem SEU header e footer)
+   - Footer do branding do sistema
 
 ## Solução
 
-### Arquivo: `supabase/functions/process-playbook-queue/index.ts`
+Modificar o `process-playbook-queue` para passar `useRawHtml: true` quando estiver enviando um template personalizado. Isso fará com que o `send-email` use o HTML exatamente como está, sem adicionar wrapper extra.
 
-**Localização:** Linhas 440-447 (função `executeEmailNode`)
+### Arquivo a Modificar
 
-**Adicionar todas as variáveis em português** que o editor oferece:
+`supabase/functions/process-playbook-queue/index.ts`
 
-```typescript
-// 2. Substituir variáveis no template
-const today = new Date().toLocaleDateString('pt-BR');
-htmlContent = (template.html_body || '')
-  // Variáveis em inglês (backward compatibility)
-  .replace(/\{\{first_name\}\}/gi, contact.first_name || 'Cliente')
-  .replace(/\{\{last_name\}\}/gi, contact.last_name || '')
-  .replace(/\{\{phone\}\}/gi, contact.phone || '')
-  .replace(/\{\{document\}\}/gi, contact.document || '')
-  .replace(/\{\{company\}\}/gi, contact.company || '')
-  // Variáveis em português (alinhadas com EmailBuilderV2)
-  .replace(/\{\{nome\}\}/gi, contact.first_name || 'Cliente')
-  .replace(/\{\{primeiro_nome\}\}/gi, contact.first_name || 'Cliente')  // ← NOVA
-  .replace(/\{\{sobrenome\}\}/gi, contact.last_name || '')               // ← NOVA
-  .replace(/\{\{email\}\}/gi, contact.email || '')
-  .replace(/\{\{telefone\}\}/gi, contact.phone || '')                    // ← NOVA
-  .replace(/\{\{empresa\}\}/gi, contact.company || '')                   // ← NOVA
-  .replace(/\{\{data\}\}/gi, today);                                     // ← NOVA
+**Localização:** Função `executeEmailNode`, na chamada do `send-email` (linhas 513-524)
 
-// Também substituir no subject
-subject = subject
-  .replace(/\{\{primeiro_nome\}\}/gi, contact.first_name || 'Cliente')
-  .replace(/\{\{nome\}\}/gi, contact.first_name || 'Cliente')
-  .replace(/\{\{email\}\}/gi, contact.email || '');
+**Mudança:**
+- Adicionar `useRawHtml: !!emailData.template_id` ao payload
+- Quando há `template_id`, o template já tem layout próprio → usar raw HTML
+- Quando não há `template_id` (fallback body/message), manter branding padrão
+
+```text
+Antes (linhas 513-524):
+const { data, error } = await supabase.functions.invoke('send-email', {
+  body: {
+    to: to,
+    to_name: to_name,
+    subject: finalSubject,
+    html: finalHtml,
+    customer_id: contact.id,
+    ...
+  },
+});
+
+Depois:
+const { data, error } = await supabase.functions.invoke('send-email', {
+  body: {
+    to: to,
+    to_name: to_name,
+    subject: finalSubject,
+    html: finalHtml,
+    customer_id: contact.id,
+    useRawHtml: !!emailData.template_id,  // Template personalizado = usar HTML como está
+    ...
+  },
+});
 ```
-
-## Arquivo a Modificar
-
-| Arquivo | Ação | Detalhes |
-|---------|------|----------|
-| `supabase/functions/process-playbook-queue/index.ts` | **ATUALIZAR** | Adicionar variáveis `{{primeiro_nome}}`, `{{sobrenome}}`, `{{telefone}}`, `{{empresa}}`, `{{data}}` na função `executeEmailNode` |
 
 ## Impacto
 
 | Aspecto | Avaliação |
 |---------|-----------|
-| Regressão | Nenhuma - adiciona variáveis novas sem remover existentes |
-| Funcionalidade | E-mails de playbook (teste e produção) terão variáveis substituídas corretamente |
-| Alinhamento | Frontend e backend usarão o mesmo conjunto de variáveis |
+| Regressão | Nenhuma - templates personalizados renderizarão corretamente |
+| Funcionalidade | Emails de playbook com template respeitam o layout do template |
+| Fallback | Emails sem template continuam recebendo branding padrão |
 
-## Testes Após Correção
+## Teste Esperado Após Correção
 
-1. Criar template com `{{primeiro_nome}}` no corpo
-2. Executar "🧪 Testar para Mim"
-3. E-mail recebido deve ter o nome substituído (ex: "Olá, João!")
-4. Testar também `{{sobrenome}}`, `{{telefone}}`, `{{empresa}}`, `{{data}}`
+1. Email de teste deve chegar com layout limpo (só o template)
+2. Banner de teste aparece dentro do template
+3. Sem duplicação de header/footer
