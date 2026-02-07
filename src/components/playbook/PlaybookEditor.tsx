@@ -68,6 +68,45 @@ const edgeTypes = {
   buttonEdge: ButtonEdge,
 };
 
+// Helper: find all email nodes upstream of a target node by traversing edges backwards
+function getUpstreamEmailNodes(nodes: Node[], edges: Edge[], targetNodeId: string): Node[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+
+  // Build a map of incoming edges per node
+  const incoming = new Map<string, Edge[]>();
+  for (const e of edges) {
+    const list = incoming.get(e.target) || [];
+    list.push(e);
+    incoming.set(e.target, list);
+  }
+
+  // Traverse backwards from target node
+  const visited = new Set<string>();
+  const stack = [targetNodeId];
+
+  while (stack.length) {
+    const cur = stack.pop() as string;
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+
+    const inc = incoming.get(cur) || [];
+    for (const ed of inc) stack.push(ed.source);
+  }
+
+  // Remove target itself
+  visited.delete(targetNodeId);
+
+  // Filter only email nodes and sort by Y position (visual flow order)
+  const emails = Array.from(visited)
+    .map((id) => byId.get(id))
+    .filter((n): n is Node => Boolean(n))
+    .filter((n) => n.type === "email");
+
+  emails.sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0));
+
+  return emails;
+}
+
 interface PlaybookEditorProps {
   initialFlow?: { nodes: Node[]; edges: Edge[] };
   onSave: (flow: { nodes: Node[]; edges: Edge[] }) => void;
@@ -917,15 +956,71 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving, playbook
                   </>
                 )}
                 
-                {/* Standard condition value */}
+                {/* Email condition: dropdown to select email node */}
+                {(selectedNode.data.condition_type === "email_opened" || 
+                  selectedNode.data.condition_type === "email_clicked") && (() => {
+                  const upstreamEmails = getUpstreamEmailNodes(nodes, edges, selectedNode.id);
+                  return (
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        Email a verificar
+                        <span className="text-xs text-muted-foreground font-normal">
+                          (obrigatório)
+                        </span>
+                      </Label>
+
+                      <Select
+                        value={selectedNode.data.email_node_id || ""}
+                        onValueChange={(value) => updateNodeData("email_node_id", value)}
+                        disabled={upstreamEmails.length === 0}
+                      >
+                        <SelectTrigger className="bg-background text-foreground">
+                          <SelectValue placeholder={
+                            upstreamEmails.length === 0
+                              ? "Nenhum email antes deste condition"
+                              : "Selecione um nó de email"
+                          } />
+                        </SelectTrigger>
+                        <SelectContent className="z-[9999] bg-popover" sideOffset={5}>
+                          {upstreamEmails.map((n) => {
+                            const label =
+                              n.data?.subject ||
+                              n.data?.label ||
+                              `Email (${String(n.id).slice(-6)})`;
+
+                            return (
+                              <SelectItem key={n.id} value={n.id}>
+                                {label}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+
+                      {upstreamEmails.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Mova este condition para depois de um nó de email, ou adicione um email antes.
+                        </p>
+                      ) : !selectedNode.data.email_node_id ? (
+                        <p className="text-xs text-destructive">
+                          Selecione um email — sem <code className="bg-muted px-1 rounded">email_node_id</code> o backend retorna FALSE.
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })()}
+
+                {/* Standard condition value (tag, status, etc) */}
                 {selectedNode.data.condition_type !== "form_score" && 
-                 selectedNode.data.condition_type !== "lead_classification" && (
+                 selectedNode.data.condition_type !== "lead_classification" &&
+                 selectedNode.data.condition_type !== "email_opened" &&
+                 selectedNode.data.condition_type !== "email_clicked" && (
                   <div>
                     <Label>Valor da Condição</Label>
                     <Input
                       value={selectedNode.data.condition_value || ""}
                       onChange={(e) => updateNodeData("condition_value", e.target.value)}
-                      placeholder="Ex: nome do email, tag, etc"
+                      placeholder="Ex: tag, valor, etc"
                     />
                   </div>
                 )}

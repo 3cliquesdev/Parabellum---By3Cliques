@@ -799,6 +799,7 @@ async function executeFormNode(supabase: any, item: QueueItem, contact: any, exe
         `,
         customer_id: contact.id,
         playbook_execution_id: execution.id,
+        playbook_node_id: item.node_id, // ✅ CRÍTICO: tracking por nó para condições email_opened/clicked
       },
     });
 
