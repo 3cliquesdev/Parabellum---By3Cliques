@@ -760,8 +760,9 @@ async function executeFormNode(supabase: any, item: QueueItem, contact: any, exe
     return { success: false, error: 'Formulário não configurado' };
   }
 
-  // Generate public form link with execution context
-  const publicFormUrl = `${Deno.env.get('PUBLIC_SITE_URL') || 'https://lovable.app'}/public-form/${formId}?execution_id=${execution.id}&contact_id=${contact.id}`;
+  // Generate public form link with execution context - use FRONTEND_URL (published domain)
+  const frontendUrl = Deno.env.get('FRONTEND_URL') || 'https://nexxoai.lovable.app';
+  const publicFormUrl = `${frontendUrl}/f/${formId}?execution_id=${execution.id}&contact_id=${contact.id}`;
   
   console.log(`Generated form link: ${publicFormUrl}`);
 
