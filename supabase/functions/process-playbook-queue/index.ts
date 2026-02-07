@@ -520,6 +520,7 @@ async function executeEmailNode(supabase: any, item: QueueItem, contact: any, ex
       playbook_execution_id: execution.id,
       playbook_node_id: item.node_id,              // Correlação do nó que enviou
       template_id: emailData.template_id || null,  // Template usado
+      useRawHtml: !!emailData.template_id,         // Template personalizado = usar HTML como está, sem wrapper extra
     },
   });
 
