@@ -1,75 +1,109 @@
 
-
-# Unificar Todos os Remetentes para contato@mail.3cliques.net
+# Notificacao Email Interna para Stakeholders ao Criar Ticket
 
 ## Resumo
 
-Trocar **todos** os enderecos de email `@parabellum.work` (e variacoes como `@seuarmazemdrop.parabellum.work`) para `contato@mail.3cliques.net` em todas as Edge Functions e no frontend. Isso garante que todos os emails saiam do dominio verificado, reduzindo drasticamente o risco de spam.
+Quando um ticket for criado (via modal ou via conversa), todos os envolvidos (created_by, assigned_to, stakeholders) receberao email interno via `send-email`. Inclui tabela de dedupe para evitar emails duplicados em retry/double-click.
 
-## Arquivos e mudancas
+## Mudancas
 
-### Edge Functions (11 arquivos)
+### 1. Migration: Tabela de dedupe + role "watcher" em stakeholders
 
-| Arquivo | De | Para |
-|---------|-----|------|
-| `send-email/index.ts` | `contato@parabellum.work` | `contato@mail.3cliques.net` |
-| `send-ticket-email-reply/index.ts` | `suporte@parabellum.work` | `contato@mail.3cliques.net` |
-| `send-quote-email/index.ts` | `comercial@parabellum.work` | `contato@mail.3cliques.net` |
-| `send-ticket-notification/index.ts` | `contato@seuarmazemdrop.parabellum.work` | `contato@mail.3cliques.net` |
-| `get-email-template/index.ts` | `contato@parabellum.work` | `contato@mail.3cliques.net` |
-| `send-triggered-email/index.ts` | `contato@parabellum.work` | `contato@mail.3cliques.net` |
-| `send-scheduled-reports/index.ts` | `sistema@parabellum.work` | `contato@mail.3cliques.net` |
-| `send-verification-code/index.ts` | `contato@seuarmazemdrop.parabellum.work` e `sistema@seuarmazemdrop.parabellum.work` | `contato@mail.3cliques.net` |
-| `resend-welcome-email/index.ts` | `contato@seuarmazemdrop.parabellum.work` | `contato@mail.3cliques.net` |
-| `test-email-send/index.ts` | `noreply@parabellum.work` | `contato@mail.3cliques.net` |
-| `create-user/index.ts` | `sistema@parabellum.work` + links `parabellum.work` | `contato@mail.3cliques.net` + links atualizados |
+- Criar tabela `ticket_notification_sends` para evitar envio duplicado
+- Adicionar role "watcher" ao CHECK constraint de `ticket_stakeholders` (para uso futuro)
 
-### Edge Function de Playbook (1 arquivo)
+```sql
+CREATE TABLE IF NOT EXISTS public.ticket_notification_sends (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_event_id UUID NOT NULL REFERENCES public.ticket_events(id) ON DELETE CASCADE,
+  recipient_user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  channel TEXT NOT NULL CHECK (channel IN ('email','in_app')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(ticket_event_id, recipient_user_id, channel)
+);
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `process-playbook-queue/index.ts` | Trocar prefixo `[TESTE]` para `(Teste)` no assunto — menos agressivo para filtros de spam |
+CREATE INDEX idx_ticket_notification_sends_event ON ticket_notification_sends(ticket_event_id);
+CREATE INDEX idx_ticket_notification_sends_recipient ON ticket_notification_sends(recipient_user_id);
 
-### Frontend (1 arquivo)
+ALTER TABLE ticket_notification_sends ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access" ON ticket_notification_sends FOR ALL TO service_role USING (true);
+CREATE POLICY "Authenticated can read" ON ticket_notification_sends FOR SELECT TO authenticated USING (true);
+```
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/components/settings/EmailSendersCard.tsx` | Trocar placeholder de `suporte@parabellum.work` para `contato@mail.3cliques.net` |
+### 2. useCreateTicket.tsx - Adicionar stakeholders + evento + notify
 
-## Nomes de remetente
+Apos criar o ticket e inserir tags, adicionar:
+- Upsert stakeholders (creator + assignee)
+- Insert `ticket_events` com `event_type = 'created'`
+- Chamar `notify-ticket-event` com `ticket_event_id` e `channels: ["email", "in_app"]`
 
-Todos os `from_name` hardcoded (como "PARABELLUM Security", "Seu Armazem Drop Comercial", etc.) serao unificados para `3Cliques` nos fallbacks, ja que o banco de dados (`email_senders`) e quem define o nome real. O fallback so e usado se a leitura do banco falhar.
+### 3. generate-ticket-from-conversation/index.ts - Mesmo padrao
 
-## Impacto
+Apos criar o ticket (step 6), antes do email ao cliente (step 9):
+- Insert `ticket_events` com `event_type = 'created'`
+- Chamar `notify-ticket-event` com `ticket_event_id`
 
-- Todos os emails passam a sair de `contato@mail.3cliques.net` (dominio verificado)
-- Emails de teste com prefixo mais suave `(Teste)` ao inves de `[TESTE]`
-- Zero mudanca de logica de negocio
-- Todas as 11 edge functions precisam redeploy
+### 4. notify-ticket-event/index.ts - Adicionar envio de email
+
+Mudancas principais:
+- Aceitar novo campo `ticket_event_id` e `channels` no payload
+- Adicionar `'created'` ao `notifiableEvents`
+- Para `event_type === 'created'`: incluir o **actor** (criador) na lista de recipients (nao excluir)
+- Para cada recipient com email: verificar dedupe via `ticket_notification_sends`, enviar email via `send-email`
+- Template HTML do email: assunto "Novo ticket criado - [subject]", corpo com link para o ticket
+
+Logica de recipients para `created`:
+```
+recipientIds = DISTINCT de:
+  - created_by (incluso, nao excluido)
+  - assigned_to (se existir)
+  - todos ticket_stakeholders.user_id
+```
+
+Para outros eventos, manter comportamento atual (excluir actor).
+
+### 5. Frontend: useCreateTicket.tsx - Ajuste no fluxo
+
+O `notify-ticket-event` ja sera chamado no `mutationFn` (nao no `onSuccess`) para garantir que o `ticket_event_id` esteja disponivel.
 
 ## Secao Tecnica
 
-### Padrao de mudanca em cada arquivo
+### Arquivos modificados
+| Arquivo | Tipo de mudanca |
+|---------|----------------|
+| Migration SQL | Nova tabela `ticket_notification_sends` |
+| `src/hooks/useCreateTicket.tsx` | Adicionar stakeholders + evento + notify |
+| `supabase/functions/generate-ticket-from-conversation/index.ts` | Adicionar evento + notify |
+| `supabase/functions/notify-ticket-event/index.ts` | Adicionar envio email + dedupe + tipo `created` |
 
-```typescript
-// ANTES (exemplo)
-let senderEmail = 'contato@parabellum.work';
-let senderName = 'Seu Armazém Drop';
+### Fluxo completo ao criar ticket
 
-// DEPOIS
-let senderEmail = 'contato@mail.3cliques.net';
-let senderName = '3Cliques';
+```
+useCreateTicket / generate-ticket-from-conversation
+  |
+  +-- INSERT tickets
+  +-- UPSERT ticket_stakeholders (creator + assignee)
+  +-- INSERT ticket_events (event_type: 'created') --> retorna event.id
+  +-- INVOKE notify-ticket-event({ ticket_id, event_type: 'created', ticket_event_id })
+        |
+        +-- Buscar ticket (subject, number, etc)
+        +-- Coletar recipients: created_by + assigned_to + stakeholders (DISTINCT)
+        +-- Para cada recipient:
+        |     +-- UPSERT ticket_notification_sends (dedupe)
+        |     +-- Se inseriu (nao duplicado): INVOKE send-email
+        +-- Criar notifications in-app (existente)
+        +-- Retornar { success, emails_sent, notifications_created }
 ```
 
-### Mudanca no prefixo de teste
+### Template do email interno
 
-```typescript
-// ANTES
-? (subject.startsWith('[TESTE]') ? subject : `[TESTE] ${subject}`)
+- Subject: `Novo ticket criado - [subject]`
+- Sem emojis no subject (reduz spam score)
+- From: `contato@mail.3cliques.net` (via send-email, ja unificado)
+- Body: HTML limpo com subject, prioridade, status, link para abrir o ticket
 
-// DEPOIS  
-? (subject.startsWith('(Teste)') ? subject : `(Teste) ${subject}`)
-```
-
-### Recomendacao externa
-- Confirmar no Resend (resend.com/domains) que SPF, DKIM e DMARC estao verdes para `mail.3cliques.net`
+### Impacto
+- Zero mudanca em comportamento existente (upgrade only)
+- Emails so sao enviados 1x por evento+recipient+channel (dedupe)
+- Se `send-email` falhar, o ticket ja foi criado - nao quebra o fluxo
+- Redeploy necessario: `notify-ticket-event`, `generate-ticket-from-conversation`
