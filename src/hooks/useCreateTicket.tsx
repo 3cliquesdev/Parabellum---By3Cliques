@@ -64,7 +64,55 @@ export function useCreateTicket() {
       if (tagsWarning) {
         (ticket as any).__tagsWarning = true;
       }
-      
+
+      // --- Stakeholders + evento + notify (upgrade: email interno) ---
+      try {
+        // 1) Garantir stakeholders (creator + assignee)
+        const stakeholderRows = [
+          user?.id ? { ticket_id: ticket.id, user_id: user.id, role: 'creator' } : null,
+          ticket.assigned_to ? { ticket_id: ticket.id, user_id: ticket.assigned_to, role: 'assignee' } : null,
+        ].filter(Boolean);
+
+        if (stakeholderRows.length) {
+          await supabase
+            .from('ticket_stakeholders')
+            .upsert(stakeholderRows as any, { onConflict: 'ticket_id,user_id,role', ignoreDuplicates: true });
+        }
+
+        // 2) Criar evento canônico
+        const { data: createdEvent } = await supabase
+          .from('ticket_events')
+          .insert({
+            ticket_id: ticket.id,
+            event_type: 'created',
+            actor_id: user?.id || null,
+            metadata: {
+              subject: ticket.subject,
+              priority: ticket.priority,
+              status: ticket.status,
+              department_id: ticket.department_id,
+            },
+          })
+          .select('id')
+          .single();
+
+        // 3) Fanout interno + email para envolvidos
+        if (createdEvent) {
+          await supabase.functions.invoke('notify-ticket-event', {
+            body: {
+              ticket_id: ticket.id,
+              event_type: 'created',
+              actor_id: user?.id || null,
+              ticket_event_id: createdEvent.id,
+              channels: ['email', 'in_app'],
+            },
+          });
+        }
+      } catch (notifyErr) {
+        // Não quebra o fluxo se notificação falhar
+        console.warn('[useCreateTicket] Notify error (non-blocking):', notifyErr);
+      }
+
       return ticket;
     },
     onSuccess: (ticket: any) => {

@@ -13,6 +13,8 @@ interface TicketEventPayload {
   old_value?: string;
   new_value?: string;
   metadata?: Record<string, any>;
+  ticket_event_id?: string;
+  channels?: string[];
 }
 
 serve(async (req) => {
@@ -26,7 +28,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const payload: TicketEventPayload = await req.json();
-    const { ticket_id, event_type, actor_id, old_value, new_value, metadata } = payload;
+    const { ticket_id, event_type, actor_id, old_value, new_value, metadata, ticket_event_id, channels } = payload;
 
     console.log(`[notify-ticket-event] Processing ${event_type} for ticket ${ticket_id}`);
 
@@ -41,6 +43,8 @@ serve(async (req) => {
         created_by,
         assigned_to,
         department_id,
+        status,
+        priority,
         departments(name)
       `)
       .eq("id", ticket_id)
@@ -155,51 +159,63 @@ serve(async (req) => {
       console.log(`[notify-ticket-event] Interaction logged for customer ${ticket.customer_id}`);
     }
 
-    // 3. Fetch all stakeholders to notify (except actor)
+    // 3. Fetch all stakeholders to notify
     const { data: stakeholders } = await supabase
       .from("ticket_stakeholders")
       .select("user_id, role")
       .eq("ticket_id", ticket_id);
 
-    // Also include creator and current assignee
+    // Build recipient list
     const usersToNotify = new Set<string>();
     
-    if (ticket.created_by && ticket.created_by !== actor_id) {
-      usersToNotify.add(ticket.created_by);
-    }
-    if (ticket.assigned_to && ticket.assigned_to !== actor_id) {
-      usersToNotify.add(ticket.assigned_to);
-    }
-    
-    stakeholders?.forEach((s) => {
-      if (s.user_id !== actor_id) {
-        usersToNotify.add(s.user_id);
+    // For 'created' event: include everyone (including actor/creator)
+    // For other events: exclude actor
+    if (event_type === 'created') {
+      if (ticket.created_by) usersToNotify.add(ticket.created_by);
+      if (ticket.assigned_to) usersToNotify.add(ticket.assigned_to);
+      stakeholders?.forEach((s) => usersToNotify.add(s.user_id));
+    } else {
+      if (ticket.created_by && ticket.created_by !== actor_id) {
+        usersToNotify.add(ticket.created_by);
       }
-    });
+      if (ticket.assigned_to && ticket.assigned_to !== actor_id) {
+        usersToNotify.add(ticket.assigned_to);
+      }
+      stakeholders?.forEach((s) => {
+        if (s.user_id !== actor_id) {
+          usersToNotify.add(s.user_id);
+        }
+      });
+    }
 
-    // 4. Create notifications for each stakeholder
-    const notifiableEvents = ['resolved', 'closed', 'transferred', 'assigned'];
+    // 4. Create in-app notifications for notifiable events
+    const notifiableEvents = ['created', 'resolved', 'closed', 'transferred', 'assigned'];
     if (notifiableEvents.includes(event_type) && usersToNotify.size > 0) {
       let title = "";
       let message = "";
       let notifType = 'ticket_status';
 
       switch (event_type) {
+        case 'created':
+          title = "Novo Ticket Criado";
+          message = `Ticket #${ticket.ticket_number} criado por ${actorName}: ${ticket.subject}`;
+          notifType = 'ticket_created';
+          break;
         case 'resolved':
-          title = "✅ Ticket Resolvido";
+          title = "Ticket Resolvido";
           message = `Ticket #${ticket.ticket_number} foi resolvido por ${actorName}`;
           break;
         case 'closed':
-          title = "📁 Ticket Fechado";
+          title = "Ticket Fechado";
           message = `Ticket #${ticket.ticket_number} foi fechado por ${actorName}`;
           break;
         case 'transferred':
-          title = "🔄 Ticket Transferido";
+          title = "Ticket Transferido";
           message = `Ticket #${ticket.ticket_number} foi transferido para ${metadata?.to_department || 'outro departamento'}`;
           notifType = 'ticket_transfer';
           break;
         case 'assigned':
-          title = "👤 Ticket Atribuído";
+          title = "Ticket Atribuído";
           const { data: newAssignee } = await supabase
             .from("profiles")
             .select("full_name")
@@ -230,26 +246,96 @@ serve(async (req) => {
       if (notifError) {
         console.error("[notify-ticket-event] Error creating notifications:", notifError);
       } else {
-        console.log(`[notify-ticket-event] Created ${notifications.length} notifications`);
+        console.log(`[notify-ticket-event] Created ${notifications.length} in-app notifications`);
       }
     }
 
-    // 5. Also record in ticket_events table for ticket timeline
-    await supabase
-      .from("ticket_events")
-      .insert({
-        ticket_id,
-        event_type,
-        actor_id,
-        old_value,
-        new_value,
-        metadata: metadata || {},
-      });
+    // 5. Send internal emails for 'created' event (with dedupe)
+    let emailsSent = 0;
+    const shouldSendEmail = channels?.includes('email') && ticket_event_id && event_type === 'created';
+
+    if (shouldSendEmail && usersToNotify.size > 0) {
+      // Fetch profiles with emails
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", Array.from(usersToNotify))
+        .not("email", "is", null);
+
+      const ticketNumber = ticket.ticket_number || ticket.id.slice(0, 8).toUpperCase();
+      const appUrl = Deno.env.get("APP_URL") || Deno.env.get("SITE_URL") || "";
+      const ticketUrl = appUrl ? `${appUrl}/support/tickets/${ticket.id}` : "";
+
+      const emailSubject = `Novo ticket criado - ${ticket.subject}`;
+      const emailHtml = `
+        <div style="font-family:Arial,sans-serif;font-size:14px;color:#333;max-width:600px;margin:0 auto">
+          <h2 style="margin:0 0 12px;color:#111">Novo ticket criado</h2>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+            <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold;width:120px">Ticket</td><td style="padding:6px 12px;border:1px solid #eee">#${ticketNumber}</td></tr>
+            <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Assunto</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.subject}</td></tr>
+            <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Prioridade</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.priority}</td></tr>
+            <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Status</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.status}</td></tr>
+            <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Criado por</td><td style="padding:6px 12px;border:1px solid #eee">${actorName}</td></tr>
+          </table>
+          ${ticketUrl ? `<p style="margin:16px 0"><a href="${ticketUrl}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Abrir ticket</a></p>` : ''}
+          <hr style="border:none;border-top:1px solid #eee;margin:20px 0"/>
+          <small style="color:#999">Notificacao interna - 3Cliques</small>
+        </div>
+      `;
+
+      for (const p of profiles || []) {
+        if (!p.email) continue;
+
+        // Dedupe check via upsert
+        const { data: inserted } = await supabase
+          .from("ticket_notification_sends")
+          .upsert(
+            { ticket_event_id, recipient_user_id: p.id, channel: "email" },
+            { onConflict: "ticket_event_id,recipient_user_id,channel", ignoreDuplicates: true }
+          )
+          .select("id");
+
+        if (!inserted || inserted.length === 0) {
+          console.log(`[notify-ticket-event] Email already sent to ${p.full_name}, skipping`);
+          continue;
+        }
+
+        try {
+          await supabase.functions.invoke("send-email", {
+            body: {
+              to: p.email,
+              to_name: p.full_name || "Usuário",
+              subject: emailSubject,
+              html: emailHtml,
+            },
+          });
+          emailsSent++;
+          console.log(`[notify-ticket-event] Email sent to ${p.full_name} (${p.email})`);
+        } catch (emailErr) {
+          console.error(`[notify-ticket-event] Failed to send email to ${p.email}:`, emailErr);
+        }
+      }
+    }
+
+    // 6. Record in ticket_events table (only if not already created by caller)
+    if (!ticket_event_id) {
+      await supabase
+        .from("ticket_events")
+        .insert({
+          ticket_id,
+          event_type,
+          actor_id,
+          old_value,
+          new_value,
+          metadata: metadata || {},
+        });
+    }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         stakeholders_notified: usersToNotify.size,
+        emails_sent: emailsSent,
         timeline_logged: !!ticket.customer_id,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

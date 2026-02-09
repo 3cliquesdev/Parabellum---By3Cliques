@@ -8113,6 +8113,45 @@ export type Database = {
           },
         ]
       }
+      ticket_notification_sends: {
+        Row: {
+          channel: string
+          created_at: string
+          id: string
+          recipient_user_id: string
+          ticket_event_id: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          id?: string
+          recipient_user_id: string
+          ticket_event_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          id?: string
+          recipient_user_id?: string
+          ticket_event_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_notification_sends_recipient_user_id_fkey"
+            columns: ["recipient_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_notification_sends_ticket_event_id_fkey"
+            columns: ["ticket_event_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_stakeholders: {
         Row: {
           added_at: string | null

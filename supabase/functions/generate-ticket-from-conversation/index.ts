@@ -242,6 +242,45 @@ Deno.serve(async (req) => {
       console.log('✅ Interaction created in timeline');
     }
 
+    // 8b. Create ticket_event + notify stakeholders (internal email)
+    try {
+      // Stakeholders
+      const stRows = [
+        ticket.created_by ? { ticket_id: ticket.id, user_id: ticket.created_by, role: 'creator' } : null,
+        assigned_to ? { ticket_id: ticket.id, user_id: assigned_to, role: 'assignee' } : null,
+      ].filter(Boolean);
+      if (stRows.length) {
+        await supabase.from('ticket_stakeholders')
+          .upsert(stRows as any, { onConflict: 'ticket_id,user_id,role', ignoreDuplicates: true });
+      }
+
+      const { data: createdEvent } = await supabase
+        .from('ticket_events')
+        .insert({
+          ticket_id: ticket.id,
+          event_type: 'created',
+          actor_id: ticket.created_by || null,
+          metadata: { subject, priority, category, source: 'conversation', conversation_id },
+        })
+        .select('id')
+        .single();
+
+      if (createdEvent) {
+        await supabase.functions.invoke('notify-ticket-event', {
+          body: {
+            ticket_id: ticket.id,
+            event_type: 'created',
+            actor_id: ticket.created_by || null,
+            ticket_event_id: createdEvent.id,
+            channels: ['email', 'in_app'],
+          },
+        });
+        console.log('✅ Internal stakeholder notification sent');
+      }
+    } catch (notifyErr) {
+      console.warn('⚠️ Stakeholder notify failed (non-blocking):', notifyErr);
+    }
+
     // 9. Send email notification to customer
     if (contact?.email) {
       console.log('📧 Sending ticket notification email...');
