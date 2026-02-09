@@ -1,77 +1,60 @@
 
+# Corrigir travamento: Auto-travessia de nos de condicao no fluxo ativo
 
-# Melhorar UX do no de Condicao: campo selecionavel + opcoes claras
+## Problema
 
-## Problema atual
+Quando o usuario responde ao no `ask_email` com seu email, o motor de fluxos:
+1. Salva o email no `collectedData` (ok)
+2. Busca o proximo no → encontra o no `condition` (ok)
+3. **Cai no handler generico (linha 740)** que salva o no `condition` como estado atual e retorna uma mensagem vazia
 
-O campo "Campo a verificar" no no de Condicao e um input de texto livre. O usuario precisa digitar manualmente o nome da variavel (ex: `email`, `name`), sem saber quais opcoes existem. Isso causa confusao e erros.
+O fluxo trava porque o no de condicao nao tem conteudo para exibir. Ele deveria ser avaliado automaticamente e o fluxo deveria continuar ate encontrar um no de conteudo (message, transfer, ai_response, ask_*).
+
+A auto-travessia ja existe para o inicio do fluxo (travessia inicial) e apos nos `fetch_order`, mas **nao existe no caminho generico** apos nos ask_*.
 
 ## Solucao
 
-Transformar o campo "Campo a verificar" em um **Select dropdown** que lista automaticamente:
+Adicionar um loop de auto-travessia apos a linha 596 em `supabase/functions/process-chat-flow/index.ts`. Depois de encontrar o `nextNode`, se ele for um no sem conteudo (`condition`, `input`, `start`), avaliar automaticamente e continuar ate chegar a um no de conteudo.
 
-1. **Variaveis coletadas no fluxo** - detectadas dos nos anteriores (`save_as` de cada no ask_*)
-2. **Campos padrao do contato** - `email`, `name`, `phone`, `cpf`
-3. **Mensagem do usuario** - opcao para avaliar o texto da ultima mensagem (campo vazio = mensagem)
-4. **Campo personalizado** - opcao "Outro" que permite digitar manualmente
+## Alteracao
 
-## Alteracoes
+### `supabase/functions/process-chat-flow/index.ts` (apos linha 596)
 
-### 1. `src/components/chat-flows/ChatFlowEditor.tsx`
+Inserir um loop de travessia automatica:
 
-**Substituir o Input por Select no campo "Campo a verificar"** (~linhas 544-551):
+```typescript
+// Auto-travessia de nos sem conteudo (condition, input, start)
+let traversalSteps = 0;
+const MAX_TRAVERSAL = 20;
 
-- Varrer todos os nos do fluxo para coletar os valores `save_as` existentes
-- Montar lista de opcoes agrupadas:
-  - **Variaveis do fluxo**: valores `save_as` encontrados nos nos (ex: email, name, phone, choice)
-  - **Campos do contato**: email, name, phone, cpf (sempre disponiveis)
-  - **Mensagem**: opcao especial para verificar o texto da mensagem do usuario
-  - **Personalizado**: permite digitar um nome customizado
-- Se o usuario escolher "custom", mostrar um Input abaixo para digitar o nome
-
-Exemplo visual do dropdown:
-
-```text
-Variaveis do Fluxo
-  - email (do no "Perguntar Email")
-  - name (do no "Perguntar Nome")
-Campos do Contato
-  - email
-  - phone  
-  - name
-  - cpf
-Especial
-  - Mensagem do usuario
-  - Personalizado...
+while (nextNode && ['condition', 'input', 'start'].includes(nextNode.type) && traversalSteps < MAX_TRAVERSAL) {
+  traversalSteps++;
+  console.log(`[process-chat-flow] ⏩ Auto-traverse[${traversalSteps}] ${nextNode.type} (${nextNode.id})`);
+  
+  if (nextNode.type === 'condition') {
+    const condResult = evaluateCondition(nextNode.data, collectedData, userMessage);
+    const condPath = condResult ? 'true' : 'false';
+    console.log(`[process-chat-flow] 🔀 Condition ${nextNode.id}: ${condResult} → path ${condPath}`);
+    nextNode = findNextNode(flowDef, nextNode, condPath);
+  } else {
+    nextNode = findNextNode(flowDef, nextNode);
+  }
+}
 ```
 
-### 2. `src/components/chat-flows/nodes/ConditionNode.tsx`
+Isso garante que apos coletar o email, a condicao `has_data(email)` sera avaliada imediatamente, e o fluxo continuara para o no de `transfer` ou `ai_response` sem precisar de outra mensagem do usuario.
 
-Melhorar o subtitulo exibido no no para mostrar labels amigaveis:
-- `email` → "Email"
-- `name` → "Nome"
-- `phone` → "Telefone"
-- Campo vazio → "Mensagem do usuario"
+## Nenhuma outra alteracao
 
-### 3. Adicionar mais tipos de condicao
-
-Adicionar opcoes uteis ao Select de "Tipo de condicao":
-- **Nao tem dado** (`not_has_data`) - inverso do "Tem dado", facilita criar caminhos "se nao informou email"
-- **Maior que** (`greater_than`) - util para valores numericos
-- **Menor que** (`less_than`) - util para valores numericos
-
-Atualizar o `conditionLabels` no ConditionNode para incluir os novos tipos.
-
-### 4. Atualizar `process-chat-flow` (edge function)
-
-Adicionar suporte ao novo tipo `not_has_data` na funcao de avaliacao de condicoes, que retorna `true` quando o campo esta vazio/nulo.
+- Frontend: sem mudanca
+- Outros edge functions: sem mudanca
+- Fluxos existentes: beneficiados automaticamente
 
 ## Impacto
 
 | Item | Status |
 |------|--------|
-| Regressao | Zero - valores existentes continuam funcionando |
-| Fluxos existentes | Sem alteracao, `condition_field` aceita os mesmos valores |
-| Motor de fluxos | Apenas adiciona `not_has_data` como tipo |
-| UX | Melhoria significativa - usuarios veem opcoes claras |
-
+| Regressao | Zero - apenas adiciona travessia que ja existe em outros caminhos |
+| Fluxos existentes | Beneficiados - condicoes apos ask_* agora funcionam |
+| Performance | Negligivel - loop limitado a 20 iteracoes |
+| fetch_order | Handler especifico continua funcionando (pode ser simplificado no futuro) |
