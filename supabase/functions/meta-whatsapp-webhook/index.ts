@@ -467,7 +467,15 @@ serve(async (req) => {
                 .single();
 
               if (!conversation) {
-                // Verificar se contato tem consultor (cliente recorrente)
+                // ═══════════════════════════════════════════════════════════════
+                // 🔒 TRAVA ROUTING-LOCK v1.0 — 2026-02-09
+                // PROTEGIDO: Routing de cliente retornante com consultant_id.
+                //   - Busca consultant_id no contato
+                //   - Se existe → cria conversa em copilot com assigned_to = consultor
+                //   - Se nao existe → cria em autopilot (fluxo normal)
+                // ⚠️  NAO ALTERAR sem aprovacao explicita do responsavel.
+                // Qualquer mudanca deve: (1) ser justificada, (2) testada, (3) versionada.
+                // ═══════════════════════════════════════════════════════════════
                 const { data: contactData } = await supabase
                   .from('contacts')
                   .select('consultant_id')
@@ -764,7 +772,16 @@ serve(async (req) => {
                     updateData.department = flowData.departmentId;
                   }
 
-                  // 🆕 Buscar consultant_id do contato para atribuição direta
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🔒 TRAVA TRANSFER-PERSIST-LOCK v1.0 — 2026-02-09
+                  // PROTEGIDO: Busca de consultor (contato/email/regex) + persistencia.
+                  //   - Busca consultor por contato, email coletado, ou regex nas msgs
+                  //   - Atribui assigned_to e ai_mode = copilot
+                  //   - Persiste consultant_id no contato para routing futuro
+                  //   - Executa transferencia de departamento
+                  // ⚠️  NAO ALTERAR sem aprovacao explicita do responsavel.
+                  // Qualquer mudanca deve: (1) ser justificada, (2) testada, (3) versionada.
+                  // ═══════════════════════════════════════════════════════════════
                   const { data: contactConsultantData } = await supabase
                     .from('contacts')
                     .select('consultant_id')
