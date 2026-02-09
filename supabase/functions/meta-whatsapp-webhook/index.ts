@@ -825,6 +825,18 @@ serve(async (req) => {
                     updateData.assigned_to = consultantId;
                     updateData.ai_mode = 'copilot';
                     console.log("[meta-whatsapp-webhook] 👤 Atribuindo ao consultor:", consultantId);
+
+                    // Persistir consultant_id no contato para routing futuro
+                    const { error: contactUpdateError } = await supabase
+                      .from('contacts')
+                      .update({ consultant_id: consultantId })
+                      .eq('id', contact.id);
+
+                    if (contactUpdateError) {
+                      console.error("[meta-whatsapp-webhook] ❌ Erro ao salvar consultant_id no contato:", contactUpdateError);
+                    } else {
+                      console.log("[meta-whatsapp-webhook] ✅ consultant_id salvo no contato:", contact.id, "→", consultantId);
+                    }
                   }
                   
                   const { error: updateError } = await supabase
