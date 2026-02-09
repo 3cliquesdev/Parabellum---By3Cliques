@@ -1,88 +1,195 @@
 
-# Redirecionar cliente recorrente direto para o consultor
 
-## Problema
+# Otimizacao Enterprise do Inbox - Fase 1 (Patch Final)
 
-Quando um cliente que ja passou pelo fluxo e foi atendido por um consultor volta a mandar mensagem:
+## Resumo
 
-1. A conversa anterior esta `closed`
-2. Uma nova conversa e criada com `ai_mode: autopilot` e `assigned_to: null`
-3. O fluxo roda de novo do zero - o cliente precisa refazer tudo
+Reduzir de 7+ queries simultaneas para 2-3, removendo redundancias, aplicando lazy-load por filtro, e estabilizando renders com useMemo. Inclui os 2 ajustes finais solicitados.
 
-## Solucao
+## Ajustes confirmados
 
-Na criacao de novas conversas no `meta-whatsapp-webhook`, verificar se o contato ja tem `consultant_id` definido. Se tiver, criar a conversa ja atribuida ao consultor:
+| Ajuste | Status |
+|--------|--------|
+| 1. activeItems nunca retorna null | Aplicar - sempre retornar array vazio |
+| 2. useInboxSearch so roda com hasActiveSearch | Ja OK - hook tem `enabled: debouncedSearch.trim().length >= 2` |
 
-- `assigned_to = contact.consultant_id`
-- `ai_mode = 'copilot'`
+## Alteracoes por arquivo
 
-A protecao existente no `process-chat-flow` (linha 317) ja bloqueia o fluxo quando `ai_mode = copilot`, entao o cliente vai direto para o consultor sem passar pelo fluxo novamente.
+### 1. `src/pages/Inbox.tsx`
 
-## Alteracao
+**A) Remover imports e chamadas (linhas 4, 113, 118):**
+- Remover `import { useConversations }` (linha 4)
+- Remover `const { data: rawInboxItems } = useInboxView()` (linha 113)
+- Remover `const { data: conversations, isLoading: convLoading } = useConversations()` (linha 118)
 
-### `supabase/functions/meta-whatsapp-webhook/index.ts` (~linha 469-485)
+**B) Estabilizar filtros com useMemo (linhas 94-106):**
 
-Antes de criar a nova conversa, verificar o `consultant_id` do contato:
-
-```text
-Conversa nao encontrada (nova conversa)
-  → Buscar consultant_id do contato
-  → Se tem consultor:
-      criar conversa com assigned_to = consultant_id, ai_mode = 'copilot'
-  → Se nao tem consultor:
-      criar conversa normal com ai_mode = 'autopilot' (comportamento atual)
-```
-
-Trecho conceitual:
+Substituir objeto literal por useMemo:
 
 ```typescript
-// Verificar se contato tem consultor (cliente recorrente)
-const { data: contactData } = await supabase
-  .from('contacts')
-  .select('consultant_id')
-  .eq('id', contact.id)
-  .maybeSingle();
+const inboxViewFilters = useMemo<InboxViewFiltersType>(() => ({
+  dateRange: filters.dateRange,
+  channels: filters.channels,
+  status: filters.status,
+  assignedTo: filters.assignedTo,
+  search: filters.search,
+  slaStatus: filters.slaExpired ? 'critical' : undefined,
+  hasAudio: filters.hasAudio,
+  hasAttachments: filters.hasAttachments,
+  aiMode: filters.aiMode as InboxViewFiltersType['aiMode'],
+  department: departmentFilter || undefined,
+  tagId: tagFilter || undefined,
+}), [filters.dateRange, filters.channels, filters.status, filters.assignedTo,
+     filters.search, filters.slaExpired, filters.hasAudio, filters.hasAttachments,
+     filters.aiMode, departmentFilter, tagFilter]);
+```
 
-const hasConsultant = !!contactData?.consultant_id;
+**C) Lazy-load hooks dedicados (linhas 121-127):**
 
-const { data: newConv } = await supabase
-  .from("conversations")
-  .insert({
-    contact_id: contact.id,
-    channel: "whatsapp",
-    status: "open",
-    ai_mode: hasConsultant ? "copilot" : "autopilot",
-    assigned_to: hasConsultant ? contactData.consultant_id : null,
-    whatsapp_provider: "meta",
-    whatsapp_meta_instance_id: instance.id,
-  })
-  .select(...)
-  .single();
+Substituir chamadas incondicionais por:
 
-if (hasConsultant) {
-  console.log("[meta-whatsapp-webhook] 👤 Cliente recorrente → direto para consultor:", contactData.consultant_id);
+```typescript
+const isMine = filter === "mine";
+const isNotResponded = filter === "not_responded";
+const isSla = filter === "sla";
+
+const { data: myNotRespondedItems } = useMyNotRespondedInboxItems({ enabled: isNotResponded, refetchInterval: 60_000 });
+const { data: myInboxItems } = useMyInboxItems({ enabled: isMine, refetchInterval: 60_000 });
+const { data: slaExceededItems } = useSlaExceededItems({ enabled: isSla, refetchInterval: 60_000 });
+```
+
+**D) Substituir `filteredConversations` inteiro (linhas 256-385):**
+
+Logica simplificada sem `fullConversations`, sem `rawInboxItems`, sem `getConversationFromItem`:
+
+```typescript
+const hasActiveSearch = !!(filters.search && filters.search.trim().length >= 2);
+
+const activeItems = useMemo(() => {
+  if (hasActiveSearch) return searchResults ?? [];
+  if (isNotResponded) return myNotRespondedItems ?? [];
+  if (isMine) return myInboxItems ?? [];
+  if (isSla) return slaExceededItems ?? [];
+  return inboxItems ?? [];
+}, [hasActiveSearch, searchResults, isNotResponded, myNotRespondedItems,
+    isMine, myInboxItems, isSla, slaExceededItems, inboxItems]);
+
+const filteredConversations = useMemo(() => {
+  let result = activeItems.map(inboxItemToConversation);
+
+  // Department filter
+  if (departmentFilter) {
+    result = result.filter(c => c.department === departmentFilter);
+  }
+
+  // Filter by URL param
+  switch (filter) {
+    case "ai_queue":
+      return result.filter(c => c.ai_mode === 'autopilot' && c.status !== 'closed');
+    case "human_queue":
+      if (role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager') {
+        return result.filter(c => c.ai_mode !== 'autopilot' && c.status !== 'closed');
+      }
+      if (departmentFilter) {
+        return result.filter(c => c.ai_mode !== 'autopilot' && c.status !== 'closed');
+      }
+      return result.filter(c => c.ai_mode !== 'autopilot' && c.assigned_to === user?.id && c.status !== 'closed');
+    case "mine":
+      return result.filter(c => c.assigned_to === user?.id && c.status !== 'closed');
+    case "not_responded":
+    case "sla":
+      return result; // Ja vem filtrado do hook dedicado
+    case "unassigned":
+      return result.filter(c => !c.assigned_to && c.status !== 'closed');
+    case "archived":
+      return result.filter(c => c.status === "closed");
+    default:
+      return result.filter(c => c.status !== 'closed');
+  }
+}, [activeItems, inboxItemToConversation, departmentFilter, filter, role, user?.id]);
+```
+
+**E) Loading do activeQuery (linhas 700, 613):**
+
+Substituir `inboxLoading || convLoading || searchLoading || ...` por:
+
+```typescript
+const activeLoading = hasActiveSearch ? searchLoading :
+  isMine ? false : // useMyInboxItems nao tem isLoading exposto no destructuring atual
+  isNotResponded ? false :
+  isSla ? false :
+  inboxLoading;
+
+const isPageLoading = activeLoading || searchLoading;
+```
+
+Usar `isPageLoading` nos dois `ConversationList` (desktop linha 700, mobile linha 613). Remover `convLoading` e `filteredConversations === null`.
+
+**F) Remover `getConversationFromItem` (linhas 251-254)** - nao mais usado.
+
+**G) Remover `inboxItemIds` (linhas 157-160)** - nao mais usado (era para rawInboxItems).
+
+**H) Ajustar `displayTotalCount` (linha 511):**
+
+Antes: `filteredConversations.length` (podia ser null)
+Depois: `filteredConversations?.length ?? 0`
+
+### 2. `src/hooks/useMyInboxItems.tsx`
+
+Aceitar opts parametrizavel:
+
+```typescript
+export function useMyInboxItems(opts?: { enabled?: boolean; refetchInterval?: number }) {
+  const { user } = useAuth();
+  const enabled = opts?.enabled ?? true;
+  const refetchInterval = opts?.refetchInterval ?? 30_000;
+
+  return useQuery({
+    queryKey: [...QUERY_KEY, user?.id],
+    queryFn: async (): Promise<InboxViewItem[]> => { /* mesma queryFn */ },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchInterval,
+    enabled: enabled && !!user?.id,
+  });
 }
 ```
 
-## Fluxo esperado
+### 3. `src/hooks/useMyNotRespondedInboxItems.tsx`
+
+Mesmo padrao: aceitar `opts?: { enabled?: boolean; refetchInterval?: number }`.
+
+### 4. `src/hooks/useSlaExceededItems.tsx`
+
+Mesmo padrao: aceitar `opts?: { enabled?: boolean; refetchInterval?: number }`.
+
+### 5. `src/hooks/useInboxView.tsx` (useInboxCounts, linhas 656-657)
 
 ```text
-Cliente recorrente (ja tem consultant_id):
-  Msg → nova conversa com assigned_to=consultor, ai_mode=copilot
-    → process-chat-flow detecta copilot → skipAutoResponse
-    → Conversa aparece na caixa do consultor
-
-Cliente novo (sem consultant_id):
-  Msg → nova conversa com ai_mode=autopilot
-    → Fluxo roda normalmente (comportamento atual)
+Antes: staleTime: 15_000, refetchInterval: 30_000
+Depois: staleTime: 30_000, refetchInterval: 60_000
 ```
 
-## Impacto
+## Resultado esperado
 
-| Item | Status |
-|------|--------|
-| Regressao | Zero - apenas adiciona checagem na criacao de conversa |
-| Clientes novos | Sem alteracao - fluxo roda normal |
-| Clientes recorrentes | Direto para o consultor |
-| process-chat-flow | Sem alteracao - protecao existente ja cuida |
-| Performance | 1 query adicional apenas ao criar nova conversa |
+| Metrica | Antes | Depois |
+|---------|-------|--------|
+| Queries ao abrir | 7+ | 2 (inbox_view + counts) |
+| Queries com filtro ativo | 7+ | 3 (+ 1 dedicado) |
+| Canais realtime | 4 | 3 |
+| Rows transferidos | ~5500 + JOINs | ~500 |
+| Polling/min | ~12 | ~3-4 |
+| Re-renders | Alto (filters instavel) | Reduzido (useMemo) |
+| null safety | activeItems podia ser null | Sempre array |
+
+## Checklist de seguranca
+
+- activeItems sempre retorna array (nunca null)
+- useInboxSearch ja tem enabled com debounce
+- filtros estabilizados com useMemo
+- Loading vem do activeQuery ativo
+- Bulk actions continuam usando orderedConversations
+- Busca continua via useInboxSearch (sem mudanca)
+- Realtime: 3 canais (sem duplicacao)
+- orderedConversations usa filteredConversations (que agora e sempre array)
