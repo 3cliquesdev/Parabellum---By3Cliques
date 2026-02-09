@@ -39,6 +39,7 @@ interface MessageBubbleProps {
   channel?: string;
   showChannel?: boolean;
   status?: "sending" | "sent" | "delivered" | "failed";
+  errorDetail?: string;
   usedArticles?: any[];
   isAdmin?: boolean;
   isManager?: boolean;
@@ -56,6 +57,7 @@ export function MessageBubble({
   channel,
   showChannel = false,
   status,
+  errorDetail,
   usedArticles = [],
   isAdmin = false,
   isManager = false,
@@ -251,6 +253,7 @@ export function MessageBubble({
             {!isCustomer && status && (
               <MessageStatusIndicator
                 status={status}
+                errorDetail={errorDetail}
                 className={
                   isAI ? "text-violet-600 dark:text-violet-400" : "text-white"
                 }

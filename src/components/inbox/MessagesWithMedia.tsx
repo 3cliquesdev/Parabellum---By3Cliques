@@ -21,6 +21,7 @@ interface Message {
   attachment_url?: string | null;
   attachment_type?: string | null;
   status?: string;
+  metadata?: Record<string, any> | null;
   sender?: {
     id: string;
     full_name: string;
@@ -219,6 +220,19 @@ export function MessagesWithMedia({
           );
         }
 
+        // Extrair erro do metadata para tooltip
+        let errorDetail: string | undefined;
+        if (message.status === 'failed' && message.metadata) {
+          const meta = message.metadata;
+          if (meta.error_title) {
+            errorDetail = meta.error_code 
+              ? `${meta.error_title} (${meta.error_code})`
+              : meta.error_title;
+          } else if (meta.error_code) {
+            errorDetail = `Erro ${meta.error_code}`;
+          }
+        }
+
         return (
           <MessageBubble
             key={message.id}
@@ -236,6 +250,7 @@ export function MessagesWithMedia({
             channel={conversation.channel}
             showChannel={false}
             status={message.status as "sending" | "sent" | "delivered" | "failed" | undefined}
+            errorDetail={errorDetail}
             usedArticles={usedArticles}
             isAdmin={isAdmin}
             isManager={isManager}

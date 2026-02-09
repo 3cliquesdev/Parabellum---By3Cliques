@@ -854,32 +854,57 @@ serve(async (req) => {
               }
 
               if (existingMsg) {
-                const updatedMetadata = {
-                  ...((existingMsg.metadata as Record<string, unknown>) || {}),
-                  delivery_status: status.status,
-                  status_timestamp: status.timestamp,
+                // 🆕 Hierarquia de status — prevenir downgrade
+                const STATUS_RANK: Record<string, number> = {
+                  sending: 0, sent: 1, delivered: 2, read: 3,
                 };
+                const currentRank = STATUS_RANK[existingMsg.status as string] ?? -1;
 
-                // 🆕 Mapear status do Meta para nosso status
-                const mappedStatus = 
+                // Mapear status do Meta para nosso status
+                const mappedStatus =
                   status.status === 'delivered' ? 'delivered' :
                   status.status === 'read' ? 'read' :
                   status.status === 'sent' ? 'sent' :
                   status.status === 'failed' ? 'failed' :
                   existingMsg.status;
 
-                const { error: updateError } = await supabase
-                  .from("messages")
-                  .update({ 
-                    metadata: updatedMetadata,
-                    status: mappedStatus, // 🆕 Atualizar campo status real
-                  })
-                  .eq("id", existingMsg.id);
+                const incomingRank = STATUS_RANK[mappedStatus as string] ?? -1;
 
-                if (updateError) {
-                  console.error("[meta-whatsapp-webhook] ❌ Error updating status:", updateError);
+                // 🆕 Regra: failed só aplica se current <= sent (rank 1)
+                if (mappedStatus === 'failed' && currentRank >= 2) {
+                  console.log(`[meta-whatsapp-webhook] ⏭️ Ignoring failed downgrade for ${existingMsg.id} (current: ${existingMsg.status})`);
+                } else if (mappedStatus !== 'failed' && incomingRank <= currentRank) {
+                  console.log(`[meta-whatsapp-webhook] ⏭️ Ignoring status downgrade ${mappedStatus} for ${existingMsg.id} (current: ${existingMsg.status})`);
                 } else {
-                  console.log(`[meta-whatsapp-webhook] ✅ Status updated: ${existingMsg.id} -> ${mappedStatus}`);
+                  // 🆕 Capturar detalhes do erro do Meta
+                  const errorInfo: Record<string, unknown> = {};
+                  if (mappedStatus === 'failed' && (status as any).errors?.length) {
+                    const metaError = (status as any).errors[0];
+                    errorInfo.error_code = metaError.code;
+                    errorInfo.error_title = metaError.title;
+                    errorInfo.error_message = metaError.message;
+                  }
+
+                  const updatedMetadata = {
+                    ...((existingMsg.metadata as Record<string, unknown>) || {}),
+                    delivery_status: status.status,
+                    status_timestamp: status.timestamp,
+                    ...errorInfo,
+                  };
+
+                  const { error: updateError } = await supabase
+                    .from("messages")
+                    .update({
+                      metadata: updatedMetadata,
+                      status: mappedStatus,
+                    })
+                    .eq("id", existingMsg.id);
+
+                  if (updateError) {
+                    console.error("[meta-whatsapp-webhook] ❌ Error updating status:", updateError);
+                  } else {
+                    console.log(`[meta-whatsapp-webhook] ✅ Status updated: ${existingMsg.id} -> ${mappedStatus}`);
+                  }
                 }
               } else {
                 console.log("[meta-whatsapp-webhook] ⚠️ Message not found for status update:", status.id);
