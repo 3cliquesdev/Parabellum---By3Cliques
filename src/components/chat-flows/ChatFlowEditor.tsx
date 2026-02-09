@@ -27,7 +27,7 @@ import {
   Save, X, Trash2, Plus, Play, Bot, BookOpen, Package
 } from "lucide-react";
 import { toast } from "sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { DraggableBlock } from "@/components/playbook/DraggableBlock";
 import { ButtonEdge } from "@/components/playbook/ButtonEdge";
@@ -522,12 +522,42 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
               )}
 
               {/* Condição */}
-              {selectedNode.type === "condition" && (
+              {selectedNode.type === "condition" && (() => {
+                // Coletar variáveis save_as dos nós do fluxo
+                const flowVariables = nodes
+                  .filter((n: Node) => n.data?.save_as)
+                  .map((n: Node) => ({
+                    value: n.data.save_as as string,
+                    label: `${n.data.save_as} (${n.data.label || n.type})`,
+                  }));
+                
+                // Deduplicate
+                const uniqueFlowVars = flowVariables.filter(
+                  (v: { value: string }, i: number, arr: { value: string }[]) => arr.findIndex((x) => x.value === v.value) === i
+                );
+
+                const contactFields = [
+                  { value: "email", label: "Email" },
+                  { value: "name", label: "Nome" },
+                  { value: "phone", label: "Telefone" },
+                  { value: "cpf", label: "CPF" },
+                ];
+
+                const currentField = selectedNode.data.condition_field || "";
+                const isCustomField = currentField && 
+                  !uniqueFlowVars.some((v: { value: string }) => v.value === currentField) && 
+                  !contactFields.some(f => f.value === currentField) && 
+                  currentField !== "__message__";
+
+                const conditionType = selectedNode.data.condition_type || "contains";
+                const hideValueField = conditionType === "has_data" || conditionType === "not_has_data";
+
+                return (
                 <div className="space-y-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Tipo de condição</Label>
                     <Select
-                      value={selectedNode.data.condition_type || "contains"}
+                      value={conditionType}
                       onValueChange={(v) => updateNodeData("condition_type", v)}
                     >
                       <SelectTrigger>
@@ -537,19 +567,68 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                         <SelectItem value="contains">Contém</SelectItem>
                         <SelectItem value="equals">É igual a</SelectItem>
                         <SelectItem value="has_data">Tem dado</SelectItem>
+                        <SelectItem value="not_has_data">Não tem dado</SelectItem>
+                        <SelectItem value="greater_than">Maior que</SelectItem>
+                        <SelectItem value="less_than">Menor que</SelectItem>
                         <SelectItem value="regex">Regex</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Campo a verificar</Label>
-                    <Input
-                      value={selectedNode.data.condition_field || ""}
-                      onChange={(e) => updateNodeData("condition_field", e.target.value)}
-                      placeholder="nome_variavel"
-                    />
+                    <Select
+                      value={isCustomField ? "__custom__" : (currentField || "__message__")}
+                      onValueChange={(v) => {
+                        if (v === "__custom__") {
+                          updateNodeData("condition_field", "");
+                        } else if (v === "__message__") {
+                          updateNodeData("condition_field", "");
+                        } else {
+                          updateNodeData("condition_field", v);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o campo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {uniqueFlowVars.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Variáveis do Fluxo</SelectLabel>
+                            {uniqueFlowVars.map((v: { value: string; label: string }) => (
+                              <SelectItem key={`flow-${v.value}`} value={v.value}>
+                                💾 {v.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        <SelectGroup>
+                          <SelectLabel>Campos do Contato</SelectLabel>
+                          {contactFields.map(f => (
+                            <SelectItem key={`contact-${f.value}`} value={f.value}>
+                              👤 {f.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel>Especial</SelectLabel>
+                          <SelectItem value="__message__">💬 Mensagem do usuário</SelectItem>
+                          <SelectItem value="__custom__">✏️ Personalizado...</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  {selectedNode.data.condition_type !== "has_data" && (
+                  {(isCustomField || (currentField === "" && selectedNode.data.condition_field !== undefined && selectedNode.data.condition_field !== "")) && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Nome do campo personalizado</Label>
+                      <Input
+                        value={selectedNode.data.condition_field || ""}
+                        onChange={(e) => updateNodeData("condition_field", e.target.value)}
+                        placeholder="nome_variavel"
+                      />
+                    </div>
+                  )}
+                  {!hideValueField && (
                     <div className="space-y-1.5">
                       <Label className="text-xs">Valor esperado</Label>
                       <Input
@@ -559,7 +638,8 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                     </div>
                   )}
                 </div>
-              )}
+                );
+              })()}
 
               {/* IA Response */}
               {selectedNode.type === "ai_response" && (

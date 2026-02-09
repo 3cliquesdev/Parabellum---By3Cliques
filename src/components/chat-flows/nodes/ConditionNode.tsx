@@ -11,20 +11,32 @@ interface ConditionNodeData {
   condition_value?: string;
 }
 
-const conditionLabels = {
+const conditionLabels: Record<string, string> = {
   contains: "Contém",
   equals: "É igual a",
   regex: "Regex",
   has_data: "Tem dado",
+  not_has_data: "Não tem dado",
+  greater_than: "Maior que",
+  less_than: "Menor que",
+};
+
+const friendlyFieldNames: Record<string, string> = {
+  email: "Email",
+  name: "Nome",
+  phone: "Telefone",
+  cpf: "CPF",
+  "": "Mensagem do usuário",
 };
 
 export const ChatFlowConditionNode = memo(({ data, selected }: NodeProps<ConditionNodeData>) => {
   const conditionType = data.condition_type || "contains";
   
   let subtitle = conditionLabels[conditionType] || conditionType;
-  if (data.condition_field) {
-    subtitle += ` (${data.condition_field})`;
-  }
+  const fieldLabel = data.condition_field 
+    ? (friendlyFieldNames[data.condition_field] || data.condition_field)
+    : friendlyFieldNames[""];
+  subtitle += ` (${fieldLabel})`;
   if (data.condition_value) {
     subtitle += `: "${data.condition_value}"`;
   }

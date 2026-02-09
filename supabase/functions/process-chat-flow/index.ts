@@ -148,7 +148,13 @@ function evaluateCondition(condition: any, collectedData: Record<string, any>, u
     case "equals":
       return fieldValue.toLowerCase() === (condition_value || "").toLowerCase();
     case "has_data":
-      return !!fieldValue && fieldValue.trim().length > 0;
+      return !!fieldValue && String(fieldValue).trim().length > 0;
+    case "not_has_data":
+      return !fieldValue || String(fieldValue).trim().length === 0;
+    case "greater_than":
+      return parseFloat(String(fieldValue)) > parseFloat(String(condition_value || "0"));
+    case "less_than":
+      return parseFloat(String(fieldValue)) < parseFloat(String(condition_value || "0"));
     case "regex":
       try {
         const regex = new RegExp(condition_value || "", "i");
