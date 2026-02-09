@@ -1,126 +1,77 @@
 
 
-# Buscar consultor pelo email coletado no fluxo durante a transferencia
+# Melhorar UX do no de Condicao: campo selecionavel + opcoes claras
 
-## Problema
+## Problema atual
 
-O fluxo esta correto:
-1. Condicao detecta a keyword
-2. "Perguntar Email" coleta o email do cliente
-3. "Resposta IA" processa (objetivo: verificar consultor)
-4. "Transferir" move para o departamento Customer Success
-
-Porem, na hora da transferencia, o sistema so verifica o `consultant_id` do contato da conversa (vinculado pelo telefone). Como esse contato nao tem consultor, a conversa vai para o pool do departamento.
-
-O email informado pelo cliente (ex: `libertecdados@gmail.com`) fica salvo no `collectedData.email` do fluxo, mas ninguem usa esse dado para buscar o consultor.
+O campo "Campo a verificar" no no de Condicao e um input de texto livre. O usuario precisa digitar manualmente o nome da variavel (ex: `email`, `name`), sem saber quais opcoes existem. Isso causa confusao e erros.
 
 ## Solucao
 
-Expandir a logica de transferencia em ambos os pipelines para:
+Transformar o campo "Campo a verificar" em um **Select dropdown** que lista automaticamente:
 
-1. Verificar `consultant_id` do contato da conversa (logica atual)
-2. Se nao encontrar, verificar se existe um email no `collectedData` do fluxo
-3. Se nao encontrar no collectedData, buscar email nas mensagens recentes do cliente
-4. Com o email encontrado, buscar um contato que tenha `consultant_id` definido
-5. Se encontrar, atribuir a conversa a esse consultor
+1. **Variaveis coletadas no fluxo** - detectadas dos nos anteriores (`save_as` de cada no ask_*)
+2. **Campos padrao do contato** - `email`, `name`, `phone`, `cpf`
+3. **Mensagem do usuario** - opcao para avaliar o texto da ultima mensagem (campo vazio = mensagem)
+4. **Campo personalizado** - opcao "Outro" que permite digitar manualmente
 
 ## Alteracoes
 
-### 1. `supabase/functions/meta-whatsapp-webhook/index.ts` (~linha 753)
+### 1. `src/components/chat-flows/ChatFlowEditor.tsx`
 
-Expandir o bloco apos buscar o `consultant_id` do contato. Se for NULL:
-- Verificar `flowData.collectedData?.email`
-- Se nao tiver, buscar email nas ultimas 10 mensagens do cliente
-- Usar o email encontrado para buscar contato com `consultant_id`
+**Substituir o Input por Select no campo "Campo a verificar"** (~linhas 544-551):
 
-### 2. `supabase/functions/ai-autopilot-chat/index.ts` (~linha 2457)
+- Varrer todos os nos do fluxo para coletar os valores `save_as` existentes
+- Montar lista de opcoes agrupadas:
+  - **Variaveis do fluxo**: valores `save_as` encontrados nos nos (ex: email, name, phone, choice)
+  - **Campos do contato**: email, name, phone, cpf (sempre disponiveis)
+  - **Mensagem**: opcao especial para verificar o texto da mensagem do usuario
+  - **Personalizado**: permite digitar um nome customizado
+- Se o usuario escolher "custom", mostrar um Input abaixo para digitar o nome
 
-Mesma logica expandida no bloco de transferencia do fluxo:
-- Verificar `flowResult.collectedData?.email`
-- Fallback: buscar email nas mensagens recentes
-- Usar email para encontrar consultor
-
-### 3. Nenhuma alteracao em `process-chat-flow`
-
-O `collectedData` ja e retornado junto com a resposta de transferencia (linha 690). Nenhuma mudanca necessaria.
-
-## Fluxo esperado
+Exemplo visual do dropdown:
 
 ```text
-Cliente envia "consultor" → Condicao = true
-  → Perguntar Email → cliente responde "libertecdados@gmail.com"
-    → collectedData.email = "libertecdados@gmail.com"
-      → Resposta IA processa
-        → Transfer node → process-chat-flow retorna:
-          { transfer: true, departmentId: "...", collectedData: { email: "libertecdados@gmail.com" } }
-          
-Pipeline de transferencia:
-  1. consultant_id do contato da conversa → NULL
-  2. Busca email no collectedData → "libertecdados@gmail.com"
-  3. Busca contato com esse email + consultant_id → Paulo Lopes
-  4. assigned_to = Paulo Lopes, ai_mode = copilot
-  → Conversa aparece na caixa do Paulo Lopes
+Variaveis do Fluxo
+  - email (do no "Perguntar Email")
+  - name (do no "Perguntar Nome")
+Campos do Contato
+  - email
+  - phone  
+  - name
+  - cpf
+Especial
+  - Mensagem do usuario
+  - Personalizado...
 ```
 
-## Detalhes tecnicos
+### 2. `src/components/chat-flows/nodes/ConditionNode.tsx`
 
-Trecho a ser adicionado em ambos os pipelines (apos a busca atual do consultant_id):
+Melhorar o subtitulo exibido no no para mostrar labels amigaveis:
+- `email` → "Email"
+- `name` → "Nome"
+- `phone` → "Telefone"
+- Campo vazio → "Mensagem do usuario"
 
-```typescript
-// Se nao tem consultor pelo contato, buscar pelo email coletado no fluxo
-if (!consultantId) {
-  let emailToSearch: string | null = null;
+### 3. Adicionar mais tipos de condicao
 
-  // 1. Tentar do collectedData do fluxo
-  const collectedEmail = flowData.collectedData?.email;
-  if (collectedEmail && typeof collectedEmail === 'string') {
-    emailToSearch = collectedEmail.toLowerCase().trim();
-  }
+Adicionar opcoes uteis ao Select de "Tipo de condicao":
+- **Nao tem dado** (`not_has_data`) - inverso do "Tem dado", facilita criar caminhos "se nao informou email"
+- **Maior que** (`greater_than`) - util para valores numericos
+- **Menor que** (`less_than`) - util para valores numericos
 
-  // 2. Fallback: buscar email nas mensagens recentes
-  if (!emailToSearch) {
-    const { data: recentMsgs } = await supabase
-      .from('messages')
-      .select('content')
-      .eq('conversation_id', conversation.id)
-      .eq('sender_type', 'contact')
-      .order('created_at', { ascending: false })
-      .limit(10);
+Atualizar o `conditionLabels` no ConditionNode para incluir os novos tipos.
 
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-    for (const msg of recentMsgs || []) {
-      const match = msg.content?.match(emailRegex);
-      if (match) {
-        emailToSearch = match[0].toLowerCase();
-        break;
-      }
-    }
-  }
+### 4. Atualizar `process-chat-flow` (edge function)
 
-  // 3. Buscar contato com esse email que tenha consultor
-  if (emailToSearch) {
-    const { data: emailContact } = await supabase
-      .from('contacts')
-      .select('consultant_id')
-      .ilike('email', emailToSearch)
-      .not('consultant_id', 'is', null)
-      .maybeSingle();
-
-    if (emailContact?.consultant_id) {
-      consultantId = emailContact.consultant_id;
-      console.log("[pipeline] Consultor encontrado pelo email:", emailToSearch, "→", consultantId);
-    }
-  }
-}
-```
+Adicionar suporte ao novo tipo `not_has_data` na funcao de avaliacao de condicoes, que retorna `true` quando o campo esta vazio/nulo.
 
 ## Impacto
 
 | Item | Status |
 |------|--------|
-| Regressao | Zero - apenas adiciona fallback de busca por email |
-| Suporte geral | Sem alteracao |
-| Contatos sem consultor | Pool do departamento (atual) |
-| Consultor offline | Atribuido mesmo assim |
-| Performance | 1-2 queries adicionais, apenas no caminho de transferencia quando consultant_id e NULL |
+| Regressao | Zero - valores existentes continuam funcionando |
+| Fluxos existentes | Sem alteracao, `condition_field` aceita os mesmos valores |
+| Motor de fluxos | Apenas adiciona `not_has_data` como tipo |
+| UX | Melhoria significativa - usuarios veem opcoes claras |
 
