@@ -1,102 +1,87 @@
 
-# Correção: Mensagens WhatsApp com Alerta de Falha (Status Failed)
 
-## Problema Identificado
+# Simplificar Disparo de Playbooks: Eliminar Confusao entre Grupo de Entrega e playbook_products
 
-Existem **477 mensagens** enviadas por agentes via WhatsApp marcadas com `status = 'failed'` no banco de dados. Isso faz o ícone de alerta (triangulo vermelho) aparecer na bolha da mensagem, assustando os atendentes.
+## Problema
 
-**Causa raiz**: O webhook do Meta WhatsApp recebe callbacks com `status: "failed"` e o sistema simplesmente aceita sem:
-1. Verificar se o status atual ja e superior (ex: `delivered` nao pode virar `failed`)
-2. Capturar os detalhes do erro (`errors[].code`, `errors[].title`)
-3. Exibir o motivo do erro ao usuario
+Existem **3 caminhos** para vincular playbook a produto, e nenhum deles se comunica:
 
-Alem disso, muitas dessas mensagens possuem `external_id` (wamid) valido, o que indica que foram aceitas pelo WhatsApp mas falharam na entrega posterior (janela de 24h expirada, numero invalido, etc).
+| Caminho | Tabela | Estado Atual | Webhook usa? |
+|---------|--------|--------------|--------------|
+| 1. Grupo de Entrega | `delivery_groups` + `group_playbooks` | Ambos grupos apontam para playbooks **inativos** | Sim (prioridade) |
+| 2. product_id direto | `onboarding_playbooks.product_id` | "Onboarding - Assinaturas" nao tem product_id | Sim (fallback) |
+| 3. playbook_products | `playbook_products` | "Onboarding - Assinaturas" vinculado a 4 produtos | **NAO** |
 
----
+O usuario configura os vinculos pelo caminho 3 (playbook_products), mas o webhook so consulta os caminhos 1 e 2. Resultado: nenhum playbook dispara.
 
-## Solucao em 3 Partes
+Alem disso, o dropdown "Grupo de Entrega (Playbook)" no dialog de produto so mostra os 2 grupos antigos e nao lista novos playbooks -- e confuso e redundante.
 
-### PARTE 1: Backend - Prevenir Downgrade de Status + Capturar Erros
+## Solucao
 
-**Arquivo**: `supabase/functions/meta-whatsapp-webhook/index.ts`
+### 1. Webhook: Adicionar consulta a `playbook_products` como fallback final
 
-**Mudancas** (linhas 856-883):
+**Arquivo**: `supabase/functions/kiwify-webhook/index.ts`
 
-1. Adicionar **hierarquia de status** para evitar downgrades:
-   - Ordem: `sending(0) < sent(1) < delivered(2) < read(3)`
-   - `failed` so aplica se status atual for `sending` ou `sent`
-   - Se mensagem ja esta `delivered` ou `read`, ignorar `failed`
+**Fluxo de venda (linhas ~1341-1362):**
+- Apos o `else` que busca `onboarding_playbooks.product_id`, adicionar um bloco final:
+- Se `playbook_ids` ainda estiver vazio e `product` existe, consultar `playbook_products` para encontrar playbooks ativos vinculados ao produto
 
-2. **Salvar detalhes do erro** do Meta no metadata:
-   - `error_code`: codigo numerico do Meta (ex: 131026)
-   - `error_title`: descricao do Meta (ex: "Message Undeliverable")
+**Fluxo de upsell (linhas ~1766-1808):**
+- Mesma logica: apos os dois caminhos existentes, adicionar fallback para `playbook_products`
 
-```text
-Hierarquia de Status (nao permite downgrade):
-
-sending  -->  sent  -->  delivered  -->  read
-   \            \
-    \----->  failed (so aceita se atual <= sent)
+Logica do fallback:
+```
+if (playbook_ids.length === 0 && product) {
+  // Fallback 3: buscar via playbook_products
+  const { data: linkedPlaybooks } = await supabase
+    .from('playbook_products')
+    .select('playbook_id, playbook:onboarding_playbooks(id, is_active)')
+    .eq('product_id', product.id);
+  
+  playbook_ids = linkedPlaybooks
+    ?.filter(lp => lp.playbook?.is_active)
+    ?.map(lp => lp.playbook_id) || [];
+}
 ```
 
-### PARTE 2: Frontend - Tooltip com Motivo do Erro
+### 2. UI do Produto: Substituir dropdown de "Grupo de Entrega" por visualizacao dos playbooks vinculados
 
-**Arquivo**: `src/components/MessageStatusIndicator.tsx`
+**Arquivo**: `src/components/ProductDialog.tsx`
 
-**Mudancas**:
-- Aceitar prop opcional `errorDetail` (string)
-- Quando status = `failed`, envolver o icone com um Tooltip mostrando o motivo
-- Fallback: "Falha no envio" quando nao ha detalhes
+Mudancas:
+- Remover o dropdown de "Grupo de Entrega (Playbook)" que so mostra os 2 grupos antigos
+- Substituir por uma **secao informativa** que mostra os playbooks ativos vinculados ao produto (via `playbook_products`)
+- Adicionar link "Gerenciar no Playbook" que leva a edicao do playbook
+- Manter o campo `delivery_group_id` no banco (nao quebrar nada), mas nao expor mais na UI
 
-**Arquivo**: `src/components/inbox/MessageBubble.tsx`
+Isso elimina a confusao: o usuario vincula produtos **dentro do playbook** (que ja funciona) e ve o resultado na tela do produto.
 
-**Mudancas**:
-- Aceitar prop opcional `errorDetail`
-- Passar para `MessageStatusIndicator`
+### 3. (Sem mudanca) Manter tabelas existentes no banco
 
-**Arquivo**: `src/components/inbox/MessagesWithMedia.tsx`
+Nao vamos deletar `delivery_groups` nem `group_playbooks` -- eles ainda podem ser uteis para cenarios futuros. Apenas:
+- O webhook ganha o fallback para `playbook_products`
+- A UI do produto para de mostrar o dropdown confuso
 
-**Mudancas**:
-- Extrair `metadata.error_title` ou `metadata.error_code` da mensagem
-- Passar como `errorDetail` para `MessageBubble`
-
-### PARTE 3: Correcao de Dados Existentes (Opcional)
-
-Uma query SQL para corrigir mensagens que tem `external_id` (foram aceitas pelo Meta) mas estao com `failed` sem detalhes de erro -- potencialmente falsos positivos que poderiam ser reclassificadas como `sent`.
-
-Isso sera opcional e apresentado como sugestao apos as correcoes de codigo.
-
----
-
-## Sequencia de Implementacao
+## Sequencia
 
 ```text
-1. meta-whatsapp-webhook/index.ts
-   - Adicionar STATUS_HIERARCHY
-   - Prevenir downgrade de status
-   - Capturar errors[] do Meta no metadata
+1. kiwify-webhook/index.ts
+   - Adicionar fallback playbook_products no fluxo de venda
+   - Adicionar fallback playbook_products no fluxo de upsell
    - Deploy automatico
 
-2. MessageStatusIndicator.tsx
-   - Adicionar prop errorDetail
-   - Adicionar Tooltip no status failed
-
-3. MessageBubble.tsx
-   - Passar errorDetail prop
-
-4. MessagesWithMedia.tsx
-   - Extrair error info do metadata
-   - Passar para MessageBubble
+2. ProductDialog.tsx  
+   - Remover dropdown "Grupo de Entrega"
+   - Adicionar secao informativa de playbooks vinculados
 ```
-
----
 
 ## Impacto
 
 | Item | Status |
 |------|--------|
-| Regressao | Zero -- status sent/delivered/read continuam iguais |
-| Mensagens futuras | Status `failed` so aplica quando correto |
-| UX | Atendente ve o motivo do erro no tooltip |
-| Dados antigos | 477 mensagens existentes mantem status (correcao manual opcional) |
-| Performance | Nenhum impacto -- apenas 1 comparacao extra por status update |
+| Regressao | Zero -- caminhos 1 e 2 continuam funcionando igual |
+| Novo comportamento | Playbooks vinculados via playbook_products serao disparados |
+| UI | Menos confusao -- usuario ve playbooks vinculados no produto |
+| Banco | Nenhuma mudanca de schema |
+| Performance | +1 query apenas quando caminhos anteriores falham |
+
