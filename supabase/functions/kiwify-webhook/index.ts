@@ -1361,6 +1361,22 @@ async function handlePaidOrder(
     if (playbook) playbook_ids = [playbook.id];
   }
 
+  // FALLBACK 3: Buscar via playbook_products (tabela de vínculo direto)
+  if (playbook_ids.length === 0 && product) {
+    console.log('[kiwify-webhook] 🔍 Tentando fallback playbook_products para produto:', product.id);
+    const { data: linkedPlaybooks } = await supabase
+      .from('playbook_products')
+      .select('playbook_id, playbook:onboarding_playbooks(id, is_active)')
+      .eq('product_id', product.id);
+    
+    if (linkedPlaybooks && linkedPlaybooks.length > 0) {
+      playbook_ids = linkedPlaybooks
+        .filter((lp: any) => lp.playbook?.is_active)
+        .map((lp: any) => lp.playbook_id);
+      console.log(`[kiwify-webhook] ✅ Encontrados ${playbook_ids.length} playbook(s) via playbook_products`);
+    }
+  }
+
   // ============================================
   // 🆕 KANBAN CARD AUTO-CREATION
   // Check if product has mapping to create card automatically
@@ -1804,6 +1820,30 @@ async function handleUpsellOrder(
         const fallback_exec_id = await initiatePlaybook(supabase, playbook.id, existingContact.id);
         
         console.log('[kiwify-webhook] 🎯 Playbook de upsell iniciado (sem login):', fallback_exec_id || 'falhou');
+      }
+    }
+
+    // FALLBACK 3: Buscar via playbook_products (tabela de vínculo direto)
+    if (playbook_ids.length === 0) {
+      console.log('[kiwify-webhook] 🔍 [UPSELL] Tentando fallback playbook_products para produto:', product.id);
+      const { data: linkedPlaybooks } = await supabase
+        .from('playbook_products')
+        .select('playbook_id, playbook:onboarding_playbooks(id, is_active)')
+        .eq('product_id', product.id);
+      
+      if (linkedPlaybooks && linkedPlaybooks.length > 0) {
+        playbook_ids = linkedPlaybooks
+          .filter((lp: any) => lp.playbook?.is_active)
+          .map((lp: any) => lp.playbook_id);
+        
+        const started_upsell_executions: string[] = [];
+        for (const playbook_id of playbook_ids) {
+          const execution_id = await initiatePlaybook(supabase, playbook_id, existingContact.id);
+          if (execution_id) {
+            started_upsell_executions.push(execution_id);
+          }
+        }
+        console.log(`[kiwify-webhook] ✅ [UPSELL] ${started_upsell_executions.length}/${playbook_ids.length} playbook(s) via playbook_products`);
       }
     }
   }

@@ -30,9 +30,9 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useUpdateProduct } from "@/hooks/useProducts";
-import { useDeliveryGroups } from "@/hooks/useDeliveryGroups";
 import { useProductOffers } from "@/hooks/useProductOffers";
 import { Package, DollarSign, ArrowRightLeft } from "lucide-react";
+import { LinkedPlaybooksInfo } from "@/components/products/LinkedPlaybooksInfo";
 import { Input } from "@/components/ui/input";
 import { MoveOfferDialog } from "@/components/products/MoveOfferDialog";
 
@@ -72,7 +72,6 @@ interface ProductDialogProps {
 export function ProductDialog({ open, onOpenChange, product, initialData }: ProductDialogProps) {
   const queryClient = useQueryClient();
   const updateProduct = useUpdateProduct();
-  const { data: deliveryGroups } = useDeliveryGroups();
   const { data: offers } = useProductOffers(product?.id || null);
 
   // State for move offer dialog
@@ -318,36 +317,12 @@ export function ProductDialog({ open, onOpenChange, product, initialData }: Prod
               />
             )}
 
-            {/* Delivery Group (Playbook) */}
-            <FormField
-              control={form.control}
-              name="delivery_group_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">
-                    📋 Grupo de Entrega (Playbook)
-                  </FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um grupo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhum</SelectItem>
-                      {deliveryGroups?.filter(g => g.is_active).map((group) => (
-                        <SelectItem key={group.id} value={group.id}>
-                          {group.name} ({group.group_playbooks?.length || 0} playbooks)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription className="text-xs">
-                    Automações disparadas automaticamente na venda
-                  </FormDescription>
-                </FormItem>
-              )}
-            />
+            {/* Playbooks Vinculados (informativo) */}
+            {product && (
+              <div className="rounded-lg border p-3">
+                <LinkedPlaybooksInfo productId={product.id} />
+              </div>
+            )}
 
             {/* Switches */}
             <div className="grid grid-cols-2 gap-3">
