@@ -1,121 +1,77 @@
 
 
-# Otimizacao Enterprise do Inbox - Fase 1 (Patch Final)
+# Corrigir Loading Real e hasActiveSearch com Debounce
 
-## Resumo
+## Problema 1: Loading sempre false nos filtros dedicados
 
-Reduzir de 7+ queries simultaneas para 2-3, removendo redundancias, aplicando lazy-load por filtro, e estabilizando renders com useMemo. Inclui os 2 ajustes finais solicitados.
+Na linha 284-288, o `activeLoading` retorna `false` para mine/not_responded/sla porque so o `data` foi desestruturado dos hooks, sem o `isLoading`. Isso faz o usuario ver lista vazia por alguns frames durante o fetch.
 
-## Ajustes confirmados
+## Problema 2: hasActiveSearch sem debounce
 
-| Ajuste | Status |
-|--------|--------|
-| 1. activeItems nunca retorna null | Aplicar - sempre retornar array vazio |
-| 2. useInboxSearch so roda com hasActiveSearch | Ja OK - hook tem `enabled: debouncedSearch.trim().length >= 2` |
+Na linha 238, `hasActiveSearch` usa `filters.search` (valor imediato), mas o `useInboxSearch` usa `debouncedSearch` internamente. Isso cria um mismatch de ~300ms onde a UI entra em modo busca mas `searchResults` ainda e `undefined`, mostrando lista vazia.
 
-## Alteracoes por arquivo
+## Correcoes
 
-### 1. `src/pages/Inbox.tsx`
+### 1. `src/pages/Inbox.tsx` (linhas 119-121) — Guardar objeto completo dos hooks
 
-**A) Remover imports e chamadas (linhas 4, 113, 118):**
-- Remover `import { useConversations }` (linha 4)
-- Remover `const { data: rawInboxItems } = useInboxView()` (linha 113)
-- Remover `const { data: conversations, isLoading: convLoading } = useConversations()` (linha 118)
-
-**B) Estabilizar filtros com useMemo (linhas 94-106):**
-
-Substituir objeto literal por useMemo:
-
+Antes:
 ```typescript
-const inboxViewFilters = useMemo<InboxViewFiltersType>(() => ({
-  dateRange: filters.dateRange,
-  channels: filters.channels,
-  status: filters.status,
-  assignedTo: filters.assignedTo,
-  search: filters.search,
-  slaStatus: filters.slaExpired ? 'critical' : undefined,
-  hasAudio: filters.hasAudio,
-  hasAttachments: filters.hasAttachments,
-  aiMode: filters.aiMode as InboxViewFiltersType['aiMode'],
-  department: departmentFilter || undefined,
-  tagId: tagFilter || undefined,
-}), [filters.dateRange, filters.channels, filters.status, filters.assignedTo,
-     filters.search, filters.slaExpired, filters.hasAudio, filters.hasAttachments,
-     filters.aiMode, departmentFilter, tagFilter]);
+const { data: myNotRespondedItems } = useMyNotRespondedInboxItems(...)
+const { data: myInboxItems } = useMyInboxItems(...)
+const { data: slaExceededItems } = useSlaExceededItems(...)
 ```
 
-**C) Lazy-load hooks dedicados (linhas 121-127):**
-
-Substituir chamadas incondicionais por:
-
+Depois:
 ```typescript
-const isMine = filter === "mine";
-const isNotResponded = filter === "not_responded";
-const isSla = filter === "sla";
-
-const { data: myNotRespondedItems } = useMyNotRespondedInboxItems({ enabled: isNotResponded, refetchInterval: 60_000 });
-const { data: myInboxItems } = useMyInboxItems({ enabled: isMine, refetchInterval: 60_000 });
-const { data: slaExceededItems } = useSlaExceededItems({ enabled: isSla, refetchInterval: 60_000 });
+const myNotRespondedQuery = useMyNotRespondedInboxItems(...)
+const myInboxQuery = useMyInboxItems(...)
+const slaQuery = useSlaExceededItems(...)
 ```
 
-**D) Substituir `filteredConversations` inteiro (linhas 256-385):**
+### 2. `src/pages/Inbox.tsx` (linha 124) — Importar useDebouncedValue e criar hasActiveSearch correto
 
-Logica simplificada sem `fullConversations`, sem `rawInboxItems`, sem `getConversationFromItem`:
+Adicionar import de `useDebouncedValue` e derivar `hasActiveSearch` do valor debounced:
 
+```typescript
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+// ...
+const debouncedSearch = useDebouncedValue(filters.search || "", 300);
+```
+
+### 3. `src/pages/Inbox.tsx` (linha 238) — hasActiveSearch usa debounce
+
+Antes:
 ```typescript
 const hasActiveSearch = !!(filters.search && filters.search.trim().length >= 2);
-
-const activeItems = useMemo(() => {
-  if (hasActiveSearch) return searchResults ?? [];
-  if (isNotResponded) return myNotRespondedItems ?? [];
-  if (isMine) return myInboxItems ?? [];
-  if (isSla) return slaExceededItems ?? [];
-  return inboxItems ?? [];
-}, [hasActiveSearch, searchResults, isNotResponded, myNotRespondedItems,
-    isMine, myInboxItems, isSla, slaExceededItems, inboxItems]);
-
-const filteredConversations = useMemo(() => {
-  let result = activeItems.map(inboxItemToConversation);
-
-  // Department filter
-  if (departmentFilter) {
-    result = result.filter(c => c.department === departmentFilter);
-  }
-
-  // Filter by URL param
-  switch (filter) {
-    case "ai_queue":
-      return result.filter(c => c.ai_mode === 'autopilot' && c.status !== 'closed');
-    case "human_queue":
-      if (role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager') {
-        return result.filter(c => c.ai_mode !== 'autopilot' && c.status !== 'closed');
-      }
-      if (departmentFilter) {
-        return result.filter(c => c.ai_mode !== 'autopilot' && c.status !== 'closed');
-      }
-      return result.filter(c => c.ai_mode !== 'autopilot' && c.assigned_to === user?.id && c.status !== 'closed');
-    case "mine":
-      return result.filter(c => c.assigned_to === user?.id && c.status !== 'closed');
-    case "not_responded":
-    case "sla":
-      return result; // Ja vem filtrado do hook dedicado
-    case "unassigned":
-      return result.filter(c => !c.assigned_to && c.status !== 'closed');
-    case "archived":
-      return result.filter(c => c.status === "closed");
-    default:
-      return result.filter(c => c.status !== 'closed');
-  }
-}, [activeItems, inboxItemToConversation, departmentFilter, filter, role, user?.id]);
 ```
 
-**E) Loading do activeQuery (linhas 700, 613):**
+Depois:
+```typescript
+const hasActiveSearch = debouncedSearch.trim().length >= 2;
+```
 
-Substituir `inboxLoading || convLoading || searchLoading || ...` por:
+### 4. `src/pages/Inbox.tsx` (linhas 240-247) — activeItems usa queries completas
 
+Antes:
+```typescript
+if (isNotResponded) return myNotRespondedItems ?? [];
+if (isMine) return myInboxItems ?? [];
+if (isSla) return slaExceededItems ?? [];
+```
+
+Depois:
+```typescript
+if (isNotResponded) return myNotRespondedQuery.data ?? [];
+if (isMine) return myInboxQuery.data ?? [];
+if (isSla) return slaQuery.data ?? [];
+```
+
+### 5. `src/pages/Inbox.tsx` (linhas 284-290) — activeLoading com isLoading real
+
+Antes:
 ```typescript
 const activeLoading = hasActiveSearch ? searchLoading :
-  isMine ? false : // useMyInboxItems nao tem isLoading exposto no destructuring atual
+  isMine ? false :
   isNotResponded ? false :
   isSla ? false :
   inboxLoading;
@@ -123,73 +79,39 @@ const activeLoading = hasActiveSearch ? searchLoading :
 const isPageLoading = activeLoading || searchLoading;
 ```
 
-Usar `isPageLoading` nos dois `ConversationList` (desktop linha 700, mobile linha 613). Remover `convLoading` e `filteredConversations === null`.
-
-**F) Remover `getConversationFromItem` (linhas 251-254)** - nao mais usado.
-
-**G) Remover `inboxItemIds` (linhas 157-160)** - nao mais usado (era para rawInboxItems).
-
-**H) Ajustar `displayTotalCount` (linha 511):**
-
-Antes: `filteredConversations.length` (podia ser null)
-Depois: `filteredConversations?.length ?? 0`
-
-### 2. `src/hooks/useMyInboxItems.tsx`
-
-Aceitar opts parametrizavel:
-
+Depois:
 ```typescript
-export function useMyInboxItems(opts?: { enabled?: boolean; refetchInterval?: number }) {
-  const { user } = useAuth();
-  const enabled = opts?.enabled ?? true;
-  const refetchInterval = opts?.refetchInterval ?? 30_000;
+const activeLoading = hasActiveSearch ? searchLoading :
+  isNotResponded ? myNotRespondedQuery.isLoading :
+  isMine ? myInboxQuery.isLoading :
+  isSla ? slaQuery.isLoading :
+  inboxLoading;
 
-  return useQuery({
-    queryKey: [...QUERY_KEY, user?.id],
-    queryFn: async (): Promise<InboxViewItem[]> => { /* mesma queryFn */ },
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-    refetchInterval,
-    enabled: enabled && !!user?.id,
-  });
-}
+const isPageLoading = activeLoading;
 ```
 
-### 3. `src/hooks/useMyNotRespondedInboxItems.tsx`
+### 6. (Bonus) Adicionar `general_manager` no human_queue (linha 262)
 
-Mesmo padrao: aceitar `opts?: { enabled?: boolean; refetchInterval?: number }`.
-
-### 4. `src/hooks/useSlaExceededItems.tsx`
-
-Mesmo padrao: aceitar `opts?: { enabled?: boolean; refetchInterval?: number }`.
-
-### 5. `src/hooks/useInboxView.tsx` (useInboxCounts, linhas 656-657)
-
-```text
-Antes: staleTime: 15_000, refetchInterval: 30_000
-Depois: staleTime: 30_000, refetchInterval: 60_000
+Antes:
+```typescript
+if (role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager') {
 ```
 
-## Resultado esperado
+Depois:
+```typescript
+if (role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager' || role === 'general_manager') {
+```
 
-| Metrica | Antes | Depois |
-|---------|-------|--------|
-| Queries ao abrir | 7+ | 2 (inbox_view + counts) |
-| Queries com filtro ativo | 7+ | 3 (+ 1 dedicado) |
-| Canais realtime | 4 | 3 |
-| Rows transferidos | ~5500 + JOINs | ~500 |
-| Polling/min | ~12 | ~3-4 |
-| Re-renders | Alto (filters instavel) | Reduzido (useMemo) |
-| null safety | activeItems podia ser null | Sempre array |
+## Resultado
 
-## Checklist de seguranca
+| Fix | Antes | Depois |
+|-----|-------|--------|
+| Loading nos filtros | Sempre false (lista vazia por frames) | isLoading real do hook ativo |
+| hasActiveSearch | Imediato (mismatch de 300ms) | Sincronizado com debounce do hook |
+| isPageLoading | Redundante (activeLoading OR searchLoading) | Limpo (so activeLoading) |
+| human_queue ACL | Faltava general_manager | Incluido |
 
-- activeItems sempre retorna array (nunca null)
-- useInboxSearch ja tem enabled com debounce
-- filtros estabilizados com useMemo
-- Loading vem do activeQuery ativo
-- Bulk actions continuam usando orderedConversations
-- Busca continua via useInboxSearch (sem mudanca)
-- Realtime: 3 canais (sem duplicacao)
-- orderedConversations usa filteredConversations (que agora e sempre array)
+## Arquivos modificados
+
+1. `src/pages/Inbox.tsx` — 6 pontos de ajuste (import, hooks, hasActiveSearch, activeItems, activeLoading, human_queue ACL)
+
