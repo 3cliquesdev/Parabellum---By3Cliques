@@ -2461,6 +2461,56 @@ Como posso ajudar você hoje?`;
               .eq('id', contact?.id)
               .maybeSingle();
 
+            let consultantId = contactConsultantData?.consultant_id || null;
+
+            // 🆕 Se não tem consultor pelo contato, buscar pelo email coletado no fluxo
+            if (!consultantId) {
+              let emailToSearch: string | null = null;
+
+              // 1. Tentar do collectedData do fluxo
+              const collectedEmail = flowResult.collectedData?.email;
+              if (collectedEmail && typeof collectedEmail === 'string') {
+                emailToSearch = collectedEmail.toLowerCase().trim();
+                console.log('[ai-autopilot-chat] 📧 Email encontrado no collectedData:', emailToSearch);
+              }
+
+              // 2. Fallback: buscar email nas mensagens recentes
+              if (!emailToSearch) {
+                const { data: recentMsgs } = await supabaseClient
+                  .from('messages')
+                  .select('content')
+                  .eq('conversation_id', conversationId)
+                  .eq('sender_type', 'contact')
+                  .order('created_at', { ascending: false })
+                  .limit(10);
+
+                const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+                for (const msg of recentMsgs || []) {
+                  const match = msg.content?.match(emailRegex);
+                  if (match) {
+                    emailToSearch = match[0].toLowerCase();
+                    console.log('[ai-autopilot-chat] 📧 Email encontrado nas mensagens:', emailToSearch);
+                    break;
+                  }
+                }
+              }
+
+              // 3. Buscar contato com esse email que tenha consultor
+              if (emailToSearch) {
+                const { data: emailContact } = await supabaseClient
+                  .from('contacts')
+                  .select('consultant_id')
+                  .ilike('email', emailToSearch)
+                  .not('consultant_id', 'is', null)
+                  .maybeSingle();
+
+                if (emailContact?.consultant_id) {
+                  consultantId = emailContact.consultant_id;
+                  console.log('[ai-autopilot-chat] 👤 Consultor encontrado pelo email:', emailToSearch, '→', consultantId);
+                }
+              }
+            }
+
             const transferUpdate: Record<string, unknown> = {
               ai_mode: 'waiting_human',
               handoff_executed_at: handoffTimestamp,
@@ -2468,10 +2518,10 @@ Como posso ajudar você hoje?`;
               department: flowResult.departmentId,
             };
 
-            if (contactConsultantData?.consultant_id) {
-              transferUpdate.assigned_to = contactConsultantData.consultant_id;
+            if (consultantId) {
+              transferUpdate.assigned_to = consultantId;
               transferUpdate.ai_mode = 'copilot';
-              console.log('[ai-autopilot-chat] 👤 Atribuindo ao consultor do contato:', contactConsultantData.consultant_id);
+              console.log('[ai-autopilot-chat] 👤 Atribuindo ao consultor:', consultantId);
             }
             
             const { error: handoffUpdateError } = await supabaseClient
@@ -2483,12 +2533,12 @@ Como posso ajudar você hoje?`;
               console.error('[ai-autopilot-chat] ❌ Erro ao marcar handoff:', handoffUpdateError);
             } else {
               console.log('[ai-autopilot-chat] ✅ Conversa marcada com department:', flowResult.departmentId,
-                'ai_mode:', contactConsultantData?.consultant_id ? 'copilot' : 'waiting_human',
-                'assigned_to:', contactConsultantData?.consultant_id || 'pool');
+                'ai_mode:', consultantId ? 'copilot' : 'waiting_human',
+                'assigned_to:', consultantId || 'pool');
             }
             
             // Chamar route-conversation SOMENTE se NÃO atribuiu ao consultor
-            if (!contactConsultantData?.consultant_id) {
+            if (!consultantId) {
               try {
                 const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
                   body: { 

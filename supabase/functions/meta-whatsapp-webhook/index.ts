@@ -757,10 +757,60 @@ serve(async (req) => {
                     .eq('id', contact.id)
                     .maybeSingle();
 
-                  if (contactConsultantData?.consultant_id) {
-                    updateData.assigned_to = contactConsultantData.consultant_id;
+                  let consultantId = contactConsultantData?.consultant_id || null;
+
+                  // 🆕 Se não tem consultor pelo contato, buscar pelo email coletado no fluxo
+                  if (!consultantId) {
+                    let emailToSearch: string | null = null;
+
+                    // 1. Tentar do collectedData do fluxo
+                    const collectedEmail = (flowData as any).collectedData?.email;
+                    if (collectedEmail && typeof collectedEmail === 'string') {
+                      emailToSearch = collectedEmail.toLowerCase().trim();
+                      console.log("[meta-whatsapp-webhook] 📧 Email encontrado no collectedData:", emailToSearch);
+                    }
+
+                    // 2. Fallback: buscar email nas mensagens recentes
+                    if (!emailToSearch) {
+                      const { data: recentMsgs } = await supabase
+                        .from('messages')
+                        .select('content')
+                        .eq('conversation_id', conversation.id)
+                        .eq('sender_type', 'contact')
+                        .order('created_at', { ascending: false })
+                        .limit(10);
+
+                      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+                      for (const msg of recentMsgs || []) {
+                        const match = msg.content?.match(emailRegex);
+                        if (match) {
+                          emailToSearch = match[0].toLowerCase();
+                          console.log("[meta-whatsapp-webhook] 📧 Email encontrado nas mensagens:", emailToSearch);
+                          break;
+                        }
+                      }
+                    }
+
+                    // 3. Buscar contato com esse email que tenha consultor
+                    if (emailToSearch) {
+                      const { data: emailContact } = await supabase
+                        .from('contacts')
+                        .select('consultant_id')
+                        .ilike('email', emailToSearch)
+                        .not('consultant_id', 'is', null)
+                        .maybeSingle();
+
+                      if (emailContact?.consultant_id) {
+                        consultantId = emailContact.consultant_id;
+                        console.log("[meta-whatsapp-webhook] 👤 Consultor encontrado pelo email:", emailToSearch, "→", consultantId);
+                      }
+                    }
+                  }
+
+                  if (consultantId) {
+                    updateData.assigned_to = consultantId;
                     updateData.ai_mode = 'copilot';
-                    console.log("[meta-whatsapp-webhook] 👤 Atribuindo ao consultor do contato:", contactConsultantData.consultant_id);
+                    console.log("[meta-whatsapp-webhook] 👤 Atribuindo ao consultor:", consultantId);
                   }
                   
                   const { error: updateError } = await supabase
@@ -772,8 +822,8 @@ serve(async (req) => {
                     console.error("[meta-whatsapp-webhook] ❌ Error executing transfer:", updateError);
                   } else {
                     console.log("[meta-whatsapp-webhook] ✅ Transfer executed → department:", flowData.departmentId, 
-                      "ai_mode:", contactConsultantData?.consultant_id ? 'copilot' : 'waiting_human',
-                      "assigned_to:", contactConsultantData?.consultant_id || 'pool');
+                      "ai_mode:", consultantId ? 'copilot' : 'waiting_human',
+                      "assigned_to:", consultantId || 'pool');
                   }
                 }
                 
