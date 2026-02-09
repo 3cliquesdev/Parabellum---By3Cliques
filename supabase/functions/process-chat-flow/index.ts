@@ -595,6 +595,24 @@ serve(async (req) => {
 
       nextNode = findNextNode(flowDef, currentNode, path);
 
+      // 🆕 Auto-travessia de nós sem conteúdo (condition, input, start)
+      let traversalSteps = 0;
+      const MAX_TRAVERSAL = 20;
+
+      while (nextNode && ['condition', 'input', 'start'].includes(nextNode.type) && traversalSteps < MAX_TRAVERSAL) {
+        traversalSteps++;
+        console.log(`[process-chat-flow] ⏩ Auto-traverse[${traversalSteps}] ${nextNode.type} (${nextNode.id})`);
+        
+        if (nextNode.type === 'condition') {
+          const condResult = evaluateCondition(nextNode.data, collectedData, userMessage);
+          const condPath = condResult ? 'true' : 'false';
+          console.log(`[process-chat-flow] 🔀 Condition ${nextNode.id}: ${condResult} → path ${condPath}`);
+          nextNode = findNextNode(flowDef, nextNode, condPath);
+        } else {
+          nextNode = findNextNode(flowDef, nextNode);
+        }
+      }
+
       // 🆕 Handler especial para fetch_order
       if (nextNode?.type === 'fetch_order') {
         console.log('[process-chat-flow] 📦 Processing fetch_order node');
