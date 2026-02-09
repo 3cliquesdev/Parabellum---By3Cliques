@@ -1,56 +1,75 @@
 
 
-# Trava de Protecao v1.0 — Routing de Cliente Retornante + Persistencia de Consultor
+# Unificar Todos os Remetentes para contato@mail.3cliques.net
 
-## Objetivo
+## Resumo
 
-Criar marcadores de protecao ("travas") nos dois blocos criticos do webhook para que qualquer desenvolvedor (humano ou IA) saiba que essas secoes **nao podem ser alteradas** sem aprovacao explicita.
+Trocar **todos** os enderecos de email `@parabellum.work` (e variacoes como `@seuarmazemdrop.parabellum.work`) para `contato@mail.3cliques.net` em todas as Edge Functions e no frontend. Isso garante que todos os emails saiam do dominio verificado, reduzindo drasticamente o risco de spam.
 
-## O que sera feito
+## Arquivos e mudancas
 
-### 1. Bloco de comentario de protecao nos 2 trechos criticos
+### Edge Functions (11 arquivos)
 
-Adicionar um header de protecao padronizado antes de cada bloco, com:
-- Identificador da trava e versao
-- Descricao do comportamento protegido
-- Regra de que alteracoes precisam de aprovacao
-- Data de criacao
+| Arquivo | De | Para |
+|---------|-----|------|
+| `send-email/index.ts` | `contato@parabellum.work` | `contato@mail.3cliques.net` |
+| `send-ticket-email-reply/index.ts` | `suporte@parabellum.work` | `contato@mail.3cliques.net` |
+| `send-quote-email/index.ts` | `comercial@parabellum.work` | `contato@mail.3cliques.net` |
+| `send-ticket-notification/index.ts` | `contato@seuarmazemdrop.parabellum.work` | `contato@mail.3cliques.net` |
+| `get-email-template/index.ts` | `contato@parabellum.work` | `contato@mail.3cliques.net` |
+| `send-triggered-email/index.ts` | `contato@parabellum.work` | `contato@mail.3cliques.net` |
+| `send-scheduled-reports/index.ts` | `sistema@parabellum.work` | `contato@mail.3cliques.net` |
+| `send-verification-code/index.ts` | `contato@seuarmazemdrop.parabellum.work` e `sistema@seuarmazemdrop.parabellum.work` | `contato@mail.3cliques.net` |
+| `resend-welcome-email/index.ts` | `contato@seuarmazemdrop.parabellum.work` | `contato@mail.3cliques.net` |
+| `test-email-send/index.ts` | `noreply@parabellum.work` | `contato@mail.3cliques.net` |
+| `create-user/index.ts` | `sistema@parabellum.work` + links `parabellum.work` | `contato@mail.3cliques.net` + links atualizados |
 
-### 2. Trechos protegidos
+### Edge Function de Playbook (1 arquivo)
 
-**Trava ROUTING-LOCK v1.0** (linhas ~471-498)
-- Busca `consultant_id` no contato
-- Se existe, cria conversa em `copilot` com `assigned_to` = consultor
-- Se nao existe, cria em `autopilot` (fluxo normal)
+| Arquivo | Mudanca |
+|---------|---------|
+| `process-playbook-queue/index.ts` | Trocar prefixo `[TESTE]` para `(Teste)` no assunto — menos agressivo para filtros de spam |
 
-**Trava TRANSFER-PERSIST-LOCK v1.0** (linhas ~765-853)
-- Busca consultor por contato, email coletado, ou regex nas mensagens
-- Atribui `assigned_to` e `ai_mode = copilot`
-- Persiste `consultant_id` no contato para routing futuro
-- Executa transferencia de departamento
+### Frontend (1 arquivo)
 
-### 3. Formato do comentario de trava
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/components/settings/EmailSendersCard.tsx` | Trocar placeholder de `suporte@parabellum.work` para `contato@mail.3cliques.net` |
 
-```text
-// ═══════════════════════════════════════════════════════════════
-// 🔒 TRAVA [NOME] v1.0 — [DATA]
-// PROTEGIDO: [descricao do comportamento]
-// ⚠️  NAO ALTERAR sem aprovacao explicita do responsavel.
-// Qualquer mudanca deve: (1) ser justificada, (2) testada, (3) versionada.
-// ═══════════════════════════════════════════════════════════════
-```
+## Nomes de remetente
+
+Todos os `from_name` hardcoded (como "PARABELLUM Security", "Seu Armazem Drop Comercial", etc.) serao unificados para `3Cliques` nos fallbacks, ja que o banco de dados (`email_senders`) e quem define o nome real. O fallback so e usado se a leitura do banco falhar.
+
+## Impacto
+
+- Todos os emails passam a sair de `contato@mail.3cliques.net` (dominio verificado)
+- Emails de teste com prefixo mais suave `(Teste)` ao inves de `[TESTE]`
+- Zero mudanca de logica de negocio
+- Todas as 11 edge functions precisam redeploy
 
 ## Secao Tecnica
 
-### Arquivo modificado
-- `supabase/functions/meta-whatsapp-webhook/index.ts`
+### Padrao de mudanca em cada arquivo
 
-### Mudancas
-- Adicionar bloco de comentario antes da linha ~471 (routing de cliente retornante)
-- Adicionar bloco de comentario antes da linha ~765 (transferencia com persistencia)
-- Zero mudanca de logica — apenas comentarios de protecao
+```typescript
+// ANTES (exemplo)
+let senderEmail = 'contato@parabellum.work';
+let senderName = 'Seu Armazém Drop';
 
-### Impacto
-- Nenhum impacto funcional (somente comentarios)
-- Nenhuma regressao possivel
-- Serve como documentacao viva e alerta para futuras edicoes
+// DEPOIS
+let senderEmail = 'contato@mail.3cliques.net';
+let senderName = '3Cliques';
+```
+
+### Mudanca no prefixo de teste
+
+```typescript
+// ANTES
+? (subject.startsWith('[TESTE]') ? subject : `[TESTE] ${subject}`)
+
+// DEPOIS  
+? (subject.startsWith('(Teste)') ? subject : `(Teste) ${subject}`)
+```
+
+### Recomendacao externa
+- Confirmar no Resend (resend.com/domains) que SPF, DKIM e DMARC estao verdes para `mail.3cliques.net`
