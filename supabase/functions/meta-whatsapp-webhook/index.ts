@@ -467,6 +467,15 @@ serve(async (req) => {
                 .single();
 
               if (!conversation) {
+                // Verificar se contato tem consultor (cliente recorrente)
+                const { data: contactData } = await supabase
+                  .from('contacts')
+                  .select('consultant_id')
+                  .eq('id', contact.id)
+                  .maybeSingle();
+
+                const hasConsultant = !!contactData?.consultant_id;
+
                 // Criar nova conversa
                 const { data: newConv } = await supabase
                   .from("conversations")
@@ -474,7 +483,8 @@ serve(async (req) => {
                     contact_id: contact.id,
                     channel: "whatsapp",
                     status: "open",
-                    ai_mode: "autopilot",
+                    ai_mode: hasConsultant ? "copilot" : "autopilot",
+                    assigned_to: hasConsultant ? contactData.consultant_id : null,
                     whatsapp_provider: "meta",
                     whatsapp_meta_instance_id: instance.id,
                   })
@@ -482,6 +492,10 @@ serve(async (req) => {
                   .single();
 
                 conversation = newConv;
+
+                if (hasConsultant) {
+                  console.log("[meta-whatsapp-webhook] 👤 Cliente recorrente → direto para consultor:", contactData.consultant_id);
+                }
                 console.log("[meta-whatsapp-webhook] 💬 New conversation created:", conversation?.id);
               } else {
                 // Migrar de Evolution para Meta se necessário
