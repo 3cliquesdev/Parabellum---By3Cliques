@@ -1,60 +1,88 @@
 
-# Corrigir travamento: Auto-travessia de nos de condicao no fluxo ativo
+# Redirecionar cliente recorrente direto para o consultor
 
 ## Problema
 
-Quando o usuario responde ao no `ask_email` com seu email, o motor de fluxos:
-1. Salva o email no `collectedData` (ok)
-2. Busca o proximo no → encontra o no `condition` (ok)
-3. **Cai no handler generico (linha 740)** que salva o no `condition` como estado atual e retorna uma mensagem vazia
+Quando um cliente que ja passou pelo fluxo e foi atendido por um consultor volta a mandar mensagem:
 
-O fluxo trava porque o no de condicao nao tem conteudo para exibir. Ele deveria ser avaliado automaticamente e o fluxo deveria continuar ate encontrar um no de conteudo (message, transfer, ai_response, ask_*).
-
-A auto-travessia ja existe para o inicio do fluxo (travessia inicial) e apos nos `fetch_order`, mas **nao existe no caminho generico** apos nos ask_*.
+1. A conversa anterior esta `closed`
+2. Uma nova conversa e criada com `ai_mode: autopilot` e `assigned_to: null`
+3. O fluxo roda de novo do zero - o cliente precisa refazer tudo
 
 ## Solucao
 
-Adicionar um loop de auto-travessia apos a linha 596 em `supabase/functions/process-chat-flow/index.ts`. Depois de encontrar o `nextNode`, se ele for um no sem conteudo (`condition`, `input`, `start`), avaliar automaticamente e continuar ate chegar a um no de conteudo.
+Na criacao de novas conversas no `meta-whatsapp-webhook`, verificar se o contato ja tem `consultant_id` definido. Se tiver, criar a conversa ja atribuida ao consultor:
+
+- `assigned_to = contact.consultant_id`
+- `ai_mode = 'copilot'`
+
+A protecao existente no `process-chat-flow` (linha 317) ja bloqueia o fluxo quando `ai_mode = copilot`, entao o cliente vai direto para o consultor sem passar pelo fluxo novamente.
 
 ## Alteracao
 
-### `supabase/functions/process-chat-flow/index.ts` (apos linha 596)
+### `supabase/functions/meta-whatsapp-webhook/index.ts` (~linha 469-485)
 
-Inserir um loop de travessia automatica:
+Antes de criar a nova conversa, verificar o `consultant_id` do contato:
+
+```text
+Conversa nao encontrada (nova conversa)
+  → Buscar consultant_id do contato
+  → Se tem consultor:
+      criar conversa com assigned_to = consultant_id, ai_mode = 'copilot'
+  → Se nao tem consultor:
+      criar conversa normal com ai_mode = 'autopilot' (comportamento atual)
+```
+
+Trecho conceitual:
 
 ```typescript
-// Auto-travessia de nos sem conteudo (condition, input, start)
-let traversalSteps = 0;
-const MAX_TRAVERSAL = 20;
+// Verificar se contato tem consultor (cliente recorrente)
+const { data: contactData } = await supabase
+  .from('contacts')
+  .select('consultant_id')
+  .eq('id', contact.id)
+  .maybeSingle();
 
-while (nextNode && ['condition', 'input', 'start'].includes(nextNode.type) && traversalSteps < MAX_TRAVERSAL) {
-  traversalSteps++;
-  console.log(`[process-chat-flow] ⏩ Auto-traverse[${traversalSteps}] ${nextNode.type} (${nextNode.id})`);
-  
-  if (nextNode.type === 'condition') {
-    const condResult = evaluateCondition(nextNode.data, collectedData, userMessage);
-    const condPath = condResult ? 'true' : 'false';
-    console.log(`[process-chat-flow] 🔀 Condition ${nextNode.id}: ${condResult} → path ${condPath}`);
-    nextNode = findNextNode(flowDef, nextNode, condPath);
-  } else {
-    nextNode = findNextNode(flowDef, nextNode);
-  }
+const hasConsultant = !!contactData?.consultant_id;
+
+const { data: newConv } = await supabase
+  .from("conversations")
+  .insert({
+    contact_id: contact.id,
+    channel: "whatsapp",
+    status: "open",
+    ai_mode: hasConsultant ? "copilot" : "autopilot",
+    assigned_to: hasConsultant ? contactData.consultant_id : null,
+    whatsapp_provider: "meta",
+    whatsapp_meta_instance_id: instance.id,
+  })
+  .select(...)
+  .single();
+
+if (hasConsultant) {
+  console.log("[meta-whatsapp-webhook] 👤 Cliente recorrente → direto para consultor:", contactData.consultant_id);
 }
 ```
 
-Isso garante que apos coletar o email, a condicao `has_data(email)` sera avaliada imediatamente, e o fluxo continuara para o no de `transfer` ou `ai_response` sem precisar de outra mensagem do usuario.
+## Fluxo esperado
 
-## Nenhuma outra alteracao
+```text
+Cliente recorrente (ja tem consultant_id):
+  Msg → nova conversa com assigned_to=consultor, ai_mode=copilot
+    → process-chat-flow detecta copilot → skipAutoResponse
+    → Conversa aparece na caixa do consultor
 
-- Frontend: sem mudanca
-- Outros edge functions: sem mudanca
-- Fluxos existentes: beneficiados automaticamente
+Cliente novo (sem consultant_id):
+  Msg → nova conversa com ai_mode=autopilot
+    → Fluxo roda normalmente (comportamento atual)
+```
 
 ## Impacto
 
 | Item | Status |
 |------|--------|
-| Regressao | Zero - apenas adiciona travessia que ja existe em outros caminhos |
-| Fluxos existentes | Beneficiados - condicoes apos ask_* agora funcionam |
-| Performance | Negligivel - loop limitado a 20 iteracoes |
-| fetch_order | Handler especifico continua funcionando (pode ser simplificado no futuro) |
+| Regressao | Zero - apenas adiciona checagem na criacao de conversa |
+| Clientes novos | Sem alteracao - fluxo roda normal |
+| Clientes recorrentes | Direto para o consultor |
+| process-chat-flow | Sem alteracao - protecao existente ja cuida |
+| Performance | 1 query adicional apenas ao criar nova conversa |
