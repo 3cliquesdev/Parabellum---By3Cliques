@@ -31,6 +31,8 @@ export function useManagerPortfolioClients() {
   const { user } = useAuth();
   const { role, isAdmin, isManager, isCSManager } = useUserRole();
 
+  const isGeneralManager = role === "general_manager";
+
   return useQuery({
     queryKey: ["manager-portfolio-clients", user?.id, role],
     queryFn: async () => {
@@ -38,141 +40,144 @@ export function useManagerPortfolioClients() {
 
       console.log("📊 Fetching manager portfolio clients...");
 
-      // For managers, get their department
-      let departmentFilter = null;
-      if (isManager || isCSManager) {
+      let contacts: any[] = [];
+      let consultantsMap = new Map<string, { full_name: string | null; avatar_url: string | null }>();
+
+      if (isAdmin || isGeneralManager) {
+        // Admin: fetch ALL customers with a consultant
+        const { data, error } = await supabase
+          .from("contacts")
+          .select("*")
+          .eq("status", "customer")
+          .not("consultant_id", "is", null)
+          .order("created_at", { ascending: false });
+
+        if (error) { console.error("❌ Error fetching contacts:", error); throw error; }
+        contacts = data || [];
+
+        // Fetch consultant profiles for name/avatar mapping
+        const uniqueConsultantIds = [...new Set(contacts.map(c => c.consultant_id).filter(Boolean))];
+        if (uniqueConsultantIds.length > 0) {
+          const { data: consultants } = await supabase
+            .from("profiles")
+            .select("id, full_name, avatar_url")
+            .in("id", uniqueConsultantIds);
+
+          consultants?.forEach(c => consultantsMap.set(c.id, { full_name: c.full_name, avatar_url: c.avatar_url }));
+        }
+      } else {
+        // Manager/cs_manager: filter by department
         const { data: profile } = await supabase
           .from("profiles")
           .select("department")
           .eq("id", user.id)
           .single();
-        
-        departmentFilter = profile?.department;
+
+        const dept = profile?.department;
+        if (!dept) { console.log("⚠️ No department found"); return []; }
+
+        const { data: consultants, error: cErr } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url")
+          .eq("department", dept);
+
+        if (cErr) { console.error("❌ Error fetching consultants:", cErr); throw cErr; }
+
+        const consultantIds = consultants?.map(c => c.id) || [];
+        if (consultantIds.length === 0) return [];
+
+        consultants?.forEach(c => consultantsMap.set(c.id, { full_name: c.full_name, avatar_url: c.avatar_url }));
+
+        const { data, error } = await supabase
+          .from("contacts")
+          .select("*")
+          .eq("status", "customer")
+          .in("consultant_id", consultantIds)
+          .order("created_at", { ascending: false });
+
+        if (error) { console.error("❌ Error fetching contacts:", error); throw error; }
+        contacts = data || [];
       }
 
-      // Fetch all consultants in the manager's department (or all for admins)
-      let consultantsQuery = supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url, department")
-        .or("id.in.(select consultant_id from contacts where consultant_id is not null)");
+      if (contacts.length === 0) return [];
 
-      if (departmentFilter && !isAdmin) {
-        consultantsQuery = consultantsQuery.eq("department", departmentFilter);
+      console.log(`✅ Found ${contacts.length} customers`);
+
+      // Batch fetch all journey steps for all contacts
+      const contactIds = contacts.map(c => c.id);
+      const { data: allSteps } = await supabase
+        .from("customer_journey_steps")
+        .select("contact_id, completed, is_critical")
+        .in("contact_id", contactIds);
+
+      const stepsMap = new Map<string, any[]>();
+      allSteps?.forEach(s => {
+        if (!stepsMap.has(s.contact_id)) stepsMap.set(s.contact_id, []);
+        stepsMap.get(s.contact_id)!.push(s);
+      });
+
+      // Batch fetch seller profiles
+      const sellerIds = [...new Set(contacts.map(c => c.assigned_to).filter(Boolean))];
+      const sellersMap = new Map<string, { full_name: string | null; avatar_url: string | null }>();
+      if (sellerIds.length > 0) {
+        const { data: sellers } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url")
+          .in("id", sellerIds);
+
+        sellers?.forEach(s => sellersMap.set(s.id, { full_name: s.full_name, avatar_url: s.avatar_url }));
       }
 
-      const { data: consultants, error: consultantsError } = await consultantsQuery;
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      if (consultantsError) {
-        console.error("❌ Error fetching consultants:", consultantsError);
-        throw consultantsError;
-      }
+      const clientsWithDetails: ManagerPortfolioClient[] = contacts.map((contact) => {
+        const steps = stepsMap.get(contact.id) || [];
+        const total_steps = steps.length;
+        const completed_steps = steps.filter(s => s.completed).length;
+        const critical_pending = steps.filter(s => s.is_critical && !s.completed).length;
+        const onboarding_progress = total_steps > 0 ? (completed_steps / total_steps) * 100 : 0;
 
-      const consultantIds = consultants?.map(c => c.id) || [];
+        const is_new_client = new Date(contact.created_at) >= sevenDaysAgo;
 
-      if (consultantIds.length === 0) {
-        console.log("⚠️ No consultants found in department");
-        return [];
-      }
+        let health_score: "green" | "yellow" | "red" = "green";
+        if (contact.last_contact_date) {
+          const daysSince = Math.floor((Date.now() - new Date(contact.last_contact_date).getTime()) / (1000 * 60 * 60 * 24));
+          if (daysSince > 30) health_score = "red";
+          else if (daysSince > 15) health_score = "yellow";
+        }
 
-      // Fetch all customers assigned to these consultants
-      const { data: contacts, error: contactsError } = await supabase
-        .from("contacts")
-        .select("*")
-        .eq("status", "customer")
-        .in("consultant_id", consultantIds)
-        .order("created_at", { ascending: false });
+        const consultant = consultantsMap.get(contact.consultant_id);
+        const seller = contact.assigned_to ? sellersMap.get(contact.assigned_to) : null;
 
-      if (contactsError) {
-        console.error("❌ Error fetching contacts:", contactsError);
-        throw contactsError;
-      }
-
-      if (!contacts || contacts.length === 0) {
-        console.log("⚠️ No customers found for consultants");
-        return [];
-      }
-
-      console.log(`✅ Found ${contacts.length} customers across ${consultants.length} consultants`);
-
-      // Process each contact with journey steps and consultant info
-      const clientsWithDetails = await Promise.all(
-        contacts.map(async (contact) => {
-          // Fetch journey steps for onboarding progress
-          const { data: steps } = await supabase
-            .from("customer_journey_steps")
-            .select("*")
-            .eq("contact_id", contact.id);
-
-          const total_steps = steps?.length || 0;
-          const completed_steps = steps?.filter(s => s.completed).length || 0;
-          const critical_pending = steps?.filter(s => s.is_critical && !s.completed).length || 0;
-          const onboarding_progress = total_steps > 0 ? (completed_steps / total_steps) * 100 : 0;
-
-          // Check if new client (created in last 7 days)
-          const createdDate = new Date(contact.created_at);
-          const sevenDaysAgo = new Date();
-          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-          const is_new_client = createdDate >= sevenDaysAgo;
-
-          // Calculate health score based on last contact
-          let health_score: "green" | "yellow" | "red" = "green";
-          if (contact.last_contact_date) {
-            const lastContact = new Date(contact.last_contact_date);
-            const daysSinceContact = Math.floor((Date.now() - lastContact.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (daysSinceContact > 30) {
-              health_score = "red";
-            } else if (daysSinceContact > 15) {
-              health_score = "yellow";
-            }
-          }
-
-          // Get consultant info
-          const consultant = consultants.find(c => c.id === contact.consultant_id);
-
-          // Get seller info
-          let seller_name = null;
-          let seller_avatar = null;
-          if (contact.assigned_to) {
-            const { data: seller } = await supabase
-              .from("profiles")
-              .select("full_name, avatar_url")
-              .eq("id", contact.assigned_to)
-              .single();
-            
-            seller_name = seller?.full_name || null;
-            seller_avatar = seller?.avatar_url || null;
-          }
-
-          return {
-            id: contact.id,
-            first_name: contact.first_name,
-            last_name: contact.last_name,
-            email: contact.email,
-            phone: contact.phone,
-            whatsapp_id: contact.whatsapp_id,
-            avatar_url: contact.avatar_url,
-            subscription_plan: contact.subscription_plan,
-            company: contact.company,
-            consultant_id: contact.consultant_id,
-            consultant_name: consultant?.full_name || null,
-            consultant_avatar: consultant?.avatar_url || null,
-            last_contact_date: contact.last_contact_date,
-            seller_name,
-            seller_avatar,
-            total_steps,
-            completed_steps,
-            critical_pending,
-            onboarding_progress,
-            is_new_client,
-            health_score,
-          };
-        })
-      );
+        return {
+          id: contact.id,
+          first_name: contact.first_name,
+          last_name: contact.last_name,
+          email: contact.email,
+          phone: contact.phone,
+          whatsapp_id: contact.whatsapp_id,
+          avatar_url: contact.avatar_url,
+          subscription_plan: contact.subscription_plan,
+          company: contact.company,
+          consultant_id: contact.consultant_id,
+          consultant_name: consultant?.full_name || null,
+          consultant_avatar: consultant?.avatar_url || null,
+          last_contact_date: contact.last_contact_date,
+          seller_name: seller?.full_name || null,
+          seller_avatar: seller?.avatar_url || null,
+          total_steps,
+          completed_steps,
+          critical_pending,
+          onboarding_progress,
+          is_new_client,
+          health_score,
+        };
+      });
 
       return clientsWithDetails;
     },
-    enabled: !!user?.id && (isAdmin || isManager || isCSManager),
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    enabled: !!user?.id && (isAdmin || isGeneralManager || isManager || isCSManager),
+    staleTime: 1000 * 60 * 2,
   });
 }

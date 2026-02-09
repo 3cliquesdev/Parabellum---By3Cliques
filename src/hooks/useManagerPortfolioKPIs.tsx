@@ -14,69 +14,65 @@ export function useManagerPortfolioKPIs() {
   const { user } = useAuth();
   const { role, isAdmin, isManager, isCSManager } = useUserRole();
 
+  const isGeneralManager = role === "general_manager";
+
   return useQuery({
     queryKey: ["manager-portfolio-kpis", user?.id, role],
     queryFn: async (): Promise<ManagerPortfolioKPIs> => {
       if (!user?.id) {
-        return {
-          totalClients: 0,
-          totalRevenue: 0,
-          atRiskCount: 0,
-          newArrivalsCount: 0,
-        };
+        return { totalClients: 0, totalRevenue: 0, atRiskCount: 0, newArrivalsCount: 0 };
       }
 
       console.log("📊 Calculating manager portfolio KPIs...");
 
-      // For managers, get their department
-      let departmentFilter = null;
-      if (isManager || isCSManager) {
+      let contacts: any[] = [];
+
+      if (isAdmin || isGeneralManager) {
+        // Admin/general_manager: fetch ALL customers with a consultant
+        const { data, error } = await supabase
+          .from("contacts")
+          .select("id, subscription_plan, last_contact_date, created_at")
+          .eq("status", "customer")
+          .not("consultant_id", "is", null);
+
+        if (error) { console.error("❌ Error fetching contacts:", error); throw error; }
+        contacts = data || [];
+      } else {
+        // Manager/cs_manager: filter by department
         const { data: profile } = await supabase
           .from("profiles")
           .select("department")
           .eq("id", user.id)
           .single();
-        
-        departmentFilter = profile?.department;
+
+        const dept = profile?.department;
+        if (!dept) {
+          console.log("⚠️ No department found for manager");
+          return { totalClients: 0, totalRevenue: 0, atRiskCount: 0, newArrivalsCount: 0 };
+        }
+
+        const { data: consultants } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("department", dept);
+
+        const consultantIds = consultants?.map(c => c.id) || [];
+        if (consultantIds.length === 0) {
+          return { totalClients: 0, totalRevenue: 0, atRiskCount: 0, newArrivalsCount: 0 };
+        }
+
+        const { data, error } = await supabase
+          .from("contacts")
+          .select("id, subscription_plan, last_contact_date, created_at")
+          .eq("status", "customer")
+          .in("consultant_id", consultantIds);
+
+        if (error) { console.error("❌ Error fetching contacts:", error); throw error; }
+        contacts = data || [];
       }
 
-      // Fetch all consultants in the manager's department (or all for admins)
-      let consultantsQuery = supabase
-        .from("profiles")
-        .select("id")
-        .or("id.in.(select consultant_id from contacts where consultant_id is not null)");
-
-      if (departmentFilter && !isAdmin) {
-        consultantsQuery = consultantsQuery.eq("department", departmentFilter);
-      }
-
-      const { data: consultants } = await consultantsQuery;
-      const consultantIds = consultants?.map(c => c.id) || [];
-
-      if (consultantIds.length === 0) {
-        console.log("⚠️ No consultants found in department");
-        return {
-          totalClients: 0,
-          totalRevenue: 0,
-          atRiskCount: 0,
-          newArrivalsCount: 0,
-        };
-      }
-
-      // Fetch all customers for these consultants
-      const { data: contacts } = await supabase
-        .from("contacts")
-        .select("id, subscription_plan, last_contact_date, created_at")
-        .eq("status", "customer")
-        .in("consultant_id", consultantIds);
-
-      if (!contacts || contacts.length === 0) {
-        return {
-          totalClients: 0,
-          totalRevenue: 0,
-          atRiskCount: 0,
-          newArrivalsCount: 0,
-        };
+      if (contacts.length === 0) {
+        return { totalClients: 0, totalRevenue: 0, atRiskCount: 0, newArrivalsCount: 0 };
       }
 
       // Calculate total revenue from subscription plans
@@ -98,34 +94,36 @@ export function useManagerPortfolioKPIs() {
       // Count new arrivals (created in last 7 days with completed onboarding)
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      const newArrivalsCount = await contacts.reduce(async (accPromise, contact) => {
-        const acc = await accPromise;
-        const createdDate = new Date(contact.created_at);
-        if (createdDate < sevenDaysAgo) return acc;
 
-        // Check if onboarding is completed
+      const recentContacts = contacts.filter(c => new Date(c.created_at) >= sevenDaysAgo);
+      let newArrivalsCount = 0;
+
+      if (recentContacts.length > 0) {
+        const recentIds = recentContacts.map(c => c.id);
         const { data: steps } = await supabase
           .from("customer_journey_steps")
-          .select("completed")
-          .eq("contact_id", contact.id);
+          .select("contact_id, completed")
+          .in("contact_id", recentIds);
 
-        if (steps && steps.length > 0 && steps.every(s => s.completed)) {
-          return acc + 1;
+        if (steps && steps.length > 0) {
+          const grouped = new Map<string, boolean[]>();
+          steps.forEach(s => {
+            if (!grouped.has(s.contact_id)) grouped.set(s.contact_id, []);
+            grouped.get(s.contact_id)!.push(s.completed);
+          });
+          grouped.forEach((completions) => {
+            if (completions.length > 0 && completions.every(c => c)) {
+              newArrivalsCount++;
+            }
+          });
         }
-        return acc;
-      }, Promise.resolve(0));
+      }
 
       console.log(`✅ KPIs: ${contacts.length} clients, R$ ${totalRevenue.toFixed(2)} revenue, ${atRiskCount} at risk, ${newArrivalsCount} new`);
 
-      return {
-        totalClients: contacts.length,
-        totalRevenue,
-        atRiskCount,
-        newArrivalsCount,
-      };
+      return { totalClients: contacts.length, totalRevenue, atRiskCount, newArrivalsCount };
     },
-    enabled: !!user?.id && (isAdmin || isManager || isCSManager),
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    enabled: !!user?.id && (isAdmin || isGeneralManager || isManager || isCSManager),
+    staleTime: 1000 * 60 * 2,
   });
 }
