@@ -19,8 +19,10 @@ const QUERY_KEY = ["my-not-responded-inbox"];
  * 3. Não dependa de estado transitório do cache
  * 4. 100% read-only (nunca escreve no banco)
  */
-export function useMyNotRespondedInboxItems() {
+export function useMyNotRespondedInboxItems(opts?: { enabled?: boolean; refetchInterval?: number }) {
   const { user } = useAuth();
+  const enabled = opts?.enabled ?? true;
+  const refetchInterval = opts?.refetchInterval ?? 30_000;
 
   return useQuery({
     queryKey: [...QUERY_KEY, user?.id],
@@ -46,10 +48,10 @@ export function useMyNotRespondedInboxItems() {
       console.log("[useMyNotRespondedInboxItems] Found:", data?.length || 0, "items");
       return (data || []) as InboxViewItem[];
     },
-    staleTime: 2000, // 2s para responsividade
-    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     refetchOnMount: true,
-    refetchInterval: 30000, // Polling backup: 30s
-    enabled: !!user?.id,
+    refetchInterval,
+    enabled: enabled && !!user?.id,
   });
 }

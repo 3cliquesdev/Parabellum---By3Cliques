@@ -25,8 +25,10 @@ const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
  * 🔒 CRÍTICO: NÃO usa inbox_view.sla_status (campo estático que nunca atualiza)
  * Em vez disso, calcula SLA dinamicamente: (now - last_message_at) >= 4h
  */
-export function useSlaExceededItems() {
+export function useSlaExceededItems(opts?: { enabled?: boolean; refetchInterval?: number }) {
   const { user } = useAuth();
+  const enabled = opts?.enabled ?? true;
+  const refetchInterval = opts?.refetchInterval ?? 60_000;
 
   return useQuery({
     queryKey: [...QUERY_KEY, user?.id],
@@ -55,10 +57,10 @@ export function useSlaExceededItems() {
       console.log("[useSlaExceededItems] Found:", data?.length || 0, "SLA critical items");
       return (data || []) as InboxViewItem[];
     },
-    staleTime: 5000, // 5s - um pouco mais que outros hooks pois SLA muda devagar
-    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     refetchOnMount: true,
-    refetchInterval: 60000, // Polling: 1 min - conversas podem entrar/sair do SLA conforme o tempo passa
-    enabled: !!user?.id,
+    refetchInterval,
+    enabled: enabled && !!user?.id,
   });
 }

@@ -653,8 +653,8 @@ export function useInboxCounts(userId?: string) {
         byTag: [],
       }) as InboxCounts;
     },
-    staleTime: 15 * 1000,
-    refetchInterval: 30 * 1000,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
     retry: 2,
     retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 3000),
     placeholderData: {

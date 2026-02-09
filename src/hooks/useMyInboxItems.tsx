@@ -21,8 +21,10 @@ const QUERY_KEY = ["my-inbox-items"];
  * onde rawInboxItems não era atualizado pelo realtime.
  * NÃO REMOVER ou simplificar para usar cache compartilhado!
  */
-export function useMyInboxItems() {
+export function useMyInboxItems(opts?: { enabled?: boolean; refetchInterval?: number }) {
   const { user } = useAuth();
+  const enabled = opts?.enabled ?? true;
+  const refetchInterval = opts?.refetchInterval ?? 30_000;
 
   return useQuery({
     queryKey: [...QUERY_KEY, user?.id],
@@ -47,10 +49,10 @@ export function useMyInboxItems() {
       console.log("[useMyInboxItems] Found:", data?.length || 0, "items");
       return (data || []) as InboxViewItem[];
     },
-    staleTime: 2000, // 2s para responsividade
-    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     refetchOnMount: true,
-    refetchInterval: 30000, // Polling backup: 30s
-    enabled: !!user?.id,
+    refetchInterval,
+    enabled: enabled && !!user?.id,
   });
 }

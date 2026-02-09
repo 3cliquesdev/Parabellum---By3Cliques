@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useInboxView, useInboxCounts, type InboxFilters as InboxViewFiltersType, type InboxCounts } from "@/hooks/useInboxView";
-import { useConversations } from "@/hooks/useConversations";
 import { useMyNotRespondedInboxItems } from "@/hooks/useMyNotRespondedInboxItems";
 import { useMyInboxItems } from "@/hooks/useMyInboxItems";
 import { useSlaExceededItems } from "@/hooks/useSlaExceededItems";
@@ -90,8 +89,8 @@ export default function Inbox() {
   const tagFilter = searchParams.get("tag");
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   
-  // Convert InboxFilters to InboxViewFilters for the optimized hook
-  const inboxViewFilters: InboxViewFiltersType = {
+  // ✅ ESTABILIZAR filtros com useMemo para evitar refetch desnecessário
+  const inboxViewFilters = useMemo<InboxViewFiltersType>(() => ({
     dateRange: filters.dateRange,
     channels: filters.channels,
     status: filters.status,
@@ -103,31 +102,25 @@ export default function Inbox() {
     aiMode: filters.aiMode as InboxViewFiltersType['aiMode'],
     department: departmentFilter || undefined,
     tagId: tagFilter || undefined,
-  };
+  }), [filters.dateRange, filters.channels, filters.status, filters.assignedTo,
+       filters.search, filters.slaExpired, filters.hasAudio, filters.hasAttachments,
+       filters.aiMode, departmentFilter, tagFilter]);
   
   // Use optimized inbox_view for list (fast)
   const { data: inboxItems, isLoading: inboxLoading } = useInboxView(inboxViewFilters);
   
-  // Query separada SEM filtros para identificar conversas não respondidas do usuário
-  // Isso garante que o filtro not_responded funcione independente dos filtros do popover
-  const { data: rawInboxItems } = useInboxView();
-  
   const { data: counts } = useInboxCounts(user?.id);
   
-  // Use original hook to get full conversation data when selected
-  const { data: conversations, isLoading: convLoading } = useConversations();
-  
-  // 🔒 Hook dedicado para "Não respondidas" - consulta direta ao banco para consistência absoluta
-  const { data: myNotRespondedItems } = useMyNotRespondedInboxItems();
-  
-  // 🔒 Hook dedicado para "Minhas" - consulta direta ao banco para evitar cache stale
-  const { data: myInboxItems } = useMyInboxItems();
-  
-  // 🔒 Hook dedicado para "SLA Excedido" - cálculo dinâmico baseado em timestamps
-  const { data: slaExceededItems } = useSlaExceededItems();
+  // ✅ LAZY-LOAD: hooks dedicados só rodam quando o filtro correspondente está ativo
+  const isMine = filter === "mine";
+  const isNotResponded = filter === "not_responded";
+  const isSla = filter === "sla";
+
+  const { data: myNotRespondedItems } = useMyNotRespondedInboxItems({ enabled: isNotResponded, refetchInterval: 60_000 });
+  const { data: myInboxItems } = useMyInboxItems({ enabled: isMine, refetchInterval: 60_000 });
+  const { data: slaExceededItems } = useSlaExceededItems({ enabled: isSla, refetchInterval: 60_000 });
   
   // 🔍 Hook dedicado para BUSCA - query direta ao banco sem limite artificial
-  // Resolve: busca client-side em array limitado não encontrava conversas recentes
   const { data: searchResults, isLoading: searchLoading } = useInboxSearch(filters.search || "");
   
   const { data: departments } = useDepartments();
@@ -152,12 +145,6 @@ export default function Inbox() {
   const handleBackToChat = () => {
     setMobileView("chat");
   };
-
-  // IDs das conversas que passaram pelos filtros do useInboxView (incluindo busca)
-  const inboxItemIds = useMemo(() => {
-    if (!inboxItems) return new Set<string>();
-    return new Set(inboxItems.map(item => item.conversation_id));
-  }, [inboxItems]);
 
   // 🔧 Helper: Converte um InboxItem em objeto Conversation mínimo
   const inboxItemToConversation = useCallback((item: any): Conversation => {
@@ -247,147 +234,63 @@ export default function Inbox() {
     } as Conversation;
   }, []);
 
-  // 🔧 Helper: Busca conversa completa ou cria mínima de inboxItem
-  const getConversationFromItem = useCallback((item: any): Conversation => {
-    const fullConv = conversations?.find(c => c.id === item.conversation_id);
-    return fullConv || inboxItemToConversation(item);
-  }, [conversations, inboxItemToConversation]);
+  // ✅ FONTE ÚNICA por filtro — activeItems SEMPRE retorna array (nunca null)
+  const hasActiveSearch = !!(filters.search && filters.search.trim().length >= 2);
+
+  const activeItems = useMemo(() => {
+    if (hasActiveSearch) return searchResults ?? [];
+    if (isNotResponded) return myNotRespondedItems ?? [];
+    if (isMine) return myInboxItems ?? [];
+    if (isSla) return slaExceededItems ?? [];
+    return inboxItems ?? [];
+  }, [hasActiveSearch, searchResults, isNotResponded, myNotRespondedItems,
+      isMine, myInboxItems, isSla, slaExceededItems, inboxItems]);
 
   const filteredConversations = useMemo(() => {
-    // 🔒 CRÍTICO: Não retornar [] quando conversations estiver undefined
-    // Isso evita "ghosting" onde a lista some temporariamente
-    const fullConversations = conversations ?? [];
-    const sourceInboxItems = rawInboxItems ?? inboxItems;
-    
-    // 🔍 BUSCA GLOBAL - QUERY DIRETA AO BANCO (useInboxSearch)
-    // Quando há busca ativa, usar searchResults que vem do banco
-    // com query própria (sem limite artificial de 5000 e ordenação correta)
-    const hasActiveSearch = filters.search && filters.search.trim().length >= 2;
-    if (hasActiveSearch && searchResults) {
-      // searchResults já vem do banco ordenado: open primeiro, depois por recência
-      console.log("[Inbox] Busca ativa, usando searchResults:", searchResults.length, "items");
-      return searchResults.map(item => {
-        // Tentar encontrar a conversa completa na lista de conversations
-        const fullConv = fullConversations.find(c => c.id === item.conversation_id);
-        return fullConv || inboxItemToConversation(item);
-      }).filter(Boolean);
-    }
-    
-    // Se há busca ativa mas searchResults ainda não carregou, retornar null
-    // para sinalizar que devemos exibir loading (não array vazio)
-    if (hasActiveSearch && !searchResults) {
-      return null; // Sinaliza loading
-    }
-    
-    // 🔒 FILTRO ESPECIAL: not_responded - usar hook dedicado (fonte de verdade absoluta)
-    // SOMENTE quando NÃO há busca ativa
-    if (filter === "not_responded") {
-      // Usar myNotRespondedItems diretamente - consulta ao banco, não depende de cache
-      if (!myNotRespondedItems || myNotRespondedItems.length === 0) {
-        return [];
-      }
-      return myNotRespondedItems.map(item => {
-        // Tentar enriquecer com dados completos se disponível
-        const fullConv = fullConversations.find(c => c.id === item.conversation_id);
-        return fullConv || inboxItemToConversation(item);
-      });
-    }
-    
-    // 🔒 FILTRO ESPECIAL: mine - usar hook dedicado (fonte de verdade absoluta)
-    // SOMENTE quando NÃO há busca ativa
-    // 🛡️ INVIOLÁVEL: Resolve bug de cache stale onde rawInboxItems não era atualizado pelo realtime
-    if (filter === "mine") {
-      // Usar myInboxItems diretamente - consulta ao banco, não depende de cache stale
-      if (!myInboxItems || myInboxItems.length === 0) {
-        return [];
-      }
-      return myInboxItems.map(item => {
-        // Tentar enriquecer com dados completos se disponível
-        const fullConv = fullConversations.find(c => c.id === item.conversation_id);
-        return fullConv || inboxItemToConversation(item);
-      });
-    }
+    let result = activeItems.map(inboxItemToConversation);
 
-     // ✅ IMPORTANTE (upgrade, sem regressão):
-     // A lista do Inbox deve ser baseada no `inbox_view` (fonte de verdade de visibilidade).
-     // Motivo: `useConversations` pode retornar apenas conversas atribuídas ao próprio usuário
-     // devido a RLS, mesmo quando o usuário tem permissão de colaborar no departamento.
-     // Se usarmos `fullConversations` como fonte primária, a lista fica “presa” em 5 (Minhas)
-     // enquanto os counts e `inbox_view` mostram 34.
-     let result: Conversation[];
-
-     if (sourceInboxItems && sourceInboxItems.length > 0) {
-       // Fonte primária: inbox_view (já vem filtrado por role + dept/tag + filtros client-side)
-       result = sourceInboxItems
-         // `applyFilters` já remove fechadas por padrão, mas mantemos a proteção aqui
-         .filter(item => item.status !== 'closed')
-         .map(item => {
-           const fullConv = fullConversations.find(c => c.id === item.conversation_id);
-           return fullConv || inboxItemToConversation(item);
-         });
-     } else {
-       // Fallback: se inbox_view ainda não carregou, usar conversations (comportamento antigo)
-       result = fullConversations;
-     }
-
-    // Apply department filter
+    // Department filter
     if (departmentFilter) {
       result = result.filter(c => c.department === departmentFilter);
     }
 
-    // Apply filters based on URL params
+    // Filter by URL param
     switch (filter) {
       case "ai_queue":
         return result.filter(c => c.ai_mode === 'autopilot' && c.status !== 'closed');
-      
       case "human_queue":
         if (role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager') {
           return result.filter(c => c.ai_mode !== 'autopilot' && c.status !== 'closed');
         }
-        // ✅ UPGRADE (sem regressão):
-        // Quando o usuário está em uma visão de Departamento (/inbox?dept=...),
-        // ele deve conseguir colaborar e ver o time inteiro daquele dept.
-        // Mantém o comportamento antigo (somente minhas) quando NÃO há dept selecionado.
         if (departmentFilter) {
           return result.filter(c => c.ai_mode !== 'autopilot' && c.status !== 'closed');
         }
-
-        return result.filter(c =>
-          c.ai_mode !== 'autopilot' &&
-          c.assigned_to === user?.id &&
-          c.status !== 'closed'
-        );
-      
+        return result.filter(c => c.ai_mode !== 'autopilot' && c.assigned_to === user?.id && c.status !== 'closed');
       case "mine":
-        // Já tratado acima usando inboxItems diretamente
         return result.filter(c => c.assigned_to === user?.id && c.status !== 'closed');
-      
+      case "not_responded":
       case "sla":
-        // SLA critical - usar hook dedicado com cálculo dinâmico
-        // 🔒 NÃO usa sla_status estático - calcula (now - last_message_at) >= 4h
-        if (!slaExceededItems || slaExceededItems.length === 0) {
-          return [];
-        }
-        return slaExceededItems.map(item => {
-          const fullConv = fullConversations.find(c => c.id === item.conversation_id);
-          return fullConv || inboxItemToConversation(item);
-        });
-      
+        return result; // Já vem filtrado do hook dedicado
       case "unassigned":
         return result.filter(c => !c.assigned_to && c.status !== 'closed');
-      
       case "archived":
         return result.filter(c => c.status === "closed");
-      
       default:
         return result.filter(c => c.status !== 'closed');
     }
-  }, [conversations, filter, departmentFilter, user?.id, role, filters.search, inboxItems, rawInboxItems, inboxItemToConversation, myNotRespondedItems, myInboxItems, slaExceededItems, searchResults]);
+  }, [activeItems, inboxItemToConversation, departmentFilter, filter, role, user?.id]);
+
+  // ✅ Loading do activeQuery ativo
+  const activeLoading = hasActiveSearch ? searchLoading :
+    isMine ? false :
+    isNotResponded ? false :
+    isSla ? false :
+    inboxLoading;
+
+  const isPageLoading = activeLoading || searchLoading;
 
   // Ordenação e filtragem por tempo de espera
   const orderedConversations = useMemo(() => {
-    if (!filteredConversations) return [];
-    
     let result = [...filteredConversations];
     const now = new Date();
     
@@ -409,23 +312,17 @@ export default function Inbox() {
     }
     
     // 🔍 BUSCA ATIVA: Resultados já vêm ordenados do banco (useInboxSearch)
-    // open primeiro, depois por recência - NÃO reordenar aqui
-    const hasActiveSearch = filters.search && filters.search.trim().length >= 2;
     if (hasActiveSearch) {
-      // searchResults já está ordenado corretamente pelo banco
-      // Apenas retornar como está
       return result;
     }
     
     // Ordenar por tempo de espera
     if (filters.waitingTime === 'newest') {
-      // Mais recentes primeiro (ordenação decrescente por last_message_at)
       result.sort((a, b) => 
         new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
       );
     } else {
-      // Por padrão e 'oldest': mais antigas primeiro (maior tempo de espera = prioridade)
-      // Se temos inboxItems, usar a ordenação deles (já está otimizada para SLA)
+      // Por padrão e 'oldest': mais antigas primeiro
       if (inboxItems && inboxItems.length > 0) {
         const indexById = new Map<string, number>();
         for (let i = 0; i < inboxItems.length; i++) {
@@ -440,7 +337,6 @@ export default function Inbox() {
           return ia - ib;
         });
       } else {
-        // Fallback: ordenar por last_message_at ascendente (mais antigas primeiro)
         result.sort((a, b) => 
           new Date(a.last_message_at).getTime() - new Date(b.last_message_at).getTime()
         );
@@ -448,7 +344,7 @@ export default function Inbox() {
     }
 
     return result;
-  }, [filteredConversations, inboxItems, filters.waitingTime]);
+  }, [filteredConversations, inboxItems, filters.waitingTime, hasActiveSearch]);
 
   // Bulk selection handlers (after filteredConversations is defined)
   const handleToggleSelect = useCallback((id: string) => {
@@ -507,8 +403,7 @@ export default function Inbox() {
   const currentFilterCount = orderedConversations.length;
   const hasHiddenConversations = currentFilterCount === 0 && totalActiveCount > 0;
 
-  // Total exibido deve refletir a contagem "real" (hook de counts). Se ainda não carregou, usa fallback do que já está renderizado.
-  const displayTotalCount = totalActiveCount > 0 ? totalActiveCount : filteredConversations.length;
+  const displayTotalCount = totalActiveCount > 0 ? totalActiveCount : (filteredConversations?.length ?? 0);
 
   // Default sidebar counts
   const sidebarCounts: InboxCounts = counts || {
@@ -610,7 +505,7 @@ export default function Inbox() {
             conversations={filteredConversations ?? []}
             activeConversationId={activeConversation?.id || null}
             onSelectConversation={handleSelectConversation}
-            isLoading={searchLoading || (filters.search?.trim().length >= 2 && filteredConversations === null)}
+            isLoading={isPageLoading}
           />
         </div>
       </div>
@@ -697,7 +592,7 @@ export default function Inbox() {
             conversations={orderedConversations}
             activeConversationId={activeConversation?.id || null}
             onSelectConversation={handleSelectConversation}
-            isLoading={inboxLoading || convLoading || searchLoading || (filters.search?.trim().length >= 2 && filteredConversations === null)}
+            isLoading={isPageLoading}
             selectionMode={selectionMode}
             selectedIds={selectedIds}
             onToggleSelect={handleToggleSelect}
