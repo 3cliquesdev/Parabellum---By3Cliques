@@ -2453,39 +2453,60 @@ Como posso ajudar você hoje?`;
             console.log('[ai-autopilot-chat] 🔀 TRANSFER NODE - Executando handoff real para departamento:', flowResult.departmentId);
             
             const handoffTimestamp = new Date().toISOString();
+
+            // 🆕 Buscar consultant_id do contato para atribuição direta
+            const { data: contactConsultantData } = await supabaseClient
+              .from('contacts')
+              .select('consultant_id')
+              .eq('id', contact?.id)
+              .maybeSingle();
+
+            const transferUpdate: Record<string, unknown> = {
+              ai_mode: 'waiting_human',
+              handoff_executed_at: handoffTimestamp,
+              needs_human_review: true,
+              department: flowResult.departmentId,
+            };
+
+            if (contactConsultantData?.consultant_id) {
+              transferUpdate.assigned_to = contactConsultantData.consultant_id;
+              transferUpdate.ai_mode = 'copilot';
+              console.log('[ai-autopilot-chat] 👤 Atribuindo ao consultor do contato:', contactConsultantData.consultant_id);
+            }
             
             const { error: handoffUpdateError } = await supabaseClient
               .from('conversations')
-              .update({ 
-                ai_mode: 'waiting_human',
-                handoff_executed_at: handoffTimestamp,
-                needs_human_review: true,
-                department: flowResult.departmentId,
-              })
+              .update(transferUpdate)
               .eq('id', conversationId);
             
             if (handoffUpdateError) {
               console.error('[ai-autopilot-chat] ❌ Erro ao marcar handoff:', handoffUpdateError);
             } else {
-              console.log('[ai-autopilot-chat] ✅ Conversa marcada como waiting_human com department:', flowResult.departmentId);
+              console.log('[ai-autopilot-chat] ✅ Conversa marcada com department:', flowResult.departmentId,
+                'ai_mode:', contactConsultantData?.consultant_id ? 'copilot' : 'waiting_human',
+                'assigned_to:', contactConsultantData?.consultant_id || 'pool');
             }
             
-            // Chamar route-conversation para distribuir para agentes
-            try {
-              const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
-                body: { 
-                  conversationId,
-                  targetDepartmentId: flowResult.departmentId
+            // Chamar route-conversation SOMENTE se NÃO atribuiu ao consultor
+            if (!contactConsultantData?.consultant_id) {
+              try {
+                const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
+                  body: { 
+                    conversationId,
+                    targetDepartmentId: flowResult.departmentId
+                  }
+                });
+                
+                if (routeError) {
+                  console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
+                } else {
+                  console.log('[ai-autopilot-chat] ✅ Conversa roteada com sucesso:', routeResult);
                 }
-              });
-              
-              if (routeError) {
-                console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
-              } else {
-                console.log('[ai-autopilot-chat] ✅ Conversa roteada com sucesso:', routeResult);
+              } catch (routeErr) {
+                console.error('[ai-autopilot-chat] ❌ Exceção ao chamar route-conversation:', routeErr);
               }
-            } catch (routeErr) {
-              console.error('[ai-autopilot-chat] ❌ Exceção ao chamar route-conversation:', routeErr);
+            } else {
+              console.log('[ai-autopilot-chat] ⏭️ Pulando route-conversation - consultor já atribuído diretamente');
             }
           }
           

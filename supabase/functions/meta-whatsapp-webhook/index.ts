@@ -749,6 +749,19 @@ serve(async (req) => {
                   if (flowData.departmentId) {
                     updateData.department = flowData.departmentId;
                   }
+
+                  // 🆕 Buscar consultant_id do contato para atribuição direta
+                  const { data: contactConsultantData } = await supabase
+                    .from('contacts')
+                    .select('consultant_id')
+                    .eq('id', contact.id)
+                    .maybeSingle();
+
+                  if (contactConsultantData?.consultant_id) {
+                    updateData.assigned_to = contactConsultantData.consultant_id;
+                    updateData.ai_mode = 'copilot';
+                    console.log("[meta-whatsapp-webhook] 👤 Atribuindo ao consultor do contato:", contactConsultantData.consultant_id);
+                  }
                   
                   const { error: updateError } = await supabase
                     .from("conversations")
@@ -758,7 +771,9 @@ serve(async (req) => {
                   if (updateError) {
                     console.error("[meta-whatsapp-webhook] ❌ Error executing transfer:", updateError);
                   } else {
-                    console.log("[meta-whatsapp-webhook] ✅ Transfer executed → department:", flowData.departmentId, "ai_mode: waiting_human");
+                    console.log("[meta-whatsapp-webhook] ✅ Transfer executed → department:", flowData.departmentId, 
+                      "ai_mode:", contactConsultantData?.consultant_id ? 'copilot' : 'waiting_human',
+                      "assigned_to:", contactConsultantData?.consultant_id || 'pool');
                   }
                 }
                 
