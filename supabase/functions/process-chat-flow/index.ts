@@ -140,7 +140,7 @@ function replaceVariables(text: string, collectedData: Record<string, any>): str
 // Avaliar condição
 function evaluateCondition(condition: any, collectedData: Record<string, any>, userMessage: string): boolean {
   const { condition_type, condition_field, condition_value } = condition;
-  const fieldValue = collectedData[condition_field] || "";
+  const fieldValue = condition_field ? (collectedData[condition_field] || "") : userMessage;
   
   switch (condition_type) {
     case "contains":
@@ -1014,9 +1014,9 @@ serve(async (req) => {
         // Função para avaliar condição com logs fortes
         function evalCond(data: any): boolean {
           const { condition_type, condition_field, condition_value } = data || {};
-          let fieldValue =
-            collectedData?.[condition_field] ??
-            (contactData ? contactData[condition_field] : null);
+          let fieldValue = condition_field
+            ? (collectedData?.[condition_field] ?? (contactData ? contactData[condition_field] : null))
+            : userMessage; // Quando field vazio, comparar contra a mensagem do usuário
 
           // Compatibilidade com campos comuns
           if (condition_field === 'is_validated_customer' || condition_field === 'isValidatedCustomer') {
