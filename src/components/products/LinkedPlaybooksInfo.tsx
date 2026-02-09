@@ -56,7 +56,7 @@ export function LinkedPlaybooksInfo({ productId }: LinkedPlaybooksInfoProps) {
             <div
               key={lp.playbook_id}
               className="flex items-center justify-between text-sm bg-background rounded px-2 py-1.5 cursor-pointer hover:bg-muted/80 transition-colors"
-              onClick={() => navigate(`/playbooks?edit=${lp.playbook_id}`)}
+              onClick={() => navigate(`/onboarding-builder?edit=${lp.playbook_id}`)}
             >
               <span className="text-foreground">{lp.playbook?.name}</span>
               <div className="flex items-center gap-1">
