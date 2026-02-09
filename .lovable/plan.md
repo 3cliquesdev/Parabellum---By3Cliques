@@ -1,63 +1,65 @@
 
-# Corrigir contagem de execuções dos Playbooks
+
+# Atribuir conversa ao consultor do cliente durante transferencia pelo fluxo
 
 ## Problema
 
-A coluna `execution_count` na tabela `onboarding_playbooks` existe mas nao esta sendo atualizada automaticamente quando novas execucoes sao criadas. Resultado atual no banco:
+Quando o fluxo de chat executa um no de Transferir, ele move a conversa para o departamento correto, mas nao atribui ao consultor vinculado ao contato (`contacts.consultant_id`). A conversa vai para o pool do departamento.
 
-| Playbook | Contagem exibida | Execucoes reais |
-|----------|-----------------|-----------------|
-| Onboarding - Assinaturas | 0 | 30 |
-| ShopeeCreation | 8 | 1023 |
-| Associado Premium | 0 | 2469 |
-| Universidade | 0 | 0 |
+## Escopo da mudanca
 
-## Solucao
+A atribuicao ao consultor so acontece quando:
+- A conversa passa por um **no de Transferencia** dentro de um fluxo
+- O contato possui um `consultant_id` definido
 
-Duas acoes no banco de dados:
+Conversas normais de suporte continuam no fluxo padrao (pool/round-robin). Consultores NAO passam a receber conversas genericas.
 
-### 1. Corrigir os valores atuais
+## Alteracoes
 
-Uma migracao SQL para sincronizar o `execution_count` com a contagem real da tabela `playbook_executions`.
+### 1. `supabase/functions/meta-whatsapp-webhook/index.ts`
 
-### 2. Criar trigger automatico
+No bloco de execucao de transferencia do fluxo (~linha 740), antes do update da conversa:
+- Buscar `consultant_id` do contato
+- Se existir, definir `assigned_to = consultant_id` e `ai_mode = 'copilot'`
+- Se nao existir, manter comportamento atual (`waiting_human` + pool)
 
-Um trigger na tabela `playbook_executions` que incrementa automaticamente o `execution_count` do playbook toda vez que uma nova execucao e inserida. Isso garante que o valor fique sempre correto sem depender de logica no frontend ou nas edge functions.
+### 2. `supabase/functions/ai-autopilot-chat/index.ts`
+
+No bloco de transferencia do fluxo (~linha 2451), mesma logica:
+- Buscar `consultant_id` do contato
+- Se existir, atribuir diretamente e pular chamada ao `route-conversation`
+- Se nao existir, manter fluxo atual de distribuicao
+
+### 3. Nenhuma alteracao no `route-conversation`
+
+A logica de distribuicao geral permanece intacta. A atribuicao ao consultor e feita diretamente nos pipelines de transferencia, antes de chamar o distribuidor.
 
 ## Detalhes tecnicos
 
-```sql
--- 1. Sincronizar valores atuais
-UPDATE onboarding_playbooks p
-SET execution_count = (
-  SELECT COUNT(*) FROM playbook_executions pe 
-  WHERE pe.playbook_id = p.id
-);
+Trecho adicionado em ambos os pipelines (antes do update de transferencia):
 
--- 2. Trigger para manter sincronizado
-CREATE OR REPLACE FUNCTION increment_playbook_execution_count()
-RETURNS TRIGGER AS $$
-BEGIN
-  UPDATE onboarding_playbooks
-  SET execution_count = execution_count + 1
-  WHERE id = NEW.playbook_id;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+```typescript
+// Buscar consultant_id do contato
+const { data: contactData } = await supabase
+  .from('contacts')
+  .select('consultant_id')
+  .eq('id', contactId)
+  .maybeSingle();
 
-CREATE TRIGGER trg_increment_playbook_executions
-AFTER INSERT ON playbook_executions
-FOR EACH ROW
-EXECUTE FUNCTION increment_playbook_execution_count();
+if (contactData?.consultant_id) {
+  updateData.assigned_to = contactData.consultant_id;
+  updateData.ai_mode = 'copilot';
+  console.log("[pipeline] Atribuindo ao consultor:", contactData.consultant_id);
+}
 ```
-
-Nenhuma alteracao de codigo frontend necessaria -- o hook `usePlaybooks` ja busca `*` (incluindo `execution_count`) e a UI ja exibe `playbook.execution_count || 0`.
 
 ## Impacto
 
 | Item | Status |
 |------|--------|
-| Regressao | Zero -- apenas corrige dados e adiciona trigger |
+| Regressao | Zero - logica adicional apenas no caminho de transferencia de fluxo |
+| Suporte geral | Sem alteracao - consultores NAO recebem conversas do pool |
+| Contatos sem consultor | Comportamento atual mantido (pool do departamento) |
+| Consultor offline | Conversa atribuida mesmo assim (requisito confirmado) |
 | Frontend | Sem alteracao necessaria |
-| Performance | Minima -- trigger simples por INSERT |
-| Dados existentes | Sincronizados imediatamente |
+
