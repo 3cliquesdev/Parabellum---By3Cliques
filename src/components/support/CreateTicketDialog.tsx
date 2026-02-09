@@ -196,10 +196,9 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const canSubmit = subject.trim() && !createTicket.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
         className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto"
-        onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Criar Novo Ticket</DialogTitle>
