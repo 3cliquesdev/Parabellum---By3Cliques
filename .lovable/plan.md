@@ -1,50 +1,48 @@
 
-
-# Operacao obrigatoria em tickets internos + automatica em formularios
+# Unificar Departamentos, Operacoes e Categorias em uma unica pagina com abas
 
 ## Resumo
 
-- Tickets criados internamente: dropdown "Operacao" continua **obrigatorio** (como ja esta hoje)
-- Tickets vindos de formularios: recebem a Operacao automaticamente (definida na configuracao do formulario)
+Transformar a pagina `/settings/departments` em uma pagina unificada com **3 abas (Tabs)**: Departamentos, Operacoes e Categorias. O menu lateral "Departamentos" continua no mesmo lugar, mas ao clicar o usuario ve as 3 secoes organizadas por abas.
+
+---
 
 ## Etapas
 
-### 1. Adicionar `default_operation_id` ao TicketSettings
+### 1. Renomear item do menu no `routes.ts`
 
-**Arquivo:** `src/hooks/useForms.tsx`
+Alterar o titulo de "Departamentos" para **"Departamentos & Operacoes"** (ou similar) no menu lateral, mantendo o mesmo href `/settings/departments` e a mesma permission.
 
-Adicionar `default_operation_id?: string` na interface `TicketSettings` (linha 193-198).
+### 2. Criar hooks CRUD para Operacoes e Categorias
 
-### 2. Adicionar dropdown "Operacao Padrao" no TicketFieldMapping
+**Operacoes** (`src/hooks/useTicketOperations.tsx`):
+- Ja existe o hook de query. Adicionar mutations: `useCreateTicketOperation`, `useUpdateTicketOperation`, `useDeleteTicketOperation`.
 
-**Arquivo:** `src/components/forms/TicketFieldMapping.tsx`
+**Categorias** (`src/hooks/useTicketCategories.tsx`):
+- Ja existe query + create. Adicionar: `useUpdateTicketCategory`, `useDeleteTicketCategory`.
 
-- Importar `useTicketOperations`
-- Adicionar um Select "Operacao Padrao" abaixo de "Categoria Padrao"
-- Valor salvo em `ticket_settings.default_operation_id`
-- Isso permite ao admin escolher qual Operacao sera atribuida aos tickets gerados por aquele formulario
+### 3. Criar componentes de Dialog para Operacoes e Categorias
 
-### 3. Passar `operation_id` no form-submit-v3
+- `src/components/OperationDialog.tsx` -- formulario para criar/editar operacao (nome, descricao, cor). Mesmo padrao do `DepartmentDialog`.
+- `src/components/CategoryDialog.tsx` -- formulario para criar/editar categoria (nome, descricao, cor). Mesmo padrao.
 
-**Arquivo:** `supabase/functions/form-submit-v3/index.ts`
+### 4. Refatorar `src/pages/Departments.tsx` com Tabs
 
-Na secao de criacao de ticket (por volta da linha 740), adicionar `operation_id` ao insert:
-
-```text
-operation_id: ticketSettings.default_operation_id || null,
-```
-
-Tambem na secao de `create_ticket` action (por volta da linha 1365), adicionar o mesmo campo.
-
-### 4. Manter CreateTicketDialog como esta
-
-O `CreateTicketDialog` ja tem o campo obrigatorio com a validacao:
+Transformar a pagina em 3 abas usando `@radix-ui/react-tabs`:
 
 ```text
-const canSubmit = subject.trim() && operationId && !createTicket.isPending;
+[Departamentos]  [Operacoes]  [Categorias]
 ```
 
-Nenhuma alteracao necessaria neste arquivo.
+- **Aba Departamentos**: conteudo atual (grid de cards com switch ativo/inativo, editar, deletar)
+- **Aba Operacoes**: mesmo layout de cards, usando `useTicketOperations` + CRUD
+- **Aba Categorias**: mesmo layout de cards, usando `useTicketCategories` + CRUD
+
+O titulo da pagina muda dinamicamente conforme a aba selecionada, e o botao "Novo" tambem se adapta ("Novo Departamento" / "Nova Operacao" / "Nova Categoria").
+
+### 5. Atualizar titulo na pagina Settings
+
+No `src/pages/Settings.tsx`, atualizar o card que navega para `/settings/departments` com descricao que mencione as 3 secoes.
 
 ---
 
@@ -52,13 +50,17 @@ Nenhuma alteracao necessaria neste arquivo.
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/hooks/useForms.tsx` | Adicionar `default_operation_id` ao tipo `TicketSettings` |
-| `src/components/forms/TicketFieldMapping.tsx` | Dropdown "Operacao Padrao" usando `useTicketOperations` |
-| `supabase/functions/form-submit-v3/index.ts` | Passar `operation_id` no insert do ticket (2 locais) |
+| `src/config/routes.ts` | Renomear titulo do menu |
+| `src/hooks/useTicketOperations.tsx` | Adicionar mutations (create, update, delete) |
+| `src/hooks/useTicketCategories.tsx` | Adicionar mutations (update, delete) |
+| `src/components/OperationDialog.tsx` | Novo -- dialog CRUD de operacao |
+| `src/components/CategoryDialog.tsx` | Novo -- dialog CRUD de categoria |
+| `src/pages/Departments.tsx` | Refatorar com Tabs (3 abas) |
+| `src/pages/Settings.tsx` | Atualizar descricao do card |
 
 ## Impacto
 
-- Zero regressao: tickets internos continuam com campo obrigatorio
-- Formularios existentes sem `default_operation_id` simplesmente geram ticket com `operation_id = null`
-- Novos formularios podem definir a operacao na configuracao
-
+- Zero regressao: a rota `/settings/departments` continua a mesma, nenhum link quebra
+- Departamentos continuam funcionando exatamente como antes (primeira aba)
+- Operacoes e Categorias ganham CRUD completo (criar, editar, ativar/desativar, deletar)
+- As 3 tabelas (`departments`, `ticket_operations`, `ticket_categories`) ja existem com estrutura identica -- apenas falta UI de gestao para operacoes e categorias
