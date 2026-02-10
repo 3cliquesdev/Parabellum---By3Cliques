@@ -89,9 +89,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const [customerSearch, setCustomerSearch] = useState("");
   const [assignedTo, setAssignedTo] = useState<string>("");
   
-  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
-  const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
-  const [uploadedAttachment, setUploadedAttachment] = useState<{ url: string; type: string; name: string } | null>(null);
+  const [uploadedAttachments, setUploadedAttachments] = useState<Array<{ url: string; type: string; name: string; preview?: string }>>([]);
 
   const [operationId, setOperationId] = useState<string>("");
   const [originId, setOriginId] = useState<string>("");
@@ -113,35 +111,34 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   );
 
   const filteredContacts = contacts.slice(0, 10);
-  const selectedContact = contacts.find((c) => c.id === customerId);
+  const [selectedContact, setSelectedContact] = useState<{ id: string; first_name: string; last_name: string; email: string | null } | null>(null);
 
-  // Dropzone para upload de imagem
+  // Dropzone para upload de múltiplas evidências
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
-    setAttachmentFile(file);
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = () => { setAttachmentPreview(reader.result as string); };
-      reader.readAsDataURL(file);
-    } else {
-      setAttachmentPreview(null);
+    for (const file of acceptedFiles) {
+      const result = await uploadFile(file);
+      if (result) {
+        let preview: string | undefined;
+        if (file.type.startsWith('image/')) {
+          preview = URL.createObjectURL(file);
+        }
+        setUploadedAttachments(prev => [...prev, { ...result, preview }]);
+      }
     }
-    const result = await uploadFile(file);
-    if (result) { setUploadedAttachment(result); }
   }, [uploadFile]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/*': ['.jpeg', '.jpg', '.png', '.webp'], 'application/pdf': ['.pdf'] },
-    maxFiles: 1,
     maxSize: 10 * 1024 * 1024,
   });
 
-  const removeAttachment = () => {
-    setAttachmentFile(null);
-    setAttachmentPreview(null);
-    setUploadedAttachment(null);
+  const removeAttachment = (index: number) => {
+    setUploadedAttachments(prev => {
+      const item = prev[index];
+      if (item?.preview) URL.revokeObjectURL(item.preview);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,7 +152,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
       customer_id: customerId || undefined,
       department_id: departmentId || undefined,
       assigned_to: assignedTo || undefined,
-      attachments: uploadedAttachment ? [uploadedAttachment] : [],
+      attachments: uploadedAttachments.map(({ preview, ...rest }) => rest),
       tag_ids: selectedTagIds,
       operation_id: operationId || undefined,
       origin_id: originId || undefined,
@@ -170,9 +167,8 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
     setOperationId("");
     setOriginId("");
     setCustomerSearch("");
-    setAttachmentFile(null);
-    setAttachmentPreview(null);
-    setUploadedAttachment(null);
+    setSelectedContact(null);
+    setUploadedAttachments([]);
     setSelectedTagIds([]);
     setTagSearch("");
     onOpenChange(false);
@@ -221,7 +217,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                   </p>
                   <p className="text-sm text-muted-foreground">{selectedContact.email}</p>
                 </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => { setCustomerId(""); setCustomerSearch(""); }}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setCustomerId(""); setSelectedContact(null); setCustomerSearch(""); }}>
                   Trocar
                 </Button>
               </div>
@@ -247,7 +243,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                             key={contact.id}
                             type="button"
                             className="w-full p-3 text-left hover:bg-muted transition-colors"
-                            onClick={() => { setCustomerId(contact.id); setCustomerSearch(""); }}
+                            onClick={() => { setCustomerId(contact.id); setSelectedContact(contact); setCustomerSearch(""); }}
                           >
                             <p className="font-medium">{contact.first_name} {contact.last_name}</p>
                             <p className="text-sm text-muted-foreground">{contact.email}</p>
@@ -267,55 +263,62 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
             <Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Resumo do problema" required />
           </div>
 
-          {/* Anexo */}
+          {/* Evidências */}
           <div className="space-y-2">
             <Label className="flex items-center gap-1">
-              Evidência (Print/Foto)
+              Evidências (Print/Foto)
               <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+              {uploadedAttachments.length > 0 && (
+                <Badge variant="secondary" className="ml-1 text-xs">{uploadedAttachments.length}</Badge>
+              )}
             </Label>
-            {!attachmentFile ? (
-              <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'}`}
-              >
-                <input {...getInputProps()} />
-                <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  {isDragActive ? "Solte o arquivo aqui..." : <>Arraste uma imagem ou <span className="text-primary font-medium">clique para selecionar</span></>}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WEBP ou PDF até 10MB</p>
-              </div>
-            ) : (
-              <div className="border rounded-lg p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {attachmentPreview ? (
-                      <img src={attachmentPreview} alt="Preview" className="w-12 h-12 object-cover rounded" />
+
+            {/* Grid de arquivos já enviados */}
+            {uploadedAttachments.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {uploadedAttachments.map((att, index) => (
+                  <div key={index} className="relative group border rounded-lg overflow-hidden">
+                    {att.preview ? (
+                      <img src={att.preview} alt={att.name} className="w-full h-20 object-cover" />
                     ) : (
-                      <div className="w-12 h-12 bg-muted rounded flex items-center justify-center">
-                        <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                      <div className="w-full h-20 bg-muted flex items-center justify-center">
+                        <ImageIcon className="w-5 h-5 text-muted-foreground" />
                       </div>
                     )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{attachmentFile.name}</p>
-                      <p className="text-xs text-muted-foreground">{(attachmentFile.size / 1024).toFixed(1)} KB</p>
-                    </div>
+                    <Button
+                      type="button" variant="destructive" size="icon"
+                      className="absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => removeAttachment(index)}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                    <p className="text-[10px] text-muted-foreground truncate px-1 py-0.5">{att.name}</p>
                   </div>
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={removeAttachment} disabled={uploading}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-                {uploading && (
-                  <div className="space-y-1">
-                    <Progress value={progress} className="h-1" />
-                    <p className="text-xs text-muted-foreground text-center">Enviando...</p>
-                  </div>
-                )}
-                {uploadedAttachment && !uploading && (
-                  <p className="text-xs text-success flex items-center gap-1">✓ Arquivo enviado com sucesso</p>
-                )}
+                ))}
               </div>
             )}
+
+            {/* Dropzone sempre visível */}
+            <div
+              {...getRootProps()}
+              className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'}`}
+            >
+              <input {...getInputProps()} />
+              {uploading ? (
+                <div className="space-y-1">
+                  <Progress value={progress} className="h-1" />
+                  <p className="text-xs text-muted-foreground">Enviando...</p>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-6 h-6 mx-auto mb-1 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">
+                    {isDragActive ? "Solte aqui..." : <>Arraste ou <span className="text-primary font-medium">clique</span> para adicionar</>}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">PNG, JPG, WEBP, PDF (máx 10MB cada)</p>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Description */}
