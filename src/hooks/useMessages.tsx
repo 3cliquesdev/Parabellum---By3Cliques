@@ -9,6 +9,38 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 type Message = Tables<"messages">;
 type MessageInsert = TablesInsert<"messages">;
 
+// ========== ENTERPRISE PERF: Optimized select & page size ==========
+export const MESSAGES_SELECT = `
+  id, content, created_at, sender_type, sender_id, is_ai_generated,
+  is_internal, attachment_url, attachment_type, status, metadata,
+  external_id, client_message_id, provider_message_id, channel,
+  sender:profiles!sender_id(id, full_name, avatar_url, job_title),
+  media_attachments(id, storage_path, storage_bucket, mime_type,
+    original_filename, file_size, status, waveform_data, duration_seconds)
+`;
+
+export const MESSAGES_PAGE_SIZE = 50;
+
+/**
+ * Prefetch messages for a conversation (used on hover in conversation list)
+ */
+export async function prefetchMessages(queryClient: any, conversationId: string) {
+  return queryClient.prefetchQuery({
+    queryKey: ["messages", conversationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select(MESSAGES_SELECT)
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: false })
+        .limit(MESSAGES_PAGE_SIZE);
+      if (error) throw error;
+      return [...(data || [])].reverse();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 /**
  * Hook para gerenciamento de mensagens com Realtime
  * 
@@ -33,97 +65,53 @@ export function useMessages(conversationId: string | null) {
   const reconnectAttemptsRef = useRef(0);
   const isConnectedRef = useRef(false);
   const lastMessageTimestampRef = useRef<string | null>(null);
-  
-  // 🆕 HOTFIX: Rastrear visibilidade da aba
-  const [isTabVisible, setIsTabVisible] = useState(true);
-  
-  // 🆕 Rastrear último evento Realtime (anti-mascaramento)
+
+  // Rastrear último evento Realtime (anti-mascaramento)
   const lastRealtimeEventRef = useRef<number>(Date.now());
   
-  // 🆕 Rastrear tamanho anterior para detectar novas mensagens
-  const previousLengthRef = useRef<number>(0);
+  // 🆕 ENTERPRISE: Pagination state for scroll-up loading
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [isFetchingOlder, setIsFetchingOlder] = useState(false);
   
-  // 🆕 HOTFIX: Detectar quando aba está visível
+  // Reset pagination state when conversation changes
   useEffect(() => {
-    const handleVisibility = () => {
-      setIsTabVisible(document.visibilityState === 'visible');
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
+    setHasMoreOlder(true);
+    setIsFetchingOlder(false);
+  }, [conversationId]);
 
   const query = useQuery({
     queryKey: ["messages", conversationId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!conversationId) return [];
 
-      // HISTÓRICO COMPLETO: Carregar TODAS as mensagens sem limite artificial
-      // Supabase tem limite padrão de 1000 - removemos para preservar histórico
       const { data, error } = await supabase
         .from("messages")
-        .select(`
-          *,
-          sender:profiles!sender_id(
-            id,
-            full_name,
-            avatar_url,
-            job_title
-          ),
-          media_attachments(
-            id,
-            storage_path,
-            storage_bucket,
-            mime_type,
-            original_filename,
-            file_size,
-            status,
-            waveform_data,
-            duration_seconds
-          )
-        `)
+        .select(MESSAGES_SELECT)
         .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true })
-        .limit(10000); // Limite alto para garantir histórico completo
+        .order("created_at", { ascending: false })
+        .limit(MESSAGES_PAGE_SIZE)
+        .abortSignal(signal);
 
       if (error) throw error;
       
-      // Atualizar timestamp da última mensagem para catch-up
-      if (data && data.length > 0) {
-        lastMessageTimestampRef.current = data[data.length - 1].created_at;
+      // Check if there are more older messages
+      setHasMoreOlder((data?.length || 0) >= MESSAGES_PAGE_SIZE);
+      
+      // Reverse to chronological order for rendering
+      const chronological = [...(data || [])].reverse();
+      
+      // Update timestamp for catch-up
+      if (chronological.length > 0) {
+        lastMessageTimestampRef.current = chronological[chronological.length - 1].created_at;
       }
       
-      // 🆕 HOTFIX: Detectar novas mensagens inbound via polling
-      if (data && data.length > previousLengthRef.current) {
-        const newCount = data.length - previousLengthRef.current;
-        const lastMessages = data.slice(-newCount);
-        
-        const hasNewInbound = lastMessages.some(m => m.sender_type === 'contact');
-        const realtimeGap = Date.now() - lastRealtimeEventRef.current > 5000;
-        
-        if (hasNewInbound && realtimeGap) {
-          console.log('[useMessages] 📥 Inbound detectado via polling (Realtime gap):', newCount);
-          registerEvent();
-        }
-      }
-      previousLengthRef.current = data?.length || 0;
-      
-      return data as any[];
+      return chronological as any[];
     },
     enabled: !!conversationId,
-    // PRESERVAÇÃO DE HISTÓRICO: Manter cache por mais tempo para não perder mensagens
-    staleTime: 1000 * 60 * 5, // 5 minutos - dados são considerados frescos
-    gcTime: 1000 * 60 * 30, // 30 minutos - manter em cache mesmo após inativo
-    refetchOnWindowFocus: true, // Recarregar ao voltar para a aba
-    refetchOnReconnect: true, // Recarregar ao reconectar internet
-    // 🆕 HOTFIX PRODUÇÃO: Polling adaptativo
-    // - Conversa ativa + aba visível: 3s (safety net)
-    // - Aba em background: 10s (economia)
-    // - Sem conversa: desativado
-    refetchInterval: !conversationId 
-      ? false 
-      : isTabVisible 
-        ? 3000 
-        : 10000,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   // 🔄 CATCH-UP: Buscar mensagens perdidas após reconexão
@@ -135,11 +123,7 @@ export function useMessages(conversationId: string | null) {
     try {
       const { data: newMessages, error } = await supabase
         .from("messages")
-        .select(`
-          *,
-          sender:profiles!sender_id(id, full_name, avatar_url, job_title),
-          media_attachments(id, storage_path, storage_bucket, mime_type, original_filename, file_size, status, waveform_data, duration_seconds)
-        `)
+        .select(MESSAGES_SELECT)
         .eq("conversation_id", conversationId)
         .gt("created_at", lastMessageTimestampRef.current)
         .order("created_at", { ascending: true });
@@ -453,7 +437,58 @@ export function useMessages(conversationId: string | null) {
     };
   }, [conversationId, queryClient, runCatchUp]);
 
-  return query;
+  // 🆕 ENTERPRISE: Fetch older messages for scroll-up pagination
+  const fetchOlderMessages = useCallback(async () => {
+    if (!conversationId || isFetchingOlder || !hasMoreOlder) return;
+    
+    const currentMessages = queryClient.getQueryData<any[]>(["messages", conversationId]);
+    if (!currentMessages || currentMessages.length === 0) return;
+    
+    const oldestTimestamp = currentMessages[0]?.created_at;
+    if (!oldestTimestamp) return;
+    
+    setIsFetchingOlder(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from("messages")
+        .select(MESSAGES_SELECT)
+        .eq("conversation_id", conversationId)
+        .lt("created_at", oldestTimestamp)
+        .order("created_at", { ascending: false })
+        .limit(MESSAGES_PAGE_SIZE);
+      
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        setHasMoreOlder(false);
+        return;
+      }
+      
+      setHasMoreOlder(data.length >= MESSAGES_PAGE_SIZE);
+      
+      // Prepend older messages in chronological order
+      const olderChronological = [...data].reverse();
+      
+      queryClient.setQueryData(
+        ["messages", conversationId],
+        (old: any[] = []) => {
+          const existingIds = new Set(old.map(m => m.id));
+          const newOnes = olderChronological.filter(m => !existingIds.has(m.id));
+          return [...newOnes, ...old];
+        }
+      );
+    } finally {
+      setIsFetchingOlder(false);
+    }
+  }, [conversationId, isFetchingOlder, hasMoreOlder, queryClient]);
+
+  return {
+    ...query,
+    fetchOlderMessages,
+    hasMoreOlder,
+    isFetchingOlder,
+  };
 }
 
 // FASE 7: Tipo estendido para suportar is_internal

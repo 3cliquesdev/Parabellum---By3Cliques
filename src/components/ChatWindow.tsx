@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   AlertDialog,
@@ -87,7 +87,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const { user } = useAuth();
   const { isAdmin, isManager, isSalesRep } = useUserRole();
   const { hasPermission } = useRolePermissions();
-  const { data: messages = [], isLoading: isMessagesLoading } = useMessages(conversation?.id || null);
+  const { data: messages = [], isLoading: isMessagesLoading, fetchOlderMessages, hasMoreOlder, isFetchingOlder } = useMessages(conversation?.id || null);
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
   const { data: activePersona } = useActivePersona(conversation?.id || null);
   const sendMessage = useSendMessage();
@@ -166,6 +166,53 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     if (!el || !shouldStickToBottom) return;
     el.scrollTop = el.scrollHeight; // instant (WhatsApp-like)
   }, [messages?.length, shouldStickToBottom]);
+
+  // 🆕 ENTERPRISE: Scroll-up pagination (load older messages)
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const scrollAnchorRef = useRef<{ height: number; top: number } | null>(null);
+  
+  const handleLoadOlder = useCallback(async () => {
+    const scrollEl = scrollRef.current;
+    if (scrollEl) {
+      scrollAnchorRef.current = {
+        height: scrollEl.scrollHeight,
+        top: scrollEl.scrollTop,
+      };
+    }
+    await fetchOlderMessages();
+  }, [fetchOlderMessages]);
+  
+  // Restore scroll position after older messages load
+  useEffect(() => {
+    const anchor = scrollAnchorRef.current;
+    const scrollEl = scrollRef.current;
+    if (anchor && scrollEl && !isFetchingOlder) {
+      const heightDiff = scrollEl.scrollHeight - anchor.height;
+      if (heightDiff > 0) {
+        scrollEl.scrollTop = anchor.top + heightDiff;
+      }
+      scrollAnchorRef.current = null;
+    }
+  });
+  
+  // IntersectionObserver for auto-loading older messages on scroll up
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    const scrollEl = scrollRef.current;
+    if (!el || !scrollEl || !hasMoreOlder) return;
+    
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          handleLoadOlder();
+        }
+      },
+      { root: scrollEl, rootMargin: '200px' }
+    );
+    
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMoreOlder, handleLoadOlder]);
 
   // FASE 5 & 7: handleSendMessage com suporte a notas internas
   const handleSendMessage = async (isInternal: boolean = false) => {
@@ -617,14 +664,22 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                     <div className="text-slate-500 dark:text-zinc-400">Nenhuma mensagem ainda</div>
                   </div>
                 ) : (
-                <MessagesWithMedia 
-                    messages={messages}
-                    contact={contact}
-                    conversation={conversation}
-                    isAdmin={isAdmin}
-                    isManager={isManager}
-                    messagesEndRef={messagesEndRef}
-                  />
+                  <>
+                    {/* 🆕 ENTERPRISE: Sentinel for scroll-up pagination */}
+                    {hasMoreOlder && (
+                      <div ref={loadMoreRef} className="flex justify-center py-2">
+                        {isFetchingOlder && <MessageSkeleton count={2} />}
+                      </div>
+                    )}
+                    <MessagesWithMedia 
+                      messages={messages}
+                      contact={contact}
+                      conversation={conversation}
+                      isAdmin={isAdmin}
+                      isManager={isManager}
+                      messagesEndRef={messagesEndRef}
+                    />
+                  </>
                 )}
               </div>
             </div>

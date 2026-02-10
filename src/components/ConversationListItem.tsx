@@ -1,5 +1,5 @@
-import { memo, useEffect, useState, useRef, CSSProperties } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { memo, useEffect, useState, useRef, useCallback, CSSProperties } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,6 +13,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useSentimentAnalysis, type Sentiment } from "@/hooks/useSentimentAnalysis";
 import { supabase } from "@/integrations/supabase/client";
 import { useWhatsAppInstances } from "@/hooks/useWhatsAppInstances";
+import { prefetchMessages } from "@/hooks/useMessages";
 type Contact = Tables<"contacts"> & {
   organizations: Tables<"organizations"> | null;
 };
@@ -213,9 +214,30 @@ function ConversationListItemComponent({
     e.stopPropagation();
   };
 
+  // 🆕 ENTERPRISE: Prefetch messages on hover (debounced 150ms)
+  const queryClient = useQueryClient();
+  const prefetchedRef = useRef(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  
+  const handleMouseEnter = useCallback(() => {
+    if (prefetchedRef.current) return;
+    hoverTimerRef.current = setTimeout(() => {
+      prefetchedRef.current = true;
+      prefetchMessages(queryClient, conversation.id);
+    }, 150);
+  }, [conversation.id, queryClient]);
+  
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
+  }, []);
+
   return (
     <button
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       style={style}
       className={cn(
         "w-full p-3 flex items-start gap-3 hover:bg-accent transition-colors text-left relative group border-b border-border",
