@@ -1,90 +1,91 @@
 
 
-# Configuracao de Campos Obrigatorios no Formulario de Ticket
+# Correcoes: Multiplas Evidencias + Bug de Selecao de Cliente
 
-## Resumo
+## Bug 1: Cliente nao fica selecionado
 
-Adicionar uma secao de configuracao na pagina "Depart. e Operacoes" que permite ao admin definir quais campos do formulario de criacao de ticket sao **obrigatorios** ou **opcionais**. Isso usa a tabela `system_configurations` ja existente (key/value).
+**Causa raiz:** Quando o usuario clica num contato, o codigo faz `setCustomerId(contact.id)` e `setCustomerSearch("")`. Ao limpar a busca, o `debouncedSearch` fica vazio, o hook `useSearchContactsForTicket` retorna array vazio, e a linha `selectedContact = contacts.find(c => c.id === customerId)` nao encontra nada porque `contacts` esta vazio. Resultado: o card de "contato selecionado" nunca aparece.
 
-## Campos configuraveis
-
-| Campo | Key no banco | Padrao atual |
-|---|---|---|
-| Departamento Responsavel | `ticket_field_department_required` | false (opcional) |
-| Operacao | `ticket_field_operation_required` | true (obrigatorio) |
-| Origem do Ticket | `ticket_field_origin_required` | true (obrigatorio) |
-| Categoria | `ticket_field_category_required` | false (opcional) |
-| Cliente | `ticket_field_customer_required` | false (opcional) |
-| Responsavel (Atribuir a) | `ticket_field_assigned_to_required` | false (opcional) |
-
-## O que muda
-
-### 1. Seed das configuracoes no banco
-
-Inserir registros na tabela `system_configurations` com os valores padrao, usando `ON CONFLICT DO NOTHING` para nao sobrescrever se ja existir.
-
-```sql
-INSERT INTO system_configurations (key, value, description, category)
-VALUES
-  ('ticket_field_department_required', 'false', 'Departamento responsavel obrigatorio na criacao de ticket', 'tickets'),
-  ('ticket_field_operation_required', 'true', 'Operacao obrigatoria na criacao de ticket', 'tickets'),
-  ('ticket_field_origin_required', 'true', 'Origem obrigatoria na criacao de ticket', 'tickets'),
-  ('ticket_field_category_required', 'false', 'Categoria obrigatoria na criacao de ticket', 'tickets'),
-  ('ticket_field_customer_required', 'false', 'Cliente obrigatorio na criacao de ticket', 'tickets'),
-  ('ticket_field_assigned_to_required', 'false', 'Responsavel obrigatorio na criacao de ticket', 'tickets')
-ON CONFLICT (key) DO NOTHING;
-```
-
-### 2. Novo hook: `useTicketFieldSettings.tsx`
-
-- Busca todas as configs com category = 'tickets' e key LIKE 'ticket_field_%_required'
-- Retorna um objeto tipado: `{ department: boolean, operation: boolean, origin: boolean, category: boolean, customer: boolean, assigned_to: boolean }`
-- Mutation para atualizar cada campo individualmente
-
-### 3. Nova aba "Campos" na pagina Departments.tsx
-
-- Aba adicional ao lado de Departamentos, Operacoes, Categorias e Origens
-- Lista cada campo com:
-  - Nome do campo
-  - Toggle (Switch) obrigatorio/opcional
-  - Descricao curta
-- Salva automaticamente ao clicar no toggle (sem botao "Salvar")
-
-### 4. Atualizar CreateTicketDialog.tsx
-
-- Importar `useTicketFieldSettings()`
-- Usar as configs para:
-  - Mostrar asterisco (*) nos labels de campos obrigatorios
-  - Mostrar "(opcional)" nos labels de campos nao obrigatorios
-  - Ajustar `canSubmit` dinamicamente baseado nos campos marcados como obrigatorios
-- Nenhum campo e removido do formulario - apenas muda se e obrigatorio ou nao
-
-### 5. Logica de validacao dinamica
+**Correcao:** Guardar o objeto do contato selecionado num state separado em vez de derivar da lista de resultados de busca.
 
 ```typescript
-// Exemplo de canSubmit dinamico
-const canSubmit =
-  subject.trim() &&
-  (!fieldSettings.operation || operationId) &&
-  (!fieldSettings.origin || originId) &&
-  (!fieldSettings.department || departmentId) &&
-  (!fieldSettings.category || category) &&
-  (!fieldSettings.customer || customerId) &&
-  (!fieldSettings.assigned_to || assignedTo) &&
-  !createTicket.isPending;
+// Antes (bug)
+const selectedContact = contacts.find((c) => c.id === customerId);
+
+// Depois (fix)
+const [selectedContact, setSelectedContact] = useState<ContactResult | null>(null);
+
+// No onClick:
+onClick={() => {
+  setCustomerId(contact.id);
+  setSelectedContact(contact);
+  setCustomerSearch("");
+}}
 ```
 
-## Arquivos envolvidos
+## Bug 2: Apenas 1 evidencia permitida
 
-| Arquivo | Acao |
+**Causa raiz:** O formulario usa estados singulares (`attachmentFile`, `uploadedAttachment`) e o dropzone tem `maxFiles: 1`. O submit envia `attachments: uploadedAttachment ? [uploadedAttachment] : []` - sempre maximo 1.
+
+**Correcao:** Converter para arrays, permitindo multiplos uploads sequenciais.
+
+Mudancas no `CreateTicketDialog.tsx`:
+
+- Substituir `attachmentFile` / `attachmentPreview` / `uploadedAttachment` por arrays
+- Remover `maxFiles: 1` do dropzone
+- Permitir adicionar novos arquivos sem perder os ja enviados
+- Exibir grid de previews com botao X individual para remover cada um
+- Submit envia `attachments: uploadedAttachments` (array completo)
+
+## Arquivo modificado
+
+| Arquivo | Mudanca |
 |---|---|
-| Migracao SQL | Seed das configs |
-| `src/hooks/useTicketFieldSettings.tsx` | **Novo** - hook de leitura/escrita |
-| `src/pages/Departments.tsx` | Nova aba "Campos" |
-| `src/components/support/CreateTicketDialog.tsx` | Validacao dinamica |
+| `src/components/support/CreateTicketDialog.tsx` | Fix selecao cliente + multiplas evidencias |
+
+## Detalhes tecnicos
+
+### Estados refatorados para multiplas evidencias:
+
+```typescript
+// Antes
+const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
+const [uploadedAttachment, setUploadedAttachment] = useState<...>(null);
+
+// Depois
+const [uploadedAttachments, setUploadedAttachments] = useState<Array<{
+  url: string; type: string; name: string; preview?: string;
+}>>([]);
+```
+
+### onDrop refatorado:
+
+```typescript
+const onDrop = useCallback(async (acceptedFiles: File[]) => {
+  for (const file of acceptedFiles) {
+    const result = await uploadFile(file);
+    if (result) {
+      let preview: string | undefined;
+      if (file.type.startsWith('image/')) {
+        preview = URL.createObjectURL(file);
+      }
+      setUploadedAttachments(prev => [...prev, { ...result, preview }]);
+    }
+  }
+}, [uploadFile]);
+```
+
+### UI de previews:
+
+- Grid com miniaturas de cada arquivo enviado
+- Botao X em cada item para remover individualmente
+- Area de upload sempre visivel para adicionar mais arquivos
+- Contador mostrando quantos arquivos foram anexados
 
 ## Impacto
 
-- Zero regressao: valores padrao mantêm o comportamento atual (Operacao e Origem obrigatorios, resto opcional)
-- Admin pode mudar a qualquer momento sem deploy
-- Formulario reflete as configs em tempo real via React Query
+- Zero regressao: o campo `attachments` do ticket ja e um array JSON, entao suporta multiplos itens nativamente
+- O `TicketAttachments.tsx` (usado na visualizacao do ticket) ja suporta multiplos anexos
+- A correcao do cliente e pontual e nao afeta nenhum outro fluxo
+
