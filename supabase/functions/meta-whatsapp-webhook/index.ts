@@ -450,6 +450,16 @@ serve(async (req) => {
                   
                   console.log("[meta-whatsapp-webhook] ✅ CSAT processed - conversation stays CLOSED");
                   continue; // ⚠️ CRÍTICO: Pular para próxima mensagem, NÃO criar conversa
+                } else {
+                  // Cliente enviou mensagem não-numérica após CSAT
+                  // Intenção clara: novo contato, não avaliação
+                  // Limpar flag para não interceptar próximas mensagens
+                  console.log(`[meta-whatsapp-webhook] 🧹 CSAT Guard: mensagem "${messageContent}" não é rating. Limpando awaiting_rating da conversa ${csatConversation.id}`);
+                  await supabase
+                    .from("conversations")
+                    .update({ awaiting_rating: false })
+                    .eq("id", csatConversation.id);
+                  // NÃO usar continue - deixar mensagem seguir para fluxo normal
                 }
               }
               // ============================================
