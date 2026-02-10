@@ -83,19 +83,19 @@ export function useDealsConversionAnalysis(dateRange?: DateRange, source: DealSo
 
       // Use count: exact to get real counts without 1000 limit
       let createdQuery = applySourceFilter(
-        supabase.from("deals").select("*", { count: "exact", head: true })
+        supabase.from("deals").select("id", { count: "exact", head: true })
       );
       
       let wonQuery = applySourceFilter(
-        supabase.from("deals").select("*", { count: "exact", head: true }).eq("status", "won")
+        supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "won")
       );
       
       let lostQuery = applySourceFilter(
-        supabase.from("deals").select("*", { count: "exact", head: true }).eq("status", "lost")
+        supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "lost")
       );
       
       let openQuery = applySourceFilter(
-        supabase.from("deals").select("*", { count: "exact", head: true }).eq("status", "open")
+        supabase.from("deals").select("id", { count: "exact", head: true }).eq("status", "open")
       );
 
       // ⚠️ LÓGICA TRAVADA: TODOS os deals filtram por created_at

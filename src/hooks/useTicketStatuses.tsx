@@ -172,7 +172,7 @@ export function useDeleteTicketStatus() {
       // We need to cast to any because the status column is an enum
       const { count, error: checkError } = await supabase
         .from("tickets")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", statusData.name as any);
 
       if (checkError) throw checkError;

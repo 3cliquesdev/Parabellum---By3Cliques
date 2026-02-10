@@ -22,7 +22,7 @@ export function useMyPendingCounts() {
       // Buscar contagem de inbox (conversas não lidas atribuídas ao usuário)
       const { count: inboxCount, error: inboxError } = await supabase
         .from("inbox_view")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("assigned_to", user.id)
         .gt("unread_count", 0);
 
@@ -33,7 +33,7 @@ export function useMyPendingCounts() {
       // Buscar contagem de tickets pendentes atribuídos ao usuário
       const { count: ticketsCount, error: ticketsError } = await supabase
         .from("tickets")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("assigned_to", user.id)
         .not("status", "in", '("resolved","closed")');
 
@@ -44,7 +44,7 @@ export function useMyPendingCounts() {
       // Buscar contagem de deals ativos atribuídos ao usuário
       const { count: dealsCount, error: dealsError } = await supabase
         .from("deals")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("assigned_to", user.id)
         .not("status", "in", '("won","lost")');
 

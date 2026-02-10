@@ -21,6 +21,13 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
+      "no-restricted-syntax": [
+        "warn",
+        {
+          selector: "CallExpression[callee.property.name='select'][arguments.0.value='*']",
+          message: "Avoid select('*'). Use explicit fields or select('id', { head: true, count: 'exact' }) for counts."
+        }
+      ],
     },
   },
 );

@@ -16,13 +16,13 @@ export const useInstagramStats = () => {
       // Get new comments count
       const { count: newCommentsCount } = await supabase
         .from("instagram_comments")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "new");
 
       // Get unread messages count
       const { count: unreadMessagesCount } = await supabase
         .from("instagram_messages")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("read", false)
         .eq("is_from_business", false);
 
@@ -32,18 +32,18 @@ export const useInstagramStats = () => {
 
       const { count: convertedDealsCount } = await supabase
         .from("instagram_comments")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "converted")
         .gte("updated_at", oneWeekAgo.toISOString());
 
       // Calculate response rate
       const { count: totalComments } = await supabase
         .from("instagram_comments")
-        .select("*", { count: "exact", head: true });
+        .select("id", { count: "exact", head: true });
 
       const { count: repliedComments } = await supabase
         .from("instagram_comments")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("replied", true);
 
       const responseRate = totalComments && totalComments > 0
