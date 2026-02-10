@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateTicketCategory, useUpdateTicketCategory, type TicketCategory } from "@/hooks/useTicketCategories";
 
 interface CategoryDialogProps {
@@ -12,10 +13,18 @@ interface CategoryDialogProps {
   category?: TicketCategory | null;
 }
 
+const priorityLabels: Record<string, string> = {
+  low: "Baixa",
+  medium: "Média",
+  high: "Alta",
+  urgent: "Urgente",
+};
+
 export default function CategoryDialog({ open, onOpenChange, category }: CategoryDialogProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState("#3B82F6");
+  const [priority, setPriority] = useState("medium");
 
   const createMutation = useCreateTicketCategory();
   const updateMutation = useUpdateTicketCategory();
@@ -25,19 +34,21 @@ export default function CategoryDialog({ open, onOpenChange, category }: Categor
       setName(category.name);
       setDescription(category.description || "");
       setColor(category.color);
+      setPriority((category as any).priority || "medium");
     } else {
       setName("");
       setDescription("");
       setColor("#3B82F6");
+      setPriority("medium");
     }
   }, [category, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (category) {
-      await updateMutation.mutateAsync({ id: category.id, name, description, color });
+      await updateMutation.mutateAsync({ id: category.id, name, description, color, priority } as any);
     } else {
-      await createMutation.mutateAsync({ name, description, color });
+      await createMutation.mutateAsync({ name, description, color, priority } as any);
     }
     onOpenChange(false);
   };
@@ -62,6 +73,19 @@ export default function CategoryDialog({ open, onOpenChange, category }: Categor
             <div className="space-y-2">
               <Label htmlFor="cat-desc">Descrição</Label>
               <Textarea id="cat-desc" placeholder="Descreva esta categoria..." value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+            </div>
+            <div className="space-y-2">
+              <Label>Prioridade Padrão</Label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(priorityLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="cat-color">Cor</Label>

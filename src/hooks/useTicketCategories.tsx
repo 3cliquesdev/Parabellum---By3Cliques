@@ -7,6 +7,7 @@ export interface TicketCategory {
   name: string;
   description: string | null;
   color: string;
+  priority: string;
   is_active: boolean;
   created_at: string;
 }

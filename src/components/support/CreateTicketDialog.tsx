@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useCreateTicket } from "@/hooks/useCreateTicket";
 import { useSearchContactsForTicket } from "@/hooks/useSearchContactsForTicket";
 import { useDepartments } from "@/hooks/useDepartments";
-import { useTicketCategories, useCreateTicketCategory } from "@/hooks/useTicketCategories";
+import { useTicketCategories } from "@/hooks/useTicketCategories";
 import { useUsers } from "@/hooks/useUsers";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useTicketAttachmentUpload } from "@/hooks/useTicketAttachmentUpload";
@@ -54,27 +54,35 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const createTicket = useCreateTicket();
   const { data: departments = [] } = useDepartments();
   const { data: categories = [] } = useTicketCategories();
-  const createCategory = useCreateTicketCategory();
+  // createCategory removed - categories are managed via settings
   const { uploadFile, uploading, progress } = useTicketAttachmentUpload();
   const { data: operations = [] } = useTicketOperations();
 
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>("medium");
+  const [priority, setPriority] = useState<string>("medium");
   const [category, setCategory] = useState<string>("");
   
-  // Definir categoria inicial quando categorias carregarem
+  // Auto-set category and priority from category
   useEffect(() => {
     if (categories.length > 0 && !category) {
       const defaultCat = categories.find(c => c.name === 'outro') || categories[0];
       setCategory(defaultCat.name);
+      setPriority((defaultCat as any).priority || "medium");
     }
   }, [categories, category]);
+
+  // When category changes, auto-fill priority from category
+  const handleCategoryChange = (catName: string) => {
+    setCategory(catName);
+    const selectedCat = categories.find(c => c.name === catName);
+    if (selectedCat) {
+      setPriority((selectedCat as any).priority || "medium");
+    }
+  };
   const [customerId, setCustomerId] = useState<string>("");
   const [departmentId, setDepartmentId] = useState<string>("");
   const [customerSearch, setCustomerSearch] = useState("");
-  const [showNewCategory, setShowNewCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
   const [assignedTo, setAssignedTo] = useState<string>("");
   
   // Estado para anexo (agora opcional)
@@ -153,12 +161,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
     setUploadedAttachment(null);
   };
 
-  const handleCreateCategory = async () => {
-    if (!newCategoryName.trim()) return;
-    await createCategory.mutateAsync({ name: newCategoryName.trim().toLowerCase().replace(/\s+/g, '_') });
-    setNewCategoryName("");
-    setShowNewCategory(false);
-  };
+  // Category creation removed - managed via settings
 
   // Evidência agora é sempre opcional
 
@@ -170,7 +173,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
     await createTicket.mutateAsync({
       subject: subject.trim(),
       description: description.trim(),
-      priority,
+      priority: priority as 'low' | 'medium' | 'high' | 'urgent',
       category,
       customer_id: customerId || undefined,
       department_id: departmentId || undefined,
@@ -388,13 +391,17 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
             />
           </div>
 
-          {/* Priority & Category Row */}
+          {/* Category & Priority Row */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Prioridade</Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as any)}>
+              <Label>Categoria</Label>
+              <Select 
+                value={category} 
+                onValueChange={handleCategoryChange}
+                disabled={categories.length === 0}
+              >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder={categories.length === 0 ? "Carregando..." : "Selecione"} />
                 </SelectTrigger>
                 <SelectContent 
                   position="popper" 
@@ -403,75 +410,27 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                   sideOffset={4}
                   className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
                 >
-                  <SelectItem value="low">Baixa</SelectItem>
-                  <SelectItem value="medium">Média</SelectItem>
-                  <SelectItem value="high">Alta</SelectItem>
-                  <SelectItem value="urgent">Urgente</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.name}>
+                      {categoryLabels[cat.name] || cat.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Categoria</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 text-xs"
-                  onClick={() => setShowNewCategory(!showNewCategory)}
-                >
-                  <Plus className="w-3 h-3 mr-1" />
-                  Nova
-                </Button>
-              </div>
-              {showNewCategory ? (
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Nome da categoria"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    className="h-9"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleCreateCategory}
-                    disabled={createCategory.isPending}
-                  >
-                    {createCategory.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar"}
-                  </Button>
-                </div>
-              ) : (
-              <Select 
-                  value={category} 
-                  onValueChange={setCategory}
-                  disabled={categories.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={categories.length === 0 ? "Carregando..." : "Selecione"} />
-                  </SelectTrigger>
-                  <SelectContent 
-                    position="popper" 
-                    side="bottom" 
-                    align="start"
-                    sideOffset={4}
-                    className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
-                  >
-                    {categories.length > 0 ? (
-                      categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.name}>
-                          {categoryLabels[cat.name] || cat.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <div className="p-2 text-sm text-muted-foreground text-center">
-                        Carregando categorias...
-                      </div>
-                    )}
-                  </SelectContent>
-                </Select>
-              )}
+              <Label>Prioridade</Label>
+              <Input
+                value={
+                  priority === "low" ? "Baixa" :
+                  priority === "medium" ? "Média" :
+                  priority === "high" ? "Alta" :
+                  priority === "urgent" ? "Urgente" : priority
+                }
+                readOnly
+                className="bg-muted cursor-default"
+              />
             </div>
           </div>
 

@@ -1,0 +1,1 @@
+ALTER TABLE public.ticket_categories ADD COLUMN priority text DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent'));
