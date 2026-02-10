@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { TicketSettings, FormField, DEFAULT_TICKET_SETTINGS } from "@/hooks/useForms";
 import { Ticket, Mail, AlertTriangle, Briefcase } from "lucide-react";
 import { useTicketOperations } from "@/hooks/useTicketOperations";
+import { useTicketCategories } from "@/hooks/useTicketCategories";
 
 interface TicketFieldMappingProps {
   fields: FormField[];
@@ -28,13 +29,6 @@ const PRIORITY_OPTIONS = [
   { value: "urgent", label: "Urgente" },
 ];
 
-const CATEGORY_OPTIONS = [
-  { value: "financeiro", label: "Financeiro" },
-  { value: "tecnico", label: "Técnico" },
-  { value: "bug", label: "Bug/Problema" },
-  { value: "outro", label: "Outro" },
-];
-
 export function TicketFieldMapping({
   fields,
   ticketSettings,
@@ -42,6 +36,7 @@ export function TicketFieldMapping({
   onFieldUpdate,
 }: TicketFieldMappingProps) {
   const settings = { ...DEFAULT_TICKET_SETTINGS, ...ticketSettings };
+  const { data: categories } = useTicketCategories();
 
   const textFields = fields.filter(f => 
     f.type === "text" || f.type === "long_text" || f.type === "select"
@@ -154,15 +149,22 @@ export function TicketFieldMapping({
           <Label className="text-sm">Categoria Padrão</Label>
           <Select
             value={settings.default_category}
-            onValueChange={(v) => onChange({ ...settings, default_category: v as any })}
+            onValueChange={(v) => {
+              const cat = categories?.find(c => c.name === v);
+              const updatedSettings: TicketSettings = { ...settings, default_category: v };
+              if (cat?.priority) {
+                updatedSettings.default_priority = cat.priority as any;
+              }
+              onChange(updatedSettings);
+            }}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Selecione uma categoria" />
             </SelectTrigger>
             <SelectContent>
-              {CATEGORY_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
+              {(categories || []).filter(c => c.is_active).map((cat) => (
+                <SelectItem key={cat.id} value={cat.name}>
+                  {cat.name}
                 </SelectItem>
               ))}
             </SelectContent>
