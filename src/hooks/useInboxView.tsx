@@ -32,6 +32,10 @@ export interface InboxViewItem {
   whatsapp_meta_instance_id: string | null;
   whatsapp_provider: string | null;
   contact_whatsapp_id: string | null;
+  department_name: string | null;
+  department_color: string | null;
+  assigned_agent_name: string | null;
+  assigned_agent_avatar: string | null;
 }
 
 export interface InboxFilters {

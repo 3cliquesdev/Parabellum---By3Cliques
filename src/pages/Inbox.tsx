@@ -232,6 +232,17 @@ export default function Inbox() {
         whatsapp_id: item.contact_whatsapp_id || item.contact_phone || null,
         zip_code: null,
       } as Contact,
+      department_data: item.department_name ? {
+        id: item.department,
+        name: item.department_name,
+        color: item.department_color || null,
+      } : null,
+      assigned_user: item.assigned_agent_name ? {
+        id: item.assigned_to,
+        full_name: item.assigned_agent_name,
+        avatar_url: item.assigned_agent_avatar || null,
+        job_title: null,
+      } : null,
     } as Conversation;
   }, []);
 

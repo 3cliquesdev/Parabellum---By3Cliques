@@ -4029,6 +4029,8 @@ export type Database = {
       inbox_view: {
         Row: {
           ai_mode: string | null
+          assigned_agent_avatar: string | null
+          assigned_agent_name: string | null
           assigned_to: string | null
           channels: string[] | null
           contact_avatar: string | null
@@ -4040,6 +4042,8 @@ export type Database = {
           conversation_id: string
           created_at: string | null
           department: string | null
+          department_color: string | null
+          department_name: string | null
           has_attachments: boolean | null
           has_audio: boolean | null
           last_channel: string | null
@@ -4056,6 +4060,8 @@ export type Database = {
         }
         Insert: {
           ai_mode?: string | null
+          assigned_agent_avatar?: string | null
+          assigned_agent_name?: string | null
           assigned_to?: string | null
           channels?: string[] | null
           contact_avatar?: string | null
@@ -4067,6 +4073,8 @@ export type Database = {
           conversation_id: string
           created_at?: string | null
           department?: string | null
+          department_color?: string | null
+          department_name?: string | null
           has_attachments?: boolean | null
           has_audio?: boolean | null
           last_channel?: string | null
@@ -4083,6 +4091,8 @@ export type Database = {
         }
         Update: {
           ai_mode?: string | null
+          assigned_agent_avatar?: string | null
+          assigned_agent_name?: string | null
           assigned_to?: string | null
           channels?: string[] | null
           contact_avatar?: string | null
@@ -4094,6 +4104,8 @@ export type Database = {
           conversation_id?: string
           created_at?: string | null
           department?: string | null
+          department_color?: string | null
+          department_name?: string | null
           has_attachments?: boolean | null
           has_audio?: boolean | null
           last_channel?: string | null
