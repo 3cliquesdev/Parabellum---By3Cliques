@@ -8999,6 +8999,7 @@ export type Database = {
         }[]
       }
       generate_session_token: { Args: never; Returns: string }
+      get_active_conversation_counts: { Args: never; Returns: Json }
       get_ai_usage_metrics: {
         Args: { p_end_date: string; p_start_date: string; p_user_id?: string }
         Returns: {
@@ -9316,6 +9317,10 @@ export type Database = {
           ticket_number: string
           total_count: number
         }[]
+      }
+      get_support_metrics_consolidated: {
+        Args: { p_end: string; p_start: string }
+        Returns: Json
       }
       get_support_metrics_v2: {
         Args: {

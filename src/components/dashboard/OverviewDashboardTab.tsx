@@ -10,12 +10,30 @@ import { useSLAAlerts } from "@/hooks/useSLAAlerts";
 import { useTicketCounts } from "@/hooks/useTicketCounts";
 import { useSupportMetrics } from "@/hooks/useSupportMetrics";
 import { useWhatsAppInstances } from "@/hooks/useWhatsAppInstances";
-import { useConversations } from "@/hooks/useConversations";
 import { useTeamOnlineCount } from "@/hooks/useTeamOnlineCount";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface OverviewDashboardTabProps {
   dateRange?: DateRange;
+}
+
+/** Lightweight RPC count instead of loading all conversations */
+function useActiveConversationCounts() {
+  return useQuery({
+    queryKey: ["active-conversation-counts"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_active_conversation_counts");
+      if (error) throw error;
+      const result = data as any;
+      return {
+        total: result?.total || 0,
+        queued: result?.queued || 0,
+      };
+    },
+    staleTime: 30_000,
+  });
 }
 
 export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
@@ -30,7 +48,7 @@ export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
   const { data: ticketCounts } = useTicketCounts();
   const { data: supportMetrics } = useSupportMetrics(startDate, endDate);
   const { data: whatsappInstances } = useWhatsAppInstances();
-  const { data: conversations } = useConversations({ status: ['open'], channels: [], tags: [], search: '', slaExpired: false });
+  const { data: convCounts } = useActiveConversationCounts();
   const { data: teamOnlineCount } = useTeamOnlineCount();
 
   const formatCurrency = (value: number) => {
@@ -58,8 +76,8 @@ export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
   const activeSlaAlerts = slaAlerts?.length || 0;
   const connectedInstances = whatsappInstances?.filter(i => i.status === 'connected').length || 0;
   const totalInstances = whatsappInstances?.length || 0;
-  const activeConversations = conversations?.length || 0;
-  const queuedConversations = conversations?.filter(c => !c.assigned_to).length || 0;
+  const activeConversations = convCounts?.total || 0;
+  const queuedConversations = convCounts?.queued || 0;
 
   return (
     <BentoGrid cols={4}>

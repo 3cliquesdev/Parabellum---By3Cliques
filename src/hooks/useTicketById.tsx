@@ -1,25 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { TICKET_SELECT } from "@/lib/select-fields";
 
 export function useTicketById(ticketId: string | undefined) {
   return useQuery({
     queryKey: ['ticket', ticketId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!ticketId) throw new Error('Ticket ID is required');
       
       const { data, error } = await supabase
         .from('tickets')
-        .select(`
-          *,
-          customer:contacts(id, first_name, last_name, email, phone, avatar_url, company, address, city, state, zip_code),
-          assigned_user:profiles!tickets_assigned_to_fkey(id, full_name, avatar_url),
-          created_by_user:profiles!tickets_created_by_fkey(id, full_name, avatar_url),
-          department:departments!tickets_department_id_fkey(id, name, color),
-          requesting_department:departments!tickets_requesting_department_id_fkey(id, name, color),
-          operation:ticket_operations(id, name, color),
-          origin:ticket_origins!tickets_origin_id_fkey(id, name, color)
-        `)
+        .select(TICKET_SELECT)
         .eq('id', ticketId)
+        .abortSignal(signal)
         .maybeSingle();
 
       if (error) throw error;
@@ -28,5 +21,6 @@ export function useTicketById(ticketId: string | undefined) {
       return data;
     },
     enabled: !!ticketId,
+    staleTime: 60_000,
   });
 }
