@@ -99,6 +99,24 @@ serve(async (req) => {
 
     console.log('[resend-webhook] Event tracked successfully:', eventType);
 
+    // Atualizar email_sends com timestamps de interação
+    if (eventType === 'opened' || eventType === 'clicked' || eventType === 'bounced') {
+      const updateField = eventType === 'opened' ? 'opened_at' 
+        : eventType === 'clicked' ? 'clicked_at' 
+        : 'bounced_at';
+      
+      const { error: updateError } = await supabase
+        .from('email_sends')
+        .update({ [updateField]: new Date().toISOString() })
+        .eq('resend_email_id', payload.data.email_id);
+      
+      if (updateError) {
+        console.warn('[resend-webhook] Falha ao atualizar email_sends:', updateError);
+      } else {
+        console.log(`[resend-webhook] email_sends.${updateField} atualizado para email ${payload.data.email_id}`);
+      }
+    }
+
     // Update interaction if customer_id exists
     if (customerId && (eventType === 'opened' || eventType === 'clicked' || eventType === 'bounced')) {
       const { error: interactionError } = await supabase
