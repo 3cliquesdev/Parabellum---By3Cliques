@@ -1,70 +1,51 @@
 
-# Adicionar configuracao de SLA no dialog de Categorias
+# Auto-preencher Prioridade ao selecionar Categoria no Formulario
 
 ## Resumo
 
-Ao criar ou editar uma Categoria (que ja tem prioridade definida), o admin tambem define os tempos de SLA (tempo de primeira resposta e tempo de resolucao). Esses valores sao salvos automaticamente na tabela `sla_policies` vinculados a `category_id` + `priority`.
+Quando o admin seleciona uma **Categoria Padrao** nas Configuracoes de Ticket do formulario, a **Prioridade Padrao** sera preenchida automaticamente com a prioridade definida nessa categoria (tabela `ticket_categories`). O admin ainda pode alterar manualmente depois.
 
-## Como funciona hoje
+## Problema atual
 
-- Tabela `sla_policies` existe com campos: `category_id`, `priority`, `response_time_value`, `response_time_unit`, `resolution_time_value`, `resolution_time_unit`
-- Tabela esta **vazia** -- nenhuma politica configurada
-- Nao existe UI para gerenciar SLA em nenhum lugar da aplicacao
+- As categorias no `TicketFieldMapping` sao **hardcoded** (`financeiro`, `tecnico`, `bug`, `outro`) e nao vem do banco
+- Nao ha vinculo entre a categoria selecionada e sua prioridade cadastrada
+- No `CategoryDialog` (criacao manual de ticket), isso ja funciona porque o admin define a prioridade junto
 
-## Onde sera configurado
+## O que muda
 
-Na aba **Categorias** (dentro de Depart. & Operacoes), ao clicar em "Editar" ou "+ Nova Categoria", o dialog ja mostra nome, descricao, cor e prioridade. Vamos adicionar:
+### 1. Buscar categorias do banco (em vez de hardcoded)
 
-- **Tempo de Primeira Resposta**: valor numerico + unidade (horas / horas uteis / dias uteis)
-- **Tempo de Resolucao**: valor numerico + unidade (horas / horas uteis / dias uteis)
+**Arquivo:** `src/components/forms/TicketFieldMapping.tsx`
 
-## Etapas
+- Importar `useTicketCategories` de `src/hooks/useTicketCategories.tsx`
+- Remover o array `CATEGORY_OPTIONS` hardcoded
+- Usar as categorias reais do banco no Select de "Categoria Padrao"
 
-### 1. Atualizar CategoryDialog com campos de SLA
+### 2. Auto-preencher prioridade ao trocar categoria
 
-**Arquivo:** `src/components/CategoryDialog.tsx`
+**Arquivo:** `src/components/forms/TicketFieldMapping.tsx`
 
-Adicionar dois grupos de campos abaixo da prioridade:
+- No `onValueChange` do Select de categoria:
+  - Buscar a categoria selecionada na lista carregada
+  - Se ela tiver `priority`, atualizar `default_priority` automaticamente
+  - Chamar `onChange({ ...settings, default_category: v, default_priority: cat.priority })`
 
-- Input numerico "Tempo de 1a Resposta" + Select de unidade (hours / business_hours / business_days)
-- Input numerico "Tempo de Resolucao" + Select de unidade
+### 3. Atualizar tipo de `default_category`
 
-Ao abrir para edicao, buscar a politica existente em `sla_policies` para pre-preencher os campos.
+**Arquivo:** `src/hooks/useForms.tsx`
 
-### 2. Salvar/atualizar sla_policies no submit
-
-Quando o admin salva a categoria, alem de salvar na `ticket_categories`, tambem faz upsert na `sla_policies`:
-
-```text
-category_id = categoria.id
-priority = categoria.priority
-response_time_value = valor informado
-response_time_unit = unidade informada
-resolution_time_value = valor informado  
-resolution_time_unit = unidade informada
-is_active = true
-```
-
-Se a categoria ja tinha uma politica, atualiza. Se nao, cria.
-
-### 3. Mostrar SLA no card da categoria (Departments.tsx)
-
-No card de cada categoria na listagem, mostrar um indicador visual do SLA configurado (ex.: "SLA: 2h resposta / 24h resolucao"), similar ao que ja acontece com "Auto-fecha em 30 min" nos departamentos.
-
-### 4. Invalidar cache de sla-policies
-
-Ao salvar, invalidar a query `['sla-policies']` para manter consistencia com qualquer parte do sistema que consulte politicas de SLA.
+- Alterar `default_category` de tipo union literal (`"financeiro" | "tecnico" | ...`) para `string`, ja que agora os valores vem do banco (IDs ou nomes dinamicos)
 
 ## Arquivos modificados
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/components/CategoryDialog.tsx` | Adicionar campos de SLA (resposta + resolucao) e logica de upsert |
-| `src/pages/Departments.tsx` | Mostrar indicador de SLA no card da categoria |
+| `src/components/forms/TicketFieldMapping.tsx` | Carregar categorias do banco, auto-preencher prioridade ao selecionar |
+| `src/hooks/useForms.tsx` | Tipo de `default_category` para `string` |
 
 ## Impacto
 
-- Zero regressao: nenhuma feature existente e alterada
-- A tabela `sla_policies` passa a ser populada automaticamente ao configurar categorias
-- O hook `useSLAPolicyForTicket` que ja existe vai encontrar as politicas corretamente
-- Categorias existentes sem SLA continuam funcionando (campos opcionais)
+- Zero regressao: categorias existentes continuam funcionando
+- O Select de categoria agora reflete o que realmente existe no sistema
+- Prioridade e preenchida automaticamente mas pode ser alterada manualmente
+- Formularios ja salvos com categorias antigas continuam validos (string e compativel)
