@@ -1,38 +1,55 @@
 
 
-# Hardening Complementar: 5 count queries restantes
+## Diagnose: Atendimentos encerrando sozinhos
 
-## Descoberta
+### Causa Raiz Identificada
 
-A busca final revelou 5 ocorrencias de `select('*', { count: 'exact', head: true })` que usavam aspas simples e nao foram capturadas no inventario anterior.
+A Edge Function `auto-close-conversations` esta fechando conversas que estao em modo **copilot** (atendimento humano ativo). Isso significa que quando um consultor esta atendendo um cliente e o cliente demora mais de **30 minutos** para responder, o sistema fecha automaticamente a conversa e envia a pesquisa de satisfacao (CSAT).
 
-## Mudancas (cirurgicas, 100% seguras)
+### Dados das ultimas 24h
 
-### 1. `src/components/settings/RAGOrchestratorWidget.tsx` (4 substituicoes)
+| Tipo | Quantidade |
+|------|-----------|
+| Fechadas automaticamente (inatividade) | **145** |
+| Fechadas manualmente (copilot) | 303 |
+| Departamentos com auto-close ativo | 3 (Suporte, Suporte Pedidos, Suporte Sistema) |
+| Tempo configurado | 30 minutos |
 
-- Linha 122: `.select('*', { count: 'exact', head: true })` -> `.select('id', { count: 'exact', head: true })`
-- Linha 127: mesma troca
-- Linha 133: mesma troca
-- Linha 139: mesma troca
+### Problemas encontrados
 
-### 2. `src/hooks/useOnboardingFunnel.tsx` (1 substituicao)
+1. **Auto-close inclui modo `copilot`**: A linha 115 do codigo filtra por `ai_mode IN ('autopilot', 'copilot')`. Conversas em `copilot` sao atendidas por humanos e NAO devem ser fechadas automaticamente por inatividade de 30 min.
 
-- Linha 18: `.select('*', { count: 'exact', head: true })` -> `.select('id', { count: 'exact', head: true })`
+2. **Flag `is_bot_message` ausente**: As mensagens de encerramento e CSAT enviadas pelo auto-close via WhatsApp nao incluem `is_bot_message: true`, podendo causar mudanca indevida de `ai_mode` no pipeline.
 
-## Seguranca
+### Correcoes Propostas
 
-Identico as fases anteriores: `head: true` nao retorna body, apenas header `Content-Range`. Trocar `'*'` por `'id'` nao muda o resultado.
+**Correcao 1 - Remover `copilot` do filtro de auto-close:**
+- Alterar o filtro de `.in('ai_mode', ['autopilot', 'copilot'])` para `.eq('ai_mode', 'autopilot')`
+- Apenas conversas onde a IA estava respondendo e o cliente parou de interagir serao fechadas
+- Conversas sob controle humano (copilot/disabled/waiting_human) ficam protegidas
 
-## Resultado apos aplicacao
+**Correcao 2 - Adicionar `is_bot_message: true` nos envios WhatsApp:**
+- Incluir a flag em todas as chamadas `send-meta-whatsapp` e `send-whatsapp` dentro da funcao auto-close
+- Impede que mensagens automaticas de encerramento/CSAT causem mudanca de `ai_mode` no pipeline
 
-Zero ocorrencias de `select("*")` ou `select('*')` em count queries (head:true) em todo o projeto.
+### Secao Tecnica
 
-As ~770 ocorrencias restantes de `select("*")` sem head:true sao queries que retornam dados reais e representam uma Fase 3 futura de hardening (cada uma precisa de campos explicitos especificos por tabela -- escopo muito maior).
+Arquivo alterado: `supabase/functions/auto-close-conversations/index.ts`
 
-## Arquivos modificados
+Mudanca 1 (linha 115):
+```typescript
+// DE:
+.in('ai_mode', ['autopilot', 'copilot'])
+// PARA:
+.eq('ai_mode', 'autopilot')
+```
 
-| Arquivo | Tipo | Mudanca |
-|---|---|---|
-| `src/components/settings/RAGOrchestratorWidget.tsx` | EDIT | 4x `'*'` -> `'id'` |
-| `src/hooks/useOnboardingFunnel.tsx` | EDIT | 1x `'*'` -> `'id'` |
+Mudanca 2 (linhas 270-305 - todas as chamadas send-meta-whatsapp e send-whatsapp):
+Adicionar `is_bot_message: true` em todos os payloads de envio de mensagem WhatsApp.
+
+### Impacto
+
+- Zero regressao: conversas em autopilot continuam sendo fechadas normalmente
+- Consultores nao serao mais surpreendidos com encerramentos durante atendimento ativo
+- Alinhado com o Super Prompt v2.3 (secao 10: auto-close so em condicoes controladas)
 
