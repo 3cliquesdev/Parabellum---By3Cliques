@@ -28,6 +28,10 @@ export interface InboxViewItem {
   sla_status: string;
   created_at: string;
   updated_at: string;
+  whatsapp_instance_id: string | null;
+  whatsapp_meta_instance_id: string | null;
+  whatsapp_provider: string | null;
+  contact_whatsapp_id: string | null;
 }
 
 export interface InboxFilters {

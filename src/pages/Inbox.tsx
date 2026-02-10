@@ -181,9 +181,9 @@ export default function Inbox() {
       related_ticket_id: null,
       session_token: null,
       support_channel_id: null,
-      whatsapp_instance_id: null,
-      whatsapp_meta_instance_id: null,
-      whatsapp_provider: null,
+      whatsapp_instance_id: item.whatsapp_instance_id || null,
+      whatsapp_meta_instance_id: item.whatsapp_meta_instance_id || null,
+      whatsapp_provider: item.whatsapp_provider || null,
       contacts: {
         id: item.contact_id,
         first_name: item.contact_name?.split(' ')[0] || 'Contato',
@@ -229,7 +229,7 @@ export default function Inbox() {
         subscription_plan: null,
         support_channel_id: null,
         total_ltv: null,
-        whatsapp_id: null,
+        whatsapp_id: item.contact_whatsapp_id || item.contact_phone || null,
         zip_code: null,
       } as Contact,
     } as Conversation;

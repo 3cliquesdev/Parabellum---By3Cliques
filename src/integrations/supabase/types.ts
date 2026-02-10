@@ -4036,6 +4036,7 @@ export type Database = {
           contact_id: string
           contact_name: string | null
           contact_phone: string | null
+          contact_whatsapp_id: string | null
           conversation_id: string
           created_at: string | null
           department: string | null
@@ -4049,6 +4050,9 @@ export type Database = {
           status: string | null
           unread_count: number | null
           updated_at: string | null
+          whatsapp_instance_id: string | null
+          whatsapp_meta_instance_id: string | null
+          whatsapp_provider: string | null
         }
         Insert: {
           ai_mode?: string | null
@@ -4059,6 +4063,7 @@ export type Database = {
           contact_id: string
           contact_name?: string | null
           contact_phone?: string | null
+          contact_whatsapp_id?: string | null
           conversation_id: string
           created_at?: string | null
           department?: string | null
@@ -4072,6 +4077,9 @@ export type Database = {
           status?: string | null
           unread_count?: number | null
           updated_at?: string | null
+          whatsapp_instance_id?: string | null
+          whatsapp_meta_instance_id?: string | null
+          whatsapp_provider?: string | null
         }
         Update: {
           ai_mode?: string | null
@@ -4082,6 +4090,7 @@ export type Database = {
           contact_id?: string
           contact_name?: string | null
           contact_phone?: string | null
+          contact_whatsapp_id?: string | null
           conversation_id?: string
           created_at?: string | null
           department?: string | null
@@ -4095,6 +4104,9 @@ export type Database = {
           status?: string | null
           unread_count?: number | null
           updated_at?: string | null
+          whatsapp_instance_id?: string | null
+          whatsapp_meta_instance_id?: string | null
+          whatsapp_provider?: string | null
         }
         Relationships: []
       }
