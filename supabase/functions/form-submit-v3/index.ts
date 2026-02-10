@@ -744,7 +744,8 @@ serve(async (req) => {
           priority: ticketSettings.default_priority || 'medium',
           category: ticketSettings.default_category || 'outro',
           department_id: form.target_department_id || null,
-          assigned_to: assignedTo, // ROUTING: use the assignee from get_assignee_for_form
+          assigned_to: assignedTo,
+          operation_id: ticketSettings.default_operation_id || null,
           status: 'open',
           channel: 'form',
           attachments: fileAttachments.length > 0 ? fileAttachments : null,
@@ -1368,6 +1369,7 @@ serve(async (req) => {
                 description: ticketDescription,
                 priority: ticketPriority,
                 category: ticketCategory,
+                operation_id: (schema?.ticket_settings as any)?.default_operation_id || null,
                 status: 'open',
                 channel: 'form',
               }).select().single();

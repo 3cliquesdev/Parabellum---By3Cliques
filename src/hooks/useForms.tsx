@@ -193,6 +193,7 @@ export interface FormSettings {
 export interface TicketSettings {
   default_priority?: "low" | "medium" | "high" | "urgent";
   default_category?: "financeiro" | "tecnico" | "bug" | "outro";
+  default_operation_id?: string;
   send_auto_reply?: boolean;
   auto_reply_template?: string;
 }

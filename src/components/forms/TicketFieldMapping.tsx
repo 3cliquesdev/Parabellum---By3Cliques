@@ -11,7 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { TicketSettings, FormField, DEFAULT_TICKET_SETTINGS } from "@/hooks/useForms";
-import { Ticket, Mail, AlertTriangle } from "lucide-react";
+import { Ticket, Mail, AlertTriangle, Briefcase } from "lucide-react";
+import { useTicketOperations } from "@/hooks/useTicketOperations";
 
 interface TicketFieldMappingProps {
   fields: FormField[];
@@ -168,6 +169,12 @@ export function TicketFieldMapping({
           </Select>
         </div>
 
+        {/* Default Operation */}
+        <OperationSelect
+          value={settings.default_operation_id}
+          onChange={(v) => onChange({ ...settings, default_operation_id: v })}
+        />
+
         {/* Auto Reply */}
         <div className="space-y-4 border-t pt-4">
           <div className="flex items-center justify-between">
@@ -204,5 +211,37 @@ export function TicketFieldMapping({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function OperationSelect({ value, onChange }: { value?: string; onChange: (v: string | undefined) => void }) {
+  const { data: operations, isLoading } = useTicketOperations();
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm flex items-center gap-1.5">
+        <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
+        Operação Padrão
+      </Label>
+      <Select
+        value={value || "none"}
+        onValueChange={(v) => onChange(v === "none" ? undefined : v)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder={isLoading ? "Carregando..." : "Nenhuma (não definir)"} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Nenhuma (não definir)</SelectItem>
+          {(operations || []).map((op) => (
+            <SelectItem key={op.id} value={op.id}>
+              {op.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">
+        Tickets criados por este formulário receberão esta operação automaticamente
+      </p>
+    </div>
   );
 }
