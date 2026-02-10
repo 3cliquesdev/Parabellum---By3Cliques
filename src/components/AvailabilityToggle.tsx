@@ -67,7 +67,7 @@ export function AvailabilityToggle() {
       
       const { count, error } = await supabase
         .from("conversations")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("assigned_to", user.id)
         .in("status", ["open"]);
       

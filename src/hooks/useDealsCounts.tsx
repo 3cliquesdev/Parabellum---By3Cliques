@@ -62,7 +62,7 @@ export function useDealsCounts(startDate: Date | undefined, endDate: Date | unde
       // Query 1: Contar TODOS os deals criados no período (mais confiável)
       const { count: totalCreated, error: createdError } = await supabase
         .from("deals")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .gte("created_at", startDateTime)
         .lte("created_at", endDateTime);
 
@@ -76,7 +76,7 @@ export function useDealsCounts(startDate: Date | undefined, endDate: Date | unde
       // Baseline: 240 deals ganhos em 15/01/2026
       const { count: totalWon, error: wonError } = await supabase
         .from("deals")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "won")
         .gte("closed_at", startDateTime)
         .lte("closed_at", endDateTime);
@@ -90,7 +90,7 @@ export function useDealsCounts(startDate: Date | undefined, endDate: Date | unde
       // ⚠️ LÓGICA TRAVADA: Usar closed_at - mesma lógica de ganhos
       const { count: totalLost, error: lostError } = await supabase
         .from("deals")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "lost")
         .gte("closed_at", startDateTime)
         .lte("closed_at", endDateTime);
@@ -103,7 +103,7 @@ export function useDealsCounts(startDate: Date | undefined, endDate: Date | unde
       // Query 4: Contar deals ABERTOS criados no período
       const { count: totalOpen, error: openError } = await supabase
         .from("deals")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "open")
         .gte("created_at", startDateTime)
         .lte("created_at", endDateTime);

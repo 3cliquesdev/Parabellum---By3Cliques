@@ -36,7 +36,7 @@ export function useLeadsBreakdown(startDate: Date | undefined, endDate: Date | u
         // Leads COM vendedor atribuído
         supabase
           .from("deals")
-          .select("*", { count: "exact", head: true })
+          .select("id", { count: "exact", head: true })
           .not("assigned_to", "is", null)
           .gte("created_at", startDateTime)
           .lte("created_at", endDateTime),
@@ -44,7 +44,7 @@ export function useLeadsBreakdown(startDate: Date | undefined, endDate: Date | u
         // Leads SEM vendedor atribuído
         supabase
           .from("deals")
-          .select("*", { count: "exact", head: true })
+          .select("id", { count: "exact", head: true })
           .is("assigned_to", null)
           .gte("created_at", startDateTime)
           .lte("created_at", endDateTime),

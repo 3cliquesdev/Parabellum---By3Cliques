@@ -78,35 +78,35 @@ export function useSalesRepDistributionReport() {
           // Leads received today
           const { count: todayCount } = await supabase
             .from("lead_distribution_logs")
-            .select("*", { count: "exact", head: true })
+            .select("id", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
             .gte("created_at", todayStart);
 
           // Leads received this week
           const { count: weekCount } = await supabase
             .from("lead_distribution_logs")
-            .select("*", { count: "exact", head: true })
+            .select("id", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
             .gte("created_at", weekStartStr);
 
           // Leads received this month
           const { count: monthCount } = await supabase
             .from("lead_distribution_logs")
-            .select("*", { count: "exact", head: true })
+            .select("id", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
             .gte("created_at", monthStartStr);
 
           // Open deals
           const { count: openDeals } = await supabase
             .from("deals")
-            .select("*", { count: "exact", head: true })
+            .select("id", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
             .eq("status", "open");
 
           // Won deals this month
           const { count: wonDeals } = await supabase
             .from("deals")
-            .select("*", { count: "exact", head: true })
+            .select("id", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
             .eq("status", "won")
             .gte("closed_at", monthStartStr);
@@ -114,7 +114,7 @@ export function useSalesRepDistributionReport() {
           // Total closed deals this month (for conversion rate)
           const { count: closedDeals } = await supabase
             .from("deals")
-            .select("*", { count: "exact", head: true })
+            .select("id", { count: "exact", head: true })
             .eq("assigned_to", profile.id)
             .in("status", ["won", "lost"])
             .gte("closed_at", monthStartStr);
@@ -266,7 +266,7 @@ export function useSalesRepDistributionReport() {
     queryFn: async () => {
       const { count, error } = await supabase
         .from("deals")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .is("assigned_to", null)
         .eq("status", "open");
 

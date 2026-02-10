@@ -101,7 +101,7 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
       // Primeiro, buscar a contagem total de eventos para saber quantas páginas precisamos
       let countQuery = supabase
         .from("kiwify_events")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .in("event_type", ["paid", "order_approved"]);
 
       if (createdAtStart) countQuery = countQuery.gte("created_at", createdAtStart);
