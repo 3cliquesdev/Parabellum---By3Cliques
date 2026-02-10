@@ -114,6 +114,28 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ANTI-DUPLICAÇÃO: verificar se já existe execução running/pending
+    const { data: existingExec } = await supabaseClient
+      .from('playbook_executions')
+      .select('id, status')
+      .eq('playbook_id', playbook_id)
+      .eq('contact_id', contact_id)
+      .in('status', ['pending', 'running'])
+      .maybeSingle();
+
+    if (existingExec) {
+      console.log(`Anti-duplication: existing execution ${existingExec.id} (${existingExec.status}). Returning existing.`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          execution_id: existingExec.id,
+          message: `Playbook already running (execution: ${existingExec.id})`,
+          already_running: true,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Create execution record
     const { data: execution, error: executionError } = await supabaseClient
       .from('playbook_executions')

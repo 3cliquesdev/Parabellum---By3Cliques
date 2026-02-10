@@ -321,6 +321,20 @@ async function initiatePlaybook(
     // Encontrar o primeiro node (start ou o primeiro da lista)
     const startNode = nodes.find((n: any) => n.type === 'start') || nodes[0];
     
+    // ANTI-DUPLICAÇÃO: verificar se já existe execução running/pending
+    const { data: existingExec } = await supabase
+      .from('playbook_executions')
+      .select('id, status')
+      .eq('playbook_id', playbook_id)
+      .eq('contact_id', contact_id)
+      .in('status', ['pending', 'running'])
+      .maybeSingle();
+
+    if (existingExec) {
+      console.log(`[initiatePlaybook] ⚠️ Execução já ativa: ${existingExec.id} (${existingExec.status}). Pulando duplicação.`);
+      return null;
+    }
+
     // 2. Criar execução com dados completos
     const { data: execution, error: execError } = await supabase
       .from('playbook_executions')

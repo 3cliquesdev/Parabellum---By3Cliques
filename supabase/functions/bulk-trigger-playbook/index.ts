@@ -113,6 +113,20 @@ serve(async (req) => {
         userId = user?.id || null;
       }
 
+      // ANTI-DUPLICAÇÃO: verificar se já existe execução running/pending
+      const { data: existingExec } = await supabase
+        .from('playbook_executions')
+        .select('id, status')
+        .eq('playbook_id', playbookId)
+        .eq('contact_id', contactId)
+        .in('status', ['pending', 'running'])
+        .maybeSingle();
+
+      if (existingExec) {
+        console.log(`Anti-duplication: contact ${contactId} already has execution ${existingExec.id} (${existingExec.status}). Skipping.`);
+        return { success: true, skipped: true, reason: 'already_running', existing_execution_id: existingExec.id };
+      }
+
       // Create execution with origin tracking
       const { data: execution, error: execError } = await supabase
         .from("playbook_executions")
