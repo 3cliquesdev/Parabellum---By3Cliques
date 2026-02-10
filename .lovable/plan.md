@@ -1,64 +1,59 @@
 
-## Correção: Departamento e Atendente não aparecem na lista de conversas
+## Trava Anti-Duplicacao de Playbooks
 
 ### Problema
+Quando um cliente tem recorrencias (assinaturas), cada cobranca dispara o webhook Kiwify novamente, que chama `initiatePlaybook()` sem nenhuma verificacao se ja existe uma execucao ativa. Resultado: multiplas execucoes simultaneas do mesmo playbook para o mesmo contato (como aconteceu com edevaldo.horizonn@gmail.com - 3 execucoes ao mesmo tempo).
 
-O componente `ConversationListItem` renderiza badges de departamento (linha 328) e atendente (linha 362) apenas quando `conversation.department_data` e `conversation.assigned_user` existem como objetos com nome/cor. Porém, a função `inboxItemToConversation` no `Inbox.tsx` **nunca monta esses objetos** — ela só tem os UUIDs (`department` e `assigned_to`), sem os nomes correspondentes.
+### Onde falta a trava
 
-### Causa
+| Ponto de disparo | Tem anti-duplicacao? |
+|---|---|
+| `public-start-playbook` | Sim (linhas 200-220) |
+| `kiwify-webhook` → `initiatePlaybook()` | **Nao** |
+| `execute-playbook` (manual) | **Nao** |
+| `bulk-trigger-playbook` | Parcial (so checa `skipExisting` por qualquer status) |
 
-A tabela `inbox_view` possui apenas `department` (UUID) e `assigned_to` (UUID), sem colunas de nome/cor do departamento ou nome/avatar do agente. A conversão para o tipo `Conversation` não resolve esses UUIDs em objetos com dados legíveis.
+### Solucao
 
-### Solução (3 passos)
+Adicionar verificacao anti-duplicacao nos 3 pontos que estao sem:
 
-**Passo 1 — Migração SQL: adicionar colunas desnormalizadas ao `inbox_view`**
+**1. `kiwify-webhook/index.ts` - funcao `initiatePlaybook()`**
 
-Adicionar ao `inbox_view`:
-- `department_name` (text)
-- `department_color` (text)
-- `assigned_agent_name` (text)
-- `assigned_agent_avatar` (text)
-
-Atualizar os triggers de sincronização para popularem esses campos a partir das tabelas `departments` e `profiles` via lookup na inserção/atualização.
-
-**Passo 2 — Atualizar tipo `InboxViewItem` em `useInboxView.tsx`**
-
-Adicionar os 4 novos campos na interface:
-
-```
-department_name: string | null;
-department_color: string | null;
-assigned_agent_name: string | null;
-assigned_agent_avatar: string | null;
-```
-
-**Passo 3 — Mapear os objetos em `inboxItemToConversation` no `Inbox.tsx`**
-
-Construir `department_data` e `assigned_user` a partir dos novos campos:
+Antes de criar a execucao (linha 324), adicionar:
 
 ```typescript
-department_data: item.department_name ? {
-  id: item.department,
-  name: item.department_name,
-  color: item.department_color || null,
-} : null,
+// ANTI-DUPLICACAO: verificar se ja existe execucao running/pending
+const { data: existing } = await supabase
+  .from('playbook_executions')
+  .select('id, status')
+  .eq('playbook_id', playbook_id)
+  .eq('contact_id', contact_id)
+  .in('status', ['pending', 'running'])
+  .maybeSingle();
 
-assigned_user: item.assigned_agent_name ? {
-  id: item.assigned_to,
-  full_name: item.assigned_agent_name,
-  avatar_url: item.assigned_agent_avatar || null,
-  job_title: null,
-} : null,
+if (existing) {
+  console.log(`[initiatePlaybook] ⚠️ Execucao ja ativa: ${existing.id} (${existing.status}). Pulando.`);
+  return null;
+}
 ```
+
+**2. `execute-playbook/index.ts` (disparo manual)**
+
+Antes de criar a execucao (linha 117), adicionar a mesma verificacao, retornando a execucao existente em vez de criar uma nova.
+
+**3. `bulk-trigger-playbook/index.ts` - funcao `processContact()`**
+
+Antes de criar execucao (linha 117), adicionar verificacao por `running`/`pending` (atualmente so checa `skipExisting` para qualquer status historico).
 
 ### Arquivos alterados
 
-1. **Migração SQL** — Alterar `inbox_view` e triggers de sincronização
-2. **`src/hooks/useInboxView.tsx`** — Adicionar 4 campos na interface
-3. **`src/pages/Inbox.tsx`** — Montar objetos `department_data` e `assigned_user`
+1. `supabase/functions/kiwify-webhook/index.ts` - adicionar check na funcao `initiatePlaybook`
+2. `supabase/functions/execute-playbook/index.ts` - adicionar check antes do insert
+3. `supabase/functions/bulk-trigger-playbook/index.ts` - adicionar check na funcao `processContact`
 
 ### Impacto
 
-- Zero regressão: badges já existem no componente, só faltavam os dados
-- Restaura funcionalidade que existia anteriormente
-- Escopo cirúrgico: mesmos 3 arquivos + 1 migração do fix anterior
+- Zero regressao: apenas adiciona verificacao antes de criar, nao altera fluxo existente
+- Segue o mesmo padrao ja implementado em `public-start-playbook` (linhas 200-220)
+- Previne emails duplicados e desperdicio de recursos
+- Execucoes com status `completed`, `failed` ou `cancelled` continuam permitindo re-disparo
