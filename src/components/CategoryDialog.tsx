@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +89,14 @@ export default function CategoryDialog({ open, onOpenChange, category }: Categor
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const hasResponse = responseTimeValue !== "" && Number(responseTimeValue) > 0;
+    const hasResolution = resolutionTimeValue !== "" && Number(resolutionTimeValue) > 0;
+
+    if (hasResponse !== hasResolution) {
+      toast.error("Preencha ambos os campos de SLA (resposta e resolução) ou deixe ambos vazios.");
+      return;
+    }
 
     let savedCategory: any;
     if (category) {
