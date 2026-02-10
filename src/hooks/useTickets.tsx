@@ -67,6 +67,11 @@ export function useTickets(
             id,
             name,
             color
+          ),
+          origin:ticket_origins!tickets_origin_id_fkey(
+            id,
+            name,
+            color
           )
         `)
         .order("created_at", { ascending: false });

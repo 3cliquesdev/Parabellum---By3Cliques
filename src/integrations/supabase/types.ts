@@ -8185,6 +8185,33 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_origins: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
       ticket_stakeholders: {
         Row: {
           added_at: string | null
@@ -8354,6 +8381,7 @@ export type Database = {
           last_email_message_id: string | null
           merged_to_ticket_id: string | null
           operation_id: string | null
+          origin_id: string | null
           priority: Database["public"]["Enums"]["ticket_priority"]
           rejection_reason: string | null
           requesting_department_id: string | null
@@ -8385,6 +8413,7 @@ export type Database = {
           last_email_message_id?: string | null
           merged_to_ticket_id?: string | null
           operation_id?: string | null
+          origin_id?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           rejection_reason?: string | null
           requesting_department_id?: string | null
@@ -8416,6 +8445,7 @@ export type Database = {
           last_email_message_id?: string | null
           merged_to_ticket_id?: string | null
           operation_id?: string | null
+          origin_id?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           rejection_reason?: string | null
           requesting_department_id?: string | null
@@ -8474,6 +8504,13 @@ export type Database = {
             columns: ["operation_id"]
             isOneToOne: false
             referencedRelation: "ticket_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_origins"
             referencedColumns: ["id"]
           },
           {

@@ -11,6 +11,7 @@ interface UpdateTicketData {
   description?: string;
   department_id?: string;
   attachments?: any[];
+  origin_id?: string;
 }
 
 export function useUpdateTicket() {
