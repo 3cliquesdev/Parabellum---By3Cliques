@@ -1,66 +1,70 @@
 
-# Unificar Departamentos, Operacoes e Categorias em uma unica pagina com abas
+# Adicionar configuracao de SLA no dialog de Categorias
 
 ## Resumo
 
-Transformar a pagina `/settings/departments` em uma pagina unificada com **3 abas (Tabs)**: Departamentos, Operacoes e Categorias. O menu lateral "Departamentos" continua no mesmo lugar, mas ao clicar o usuario ve as 3 secoes organizadas por abas.
+Ao criar ou editar uma Categoria (que ja tem prioridade definida), o admin tambem define os tempos de SLA (tempo de primeira resposta e tempo de resolucao). Esses valores sao salvos automaticamente na tabela `sla_policies` vinculados a `category_id` + `priority`.
 
----
+## Como funciona hoje
+
+- Tabela `sla_policies` existe com campos: `category_id`, `priority`, `response_time_value`, `response_time_unit`, `resolution_time_value`, `resolution_time_unit`
+- Tabela esta **vazia** -- nenhuma politica configurada
+- Nao existe UI para gerenciar SLA em nenhum lugar da aplicacao
+
+## Onde sera configurado
+
+Na aba **Categorias** (dentro de Depart. & Operacoes), ao clicar em "Editar" ou "+ Nova Categoria", o dialog ja mostra nome, descricao, cor e prioridade. Vamos adicionar:
+
+- **Tempo de Primeira Resposta**: valor numerico + unidade (horas / horas uteis / dias uteis)
+- **Tempo de Resolucao**: valor numerico + unidade (horas / horas uteis / dias uteis)
 
 ## Etapas
 
-### 1. Renomear item do menu no `routes.ts`
+### 1. Atualizar CategoryDialog com campos de SLA
 
-Alterar o titulo de "Departamentos" para **"Departamentos & Operacoes"** (ou similar) no menu lateral, mantendo o mesmo href `/settings/departments` e a mesma permission.
+**Arquivo:** `src/components/CategoryDialog.tsx`
 
-### 2. Criar hooks CRUD para Operacoes e Categorias
+Adicionar dois grupos de campos abaixo da prioridade:
 
-**Operacoes** (`src/hooks/useTicketOperations.tsx`):
-- Ja existe o hook de query. Adicionar mutations: `useCreateTicketOperation`, `useUpdateTicketOperation`, `useDeleteTicketOperation`.
+- Input numerico "Tempo de 1a Resposta" + Select de unidade (hours / business_hours / business_days)
+- Input numerico "Tempo de Resolucao" + Select de unidade
 
-**Categorias** (`src/hooks/useTicketCategories.tsx`):
-- Ja existe query + create. Adicionar: `useUpdateTicketCategory`, `useDeleteTicketCategory`.
+Ao abrir para edicao, buscar a politica existente em `sla_policies` para pre-preencher os campos.
 
-### 3. Criar componentes de Dialog para Operacoes e Categorias
+### 2. Salvar/atualizar sla_policies no submit
 
-- `src/components/OperationDialog.tsx` -- formulario para criar/editar operacao (nome, descricao, cor). Mesmo padrao do `DepartmentDialog`.
-- `src/components/CategoryDialog.tsx` -- formulario para criar/editar categoria (nome, descricao, cor). Mesmo padrao.
-
-### 4. Refatorar `src/pages/Departments.tsx` com Tabs
-
-Transformar a pagina em 3 abas usando `@radix-ui/react-tabs`:
+Quando o admin salva a categoria, alem de salvar na `ticket_categories`, tambem faz upsert na `sla_policies`:
 
 ```text
-[Departamentos]  [Operacoes]  [Categorias]
+category_id = categoria.id
+priority = categoria.priority
+response_time_value = valor informado
+response_time_unit = unidade informada
+resolution_time_value = valor informado  
+resolution_time_unit = unidade informada
+is_active = true
 ```
 
-- **Aba Departamentos**: conteudo atual (grid de cards com switch ativo/inativo, editar, deletar)
-- **Aba Operacoes**: mesmo layout de cards, usando `useTicketOperations` + CRUD
-- **Aba Categorias**: mesmo layout de cards, usando `useTicketCategories` + CRUD
+Se a categoria ja tinha uma politica, atualiza. Se nao, cria.
 
-O titulo da pagina muda dinamicamente conforme a aba selecionada, e o botao "Novo" tambem se adapta ("Novo Departamento" / "Nova Operacao" / "Nova Categoria").
+### 3. Mostrar SLA no card da categoria (Departments.tsx)
 
-### 5. Atualizar titulo na pagina Settings
+No card de cada categoria na listagem, mostrar um indicador visual do SLA configurado (ex.: "SLA: 2h resposta / 24h resolucao"), similar ao que ja acontece com "Auto-fecha em 30 min" nos departamentos.
 
-No `src/pages/Settings.tsx`, atualizar o card que navega para `/settings/departments` com descricao que mencione as 3 secoes.
+### 4. Invalidar cache de sla-policies
 
----
+Ao salvar, invalidar a query `['sla-policies']` para manter consistencia com qualquer parte do sistema que consulte politicas de SLA.
 
 ## Arquivos modificados
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/config/routes.ts` | Renomear titulo do menu |
-| `src/hooks/useTicketOperations.tsx` | Adicionar mutations (create, update, delete) |
-| `src/hooks/useTicketCategories.tsx` | Adicionar mutations (update, delete) |
-| `src/components/OperationDialog.tsx` | Novo -- dialog CRUD de operacao |
-| `src/components/CategoryDialog.tsx` | Novo -- dialog CRUD de categoria |
-| `src/pages/Departments.tsx` | Refatorar com Tabs (3 abas) |
-| `src/pages/Settings.tsx` | Atualizar descricao do card |
+| `src/components/CategoryDialog.tsx` | Adicionar campos de SLA (resposta + resolucao) e logica de upsert |
+| `src/pages/Departments.tsx` | Mostrar indicador de SLA no card da categoria |
 
 ## Impacto
 
-- Zero regressao: a rota `/settings/departments` continua a mesma, nenhum link quebra
-- Departamentos continuam funcionando exatamente como antes (primeira aba)
-- Operacoes e Categorias ganham CRUD completo (criar, editar, ativar/desativar, deletar)
-- As 3 tabelas (`departments`, `ticket_operations`, `ticket_categories`) ja existem com estrutura identica -- apenas falta UI de gestao para operacoes e categorias
+- Zero regressao: nenhuma feature existente e alterada
+- A tabela `sla_policies` passa a ser populada automaticamente ao configurar categorias
+- O hook `useSLAPolicyForTicket` que ja existe vai encontrar as politicas corretamente
+- Categorias existentes sem SLA continuam funcionando (campos opcionais)
