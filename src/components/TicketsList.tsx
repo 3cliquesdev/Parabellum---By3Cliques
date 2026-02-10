@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -6,6 +7,9 @@ import { ptBR } from "date-fns/locale";
 import { AlertCircle, Clock, CheckCircle, UserPen } from "lucide-react";
 import { SLABadge } from "./SLABadge";
 import { useAuth } from "@/hooks/useAuth";
+import { usePrefetchOnHover } from "@/lib/prefetch";
+import { supabase } from "@/integrations/supabase/client";
+import { TICKET_SELECT } from "@/lib/select-fields";
 
 interface Ticket {
   id: string;
@@ -84,6 +88,94 @@ const statusLabels: Record<string, string> = {
   approved: 'Aprovado',
 };
 
+function TicketListItem({ ticket, selectedTicketId, onSelectTicket, userId }: {
+  ticket: Ticket;
+  selectedTicketId: string | null;
+  onSelectTicket: (id: string) => void;
+  userId: string | undefined;
+}) {
+  const prefetchQueryFn = useCallback(
+    async () => {
+      const { data } = await supabase.from('tickets').select(TICKET_SELECT).eq('id', ticket.id).maybeSingle();
+      return data;
+    },
+    [ticket.id]
+  );
+  const prefetchHandlers = usePrefetchOnHover(['ticket', ticket.id], prefetchQueryFn);
+
+  const isCreatedByMe = ticket.created_by === userId;
+  const isAssignedToOther = ticket.assigned_to && ticket.assigned_to !== userId;
+  const showCreatedByMeBadge = isCreatedByMe && isAssignedToOther;
+
+  return (
+    <div
+      key={ticket.id}
+      onClick={() => onSelectTicket(ticket.id)}
+      {...prefetchHandlers}
+      className={`p-4 cursor-pointer transition-colors hover:bg-accent ${
+        selectedTicketId === ticket.id ? 'bg-accent border-l-4 border-primary' : ''
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <Avatar className="w-10 h-10">
+          <AvatarImage src={ticket.customer?.avatar_url} />
+          <AvatarFallback>
+            {ticket.customer?.first_name?.[0]}{ticket.customer?.last_name?.[0]}
+          </AvatarFallback>
+        </Avatar>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <p className="font-medium text-sm truncate text-slate-900 dark:text-white">
+              {ticket.customer?.first_name || 'Cliente'} {ticket.customer?.last_name || ''}
+            </p>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {formatDistanceToNow(new Date(ticket.created_at), { 
+                addSuffix: true, 
+                locale: ptBR 
+              })}
+            </span>
+          </div>
+
+          <h4 className="font-semibold text-sm mb-1 truncate text-slate-900 dark:text-white">{ticket.subject}</h4>
+          
+          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-2">
+            {ticket.description}
+          </p>
+
+          <div className="mb-2">
+            <SLABadge 
+              dueDate={ticket.due_date} 
+              priority={ticket.priority}
+              size="sm"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="outline" className="text-xs flex items-center gap-1">
+              {statusIcons[ticket.status]}
+              {statusLabels[ticket.status]}
+            </Badge>
+
+            {showCreatedByMeBadge && (
+              <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                <UserPen className="h-3 w-3" />
+                Você criou
+              </Badge>
+            )}
+
+            {ticket.assigned_user && (
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                → {ticket.assigned_user.full_name}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TicketsList({ tickets, selectedTicketId, onSelectTicket }: TicketsListProps) {
   const { user } = useAuth();
 
@@ -100,81 +192,15 @@ export function TicketsList({ tickets, selectedTicketId, onSelectTicket }: Ticke
   return (
     <ScrollArea className="h-full">
       <div className="divide-y divide-border">
-        {tickets.map((ticket) => {
-          // Check if current user created this ticket but it's assigned to someone else
-          const isCreatedByMe = ticket.created_by === user?.id;
-          const isAssignedToOther = ticket.assigned_to && ticket.assigned_to !== user?.id;
-          const showCreatedByMeBadge = isCreatedByMe && isAssignedToOther;
-
-          return (
-          <div
+        {tickets.map((ticket) => (
+          <TicketListItem
             key={ticket.id}
-            onClick={() => onSelectTicket(ticket.id)}
-            className={`p-4 cursor-pointer transition-colors hover:bg-accent ${
-              selectedTicketId === ticket.id ? 'bg-accent border-l-4 border-primary' : ''
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <Avatar className="w-10 h-10">
-                <AvatarImage src={ticket.customer?.avatar_url} />
-                <AvatarFallback>
-                  {ticket.customer?.first_name?.[0]}{ticket.customer?.last_name?.[0]}
-                </AvatarFallback>
-              </Avatar>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <p className="font-medium text-sm truncate text-slate-900 dark:text-white">
-                    {ticket.customer?.first_name || 'Cliente'} {ticket.customer?.last_name || ''}
-                  </p>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {formatDistanceToNow(new Date(ticket.created_at), { 
-                      addSuffix: true, 
-                      locale: ptBR 
-                    })}
-                  </span>
-                </div>
-
-                <h4 className="font-semibold text-sm mb-1 truncate text-slate-900 dark:text-white">{ticket.subject}</h4>
-                
-                <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-2">
-                  {ticket.description}
-                </p>
-
-                {/* SLA Visual Alert */}
-                <div className="mb-2">
-                  <SLABadge 
-                    dueDate={ticket.due_date} 
-                    priority={ticket.priority}
-                    size="sm"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className="text-xs flex items-center gap-1">
-                    {statusIcons[ticket.status]}
-                    {statusLabels[ticket.status]}
-                  </Badge>
-
-                  {/* Badge: Você criou */}
-                  {showCreatedByMeBadge && (
-                    <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                      <UserPen className="h-3 w-3" />
-                      Você criou
-                    </Badge>
-                  )}
-
-                  {ticket.assigned_user && (
-                    <span className="text-xs text-slate-600 dark:text-slate-400">
-                      → {ticket.assigned_user.full_name}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-          );
-        })}
+            ticket={ticket}
+            selectedTicketId={selectedTicketId}
+            onSelectTicket={onSelectTicket}
+            userId={user?.id}
+          />
+        ))}
       </div>
     </ScrollArea>
   );

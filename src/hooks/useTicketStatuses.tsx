@@ -68,6 +68,7 @@ export function useActiveTicketStatuses() {
       if (error) throw error;
       return data as TicketStatus[];
     },
+    staleTime: 10 * 60 * 1000, // 10min — statuses raramente mudam
   });
 }
 

@@ -14,6 +14,7 @@ import { useTeamOnlineCount } from "@/hooks/useTeamOnlineCount";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { usePerformanceLog } from "@/lib/prefetch";
 
 interface OverviewDashboardTabProps {
   dateRange?: DateRange;
@@ -50,6 +51,10 @@ export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
   const { data: whatsappInstances } = useWhatsAppInstances();
   const { data: convCounts } = useActiveConversationCounts();
   const { data: teamOnlineCount } = useTeamOnlineCount();
+
+  // Perf log: mount → data ready
+  const dataReady = convCounts !== undefined && supportMetrics !== undefined && ticketCounts !== undefined;
+  usePerformanceLog('DashboardOverview', dataReady);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {

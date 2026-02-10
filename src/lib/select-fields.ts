@@ -20,3 +20,10 @@ export const TICKET_SELECT = `
   operation:ticket_operations(id, name, color),
   origin:ticket_origins!tickets_origin_id_fkey(id, name, color)
 `;
+
+export const DEAL_SELECT = `
+  *,
+  contacts(id, first_name, last_name, email, phone, company),
+  organizations(name),
+  assigned_user:profiles!deals_assigned_to_fkey(id, full_name, avatar_url)
+`;

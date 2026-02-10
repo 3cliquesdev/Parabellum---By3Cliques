@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { DEAL_SELECT } from "@/lib/select-fields";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import type { DateRange } from "react-day-picker";
 
@@ -44,17 +45,11 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
 
   return useQuery({
     queryKey: ["deals", pipelineId, filters, user?.id, role],
-    queryFn: async () => {
-      // Query com relacionamentos essenciais
-      // A otimização principal está nas RLS policies (EXISTS vs has_role)
+    queryFn: async ({ signal }) => {
+      // Select mínimo centralizado + abortSignal para cancelamento
       let query = supabase
         .from("deals")
-        .select(`
-          *,
-          contacts (id, first_name, last_name, email, phone, company),
-          organizations (name),
-          assigned_user:profiles!deals_assigned_to_fkey (id, full_name, avatar_url)
-        `);
+        .select(DEAL_SELECT);
 
       // Filter by pipeline
       if (pipelineId) {
@@ -184,7 +179,7 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
       const limit = hasDateFilter ? 200 : (hasExplicitStatus ? 200 : 500);
       query = query.limit(limit);
 
-      const { data, error } = await query;
+      const { data, error } = await query.abortSignal(signal);
       if (error) throw error;
       return data;
     },
