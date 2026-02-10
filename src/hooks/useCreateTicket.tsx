@@ -14,6 +14,7 @@ interface CreateTicketData {
   department_id?: string;
   tag_ids?: string[];
   operation_id?: string;
+  origin_id?: string;
 }
 
 export function useCreateTicket() {

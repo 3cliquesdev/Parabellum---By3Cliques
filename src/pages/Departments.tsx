@@ -8,10 +8,12 @@ import { useDeleteDepartment } from "@/hooks/useDeleteDepartment";
 import { useUpdateDepartment } from "@/hooks/useUpdateDepartment";
 import { useTicketOperations, useUpdateTicketOperation, useDeleteTicketOperation, type TicketOperation } from "@/hooks/useTicketOperations";
 import { useTicketCategories, useUpdateTicketCategory, useDeleteTicketCategory, type TicketCategory } from "@/hooks/useTicketCategories";
+import { useTicketOrigins, useUpdateTicketOrigin, useDeleteTicketOrigin, type TicketOrigin } from "@/hooks/useTicketOrigins";
 import { useSLAPolicies } from "@/hooks/useSLAPolicies";
 import DepartmentDialog from "@/components/DepartmentDialog";
 import OperationDialog from "@/components/OperationDialog";
 import CategoryDialog from "@/components/CategoryDialog";
+import OriginDialog from "@/components/OriginDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,14 +41,19 @@ export default function Departments() {
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<TicketCategory | null>(null);
 
+  // Origin state
+  const [originDialogOpen, setOriginDialogOpen] = useState(false);
+  const [selectedOrigin, setSelectedOrigin] = useState<TicketOrigin | null>(null);
+
   // Delete state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: "dept" | "op" | "cat" } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: "dept" | "op" | "cat" | "origin" } | null>(null);
 
   // Data hooks
   const { data: departments, isLoading: loadingDepts } = useDepartments();
   const { data: operations, isLoading: loadingOps } = useTicketOperations();
   const { data: categories, isLoading: loadingCats } = useTicketCategories();
+  const { data: origins, isLoading: loadingOrigins } = useTicketOrigins();
   const { data: slaPolicies } = useSLAPolicies();
 
   const unitLabels: Record<string, string> = { hours: "h", business_hours: "h úteis", business_days: "d úteis" };
@@ -60,14 +67,17 @@ export default function Departments() {
   const deleteOpMutation = useDeleteTicketOperation();
   const updateCatMutation = useUpdateTicketCategory();
   const deleteCatMutation = useDeleteTicketCategory();
+  const updateOriginMutation = useUpdateTicketOrigin();
+  const deleteOriginMutation = useDeleteTicketOrigin();
 
   const handleCreate = () => {
     if (activeTab === "departments") { setSelectedDepartment(null); setDeptDialogOpen(true); }
     else if (activeTab === "operations") { setSelectedOperation(null); setOpDialogOpen(true); }
+    else if (activeTab === "origins") { setSelectedOrigin(null); setOriginDialogOpen(true); }
     else { setSelectedCategory(null); setCatDialogOpen(true); }
   };
 
-  const handleDelete = (id: string, type: "dept" | "op" | "cat") => {
+  const handleDelete = (id: string, type: "dept" | "op" | "cat" | "origin") => {
     setDeleteTarget({ id, type });
     setDeleteDialogOpen(true);
   };
@@ -76,19 +86,21 @@ export default function Departments() {
     if (!deleteTarget) return;
     if (deleteTarget.type === "dept") await deleteDeptMutation.mutateAsync(deleteTarget.id);
     else if (deleteTarget.type === "op") await deleteOpMutation.mutateAsync(deleteTarget.id);
+    else if (deleteTarget.type === "origin") await deleteOriginMutation.mutateAsync(deleteTarget.id);
     else await deleteCatMutation.mutateAsync(deleteTarget.id);
     setDeleteDialogOpen(false);
     setDeleteTarget(null);
   };
 
-  const tabConfig = {
+  const tabConfig: Record<string, { title: string; subtitle: string; btnLabel: string }> = {
     departments: { title: "Departamentos", subtitle: "Gerencie os departamentos organizacionais", btnLabel: "Novo Departamento" },
     operations: { title: "Operações", subtitle: "Gerencie as operações de tickets", btnLabel: "Nova Operação" },
     categories: { title: "Categorias", subtitle: "Gerencie as categorias de tickets", btnLabel: "Nova Categoria" },
+    origins: { title: "Origens", subtitle: "Gerencie as origens (momento da jornada do cliente)", btnLabel: "Nova Origem" },
   };
 
-  const current = tabConfig[activeTab as keyof typeof tabConfig];
-  const isLoading = loadingDepts || loadingOps || loadingCats;
+  const current = tabConfig[activeTab] || tabConfig.departments;
+  const isLoading = loadingDepts || loadingOps || loadingCats || loadingOrigins;
 
   if (isLoading) {
     return (
@@ -116,6 +128,7 @@ export default function Departments() {
           <TabsTrigger value="departments">Departamentos</TabsTrigger>
           <TabsTrigger value="operations">Operações</TabsTrigger>
           <TabsTrigger value="categories">Categorias</TabsTrigger>
+          <TabsTrigger value="origins">Origens</TabsTrigger>
         </TabsList>
 
         {/* === DEPARTAMENTOS === */}
@@ -266,12 +279,51 @@ export default function Departments() {
             ))}
           </div>
         </TabsContent>
+
+        {/* === ORIGENS === */}
+        <TabsContent value="origins">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+            {origins?.map((origin) => (
+              <Card key={origin.id} className="relative">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: origin.color }} />
+                    <div>
+                      <CardTitle className="text-lg">{origin.name}</CardTitle>
+                      <CardDescription className="mt-1">{origin.description}</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={origin.is_active}
+                        onCheckedChange={() => updateOriginMutation.mutateAsync({ id: origin.id, is_active: !origin.is_active })}
+                      />
+                      <span className="text-sm text-muted-foreground">{origin.is_active ? "Ativo" : "Inativo"}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => { setSelectedOrigin(origin); setOriginDialogOpen(true); }}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(origin.id, "origin")}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Dialogs */}
       <DepartmentDialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen} department={selectedDepartment} />
       <OperationDialog open={opDialogOpen} onOpenChange={setOpDialogOpen} operation={selectedOperation} />
       <CategoryDialog open={catDialogOpen} onOpenChange={setCatDialogOpen} category={selectedCategory} />
+      <OriginDialog open={originDialogOpen} onOpenChange={setOriginDialogOpen} origin={selectedOrigin} />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>

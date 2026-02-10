@@ -63,6 +63,11 @@ interface Ticket {
     name: string;
     color?: string | null;
   } | null;
+  origin?: {
+    id: string;
+    name: string;
+    color?: string | null;
+  } | null;
 }
 
 interface TicketsTableProps {
@@ -402,25 +407,29 @@ export function TicketsTable({
                   {formatTicketDate(ticket.created_at)}
                 </div>
 
-                {/* Origem (Agente ou Cliente) */}
+                {/* Origem (do banco) */}
                 <div className="flex items-center justify-center">
-                  {isCreatedByAgent ? (
+                  {ticket.origin?.name ? (
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 whitespace-nowrap">
-                            Agente
+                          <span 
+                            className="text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap truncate max-w-[60px]"
+                            style={{
+                              backgroundColor: ticket.origin.color ? `${ticket.origin.color}20` : undefined,
+                              color: ticket.origin.color || undefined,
+                            }}
+                          >
+                            {ticket.origin.name.length > 10 ? ticket.origin.name.slice(0, 10) + '…' : ticket.origin.name}
                           </span>
                         </TooltipTrigger>
                         <TooltipContent side="left">
-                          <p className="text-xs">Aberto por {creatorName}</p>
+                          <p className="text-xs">{ticket.origin.name}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   ) : (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 whitespace-nowrap">
-                      Cliente
-                    </span>
+                    <span className="text-[10px] text-muted-foreground/50">—</span>
                   )}
                 </div>
               </div>

@@ -8,6 +8,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useTicketAttachmentUpload } from "@/hooks/useTicketAttachmentUpload";
 import { useTags } from "@/hooks/useTags";
 import { useTicketOperations } from "@/hooks/useTicketOperations";
+import { useTicketOrigins } from "@/hooks/useTicketOrigins";
 import { useDropzone } from "react-dropzone";
 import {
   Dialog,
@@ -57,6 +58,8 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   // createCategory removed - categories are managed via settings
   const { uploadFile, uploading, progress } = useTicketAttachmentUpload();
   const { data: operations = [] } = useTicketOperations();
+  const { data: origins = [] } = useTicketOrigins();
+  const activeOrigins = origins.filter((o: any) => o.is_active);
 
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
@@ -92,6 +95,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
   // Operação (obrigatório)
   const [operationId, setOperationId] = useState<string>("");
+  const [originId, setOriginId] = useState<string>("");
 
   // Tags
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -181,6 +185,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
       attachments: uploadedAttachment ? [uploadedAttachment] : [],
       tag_ids: selectedTagIds,
       operation_id: operationId || undefined,
+      origin_id: originId || undefined,
     });
 
     // Reset form
@@ -192,6 +197,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
     setDepartmentId("");
     setAssignedTo("");
     setOperationId("");
+    setOriginId("");
     setCustomerSearch("");
     setAttachmentFile(null);
     setAttachmentPreview(null);
@@ -203,7 +209,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
   const activeDepartments = departments?.filter((d) => d.is_active) || [];
 
-  const canSubmit = subject.trim() && operationId && !createTicket.isPending;
+  const canSubmit = subject.trim() && operationId && originId && !createTicket.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -451,6 +457,29 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 {operations.map((op) => (
                   <SelectItem key={op.id} value={op.id}>
                     {op.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Origem do Ticket (obrigatório) */}
+          <div className="space-y-2">
+            <Label>Origem do Ticket *</Label>
+            <Select value={originId} onValueChange={setOriginId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a origem (jornada do cliente)" />
+              </SelectTrigger>
+              <SelectContent 
+                position="popper" 
+                side="bottom" 
+                align="start"
+                sideOffset={4}
+                className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+              >
+                {activeOrigins.map((origin: any) => (
+                  <SelectItem key={origin.id} value={origin.id}>
+                    {origin.name}
                   </SelectItem>
                 ))}
               </SelectContent>

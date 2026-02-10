@@ -16,7 +16,8 @@ export function useTicketById(ticketId: string | undefined) {
           created_by_user:profiles!tickets_created_by_fkey(id, full_name, avatar_url),
           department:departments!tickets_department_id_fkey(id, name, color),
           requesting_department:departments!tickets_requesting_department_id_fkey(id, name, color),
-          operation:ticket_operations(id, name, color)
+          operation:ticket_operations(id, name, color),
+          origin:ticket_origins!tickets_origin_id_fkey(id, name, color)
         `)
         .eq('id', ticketId)
         .maybeSingle();
