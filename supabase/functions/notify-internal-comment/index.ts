@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,8 +11,7 @@ interface InternalCommentRequest {
   commenter_id: string;
 }
 
-serve(async (req: Request): Promise<Response> => {
-  // Handle CORS preflight
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -27,7 +25,6 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error("ticket_id and comment_content are required");
     }
 
-    // Initialize Supabase client with service role
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -70,14 +67,12 @@ serve(async (req: Request): Promise<Response> => {
     // Collect users to notify (exclude commenter)
     const usersToNotify: { id: string; full_name: string }[] = [];
 
-    // Notify ticket creator if different from commenter
     const creatorData = ticket.creator as unknown;
     const creator = Array.isArray(creatorData) ? creatorData[0] : creatorData;
     if (ticket.created_by && ticket.created_by !== commenter_id && creator) {
       usersToNotify.push(creator as { id: string; full_name: string });
     }
 
-    // Notify assigned agent if different from commenter and creator
     const assigneeData = ticket.assignee as unknown;
     const assignee = Array.isArray(assigneeData) ? assigneeData[0] : assigneeData;
     if (ticket.assigned_to && 
@@ -100,14 +95,12 @@ serve(async (req: Request): Promise<Response> => {
     }));
 
     if (notifications.length > 0) {
-      // Check if notifications table exists
       const { error: notifError } = await supabase
         .from("notifications")
         .insert(notifications);
 
       if (notifError) {
         console.error('[notify-internal-comment] Error inserting notifications:', notifError);
-        // Don't throw - just log the error since notifications might not be critical
       } else {
         console.log('[notify-internal-comment] Notifications created:', notifications.length);
       }

@@ -242,14 +242,23 @@ Deno.serve(async (req) => {
       if (ticket_event_id) {
         const inAppResults = await Promise.allSettled(
           Array.from(usersToNotify).map(async (userId) => {
-            // Dedupe check
-            const { data: inserted } = await supabase
+            // Dedupe check with 23505 handling
+            const { data: inserted, error: dedupeError } = await supabase
               .from("ticket_notification_sends")
               .upsert(
                 { ticket_event_id, recipient_user_id: userId, channel: "in_app" },
                 { onConflict: "ticket_event_id,recipient_user_id,channel", ignoreDuplicates: true }
               )
               .select("id");
+
+            if (dedupeError) {
+              if (dedupeError.code === '23505') {
+                console.log(`[notify-ticket-event] in_app already sent to ${userId} (23505), skipping`);
+                return false;
+              }
+              console.warn(`[notify-ticket-event] Dedupe error for in_app ${userId}:`, dedupeError);
+              return false; // fail safe: don't send twice
+            }
 
             if (!inserted || inserted.length === 0) {
               console.log(`[notify-ticket-event] in_app already sent to ${userId}, skipping`);
@@ -369,14 +378,23 @@ Deno.serve(async (req) => {
 
       const emailResults = await Promise.allSettled(
         (profiles || []).filter(p => p.email).map(async (p) => {
-          // Dedupe check
-          const { data: inserted } = await supabase
+          // Dedupe check with 23505 handling
+          const { data: inserted, error: dedupeError } = await supabase
             .from("ticket_notification_sends")
             .upsert(
               { ticket_event_id, recipient_user_id: p.id, channel: "email" },
               { onConflict: "ticket_event_id,recipient_user_id,channel", ignoreDuplicates: true }
             )
             .select("id");
+
+          if (dedupeError) {
+            if (dedupeError.code === '23505') {
+              console.log(`[notify-ticket-event] Email already sent to ${p.full_name} (23505), skipping`);
+              return false;
+            }
+            console.warn(`[notify-ticket-event] Dedupe error for email ${p.full_name}:`, dedupeError);
+            return false; // fail safe: don't send twice
+          }
 
           if (!inserted || inserted.length === 0) {
             console.log(`[notify-ticket-event] Email already sent to ${p.full_name}, skipping`);

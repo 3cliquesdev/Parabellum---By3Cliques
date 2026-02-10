@@ -5350,7 +5350,7 @@ export type Database = {
           id: string
           message: string | null
           metadata: Json | null
-          read: boolean | null
+          read: boolean
           title: string
           type: string
           user_id: string
@@ -5360,7 +5360,7 @@ export type Database = {
           id?: string
           message?: string | null
           metadata?: Json | null
-          read?: boolean | null
+          read?: boolean
           title: string
           type: string
           user_id: string
@@ -5370,7 +5370,7 @@ export type Database = {
           id?: string
           message?: string | null
           metadata?: Json | null
-          read?: boolean | null
+          read?: boolean
           title?: string
           type?: string
           user_id?: string
