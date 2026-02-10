@@ -1,113 +1,64 @@
 
 
-# Adicionar campo obrigatório "Operação" aos Tickets
+# Operacao obrigatoria em tickets internos + automatica em formularios
 
 ## Resumo
 
-Criar um cadastro editável de **Operações** (similar a Departamentos/Categorias) e adicionar um dropdown obrigatório "Operação" no formulário de criação de tickets. As 3 operações iniciais serão: **Nacional**, **Internacional**, **Híbrido**.
-
----
+- Tickets criados internamente: dropdown "Operacao" continua **obrigatorio** (como ja esta hoje)
+- Tickets vindos de formularios: recebem a Operacao automaticamente (definida na configuracao do formulario)
 
 ## Etapas
 
-### 1. Criar tabela `ticket_operations` no banco de dados
+### 1. Adicionar `default_operation_id` ao TicketSettings
 
-Estrutura idêntica à `ticket_categories` para manter consistência:
-- `id` (uuid, PK)
-- `name` (text, NOT NULL, UNIQUE)
-- `description` (text, nullable)
-- `color` (text, default '#6B7280')
-- `is_active` (boolean, default true)
-- `created_at`, `updated_at` (timestamps)
+**Arquivo:** `src/hooks/useForms.tsx`
 
-Seed com 3 registros: Nacional, Internacional, Híbrido.
+Adicionar `default_operation_id?: string` na interface `TicketSettings` (linha 193-198).
 
-RLS: leitura para usuários autenticados, escrita para admins/managers.
+### 2. Adicionar dropdown "Operacao Padrao" no TicketFieldMapping
 
-### 2. Adicionar coluna `operation_id` na tabela `tickets`
-
-- Tipo: `uuid`, nullable (para compatibilidade com tickets antigos)
-- FK referenciando `ticket_operations.id`
-
-### 3. Criar hook `useTicketOperations`
-
-Arquivo: `src/hooks/useTicketOperations.tsx`
-
-Espelho do `useTicketCategories` existente -- query simples com cache, filtrando por `is_active = true`.
-
-### 4. Atualizar `CreateTicketDialog`
+**Arquivo:** `src/components/forms/TicketFieldMapping.tsx`
 
 - Importar `useTicketOperations`
-- Adicionar estado `operationId`
-- Adicionar dropdown "Operação *" (obrigatório) entre Prioridade/Categoria e Tags
-- Incluir `operation_id` no payload de criação
-- Bloquear submit se `operationId` estiver vazio
+- Adicionar um Select "Operacao Padrao" abaixo de "Categoria Padrao"
+- Valor salvo em `ticket_settings.default_operation_id`
+- Isso permite ao admin escolher qual Operacao sera atribuida aos tickets gerados por aquele formulario
 
-### 5. Atualizar `useCreateTicket`
+### 3. Passar `operation_id` no form-submit-v3
 
-- Aceitar `operation_id` no tipo `CreateTicketData`
-- Passar para o insert do ticket
+**Arquivo:** `supabase/functions/form-submit-v3/index.ts`
 
-### 6. Exibir Operação no `TicketDetails`
+Na secao de criacao de ticket (por volta da linha 740), adicionar `operation_id` ao insert:
 
-- Mostrar a operação do ticket na seção de informações laterais (junto com departamento, categoria, etc.)
+```text
+operation_id: ticketSettings.default_operation_id || null,
+```
 
-### 7. (Opcional futuro) Tela de CRUD de Operações
+Tambem na secao de `create_ticket` action (por volta da linha 1365), adicionar o mesmo campo.
 
-A tabela já estará pronta para um CRUD em "Cadastros > Operações" na sidebar, similar a Categorias e Departamentos. Isso pode ser feito em um passo futuro.
+### 4. Manter CreateTicketDialog como esta
+
+O `CreateTicketDialog` ja tem o campo obrigatorio com a validacao:
+
+```text
+const canSubmit = subject.trim() && operationId && !createTicket.isPending;
+```
+
+Nenhuma alteracao necessaria neste arquivo.
 
 ---
 
-## Detalhes Técnicos
-
-### Migration SQL
-
-```text
--- Tabela de operações
-CREATE TABLE public.ticket_operations (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL UNIQUE,
-  description text,
-  color text DEFAULT '#6B7280',
-  is_active boolean DEFAULT true,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
--- Seed
-INSERT INTO public.ticket_operations (name) VALUES
-  ('Nacional'), ('Internacional'), ('Híbrido');
-
--- RLS
-ALTER TABLE public.ticket_operations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated users can read operations"
-  ON public.ticket_operations FOR SELECT
-  TO authenticated USING (true);
-CREATE POLICY "Admins can manage operations"
-  ON public.ticket_operations FOR ALL
-  TO authenticated USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin','manager','general_manager'))
-  );
-
--- Coluna na tickets
-ALTER TABLE public.tickets ADD COLUMN operation_id uuid REFERENCES public.ticket_operations(id);
-
--- Realtime (opcional)
-ALTER PUBLICATION supabase_realtime ADD TABLE public.ticket_operations;
-```
-
-### Arquivos modificados
+## Arquivos modificados
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/hooks/useTicketOperations.tsx` | Novo hook (query + create mutation) |
-| `src/hooks/useCreateTicket.tsx` | Adicionar `operation_id` ao tipo e ao insert |
-| `src/components/support/CreateTicketDialog.tsx` | Dropdown obrigatório de Operação |
-| `src/components/TicketDetails.tsx` | Exibir operação nos detalhes |
+| `src/hooks/useForms.tsx` | Adicionar `default_operation_id` ao tipo `TicketSettings` |
+| `src/components/forms/TicketFieldMapping.tsx` | Dropdown "Operacao Padrao" usando `useTicketOperations` |
+| `supabase/functions/form-submit-v3/index.ts` | Passar `operation_id` no insert do ticket (2 locais) |
 
-### Impacto
+## Impacto
 
-- Zero regressao: coluna `operation_id` é nullable, tickets antigos continuam funcionando
-- O campo é obrigatório apenas no formulário de criação (validação no frontend)
-- A tabela `ticket_operations` segue o mesmo padrão de `ticket_categories`, facilitando manutenção futura
+- Zero regressao: tickets internos continuam com campo obrigatorio
+- Formularios existentes sem `default_operation_id` simplesmente geram ticket com `operation_id = null`
+- Novos formularios podem definir a operacao na configuracao
 
