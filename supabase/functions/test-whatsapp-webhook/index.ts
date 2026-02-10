@@ -139,12 +139,12 @@ Deno.serve(async (req) => {
       
       const { count: recentMessages } = await supabase
         .from("messages")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .gte("created_at", oneDayAgo);
       
       const { count: instanceConversations } = await supabase
         .from("conversations")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("whatsapp_instance_id", instance_id);
       
       diagnostics.checks.push({

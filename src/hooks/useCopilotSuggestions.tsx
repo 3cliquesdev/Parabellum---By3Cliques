@@ -146,7 +146,7 @@ export function useKBGapsCount() {
     queryFn: async () => {
       const { count, error } = await supabase
         .from("ai_suggestions")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("suggestion_type", "kb_gap")
         .eq("used", false);
 
