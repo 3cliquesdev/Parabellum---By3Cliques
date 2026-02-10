@@ -1,84 +1,27 @@
 
 
-# Hardening Final: NOT NULL + Boot Fix + Dedupe 23505
+# Fix: Scroll no sino de notificacoes
 
-## Resumo
+## Problema
 
-3 ajustes cirurgicos para fechar as ultimas brechas de producao. Tudo que o usuario pediu (RLS, realtime, default) ja esta implementado -- restam apenas estes pontos.
+O `ScrollArea` do Radix UI precisa de uma altura fixa (`h-XX`) para ativar o scrollbar interno. Usar apenas `max-h-80` nao funciona porque o ScrollArea nao consegue calcular quando o conteudo excede o container.
 
-## Status Atual (ja OK)
+Na imagem, as notificacoes continuam renderizando para baixo sem scroll, cortando o conteudo.
 
-- `notifications.read` tem DEFAULT false
-- RLS na `notifications`: SELECT own, UPDATE own, INSERT service -- correto
-- `notifications` esta na publication `supabase_realtime` -- sino atualiza em tempo real
-- `notify-internal-comment` ja usa `read: false` e `metadata` (bugfix anterior aplicado)
-- `notify-ticket-event` ja usa `read: false`, dedupe, fallback email
+## Solucao
 
-## Mudancas Necessarias
+Trocar `max-h-80` por `h-80` no `ScrollArea`. Isso da uma altura fixa de 320px ao container, permitindo que o ScrollArea detecte overflow e mostre a barra de rolagem.
 
-### 1. Migration: `notifications.read` SET NOT NULL
+## Mudanca (1 linha)
 
-O campo `read` e nullable (YES). Isso pode causar `read = NULL` em inserts futuros que nao passem o campo. Travar com NOT NULL apos backfill (ja feito).
+**Arquivo:** `src/components/NotificationBell.tsx`, linha 145
 
-```sql
-ALTER TABLE public.notifications ALTER COLUMN read SET NOT NULL;
-```
+- Antes: `<ScrollArea className="max-h-80">`
+- Depois: `<ScrollArea className="h-80">`
 
-### 2. `notify-internal-comment/index.ts` -- Boot Hardening
+## Impacto
 
-A funcao usa imports que violam as regras de estabilidade:
-- `import { serve } from "https://deno.land/std@0.190.0/http/server.ts"` -- trocar por `Deno.serve`
-- `import { createClient } from "npm:@supabase/supabase-js@2"` -- trocar por `https://esm.sh/@supabase/supabase-js@2.49.1`
+- Scroll funciona corretamente no dropdown de notificacoes
+- Quando ha poucas notificacoes, o espaco vazio fica visivel (comportamento aceitavel para dropdown)
+- Zero quebra em qualquer outro componente
 
-Isso previne 503 BOOT_ERROR em producao.
-
-### 3. `notify-ticket-event/index.ts` -- Dedupe com tratamento explicito de 23505
-
-O codigo atual usa `ignoreDuplicates: true` no upsert, mas nao trata o erro 23505 explicitamente. Em cenarios de race condition (2 requests simultaneos), o Supabase pode retornar erro ao inves de ignorar silenciosamente.
-
-Trocar de:
-
-```typescript
-const { data: inserted } = await supabase
-  .from("ticket_notification_sends")
-  .upsert(...)
-  .select("id");
-if (!inserted || inserted.length === 0) return false;
-```
-
-Para:
-
-```typescript
-const { data: inserted, error: dedupeError } = await supabase
-  .from("ticket_notification_sends")
-  .upsert(...)
-  .select("id");
-if (dedupeError) {
-  if (dedupeError.code === '23505') return false; // duplicate = already sent
-  console.warn('[notify-ticket-event] Dedupe error:', dedupeError);
-  return false; // fail safe: don't send twice
-}
-if (!inserted || inserted.length === 0) return false;
-```
-
-Aplicar em ambos os blocos (in_app e email).
-
-## Secao Tecnica
-
-### Arquivos modificados
-
-| Arquivo | Mudanca |
-|---------|---------|
-| Migration SQL | `ALTER COLUMN read SET NOT NULL` |
-| `supabase/functions/notify-internal-comment/index.ts` | Trocar imports para esm.sh + Deno.serve |
-| `supabase/functions/notify-ticket-event/index.ts` | Adicionar tratamento 23505 no dedupe |
-
-### Redeploy necessario
-- `notify-internal-comment`
-- `notify-ticket-event`
-
-### Impacto
-- NOT NULL impede inserts futuros com read=NULL (zero regressao, backfill ja feito)
-- Boot hardening previne 503 em deploy/cold start
-- Dedupe 23505 protege contra race condition em requests simultaneos
-- Zero quebra de comportamento existente
