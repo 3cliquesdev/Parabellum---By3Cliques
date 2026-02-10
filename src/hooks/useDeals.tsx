@@ -68,9 +68,11 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
 
       // Advanced filters
       if (filters) {
-        // Status filter (NEW)
+        // Status filter: default to 'open' when no status selected (fixes kanban showing only recent stages)
         if (filters.status && filters.status.length > 0) {
           query = query.in("status", filters.status as ("open" | "won" | "lost")[]);
+        } else {
+          query = query.eq("status", "open");
         }
 
         // Stage filter (NEW)
@@ -168,17 +170,18 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
             break;
         }
       } else {
-        // Default ordering
+        // No filters: default to open deals only + default ordering
+        query = query.eq("status", "open");
         query = query.order("created_at", { ascending: false });
       }
 
-      // Limite dinâmico baseado em filtros ativos
-      // Com filtros de data, aumentar limite pois o conjunto é naturalmente menor
+      // Limite dinâmico: open deals precisam de limite maior (working set do kanban)
+      const hasExplicitStatus = filters?.status && filters.status.length > 0;
       const hasDateFilter = filters?.createdDateRange?.from || 
                             filters?.closedDateRange?.from ||
                             filters?.expectedCloseDateRange?.from ||
                             filters?.updatedDateRange?.from;
-      const limit = hasDateFilter ? 200 : 50;
+      const limit = hasDateFilter ? 200 : (hasExplicitStatus ? 200 : 500);
       query = query.limit(limit);
 
       const { data, error } = await query;
