@@ -45,14 +45,14 @@ export function useConsultantDistributionReport() {
       // Total de clientes vinculados
       const { count: linkedCount } = await supabase
         .from("contacts")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "customer")
         .not("consultant_id", "is", null);
 
       // Total de clientes NÃO vinculados
       const { count: unlinkedCount } = await supabase
         .from("contacts")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "customer")
         .is("consultant_id", null);
 
