@@ -330,6 +330,8 @@ export default function RealtimeNotifications() {
       deal_id?: string;
       deal_title?: string;
       deadline?: string;
+      ticket_id?: string;
+      ticket_number?: string;
     } | null;
 
     // Handle different notification types
@@ -373,15 +375,28 @@ export default function RealtimeNotifications() {
         });
         break;
 
+      case 'ticket_created':
+        play();
+        toast(notification.title, {
+          description: notification.message,
+          icon: <Ticket className="h-4 w-4" />,
+          action: metadata?.ticket_id ? {
+            label: "Ver Ticket",
+            onClick: () => navigate(`/support?ticket=${(metadata as any).ticket_id}`),
+          } : undefined,
+          duration: 10000,
+        });
+        break;
+
       case 'ticket_status':
       case 'ticket_transfer':
         play();
         toast(notification.title, {
           description: notification.message,
           icon: <Ticket className="h-4 w-4" />,
-          action: notification.reference_id ? {
+          action: (metadata as any)?.ticket_id ? {
             label: "Ver Ticket",
-            onClick: () => navigate(`/support?ticket=${notification.reference_id}`),
+            onClick: () => navigate(`/support?ticket=${(metadata as any).ticket_id}`),
           } : undefined,
           duration: 10000,
         });

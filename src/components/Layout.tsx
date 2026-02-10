@@ -6,6 +6,7 @@ import { useDealsRealtime } from "@/hooks/useDealsRealtime";
 import { useRealtimeHealth } from "@/hooks/useRealtimeHealth";
 import { GlobalTourButton } from "@/components/tour/GlobalTourButton";
 import { UpdateAvailableBanner } from "@/components/UpdateAvailableBanner";
+import { NotificationBell } from "@/components/NotificationBell";
 import { WifiOff, RefreshCw } from "lucide-react";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -41,6 +42,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <RefreshCw className="h-3 w-3 animate-spin" />
               </button>
             )}
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Notification Bell */}
+            <NotificationBell />
           </header>
 
           {/* Main content */}

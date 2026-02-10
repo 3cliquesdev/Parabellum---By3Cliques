@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,7 +16,7 @@ interface TicketEventPayload {
   channels?: string[];
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -30,7 +29,10 @@ serve(async (req) => {
     const payload: TicketEventPayload = await req.json();
     const { ticket_id, event_type, actor_id, old_value, new_value, metadata, ticket_event_id, channels } = payload;
 
-    console.log(`[notify-ticket-event] Processing ${event_type} for ticket ${ticket_id}`);
+    // Backward compat: default channels to ['in_app'] if not provided
+    const activeChannels = channels || ['in_app'];
+
+    console.log(`[notify-ticket-event] Processing ${event_type} for ticket ${ticket_id}, channels: ${activeChannels.join(',')}, ticket_event_id: ${ticket_event_id || 'none'}`);
 
     // Fetch ticket with relations
     const { data: ticket, error: ticketError } = await supabase
@@ -188,9 +190,11 @@ serve(async (req) => {
       });
     }
 
-    // 4. Create in-app notifications for notifiable events
+    // 4. Create in-app notifications for notifiable events (with dedupe)
     const notifiableEvents = ['created', 'resolved', 'closed', 'transferred', 'assigned'];
-    if (notifiableEvents.includes(event_type) && usersToNotify.size > 0) {
+    let inAppCreated = 0;
+
+    if (activeChannels.includes('in_app') && notifiableEvents.includes(event_type) && usersToNotify.size > 0) {
       let title = "";
       let message = "";
       let notifType = 'ticket_status';
@@ -225,96 +229,178 @@ serve(async (req) => {
           break;
       }
 
-      const notifications = Array.from(usersToNotify).map((userId) => ({
-        user_id: userId,
-        type: notifType,
-        title,
-        message,
-        reference_id: ticket_id,
-        metadata: {
-          ticket_id,
-          ticket_number: ticket.ticket_number,
-          event_type,
-          actor_name: actorName,
-        },
-      }));
+      const notifMetadata = {
+        ticket_id,
+        ticket_number: ticket.ticket_number,
+        event_type,
+        actor_name: actorName,
+        priority: ticket.priority,
+        status: ticket.status,
+      };
 
-      const { error: notifError } = await supabase
-        .from("notifications")
-        .insert(notifications);
+      // If we have ticket_event_id, use dedupe; otherwise insert directly
+      if (ticket_event_id) {
+        const inAppResults = await Promise.allSettled(
+          Array.from(usersToNotify).map(async (userId) => {
+            // Dedupe check
+            const { data: inserted } = await supabase
+              .from("ticket_notification_sends")
+              .upsert(
+                { ticket_event_id, recipient_user_id: userId, channel: "in_app" },
+                { onConflict: "ticket_event_id,recipient_user_id,channel", ignoreDuplicates: true }
+              )
+              .select("id");
 
-      if (notifError) {
-        console.error("[notify-ticket-event] Error creating notifications:", notifError);
+            if (!inserted || inserted.length === 0) {
+              console.log(`[notify-ticket-event] in_app already sent to ${userId}, skipping`);
+              return false;
+            }
+
+            const { error: notifError } = await supabase
+              .from("notifications")
+              .insert({
+                user_id: userId,
+                type: notifType,
+                title,
+                message,
+                metadata: notifMetadata,
+                read: false,
+              });
+
+            if (notifError) {
+              console.error(`[notify-ticket-event] Error creating notification for ${userId}:`, notifError);
+              return false;
+            }
+            return true;
+          })
+        );
+        inAppCreated = inAppResults.filter(r => r.status === 'fulfilled' && r.value === true).length;
       } else {
-        console.log(`[notify-ticket-event] Created ${notifications.length} in-app notifications`);
+        // No ticket_event_id: insert directly (backward compat)
+        const notifications = Array.from(usersToNotify).map((userId) => ({
+          user_id: userId,
+          type: notifType,
+          title,
+          message,
+          metadata: notifMetadata,
+          read: false,
+        }));
+
+        const { error: notifError } = await supabase
+          .from("notifications")
+          .insert(notifications);
+
+        if (notifError) {
+          console.error("[notify-ticket-event] Error creating notifications:", notifError);
+        } else {
+          inAppCreated = notifications.length;
+        }
       }
+
+      console.log(`[notify-ticket-event] Created ${inAppCreated} in-app notifications`);
     }
 
-    // 5. Send internal emails for 'created' event (with dedupe)
+    // 5. Send internal emails (with dedupe + fallback)
     let emailsSent = 0;
-    const shouldSendEmail = channels?.includes('email') && ticket_event_id && event_type === 'created';
+    const shouldSendEmail = activeChannels.includes('email') && ticket_event_id;
 
     if (shouldSendEmail && usersToNotify.size > 0) {
       // Fetch profiles with emails
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, email")
-        .in("id", Array.from(usersToNotify))
-        .not("email", "is", null);
+        .in("id", Array.from(usersToNotify));
+
+      // Fallback: fetch email from auth.users for profiles without email
+      for (const p of profiles || []) {
+        if (!p.email) {
+          try {
+            const { data: authUser } = await supabase.auth.admin.getUserById(p.id);
+            if (authUser?.user?.email) {
+              p.email = authUser.user.email;
+            }
+          } catch (e) {
+            console.warn(`[notify-ticket-event] Could not fetch auth email for ${p.id}`);
+          }
+        }
+      }
 
       const ticketNumber = ticket.ticket_number || ticket.id.slice(0, 8).toUpperCase();
       const appUrl = Deno.env.get("APP_URL") || Deno.env.get("SITE_URL") || "";
       const ticketUrl = appUrl ? `${appUrl}/support/tickets/${ticket.id}` : "";
 
-      const emailSubject = `Novo ticket criado - ${ticket.subject}`;
-      const emailHtml = `
-        <div style="font-family:Arial,sans-serif;font-size:14px;color:#333;max-width:600px;margin:0 auto">
-          <h2 style="margin:0 0 12px;color:#111">Novo ticket criado</h2>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-            <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold;width:120px">Ticket</td><td style="padding:6px 12px;border:1px solid #eee">#${ticketNumber}</td></tr>
-            <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Assunto</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.subject}</td></tr>
-            <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Prioridade</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.priority}</td></tr>
-            <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Status</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.status}</td></tr>
-            <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Criado por</td><td style="padding:6px 12px;border:1px solid #eee">${actorName}</td></tr>
-          </table>
-          ${ticketUrl ? `<p style="margin:16px 0"><a href="${ticketUrl}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Abrir ticket</a></p>` : ''}
-          <hr style="border:none;border-top:1px solid #eee;margin:20px 0"/>
-          <small style="color:#999">Notificacao interna - 3Cliques</small>
-        </div>
-      `;
+      let emailSubject = "";
+      let emailBody = "";
 
-      for (const p of profiles || []) {
-        if (!p.email) continue;
-
-        // Dedupe check via upsert
-        const { data: inserted } = await supabase
-          .from("ticket_notification_sends")
-          .upsert(
-            { ticket_event_id, recipient_user_id: p.id, channel: "email" },
-            { onConflict: "ticket_event_id,recipient_user_id,channel", ignoreDuplicates: true }
-          )
-          .select("id");
-
-        if (!inserted || inserted.length === 0) {
-          console.log(`[notify-ticket-event] Email already sent to ${p.full_name}, skipping`);
-          continue;
-        }
-
-        try {
-          await supabase.functions.invoke("send-email", {
-            body: {
-              to: p.email,
-              to_name: p.full_name || "Usuário",
-              subject: emailSubject,
-              html: emailHtml,
-            },
-          });
-          emailsSent++;
-          console.log(`[notify-ticket-event] Email sent to ${p.full_name} (${p.email})`);
-        } catch (emailErr) {
-          console.error(`[notify-ticket-event] Failed to send email to ${p.email}:`, emailErr);
-        }
+      switch (event_type) {
+        case 'created':
+          emailSubject = `Novo ticket criado - ${ticket.subject}`;
+          emailBody = `
+            <div style="font-family:Arial,sans-serif;font-size:14px;color:#333;max-width:600px;margin:0 auto">
+              <h2 style="margin:0 0 12px;color:#111">Novo ticket criado</h2>
+              <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+                <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold;width:120px">Ticket</td><td style="padding:6px 12px;border:1px solid #eee">#${ticketNumber}</td></tr>
+                <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Assunto</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.subject}</td></tr>
+                <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Prioridade</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.priority}</td></tr>
+                <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Status</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.status}</td></tr>
+                <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Criado por</td><td style="padding:6px 12px;border:1px solid #eee">${actorName}</td></tr>
+              </table>
+              ${ticketUrl ? `<p style="margin:16px 0"><a href="${ticketUrl}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Abrir ticket</a></p>` : ''}
+              <hr style="border:none;border-top:1px solid #eee;margin:20px 0"/>
+              <small style="color:#999">Você recebeu isso porque está envolvido neste ticket.</small>
+            </div>
+          `;
+          break;
+        default:
+          emailSubject = `Ticket #${ticketNumber} - ${event_type}`;
+          emailBody = `
+            <div style="font-family:Arial,sans-serif;font-size:14px;color:#333;max-width:600px;margin:0 auto">
+              <h2 style="margin:0 0 12px;color:#111">Atualização de ticket</h2>
+              <p><strong>Ticket:</strong> #${ticketNumber} - ${ticket.subject}</p>
+              <p><strong>Evento:</strong> ${event_type}</p>
+              <p><strong>Por:</strong> ${actorName}</p>
+              ${ticketUrl ? `<p style="margin:16px 0"><a href="${ticketUrl}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Abrir ticket</a></p>` : ''}
+              <hr style="border:none;border-top:1px solid #eee;margin:20px 0"/>
+              <small style="color:#999">Você recebeu isso porque está envolvido neste ticket.</small>
+            </div>
+          `;
+          break;
       }
+
+      const emailResults = await Promise.allSettled(
+        (profiles || []).filter(p => p.email).map(async (p) => {
+          // Dedupe check
+          const { data: inserted } = await supabase
+            .from("ticket_notification_sends")
+            .upsert(
+              { ticket_event_id, recipient_user_id: p.id, channel: "email" },
+              { onConflict: "ticket_event_id,recipient_user_id,channel", ignoreDuplicates: true }
+            )
+            .select("id");
+
+          if (!inserted || inserted.length === 0) {
+            console.log(`[notify-ticket-event] Email already sent to ${p.full_name}, skipping`);
+            return false;
+          }
+
+          try {
+            await supabase.functions.invoke("send-email", {
+              body: {
+                to: p.email,
+                to_name: p.full_name || "Usuário",
+                subject: emailSubject,
+                html: emailBody,
+              },
+            });
+            console.log(`[notify-ticket-event] Email sent to ${p.full_name} (${p.email})`);
+            return true;
+          } catch (emailErr) {
+            console.error(`[notify-ticket-event] Failed to send email to ${p.email}:`, emailErr);
+            return false;
+          }
+        })
+      );
+      emailsSent = emailResults.filter(r => r.status === 'fulfilled' && r.value === true).length;
     }
 
     // 6. Record in ticket_events table (only if not already created by caller)
@@ -335,6 +421,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         stakeholders_notified: usersToNotify.size,
+        in_app_created: inAppCreated,
         emails_sent: emailsSent,
         timeline_logged: !!ticket.customer_id,
       }),
