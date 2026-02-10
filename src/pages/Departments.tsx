@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Edit, Trash2, Loader2, Clock, MessageSquare } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, Clock, MessageSquare, Timer } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDepartments, type Department } from "@/hooks/useDepartments";
 import { useDeleteDepartment } from "@/hooks/useDeleteDepartment";
 import { useUpdateDepartment } from "@/hooks/useUpdateDepartment";
 import { useTicketOperations, useUpdateTicketOperation, useDeleteTicketOperation, type TicketOperation } from "@/hooks/useTicketOperations";
 import { useTicketCategories, useUpdateTicketCategory, useDeleteTicketCategory, type TicketCategory } from "@/hooks/useTicketCategories";
+import { useSLAPolicies } from "@/hooks/useSLAPolicies";
 import DepartmentDialog from "@/components/DepartmentDialog";
 import OperationDialog from "@/components/OperationDialog";
 import CategoryDialog from "@/components/CategoryDialog";
@@ -46,6 +47,12 @@ export default function Departments() {
   const { data: departments, isLoading: loadingDepts } = useDepartments();
   const { data: operations, isLoading: loadingOps } = useTicketOperations();
   const { data: categories, isLoading: loadingCats } = useTicketCategories();
+  const { data: slaPolicies } = useSLAPolicies();
+
+  const unitLabels: Record<string, string> = { hours: "h", business_hours: "h úteis", business_days: "d úteis" };
+  const getSlaForCategory = (catId: string, prio: string) => {
+    return slaPolicies?.find(p => p.category_id === catId && p.priority === prio && p.is_active);
+  };
 
   const deleteDeptMutation = useDeleteDepartment();
   const updateDeptMutation = useUpdateDepartment();
@@ -218,6 +225,24 @@ export default function Departments() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  <div className="space-y-3">
+                    {cat.priority && (
+                      <span className="inline-block text-xs font-medium px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                        Prioridade: {({ low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" } as Record<string, string>)[cat.priority] || cat.priority}
+                      </span>
+                    )}
+                    {(() => {
+                      const sla = getSlaForCategory(cat.id, cat.priority);
+                      if (!sla) return null;
+                      return (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Timer className="h-4 w-4" />
+                          <span>
+                            SLA: {sla.response_time_value}{unitLabels[sla.response_time_unit]} resposta / {sla.resolution_time_value}{unitLabels[sla.resolution_time_unit]} resolução
+                          </span>
+                        </div>
+                      );
+                    })()}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Switch
@@ -234,6 +259,7 @@ export default function Departments() {
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
+                  </div>
                   </div>
                 </CardContent>
               </Card>
