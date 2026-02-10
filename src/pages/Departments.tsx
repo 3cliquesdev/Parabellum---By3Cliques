@@ -10,6 +10,7 @@ import { useTicketOperations, useUpdateTicketOperation, useDeleteTicketOperation
 import { useTicketCategories, useUpdateTicketCategory, useDeleteTicketCategory, type TicketCategory } from "@/hooks/useTicketCategories";
 import { useTicketOrigins, useUpdateTicketOrigin, useDeleteTicketOrigin, type TicketOrigin } from "@/hooks/useTicketOrigins";
 import { useSLAPolicies } from "@/hooks/useSLAPolicies";
+import { useTicketFieldSettings } from "@/hooks/useTicketFieldSettings";
 import DepartmentDialog from "@/components/DepartmentDialog";
 import OperationDialog from "@/components/OperationDialog";
 import CategoryDialog from "@/components/CategoryDialog";
@@ -55,6 +56,7 @@ export default function Departments() {
   const { data: categories, isLoading: loadingCats } = useTicketCategories();
   const { data: origins, isLoading: loadingOrigins } = useTicketOrigins();
   const { data: slaPolicies } = useSLAPolicies();
+  const { settings: fieldSettings, updateField } = useTicketFieldSettings();
 
   const unitLabels: Record<string, string> = { hours: "h", business_hours: "h úteis", business_days: "d úteis" };
   const getSlaForCategory = (catId: string, prio: string) => {
@@ -92,11 +94,12 @@ export default function Departments() {
     setDeleteTarget(null);
   };
 
-  const tabConfig: Record<string, { title: string; subtitle: string; btnLabel: string }> = {
+  const tabConfig: Record<string, { title: string; subtitle: string; btnLabel?: string }> = {
     departments: { title: "Departamentos", subtitle: "Gerencie os departamentos organizacionais", btnLabel: "Novo Departamento" },
     operations: { title: "Operações", subtitle: "Gerencie as operações de tickets", btnLabel: "Nova Operação" },
     categories: { title: "Categorias", subtitle: "Gerencie as categorias de tickets", btnLabel: "Nova Categoria" },
     origins: { title: "Origens", subtitle: "Gerencie as origens (momento da jornada do cliente)", btnLabel: "Nova Origem" },
+    fields: { title: "Campos Obrigatórios", subtitle: "Defina quais campos são obrigatórios ao criar um ticket" },
   };
 
   const current = tabConfig[activeTab] || tabConfig.departments;
@@ -117,10 +120,12 @@ export default function Departments() {
           <h1 className="text-3xl font-bold text-foreground">{current.title}</h1>
           <p className="text-muted-foreground mt-2">{current.subtitle}</p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />
-          {current.btnLabel}
-        </Button>
+        {current.btnLabel && (
+          <Button onClick={handleCreate}>
+            <Plus className="h-4 w-4 mr-2" />
+            {current.btnLabel}
+          </Button>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -129,6 +134,7 @@ export default function Departments() {
           <TabsTrigger value="operations">Operações</TabsTrigger>
           <TabsTrigger value="categories">Categorias</TabsTrigger>
           <TabsTrigger value="origins">Origens</TabsTrigger>
+          <TabsTrigger value="fields">Campos</TabsTrigger>
         </TabsList>
 
         {/* === DEPARTAMENTOS === */}
@@ -311,6 +317,38 @@ export default function Departments() {
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        {/* === CAMPOS OBRIGATÓRIOS === */}
+        <TabsContent value="fields">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            {([
+              { field: "department" as const, label: "Departamento Responsável", desc: "Departamento ao qual o ticket será vinculado" },
+              { field: "operation" as const, label: "Operação", desc: "Tipo de operação do ticket" },
+              { field: "origin" as const, label: "Origem do Ticket", desc: "Momento da jornada do cliente" },
+              { field: "category" as const, label: "Categoria", desc: "Classificação do ticket por tipo de problema" },
+              { field: "customer" as const, label: "Cliente", desc: "Cliente vinculado ao ticket" },
+              { field: "assigned_to" as const, label: "Responsável (Atribuir a)", desc: "Agente responsável pelo ticket" },
+            ]).map(({ field, label, desc }) => (
+              <Card key={field}>
+                <CardContent className="flex items-center justify-between py-4">
+                  <div>
+                    <p className="font-medium text-foreground">{label}</p>
+                    <p className="text-sm text-muted-foreground">{desc}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {fieldSettings[field] ? "Obrigatório" : "Opcional"}
+                    </span>
+                    <Switch
+                      checked={fieldSettings[field]}
+                      onCheckedChange={(checked) => updateField({ field, required: checked })}
+                    />
                   </div>
                 </CardContent>
               </Card>
