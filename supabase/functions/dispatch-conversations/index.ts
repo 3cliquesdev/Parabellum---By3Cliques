@@ -573,7 +573,7 @@ async function processAgentCapacity(
     .map((p: any) => ({
       id: p.id,
       full_name: p.full_name,
-      max_chats: capacityMap.get(p.id) ?? 10,
+      max_chats: capacityMap.get(p.id) ?? 40,
       active_chats: activeChatsMap.get(p.id) ?? 0,
       last_status_change: p.last_status_change,
     }))
