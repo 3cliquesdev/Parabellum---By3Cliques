@@ -1,52 +1,41 @@
 
-# Fix: Corrigir o Funil de Retencao - Onboarding
 
-## Problema Identificado
+# Fix: Capacidade de distribuição inconsistente
 
-O widget "Funil de Retencao - Onboarding" (`useOnboardingFunnel.tsx`) usa fontes de dados incorretas:
+## Problema Raiz
 
-| Etapa | Fonte Atual (errada) | Fonte Correta |
-|-------|---------------------|---------------|
-| Compra Aprovada | `contacts` com `status=customer` | `deals` no pipeline CS - Novos Clientes |
-| Primeiro Login | **Todas** `playbook_executions` (qualquer playbook) | Deveria filtrar por playbook especifico de onboarding |
-| Email Entregue | `email_tracking_events` (tabela sem dados) | `email_sends` com `sent_at IS NOT NULL` |
-| Concluiu Onboarding | `playbook_executions` com `status=completed` | Idem, mas filtrado por playbook correto |
+Existem **dois fallbacks diferentes** no mesmo arquivo `dispatch-conversations/index.ts`:
 
-## Solucao Proposta
+- **Linha 550**: Quando o agente ESTA em `team_members` mas `max_concurrent_chats` e NULL → fallback = **40** (correto)
+- **Linha 576**: Quando o agente NAO esta em `team_members` (nao entra no capacityMap) → fallback = **10** (errado!)
 
-Duas opcoes:
+A Mabile nao esta cadastrada em nenhum team, entao o sistema aplica o limite de 10. Com 15 chats ativos, ela aparece como "at capacity" mesmo tendo capacidade para 40.
 
-### Opcao A: Remover o widget antigo e manter apenas o novo (Recomendado)
+## Correcao
 
-O novo `CSEmailFunnelWidget` ja usa as fontes corretas e mostra exatamente os dados pedidos:
-1. Total de vendas novas (deals no pipeline CS)
-2. 1o email entregue (email_sends com sent_at)
-3. 2o email aberto (email_sends com opened_at)
+### Arquivo: `supabase/functions/dispatch-conversations/index.ts`
 
-Remover o `OnboardingFunnelWidget` do dashboard para evitar confusao com dados errados.
+Mudar a **linha 576** de:
 
-### Opcao B: Corrigir o widget antigo
+```typescript
+max_chats: capacityMap.get(p.id) ?? 10,
+```
 
-Reescrever o `useOnboardingFunnel.tsx` para usar as mesmas fontes do `useCSOnboardingEmailFunnel`:
-- Trocar `contacts` por `deals` do pipeline CS
-- Filtrar `playbook_executions` pelo playbook de onboarding especifico
-- Trocar `email_tracking_events` por `email_sends`
+Para:
 
-## Recomendacao
+```typescript
+max_chats: capacityMap.get(p.id) ?? 40,
+```
 
-**Opcao A** e mais limpa: o novo widget ja resolve o problema, manter o antigo com dados errados so gera confusao. Se quiser adicionar "Primeiro Login" e "Concluiu Onboarding" como etapas extras, podemos expandir o CSEmailFunnelWidget para incluir essas metricas (filtrando pelo playbook correto).
+Isso garante que agentes que nao pertencem a nenhum team tambem usem o padrao de 40 conversas simultaneas, consistente com a linha 550.
 
-## Mudancas Tecnicas
+### Impacto
 
-### Opcao A (remover widget antigo):
-- **Arquivo**: `src/components/analytics/AdvancedTab.tsx` - Remover import e uso do `OnboardingFunnelWidget`
-- Arquivos `src/hooks/useOnboardingFunnel.tsx` e `src/components/widgets/OnboardingFunnelWidget.tsx` podem ser mantidos (sem impacto) ou removidos
+- **Mabile**: Vai passar de limite 10 para 40. Com 15 chats ativos, volta a ter capacidade (15 < 40)
+- **Outros agentes sem team**: Tambem serao beneficiados pelo limite correto
+- **Agentes COM team**: Zero impacto (ja usam o valor do `team_settings` ou fallback 40 da linha 550)
+- **Zero regressao**: Apenas corrige inconsistencia de fallback
 
-### Opcao B (corrigir widget antigo):
-- **Arquivo**: `src/hooks/useOnboardingFunnel.tsx` - Reescrever queries para usar `deals` + `email_sends`
-- Precisaria identificar o ID do playbook de onboarding para filtrar execucoes
+### Apos o deploy
 
-## Validacao
-- Confirmar que os numeros do funil fazem sentido (vendas >= emails entregues >= emails abertos)
-- Console sem erros
-- Zero regressao em outros widgets do dashboard
+Os 57 jobs `escalated` serao reprocessados automaticamente na proxima execucao do dispatcher (ou quando um agente voltar online, conforme a politica de requeue existente).
