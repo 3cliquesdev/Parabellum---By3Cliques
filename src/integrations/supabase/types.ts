@@ -9059,6 +9059,19 @@ export type Database = {
         Args: { p_end: string; p_start: string }
         Returns: number
       }
+      get_channel_performance_consolidated: {
+        Args: { p_end: string; p_start: string }
+        Returns: {
+          ai_handled: number
+          avg_csat: number
+          channel: string
+          closed_conversations: number
+          conversion_rate: number
+          human_handled: number
+          total_conversations: number
+          total_messages: number
+        }[]
+      }
       get_commercial_conversations_drilldown:
         | {
             Args: {
@@ -9362,6 +9375,20 @@ export type Database = {
           mttr_count: number
         }[]
       }
+      get_team_performance_consolidated: {
+        Args: { p_end: string; p_start: string }
+        Returns: {
+          agent_id: string
+          agent_name: string
+          avatar_url: string
+          avg_csat: number
+          avg_response_minutes: number
+          chats_attended: number
+          sales_closed: number
+          total_csat_ratings: number
+          total_revenue: number
+        }[]
+      }
       get_tickets_export_report: {
         Args: {
           p_agent_id?: string
@@ -9401,6 +9428,14 @@ export type Database = {
           tags_list: string
           ticket_number: string
           total_count: number
+        }[]
+      }
+      get_volume_resolution_consolidated: {
+        Args: { p_end: string; p_start: string }
+        Returns: {
+          date_bucket: string
+          opened: number
+          resolved: number
         }[]
       }
       get_volume_vs_resolution_v2: {
