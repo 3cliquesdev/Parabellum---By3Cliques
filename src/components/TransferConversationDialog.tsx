@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +19,13 @@ import { useTransferConversation } from "@/hooks/useTransferConversation";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { ArrowRightLeft, Users } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+
+const STATUS_CONFIG: Record<string, { label: string; dotClass: string; badgeVariant: "success" | "warning" | "cold" | "error"; ringClass: string; fallbackBg: string; fallbackText: string }> = {
+  online: { label: "Online", dotClass: "bg-green-500 animate-pulse", badgeVariant: "success", ringClass: "ring-green-500", fallbackBg: "bg-green-100", fallbackText: "text-green-700" },
+  busy: { label: "Ocupado", dotClass: "bg-yellow-500", badgeVariant: "warning", ringClass: "ring-yellow-500", fallbackBg: "bg-yellow-100", fallbackText: "text-yellow-700" },
+  away: { label: "Ausente", dotClass: "bg-gray-400", badgeVariant: "cold", ringClass: "ring-gray-400", fallbackBg: "bg-gray-100", fallbackText: "text-gray-600" },
+  offline: { label: "Offline", dotClass: "bg-red-400", badgeVariant: "error", ringClass: "ring-red-400", fallbackBg: "bg-red-100", fallbackText: "text-red-700" },
+};
 
 type Contact = Tables<"contacts"> & {
   organizations: Tables<"organizations"> | null;
@@ -46,23 +54,31 @@ export default function TransferConversationDialog({
   conversation,
   currentUserId,
 }: TransferConversationDialogProps) {
-  // ✅ Todos os hooks PRIMEIRO, antes de qualquer early return
   const { hasPermission } = useRolePermissions();
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [transferNote, setTransferNote] = useState("");
   const { data: departments } = useDepartments();
-  // Buscar APENAS usuários online para transferência direta
-  const { data: users, isLoading } = useUsersByDepartment(selectedDepartmentId || undefined, { onlineOnly: true });
+  const { data: users, isLoading } = useUsersByDepartment(selectedDepartmentId || undefined, { onlineOnly: false });
   const transferMutation = useTransferConversation();
-  
-  // Early return DEPOIS de todos os hooks
+
+  // Hooks antes do early return
+  const availableUsers = useMemo(() =>
+    users?.filter((user) => user.id !== conversation?.assigned_to) || [],
+    [users, conversation?.assigned_to]
+  );
+
+  const { onlineAgents, offlineAgents } = useMemo(() => {
+    const online = availableUsers.filter(u => u.availability_status === "online");
+    const offline = availableUsers.filter(u => u.availability_status !== "online");
+    return { onlineAgents: online, offlineAgents: offline };
+  }, [availableUsers]);
+
   if (!conversation || !conversation.contacts || !hasPermission('inbox.transfer')) {
     return null;
   }
 
   const handleTransfer = () => {
-    // Agente é opcional - se não selecionou, usa distribuição automática
     if (!selectedDepartmentId) return;
 
     const isAutoDistribute = !selectedUserId || selectedUserId === "auto";
@@ -100,10 +116,35 @@ export default function TransferConversationDialog({
     );
   };
 
-  // Filtrar usuário atribuído atual da lista
-  const availableUsers = users?.filter(
-    (user) => user.id !== conversation.assigned_to
-  );
+  const renderAgentButton = (user: NonNullable<typeof users>[number]) => {
+    const status = STATUS_CONFIG[user.availability_status || "offline"] || STATUS_CONFIG.offline;
+    return (
+      <button
+        key={user.id}
+        onClick={() => setSelectedUserId(user.id)}
+        className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all hover:bg-accent ${
+          selectedUserId === user.id ? "border-primary bg-accent" : "border-border"
+        }`}
+      >
+        <Avatar className={`h-10 w-10 ring-2 ${status.ringClass}`}>
+          <AvatarImage src={user.avatar_url || undefined} alt={user.full_name} />
+          <AvatarFallback className={`${status.fallbackBg} ${status.fallbackText}`}>
+            {user.full_name.split(" ").map((n) => n[0]).join("").toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex-1 text-left">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${status.dotClass}`} />
+            <p className="font-medium">{user.full_name}</p>
+            <Badge variant={status.badgeVariant} className="text-[10px] px-1.5 py-0">{status.label}</Badge>
+          </div>
+          {user.job_title && (
+            <p className="text-sm text-muted-foreground">{user.job_title}</p>
+          )}
+        </div>
+      </button>
+    );
+  };
 
   const activeDepartments = departments?.filter((d) => d.is_active) || [];
 
@@ -129,15 +170,15 @@ export default function TransferConversationDialog({
               value={selectedDepartmentId || ""}
               onValueChange={(value) => {
                 setSelectedDepartmentId(value);
-                setSelectedUserId(null); // Reset user selection when department changes
+                setSelectedUserId(null);
               }}
             >
               <SelectTrigger id="department">
                 <SelectValue placeholder="Selecione o departamento" />
               </SelectTrigger>
-              <SelectContent 
-                position="popper" 
-                side="bottom" 
+              <SelectContent
+                position="popper"
+                side="bottom"
                 align="start"
                 sideOffset={4}
                 className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
@@ -151,11 +192,11 @@ export default function TransferConversationDialog({
             </Select>
           </div>
 
-          {/* Lista de Usuários (só aparece após selecionar departamento) */}
+          {/* Lista de Agentes */}
           {selectedDepartmentId && (
             <>
               <div className="space-y-2">
-                <Label>Agente de Destino <span className="text-muted-foreground font-normal">(apenas online)</span></Label>
+                <Label>Agente de Destino <span className="text-muted-foreground font-normal">(todos)</span></Label>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -163,7 +204,7 @@ export default function TransferConversationDialog({
                 ) : (
                   <ScrollArea className="h-[240px]">
                     <div className="space-y-2 pr-4">
-                      {/* Opção de distribuição automática */}
+                      {/* Distribuição automática */}
                       <button
                         onClick={() => setSelectedUserId("auto")}
                         className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all hover:bg-accent ${
@@ -183,49 +224,26 @@ export default function TransferConversationDialog({
                         </div>
                       </button>
 
-                      {/* Usuários ONLINE do departamento */}
-                      {availableUsers?.map((user) => (
-                        <button
-                          key={user.id}
-                          onClick={() => setSelectedUserId(user.id)}
-                          className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all hover:bg-accent ${
-                            selectedUserId === user.id
-                              ? "border-primary bg-accent"
-                              : "border-border"
-                          }`}
-                        >
-                          <Avatar className="h-10 w-10 ring-2 ring-green-500">
-                            <AvatarImage
-                              src={user.avatar_url || undefined}
-                              alt={user.full_name}
-                            />
-                            <AvatarFallback className="bg-green-100 text-green-700">
-                              {user.full_name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")
-                                .toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 text-left">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                              <p className="font-medium">{user.full_name}</p>
-                              <span className="text-xs text-green-600 font-medium bg-green-100 px-1.5 py-0.5 rounded">Online</span>
-                            </div>
-                            {user.job_title && (
-                              <p className="text-sm text-muted-foreground">
-                                {user.job_title}
-                              </p>
-                            )}
-                          </div>
-                        </button>
-                      ))}
+                      {/* Agentes Online */}
+                      {onlineAgents.length > 0 && (
+                        <>
+                          <p className="text-xs font-medium text-muted-foreground pt-2 px-1">Online ({onlineAgents.length})</p>
+                          {onlineAgents.map(renderAgentButton)}
+                        </>
+                      )}
 
-                      {(!availableUsers || availableUsers.length === 0) && (
+                      {/* Agentes Indisponíveis */}
+                      {offlineAgents.length > 0 && (
+                        <>
+                          <p className="text-xs font-medium text-muted-foreground pt-2 px-1">Indisponíveis ({offlineAgents.length})</p>
+                          {offlineAgents.map(renderAgentButton)}
+                        </>
+                      )}
+
+                      {availableUsers.length === 0 && (
                         <div className="text-center py-4 space-y-2">
                           <p className="text-muted-foreground">
-                            Nenhum agente <strong>online</strong> neste departamento
+                            Nenhum agente neste departamento
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Use "Distribuir Automaticamente" para enviar à fila
