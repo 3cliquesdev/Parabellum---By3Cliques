@@ -44,7 +44,7 @@ serve(async (req) => {
         updated_at,
         resolved_at,
         first_response_at,
-        department:departments(id, name)
+        department:departments!tickets_department_id_fkey(id, name)
       `)
       .eq('customer_id', contact_id)
       .order('created_at', { ascending: false });
