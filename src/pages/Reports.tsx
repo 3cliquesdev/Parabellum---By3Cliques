@@ -49,6 +49,13 @@ export default function Reports() {
           icon: FileSpreadsheet,
         },
         {
+          id: 'tickets_export',
+          name: 'Relatório de Tickets (Excel)',
+          description: 'Exportação completa com métricas de SLA, tempos de resposta e resolução',
+          icon: FileSpreadsheet,
+          route: '/reports/tickets-export',
+        },
+        {
           id: 'agent_performance',
           name: 'Performance por Agente',
           description: 'Métricas de produtividade e qualidade por agente',
