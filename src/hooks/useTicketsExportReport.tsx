@@ -28,6 +28,7 @@ export interface TicketExportRow {
   sla_response_time_unit: string | null;
   sla_resolution_time_value: number | null;
   sla_resolution_time_unit: string | null;
+  tags_list: string | null;
   total_count: number;
 }
 
