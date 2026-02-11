@@ -74,6 +74,13 @@ export default function Reports() {
           icon: MessageSquare,
           route: '/reports/commercial-conversations',
         },
+        {
+          id: 'conversations_detailed',
+          name: 'Relatório de Conversas',
+          description: 'Lista detalhada de todas as conversas com filtros avançados e exportação CSV',
+          icon: MessageSquare,
+          route: '/reports/conversations',
+        },
       ],
     },
     {
