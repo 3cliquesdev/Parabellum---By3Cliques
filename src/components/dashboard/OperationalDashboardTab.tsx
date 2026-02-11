@@ -9,6 +9,7 @@ import { TeamEfficiencyWidget } from "@/components/widgets/TeamEfficiencyWidget"
 import { BusyHoursHeatmap } from "@/components/widgets/BusyHoursHeatmap";
 import { ChannelPerformanceComparison } from "@/components/widgets/ChannelPerformanceComparison";
 import { AIUsageWidget } from "@/components/widgets/AIUsageWidget";
+import { DispatchQueueWidget } from "@/components/widgets/DispatchQueueWidget";
 import { useWhatsAppInstances } from "@/hooks/useWhatsAppInstances";
 import { useConversations } from "@/hooks/useConversations";
 import { useTeamOnlineCount } from "@/hooks/useTeamOnlineCount";
@@ -100,6 +101,11 @@ export function OperationalDashboardTab({ dateRange }: OperationalDashboardTabPr
       </BentoCard>
       <BentoCard span="2">
         <AIUsageWidget />
+      </BentoCard>
+
+      {/* ROW 5: Dispatch Queue Monitoring */}
+      <BentoCard span="full">
+        <DispatchQueueWidget />
       </BentoCard>
     </BentoGrid>
   );

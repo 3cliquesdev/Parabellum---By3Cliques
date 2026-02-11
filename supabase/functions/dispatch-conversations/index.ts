@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,15 +82,34 @@ serve(async (req) => {
     }
     // ======================================================================
 
-    // 1. Fetch pending jobs (LIMIT 50 for performance)
+    // ==================== NEW: Requeue stuck jobs ====================
+    const stuckResult = await requeueStuckJobs(supabase);
+    if (stuckResult.requeued > 0) {
+      console.log(`[dispatch-conversations] 🔄 Requeued ${stuckResult.requeued} stuck jobs`);
+    }
+    // ======================================================================
+
+    // 1. Fetch pending jobs with SLA priority (JOIN conversations for wait time)
     const { data: pendingJobs, error: jobsError } = await supabase
       .from('conversation_dispatch_jobs')
-      .select('*')
+      .select('*, conversation:conversations(last_message_at)')
       .eq('status', 'pending')
       .lte('next_attempt_at', new Date().toISOString())
       .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
       .limit(50);
+
+    // Re-sort by SLA priority: older conversations first within same priority
+    if (pendingJobs?.length) {
+      pendingJobs.sort((a: any, b: any) => {
+        // First by priority DESC
+        if (a.priority !== b.priority) return b.priority - a.priority;
+        // Then by conversation wait time DESC (older = higher priority)
+        const aWait = a.conversation?.last_message_at ? new Date(a.conversation.last_message_at).getTime() : Date.now();
+        const bWait = b.conversation?.last_message_at ? new Date(b.conversation.last_message_at).getTime() : Date.now();
+        return aWait - bWait; // Older first
+      });
+    }
 
     if (jobsError) {
       console.error('[dispatch-conversations] Error fetching jobs:', jobsError);
@@ -526,9 +545,9 @@ async function processAgentCapacity(
   const capacityMap = new Map<string, number>();
   // deno-lint-ignore no-explicit-any
   for (const tm of (teamMembers || []) as any[]) {
-    // D5: Forçar mínimo de 30 conversas por agente para alta demanda
+    // Enterprise: Respect team-configured capacity limits (fallback: 10)
     const configuredMax = tm.team?.team_settings?.max_concurrent_chats;
-    const maxChats = Math.max(configuredMax ?? 30, 30);
+    const maxChats = configuredMax ?? 10;
     capacityMap.set(tm.user_id, maxChats);
   }
 
@@ -554,7 +573,7 @@ async function processAgentCapacity(
     .map((p: any) => ({
       id: p.id,
       full_name: p.full_name,
-      max_chats: capacityMap.get(p.id) ?? 30,
+      max_chats: capacityMap.get(p.id) ?? 10,
       active_chats: activeChatsMap.get(p.id) ?? 0,
       last_status_change: p.last_status_change,
     }))
@@ -662,12 +681,12 @@ async function handleJobFailure(
 ) {
   const newAttempts = job.attempts + 1;
   
-  // Calculate next retry with exponential backoff
+  // Enterprise: Aggressive backoff for faster distribution
   let nextAttemptDelay: number;
-  if (newAttempts === 1) nextAttemptDelay = 30; // 30 seconds
-  else if (newAttempts === 2) nextAttemptDelay = 60; // 1 minute
-  else if (newAttempts === 3) nextAttemptDelay = 120; // 2 minutes
-  else nextAttemptDelay = 300; // 5 minutes
+  if (newAttempts === 1) nextAttemptDelay = 10; // 10 seconds
+  else if (newAttempts === 2) nextAttemptDelay = 20; // 20 seconds
+  else if (newAttempts === 3) nextAttemptDelay = 30; // 30 seconds
+  else nextAttemptDelay = 60; // 1 minute max
 
   const nextAttemptAt = new Date(Date.now() + nextAttemptDelay * 1000).toISOString();
   
@@ -743,5 +762,40 @@ async function processEscalations(supabase: any) {
     });
 
     console.log(`[dispatch-conversations] 🚨 Created escalation alert for ${job.conversation_id}`);
+  }
+}
+
+/**
+ * ==================== NEW: Requeue stuck jobs ====================
+ * Finds jobs that are "pending" but haven't been processed (next_attempt_at passed >3 min ago)
+ * and resets them to be picked up immediately.
+ */
+// deno-lint-ignore no-explicit-any
+async function requeueStuckJobs(supabase: any): Promise<{ requeued: number }> {
+  try {
+    const threeMinAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+    
+    const { data: stuckJobs, error } = await supabase
+      .from('conversation_dispatch_jobs')
+      .update({
+        next_attempt_at: new Date().toISOString(),
+        attempts: 0,
+        last_error: 'requeued_stuck_job',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('status', 'pending')
+      .lt('next_attempt_at', threeMinAgo)
+      .gt('attempts', 0)
+      .select('id');
+
+    if (error) {
+      console.error('[requeueStuckJobs] Error:', error);
+      return { requeued: 0 };
+    }
+
+    return { requeued: stuckJobs?.length || 0 };
+  } catch (error) {
+    console.error('[requeueStuckJobs] Error:', error);
+    return { requeued: 0 };
   }
 }
