@@ -1,31 +1,40 @@
 
+# Adicionar Coluna "Tags" ao Relatorio de Tickets Excel
 
-# Correcao do Relatorio de Tickets - Erro de Tipo no Banco
+## O que sera feito
 
-## Problema Identificado
+Adicionar uma coluna "Tags" ao relatorio de tickets que mostra todas as tags associadas a cada ticket, separadas por virgula.
 
-O erro `operator does not exist: ticket_status = text` ocorre porque as colunas `status`, `priority` e `category` da tabela `tickets` usam tipos ENUM customizados (`ticket_status`, `ticket_priority`, `ticket_category`), mas a funcao RPC compara diretamente com parametros TEXT sem fazer a conversao (cast).
+## Abordagem Tecnica
 
-## Solucao
+Como a relacao `tickets` -> `ticket_tags` -> `tags` e many-to-many (um ticket pode ter varias tags), a melhor abordagem e usar `STRING_AGG` no SQL para concatenar os nomes das tags em uma unica string.
 
-Recriar a funcao `get_tickets_export_report` com casts explicitos nos filtros e nos campos de retorno:
+### 1. Atualizar a RPC `get_tickets_export_report` (nova migration)
 
-### Alteracoes na RPC (nova migration SQL)
+Adicionar um subselect com `STRING_AGG` para trazer todas as tags do ticket concatenadas:
 
-1. **Filtros WHERE**: Adicionar `::text` nos campos enum ao comparar com parametros texto:
-   - `t.status::text = p_status` (em vez de `t.status = p_status`)
-   - `t.priority::text = p_priority` (em vez de `t.priority = p_priority`)
+```sql
+(SELECT STRING_AGG(tg.name, ', ' ORDER BY tg.name)
+ FROM ticket_tags tt
+ JOIN tags tg ON tg.id = tt.tag_id
+ WHERE tt.ticket_id = t.id
+) AS tags_list
+```
 
-2. **Campos SELECT**: Adicionar `::text` nos campos enum retornados:
-   - `t.status::text` 
-   - `t.priority::text`
-   - `t.category::text`
+Novo campo no `RETURNS TABLE`: `tags_list TEXT`
 
-3. **JOIN com sla_policies**: A coluna `sp.priority` e texto, mas `t.priority` e enum, entao tambem precisa de cast: `sp.priority = t.priority::text`
+### 2. Atualizar o hook `useTicketsExportReport.tsx`
 
-Isso corrige tanto a query de contagem (COUNT) quanto a query principal de dados.
+Adicionar `tags_list: string | null` na interface `TicketExportRow`.
 
-### Nenhuma alteracao no frontend
+### 3. Atualizar o hook `useExportTicketsExcel.tsx`
 
-Os hooks e a pagina permanecem iguais - o problema e exclusivamente no SQL.
+Adicionar a coluna `"Tags": r.tags_list || ""` no mapeamento do Excel.
 
+### 4. Atualizar a pagina `TicketsExportReport.tsx`
+
+Adicionar a coluna "Tags" na tabela de preview.
+
+### Impacto
+- Zero regressao: apenas adicao de um campo novo na RPC e nos componentes existentes
+- Tags separadas por virgula quando o ticket tem mais de uma
