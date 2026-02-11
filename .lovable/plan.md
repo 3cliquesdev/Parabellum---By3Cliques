@@ -1,44 +1,47 @@
 
 
-# Fix: Exportação do Relatório de Conversas
+# Fix: Download da Planilha Bloqueado pelo Iframe
 
 ## Problema
-O botão "Exportar CSV" do Relatório de Conversas reutiliza o hook `useExportCommercialConversationsCSV`, que chama 3 RPCs:
-1. `get_commercial_conversations_kpis` (desnecessario)
-2. `get_commercial_conversations_pivot` (desnecessario)  
-3. `get_commercial_conversations_report` (unico necessario)
 
-Se qualquer uma das 2 RPCs extras falhar, o export inteiro falha.
+O `XLSX.writeFile()` tenta disparar um download diretamente, mas dentro de iframes (como o preview do Lovable), o navegador bloqueia downloads silenciosos. O toast de sucesso aparece porque o codigo roda sem erro — mas o arquivo nunca chega ao usuario.
 
 ## Solucao
-Criar um hook dedicado `useExportConversationsCSV` que chama APENAS a RPC de detalhes e gera um Excel simples com 1 aba ("Conversas") contendo os 20 campos solicitados.
 
-## Mudancas
+Substituir `XLSX.writeFile(wb, filename)` por uma abordagem manual com Blob + link programatico que funciona em qualquer contexto (iframe ou nao):
 
-### 1. Novo arquivo: `src/hooks/useExportConversationsCSV.tsx`
-- Chama apenas `get_commercial_conversations_report` (1 RPC)
-- Gera Excel com 1 aba "Conversas" com as 20 colunas:
-  - ID, Status, Nome, Email, Telefone, Data Entrada, Hora Entrada, Data Encerramento, Hora Encerramento, Tempo Espera, Duracao, Responsavel, Participantes, Grupo Responsavel, Total Interacoes, Origem, CSAT, Ticket, Tags, Tempo Espera pos Atribuicao, Primeira Mensagem
-- Limite de 5000 registros
-- Nome do arquivo: `relatorio_conversas_YYYY-MM-DD.xlsx`
+1. Gerar o arquivo como array buffer: `XLSX.write(wb, { bookType: "xlsx", type: "array" })`
+2. Criar um `Blob` com o tipo MIME correto
+3. Criar um `<a>` temporario com `URL.createObjectURL`
+4. Disparar o click programaticamente
+5. Limpar o objeto URL
 
-### 2. Editar: `src/pages/ConversationsReport.tsx`
-- Trocar import de `useExportCommercialConversationsCSV` para `useExportConversationsCSV`
-- Nenhuma outra mudanca
+## Mudanca
 
-## Detalhes tecnicos
+**Arquivo**: `src/hooks/useExportConversationsCSV.tsx`
 
-```text
-Hook novo: useExportConversationsCSV
-  - 1 chamada RPC: get_commercial_conversations_report
-  - Formata datas separadas (Data / Hora)
-  - Formata duracoes em "Xh Ym Zs"
-  - Auto-width nas colunas
-  - BOM para compatibilidade Excel
-  - Toast de sucesso/erro
+**Linha 104** — substituir:
+```typescript
+XLSX.writeFile(wb, `relatorio_conversas_${dateStr}.xlsx`);
+```
+
+Por:
+```typescript
+const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+const url = URL.createObjectURL(blob);
+const a = document.createElement("a");
+a.href = url;
+a.download = `relatorio_conversas_${dateStr}.xlsx`;
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
+URL.revokeObjectURL(url);
 ```
 
 ## Impacto
-- Zero regressao: hook antigo continua funcionando para Conversas Comerciais
-- Novo hook serve apenas o Relatorio de Conversas
-- 1 RPC ao inves de 3 = mais rapido e sem erro
+
+- Zero regressao: apenas muda o metodo de disparo do download
+- Funciona em iframe, popup e janela normal
+- Mesmo arquivo Excel gerado, mesmos dados
+
