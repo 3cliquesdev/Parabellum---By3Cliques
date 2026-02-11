@@ -9398,6 +9398,7 @@ export type Database = {
           sla_response_time_value: number
           status: string
           subject: string
+          tags_list: string
           ticket_number: string
           total_count: number
         }[]

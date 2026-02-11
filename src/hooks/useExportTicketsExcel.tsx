@@ -90,6 +90,7 @@ export function useExportTicketsExcel() {
         "SLA Meta Resolução": fmtSla(r.sla_resolution_time_value, r.sla_resolution_time_unit),
         "SLA Status": slaStatus(r),
         "Due Date": fmtDate(r.due_date),
+        "Tags": r.tags_list || "",
       }));
 
       const ws = XLSX.utils.json_to_sheet(excelRows);

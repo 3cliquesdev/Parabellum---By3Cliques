@@ -170,20 +170,21 @@ export default function TicketsExportReport() {
                   <TableHead>Data Criação</TableHead>
                   <TableHead>1ª Resposta (min)</TableHead>
                   <TableHead>SLA Status</TableHead>
+                  <TableHead>Tags</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 13 }).map((_, j) => (
+                      {Array.from({ length: 14 }).map((_, j) => (
                         <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>
                       ))}
                     </TableRow>
                   ))
                 ) : data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={14} className="text-center py-8 text-muted-foreground">
                       Nenhum ticket encontrado com os filtros selecionados
                     </TableCell>
                   </TableRow>
@@ -209,6 +210,7 @@ export default function TicketsExportReport() {
                         </TableCell>
                         <TableCell>{row.frt_minutes ?? "—"}</TableCell>
                         <TableCell>{sla}</TableCell>
+                        <TableCell>{row.tags_list || "—"}</TableCell>
                       </TableRow>
                     );
                   })
