@@ -8,7 +8,6 @@ import { AIUsageWidget } from "@/components/widgets/AIUsageWidget";
 import { TopTopicsWidget } from "@/components/widgets/TopTopicsWidget";
 
 // Onboarding
-import { OnboardingFunnelWidget } from "@/components/widgets/OnboardingFunnelWidget";
 import { CSEmailFunnelWidget } from "@/components/widgets/CSEmailFunnelWidget";
 
 // WhatsApp
@@ -93,7 +92,6 @@ export function AdvancedTab({ startDate, endDate }: AdvancedTabProps) {
             startDate={startDate}
             endDate={endDate}
           />
-          <OnboardingFunnelWidget startDate={startDate} endDate={endDate} />
           <CSEmailFunnelWidget startDate={startDate} endDate={endDate} />
         </TabsContent>
 
