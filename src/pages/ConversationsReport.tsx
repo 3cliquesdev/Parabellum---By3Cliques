@@ -15,7 +15,7 @@ import { DateRangePicker } from "@/components/DateRangePicker";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useProfiles } from "@/hooks/useProfiles";
 import { useCommercialConversationsReport } from "@/hooks/useCommercialConversationsReport";
-import { useExportCommercialConversationsCSV } from "@/hooks/useExportCommercialConversationsCSV";
+import { useExportConversationsCSV } from "@/hooks/useExportConversationsCSV";
 import { CommercialDetailedTable } from "@/components/reports/commercial/CommercialDetailedTable";
 import { DateRange } from "react-day-picker";
 
@@ -56,7 +56,7 @@ export default function ConversationsReport() {
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
   });
-  const { exportCSV, isExporting } = useExportCommercialConversationsCSV();
+  const { exportCSV, isExporting } = useExportConversationsCSV();
 
   const handleExport = () => {
     exportCSV({
