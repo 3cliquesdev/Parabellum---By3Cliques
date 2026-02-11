@@ -1,46 +1,35 @@
 
+# Plano: Aumentar Limite de Capacidade para 40 chats por Agente
 
-# Fix: Tela "Atualização importante" que aparece mesmo com navegador atualizado
+## Diagnóstico Confirmado
 
-## Problema Real
-A tela "Atualização importante" **nao e** um problema de versao do navegador. Ela e o **ErrorBoundary** do React — aparece quando o app crasha por qualquer erro JavaScript. A mensagem e enganosa porque diz "versao antiga do sistema", mas na verdade esta escondendo um erro real.
+1. **Nenhuma `team_settings` configurada**: A tabela `team_settings` está vazia.
+2. **Fallback ativo**: O código usa o limite hardcoded de **10 chats** por agente (linhas 550 e 576 de `dispatch-conversations/index.ts`).
+3. **Por isso a distribuição travou**: Mabile (31 chats), Miguel (14 chats) e Caroline (10 chats) todas estão acima ou no limite de 10, então o dispatcher não atribui novas conversas.
 
-O botao "Atualizar agora" faz hard refresh, mas se o erro persistir (ex.: chunk corrompido, import dinamico falhando, ou bug de runtime), o usuario fica preso nessa tela sem saber o que aconteceu.
+## Solução: Duas Alterações
 
-## Solucao (2 mudancas)
+### 1. Aumentar o Fallback Padrão de 10 para 40
+**Arquivo**: `supabase/functions/dispatch-conversations/index.ts`
 
-### 1. Melhorar o ErrorBoundary para mostrar informacoes uteis
-**Arquivo:** `src/components/AppErrorBoundary.tsx`
+**Locais a alterar**:
+- Linha 550: `const maxChats = configuredMax ?? 10;` → `const maxChats = configuredMax ?? 40;`
+- Linha 576: `.filter((a: EligibleAgent) => a.active_chats < a.max_chats)` (já usa `a.max_chats`, então apenas a linha 550 precisa mudar)
 
-- Mudar o titulo de "Atualizacao importante" para algo mais honesto: **"Algo deu errado"**
-- Mudar o texto explicativo para: "Ocorreu um erro inesperado. Tente recarregar a pagina."
-- Adicionar botao **"Recarregar Pagina"** (reload simples, sem limpar tudo)
-- Manter o botao "Limpar Cache e Atualizar" como opcao secundaria (hard refresh)
-- Mostrar detalhes do erro em modo colapsado (para todos, nao so DEV) — isso ajuda o usuario a reportar o problema
-- Adicionar um botao "Copiar erro" para facilitar o report
+Isso garante que:
+- O dispatch vai tentar atribuir conversas enquanto agentes tiverem menos de 40 chats
+- Quando uma conversa fechar, o agente volta abaixo do limite e recebe novas
+- Zero regressão: a lógica continua exatamente igual, apenas o threshold aumenta
 
-### 2. Adicionar tratamento de erro de chunk mais robusto
-- No `componentDidCatch`, verificar se o erro e de chunk/import dinamico
-- Se for erro de chunk, tentar reload automatico UMA vez (usando sessionStorage para controlar)
-- Se nao for erro de chunk, mostrar a tela de erro melhorada
+### 2. Por que não usar `team_settings` (ainda)
+Embora tenhamos a estrutura para isso, criar `team_settings` via UI/API seria mais complexo neste momento. O fallback de 40 resolve o problema imediatamente e é simples de ajustar depois se necessário.
 
-## Detalhes tecnicos
+## Validação Obrigatória
+1. No preview: confirmar que conversas pendentes/escaladas começam a ser distribuídas
+2. Monitorar Miguel: verificar que recebe novas conversas enquanto tiver <40 chats
+3. Console sem erros
+4. Distribuição continua respeitando `online + agent_departments`
 
-```text
-AppErrorBoundary.tsx (reescrita da UI de erro):
-
-1. Titulo: "Algo deu errado" (em vez de "Atualizacao importante")
-2. Subtitulo: "Ocorreu um erro inesperado."
-3. Botao primario: "Recarregar Pagina" (window.location.reload())
-4. Botao secundario: "Limpar Cache e Atualizar" (hardRefresh)
-5. Detalhes colapsaveis com nome do erro + stack trace resumido
-6. Botao "Copiar erro" que copia error.message + stack para clipboard
-7. Auto-reload para erros de chunk (1x apenas, controlado por sessionStorage)
-```
-
-## Impacto
-- Zero regressao: ErrorBoundary continua capturando erros normalmente
-- Melhora UX: usuario sabe que houve um erro real, nao acha que e problema de versao
-- Facilita debug: erro visivel + copiavel
-- Resolve loops: reload simples primeiro, hard refresh como opcao
+## Rollback Rápido
+Se qualquer problema ocorrer: reverter linha 550 para `?? 10` e redeploy
 
