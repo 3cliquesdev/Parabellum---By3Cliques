@@ -13,6 +13,10 @@ interface ExportFilters {
   search?: string;
 }
 
+interface ExportOptions {
+  downloadWindow?: Window | null;
+}
+
 const MAX_EXPORT = 5000;
 
 function formatDuration(seconds: number | null): string {
@@ -40,8 +44,17 @@ function formatTime(iso: string | null): string {
 export function useExportConversationsCSV() {
   const [isExporting, setIsExporting] = useState(false);
 
-  const exportCSV = useCallback(async (filters: ExportFilters) => {
+  const exportCSV = useCallback(async (filters: ExportFilters, options?: ExportOptions) => {
     setIsExporting(true);
+    const downloadWindow = options?.downloadWindow;
+    
+    // Show loading message in popup if available
+    if (downloadWindow && !downloadWindow.closed) {
+      try {
+        downloadWindow.document.write('<html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><p>Gerando planilha…</p></body></html>');
+      } catch (_) { /* cross-origin fallback */ }
+    }
+    
     try {
       const endExclusive = new Date(filters.endDate);
       endExclusive.setDate(endExclusive.getDate() + 1);
@@ -61,6 +74,7 @@ export function useExportConversationsCSV() {
       if (error) throw error;
       if (!data || data.length === 0) {
         toast.info("Nenhum dado para exportar");
+        if (downloadWindow && !downloadWindow.closed) downloadWindow.close();
         return;
       }
 
@@ -104,13 +118,22 @@ export function useExportConversationsCSV() {
       const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
       const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `relatorio_conversas_${dateStr}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+
+      // Strategy 1: Use popup window (most reliable in iframes)
+      if (downloadWindow && !downloadWindow.closed) {
+        downloadWindow.location.href = url;
+      } else {
+        // Strategy 2: Anchor click fallback
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `relatorio_conversas_${dateStr}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      // Delay revoke to ensure download starts
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
       const totalCount = (data as any[])[0]?.total_count ?? data.length;
       if (totalCount > MAX_EXPORT) {
@@ -121,6 +144,7 @@ export function useExportConversationsCSV() {
     } catch (err) {
       console.error("[ExportConversations] Error:", err);
       toast.error("Erro ao exportar dados");
+      if (downloadWindow && !downloadWindow.closed) downloadWindow.close();
     } finally {
       setIsExporting(false);
     }

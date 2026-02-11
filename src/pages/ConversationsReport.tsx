@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { startOfMonth, endOfMonth, addDays } from "date-fns";
 import { MessageSquare, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -43,7 +44,7 @@ export default function ConversationsReport() {
 
   const baseFilters = {
     startDate: dateRange?.from || startOfMonth(new Date()),
-    endDate: addDays(dateRange?.to || endOfMonth(new Date()), 1),
+    endDate: dateRange?.to || endOfMonth(new Date()),
     departmentId: departmentId || undefined,
     agentId: agentId || undefined,
     status: status || undefined,
@@ -59,10 +60,15 @@ export default function ConversationsReport() {
   const { exportCSV, isExporting } = useExportConversationsCSV();
 
   const handleExport = () => {
+    // Open popup synchronously (user gesture) for reliable download in iframes
+    const w = window.open("", "_blank");
+    if (!w) {
+      toast.info("Popups bloqueados. Permita popups para baixar a planilha.");
+    }
     exportCSV({
       ...baseFilters,
       search: search || undefined,
-    });
+    }, { downloadWindow: w });
   };
 
   const handleDateChange = (range: DateRange | undefined) => {
