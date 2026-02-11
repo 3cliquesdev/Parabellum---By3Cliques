@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -25,6 +26,28 @@ export interface PortfolioClient {
 
 export function usePortfolioClients() {
   const { user } = useAuth();
+
+  const queryClient = useQueryClient();
+
+  // Realtime: invalidar cache quando contacts mudar (distribuição, etc.)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel('portfolio-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'contacts', filter: `consultant_id=eq.${user.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["portfolio-clients", user.id] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
 
   return useQuery({
     queryKey: ["portfolio-clients", user?.id],
