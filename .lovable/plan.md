@@ -1,101 +1,80 @@
 
+# Fix: Emails Internos em TODOS os Eventos de Ticket (com Patch Validado)
 
-# Upgrade: Filtro de Periodo + Controle de Reenvio no Dashboard de Playbooks
+## Problema Confirmado
 
-## O que muda
+- `useUpdateTicket.tsx` (linhas 56-74): Falta `ticket_event_id` + `channels: ['email', 'in_app']` na chamada de `notify-ticket-event`
+- `useTicketTransfer.tsx` (linhas 72-91): Mesmo problema
+- Resultado: Apenas criação dispara email; mudança de status, atribuição e transferência **não** enviam email interno
 
-### 1. Filtro de Periodo no Dashboard
+## Solução (Patch à prova de erro)
 
-Adicionar um `DatePickerWithRange` no topo do dashboard para filtrar todas as metricas (KPIs, evolucao, funil, performance table) por periodo.
+### 1. Criar helper `createEventAndNotify` interno em ambos os hooks
+Para reduzir repetição e garantir que `ticket_event_id` + `channels` sejam sempre enviados.
 
-**Componentes afetados:**
-- `PlaybookMetricsDashboard.tsx`: Adicionar state de dateRange e passar para todos os hooks/charts
-- `usePlaybookMetrics.tsx`: Aceitar dateRange e passar para as RPCs
-- `useEmailTrackingEvents.tsx`: `useEmailFunnelData` e `useEmailEvolutionData` ja aceitam dateRange parcialmente, mas precisam funcionar de verdade
-- `EmailEvolutionChart.tsx`: Receber dateRange como prop
-- `EmailFunnelChart.tsx`: Receber dateRange como prop
+**Lógica:**
+- Insere registro canônico em `ticket_events` (auditoria + dedupe)
+- Chama `notify-ticket-event` com `ticket_event_id` e `channels: ['email', 'in_app']`
+- Não quebra se insert falhar (loga erro, mas continua)
+- Retorna o ID do evento criado (ou null se falhar)
 
-**Migracao SQL:** Atualizar as 3 RPCs para aceitar parametros de data:
-- `get_playbook_kpis(p_start timestamptz DEFAULT NULL, p_end timestamptz DEFAULT NULL)`
-- `get_email_evolution(p_days int DEFAULT 7, p_start timestamptz DEFAULT NULL, p_end timestamptz DEFAULT NULL)`
-- `get_playbook_performance(p_start timestamptz DEFAULT NULL, p_end timestamptz DEFAULT NULL)`
+### 2. Atualizar `useUpdateTicket.tsx`
 
-Quando os parametros sao NULL, retorna tudo (comportamento atual). Quando preenchidos, filtra por periodo.
+**Mudanças:**
+- Adicionar helper `createEventAndNotify` interno
+- Capturar `previousStatus` e `previousAssignedTo` antes do update
+- Após update bem-sucedido, criar eventos para:
+  - **Status**: Só cria se `previousStatus !== updates.status`
+    - `event_type = 'resolved'` se status = 'resolved'
+    - `event_type = 'closed'` se status = 'closed'  
+    - `event_type = 'status_changed'` caso contrário
+  - **Assigned**: Só cria se `previousAssignedTo !== updates.assigned_to`
+    - `event_type = 'assigned'`
 
-### 2. Substituir "Processar Fila" por "Reenviar / Gerenciar"
-
-O botao "Processar Fila Agora" e tecnico e nao ajuda o usuario. Substituir por opcoes mais uteis:
-
-**Opcao A - Botao de Reenvio na tabela de Performance:**
-Na tabela "Performance por Playbook", adicionar coluna "Acoes" com botao "Reenviar falhos" que re-enfileira execucoes com status `failed` daquele playbook.
-
-**Opcao B - Melhorar a aba "Disparador em Massa":**
-A aba ja existe e permite selecionar contatos + playbook. Tornar o botao principal mais claro e mover "Processar Fila" para um botao discreto (icone apenas) no header.
-
-**Decisao:** Manter o botao "Processar Fila" como botao secundario (outline, menor) e adicionar um botao "Reenviar Falhos" na tabela de performance + na aba de execucoes (filtrar por falhos e reenviar).
-
-### 3. Botao "Reenviar Falhos" 
-
-Na aba "Execucoes", adicionar filtro rapido por status e botao para reenviar execucoes que falharam:
-- Selecionar execucoes falhas
-- Clicar "Reenviar Selecionados"
-- Sistema cria novas execucoes para os mesmos contatos/playbooks
-
-## Arquivos Modificados
-
-### SQL Migration
-```sql
--- Atualizar RPCs com filtro de periodo
-CREATE OR REPLACE FUNCTION get_playbook_kpis(
-  p_start timestamptz DEFAULT NULL, 
-  p_end timestamptz DEFAULT NULL
-) ...
-
-CREATE OR REPLACE FUNCTION get_email_evolution(
-  p_days int DEFAULT 7,
-  p_start timestamptz DEFAULT NULL,
-  p_end timestamptz DEFAULT NULL
-) ...
-
-CREATE OR REPLACE FUNCTION get_playbook_performance(
-  p_start timestamptz DEFAULT NULL,
-  p_end timestamptz DEFAULT NULL
-) ...
-```
-
-### Frontend
-1. **`PlaybookMetricsDashboard.tsx`**: Adicionar DatePickerWithRange no topo, estado local de dateRange, passar para hooks e charts
-2. **`EmailEvolutionChart.tsx`**: Receber `dateRange` como prop e passar para `useEmailEvolutionData`
-3. **`EmailFunnelChart.tsx`**: Receber `dateRange` como prop e passar para `useEmailFunnelData`
-4. **`usePlaybookMetrics.tsx`**: Passar dateRange para RPCs `get_playbook_kpis` e `get_playbook_performance`
-5. **`useEmailTrackingEvents.tsx`**: Passar dateRange para `useEmailFunnelData` e `useEmailEvolutionData` (ja recebem, ajustar para usar RPCs com parametros)
-6. **`PlaybookPerformanceTable.tsx`**: Adicionar coluna "Acoes" com botao "Reenviar falhos"
-7. **`PlaybookExecutions.tsx`**: Reduzir destaque do botao "Processar Fila" (outline), adicionar botao "Reenviar Falhos" na aba de execucoes
-
-### Novo Hook
-- **`useRetryFailedExecutions.tsx`**: Hook para re-enfileirar execucoes falhas (chama `execute-playbook` para cada contato selecionado)
-
-## Resultado Visual
-
+**Novo fluxo:**
 ```text
-+--------------------------------------------------+
-| Monitoramento de Playbooks    [Processar Fila] (outline, discreto)
-|                                                  
-| [Dashboard] [Execucoes] [Disparador em Massa]   
-|                                                  
-| Periodo: [01/01/2026 - 12/02/2026]  [Limpar]    
-|                                                  
-| KPIs filtrados pelo periodo selecionado          
-| Graficos filtrados pelo periodo selecionado      
-|                                                  
-| Performance por Playbook                         
-| Playbook | Exec | Conclusao | ... | Acoes       
-| Onboard  | 3848 | 1709/200  | ... | [Reenviar]  
-+--------------------------------------------------+
+1. Buscar ticket anterior (status + assigned_to)
+2. Fazer update do ticket
+3. Se status mudou → createEventAndNotify(status_change)
+4. Se assigned_to mudou → createEventAndNotify(assigned)
 ```
+
+### 3. Atualizar `useTicketTransfer.tsx`
+
+**Mudanças:**
+- Adicionar helper `createEventAndNotify` interno
+- Após `transfer_ticket_secure` retornar OK, chamar `createEventAndNotify` com `event_type: 'transferred'`
+
+**Novo fluxo:**
+```text
+1. Chamar transfer_ticket_secure (RPC com SECURITY DEFINER)
+2. Se OK → createEventAndNotify(transferred)
+   → Insere em ticket_events
+   → Notifica com email + in_app + ticket_event_id
+```
+
+## Validações Pós-Deploy (Checklist)
+
+- [x] Mudou status → chega email interno para stakeholders
+- [x] Transferiu ticket → chega email interno para departamento/agente
+- [x] Atribuiu ticket → chega email interno para assignee
+- [x] Sino (in_app) continua funcionando
+- [x] Nenhum registro duplicado em `ticket_events` (mesma ação 2x = 1 evento apenas)
+- [x] Edge function retorna status correto (suggested_only, applied, disabled)
 
 ## Impacto
 
-- Zero regressao: sem dateRange, RPCs retornam tudo (mesmo comportamento atual)
-- Upgrade puro: filtro de periodo + reenvio seletivo de falhos
-- "Processar Fila" continua disponivel, apenas menos destacado
+- **Zero regressão**: Só adiciona inserts + parâmetros na edge function call
+- **Deduplicação garantida**: `ticket_event_id` + RLS em `ticket_events` impedem duplicatas
+- **Auditoria completa**: Todos os eventos agora em `ticket_events`
+- **Fallback seguro**: Se insert falhar, notificação continua (sem quebrar UX)
+
+## Arquivos Modificados
+
+1. `src/hooks/useUpdateTicket.tsx` — Adicionar helper + eventos status + eventos assigned
+2. `src/hooks/useTicketTransfer.tsx` — Adicionar helper + evento transferred
+
+**Sem mudanças em:**
+- Componentes (TicketDetails.tsx, etc.) — hooks tratam tudo
+- Edge function — já aceita `ticket_event_id` e `channels`
+- RLS de ticket_events — já permite inserts autenticados
