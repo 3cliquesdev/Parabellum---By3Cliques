@@ -8,6 +8,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
+import { useRetryFailedExecutions } from "@/hooks/useRetryFailedExecutions";
 
 interface PlaybookPerformance {
   playbook_id: string;
@@ -25,6 +28,8 @@ interface PlaybookPerformanceTableProps {
 }
 
 export function PlaybookPerformanceTable({ data }: PlaybookPerformanceTableProps) {
+  const retryFailed = useRetryFailedExecutions();
+
   if (!data || data.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -43,6 +48,7 @@ export function PlaybookPerformanceTable({ data }: PlaybookPerformanceTableProps
           <TableHead className="text-center">Emails</TableHead>
           <TableHead className="text-center">Taxa Abertura</TableHead>
           <TableHead>Progresso</TableHead>
+          <TableHead className="text-center">Ações</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -89,6 +95,20 @@ export function PlaybookPerformanceTable({ data }: PlaybookPerformanceTableProps
                     {completionRate}%
                   </span>
                 </div>
+              </TableCell>
+              <TableCell className="text-center">
+                {row.failed > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 text-xs"
+                    disabled={retryFailed.isPending}
+                    onClick={() => retryFailed.mutate({ playbookId: row.playbook_id })}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Reenviar ({row.failed})
+                  </Button>
+                )}
               </TableCell>
             </TableRow>
           );

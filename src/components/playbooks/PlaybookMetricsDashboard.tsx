@@ -1,12 +1,22 @@
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePlaybookMetrics } from "@/hooks/usePlaybookMetrics";
 import { Mail, MailOpen, MousePointerClick, CheckCircle, TrendingUp, AlertCircle } from "lucide-react";
 import { EmailFunnelChart } from "./EmailFunnelChart";
 import { PlaybookPerformanceTable } from "./PlaybookPerformanceTable";
 import { EmailEvolutionChart } from "./EmailEvolutionChart";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
+import { Button } from "@/components/ui/button";
 
 export function PlaybookMetricsDashboard() {
-  const { data: metrics, isLoading } = usePlaybookMetrics();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
+  const activeDateRange = dateRange?.from && dateRange?.to
+    ? { from: dateRange.from, to: dateRange.to }
+    : undefined;
+
+  const { data: metrics, isLoading } = usePlaybookMetrics(activeDateRange);
 
   if (isLoading) {
     return (
@@ -27,6 +37,17 @@ export function PlaybookMetricsDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Date Filter */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-sm font-medium text-muted-foreground">Período:</span>
+        <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
+        {dateRange && (
+          <Button variant="ghost" size="sm" onClick={() => setDateRange(undefined)}>
+            Limpar
+          </Button>
+        )}
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
@@ -104,14 +125,14 @@ export function PlaybookMetricsDashboard() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              Evolução de Emails (7 dias)
+              {activeDateRange ? "Evolução de Emails (período)" : "Evolução de Emails (7 dias)"}
             </CardTitle>
             <CardDescription>
               Histórico de envios, entregas e aberturas
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <EmailEvolutionChart />
+            <EmailEvolutionChart dateRange={activeDateRange} />
           </CardContent>
         </Card>
 
@@ -126,7 +147,7 @@ export function PlaybookMetricsDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <EmailFunnelChart />
+            <EmailFunnelChart dateRange={activeDateRange} />
           </CardContent>
         </Card>
       </div>

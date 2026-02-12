@@ -285,10 +285,12 @@ export default function PlaybookExecutions() {
         <Button
           onClick={() => processQueue.mutate()}
           disabled={processQueue.isPending}
+          variant="outline"
+          size="sm"
           className="gap-2"
         >
           <Play className="h-4 w-4" />
-          {processQueue.isPending ? "Processando..." : "Processar Fila Agora"}
+          {processQueue.isPending ? "Processando..." : "Processar Fila"}
         </Button>
       </div>
 

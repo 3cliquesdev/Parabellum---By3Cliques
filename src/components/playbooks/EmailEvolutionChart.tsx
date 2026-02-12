@@ -12,8 +12,12 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export function EmailEvolutionChart() {
-  const { data: evolutionData, isLoading } = useEmailEvolutionData(7);
+interface EmailEvolutionChartProps {
+  dateRange?: { from: Date; to: Date };
+}
+
+export function EmailEvolutionChart({ dateRange }: EmailEvolutionChartProps) {
+  const { data: evolutionData, isLoading } = useEmailEvolutionData(7, dateRange);
 
   if (isLoading) {
     return (

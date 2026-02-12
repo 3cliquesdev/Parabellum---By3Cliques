@@ -10,8 +10,12 @@ import {
   Cell
 } from "recharts";
 
-export function EmailFunnelChart() {
-  const { data: funnelData, isLoading } = useEmailFunnelData();
+interface EmailFunnelChartProps {
+  dateRange?: { from: Date; to: Date };
+}
+
+export function EmailFunnelChart({ dateRange }: EmailFunnelChartProps) {
+  const { data: funnelData, isLoading } = useEmailFunnelData(dateRange);
 
   if (isLoading) {
     return (

@@ -33,8 +33,12 @@ export function usePlaybookMetrics(dateRange?: { from: Date; to: Date }) {
   return useQuery({
     queryKey: ["playbook-metrics", dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async (): Promise<PlaybookMetrics> => {
-      // Fetch KPIs via RPC (contagem no banco, sem limite de 1000)
-      const { data: kpis, error: kpiError } = await supabase.rpc("get_playbook_kpis");
+      // Fetch KPIs via RPC with date filtering
+      const rpcParams: { p_start?: string; p_end?: string } = {};
+      if (dateRange?.from) rpcParams.p_start = dateRange.from.toISOString();
+      if (dateRange?.to) rpcParams.p_end = dateRange.to.toISOString();
+
+      const { data: kpis, error: kpiError } = await supabase.rpc("get_playbook_kpis", rpcParams);
       if (kpiError) throw kpiError;
 
       const k = kpis as any;
@@ -54,8 +58,8 @@ export function usePlaybookMetrics(dateRange?: { from: Date; to: Date }) {
       const openRate = delivered > 0 ? (opened / delivered) * 100 : 0;
       const clickRate = opened > 0 ? (clicked / opened) * 100 : 0;
 
-      // Fetch performance por playbook via RPC
-      const { data: perfData, error: perfError } = await supabase.rpc("get_playbook_performance");
+      // Fetch performance por playbook via RPC with date filtering
+      const { data: perfData, error: perfError } = await supabase.rpc("get_playbook_performance", rpcParams);
       if (perfError) throw perfError;
 
       const byPlaybook = (perfData as any[] || []).map((p: any) => ({

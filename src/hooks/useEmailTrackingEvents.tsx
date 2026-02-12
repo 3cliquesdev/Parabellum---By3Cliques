@@ -106,11 +106,15 @@ export function useEmailFunnelData(dateRange?: { from: Date; to: Date }) {
   });
 }
 
-export function useEmailEvolutionData(days: number = 7) {
+export function useEmailEvolutionData(days: number = 7, dateRange?: { from: Date; to: Date }) {
   return useQuery({
-    queryKey: ["email-evolution-data", days],
+    queryKey: ["email-evolution-data", days, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_email_evolution", { p_days: days });
+      const rpcParams: { p_days: number; p_start?: string; p_end?: string } = { p_days: days };
+      if (dateRange?.from) rpcParams.p_start = dateRange.from.toISOString();
+      if (dateRange?.to) rpcParams.p_end = dateRange.to.toISOString();
+
+      const { data, error } = await supabase.rpc("get_email_evolution", rpcParams);
 
       if (error) throw error;
 
