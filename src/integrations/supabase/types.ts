@@ -3859,6 +3859,8 @@ export type Database = {
           max_submissions_per_contact: number | null
           name: string
           notify_manager: boolean | null
+          routing_field_id: string | null
+          routing_field_mappings: Json | null
           schema: Json
           score_routing_rules: Json | null
           target_board_id: string | null
@@ -3881,6 +3883,8 @@ export type Database = {
           max_submissions_per_contact?: number | null
           name: string
           notify_manager?: boolean | null
+          routing_field_id?: string | null
+          routing_field_mappings?: Json | null
           schema?: Json
           score_routing_rules?: Json | null
           target_board_id?: string | null
@@ -3903,6 +3907,8 @@ export type Database = {
           max_submissions_per_contact?: number | null
           name?: string
           notify_manager?: boolean | null
+          routing_field_id?: string | null
+          routing_field_mappings?: Json | null
           schema?: Json
           score_routing_rules?: Json | null
           target_board_id?: string | null

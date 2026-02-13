@@ -205,7 +205,7 @@ export interface FormSchema {
 }
 
 export type FormTargetType = "deal" | "ticket" | "internal_request" | "none" | "kanban_card";
-export type FormDistributionRule = "round_robin" | "manager_only" | "specific_user";
+export type FormDistributionRule = "round_robin" | "manager_only" | "specific_user" | "field_based";
 
 export interface Form {
   id: string;
@@ -226,6 +226,8 @@ export interface Form {
   distribution_rule: FormDistributionRule;
   notify_manager: boolean;
   max_submissions_per_contact: number | null;
+  routing_field_id: string | null;
+  routing_field_mappings: Record<string, string> | null;
 }
 
 // ==================== DEFAULT VALUES ====================
@@ -458,6 +460,8 @@ export function useCreateForm() {
       distribution_rule?: FormDistributionRule;
       notify_manager?: boolean;
       max_submissions_per_contact?: number | null;
+      routing_field_id?: string | null;
+      routing_field_mappings?: Record<string, string> | null;
     }) => {
       const { data, error } = await supabase
         .from("forms")
@@ -472,10 +476,12 @@ export function useCreateForm() {
           target_user_id: form.target_user_id || null,
           target_board_id: form.target_board_id || null,
           target_column_id: form.target_column_id || null,
-          distribution_rule: form.distribution_rule || "round_robin",
+          distribution_rule: (form.distribution_rule || "round_robin") as any,
           notify_manager: form.notify_manager ?? true,
           max_submissions_per_contact: form.max_submissions_per_contact ?? null,
-        })
+          routing_field_id: form.routing_field_id || null,
+          routing_field_mappings: (form.routing_field_mappings || {}) as any,
+        } as any)
         .select()
         .single();
 
@@ -524,6 +530,8 @@ export function useUpdateForm() {
         distribution_rule?: FormDistributionRule;
         notify_manager?: boolean;
         max_submissions_per_contact?: number | null;
+        routing_field_id?: string | null;
+        routing_field_mappings?: Record<string, string> | null;
       };
     }) => {
       const updatePayload: any = { ...updates };

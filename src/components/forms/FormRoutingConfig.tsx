@@ -17,7 +17,7 @@ import { useProjectColumns } from "@/hooks/useProjectColumns";
 import { Briefcase, Ticket, FileText, Users, Target, Bell, RefreshCcw, Database, Kanban } from "lucide-react";
 
 export type FormTargetType = "deal" | "ticket" | "internal_request" | "none" | "kanban_card";
-export type FormDistributionRule = "round_robin" | "manager_only" | "specific_user";
+export type FormDistributionRule = "round_robin" | "manager_only" | "specific_user" | "field_based";
 
 export interface FormRoutingSettings {
   target_type: FormTargetType;
@@ -29,11 +29,22 @@ export interface FormRoutingSettings {
   distribution_rule: FormDistributionRule;
   notify_manager: boolean;
   max_submissions_per_contact?: number | null;
+  routing_field_id?: string;
+  routing_field_mappings?: Record<string, string>;
+}
+
+interface FormField {
+  id: string;
+  type: string;
+  label: string;
+  options?: string[];
+  [key: string]: any;
 }
 
 interface FormRoutingConfigProps {
   settings: FormRoutingSettings;
   onChange: (settings: FormRoutingSettings) => void;
+  fields?: FormField[];
 }
 
 const TARGET_TYPE_OPTIONS = [
@@ -48,9 +59,10 @@ const DISTRIBUTION_OPTIONS = [
   { value: "round_robin", label: "Distribuir Igualmente", description: "Distribuir entre todos do setor" },
   { value: "manager_only", label: "Apenas Gestor", description: "Enviar somente para o gestor" },
   { value: "specific_user", label: "Usuário Específico", description: "Fixar em um responsável" },
+  { value: "field_based", label: "Por Resposta do Campo", description: "Responsável muda conforme a resposta de um campo" },
 ];
 
-export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps) {
+export function FormRoutingConfig({ settings, onChange, fields = [] }: FormRoutingConfigProps) {
   const { data: departments } = useDepartments();
   const { data: pipelines } = usePipelines();
   const { data: boards } = useProjectBoards();
@@ -340,6 +352,105 @@ export function FormRoutingConfig({ settings, onChange }: FormRoutingConfigProps
                 </SelectContent>
               </Select>
             )}
+          </div>
+        )}
+
+        {/* Field-Based Routing - map dropdown answers to users */}
+        {!isNeutralMode && !isKanbanMode && settings.distribution_rule === "field_based" && (
+          <div className="space-y-4">
+            {/* Select which field to route by */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Campo de roteamento</Label>
+              {(() => {
+                const selectFields = fields.filter(f => f.type === 'select' && f.options && f.options.length > 0);
+                if (selectFields.length === 0) {
+                  return (
+                    <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-md">
+                      Nenhum campo do tipo dropdown encontrado. Adicione um campo select ao formulário primeiro.
+                    </p>
+                  );
+                }
+                return (
+                  <Select
+                    value={settings.routing_field_id || ""}
+                    onValueChange={(v) => {
+                      onChange({
+                        ...settings,
+                        routing_field_id: v || undefined,
+                        routing_field_mappings: {},
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o campo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectFields.map((field) => (
+                        <SelectItem key={field.id} value={field.id}>
+                          {field.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                );
+              })()}
+            </div>
+
+            {/* Map each option to a user */}
+            {settings.routing_field_id && (() => {
+              const selectedField = fields.find(f => f.id === settings.routing_field_id);
+              const options = selectedField?.options || [];
+              if (options.length === 0) return null;
+
+              return (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Mapeamento de responsáveis</Label>
+                  {!settings.target_department_id ? (
+                    <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-md">
+                      Selecione primeiro o departamento acima para ver os usuários
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {options.map((option) => (
+                        <div key={option} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
+                          <span className="text-sm font-medium min-w-[140px] truncate">{option}</span>
+                          <Select
+                            value={settings.routing_field_mappings?.[option] || ""}
+                            onValueChange={(userId) => {
+                              const newMappings = { ...(settings.routing_field_mappings || {}) };
+                              if (userId) {
+                                newMappings[option] = userId;
+                              } else {
+                                delete newMappings[option];
+                              }
+                              updateSetting("routing_field_mappings", newMappings);
+                            }}
+                            disabled={isLoadingUsers}
+                          >
+                            <SelectTrigger className="flex-1">
+                              <SelectValue placeholder="Selecione o responsável..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {departmentUsers?.length === 0 ? (
+                                <div className="p-2 text-sm text-muted-foreground text-center">
+                                  Nenhum usuário neste departamento
+                                </div>
+                              ) : (
+                                departmentUsers?.map((user) => (
+                                  <SelectItem key={user.id} value={user.id}>
+                                    {user.full_name}
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 

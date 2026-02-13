@@ -62,6 +62,8 @@ export default function FormBuilderPage() {
         distribution_rule: existingForm.distribution_rule || "round_robin",
         notify_manager: existingForm.notify_manager ?? true,
         max_submissions_per_contact: existingForm.max_submissions_per_contact ?? null,
+        routing_field_id: (existingForm as any).routing_field_id || undefined,
+        routing_field_mappings: (existingForm as any).routing_field_mappings || undefined,
       });
     }
   }, [existingForm]);
@@ -92,6 +94,8 @@ export default function FormBuilderPage() {
         distribution_rule: routingSettings.distribution_rule,
         notify_manager: routingSettings.notify_manager,
         max_submissions_per_contact: routingSettings.max_submissions_per_contact ?? null,
+        routing_field_id: routingSettings.routing_field_id || null,
+        routing_field_mappings: routingSettings.routing_field_mappings || null,
       };
 
       if (isEditing) {
@@ -227,6 +231,7 @@ export default function FormBuilderPage() {
             <FormRoutingConfig
               settings={routingSettings}
               onChange={setRoutingSettings}
+              fields={schema.fields}
             />
 
             {/* Display Mode Selector */}
