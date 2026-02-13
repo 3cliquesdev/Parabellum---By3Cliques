@@ -52,6 +52,8 @@ export interface InboxFilters {
   tagId?: string;
 }
 
+export type InboxScope = 'active' | 'archived';
+
 const QUERY_KEY = ["inbox-view"];
 
 interface FetchOptions {
@@ -59,42 +61,44 @@ interface FetchOptions {
   userId?: string;
   role?: string | null;
   departmentIds?: string[] | null;
+  scope?: InboxScope;
 }
 
 // Função para buscar dados do inbox com filtros de role
 async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem[]> {
-  const { cursor, userId, role, departmentIds } = options;
+  const { cursor, userId, role, departmentIds, scope = 'active' } = options;
 
   let query = supabase
     .from("inbox_view")
-    .select("*")
-    .neq("status", "closed") // ✅ FIX: Filtrar conversas fechadas NO BANCO, não no JS
+    .select("*");
+
+  // ✅ FIX: Scope determina se busca ativas ou arquivadas
+  if (scope === 'archived') {
+    query = query.eq("status", "closed");
+  } else {
+    query = query.neq("status", "closed");
+  }
+
+  query = query
     .order("updated_at", { ascending: true })
-    .limit(500); // REDUZIDO de 5000 para 500 para aliviar carga no banco durante timeouts
+    .limit(500);
 
   // Aplicar filtros de role no nível do banco
   if (role && userId && !hasFullInboxAccess(role)) {
     if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
       if (departmentIds && departmentIds.length > 0) {
-        // ✅ MUDANÇA: Agentes veem TODAS as conversas do departamento (incluindo de colegas)
-        // Conversa atribuída ao usuário OU 
-        // (qualquer conversa do departamento permitido) OU
-        // (não atribuída E sem departamento definido - pool geral da IA)
         query = query.or(
           `assigned_to.eq.${userId},department.in.(${departmentIds.join(",")}),and(assigned_to.is.null,department.is.null)`
         );
       } else {
-        // Sem departamentos configurados: atribuídas ao usuário OU sem departamento (pool geral)
         query = query.or(
           `assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null)`
         );
       }
     } else if (role === "consultant" || role === "user") {
-      // Consultant/User: apenas conversas atribuídas a ele
       query = query.eq("assigned_to", userId);
     }
   }
-  // Roles de gestão = sem filtro (ver tudo)
 
   if (cursor) {
     query = query.gt("updated_at", cursor);
@@ -105,14 +109,12 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
   return (data || []) as InboxViewItem[];
 }
 
-// Função para aplicar filtros client-side
-function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxViewItem[] {
+// Função para aplicar filtros client-side (PURAMENTE SÍNCRONA)
+function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?: Set<string>): InboxViewItem[] {
   if (!filters) return items;
 
   let result = [...items];
   
-  // IMPORTANTE: Quando há busca ativa, NÃO filtrar por status automaticamente
-  // Isso permite encontrar conversas em qualquer estado
   const hasActiveSearch = filters.search && filters.search.trim().length > 0;
 
   // Date range filter
@@ -136,16 +138,12 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
     );
   }
 
-  // Status filter - SE o usuário selecionou status específico, aplicar
-  // SE há busca ativa, mostrar todas (não filtrar por status)
-  // SE não há busca e não há status selecionado, ocultar fechadas
+  // Status filter
   if (filters.status.length > 0) {
     result = result.filter(item => filters.status.includes(item.status));
   } else if (!hasActiveSearch) {
-    // Padrão: mostrar apenas conversas NÃO fechadas (open, pending, etc.)
     result = result.filter(item => item.status !== 'closed');
   }
-  // Se hasActiveSearch && status.length === 0 → não filtra por status
 
   // Assigned to filter
   if (filters.assignedTo) {
@@ -156,15 +154,13 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
     }
   }
 
-  // SLA status filter - CÁLCULO DINÂMICO (não usa campo estático sla_status)
-  // Regras: critical >= 4h, warning >= 1h && < 4h
+  // SLA status filter
   if (filters.slaStatus) {
     const now = Date.now();
     const ONE_HOUR_MS = 60 * 60 * 1000;
     const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
     
     result = result.filter(item => {
-      // SLA só se aplica a mensagens de clientes em conversas abertas
       if (item.status === 'closed') return false;
       if (item.last_sender_type !== 'contact') return false;
       
@@ -201,7 +197,12 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
     result = result.filter(item => item.department === filters.department);
   }
 
-  // Search filter - case-insensitive em todos os campos
+  // Tag filter (usando Set pré-carregado)
+  if (filters.tagId && tagIdsSet) {
+    result = result.filter(item => tagIdsSet.has(item.conversation_id));
+  }
+
+  // Search filter
   if (hasActiveSearch) {
     const searchLower = filters.search!.toLowerCase().trim();
     result = result.filter(item => 
@@ -217,6 +218,23 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters): InboxView
   return result;
 }
 
+// Mini-hook para carregar IDs de conversas com uma tag específica
+function useTagConversationIds(tagId?: string): Set<string> | undefined {
+  const { data } = useQuery({
+    queryKey: ['tag-conversation-ids', tagId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('conversation_tags')
+        .select('conversation_id')
+        .eq('tag_id', tagId!);
+      return new Set(data?.map(t => t.conversation_id) || []);
+    },
+    enabled: !!tagId,
+    staleTime: 30000,
+  });
+  return data;
+}
+
 // Função para fazer merge incremental por conversation_id
 function mergeInboxItems(existing: InboxViewItem[], incoming: InboxViewItem[]): InboxViewItem[] {
   const map = new Map(existing.map(item => [item.conversation_id, item]));
@@ -225,24 +243,20 @@ function mergeInboxItems(existing: InboxViewItem[], incoming: InboxViewItem[]): 
     map.set(item.conversation_id, { ...map.get(item.conversation_id), ...item });
   }
   
-  // Ordenar por updated_at ASC (mais antigas primeiro = maior prioridade)
   return Array.from(map.values()).sort((a, b) => 
     new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
   );
 }
 
 function sortInboxItemsByPriority(items: InboxViewItem[]): InboxViewItem[] {
-  // Never mutate input array (critical for React Query cache + react-window stability)
-  // PRIORIDADE: Conversas mais antigas no topo (aguardando há mais tempo)
   return [...items].sort((a, b) =>
     new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
   );
 }
 
-export function useInboxView(filters?: InboxFilters) {
+export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active') {
   const { user, department: userDepartmentId } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
-  // ✅ MUDANÇA: Passar departamento do perfil do usuário para useDepartmentsByRole
   const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role, userDepartmentId);
   const queryClient = useQueryClient();
   const lastSeenRef = useRef<string | null>(null);
@@ -254,70 +268,60 @@ export function useInboxView(filters?: InboxFilters) {
   roleRef.current = role;
   const departmentIdsRef = useRef(departmentIds);
   departmentIdsRef.current = departmentIds;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
 
-  // ✅ FIX 4: QueryKey estável - serializar departmentIds e filters para evitar mismatch
   const deptKey = useMemo(() => 
     departmentIds ? [...departmentIds].sort().join(',') : 'all',
     [departmentIds]
-  );
-  const filtersKey = useMemo(() => 
-    filters ? JSON.stringify(filters) : 'default',
-    [filters]
   );
 
   // Refs para uso no realtime (sem resubscrição)
   const deptKeyRef = useRef(deptKey);
   deptKeyRef.current = deptKey;
-  const filtersKeyRef = useRef(filtersKey);
-  filtersKeyRef.current = filtersKey;
 
-  // Memoizar opções de fetch para evitar recriações desnecessárias
+  // Memoizar opções de fetch
   const fetchOptions = useMemo(() => ({
     userId: user?.id,
     role,
     departmentIds,
-  }), [user?.id, role, departmentIds]);
+    scope,
+  }), [user?.id, role, departmentIds, scope]);
 
-  // Ref estável para fetchOptions (usado no realtime)
   const fetchOptionsRef = useRef(fetchOptions);
   fetchOptionsRef.current = fetchOptions;
 
+  // ✅ queryKey SEM filtersKey — scope é o único discriminador de dataset
   const query = useQuery({
-    queryKey: [...QUERY_KEY, user?.id, role, deptKey, filtersKey],
+    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope],
     queryFn: async () => {
       const data = await fetchInboxData(fetchOptions);
       
-      // Atualizar cursor com o registro mais recente.
-      // IMPORTANTE: como a query está ordenada ASC (mais antigas primeiro), o mais recente é o ÚLTIMO.
       if (data.length > 0) {
         lastSeenRef.current = data[data.length - 1].updated_at;
       }
 
-      // Aplicar filtros de tag (requer lookup separado)
-      let result = data;
-      if (filters?.tagId) {
-        const { data: taggedConversations } = await supabase
-          .from("conversation_tags")
-          .select("conversation_id")
-          .eq("tag_id", filters.tagId);
-        
-        const taggedIds = new Set(taggedConversations?.map(tc => tc.conversation_id) || []);
-        result = result.filter(item => taggedIds.has(item.conversation_id));
-      }
-
-      // Aplicar filtros client-side
-      return applyFilters(result, filters);
+      // ✅ Retorna dados BRUTOS — sem applyFilters
+      return data;
     },
-    staleTime: 30000, // 30s - reduzir carga no banco durante período de stress
-    refetchOnWindowFocus: false, // Desabilitar temporariamente para reduzir carga
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
     refetchOnMount: true,
-    refetchInterval: 120000, // Polling backup: 2min - realtime já cobre atualizações
-    refetchIntervalInBackground: false, // Não buscar em background para aliviar banco
+    refetchInterval: 120000,
+    refetchIntervalInBackground: false,
     enabled: !!user && !roleLoading && !deptLoading,
   });
 
+  // ✅ Tag lookup separado (async -> próprio hook/query)
+  const tagIdsSet = useTagConversationIds(filters?.tagId);
+
+  // ✅ Filtragem instantânea via useMemo (0ms, sem rede)
+  const filteredData = useMemo(
+    () => applyFilters(query.data ?? [], filters, tagIdsSet),
+    [query.data, filters, tagIdsSet]
+  );
+
   // Realtime subscription com merge incremental e catch-up
-  // CORRIGIDO: Dependências estáveis para evitar resubscrição excessiva
   useEffect(() => {
     if (!user?.id) return;
     
@@ -334,7 +338,6 @@ export function useInboxView(filters?: InboxFilters) {
           table: "inbox_view",
         },
         (payload) => {
-          // ✅ FIX 3: Logs com feature flag localStorage.inboxDebug
           const DEBUG = typeof window !== 'undefined' && 
             (window.localStorage?.getItem('inboxDebug') === '1' || import.meta.env.DEV);
           
@@ -344,23 +347,19 @@ export function useInboxView(filters?: InboxFilters) {
           const userId = user?.id;
           if (!userId) return;
 
-          // Usar refs para valores atuais (sem recriar canal)
           const currentRole = roleRef.current;
           const currentDeptIds = departmentIdsRef.current || [];
           const hasFullAccess = hasFullInboxAccess(currentRole);
 
-          // ✅ AJUSTE A: dept=null NÃO conta como "meu departamento" para colega
           const isInAllowedDepartment = 
             row.department !== null && currentDeptIds.includes(row.department);
 
           const isAssignedToMe = row.assigned_to === userId;
 
-          // ✅ AJUSTE A: dept=null só aparece se unassigned (pool)
           const isUnassignedAllowed = 
             row.assigned_to === null && 
             (row.department === null || isInAllowedDepartment);
 
-          // ✅ FIX 1: Colega do MESMO dept - só quando dept !== null
           const isAssignedToColleagueInMyDept = 
             row.assigned_to !== null && 
             row.assigned_to !== userId && 
@@ -377,24 +376,38 @@ export function useInboxView(filters?: InboxFilters) {
             console.log(`[Inbox-Debug] shouldShow=${shouldShow} | me=${isAssignedToMe} | unassignedAllowed=${isUnassignedAllowed} | colleagueSameDept=${isAssignedToColleagueInMyDept} | dept=${row.department ?? 'null'}`);
           }
 
-          // ✅ FIX 4: Merge incremental no cache - queryKey estável
+          // ✅ Determinar scope do item baseado no status
+          const itemScope: InboxScope = row.status === 'closed' ? 'archived' : 'active';
+          const otherScope: InboxScope = itemScope === 'active' ? 'archived' : 'active';
+
+          // ✅ Merge no cache correto (usando scope, sem filtersKey)
           queryClient.setQueryData<InboxViewItem[]>(
-            [...QUERY_KEY, userId, currentRole, deptKeyRef.current, filtersKeyRef.current],
+            [...QUERY_KEY, userId, currentRole, deptKeyRef.current, itemScope],
             (prev = []) => {
-              // ✅ FIX 2: Só remove em DELETE explícito
               if (payload.eventType === "DELETE") {
                 if (DEBUG) console.warn(`[Inbox-Debug] ⚠️ REMOVED (DELETE): ${row.conversation_id.slice(0, 8)}`);
                 return prev.filter(item => item.conversation_id !== row.conversation_id);
               }
 
-              // ✅ FIX 2: UPDATE com shouldShow=false -> ignora, NÃO destrói cache
               if (!shouldShow) {
                 if (DEBUG) console.log(`[Inbox-Debug] ⏭️ IGNORED (shouldShow=false): ${row.conversation_id.slice(0, 8)}`);
                 return prev;
               }
 
-              if (DEBUG) console.log(`[Inbox-Debug] ✅ MERGED: ${row.conversation_id.slice(0, 8)}`);
+              if (DEBUG) console.log(`[Inbox-Debug] ✅ MERGED: ${row.conversation_id.slice(0, 8)} -> scope=${itemScope}`);
               return mergeInboxItems(prev, [row as InboxViewItem]);
+            }
+          );
+
+          // ✅ Remover do cache oposto (ex: conversa fechou -> sai do active)
+          queryClient.setQueryData<InboxViewItem[]>(
+            [...QUERY_KEY, userId, currentRole, deptKeyRef.current, otherScope],
+            (prev) => {
+              if (!prev) return prev;
+              const without = prev.filter(item => item.conversation_id !== row.conversation_id);
+              if (without.length === prev.length) return prev; // sem mudança, sem re-render
+              if (DEBUG) console.log(`[Inbox-Debug] 🔄 MOVED from ${otherScope} to ${itemScope}: ${row.conversation_id.slice(0, 8)}`);
+              return without;
             }
           );
 
@@ -420,12 +433,10 @@ export function useInboxView(filters?: InboxFilters) {
             });
             if (catchUpData.length > 0) {
               console.log("[Realtime] Catch-up found", catchUpData.length, "new records");
-              const currentFilters = filtersRef.current;
               queryClient.setQueryData<InboxViewItem[]>(
-                [...QUERY_KEY, user?.id, roleRef.current, deptKeyRef.current, filtersKeyRef.current],
+                [...QUERY_KEY, user?.id, roleRef.current, deptKeyRef.current, scopeRef.current],
                 (prev = []) => mergeInboxItems(prev, catchUpData)
               );
-              // catchUpData vem ordenado ASC; último é o mais recente
               lastSeenRef.current = catchUpData[catchUpData.length - 1].updated_at;
             }
           } catch (error) {
@@ -434,9 +445,7 @@ export function useInboxView(filters?: InboxFilters) {
         }
       });
 
-    // 🆕 Canal 2: messages GLOBAL para atualizar snippet e unread_count de TODAS as conversas
-    // IMPORTANTE: Isso NÃO duplica mensagens no chat - apenas atualiza o preview na sidebar
-    // O useMessages.tsx cuida das mensagens na conversa ATIVA
+    // Canal 2: messages GLOBAL para atualizar snippet e unread_count
     const messagesChannel = supabase
       .channel("inbox-messages-global-realtime")
       .on(
@@ -464,7 +473,6 @@ export function useInboxView(filters?: InboxFilters) {
                       last_message_at: newMessage.created_at,
                       last_sender_type: newMessage.sender_type,
                       last_channel: newMessage.channel || 'web_chat',
-                      // Incrementar unread_count APENAS para mensagens de clientes
                       unread_count: newMessage.sender_type === 'contact' 
                         ? (item.unread_count || 0) + 1 
                         : item.unread_count,
@@ -476,7 +484,6 @@ export function useInboxView(filters?: InboxFilters) {
             }
           );
           
-          // Invalidar counts para atualizar badges
           queryClient.invalidateQueries({ queryKey: ["inbox-counts"], exact: false });
         }
       )
@@ -484,7 +491,7 @@ export function useInboxView(filters?: InboxFilters) {
         console.log("[Realtime] messages global subscription status:", status);
       });
 
-    // 🆕 Canal 3: conversations para detectar NOVAS conversas imediatamente
+    // Canal 3: conversations para detectar NOVAS conversas imediatamente
     const conversationsChannel = supabase
       .channel("inbox-conversations-realtime")
       .on(
@@ -500,8 +507,6 @@ export function useInboxView(filters?: InboxFilters) {
           
           console.log("[Realtime] NOVA conversa detectada:", newConv.id);
           
-          // Fazer refetch para obter dados completos da inbox_view
-          // O invalidateQueries forçará um refetch automático
           queryClient.invalidateQueries({ queryKey: ["inbox-view"], exact: false });
           queryClient.invalidateQueries({ queryKey: ["inbox-counts"], exact: false });
         }
@@ -543,7 +548,6 @@ export function useInboxView(filters?: InboxFilters) {
             }
           );
 
-          // Invalidar counts para atualizar badges do sidebar
           queryClient.invalidateQueries({ queryKey: ["inbox-counts"], exact: false });
         }
       )
@@ -557,10 +561,9 @@ export function useInboxView(filters?: InboxFilters) {
       supabase.removeChannel(messagesChannel);
       supabase.removeChannel(conversationsChannel);
     };
-  }, [queryClient, user?.id]); // APENAS user?.id como dependência - refs mantêm valores atuais
+  }, [queryClient, user?.id]);
 
-  // Visibility change listener - refetch quando aba volta ao foco
-  // CORRIGIDO: Usar refs para evitar resubscrição excessiva
+  // Visibility change listener
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && lastSeenRef.current) {
@@ -568,7 +571,7 @@ export function useInboxView(filters?: InboxFilters) {
         fetchInboxData({ cursor: lastSeenRef.current, ...fetchOptionsRef.current }).then(data => {
           if (data.length > 0) {
             queryClient.setQueryData<InboxViewItem[]>(
-              [...QUERY_KEY, user?.id, roleRef.current, deptKeyRef.current, filtersKeyRef.current],
+              [...QUERY_KEY, user?.id, roleRef.current, deptKeyRef.current, scopeRef.current],
               (prev = []) => mergeInboxItems(prev, data)
             );
             lastSeenRef.current = data[0].updated_at;
@@ -579,18 +582,17 @@ export function useInboxView(filters?: InboxFilters) {
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [queryClient, user?.id]); // APENAS user?.id como dependência
+  }, [queryClient, user?.id]);
 
   // Função para resetar unread count ao abrir conversa
-  // CORRIGIDO: Usar refs para evitar recriação desnecessária
   const resetUnreadCount = useCallback(async (conversationId: string) => {
     try {
       await supabase.rpc("reset_inbox_unread_count", {
         p_conversation_id: conversationId,
       });
-      // Atualização otimista no cache usando refs
+      // Atualização otimista no cache usando scope (sem filtersKey)
       queryClient.setQueryData<InboxViewItem[]>(
-        [...QUERY_KEY, user?.id, roleRef.current, deptKeyRef.current, filtersKeyRef.current],
+        [...QUERY_KEY, user?.id, roleRef.current, deptKeyRef.current, scopeRef.current],
         (prev = []) => prev.map(item => 
           item.conversation_id === conversationId 
             ? { ...item, unread_count: 0 } 
@@ -604,6 +606,8 @@ export function useInboxView(filters?: InboxFilters) {
 
   return {
     ...query,
+    data: filteredData,    // ✅ dados filtrados (para UI)
+    rawData: query.data,   // ✅ dados brutos (para debug/referência)
     resetUnreadCount,
   };
 }
@@ -617,7 +621,7 @@ export interface InboxCounts {
   slaCritical: number;
   slaWarning: number;
   notResponded: number;
-  myNotResponded: number; // Conversas do usuário atual aguardando resposta
+  myNotResponded: number;
   unassigned: number;
   unread: number;
   closed: number;
@@ -630,19 +634,13 @@ export function useInboxCounts(userId?: string) {
   const { department: userDepartmentId } = useAuth();
   const { departmentIds, isLoading: deptLoading } = useDepartmentsByRole(role, userDepartmentId);
 
-  // IMPORTANTE: Só executar a query quando o role estiver REALMENTE carregado
-  // Para evitar que admin veja dados filtrados como "user"
   const isRoleReady = !roleLoading && role !== null && role !== undefined;
-  
-  // Usar o role real quando disponível (null = sem filtro de role)
   const effectiveRole = isRoleReady ? role : null;
 
   return useQuery<InboxCounts>({
     queryKey: ["inbox-counts", userId, effectiveRole, departmentIds],
-    // CRITICAL: Só rodar quando role estiver DEFINITIVAMENTE resolvido
     enabled: !!userId && isRoleReady && !deptLoading,
     queryFn: async (): Promise<InboxCounts> => {
-      // ✅ Contagens via backend function (bypass de RLS) para evitar discrepâncias.
       const { data, error } = await supabase.functions.invoke("get-inbox-counts");
       if (error) throw error;
       return (data?.counts || {

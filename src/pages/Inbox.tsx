@@ -107,8 +107,10 @@ export default function Inbox() {
        filters.search, filters.slaExpired, filters.hasAudio, filters.hasAttachments,
        filters.aiMode, departmentFilter, tagFilter]);
   
-  // Use optimized inbox_view for list (fast)
-  const { data: inboxItems, isLoading: inboxLoading } = useInboxView(inboxViewFilters);
+  // ✅ FIX: Passar scope explícito — 2 caches brutos (active/archived)
+  const isArchived = filter === "archived";
+  const inboxScope = isArchived ? 'archived' as const : 'active' as const;
+  const { data: inboxItems, isLoading: inboxLoading } = useInboxView(inboxViewFilters, inboxScope);
   
   const { data: counts } = useInboxCounts(user?.id);
   
@@ -287,7 +289,7 @@ export default function Inbox() {
       case "unassigned":
         return result.filter(c => !c.assigned_to && c.status !== 'closed');
       case "archived":
-        return result.filter(c => c.status === "closed");
+        return result; // ✅ Cache já vem com scope=archived, sem re-filtrar
       default:
         return result.filter(c => c.status !== 'closed');
     }
