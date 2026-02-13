@@ -79,6 +79,17 @@ export function useTicketFieldSettings() {
           { onConflict: "key" }
         );
       if (error) throw error;
+
+      // Verificação pós-upsert
+      const { data: check } = await supabase
+        .from("system_configurations")
+        .select("value")
+        .eq("key", key)
+        .single();
+
+      if (!check || check.value !== (required ? "true" : "false")) {
+        throw new Error(`Falha ao persistir configuração ${key}`);
+      }
     },
     onMutate: async ({ field, required }) => {
       await queryClient.cancelQueries({ queryKey: ["ticket-field-settings"] });
