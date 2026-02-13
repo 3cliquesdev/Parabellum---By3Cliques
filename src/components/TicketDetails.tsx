@@ -36,6 +36,8 @@ import ReactMarkdown from 'react-markdown';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTicketFieldSettings } from "@/hooks/useTicketFieldSettings";
+import { useTicketTags } from "@/hooks/useTicketTags";
 
 interface TicketDetailsProps {
   ticket: any;
@@ -104,7 +106,18 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
     ['support_agent', 'support_manager', 'admin', 'manager', 'general_manager', 'financial_manager', 'financial_agent', 'consultant', 'cs_manager'].includes(user.role)
   );
 
+  const { settings: fieldSettings } = useTicketFieldSettings();
+  const { data: ticketTagsData } = useTicketTags(ticket.id);
+
   const handleStatusChange = (status: string) => {
+    if ((status === 'resolved' || status === 'closed') && fieldSettings.tags && (!ticketTagsData || ticketTagsData.length === 0)) {
+      toast({
+        title: "Tags obrigatórias",
+        description: "Adicione pelo menos uma tag antes de encerrar o ticket.",
+        variant: "destructive",
+      });
+      return;
+    }
     updateTicket.mutate({
       id: ticket.id,
       updates: { status: status as any },

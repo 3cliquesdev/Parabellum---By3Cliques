@@ -184,6 +184,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
     (!fieldSettings.category || category) &&
     (!fieldSettings.customer || customerId) &&
     (!fieldSettings.assigned_to || assignedTo) &&
+    (!fieldSettings.tags || selectedTagIds.length > 0) &&
     !createTicket.isPending;
 
   // Helper for field label
@@ -387,8 +388,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
           <div className="space-y-2">
             <Label className="flex items-center gap-1">
               <Tag className="h-3.5 w-3.5" />
-              Tags
-              <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+              {fieldLabel("Tags", "tags")}
             </Label>
             {selectedTagIds.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">

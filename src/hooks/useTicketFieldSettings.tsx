@@ -9,6 +9,7 @@ export interface TicketFieldSettings {
   category: boolean;
   customer: boolean;
   assigned_to: boolean;
+  tags: boolean;
 }
 
 const FIELD_KEYS: Record<keyof TicketFieldSettings, string> = {
@@ -18,6 +19,7 @@ const FIELD_KEYS: Record<keyof TicketFieldSettings, string> = {
   category: "ticket_field_category_required",
   customer: "ticket_field_customer_required",
   assigned_to: "ticket_field_assigned_to_required",
+  tags: "ticket_field_tags_required",
 };
 
 const DEFAULTS: TicketFieldSettings = {
@@ -27,6 +29,7 @@ const DEFAULTS: TicketFieldSettings = {
   category: false,
   customer: false,
   assigned_to: false,
+  tags: false,
 };
 
 export function useTicketFieldSettings() {
