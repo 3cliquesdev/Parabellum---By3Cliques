@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePlaybookMetrics } from "@/hooks/usePlaybookMetrics";
-import { Mail, MailOpen, MousePointerClick, CheckCircle, TrendingUp, AlertCircle } from "lucide-react";
+import { Mail, MailOpen, MousePointerClick, CheckCircle, TrendingUp, AlertCircle, ShoppingCart, Send, Inbox } from "lucide-react";
 import { EmailFunnelChart } from "./EmailFunnelChart";
 import { PlaybookPerformanceTable } from "./PlaybookPerformanceTable";
+import { CompactMetricsGrid, type CompactMetric } from "@/components/ui/CompactMetricsGrid";
 import { EmailEvolutionChart } from "./EmailEvolutionChart";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
@@ -47,6 +48,68 @@ export function PlaybookMetricsDashboard() {
           </Button>
         )}
       </div>
+
+      {/* Funil de Onboarding (1º Email) */}
+      {metrics?.firstEmailFunnel && (() => {
+        const f = metrics.firstEmailFunnel;
+        const funnelMetrics: CompactMetric[] = [
+          {
+            title: "Vendas Novas",
+            value: f.newSales,
+            icon: ShoppingCart,
+            color: "text-primary",
+            bgColor: "bg-primary/10",
+            tooltip: "Total de execuções do playbook Onboarding no período",
+          },
+          {
+            title: "1º Email Enviado",
+            value: f.sent,
+            icon: Send,
+            color: "text-info",
+            bgColor: "bg-info/10",
+            percent: f.newSales > 0 ? `${((f.sent / f.newSales) * 100).toFixed(1)}%` : "—",
+            percentColor: "muted" as const,
+            subtext: "dos vendidos",
+          },
+          {
+            title: "Entregues",
+            value: f.delivered,
+            icon: Inbox,
+            color: "text-success",
+            bgColor: "bg-success/10",
+            percent: f.sent > 0 ? `${((f.delivered / f.sent) * 100).toFixed(1)}%` : "—",
+            percentColor: "green" as const,
+            subtext: "dos enviados",
+          },
+          {
+            title: "Abertos",
+            value: f.opened,
+            icon: MailOpen,
+            color: "text-warning",
+            bgColor: "bg-warning/10",
+            percent: f.delivered > 0 ? `${((f.opened / f.delivered) * 100).toFixed(1)}%` : "—",
+            percentColor: "yellow" as const,
+            subtext: "dos entregues",
+          },
+          {
+            title: "Clicados",
+            value: f.clicked,
+            icon: MousePointerClick,
+            color: "text-destructive",
+            bgColor: "bg-destructive/10",
+            percent: f.opened > 0 ? `${((f.clicked / f.opened) * 100).toFixed(1)}%` : "—",
+            percentColor: "red" as const,
+            subtext: "dos abertos",
+          },
+        ];
+        return (
+          <CompactMetricsGrid
+            label="Funil de Onboarding — 1º Email"
+            metrics={funnelMetrics}
+            columns={3}
+          />
+        );
+      })()}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

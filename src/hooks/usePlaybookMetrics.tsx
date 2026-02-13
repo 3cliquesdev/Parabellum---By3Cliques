@@ -17,6 +17,13 @@ interface PlaybookMetrics {
     openRate: number;
     clickRate: number;
   };
+  firstEmailFunnel: {
+    newSales: number;
+    sent: number;
+    delivered: number;
+    opened: number;
+    clicked: number;
+  };
   byPlaybook: Array<{
     playbook_id: string;
     playbook_name: string;
@@ -73,6 +80,74 @@ export function usePlaybookMetrics(dateRange?: { from: Date; to: Date }) {
         open_rate: Number(p.open_rate) || 0,
       }));
 
+      // --- Funil do 1º Email (Onboarding - Assinaturas) ---
+      const ONBOARDING_PLAYBOOK_ID = "7fd27c52-40f1-455f-8c29-890ed444defa";
+      const FIRST_EMAIL_NODE_ID = "1769519399023";
+
+      let salesQuery = supabase
+        .from("playbook_executions")
+        .select("id", { count: "exact", head: true })
+        .eq("playbook_id", ONBOARDING_PLAYBOOK_ID);
+
+      let sentQuery = supabase
+        .from("email_sends")
+        .select("id", { count: "exact", head: true })
+        .eq("playbook_node_id", FIRST_EMAIL_NODE_ID)
+        .not("sent_at", "is", null);
+
+      if (dateRange?.from) {
+        salesQuery = salesQuery.gte("created_at", dateRange.from.toISOString());
+        sentQuery = sentQuery.gte("sent_at", dateRange.from.toISOString());
+      }
+      if (dateRange?.to) {
+        salesQuery = salesQuery.lte("created_at", dateRange.to.toISOString());
+        sentQuery = sentQuery.lte("sent_at", dateRange.to.toISOString());
+      }
+
+      const [salesRes, sentRes] = await Promise.all([salesQuery, sentQuery]);
+
+      const newSales = salesRes.count ?? 0;
+      const feSent = sentRes.count ?? 0;
+
+      // Delivered, opened, clicked — reuse same base filters
+      let deliveredQ = supabase
+        .from("email_sends")
+        .select("id", { count: "exact", head: true })
+        .eq("playbook_node_id", FIRST_EMAIL_NODE_ID)
+        .not("sent_at", "is", null)
+        .is("bounced_at", null);
+
+      let openedQ = supabase
+        .from("email_sends")
+        .select("id", { count: "exact", head: true })
+        .eq("playbook_node_id", FIRST_EMAIL_NODE_ID)
+        .not("sent_at", "is", null)
+        .not("opened_at", "is", null);
+
+      let clickedQ = supabase
+        .from("email_sends")
+        .select("id", { count: "exact", head: true })
+        .eq("playbook_node_id", FIRST_EMAIL_NODE_ID)
+        .not("sent_at", "is", null)
+        .not("clicked_at", "is", null);
+
+      if (dateRange?.from) {
+        deliveredQ = deliveredQ.gte("sent_at", dateRange.from.toISOString());
+        openedQ = openedQ.gte("sent_at", dateRange.from.toISOString());
+        clickedQ = clickedQ.gte("sent_at", dateRange.from.toISOString());
+      }
+      if (dateRange?.to) {
+        deliveredQ = deliveredQ.lte("sent_at", dateRange.to.toISOString());
+        openedQ = openedQ.lte("sent_at", dateRange.to.toISOString());
+        clickedQ = clickedQ.lte("sent_at", dateRange.to.toISOString());
+      }
+
+      const [delRes, openRes, clickRes] = await Promise.all([deliveredQ, openedQ, clickedQ]);
+
+      const feDelivered = delRes.count ?? 0;
+      const feOpened = openRes.count ?? 0;
+      const feClicked = clickRes.count ?? 0;
+
       return {
         totalExecutions,
         running,
@@ -88,6 +163,13 @@ export function usePlaybookMetrics(dateRange?: { from: Date; to: Date }) {
           deliveryRate,
           openRate,
           clickRate,
+        },
+        firstEmailFunnel: {
+          newSales,
+          sent: feSent,
+          delivered: feDelivered,
+          opened: feOpened,
+          clicked: feClicked,
         },
         byPlaybook,
       };
