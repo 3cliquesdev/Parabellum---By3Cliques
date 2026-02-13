@@ -8,7 +8,7 @@ class Resend {
     this.apiKey = apiKey || "";
   }
   emails = {
-    send: async (options: { from: string; to: string[]; bcc?: string[]; subject: string; html: string }) => {
+    send: async (options: { from: string; to: string[]; bcc?: string[]; subject: string; html: string; headers?: Record<string, string> }) => {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { "Authorization": `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
@@ -112,139 +112,33 @@ serve(async (req) => {
     
     console.log('[send-verification-code] Enviando email com branding:', branding.name);
     
+    // Template simplificado para melhor deliverability em emails corporativos
+    const simpleHtml = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:20px;">
+<div style="text-align:center;padding:20px 0;">
+<img src="${branding.logo}" alt="${branding.name}" style="max-width:160px;height:auto;" />
+</div>
+<div style="background:#fff;padding:30px;border:1px solid #e5e7eb;border-radius:8px;">
+<p style="color:#1f2937;font-size:15px;margin:0 0 15px;">${branding.greeting}</p>
+<p style="color:#374151;font-size:14px;line-height:1.5;margin:0 0 20px;">${branding.description}</p>
+<p style="color:#374151;font-size:14px;margin:0 0 20px;">Use o codigo abaixo para verificar sua identidade:</p>
+<div style="background:#f3f4f6;border-radius:8px;padding:24px;text-align:center;margin:20px 0;">
+<p style="color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:2px;margin:0 0 10px;">Codigo de Verificacao</p>
+<p style="font-family:'Courier New',monospace;font-size:36px;letter-spacing:12px;margin:0;color:#111827;font-weight:bold;">${code}</p>
+<p style="color:#dc2626;font-size:12px;margin:10px 0 0;">Valido por 10 minutos</p>
+</div>
+<p style="color:#78350f;font-size:12px;background:#fef3c7;padding:12px;border-radius:6px;margin:20px 0;">Nao compartilhe este codigo. A equipe ${branding.systemName} nunca pedira seu codigo por telefone ou WhatsApp.</p>
+</div>
+<p style="color:#9ca3af;font-size:11px;text-align:center;margin:20px 0 0;">Email automatico - nao responda. ${branding.systemName}</p>
+</div>`;
+
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: branding.from,
       to: [email],
       subject: branding.subject,
-      html: `
-        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb;">
-          
-        <!-- HEADER COM LOGO -->
-        <div style="background: linear-gradient(135deg, ${branding.headerColor} 0%, ${branding.primaryColor} 100%); padding: 30px; text-align: center;">
-          <img src="${branding.logo}" 
-               alt="${branding.name}" 
-               style="max-width: 200px; height: auto;" />
-        </div>
-          
-          <!-- CONTAINER PRINCIPAL -->
-          <div style="background: #ffffff; border: 1px solid #e5e7eb; margin: 0; padding: 40px 30px;">
-            
-            <!-- SAUDAÇÃO -->
-            <p style="color: #1f2937; font-size: 16px; margin: 0 0 20px 0;">
-              ${branding.greeting}
-            </p>
-            
-            <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
-              ${branding.description}
-            </p>
-            
-            <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
-              Para garantir a segurança dos seus dados, utilize o código de verificação única (OTP) abaixo:
-            </p>
-            
-            <!-- CÓDIGO OTP - DESTAQUE PRINCIPAL -->
-            <div style="background: #f3f4f6; border-radius: 12px; padding: 30px; text-align: center; margin: 30px 0; border: 2px solid #d1d5db;">
-              <p style="color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 15px 0;">
-                Seu Código de Verificação
-              </p>
-              <h1 style="font-family: 'Courier New', Consolas, monospace; font-size: 42px; letter-spacing: 16px; margin: 0; color: #111827; font-weight: bold;">
-                ${code.split('').join(' ')}
-              </h1>
-              <p style="color: #dc2626; font-size: 13px; margin: 15px 0 0 0; font-weight: 500;">
-                Código válido por 10 minutos
-              </p>
-            </div>
-            
-            <!-- ALERTA DE SEGURANÇA -->
-            <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0; border-radius: 0 8px 8px 0;">
-              <h3 style="color: #92400e; font-size: 14px; margin: 0 0 12px 0;">
-                ALERTA DE SEGURANÇA
-              </h3>
-              <p style="color: #78350f; font-size: 13px; line-height: 1.6; margin: 0 0 10px 0;">
-                <strong>Nunca compartilhe:</strong> A equipe ${branding.systemName} <u>jamais</u> solicitará este código por telefone, WhatsApp ou SMS.
-              </p>
-              <p style="color: #78350f; font-size: 13px; line-height: 1.6; margin: 0;">
-                <strong>Não foi você?</strong> Se você não solicitou este código, ignore este email.
-              </p>
-            </div>
-            
-            <!-- DETALHES DA SOLICITAÇÃO -->
-            <div style="background: #f9fafb; border-radius: 8px; padding: 20px; margin: 30px 0; border: 1px solid #e5e7eb;">
-              <h4 style="color: #374151; font-size: 13px; margin: 0 0 15px 0; text-transform: uppercase; letter-spacing: 1px;">
-                Detalhes da Solicitação
-              </h4>
-              <table style="width: 100%; font-size: 13px; color: #4b5563;">
-                <tr>
-                  <td style="padding: 5px 0; color: #6b7280;">Sistema:</td>
-                  <td style="padding: 5px 0; font-weight: 500;">${branding.systemName}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 5px 0; color: #6b7280;">Data/Hora:</td>
-                  <td style="padding: 5px 0; font-weight: 500;">${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 5px 0; color: #6b7280;">Tipo:</td>
-                  <td style="padding: 5px 0; font-weight: 500;">Verificação de Identidade</td>
-                </tr>
-              </table>
-            </div>
-            
-            <!-- AVISO FINAL -->
-            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 30px 0 0 0; font-style: italic;">
-              Esta é uma mensagem automática de segurança. Por favor, não responda.
-            </p>
-            
-          </div>
-          
-          <!-- FOOTER -->
-          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: ${branding.headerColor};">
-            <tr>
-              <td align="center" style="padding: 25px;">
-                ${type === 'employee' ? `
-                <!-- Logos lado a lado (APENAS PARA COLABORADORES) -->
-                <table cellpadding="0" cellspacing="0" border="0" align="center">
-                  <tr>
-                    <td style="padding: 0 8px;">
-                      <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-                           alt="PARABELLUM" 
-                           width="100"
-                           style="display: block; max-width: 100px; height: auto;" />
-                    </td>
-                    <td style="padding: 0 8px;">
-                      <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-3cliques-email.png?v=2" 
-                           alt="3 CLIQUES" 
-                           width="80"
-                           style="display: block; max-width: 80px; height: auto;" />
-                    </td>
-                  </tr>
-                </table>
-                
-                <!-- Texto "PARABELLUM by 3Cliques" -->
-                <p style="color: #ffffff; margin: 15px 0 10px 0; font-size: 14px; font-weight: 600;">
-                  PARABELLUM by 3Cliques
-                </p>
-                
-                <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
-                  Departamento de Segurança da Informação
-                </p>
-                <p style="color: #64748b; margin: 0; font-size: 11px;">
-                  Ambiente Seguro
-                </p>
-                ` : `
-                <!-- Footer Cliente (SIMPLES) -->
-                <p style="color: #ffffff; margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">
-                  ${branding.footer}
-                </p>
-                <p style="color: #94a3b8; margin: 0; font-size: 11px;">
-                  Este é um email automático. Por favor, não responda.
-                </p>
-                `}
-              </td>
-            </tr>
-          </table>
-          
-        </div>
-      `,
+      headers: {
+        'X-Entity-Ref-ID': crypto.randomUUID(),
+      },
+      html: simpleHtml,
     });
 
     if (emailError) {
@@ -282,14 +176,25 @@ serve(async (req) => {
 
     console.log('[send-verification-code] ✅ Email enviado com SUCESSO via Resend');
     console.log('[send-verification-code] Destinatário:', email);
-    console.log('[send-verification-code] ID do email:', emailData?.id);
-    // SECURITY: OTP code is NOT logged in production - sent only via email
+    console.log('[send-verification-code] Resend ID:', emailData?.id);
 
-    return new Response(JSON.stringify({ 
-      success: true
-      // SECURITY FIX: Code is only sent via email, never in API response
-      // Code can only be returned in dev_mode (line 214) for testing purposes
-    }), {
+    // Registrar em email_sends para tracking de bounces via webhook
+    if (emailData?.id) {
+      const { error: trackError } = await supabase.from('email_sends').insert({
+        resend_email_id: emailData.id,
+        recipient_email: email,
+        subject: branding.subject,
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+      });
+      if (trackError) {
+        console.warn('[send-verification-code] Falha ao registrar email_sends:', trackError);
+      } else {
+        console.log('[send-verification-code] Registrado em email_sends para tracking');
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
