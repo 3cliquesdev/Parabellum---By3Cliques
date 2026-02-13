@@ -90,6 +90,10 @@ export function OTPVerificationModal({ open, email, onVerified, onCancel, type =
             <Mail className="h-4 w-4" />
             <AlertDescription>
               Enviamos um código de 6 dígitos para <strong>{email}</strong>
+              <br />
+              <span className="text-xs text-muted-foreground mt-1 block">
+                Não recebeu? Verifique a pasta de spam/lixo eletrônico. Emails corporativos podem ter filtros mais rigorosos.
+              </span>
             </AlertDescription>
           </Alert>
 
