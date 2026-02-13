@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePlaybookMetrics } from "@/hooks/usePlaybookMetrics";
-import { Mail, MailOpen, MousePointerClick, CheckCircle, TrendingUp, AlertCircle, ShoppingCart, Send, Inbox } from "lucide-react";
-import { EmailFunnelChart } from "./EmailFunnelChart";
+import { Mail, MailOpen, MousePointerClick, CheckCircle, TrendingUp, AlertCircle } from "lucide-react";
 import { PlaybookPerformanceTable } from "./PlaybookPerformanceTable";
-import { CompactMetricsGrid, type CompactMetric } from "@/components/ui/CompactMetricsGrid";
 import { EmailEvolutionChart } from "./EmailEvolutionChart";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+} from "recharts";
+import { chartColors, getChartColor } from "@/design/chart-colors";
 
 export function PlaybookMetricsDashboard() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -48,68 +50,6 @@ export function PlaybookMetricsDashboard() {
           </Button>
         )}
       </div>
-
-      {/* Funil de Onboarding (1º Email) */}
-      {metrics?.firstEmailFunnel && (() => {
-        const f = metrics.firstEmailFunnel;
-        const funnelMetrics: CompactMetric[] = [
-          {
-            title: "Vendas Novas",
-            value: f.newSales,
-            icon: ShoppingCart,
-            color: "text-primary",
-            bgColor: "bg-primary/10",
-            tooltip: "Total de execuções do playbook Onboarding no período",
-          },
-          {
-            title: "1º Email Enviado",
-            value: f.sent,
-            icon: Send,
-            color: "text-info",
-            bgColor: "bg-info/10",
-            percent: f.newSales > 0 ? `${((f.sent / f.newSales) * 100).toFixed(1)}%` : "—",
-            percentColor: "muted" as const,
-            subtext: "dos vendidos",
-          },
-          {
-            title: "Entregues",
-            value: f.delivered,
-            icon: Inbox,
-            color: "text-success",
-            bgColor: "bg-success/10",
-            percent: f.sent > 0 ? `${((f.delivered / f.sent) * 100).toFixed(1)}%` : "—",
-            percentColor: "green" as const,
-            subtext: "dos enviados",
-          },
-          {
-            title: "Abertos",
-            value: f.opened,
-            icon: MailOpen,
-            color: "text-warning",
-            bgColor: "bg-warning/10",
-            percent: f.delivered > 0 ? `${((f.opened / f.delivered) * 100).toFixed(1)}%` : "—",
-            percentColor: "yellow" as const,
-            subtext: "dos entregues",
-          },
-          {
-            title: "Clicados",
-            value: f.clicked,
-            icon: MousePointerClick,
-            color: "text-destructive",
-            bgColor: "bg-destructive/10",
-            percent: f.opened > 0 ? `${((f.clicked / f.opened) * 100).toFixed(1)}%` : "—",
-            percentColor: "red" as const,
-            subtext: "dos abertos",
-          },
-        ];
-        return (
-          <CompactMetricsGrid
-            label="Funil de Onboarding — 1º Email"
-            metrics={funnelMetrics}
-            columns={3}
-          />
-        );
-      })()}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -203,14 +143,55 @@ export function PlaybookMetricsDashboard() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Mail className="h-5 w-5" />
-              Funil de Conversão
+              Funil de Onboarding — 1º Email
             </CardTitle>
             <CardDescription>
-              Jornada do email: enviado → entregue → aberto → clicado
+              Vendas novas → enviado → entregue → aberto → clicado
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <EmailFunnelChart dateRange={activeDateRange} />
+            {(() => {
+              const f = metrics?.firstEmailFunnel;
+              if (!f) return <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">Sem dados</div>;
+              const funnelData = [
+                { stage: "Vendas Novas", value: f.newSales },
+                { stage: "Enviados", value: f.sent },
+                { stage: "Entregues", value: f.delivered },
+                { stage: "Abertos", value: f.opened },
+                { stage: "Clicados", value: f.clicked },
+              ];
+              const funnelColors = [
+                chartColors.primary,
+                chartColors.info,
+                chartColors.success,
+                chartColors.warning,
+                chartColors.danger,
+              ];
+              return (
+                <div className="h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={funnelData} layout="vertical" margin={{ top: 5, right: 30, left: 80, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal vertical={false} />
+                      <XAxis type="number" />
+                      <YAxis type="category" dataKey="stage" tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        formatter={(value: number) => [value, 'Total']}
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--background))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={40}>
+                        {funnelData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={funnelColors[index]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
