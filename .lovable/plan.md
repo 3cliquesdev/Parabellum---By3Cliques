@@ -1,126 +1,64 @@
 
 
-# Fix: Ligia do Financeiro nao consegue transferir tickets
+# KPIs do Funil de Onboarding: Vendas Novas ate Cliques no 1o Email
 
-## Diagnostico
+## Resumo
 
-A funcao RPC `transfer_ticket_secure` valida autorizacao com 4 condicoes para agentes:
-1. Ticket atribuido ao caller
-2. Ticket criado pelo caller
-3. Ticket sem atribuicao (assigned_to IS NULL)
-4. Ticket no mesmo departamento do caller
+Adicionar uma nova secao de KPIs no Dashboard de Playbooks mostrando o funil completo de onboarding:
 
-O SELECT RLS de tickets e mais permissivo — permite que financial_agent veja tickets que criou ou que estao atribuidos a ela, independente do departamento. Isso cria um gap: Ligia ve o ticket na lista mas a RPC rejeita a transferencia.
+**Vendas Novas** (execucoes do playbook no periodo) → **1o Email Enviado** → **Entregues** → **Abertos** → **Clicados**
 
-Alem disso, a RPC usa apenas `profiles.department` (coluna legada 1:1), ignorando a tabela N:N `agent_departments`.
+Dados extraidos da tabela `email_sends` filtrando pelo `playbook_node_id = '1769519399023'` (primeiro email do Onboarding - Assinaturas) e `playbook_executions` para contagem de vendas novas.
 
-## Solucao
+## Mudancas
 
-Expandir a autorizacao na RPC `transfer_ticket_secure` para:
+### 1. Hook `usePlaybookMetrics.tsx`
 
-1. Verificar tambem a tabela `agent_departments` (N:N) em vez de so `profiles.department`
-2. Permitir que agentes com a permissao `inbox.transfer` habilitada possam transferir qualquer ticket que eles consigam visualizar (alinhado com o SELECT policy)
+Adicionar queries para o primeiro email do onboarding dentro do `queryFn` existente:
 
-### Migration SQL
+- **Vendas Novas**: `COUNT(*)` de `playbook_executions` do playbook "Onboarding - Assinaturas" (`7fd27c52-40f1-455f-8c29-890ed444defa`) no periodo
+- **1o Email Enviado**: `COUNT(*)` de `email_sends` com `playbook_node_id = '1769519399023'` e `sent_at IS NOT NULL`
+- **Entregues**: Mesma query + `bounced_at IS NULL`
+- **Abertos**: Mesma query + `opened_at IS NOT NULL`
+- **Clicados**: Mesma query + `clicked_at IS NOT NULL`
 
-```sql
-CREATE OR REPLACE FUNCTION public.transfer_ticket_secure(
-  p_ticket_id uuid, 
-  p_department_id uuid, 
-  p_assigned_to uuid DEFAULT NULL, 
-  p_internal_note text DEFAULT NULL
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-DECLARE
-  v_caller_id UUID := auth.uid();
-  v_ticket RECORD;
-  v_is_authorized BOOLEAN := false;
-  v_dept_name TEXT;
-  v_assignee_name TEXT;
-  v_has_transfer_perm BOOLEAN := false;
-BEGIN
-  -- 1. Buscar ticket
-  SELECT id, assigned_to, created_by, department_id
-  INTO v_ticket
-  FROM tickets
-  WHERE id = p_ticket_id;
+Todas as queries respeitam o filtro de `dateRange` quando informado.
 
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Ticket nao encontrado');
-  END IF;
-
-  -- 2. Verificar autorizacao
-  -- Managers/admins: acesso total
-  IF has_any_role(v_caller_id, ARRAY[
-    'admin','manager','general_manager',
-    'cs_manager','support_manager','financial_manager'
-  ]::app_role[]) THEN
-    v_is_authorized := true;
-  ELSIF has_any_role(v_caller_id, ARRAY[
-    'support_agent','financial_agent','ecommerce_analyst','sales_rep'
-  ]::app_role[]) THEN
-    -- Verificar permissao inbox.transfer
-    SELECT EXISTS (
-      SELECT 1 FROM role_permissions rp
-      JOIN user_roles ur ON ur.role = rp.role
-      WHERE ur.user_id = v_caller_id
-        AND rp.permission_key = 'inbox.transfer'
-        AND rp.enabled = true
-    ) INTO v_has_transfer_perm;
-
-    v_is_authorized := (
-      v_ticket.assigned_to = v_caller_id        -- Atribuido a ele
-      OR v_ticket.created_by = v_caller_id       -- Criado por ele
-      OR v_ticket.assigned_to IS NULL            -- Sem dono
-      OR v_ticket.department_id IN (             -- No departamento dele (N:N)
-           SELECT department_id FROM agent_departments
-           WHERE profile_id = v_caller_id
-         )
-      OR v_has_transfer_perm                     -- Tem permissao inbox.transfer
-    );
-  END IF;
-
-  IF NOT v_is_authorized THEN
-    RETURN jsonb_build_object(
-      'success', false, 
-      'error', 'Sem permissao para transferir este ticket'
-    );
-  END IF;
-
-  -- (resto da funcao permanece igual: buscar dept name, 
-  --  assignee name, executar UPDATE, criar comentario interno)
-  ...
-END;
-$$;
+Novo campo no retorno:
+```
+firstEmailFunnel: {
+  newSales: number;
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+}
 ```
 
-### Mudancas Principais
+### 2. Dashboard `PlaybookMetricsDashboard.tsx`
 
-1. Substituiu `profiles.department` (legado 1:1) por `agent_departments` (N:N)
-2. Adicionou verificacao da permissao `inbox.transfer` como condicao alternativa
-3. Usou `has_any_role` em vez de multiplos `has_role` (performance)
+Adicionar uma nova linha de 5 cards ACIMA dos KPIs gerais existentes, com titulo "Funil de Onboarding (1o Email)":
+
+```
++-------------+-------------+-------------+-------------+-------------+
+| Vendas      | 1o Email    | Entregues   | Abertos     | Clicados    |
+| Novas       | Enviado     |             |             |             |
+| 431         | 525         | 525 (100%)  | 264 (50.3%) | 142 (27%)   |
++-------------+-------------+-------------+-------------+-------------+
+```
+
+Cada card mostra:
+- Valor absoluto em destaque
+- Subtitulo com taxa relativa (ex: "100% dos enviados")
+- Icone diferenciado
 
 ## Arquivos Modificados
 
-1. **Migration SQL** — Recriar `transfer_ticket_secure` com autorizacao expandida
-
-Nenhum arquivo frontend precisa mudar. A RPC continua com a mesma assinatura e retorno.
+1. `src/hooks/usePlaybookMetrics.tsx` — Adicionar queries do funil do primeiro email
+2. `src/components/playbooks/PlaybookMetricsDashboard.tsx` — Nova linha de 5 KPI cards
 
 ## Zero Regressao
 
-- Managers/admins continuam com acesso total (nenhuma mudanca)
-- Agentes que ja conseguiam transferir continuam conseguindo (as 3 condicoes originais permanecem)
-- Nova condicao (agent_departments + inbox.transfer) so EXPANDE acesso, nunca restringe
-- A mesma funcao e usada por `useBulkTransferTickets` e `useTicketTransfer` — ambos se beneficiam
-
-## Testes Obrigatorios
-
-1. Ligia (financial_agent) tenta transferir ticket atribuido a ela — deve funcionar
-2. Ligia tenta transferir ticket de outro departamento que ela ve — deve funcionar (inbox.transfer = true)
-3. Agente sem permissao inbox.transfer tenta transferir ticket de outro departamento — deve bloquear
-4. Manager transfere qualquer ticket — deve funcionar (sem mudanca)
-
+- KPIs existentes (taxa de entrega geral, abertura, cliques, conclusao) continuam inalterados
+- Graficos e tabela de performance nao mudam
+- Novas queries sao paralelas e independentes das existentes
