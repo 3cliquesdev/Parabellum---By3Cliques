@@ -112,6 +112,8 @@ export function useMessages(conversationId: string | null) {
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
+    refetchInterval: isDegraded ? 5000 : false,
+    refetchIntervalInBackground: false,
   });
 
   // 🔄 CATCH-UP: Buscar mensagens perdidas após reconexão

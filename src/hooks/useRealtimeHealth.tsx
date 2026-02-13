@@ -14,6 +14,7 @@ export function useRealtimeHealth() {
   const [isConnected, setIsConnected] = useState(true);
   const [lastPing, setLastPing] = useState<Date | null>(null);
   const [lastEventReceived, setLastEventReceived] = useState<Date | null>(new Date()); // 🆕 Iniciar com agora
+  const [healthTick, setHealthTick] = useState(0); // 🆕 Força re-render periódico
   const queryClient = useQueryClient();
   const reconnectAttempts = useRef(0);
   const lastVisibilityChange = useRef<number>(Date.now());
@@ -22,16 +23,15 @@ export function useRealtimeHealth() {
   // 🆕 isHealthy = conectado E recebeu evento nos últimos 60s
   const isHealthy = useMemo(() => {
     if (!isConnected) return false;
-    if (!lastEventReceived) return true; // Assume healthy se acabou de iniciar
+    if (!lastEventReceived) return true;
     return (Date.now() - lastEventReceived.getTime()) < 60000;
-  }, [isConnected, lastEventReceived]);
+  }, [isConnected, lastEventReceived, healthTick]);
   
-  // 🆕 isDegraded = conectado mas sem eventos recentes (possível gap)
   const isDegraded = useMemo(() => {
     if (!isConnected) return false;
     if (!lastEventReceived) return false;
     return (Date.now() - lastEventReceived.getTime()) >= 60000;
-  }, [isConnected, lastEventReceived]);
+  }, [isConnected, lastEventReceived, healthTick]);
 
   // 🆕 Função para registrar evento recebido (chamada pelos hooks de realtime)
   const registerEvent = useCallback(() => {
@@ -117,8 +117,8 @@ export function useRealtimeHealth() {
 
     // 🆕 Health check interval - atualizar isHealthy/isDegraded
     healthCheckInterval = setInterval(() => {
-      // Forçar re-render para atualizar isHealthy/isDegraded
-      setLastEventReceived(prev => prev);
+      // 🆕 Incrementar tick para forçar recálculo de isHealthy/isDegraded
+      setHealthTick(t => t + 1);
     }, 10000);
 
     return () => {
