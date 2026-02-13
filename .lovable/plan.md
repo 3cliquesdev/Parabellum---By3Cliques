@@ -1,89 +1,86 @@
 
-# Corrigir Entrega de OTP para Emails Corporativos
+## Problema Identificado
 
-## Diagnostico
+Na função `ai-autopilot-chat`, existem dois locais onde `handoffDepartment` é calculado e usado para atualizar o banco de dados:
 
-O codigo OTP esta sendo gerado e salvo corretamente no banco (varios registros para `atendimentobabado@babadotop.com.br`, todos `verified: false`). A API do Resend aceita o envio (retorna `success: true`), mas o email nao esta chegando ao destinatario.
+1. **Linha 4310**: `const handoffDepartment = confidenceResult.department || DEPT_SUPORTE_ID;`
+2. **Linha 6752**: `const handoffDepartment = isLeadWithoutEmail ? DEPT_COMERCIAL_ID : DEPT_SUPORTE_ID;`
 
-**Causa provavel**: O servidor de email do dominio `babadotop.com.br` esta rejeitando ou filtrando o email enviado de `contato@mail.3cliques.net`. Isso e comum em dominios corporativos com filtros anti-spam mais rigorosos.
+O problema é que `confidenceResult.department` é calculado por `pickDepartment()` (linha 886), que analisa apenas o conteúdo da mensagem usando regex/keywords de fins financeiros. Isso ignora completamente o departamento já definido pelo chat flow.
 
-## Solucoes Propostas
+**Exemplo do bug**:
+- Chat flow define `department = "Suporte Pedidos"` (via nó de transfer)
+- Cliente escreve "como faço uma devolução" (palavra-chave de finanças)
+- `pickDepartment()` detecta "devolução" → retorna "Financeiro"
+- `handoffDepartment` recebe "Financeiro"
+- Conversa é transferida para Financeiro, ignorando o Suporte Pedidos já definido
 
-### 1. Melhorar a Edge Function `send-verification-code`
+## Solução Proposta
 
-**Arquivo**: `supabase/functions/send-verification-code/index.ts`
+**Modificar a lógica de atribuição de departamento para respeitar a hierarquia**:
 
-- Adicionar logging do `resend_email_id` retornado para rastreamento
-- Adicionar headers `Reply-To` e `List-Unsubscribe` para melhorar deliverability
-- Reduzir conteudo HTML (emails longos com muitas tabelas sao mais propensos a filtros de spam)
-- Simplificar o template para emails de verificacao (quanto mais limpo, menos chance de spam)
+```
+1. Se conversation.department existe (não é null) → usar esse departamento
+2. Se conversation.department é null → usar pickDepartment() para determinar
+3. Nunca sobrescrever departamento já definido
+```
 
-### 2. Adicionar feedback visual na interface
+### Mudanças Técnicas
 
-**Arquivo**: `src/components/OTPVerificationModal.tsx` (e equivalente no webchat se houver)
+**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
 
-- Adicionar dica visual: "Verifique sua caixa de spam/lixo eletronico"
-- Adicionar texto informativo sobre emails corporativos que podem bloquear
+#### Mudança 1: Linha 4310 (Handoff após identificação de cliente)
 
-### 3. Adicionar fallback: registro na tabela `email_sends` para tracking
+**Antes**:
+```typescript
+const handoffDepartment = confidenceResult.department || DEPT_SUPORTE_ID;
+```
 
-**Arquivo**: `supabase/functions/send-verification-code/index.ts`
+**Depois**:
+```typescript
+// ✅ NOVO: Respeitar departamento definido pelo fluxo
+const handoffDepartment = conversation.department || confidenceResult.department || DEPT_SUPORTE_ID;
+```
 
-- Apos enviar via Resend, registrar o `resend_email_id` na tabela para que o webhook de tracking (resend-webhook) consiga reportar bounces
-- Isso permite detectar automaticamente quando o email nao foi entregue
+#### Mudança 2: Linha 6752 (Fallback para leads)
 
-## Detalhes Tecnicos
+**Antes**:
+```typescript
+const handoffDepartment = isLeadWithoutEmail ? DEPT_COMERCIAL_ID : DEPT_SUPORTE_ID;
+```
 
-### Edge Function - Melhorias de deliverability
+**Depois**:
+```typescript
+// ✅ NOVO: Respeitar departamento definido pelo fluxo (não sobrescrever)
+const handoffDepartment = conversation.department || 
+                         (isLeadWithoutEmail ? DEPT_COMERCIAL_ID : DEPT_SUPORTE_ID);
+```
+
+#### Mudança 3: Adicionar logs de auditoria (linhas 4312 + 6754)
+
+Para facilitar diagnóstico, adicionar um log que mostre se o departamento foi respeitado ou recalculado:
 
 ```typescript
-// Adicionar headers para melhorar deliverability
-const { data: emailData, error: emailError } = await resend.emails.send({
-  from: branding.from,
-  to: [email],
-  subject: branding.subject,
-  headers: {
-    'X-Entity-Ref-ID': verificationId, // Evita agrupamento
-  },
-  html: templateSimplificado, // Template mais enxuto
+console.log('[ai-autopilot-chat] 🔄 Departamento de handoff:', {
+  flowDepartment: conversation.department,
+  aiDetectedDepartment: confidenceResult.department || 'nenhum',
+  finalDepartment: handoffDepartment,
+  reason: conversation.department ? 'RESPEITANDO FLUXO' : 'USANDO IA'
 });
-
-// Logar resend_email_id para debug
-console.log('[send-verification-code] Resend ID:', emailData?.id);
 ```
 
-### Modal OTP - Feedback visual
+## Impacto (Zero Regressão)
 
-Adicionar apos o Alert de "Enviamos um codigo":
-
-```text
-Nao recebeu? Verifique a pasta de spam ou lixo eletronico.
-Emails corporativos podem ter filtros mais rigorosos.
-```
-
-### Registro em email_sends para tracking
-
-```typescript
-// Apos envio bem-sucedido, registrar para tracking de bounces
-if (emailData?.id) {
-  await supabase.from('email_sends').insert({
-    resend_email_id: emailData.id,
-    recipient_email: email,
-    subject: branding.subject,
-    status: 'sent',
-    sent_at: new Date().toISOString(),
-  });
-}
-```
+- ✅ Conversas SEM departamento definido pelo fluxo continuam funcionando igual (usam `pickDepartment()`)
+- ✅ Conversas COM departamento definido pelo fluxo agora são respeitadas
+- ✅ Fallback para leads sem email continua funcionando, mas agora respeita fluxo se houver
+- ✅ Nenhuma mudança de lógica de IA, apenas ordem de prioridade
+- ✅ Logs adicionados para auditoria, sem afetar comportamento
 
 ## Arquivos Modificados
 
-1. `supabase/functions/send-verification-code/index.ts` - Melhorar deliverability e registrar envio
-2. `src/components/OTPVerificationModal.tsx` - Adicionar feedback sobre spam
+1. `supabase/functions/ai-autopilot-chat/index.ts` 
+   - Linha ~4310: Adicionar `conversation.department ||` antes de `confidenceResult.department`
+   - Linha ~6752: Adicionar `conversation.department ||` antes de `isLeadWithoutEmail`
+   - Linhas ~4312 + 6754: Adicionar logs estruturados
 
-## Zero Regressao
-
-- Fluxo de verificacao continua funcionando igual
-- Codigo OTP gerado da mesma forma
-- Apenas melhora o template e adiciona tracking
-- Nenhuma mudanca em verify-code ou outros fluxos
