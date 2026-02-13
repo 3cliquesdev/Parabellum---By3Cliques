@@ -1,64 +1,44 @@
 
 
-# KPIs do Funil de Onboarding: Vendas Novas ate Cliques no 1o Email
+# Funil de Onboarding como Grafico de Barras Horizontais
 
-## Resumo
+## O que muda
 
-Adicionar uma nova secao de KPIs no Dashboard de Playbooks mostrando o funil completo de onboarding:
+1. **Substituir os 5 cards** (CompactMetricsGrid "Funil de Onboarding") por um grafico de barras horizontais no mesmo estilo do "Funil de Conversao" existente
+2. **Corrigir o "Funil de Conversao"** que mostra 2132 emails (todos os emails de todos os nodes) — deve mostrar apenas os dados do 1o email do onboarding, incluindo "Vendas Novas" como primeira barra
 
-**Vendas Novas** (execucoes do playbook no periodo) → **1o Email Enviado** → **Entregues** → **Abertos** → **Clicados**
+## Resultado Visual
 
-Dados extraidos da tabela `email_sends` filtrando pelo `playbook_node_id = '1769519399023'` (primeiro email do Onboarding - Assinaturas) e `playbook_executions` para contagem de vendas novas.
+O grafico tera 5 barras horizontais:
 
-## Mudancas
-
-### 1. Hook `usePlaybookMetrics.tsx`
-
-Adicionar queries para o primeiro email do onboarding dentro do `queryFn` existente:
-
-- **Vendas Novas**: `COUNT(*)` de `playbook_executions` do playbook "Onboarding - Assinaturas" (`7fd27c52-40f1-455f-8c29-890ed444defa`) no periodo
-- **1o Email Enviado**: `COUNT(*)` de `email_sends` com `playbook_node_id = '1769519399023'` e `sent_at IS NOT NULL`
-- **Entregues**: Mesma query + `bounced_at IS NULL`
-- **Abertos**: Mesma query + `opened_at IS NOT NULL`
-- **Clicados**: Mesma query + `clicked_at IS NOT NULL`
-
-Todas as queries respeitam o filtro de `dateRange` quando informado.
-
-Novo campo no retorno:
-```
-firstEmailFunnel: {
-  newSales: number;
-  sent: number;
-  delivered: number;
-  opened: number;
-  clicked: number;
-}
+```text
+Vendas Novas  ██████████████████████████████  431
+Enviados      ██████████████████████████████  431
+Entregues     ██████████████████████████████  431
+Abertos       ████████████████████           285
+Clicados      ████████████                   137
 ```
 
-### 2. Dashboard `PlaybookMetricsDashboard.tsx`
+## Mudancas Tecnicas
 
-Adicionar uma nova linha de 5 cards ACIMA dos KPIs gerais existentes, com titulo "Funil de Onboarding (1o Email)":
+### 1. `PlaybookMetricsDashboard.tsx`
 
-```
-+-------------+-------------+-------------+-------------+-------------+
-| Vendas      | 1o Email    | Entregues   | Abertos     | Clicados    |
-| Novas       | Enviado     |             |             |             |
-| 431         | 525         | 525 (100%)  | 264 (50.3%) | 142 (27%)   |
-+-------------+-------------+-------------+-------------+-------------+
-```
+- Remover a secao CompactMetricsGrid do funil (linhas 52-112)
+- Alterar o card "Funil de Conversao" para usar os dados de `metrics.firstEmailFunnel` diretamente em vez do componente `EmailFunnelChart` que busca todos os emails
+- Renderizar um BarChart horizontal inline com os 5 estágios (Vendas Novas, Enviados, Entregues, Abertos, Clicados)
+- Titulo do card: "Funil de Onboarding — 1o Email"
+- Subtitulo: "Vendas novas -> enviado -> entregue -> aberto -> clicado"
 
-Cada card mostra:
-- Valor absoluto em destaque
-- Subtitulo com taxa relativa (ex: "100% dos enviados")
-- Icone diferenciado
+### 2. Nenhuma mudanca no hook
+
+Os dados de `firstEmailFunnel` ja existem em `usePlaybookMetrics` e estao corretos. So precisamos usa-los no lugar certo.
 
 ## Arquivos Modificados
 
-1. `src/hooks/usePlaybookMetrics.tsx` — Adicionar queries do funil do primeiro email
-2. `src/components/playbooks/PlaybookMetricsDashboard.tsx` — Nova linha de 5 KPI cards
+1. `src/components/playbooks/PlaybookMetricsDashboard.tsx` — Trocar cards por grafico de barras horizontais com dados do 1o email
 
 ## Zero Regressao
 
-- KPIs existentes (taxa de entrega geral, abertura, cliques, conclusao) continuam inalterados
-- Graficos e tabela de performance nao mudam
-- Novas queries sao paralelas e independentes das existentes
+- KPIs gerais (Taxa de Entrega, Abertura, Cliques, Conclusao) permanecem inalterados
+- Tabela de performance e grafico de evolucao nao mudam
+- Dados vem do mesmo hook, apenas a visualizacao muda
