@@ -98,50 +98,54 @@ serve(async (req) => {
     console.log(`Contact ${is_new_contact ? "created" : "updated"}: ${contact_id}`);
 
     // 3. Determine assignee based on distribution rule
-    // IMPORTANTE: Usa função pipeline-aware e NUNCA faz fallback para target_user_id
-    // se não encontrar sales_rep elegível, deixa null (vai para fila de pendentes)
     let assigned_to: string | null = null;
     
-    // Determinar o pipeline_id para round robin
-    let pipeline_id = form.target_pipeline_id;
-    if (!pipeline_id && form.target_type === "deal") {
-      const { data: defaultPipeline } = await supabase
-        .from("pipelines")
-        .select("id")
-        .eq("is_default", true)
-        .single();
-      pipeline_id = defaultPipeline?.id;
-    }
-
-    if (form.distribution_rule === "round_robin" && pipeline_id) {
-      // Usar função que respeita equipe do pipeline
-      const { data: leastLoaded, error: rpcError } = await supabase.rpc(
-        "get_least_loaded_sales_rep_for_pipeline",
-        { p_pipeline_id: pipeline_id }
-      );
-      
-      if (rpcError) {
-        console.error("Error getting least loaded sales rep:", rpcError);
+    // Field-based routing: look up answer in mappings
+    if (form.distribution_rule === "field_based") {
+      const routingFieldId = form.routing_field_id;
+      const mappings = form.routing_field_mappings;
+      if (routingFieldId && mappings) {
+        const userAnswer = answers[routingFieldId];
+        assigned_to = mappings[userAnswer] || null;
+        console.log(`[submit-form] Field-based routing: field=${routingFieldId}, answer=${userAnswer}, assigned_to=${assigned_to}`);
       }
-      
-      assigned_to = leastLoaded || null;
-      console.log(`Round robin assignment for pipeline ${pipeline_id}: ${assigned_to || 'none (will go to pending queue)'}`);
-      
-    } else if (form.distribution_rule === "manager_only" && form.target_department_id) {
-      // Para manager_only, mantém comportamento original
-      const { data: managers } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("department", form.target_department_id)
-        .limit(1);
-      assigned_to = managers?.[0]?.id || null;
-      
-    } else if (form.distribution_rule === "specific_user" && form.target_user_id) {
-      // Apenas para regra específica, usar target_user_id
-      // O trigger guardrail vai validar se é sales_rep
-      assigned_to = form.target_user_id;
+    } else {
+      // Determinar o pipeline_id para round robin
+      let pipeline_id = form.target_pipeline_id;
+      if (!pipeline_id && form.target_type === "deal") {
+        const { data: defaultPipeline } = await supabase
+          .from("pipelines")
+          .select("id")
+          .eq("is_default", true)
+          .single();
+        pipeline_id = defaultPipeline?.id;
+      }
+
+      if (form.distribution_rule === "round_robin" && pipeline_id) {
+        const { data: leastLoaded, error: rpcError } = await supabase.rpc(
+          "get_least_loaded_sales_rep_for_pipeline",
+          { p_pipeline_id: pipeline_id }
+        );
+        
+        if (rpcError) {
+          console.error("Error getting least loaded sales rep:", rpcError);
+        }
+        
+        assigned_to = leastLoaded || null;
+        console.log(`Round robin assignment for pipeline ${pipeline_id}: ${assigned_to || 'none'}`);
+        
+      } else if (form.distribution_rule === "manager_only" && form.target_department_id) {
+        const { data: managers } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("department", form.target_department_id)
+          .limit(1);
+        assigned_to = managers?.[0]?.id || null;
+        
+      } else if (form.distribution_rule === "specific_user" && form.target_user_id) {
+        assigned_to = form.target_user_id;
+      }
     }
-    // Se nenhuma regra se aplicar, assigned_to fica null
 
     // 4. Route based on target_type
     let created_record: any = null;

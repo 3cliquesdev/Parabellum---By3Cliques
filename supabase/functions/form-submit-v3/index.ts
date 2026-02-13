@@ -675,12 +675,21 @@ serve(async (req) => {
     // Get assignee using the database function
     // Now respects pipeline_sales_reps when target_pipeline_id is set
     let assignedTo: string | null = null;
-    if (form.distribution_rule) {
+    if (form.distribution_rule === 'field_based') {
+      // Field-based routing: look up answer in mappings
+      const routingFieldId = form.routing_field_id;
+      const mappings = form.routing_field_mappings;
+      if (routingFieldId && mappings) {
+        const userAnswer = sanitizedAnswers[routingFieldId];
+        assignedTo = mappings[userAnswer] || null;
+        console.log(`[form-submit-v3] Field-based routing: field=${routingFieldId}, answer=${userAnswer}, assignedTo=${assignedTo}`);
+      }
+    } else if (form.distribution_rule) {
       const { data: assigneeId } = await supabase.rpc('get_assignee_for_form', {
         p_distribution_rule: form.distribution_rule,
         p_target_user_id: form.target_user_id || null,
         p_department_id: form.target_department_id || null,
-        p_pipeline_id: form.target_pipeline_id || null  // NEW: Filter by pipeline team
+        p_pipeline_id: form.target_pipeline_id || null
       });
       assignedTo = assigneeId;
       console.log(`[form-submit-v3] Assignee determined: ${assignedTo} (rule: ${form.distribution_rule}, pipeline: ${form.target_pipeline_id || 'none'})`);
