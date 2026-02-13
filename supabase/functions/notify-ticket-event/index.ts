@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
         department_id,
         status,
         priority,
-        departments(name)
+        departments!tickets_department_id_fkey(name)
       `)
       .eq("id", ticket_id)
       .single();
