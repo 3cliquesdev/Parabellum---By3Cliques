@@ -334,6 +334,7 @@ export default function Departments() {
               { field: "category" as const, label: "Categoria", desc: "Classificação do ticket por tipo de problema" },
               { field: "customer" as const, label: "Cliente", desc: "Cliente vinculado ao ticket" },
               { field: "assigned_to" as const, label: "Responsável (Atribuir a)", desc: "Agente responsável pelo ticket" },
+              { field: "tags" as const, label: "Tags", desc: "Etiquetas de classificação do ticket" },
             ]).map(({ field, label, desc }) => (
               <Card key={field}>
                 <CardContent className="flex items-center justify-between py-4">
