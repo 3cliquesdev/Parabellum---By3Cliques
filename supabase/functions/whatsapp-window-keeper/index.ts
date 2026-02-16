@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const MAX_PER_RUN = 50;
-const SAFE_MESSAGE = "Oi! Ainda estamos verificando sua solicitação. Precisa de algo mais? Estamos aqui para ajudar. 😊";
+const SAFE_MESSAGE = "Oi! Passando aqui para avisar que não esquecemos de você 😊 Assim que nosso time retomar o atendimento, você já está na fila de prioridade. Se precisar de algo, é só nos chamar!";
 const ANCHOR_REGEX = /pedido|produto|entrega|problema|erro|compra|pagamento|duvida|dúvida|reclamacao|reclamação|suporte|boleto|pix|parcela|troca|devolução|devoluç/i;
 
 serve(async (req) => {
@@ -295,10 +295,11 @@ async function generateAIFollowUp(
       messages: [
         {
           role: "system",
-          content: `Você é um assistente de atendimento ao cliente. A conversa abaixo está prestes a expirar (janela de 24h do WhatsApp). 
-Gere uma mensagem curta (máximo 2 frases), educada e contextual, perguntando se o cliente ainda precisa de ajuda.
-NÃO seja genérico. Use o contexto da conversa.
-NÃO mencione a janela de 24h ou termos técnicos.
+          content: `Você é um assistente de atendimento ao cliente. Gere uma mensagem curta (máximo 2 frases), acolhedora e natural, passando a ideia de que a empresa NÃO esqueceu do cliente e que o atendimento vai continuar em breve.
+NÃO pergunte se o cliente precisa de ajuda (ele já pediu).
+NÃO mencione janela de 24h, termos técnicos ou que a mensagem é automática.
+Use o contexto da conversa para personalizar.
+O tom deve ser caloroso, como se um atendente humano estivesse passando para dar um retorno rápido.
 Responda APENAS com o texto da mensagem, sem aspas nem prefixos.`,
         },
         {
