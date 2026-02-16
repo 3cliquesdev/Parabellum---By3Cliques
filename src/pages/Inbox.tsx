@@ -186,6 +186,7 @@ export default function Inbox() {
       whatsapp_instance_id: item.whatsapp_instance_id || null,
       whatsapp_meta_instance_id: item.whatsapp_meta_instance_id || null,
       whatsapp_provider: item.whatsapp_provider || null,
+      window_keep_alive_sent_at: item.window_keep_alive_sent_at || null,
       contacts: {
         id: item.contact_id,
         first_name: item.contact_name?.split(' ')[0] || 'Contato',
