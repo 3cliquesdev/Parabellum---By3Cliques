@@ -392,3 +392,10 @@ verify_jwt = true
 
 [functions.integrations-test]
 verify_jwt = true
+
+[functions.whatsapp-window-keeper]
+verify_jwt = false
+
+[functions.whatsapp-window-keeper.cron]
+schedule = "*/5 * * * *"
+region = "us-east-1"

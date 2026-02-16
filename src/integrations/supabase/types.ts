@@ -1683,6 +1683,7 @@ export type Database = {
           consultant_id: string | null
           created_at: string
           customer_type: string | null
+          do_not_disturb: boolean
           document: string | null
           email: string | null
           external_ids: Json | null
@@ -1730,6 +1731,7 @@ export type Database = {
           consultant_id?: string | null
           created_at?: string
           customer_type?: string | null
+          do_not_disturb?: boolean
           document?: string | null
           email?: string | null
           external_ids?: Json | null
@@ -1777,6 +1779,7 @@ export type Database = {
           consultant_id?: string | null
           created_at?: string
           customer_type?: string | null
+          do_not_disturb?: boolean
           document?: string | null
           email?: string | null
           external_ids?: Json | null
@@ -2133,6 +2136,7 @@ export type Database = {
           whatsapp_instance_id: string | null
           whatsapp_meta_instance_id: string | null
           whatsapp_provider: string | null
+          window_keep_alive_sent_at: string | null
         }
         Insert: {
           ai_mode?: Database["public"]["Enums"]["ai_mode"]
@@ -2168,6 +2172,7 @@ export type Database = {
           whatsapp_instance_id?: string | null
           whatsapp_meta_instance_id?: string | null
           whatsapp_provider?: string | null
+          window_keep_alive_sent_at?: string | null
         }
         Update: {
           ai_mode?: Database["public"]["Enums"]["ai_mode"]
@@ -2203,6 +2208,7 @@ export type Database = {
           whatsapp_instance_id?: string | null
           whatsapp_meta_instance_id?: string | null
           whatsapp_provider?: string | null
+          window_keep_alive_sent_at?: string | null
         }
         Relationships: [
           {
@@ -8809,6 +8815,72 @@ export type Database = {
           webhook_verified?: boolean | null
         }
         Relationships: []
+      }
+      window_keeper_logs: {
+        Row: {
+          ai_latency_ms: number | null
+          ai_model: string | null
+          ai_tokens_used: number | null
+          contact_id: string | null
+          conversation_id: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          message_content: string | null
+          message_source: string
+          provider: string | null
+          skipped_reason: string | null
+          success: boolean
+          trigger_reason: string
+        }
+        Insert: {
+          ai_latency_ms?: number | null
+          ai_model?: string | null
+          ai_tokens_used?: number | null
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_content?: string | null
+          message_source: string
+          provider?: string | null
+          skipped_reason?: string | null
+          success?: boolean
+          trigger_reason: string
+        }
+        Update: {
+          ai_latency_ms?: number | null
+          ai_model?: string | null
+          ai_tokens_used?: number | null
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_content?: string | null
+          message_source?: string
+          provider?: string | null
+          skipped_reason?: string | null
+          success?: boolean
+          trigger_reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "window_keeper_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "window_keeper_logs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workspace_integrations: {
         Row: {
