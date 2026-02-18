@@ -338,29 +338,14 @@ export default function Inbox() {
         new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
       );
     } else {
-      // Por padrão e 'oldest': mais antigas primeiro
-      if (inboxItems && inboxItems.length > 0) {
-        const indexById = new Map<string, number>();
-        for (let i = 0; i < inboxItems.length; i++) {
-          indexById.set(inboxItems[i].conversation_id, i);
-        }
-        result.sort((a, b) => {
-          const ia = indexById.get(a.id);
-          const ib = indexById.get(b.id);
-          if (ia == null && ib == null) return 0;
-          if (ia == null) return 1;
-          if (ib == null) return -1;
-          return ia - ib;
-        });
-      } else {
-        result.sort((a, b) => 
-          new Date(a.last_message_at).getTime() - new Date(b.last_message_at).getTime()
-        );
-      }
+      // 'oldest': mais antigas primeiro — ordenação direta por last_message_at
+      result.sort((a, b) => 
+        new Date(a.last_message_at).getTime() - new Date(b.last_message_at).getTime()
+      );
     }
 
     return result;
-  }, [filteredConversations, inboxItems, filters.waitingTime, hasActiveSearch]);
+  }, [filteredConversations, filters.waitingTime, hasActiveSearch]);
 
   // Bulk selection handlers (after filteredConversations is defined)
   const handleToggleSelect = useCallback((id: string) => {
@@ -518,7 +503,7 @@ export default function Inbox() {
         
         <div className="flex-1 overflow-y-auto">
           <ConversationList
-            conversations={filteredConversations ?? []}
+            conversations={orderedConversations ?? []}
             activeConversationId={activeConversation?.id || null}
             onSelectConversation={handleSelectConversation}
             isLoading={isPageLoading}
