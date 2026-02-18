@@ -111,6 +111,13 @@ export default function Settings() {
               onClick={() => navigate('/settings/whatsapp')}
             />
             <SettingsCard
+              icon={MessageCircle}
+              iconBgColor="bg-green-600"
+              title="WhatsApp Meta API"
+              description="Cloud API e Templates HSM"
+              onClick={() => navigate('/settings/whatsapp-meta')}
+            />
+            <SettingsCard
               icon={Instagram}
               iconBgColor="bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400"
               title="Instagram"
