@@ -176,6 +176,25 @@ export function SuperComposer({
     await upload(attachment.file);
   };
 
+  // Handler para colar imagens do clipboard (Ctrl+V / Cmd+V)
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          const ext = file.type.split('/')[1] || 'png';
+          const named = new File([file], `clipboard-${Date.now()}.${ext}`, { type: file.type });
+          handleFileSelect(named);
+        }
+        return;
+      }
+    }
+  };
+
   // Preload FFmpeg in background when composer mounts (for WhatsApp conversations)
   useEffect(() => {
     if (whatsappProvider === 'meta' || whatsappInstanceId) {
@@ -706,6 +725,7 @@ export function SuperComposer({
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={handleKeyPress}
+                  onPaste={handlePaste}
                   disabled={isSending || isDisabled}
                   rows={1}
                   className={cn(
