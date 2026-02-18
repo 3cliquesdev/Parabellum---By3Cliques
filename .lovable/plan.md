@@ -1,65 +1,72 @@
 
 
-## Relatorio de Sequencia de E-mails por Venda (Onboarding)
+## Correcao: Status "Aguardando Cliente" ao Responder Ticket
 
-### Onde fica
+### Problema
 
-Na pagina **Relatorios** (`/reports`), aba **Onboarding**, como um novo card que navega para uma pagina dedicada em `/reports/playbook-email-sequence`.
+Quando um agente envia uma resposta publica em um ticket, o sistema:
+1. Cria o comentario no banco
+2. Envia email ao cliente via `send-ticket-email-reply`
 
-### Formato da planilha exportada
+Porem **nao atualiza o status do ticket para `waiting_customer`**. Isso significa que:
+- O ticket permanece em `open` ou `in_progress`
+- O cliente (ex: atendimentobabado@babadotop.com.br) nunca recebe a notificacao de "Precisamos da sua resposta"
+- A edge function `send-ticket-status-notification` nunca e chamada com `waiting_customer`
+
+Confirmacao nos dados: O ticket TK-2026-00613 do Babado Top mostra eventos `created` -> `comment_added` -> `resolved`, sem nenhum evento `waiting_customer` intermediario.
+
+### Solucao
+
+No componente `TicketChat.tsx`, apos enviar a resposta publica com sucesso (email enviado), atualizar automaticamente o status do ticket para `waiting_customer` (se o status atual permitir essa transicao).
+
+Status que permitem transicao automatica para `waiting_customer`:
+- `open`
+- `in_progress`
+
+Status que NAO devem ser alterados automaticamente:
+- `resolved`, `closed` (ja encerrados)
+- `waiting_customer` (ja esta nesse status)
+- `pending_approval`, `returned` etc. (fluxos especiais)
+
+### Alteracoes
+
+**Arquivo: `src/components/TicketChat.tsx`**
+
+No bloco de resposta publica (linhas 122-146), apos o envio do email com sucesso:
+
+1. Buscar o status atual do ticket
+2. Se o status for `open` ou `in_progress`, chamar `useUpdateTicket` para mudar para `waiting_customer`
+3. Isso dispara automaticamente:
+   - Evento em `ticket_events`
+   - Notificacao via `notify-ticket-event` (email + in_app)
+   - Notificacao de status via `send-ticket-status-notification` (email para o cliente)
+
+Pseudocodigo da mudanca:
 
 ```text
-| Cliente | Email | Playbook | Data Venda | Hora Venda | Email 1 - Titulo | Email 1 - Data | Email 1 - Hora | Email 1 - Status | Email 2 - Titulo | ... |
-```
+// Apos email enviado com sucesso:
+const { data: currentTicket } = await supabase
+  .from("tickets")
+  .select("status")
+  .eq("id", ticketId)
+  .single();
 
-- Cada execucao de playbook = 1 linha
-- Colunas de e-mail se expandem dinamicamente conforme o maximo de e-mails encontrados
-- Status: Enviado / Aberto / Clicado / Bounce / Erro
-
-### Arquivos e Alteracoes
-
-**1. Nova migracao SQL** — RPC `get_playbook_email_sequence_report`
-
-Consulta que retorna execucoes com seus e-mails ordenados, aceitando filtros opcionais `p_start`, `p_end`, `p_playbook_id`. Faz JOIN entre `playbook_executions`, `contacts`, `onboarding_playbooks` e `email_sends`, retornando o numero sequencial de cada e-mail via `ROW_NUMBER()`.
-
-**2. Novo arquivo: `src/hooks/usePlaybookEmailSequenceReport.tsx`**
-
-- Hook que chama a RPC com filtros de data e playbook
-- Retorna dados brutos para exibicao na tabela
-
-**3. Novo arquivo: `src/hooks/useExportPlaybookEmailSequence.tsx`**
-
-- Recebe os dados, pivota por execution_id (1 linha por execucao, N colunas por e-mail)
-- Gera arquivo `.xlsx` usando a biblioteca `xlsx` (ja instalada)
-- Segue o mesmo padrao do `useExportTicketsExcel`
-
-**4. Nova pagina: `src/pages/PlaybookEmailSequenceReport.tsx`**
-
-Pagina dedicada seguindo o padrao do `TicketsExportReport.tsx`:
-- Botao voltar para `/reports`
-- Filtros: DateRangePicker + Select de Playbook
-- Tabela com preview dos dados (primeiros 3 e-mails visiveis, restante no Excel)
-- Botao "Exportar Excel"
-
-**5. Editar: `src/pages/Reports.tsx`**
-
-Adicionar novo card na categoria Onboarding:
-```
-{
-  id: 'email_sequence',
-  name: 'Sequencia de E-mails',
-  description: 'Exportacao com todas as etapas de e-mail por venda/execucao',
-  icon: FileSpreadsheet,
-  route: '/reports/playbook-email-sequence',
+const autoTransitionStatuses = ['open', 'in_progress'];
+if (currentTicket && autoTransitionStatuses.includes(currentTicket.status)) {
+  await updateTicket.mutateAsync({
+    id: ticketId,
+    updates: { status: 'waiting_customer' },
+    statusNote: 'Status atualizado automaticamente apos resposta do agente',
+  });
 }
 ```
 
-**6. Editar: `src/App.tsx`**
-
-Adicionar rota `/reports/playbook-email-sequence` apontando para a nova pagina.
+**Dependencias**: O componente precisa receber o hook `useUpdateTicket` ou aceitar uma prop com a funcao de atualizacao. A abordagem mais limpa e importar `useUpdateTicket` diretamente dentro do `TicketChat`.
 
 ### Impacto
 
-- Zero impacto em funcionalidades existentes
-- Apenas adiciona novo card + pagina + RPC
-- Kill Switch, Shadow Mode, CSAT, distribuicao nao sao afetados
+- Tickets respondidos passam automaticamente para "Aguardando Cliente"
+- O cliente recebe email de notificacao com o template configurado para `waiting_customer`
+- Quando o cliente responde (via `add-customer-comment`), o ticket volta para `open` (ja implementado)
+- Kill Switch, Shadow Mode, CSAT, distribuicao: nao afetados
+- Tickets ja em `resolved`/`closed` nao sao alterados (proteção contra reabrir indevida)
