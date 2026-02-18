@@ -1,38 +1,52 @@
 
-## Correção: Usar Label da Regra como Texto de Matching
 
-### Problema Real (confirmado pelos logs)
-Os logs mostram que a **Regra 1** esta com keywords erradas (contem a frase da Regra 2). Alem disso, o fluxo atual exige que o usuario configure keywords separadamente do label, o que gera confusao.
+## Correção: Limpar Keywords Duplicadas e Prevenir Repetição
 
-### Solucao
-Tornar o campo `keywords` **opcional** -- quando estiver vazio, o motor usa o **label da regra** como texto de matching. Isso simplifica a experiencia: o usuario escreve a frase no nome da regra e ela ja funciona como condicao.
+### Problema Confirmado (dados do banco)
+Ambas as regras no nó de condição têm o campo `keywords` com o **mesmo valor idêntico**:
+- Regra 1 (Onboarding): keywords = "Olá, vim pelo email e gostaria de saber mais sobre a ressaca de carnaval"
+- Regra 2 (Carnaval): keywords = "Olá, vim pelo email e gostaria de saber mais sobre a ressaca de carnaval"
 
-### Mudancas Tecnicas
+Como o campo keywords não está vazio, o fallback para o label nunca é acionado. E como são idênticos, a Regra 1 sempre ganha.
 
-**1. Engine: `supabase/functions/process-chat-flow/index.ts` (funcao `evaluateConditionPath`)**
+### Solução (3 partes)
 
-Na logica de keywords, adicionar fallback para label:
+**1. Correção dos dados no banco (migração SQL)**
 
-```
-// Usar keywords se preenchido, senao usar label como fallback
-const rawKw = (rule.keywords || "").trim() || (rule.label || "").trim();
-```
+Limpar o campo `keywords` de todas as regras que tenham keywords idêntico ao label de outra regra no mesmo nó, permitindo que o fallback para label funcione:
 
-O resto da logica de matching permanece identica (split por newline, normalize, includes).
-
-**2. UI: `src/components/chat-flows/ChatFlowEditor.tsx`**
-
-Atualizar o placeholder do campo keywords para indicar que e opcional:
-
-```
-placeholder="Opcional: frases extras (1 por linha). Se vazio, usa o nome da regra acima."
+```sql
+-- Atualizar o flow_definition para limpar keywords das regras de condição
+-- Isso forçará o motor a usar o label de cada regra como texto de matching
 ```
 
-**3. Atualizar texto de ajuda**
+Na prática: atualizar o JSON do flow removendo o conteúdo do campo `keywords` das duas regras, para que o motor use os labels "Onboarding" e "Carnaval" (ou os labels corretos que o usuário definir).
 
-Mudar a descricao de `"Cada regra usa palavras-chave (virgula = OR)"` para `"O nome da regra e usado como condicao. Opcionalmente, adicione frases extras no campo abaixo."`.
+**2. Validação na UI: impedir keywords duplicadas entre regras**
+
+No `ChatFlowEditor.tsx`, adicionar validação ao salvar: se duas regras no mesmo nó de condição tiverem keywords idênticas, exibir alerta e bloquear o salvamento.
+
+**3. Auto-clear: limpar keywords quando igual ao label**
+
+No `ChatFlowEditor.tsx`, quando o usuário salvar, se o campo keywords de uma regra for idêntico ao label dela, limpar o keywords automaticamente (já que o motor usa o label como fallback).
+
+### Mudanças Técnicas
+
+**Arquivo: `src/components/chat-flows/ChatFlowEditor.tsx`**
+
+- Na função de salvar/atualizar regras de condição, adicionar:
+  1. Validação de duplicatas: `if (rules[i].keywords === rules[j].keywords && keywords não vazio) -> alerta`
+  2. Auto-clear: `if (rule.keywords.trim() === rule.label.trim()) -> rule.keywords = ""`
+
+**Arquivo: `supabase/functions/process-chat-flow/index.ts`**
+
+- Sem mudança na lógica do motor (já está correta com o fallback para label)
+
+**Correção de dados: migração SQL**
+
+- Atualizar o `flow_definition` do fluxo ativo (id: `3ea0d227-01f3-46a6-bcad-80a085ec2337`) para limpar o campo keywords das duas regras, forçando uso dos labels
 
 ### Impactos
-- Sem downgrade: quem ja usa keywords continua funcionando normalmente
-- Upgrade: regras sem keywords agora funcionam usando o label
-- O usuario nao precisa mais configurar keywords separadamente se o label ja contem a frase desejada
+- Sem downgrade: a lógica do motor permanece igual
+- Upgrade: dados corrigidos, validação previne recorrência
+- O usuário só precisa garantir que os **labels** das regras sejam as frases corretas de matching
