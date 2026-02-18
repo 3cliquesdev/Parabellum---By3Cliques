@@ -1113,21 +1113,33 @@ serve(async (req) => {
           console.log(`[process-chat-flow] ⏩ Traversing[${steps}] ${node.type} (${node.id})`);
 
           if (node.type === 'condition') {
-            const result = evalCond(node.data);
-            console.log(`[process-chat-flow] 🔀 Condition result: ${result}`);
-
-            // CORREÇÃO #3: Cascata de handles (true/false, yes/no, 1/2)
-            const handles = result ? ['true', 'yes', '1'] : ['false', 'no', '2'];
-            console.log('[process-chat-flow] 🔀 Trying handles:', handles.join(', '));
-            
+            // Detectar multi-regra vs clássico
+            const hasMultiRules = node.data?.condition_rules?.length > 0;
             let next: any = null;
-            for (const h of handles) {
-              next = findNextNode(flowDef, node, h);
+
+            if (hasMultiRules) {
+              // Multi-regra: usar evaluateConditionPath que retorna rule.id ou "else"
+              const path = evaluateConditionPath(node.data, collectedData, userMessage);
+              console.log(`[process-chat-flow] 🔀 Multi-rule condition path: "${path}"`);
+              next = findNextNode(flowDef, node, path);
               if (next) {
-                console.log(`[process-chat-flow] ✓ Found next node via handle "${h}":`, next.type);
-                break;
+                console.log(`[process-chat-flow] ✓ Found next node via multi-rule handle "${path}":`, next.type);
+              }
+            } else {
+              // Clássico: true/false com cascata de handles
+              const result = evalCond(node.data);
+              console.log(`[process-chat-flow] 🔀 Classic condition result: ${result}`);
+              const handles = result ? ['true', 'yes', '1'] : ['false', 'no', '2'];
+              console.log('[process-chat-flow] 🔀 Trying handles:', handles.join(', '));
+              for (const h of handles) {
+                next = findNextNode(flowDef, node, h);
+                if (next) {
+                  console.log(`[process-chat-flow] ✓ Found next node via handle "${h}":`, next.type);
+                  break;
+                }
               }
             }
+
             if (!next) {
               console.log('[process-chat-flow] ⚠️ No next node for condition - stopping traversal');
               break;
