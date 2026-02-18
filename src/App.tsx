@@ -122,6 +122,7 @@ const SupportDashboard = lazy(() => import("./pages/SupportDashboard"));
 const CommercialConversationsReport = lazy(() => import("./pages/CommercialConversationsReport"));
 const TicketsExportReport = lazy(() => import("./pages/TicketsExportReport"));
 const ConversationsReport = lazy(() => import("./pages/ConversationsReport"));
+const PlaybookEmailSequenceReport = lazy(() => import("./pages/PlaybookEmailSequenceReport"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -211,6 +212,7 @@ const App = () => {
               <Route path="/reports/commercial-conversations" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><CommercialConversationsReport /></Layout></ProtectedRoute>} />
               <Route path="/reports/tickets-export" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><TicketsExportReport /></Layout></ProtectedRoute>} />
               <Route path="/reports/conversations" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ConversationsReport /></Layout></ProtectedRoute>} />
+              <Route path="/reports/playbook-email-sequence" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><PlaybookEmailSequenceReport /></Layout></ProtectedRoute>} />
               <Route path="/goals" element={<ProtectedRoute requiredPermission="goals.view_own"><Layout><Goals /></Layout></ProtectedRoute>} />
               <Route path="/goals-management" element={<ProtectedRoute requiredPermission="goals.set"><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
               <Route path="/internal-requests" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><InternalRequests /></Layout></ProtectedRoute>} />

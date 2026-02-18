@@ -9443,6 +9443,23 @@ export type Database = {
           was_reopened: boolean
         }[]
       }
+      get_playbook_email_sequence_report: {
+        Args: { p_end?: string; p_playbook_id?: string; p_start?: string }
+        Returns: {
+          contact_email: string
+          contact_name: string
+          email_bounced_at: string
+          email_clicked_at: string
+          email_opened_at: string
+          email_order: number
+          email_sent_at: string
+          email_status: string
+          email_subject: string
+          execution_id: string
+          playbook_name: string
+          sale_date: string
+        }[]
+      }
       get_playbook_kpis: {
         Args: { p_end?: string; p_start?: string }
         Returns: Json

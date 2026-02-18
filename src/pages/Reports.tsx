@@ -137,6 +137,13 @@ export default function Reports() {
           description: 'Análise de tempo médio de conclusão de playbooks',
           icon: TrendingUp,
         },
+        {
+          id: 'email_sequence',
+          name: 'Sequência de E-mails',
+          description: 'Exportação com todas as etapas de e-mail por venda/execução',
+          icon: FileSpreadsheet,
+          route: '/reports/playbook-email-sequence',
+        },
       ],
     },
     {
