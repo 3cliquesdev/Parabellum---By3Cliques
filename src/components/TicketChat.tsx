@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SlashCommandMenu } from "@/components/SlashCommandMenu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useUpdateTicket } from "@/hooks/useUpdateTicket";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -53,6 +54,7 @@ export function TicketChat({ ticketId, channel = 'platform' }: TicketChatProps) 
   const createComment = useCreateComment();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const updateTicket = useUpdateTicket();
 
   // Realtime subscription para novos comentários
   useEffect(() => {
@@ -135,6 +137,27 @@ export function TicketChat({ ticketId, channel = 'platform' }: TicketChatProps) 
           title: "📧 Email enviado",
           description: "Sua resposta foi enviada por email ao cliente",
         });
+
+        // Auto-transition: atualizar status para waiting_customer se aplicável
+        try {
+          const { data: currentTicket } = await supabase
+            .from("tickets")
+            .select("status")
+            .eq("id", ticketId)
+            .single();
+
+          const autoTransitionStatuses = ['open', 'in_progress'];
+          if (currentTicket && autoTransitionStatuses.includes(currentTicket.status)) {
+            await updateTicket.mutateAsync({
+              id: ticketId,
+              updates: { status: 'waiting_customer' },
+              statusNote: 'Status atualizado automaticamente após resposta do agente',
+            });
+            console.log('[TicketChat] Auto-transition to waiting_customer');
+          }
+        } catch (transitionErr) {
+          console.error('[TicketChat] Auto-transition error:', transitionErr);
+        }
       } catch (error: any) {
         console.error('[TicketChat] Email send error:', error);
         toast({
