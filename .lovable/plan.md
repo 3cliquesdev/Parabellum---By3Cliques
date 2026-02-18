@@ -1,72 +1,88 @@
 
 
-## Correcao: Status "Aguardando Cliente" ao Responder Ticket
+## Correcao: Visibilidade Bidirecional de Comentarios, Anexos e Status no Portal e CRM
 
-### Problema
+### Problemas Identificados
 
-Quando um agente envia uma resposta publica em um ticket, o sistema:
-1. Cria o comentario no banco
-2. Envia email ao cliente via `send-ticket-email-reply`
+1. **Portal do cliente nao mostra anexos**: A edge function `get-customer-tickets` busca comentarios mas NAO inclui o campo `attachments` na resposta. Quando o agente envia um comprovante/anexo, o cliente nao ve.
 
-Porem **nao atualiza o status do ticket para `waiting_customer`**. Isso significa que:
-- O ticket permanece em `open` ou `in_progress`
-- O cliente (ex: atendimentobabado@babadotop.com.br) nunca recebe a notificacao de "Precisamos da sua resposta"
-- A edge function `send-ticket-status-notification` nunca e chamada com `waiting_customer`
+2. **Refresh quebrado apos cliente responder no portal**: Apos enviar um comentario, o `handleCommentAdded` tenta atualizar o ticket selecionado a partir do estado antigo (antes do fetch completar), causando um race condition onde a resposta recem-enviada nao aparece.
 
-Confirmacao nos dados: O ticket TK-2026-00613 do Babado Top mostra eventos `created` -> `comment_added` -> `resolved`, sem nenhum evento `waiting_customer` intermediario.
+3. **Portal nao mostra mudancas de status no historico**: O cliente so ve o status atual no header, mas nao ve eventos como "Aguardando Cliente", "Resolvido", etc. no historico de mensagens.
 
-### Solucao
-
-No componente `TicketChat.tsx`, apos enviar a resposta publica com sucesso (email enviado), atualizar automaticamente o status do ticket para `waiting_customer` (se o status atual permitir essa transicao).
-
-Status que permitem transicao automatica para `waiting_customer`:
-- `open`
-- `in_progress`
-
-Status que NAO devem ser alterados automaticamente:
-- `resolved`, `closed` (ja encerrados)
-- `waiting_customer` (ja esta nesse status)
-- `pending_approval`, `returned` etc. (fluxos especiais)
+4. **Portal nao renderiza anexos**: O componente `MyTicketDetail` nao tem logica para exibir anexos nos comentarios.
 
 ### Alteracoes
 
-**Arquivo: `src/components/TicketChat.tsx`**
+**1. Edge function `get-customer-tickets`** — Incluir attachments nos comentarios
 
-No bloco de resposta publica (linhas 122-146), apos o envio do email com sucesso:
+Adicionar `attachments` na query de comentarios e incluir no retorno. Atualmente a query seleciona `id, ticket_id, content, created_at, is_internal, source, created_by` — falta `attachments`.
 
-1. Buscar o status atual do ticket
-2. Se o status for `open` ou `in_progress`, chamar `useUpdateTicket` para mudar para `waiting_customer`
-3. Isso dispara automaticamente:
-   - Evento em `ticket_events`
-   - Notificacao via `notify-ticket-event` (email + in_app)
-   - Notificacao de status via `send-ticket-status-notification` (email para o cliente)
+Tambem incluir eventos de status (status_changed, resolved, closed) da tabela `ticket_events` para o cliente ver a timeline de mudancas.
 
-Pseudocodigo da mudanca:
+**2. Componente `MyTicketDetail.tsx`** — Exibir anexos e eventos de status
 
+- Adicionar renderizacao de anexos nos comentarios (imagens inline, links para download)
+- Adicionar eventos de status intercalados no historico (ex: "Status alterado para Aguardando Cliente")
+- Atualizar interface `TicketComment` para incluir campo `attachments`
+
+**3. Componente `MyTickets.tsx`** — Corrigir refresh apos enviar comentario
+
+O `handleCommentAdded` faz `fetchTickets()` mas depois tenta pegar o ticket atualizado do array ANTIGO. Corrigir para:
+- Fazer fetch e aguardar resultado
+- Atualizar `selectedTicket` com os dados novos do fetch
+
+**4. Edge function `get-customer-tickets`** — Incluir eventos de status
+
+Adicionar query na tabela `ticket_events` para buscar eventos relevantes (status_changed, resolved, closed, assigned) e retornar junto com o ticket, para o portal poder exibir uma timeline de atualizacoes.
+
+### Detalhes Tecnicos
+
+**get-customer-tickets/index.ts** — mudancas:
 ```text
-// Apos email enviado com sucesso:
-const { data: currentTicket } = await supabase
-  .from("tickets")
-  .select("status")
-  .eq("id", ticketId)
-  .single();
+// Na query de comentarios, adicionar attachments:
+.select(`id, ticket_id, content, created_at, is_internal, source, created_by, attachments, ...`)
 
-const autoTransitionStatuses = ['open', 'in_progress'];
-if (currentTicket && autoTransitionStatuses.includes(currentTicket.status)) {
-  await updateTicket.mutateAsync({
-    id: ticketId,
-    updates: { status: 'waiting_customer' },
-    statusNote: 'Status atualizado automaticamente apos resposta do agente',
-  });
-}
+// No mapeamento de comentarios:
+acc[comment.ticket_id].push({
+  ...campos_existentes,
+  attachments: comment.attachments || []
+});
+
+// Nova query: buscar eventos de status
+const { data: events } = await supabase
+  .from('ticket_events')
+  .select('id, ticket_id, event_type, created_at, metadata')
+  .in('ticket_id', ticketIds)
+  .in('event_type', ['status_changed', 'resolved', 'closed'])
+  .order('created_at', { ascending: true });
+
+// Retornar events junto com cada ticket
 ```
 
-**Dependencias**: O componente precisa receber o hook `useUpdateTicket` ou aceitar uma prop com a funcao de atualizacao. A abordagem mais limpa e importar `useUpdateTicket` diretamente dentro do `TicketChat`.
+**MyTicketDetail.tsx** — mudancas:
+```text
+// Interface TicketComment: adicionar attachments
+attachments?: Array<{ url: string; name: string; type: string; size: number }>;
+
+// Interface CustomerTicket: adicionar events
+events?: Array<{ id: string; event_type: string; created_at: string; metadata: any }>;
+
+// Renderizacao: intercalar comentarios + eventos por data
+// Anexos: exibir imagens inline e links para download
+```
+
+**MyTickets.tsx** — correcao de refresh:
+```text
+const handleCommentAdded = async () => {
+  await fetchTickets(); // aguardar
+  // selectedTicket sera atualizado via useEffect ou re-fetch
+};
+```
 
 ### Impacto
-
-- Tickets respondidos passam automaticamente para "Aguardando Cliente"
-- O cliente recebe email de notificacao com o template configurado para `waiting_customer`
-- Quando o cliente responde (via `add-customer-comment`), o ticket volta para `open` (ja implementado)
+- Zero impacto em funcionalidades internas do CRM
+- Melhora visibilidade bidirecional: agente ve respostas do cliente, cliente ve respostas do agente com anexos e mudancas de status
 - Kill Switch, Shadow Mode, CSAT, distribuicao: nao afetados
-- Tickets ja em `resolved`/`closed` nao sao alterados (proteção contra reabrir indevida)
+- Todos os tickets antigos serao beneficiados pois os dados ja existem no banco
+
