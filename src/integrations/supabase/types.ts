@@ -9406,27 +9406,16 @@ export type Database = {
           total_conversations: number
         }[]
       }
-      get_email_evolution:
-        | {
-            Args: { p_days?: number }
-            Returns: {
-              clicked: number
-              day: string
-              delivered: number
-              opened: number
-              sent: number
-            }[]
-          }
-        | {
-            Args: { p_days?: number; p_end?: string; p_start?: string }
-            Returns: {
-              clicked: number
-              day: string
-              delivered: number
-              opened: number
-              sent: number
-            }[]
-          }
+      get_email_evolution: {
+        Args: { p_days?: number; p_end?: string; p_start?: string }
+        Returns: {
+          clicked: number
+          day: string
+          delivered: number
+          opened: number
+          sent: number
+        }[]
+      }
       get_kb_gaps_by_category: {
         Args: { p_end_date?: string; p_start_date?: string }
         Returns: {
@@ -9454,36 +9443,23 @@ export type Database = {
           was_reopened: boolean
         }[]
       }
-      get_playbook_kpis:
-        | { Args: never; Returns: Json }
-        | { Args: { p_end?: string; p_start?: string }; Returns: Json }
-      get_playbook_performance:
-        | {
-            Args: never
-            Returns: {
-              completed: number
-              emails_opened: number
-              emails_sent: number
-              executions: number
-              failed: number
-              open_rate: number
-              playbook_id: string
-              playbook_name: string
-            }[]
-          }
-        | {
-            Args: { p_end?: string; p_start?: string }
-            Returns: {
-              completed: number
-              emails_opened: number
-              emails_sent: number
-              executions: number
-              failed: number
-              open_rate: number
-              playbook_id: string
-              playbook_name: string
-            }[]
-          }
+      get_playbook_kpis: {
+        Args: { p_end?: string; p_start?: string }
+        Returns: Json
+      }
+      get_playbook_performance: {
+        Args: { p_end?: string; p_start?: string }
+        Returns: {
+          completed: number
+          emails_opened: number
+          emails_sent: number
+          executions: number
+          failed: number
+          open_rate: number
+          playbook_id: string
+          playbook_name: string
+        }[]
+      }
       get_sla_compliance_v2: {
         Args: {
           p_agent_id?: string
