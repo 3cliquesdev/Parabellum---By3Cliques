@@ -8,6 +8,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, Settings, FlaskConical, LayoutTemplate, AlertTriangle } from "lucide-react";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   EmailTemplateBuilderV2,
   ABTestingPanel,
   LayoutLibrary,
@@ -238,9 +245,34 @@ export default function EmailBuilderV2Page() {
                       <span className="text-muted-foreground">Categoria</span>
                       <span>{template.category || "—"}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="space-y-1">
                       <span className="text-muted-foreground">Gatilho</span>
-                      <span>{template.trigger_type || "Manual"}</span>
+                      <Select
+                        value={template.trigger_type || "manual"}
+                        onValueChange={(value) => {
+                          if (id) {
+                            updateTemplate.mutate({
+                              id,
+                              updates: { trigger_type: value },
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="manual">Manual</SelectItem>
+                          <SelectItem value="deal_created">Negócio Criado</SelectItem>
+                          <SelectItem value="deal_won">Negócio Ganho</SelectItem>
+                          <SelectItem value="deal_lost">Negócio Perdido</SelectItem>
+                          <SelectItem value="ticket_created">Ticket Criado</SelectItem>
+                          <SelectItem value="ticket_resolved">Ticket Resolvido</SelectItem>
+                          <SelectItem value="contact_created">Contato Criado</SelectItem>
+                          <SelectItem value="playbook_step">Etapa de Playbook</SelectItem>
+                          <SelectItem value="form_submission">Envio de Formulário</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Versão</span>
