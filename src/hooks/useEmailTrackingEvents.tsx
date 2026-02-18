@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getStartOfDayString, getEndOfDayString } from "@/lib/dateUtils";
 
 export interface EmailTrackingEvent {
   id: string;
@@ -52,11 +53,11 @@ export function useEmailTrackingEvents(params?: UseEmailTrackingEventsParams) {
       }
 
       if (dateRange?.from) {
-        query = query.gte('created_at', dateRange.from.toISOString());
+        query = query.gte('created_at', getStartOfDayString(dateRange.from));
       }
 
       if (dateRange?.to) {
-        query = query.lte('created_at', dateRange.to.toISOString());
+        query = query.lte('created_at', getEndOfDayString(dateRange.to));
       }
 
       const { data, error } = await query;
@@ -73,26 +74,26 @@ export function useEmailFunnelData(dateRange?: { from: Date; to: Date }) {
     queryFn: async () => {
       // Usar email_sends como fonte de verdade
       let baseQuery = supabase.from("email_sends").select("id", { count: "exact", head: true });
-      if (dateRange?.from) baseQuery = baseQuery.gte('sent_at', dateRange.from.toISOString());
-      if (dateRange?.to) baseQuery = baseQuery.lte('sent_at', dateRange.to.toISOString());
+      if (dateRange?.from) baseQuery = baseQuery.gte('sent_at', getStartOfDayString(dateRange.from));
+      if (dateRange?.to) baseQuery = baseQuery.lte('sent_at', getEndOfDayString(dateRange.to));
 
       const { count: sent } = await baseQuery;
 
       let deliveredQuery = supabase.from("email_sends").select("id", { count: "exact", head: true }).is('bounced_at', null);
-      if (dateRange?.from) deliveredQuery = deliveredQuery.gte('sent_at', dateRange.from.toISOString());
-      if (dateRange?.to) deliveredQuery = deliveredQuery.lte('sent_at', dateRange.to.toISOString());
+      if (dateRange?.from) deliveredQuery = deliveredQuery.gte('sent_at', getStartOfDayString(dateRange.from));
+      if (dateRange?.to) deliveredQuery = deliveredQuery.lte('sent_at', getEndOfDayString(dateRange.to));
 
       const { count: delivered } = await deliveredQuery;
 
       let openedQuery = supabase.from("email_sends").select("id", { count: "exact", head: true }).not('opened_at', 'is', null);
-      if (dateRange?.from) openedQuery = openedQuery.gte('sent_at', dateRange.from.toISOString());
-      if (dateRange?.to) openedQuery = openedQuery.lte('sent_at', dateRange.to.toISOString());
+      if (dateRange?.from) openedQuery = openedQuery.gte('sent_at', getStartOfDayString(dateRange.from));
+      if (dateRange?.to) openedQuery = openedQuery.lte('sent_at', getEndOfDayString(dateRange.to));
 
       const { count: opened } = await openedQuery;
 
       let clickedQuery = supabase.from("email_sends").select("id", { count: "exact", head: true }).not('clicked_at', 'is', null);
-      if (dateRange?.from) clickedQuery = clickedQuery.gte('sent_at', dateRange.from.toISOString());
-      if (dateRange?.to) clickedQuery = clickedQuery.lte('sent_at', dateRange.to.toISOString());
+      if (dateRange?.from) clickedQuery = clickedQuery.gte('sent_at', getStartOfDayString(dateRange.from));
+      if (dateRange?.to) clickedQuery = clickedQuery.lte('sent_at', getEndOfDayString(dateRange.to));
 
       const { count: clicked } = await clickedQuery;
 
@@ -111,8 +112,8 @@ export function useEmailEvolutionData(days: number = 7, dateRange?: { from: Date
     queryKey: ["email-evolution-data", days, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async () => {
       const rpcParams: { p_days: number; p_start?: string; p_end?: string } = { p_days: days };
-      if (dateRange?.from) rpcParams.p_start = dateRange.from.toISOString();
-      if (dateRange?.to) rpcParams.p_end = dateRange.to.toISOString();
+      if (dateRange?.from) rpcParams.p_start = getStartOfDayString(dateRange.from);
+      if (dateRange?.to) rpcParams.p_end = getEndOfDayString(dateRange.to);
 
       const { data, error } = await supabase.rpc("get_email_evolution", rpcParams);
 

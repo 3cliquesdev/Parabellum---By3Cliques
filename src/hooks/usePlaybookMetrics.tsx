@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getStartOfDayString, getEndOfDayString } from "@/lib/dateUtils";
 
 interface PlaybookMetrics {
   totalExecutions: number;
@@ -42,8 +43,8 @@ export function usePlaybookMetrics(dateRange?: { from: Date; to: Date }) {
     queryFn: async (): Promise<PlaybookMetrics> => {
       // Fetch KPIs via RPC with date filtering
       const rpcParams: { p_start?: string; p_end?: string } = {};
-      if (dateRange?.from) rpcParams.p_start = dateRange.from.toISOString();
-      if (dateRange?.to) rpcParams.p_end = dateRange.to.toISOString();
+      if (dateRange?.from) rpcParams.p_start = getStartOfDayString(dateRange.from);
+      if (dateRange?.to) rpcParams.p_end = getEndOfDayString(dateRange.to);
 
       const { data: kpis, error: kpiError } = await supabase.rpc("get_playbook_kpis", rpcParams);
       if (kpiError) throw kpiError;
@@ -96,12 +97,12 @@ export function usePlaybookMetrics(dateRange?: { from: Date; to: Date }) {
         .not("sent_at", "is", null);
 
       if (dateRange?.from) {
-        salesQuery = salesQuery.gte("created_at", dateRange.from.toISOString());
-        sentQuery = sentQuery.gte("sent_at", dateRange.from.toISOString());
+        salesQuery = salesQuery.gte("created_at", getStartOfDayString(dateRange.from));
+        sentQuery = sentQuery.gte("sent_at", getStartOfDayString(dateRange.from));
       }
       if (dateRange?.to) {
-        salesQuery = salesQuery.lte("created_at", dateRange.to.toISOString());
-        sentQuery = sentQuery.lte("sent_at", dateRange.to.toISOString());
+        salesQuery = salesQuery.lte("created_at", getEndOfDayString(dateRange.to));
+        sentQuery = sentQuery.lte("sent_at", getEndOfDayString(dateRange.to));
       }
 
       const [salesRes, sentRes] = await Promise.all([salesQuery, sentQuery]);
@@ -132,14 +133,14 @@ export function usePlaybookMetrics(dateRange?: { from: Date; to: Date }) {
         .not("clicked_at", "is", null);
 
       if (dateRange?.from) {
-        deliveredQ = deliveredQ.gte("sent_at", dateRange.from.toISOString());
-        openedQ = openedQ.gte("sent_at", dateRange.from.toISOString());
-        clickedQ = clickedQ.gte("sent_at", dateRange.from.toISOString());
+        deliveredQ = deliveredQ.gte("sent_at", getStartOfDayString(dateRange.from));
+        openedQ = openedQ.gte("sent_at", getStartOfDayString(dateRange.from));
+        clickedQ = clickedQ.gte("sent_at", getStartOfDayString(dateRange.from));
       }
       if (dateRange?.to) {
-        deliveredQ = deliveredQ.lte("sent_at", dateRange.to.toISOString());
-        openedQ = openedQ.lte("sent_at", dateRange.to.toISOString());
-        clickedQ = clickedQ.lte("sent_at", dateRange.to.toISOString());
+        deliveredQ = deliveredQ.lte("sent_at", getEndOfDayString(dateRange.to));
+        openedQ = openedQ.lte("sent_at", getEndOfDayString(dateRange.to));
+        clickedQ = clickedQ.lte("sent_at", getEndOfDayString(dateRange.to));
       }
 
       const [delRes, openRes, clickRes] = await Promise.all([deliveredQ, openedQ, clickedQ]);
