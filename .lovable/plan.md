@@ -1,43 +1,49 @@
 
+## Nó de Condição com Múltiplas Regras (Múltiplos Caminhos)
 
-## Correções: Multi-valor, Display e Build Error
+### Problema
+O nó de Condição atual só tem **2 saídas** (Sim/Não). Para direcionar 3+ caminhos diferentes, você precisa encadear vários nós de condição, o que polui o fluxo.
 
-### 1. Corrigir erro de build "mux-embed"
+### Solução
+Transformar o nó de Condição para suportar **múltiplas regras**, cada uma com seu próprio handle de saída colorido, mais um handle "Outros" (fallback). Funciona como um switch/case visual.
 
-O `bun.lock` contém uma referência corrompida a `mux-embed` (dependência de `@mux/mux-player` que não está no `package.json`). A solução é deletar o `bun.lock` para que seja regenerado limpo.
+### Como vai funcionar
 
-- Arquivo: `bun.lock` -- deletar o arquivo para regeneração automática
+```text
+                           ┌──── Regra 1 "Preço"     → Mensagem de preços
+                           │
+[Início] → [Condição]     ├──── Regra 2 "Suporte"   → Transferir humano
+                           │
+                           ├──── Regra 3 "Pedido"    → Fetch Order
+                           │
+                           └──── Outros (cinza)       → Resposta IA
+```
 
-### 2. Corrigir display do nó de Condição
+1. Ao selecionar o nó de Condição, o painel lateral mostra as opções atuais (tipo, campo, valor)
+2. Um botão "+ Adicionar Regra" permite criar regras adicionais
+3. Cada regra tem: **Rótulo** + **Palavras-chave** (separadas por vírgula, lógica OR)
+4. Cada regra gera um **handle colorido** no lado direito do nó (igual ao AskOptionsNode)
+5. Um handle cinza "Outros" sempre existe para mensagens que não batem com nenhuma regra
+6. O nó continua funcionando com **apenas 1 regra** (Sim/Não) = retrocompatível
 
-Atualmente o nó mostra "(X termos)" para QUALQUER tipo de condição quando o valor tem vírgula. Isso é enganoso para "É igual a", que não suporta multi-valor. O display de termos deve aparecer APENAS quando o tipo é "contains".
+### Comportamento no Motor de Fluxo
+- Quando o nó tem `condition_rules` (array de regras), o motor itera cada regra na ordem
+- Para cada regra, faz split das keywords por vírgula e verifica se a mensagem contém alguma (OR)
+- A **primeira regra** que bater define o `sourceHandle` usado para seguir o caminho
+- Se nenhuma bater, segue pelo handle `"else"`
+- Se `condition_rules` não existir (nós antigos), usa a lógica atual de Sim/Não = **retrocompatível**
 
-- Arquivo: `src/components/chat-flows/nodes/ConditionNode.tsx`
-- Alteração: Verificar `condition_type` antes de fazer split por vírgula. Só mostrar contagem de termos quando tipo for "contains".
+### Secao Tecnica
 
-### 3. Suportar multi-valor também para "É igual a" (equals)
-
-Para dar mais flexibilidade, o tipo "equals" também passará a suportar múltiplos valores separados por vírgula com lógica OR (se o valor é igual a qualquer um dos termos).
-
-- Arquivo: `supabase/functions/process-chat-flow/index.ts`
-- Na função `evaluateCondition`, o case "equals" fará split por vírgula e verificará se o campo é igual a qualquer um dos valores.
-- Arquivo: `src/components/chat-flows/ChatFlowEditor.tsx`
-- Trocar Input por Textarea também para tipo "equals" com o mesmo hint.
-- Arquivo: `src/components/chat-flows/nodes/ConditionNode.tsx`
-- Permitir display de termos para "contains" e "equals".
-
-### Seção Técnica
-
-| Arquivo | Alteração |
+| Arquivo | Alteracao |
 |---------|-----------|
-| `bun.lock` | Deletar para regeneração |
-| `src/components/chat-flows/nodes/ConditionNode.tsx` | Mostrar "(X termos)" para contains e equals apenas |
-| `src/components/chat-flows/ChatFlowEditor.tsx` (~linha 634) | Textarea para "contains" e "equals" |
-| `supabase/functions/process-chat-flow/index.ts` (~linha 151-152) | Split por vírgula no case "equals" com lógica OR |
+| `src/components/chat-flows/nodes/ConditionNode.tsx` | Renderizar handles dinâmicos quando `condition_rules` existir (inspirado no AskOptionsNode). Mostrar badges coloridos por regra + badge cinza "Outros" |
+| `src/components/chat-flows/ChatFlowEditor.tsx` | No painel de propriedades da Condição: adicionar UI para gerenciar `condition_rules` (adicionar/remover regras, cada uma com label + keywords). Botao "+ Regra". Default data atualizado |
+| `supabase/functions/process-chat-flow/index.ts` | Na travessia (tanto `evaluateCondition` quanto `evalCond`): se `node.data.condition_rules` existir, iterar regras fazendo match contains/equals. Retornar o ID da regra que bateu como sourceHandle, ou "else". Se não existir `condition_rules`, manter lógica true/false atual |
+| `bun.lock` | Deletar para corrigir erro de build mux-embed |
 
-### O que NÃO muda
-- Outros tipos de condição (has_data, regex, etc.) não são afetados
-- Fluxos existentes continuam compatíveis (valor único = array de 1)
+### Retrocompatibilidade
+- Nós de condição existentes (sem `condition_rules`) continuam usando Sim/Não normalmente
+- Quando o usuário adiciona a primeira regra extra, o nó migra para o modo multi-regra
 - Kill Switch, Shadow Mode, CSAT, distribuição: inalterados
-- Encadear condições (Condição → Não → outra Condição) continua sendo a forma recomendada para rotas diferentes
-
+- Fluxos salvos anteriormente: 100% compatíveis
