@@ -631,16 +631,16 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                   {!hideValueField && (
                     <div className="space-y-1.5">
                       <Label className="text-xs">Valor esperado</Label>
-                      {selectedNode.data.condition_type === "contains" ? (
+                      {(selectedNode.data.condition_type === "contains" || selectedNode.data.condition_type === "equals") ? (
                         <>
                           <Textarea
                             value={selectedNode.data.condition_value || ""}
                             onChange={(e) => updateNodeData("condition_value", e.target.value)}
-                            placeholder="Separe múltiplas frases por vírgula"
+                            placeholder="Separe múltiplos valores por vírgula"
                             className="min-h-[60px] text-sm"
                           />
                           <p className="text-[10px] text-muted-foreground">
-                            Use vírgula para verificar múltiplas frases (qualquer uma = verdadeiro)
+                            Use vírgula para verificar múltiplos valores (qualquer um = verdadeiro)
                           </p>
                         </>
                       ) : (

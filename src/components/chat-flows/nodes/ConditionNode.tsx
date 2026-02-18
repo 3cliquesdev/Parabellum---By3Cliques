@@ -38,10 +38,15 @@ export const ChatFlowConditionNode = memo(({ data, selected }: NodeProps<Conditi
     : friendlyFieldNames[""];
   subtitle += ` (${fieldLabel})`;
   if (data.condition_value) {
-    const terms = data.condition_value.split(",").map(t => t.trim()).filter(Boolean);
-    if (terms.length > 1) {
-      const preview = terms.slice(0, 2).join(", ");
-      subtitle += `: "${preview}, ..." (${terms.length} termos)`;
+    const supportsMulti = conditionType === "contains" || conditionType === "equals";
+    if (supportsMulti) {
+      const terms = data.condition_value.split(",").map(t => t.trim()).filter(Boolean);
+      if (terms.length > 1) {
+        const preview = terms.slice(0, 2).join(", ");
+        subtitle += `: "${preview}, ..." (${terms.length} termos)`;
+      } else {
+        subtitle += `: "${data.condition_value}"`;
+      }
     } else {
       subtitle += `: "${data.condition_value}"`;
     }
