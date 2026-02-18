@@ -57,7 +57,80 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    console.log('[Auto-Close] Starting dynamic inactivity check based on department settings...');
+    console.log('[Auto-Close] Starting...');
+
+    // ============================
+    // ETAPA 1: WhatsApp Window Expired (>24h)
+    // ============================
+    let windowExpiredCount = 0;
+    try {
+      const threshold24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      
+      const { data: expiredConvos, error: expiredError } = await supabase
+        .from('conversations')
+        .select('id, contact_id')
+        .eq('status', 'open')
+        .eq('channel', 'whatsapp')
+        .lt('last_message_at', threshold24h);
+
+      if (expiredError) {
+        console.error('[Auto-Close] Error fetching expired WhatsApp convos:', expiredError);
+      } else if (expiredConvos && expiredConvos.length > 0) {
+        console.log(`[Auto-Close] Found ${expiredConvos.length} WhatsApp conversations with expired 24h window`);
+
+        for (const conv of expiredConvos) {
+          try {
+            // Close silently - no WhatsApp message (window expired)
+            await supabase
+              .from('conversations')
+              .update({
+                status: 'closed',
+                auto_closed: true,
+                closed_at: new Date().toISOString(),
+                closed_reason: 'whatsapp_window_expired',
+                ai_mode: 'disabled',
+              })
+              .eq('id', conv.id);
+
+            // Internal message only (not sent to WhatsApp)
+            await supabase
+              .from('messages')
+              .insert({
+                conversation_id: conv.id,
+                content: 'Conversa encerrada automaticamente - janela de 24h do WhatsApp expirada.',
+                sender_type: 'system',
+              });
+
+            // Add "Desistência" tag
+            await supabase
+              .from('conversation_tags')
+              .upsert({
+                conversation_id: conv.id,
+                tag_id: DESISTENCIA_TAG_ID,
+              }, {
+                onConflict: 'conversation_id,tag_id',
+                ignoreDuplicates: true,
+              });
+
+            windowExpiredCount++;
+            console.log(`[Auto-Close] ✅ Closed expired WhatsApp conversation ${conv.id}`);
+          } catch (err) {
+            console.error(`[Auto-Close] Error closing expired conversation ${conv.id}:`, err);
+          }
+        }
+      } else {
+        console.log('[Auto-Close] No WhatsApp conversations with expired 24h window');
+      }
+    } catch (err) {
+      console.error('[Auto-Close] Error in WhatsApp window expired step:', err);
+    }
+
+    console.log(`[Auto-Close] WhatsApp window expired step: closed ${windowExpiredCount} conversations`);
+
+    // ============================
+    // ETAPA 2: Auto-close por departamento (inatividade configurada)
+    // ============================
+    console.log('[Auto-Close] Starting department-based inactivity check...');
 
     // 1. Buscar departamentos com auto_close_enabled = true
     const { data: departments, error: deptError } = await supabase
@@ -226,9 +299,10 @@ Deno.serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         closed_count: totalClosedCount,
+        whatsapp_window_expired_count: windowExpiredCount,
         closed_ids: closedIds,
         by_department: results,
-        message: `Closed ${totalClosedCount} inactive conversations based on department settings` 
+        message: `Closed ${totalClosedCount} by inactivity + ${windowExpiredCount} by WhatsApp window expired` 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
