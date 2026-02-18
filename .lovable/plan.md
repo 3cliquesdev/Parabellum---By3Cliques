@@ -1,45 +1,50 @@
 
+## Encerramento Automatico de Conversas WhatsApp com Janela Expirada (+24h)
 
-## Ajuste da Mensagem do Keep-Alive - Tom Humano e Acolhedor
+### Problema
 
-### O que muda
+Existem 20 conversas WhatsApp abertas ha mais de 24h (algumas ha mais de 100h). Apos esse prazo, a janela do WhatsApp fecha e nao e mais possivel enviar mensagens. Essas conversas ficam "travadas" no sistema ocupando fila e confundindo agentes.
 
-A mensagem enviada automaticamente pelo Window Keeper precisa soar natural, sem mencionar "janela de 24h" ou termos tecnicos. O tom deve ser: "nao esquecemos de voce, estamos cuidando do seu caso".
+O auto-close atual so funciona para conversas em `autopilot` com departamento que tem `auto_close_enabled`. Conversas em `waiting_human`, `copilot` ou sem departamento configurado nao sao afetadas.
 
----
+### Solucao
 
-### Mudancas no arquivo `supabase/functions/whatsapp-window-keeper/index.ts`
-
-#### 1. Mensagem segura padrao (linha 11)
-
-**Atual:**
-> "Oi! Ainda estamos verificando sua solicitacao. Precisa de algo mais? Estamos aqui para ajudar."
-
-**Nova:**
-> "Oi! Passando aqui para avisar que nao esquecemos de voce. Assim que nosso time retomar o atendimento, voce ja esta na fila de prioridade. Se precisar de algo, e so nos chamar!"
-
-#### 2. Prompt da IA (linhas 296-302)
-
-Ajustar o system prompt para que a IA gere mensagens no mesmo tom humano e acolhedor:
-
-**Atual:**
-> "Gere uma mensagem curta... perguntando se o cliente ainda precisa de ajuda. NAO mencione a janela de 24h..."
-
-**Novo:**
-> "Voce e um assistente de atendimento ao cliente. Gere uma mensagem curta (maximo 2 frases), acolhedora e natural, passando a ideia de que a empresa NAO esqueceu do cliente e que o atendimento vai continuar em breve. NAO pergunte se o cliente precisa de ajuda (ele ja pediu). NAO mencione janela de 24h, termos tecnicos ou que a mensagem e automatica. Use o contexto da conversa para personalizar. O tom deve ser caloroso, como se um atendente humano estivesse passando para dar um retorno rapido. Responda APENAS com o texto da mensagem, sem aspas nem prefixos."
-
-#### 3. Fallback da IA (linha 320)
-
-Se a IA falhar, o fallback tambem usara a nova mensagem segura (ja usa a constante `SAFE_MESSAGE`, entao muda automaticamente).
+Adicionar uma etapa no `auto-close-conversations` que encerra **todas** as conversas WhatsApp abertas com `last_message_at` superior a 24h, independente de `ai_mode` ou departamento. Nao tenta enviar mensagem (janela ja expirou), apenas fecha silenciosamente no sistema.
 
 ---
 
-### Resumo tecnico
+### Mudancas tecnicas
 
-| Item | Arquivo | Linhas |
-|------|---------|--------|
-| Constante `SAFE_MESSAGE` | `whatsapp-window-keeper/index.ts` | 11 |
-| System prompt da IA | `whatsapp-window-keeper/index.ts` | 296-302 |
+**Arquivo:** `supabase/functions/auto-close-conversations/index.ts`
 
-Apenas 2 trechos alterados, zero impacto em logica ou governanca existente.
+#### Nova etapa: "WhatsApp Window Expired"
 
+Antes do processamento por departamento, adicionar um bloco que:
+
+1. Busca conversas: `status = 'open'`, `channel = 'whatsapp'`, `last_message_at < now() - 24h`
+2. Para cada conversa encontrada:
+   - Atualiza para `status = 'closed'`, `closed_reason = 'whatsapp_window_expired'`, `ai_mode = 'disabled'`, `auto_closed = true`
+   - Insere mensagem interna (nao enviada ao WhatsApp): "Conversa encerrada automaticamente - janela de 24h do WhatsApp expirada."
+   - Adiciona tag "Desistencia" (mesma tag ja usada)
+3. Nao tenta enviar mensagem via WhatsApp (impossivel apos 24h)
+4. Nao envia CSAT (impossivel apos 24h)
+5. Registra log no console
+
+#### Fluxo atualizado
+
+```
+1. [NOVO] Encerrar conversas WhatsApp com janela expirada (>24h)
+2. [EXISTENTE] Processar auto-close por departamento (inatividade configurada)
+```
+
+### O que NAO muda
+
+- Logica de auto-close por departamento continua identica
+- Kill Switch, Shadow Mode, distribuicao humana nao sao afetados
+- Conversas de outros canais (webchat, etc.) nao sao afetadas
+- Nenhuma mensagem e enviada ao cliente (janela ja fechou)
+- CSAT nao e enviado (impossivel)
+
+### Resultado esperado
+
+As 20 conversas WhatsApp abertas com +24h serao encerradas na proxima execucao do CRON. Novas conversas que ultrapassarem 24h sem resposta tambem serao encerradas automaticamente.
