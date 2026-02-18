@@ -94,7 +94,7 @@ const validators: Record<string, (value: string) => { valid: boolean; error?: st
 function findNextNode(flowDef: any, currentNode: any, path?: string): any {
   const edges = flowDef.edges || [];
   
-  // Para nós de condição, usar o path (true/false)
+  // Para nós de condição, usar o path (true/false ou rule ID / else)
   if (currentNode.type === 'condition' && path) {
     const edge = edges.find((e: any) => 
       e.source === currentNode.id && e.sourceHandle === path
@@ -177,7 +177,30 @@ function evaluateCondition(condition: any, collectedData: Record<string, any>, u
   }
 }
 
-// Handler para nó fetch_order
+// 🆕 Avaliar condição com suporte a multi-regra (condition_rules)
+// Retorna: para multi-regra, o ID da regra que bateu ou "else"
+//          para modo clássico, "true" ou "false"
+function evaluateConditionPath(nodeData: any, collectedData: Record<string, any>, userMessage: string): string {
+  const rules = nodeData.condition_rules;
+  
+  // Multi-regra: iterar cada regra e retornar a primeira que bater
+  if (rules && Array.isArray(rules) && rules.length > 0) {
+    const msg = userMessage.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    for (const rule of rules) {
+      const terms = (rule.keywords || "").split(",").map((t: string) => t.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')).filter(Boolean);
+      if (terms.length > 0 && terms.some((term: string) => msg.includes(term))) {
+        console.log(`[process-chat-flow] 🎯 Multi-rule match: "${rule.label}" (${rule.id})`);
+        return rule.id;
+      }
+    }
+    console.log('[process-chat-flow] 🔀 No multi-rule match → else');
+    return "else";
+  }
+  
+  // Modo clássico: true/false
+  const result = evaluateCondition(nodeData, collectedData, userMessage);
+  return result ? 'true' : 'false';
+}
 async function handleFetchOrderNode(
   node: any, 
   collectedData: Record<string, any>, 
@@ -595,8 +618,7 @@ serve(async (req) => {
         path = selectedOption.id;
         collectedData[currentNode.data?.save_as || 'choice'] = selectedOption.value || selectedOption.label;
       } else if (currentNode.type === 'condition') {
-        const conditionResult = evaluateCondition(currentNode.data, collectedData, userMessage);
-        path = conditionResult ? 'true' : 'false';
+        path = evaluateConditionPath(currentNode.data, collectedData, userMessage);
       }
 
       nextNode = findNextNode(flowDef, currentNode, path);
@@ -610,9 +632,8 @@ serve(async (req) => {
         console.log(`[process-chat-flow] ⏩ Auto-traverse[${traversalSteps}] ${nextNode.type} (${nextNode.id})`);
         
         if (nextNode.type === 'condition') {
-          const condResult = evaluateCondition(nextNode.data, collectedData, userMessage);
-          const condPath = condResult ? 'true' : 'false';
-          console.log(`[process-chat-flow] 🔀 Condition ${nextNode.id}: ${condResult} → path ${condPath}`);
+          const condPath = evaluateConditionPath(nextNode.data, collectedData, userMessage);
+          console.log(`[process-chat-flow] 🔀 Condition ${nextNode.id}: → path ${condPath}`);
           nextNode = findNextNode(flowDef, nextNode, condPath);
         } else {
           nextNode = findNextNode(flowDef, nextNode);
@@ -641,8 +662,7 @@ serve(async (req) => {
         if (nodeAfterFetch) {
           // Se próximo é condição, avaliar automaticamente
           if (nodeAfterFetch.type === 'condition') {
-            const conditionResult = evaluateCondition(nodeAfterFetch.data, collectedData, userMessage);
-            const conditionPath = conditionResult ? 'true' : 'false';
+            const conditionPath = evaluateConditionPath(nodeAfterFetch.data, collectedData, userMessage);
             nextNode = findNextNode(flowDef, nodeAfterFetch, conditionPath);
             
             // Atualizar estado para após a condição
@@ -1309,38 +1329,8 @@ serve(async (req) => {
       console.log('[process-chat-flow] ⏩ Nó sem conteúdo (', currentNode.type, ') - avançando...');
       
       if (currentNode.type === 'condition') {
-        // Para nós de condição, avaliar a condição
-        const conditionField = currentNode.data?.condition_field || '';
-        const conditionType = currentNode.data?.condition_type || 'contains';
-        const conditionValue = currentNode.data?.condition_value || '';
-        
-        // Normalizar para comparação
-        const msgNorm = userMessage.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const valueNorm = conditionValue.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        
-        let conditionResult = false;
-        
-        switch (conditionType) {
-          case 'contains':
-            conditionResult = msgNorm.includes(valueNorm);
-            break;
-          case 'equals':
-            conditionResult = msgNorm === valueNorm;
-            break;
-          case 'starts_with':
-            conditionResult = msgNorm.startsWith(valueNorm);
-            break;
-          case 'ends_with':
-            conditionResult = msgNorm.endsWith(valueNorm);
-            break;
-          default:
-            conditionResult = msgNorm.includes(valueNorm);
-        }
-        
-        console.log('[process-chat-flow] 🔍 Condição avaliada:', { conditionType, conditionValue: valueNorm.slice(0, 30), result: conditionResult });
-        
-        // Seguir para true ou false path
-        const path = conditionResult ? 'true' : 'false';
+        const path = evaluateConditionPath(currentNode.data, {}, userMessage);
+        console.log('[process-chat-flow] 🔍 Condição avaliada → path:', path);
         currentNode = findNextNode(flowDef, currentNode, path);
       } else {
         // Para nó input, apenas seguir para o próximo

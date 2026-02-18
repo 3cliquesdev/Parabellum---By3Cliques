@@ -4,11 +4,18 @@ import { GitBranch } from "lucide-react";
 import { ChatFlowNodeWrapper } from "../ChatFlowNodeWrapper";
 import { Badge } from "@/components/ui/badge";
 
+interface ConditionRule {
+  id: string;
+  label: string;
+  keywords: string;
+}
+
 interface ConditionNodeData {
   label: string;
   condition_type: "contains" | "equals" | "regex" | "has_data";
   condition_field?: string;
   condition_value?: string;
+  condition_rules?: ConditionRule[];
 }
 
 const conditionLabels: Record<string, string> = {
@@ -29,11 +36,101 @@ const friendlyFieldNames: Record<string, string> = {
   "": "Mensagem do usuário",
 };
 
+// Cores fixas para cada regra (mesmas do AskOptionsNode)
+const ruleColors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+// Posição vertical dos handles
+const getHandlePosition = (index: number, total: number) => {
+  const startOffset = 25;
+  const endOffset = 75;
+  const range = endOffset - startOffset;
+  if (total === 1) return 50;
+  return startOffset + (index * range) / (total - 1);
+};
+
 export const ChatFlowConditionNode = memo(({ data, selected }: NodeProps<ConditionNodeData>) => {
   const conditionType = data.condition_type || "contains";
-  
+  const rules = data.condition_rules;
+  const hasMultiRules = rules && rules.length > 0;
+
+  // === MODO MULTI-REGRA ===
+  if (hasMultiRules) {
+    const totalHandles = rules.length + 1; // regras + else
+
+    return (
+      <ChatFlowNodeWrapper
+        type="condition"
+        icon={GitBranch}
+        title={data.label || "Condição"}
+        subtitle={`${rules.length} regras configuradas`}
+        selected={selected}
+        showSourceHandle={false}
+        customHandles={
+          <>
+            <Handle
+              type="target"
+              position={Position.Left}
+              className="!w-4 !h-4 !bg-primary !border-2 !border-background"
+            />
+            {rules.map((rule, idx) => (
+              <Handle
+                key={rule.id}
+                type="source"
+                position={Position.Right}
+                id={rule.id}
+                className="!w-4 !h-4 !border-2 !border-background cursor-crosshair"
+                style={{
+                  background: ruleColors[idx % ruleColors.length],
+                  top: `${getHandlePosition(idx, totalHandles)}%`,
+                }}
+              />
+            ))}
+            {/* Handle "Outros" (else) */}
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="else"
+              className="!w-4 !h-4 !border-2 !border-background cursor-crosshair"
+              style={{
+                background: '#6b7280',
+                top: `${getHandlePosition(rules.length, totalHandles)}%`,
+              }}
+            />
+          </>
+        }
+      >
+        <div className="space-y-1.5">
+          {rules.map((rule, idx) => (
+            <div
+              key={rule.id}
+              className="flex items-center gap-2 px-2 py-1 rounded text-xs"
+              style={{ backgroundColor: `${ruleColors[idx % ruleColors.length]}15` }}
+            >
+              <div
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: ruleColors[idx % ruleColors.length] }}
+              />
+              <span
+                className="font-medium truncate"
+                style={{ color: ruleColors[idx % ruleColors.length] }}
+              >
+                {rule.label || "Sem rótulo"}
+              </span>
+            </div>
+          ))}
+          {/* Else */}
+          <div className="flex items-center gap-2 px-2 py-1 rounded text-xs bg-muted/50">
+            <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-muted-foreground/50" />
+            <span className="font-medium truncate text-muted-foreground">Outros</span>
+          </div>
+        </div>
+      </ChatFlowNodeWrapper>
+    );
+  }
+
+  // === MODO CLÁSSICO (Sim/Não) ===
   let subtitle = conditionLabels[conditionType] || conditionType;
-  const fieldLabel = data.condition_field 
+  const fieldLabel = data.condition_field
     ? (friendlyFieldNames[data.condition_field] || data.condition_field)
     : friendlyFieldNames[""];
   subtitle += ` (${fieldLabel})`;
@@ -51,7 +148,7 @@ export const ChatFlowConditionNode = memo(({ data, selected }: NodeProps<Conditi
       subtitle += `: "${data.condition_value}"`;
     }
   }
-  
+
   return (
     <ChatFlowNodeWrapper
       type="condition"

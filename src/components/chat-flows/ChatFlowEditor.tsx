@@ -312,6 +312,35 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
     updateNodeData('options', options);
   };
 
+  // Adicionar/remover regras de condição (multi-rule)
+  const addConditionRule = () => {
+    if (!selectedNode) return;
+    const rules = selectedNode.data.condition_rules || [];
+    const newRule = { id: `rule_${Date.now()}`, label: "", keywords: "" };
+    updateNodeData('condition_rules', [...rules, newRule]);
+  };
+
+  const removeConditionRule = (idx: number) => {
+    if (!selectedNode) return;
+    const rules = [...(selectedNode.data.condition_rules || [])];
+    const removed = rules[idx];
+    rules.splice(idx, 1);
+    updateNodeData('condition_rules', rules);
+    // Remover edges conectadas ao handle dessa regra
+    if (removed?.id) {
+      setEdges((eds) => eds.filter(
+        (e) => !(e.source === selectedNode.id && e.sourceHandle === removed.id)
+      ));
+    }
+  };
+
+  const updateConditionRule = (idx: number, field: string, value: string) => {
+    if (!selectedNode) return;
+    const rules = [...(selectedNode.data.condition_rules || [])];
+    rules[idx] = { ...rules[idx], [field]: value };
+    updateNodeData('condition_rules', rules);
+  };
+
   return (
     <div className="flex h-full">
       {/* Sidebar esquerda - Blocos categorizados */}
@@ -651,6 +680,58 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       )}
                     </div>
                   )}
+
+                  {/* === MULTI-REGRA (condition_rules) === */}
+                  <div className="border-t pt-3 mt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold">Múltiplos caminhos</Label>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={addConditionRule}
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Regra
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Adicione regras para criar 3+ saídas. Cada regra usa palavras-chave (vírgula = OR). Se nenhuma bater, segue por "Outros".
+                    </p>
+                    {(selectedNode.data.condition_rules || []).length > 0 && (
+                      <p className="text-[10px] text-warning font-medium">
+                        ⚠ Modo multi-regra ativo — as saídas Sim/Não são substituídas pelas regras abaixo.
+                      </p>
+                    )}
+                    {(selectedNode.data.condition_rules || []).map((rule: any, idx: number) => (
+                      <div key={rule.id} className="border rounded-md p-2 space-y-1.5 bg-muted/30">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'][idx % 8] }}
+                          />
+                          <Input
+                            value={rule.label || ""}
+                            onChange={(e) => updateConditionRule(idx, "label", e.target.value)}
+                            placeholder={`Regra ${idx + 1} (ex: Preço)`}
+                            className="h-7 text-xs flex-1"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => removeConditionRule(idx)}
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Textarea
+                          value={rule.keywords || ""}
+                          onChange={(e) => updateConditionRule(idx, "keywords", e.target.value)}
+                          placeholder="Palavras-chave separadas por vírgula"
+                          className="min-h-[40px] text-xs"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 );
               })()}
