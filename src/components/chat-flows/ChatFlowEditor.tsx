@@ -266,7 +266,40 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
       toast.error("Adicione pelo menos um bloco além do início");
       return;
     }
-    onSave({ nodes, edges });
+
+    // Sanitizar e validar regras de condição antes de salvar
+    const sanitizedNodes = nodes.map(node => {
+      if (node.type !== 'condition' || !node.data.condition_rules?.length) return node;
+      
+      const rules = node.data.condition_rules.map((rule: any) => {
+        // Auto-clear: se keywords === label, limpar keywords (motor usa label como fallback)
+        const kw = (rule.keywords || "").trim();
+        const lbl = (rule.label || "").trim();
+        if (kw && kw === lbl) {
+          return { ...rule, keywords: "" };
+        }
+        return rule;
+      });
+
+      // Validação: impedir keywords duplicadas não-vazias entre regras do mesmo nó
+      const kwMap = new Map<string, number>();
+      for (let i = 0; i < rules.length; i++) {
+        const kw = (rules[i].keywords || "").trim();
+        if (!kw) continue;
+        if (kwMap.has(kw)) {
+          toast.error(`Regras "${rules[kwMap.get(kw)!].label}" e "${rules[i].label}" têm keywords idênticas. Corrija antes de salvar.`);
+          return null; // sinaliza erro
+        }
+        kwMap.set(kw, i);
+      }
+
+      return { ...node, data: { ...node.data, condition_rules: rules } };
+    });
+
+    // Se algum nó retornou null, houve erro de validação
+    if (sanitizedNodes.includes(null)) return;
+
+    onSave({ nodes: sanitizedNodes as Node[], edges });
   };
 
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
