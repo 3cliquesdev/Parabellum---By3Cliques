@@ -71,6 +71,7 @@
     "framer-motion": "^12.23.24",
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",
+    "is-even": "^1.0.0",
     "is-odd": "^3.0.1",
     "jsdom": "^20.0.3",
     "jspdf": "^4.0.0",
