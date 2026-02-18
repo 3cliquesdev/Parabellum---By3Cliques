@@ -1,50 +1,31 @@
 
-## Encerramento Automatico de Conversas WhatsApp com Janela Expirada (+24h)
+## Correcao do Filtro "Mais Antigas Primeiro" no Inbox
 
-### Problema
+### Problema Identificado
 
-Existem 20 conversas WhatsApp abertas ha mais de 24h (algumas ha mais de 100h). Apos esse prazo, a janela do WhatsApp fecha e nao e mais possivel enviar mensagens. Essas conversas ficam "travadas" no sistema ocupando fila e confundindo agentes.
+O filtro "Mais antigas primeiro" nao funciona por dois motivos:
 
-O auto-close atual so funciona para conversas em `autopilot` com departamento que tem `auto_close_enabled`. Conversas em `waiting_human`, `copilot` ou sem departamento configurado nao sao afetadas.
+1. **Ordenacao nunca aplicada na view compacta (mobile/tablet)**: Na linha 521 do `Inbox.tsx`, o componente `ConversationList` recebe `filteredConversations` (sem ordenacao) em vez de `orderedConversations` (com ordenacao). Isso significa que na view compacta a ordenacao e completamente ignorada.
+
+2. **Logica de ordenacao "oldest" fragil na view desktop**: Na view desktop (linha 342-354), o codigo tenta reutilizar a ordem do array `inboxItems` (que vem do hook `useInboxView`), mas isso falha quando o usuario esta em filtros como "Fila Humana" porque os `activeItems` vem de outra fonte. Alem disso, `inboxItems` e ordenado por `updated_at` (que muda com qualquer atualizacao no sistema) e nao por `last_message_at` (que reflete quando o cliente realmente mandou a ultima mensagem).
 
 ### Solucao
 
-Adicionar uma etapa no `auto-close-conversations` que encerra **todas** as conversas WhatsApp abertas com `last_message_at` superior a 24h, independente de `ai_mode` ou departamento. Nao tenta enviar mensagem (janela ja expirou), apenas fecha silenciosamente no sistema.
+Duas mudancas simples no arquivo `src/pages/Inbox.tsx`:
 
----
+**Mudanca 1 - Simplificar a ordenacao "oldest"** (linhas 340-359):
+- Remover a logica complexa de `indexById` que tenta reusar a ordem do `inboxItems`
+- Substituir por uma ordenacao direta por `last_message_at` ascendente (mais antigo primeiro)
+- Isso garante que funciona independente de qual hook/filtro esta ativo
 
-### Mudancas tecnicas
-
-**Arquivo:** `supabase/functions/auto-close-conversations/index.ts`
-
-#### Nova etapa: "WhatsApp Window Expired"
-
-Antes do processamento por departamento, adicionar um bloco que:
-
-1. Busca conversas: `status = 'open'`, `channel = 'whatsapp'`, `last_message_at < now() - 24h`
-2. Para cada conversa encontrada:
-   - Atualiza para `status = 'closed'`, `closed_reason = 'whatsapp_window_expired'`, `ai_mode = 'disabled'`, `auto_closed = true`
-   - Insere mensagem interna (nao enviada ao WhatsApp): "Conversa encerrada automaticamente - janela de 24h do WhatsApp expirada."
-   - Adiciona tag "Desistencia" (mesma tag ja usada)
-3. Nao tenta enviar mensagem via WhatsApp (impossivel apos 24h)
-4. Nao envia CSAT (impossivel apos 24h)
-5. Registra log no console
-
-#### Fluxo atualizado
-
-```
-1. [NOVO] Encerrar conversas WhatsApp com janela expirada (>24h)
-2. [EXISTENTE] Processar auto-close por departamento (inatividade configurada)
-```
+**Mudanca 2 - View compacta usar `orderedConversations`** (linha 521):
+- Trocar `filteredConversations` por `orderedConversations` na props do `ConversationList` da view compacta
+- Isso garante que a ordenacao funciona tanto no mobile quanto no desktop
 
 ### O que NAO muda
 
-- Logica de auto-close por departamento continua identica
-- Kill Switch, Shadow Mode, distribuicao humana nao sao afetados
-- Conversas de outros canais (webchat, etc.) nao sao afetadas
-- Nenhuma mensagem e enviada ao cliente (janela ja fechou)
-- CSAT nao e enviado (impossivel)
-
-### Resultado esperado
-
-As 20 conversas WhatsApp abertas com +24h serao encerradas na proxima execucao do CRON. Novas conversas que ultrapassarem 24h sem resposta tambem serao encerradas automaticamente.
+- Todos os outros filtros (Minhas, Nao respondidas, SLA, etc.) continuam identicos
+- A logica de filtros de tempo de espera (+1h, +4h, +24h, +7d) continua identica
+- A ordenacao "Mais recentes primeiro" continua identica
+- Nenhuma query ao banco e alterada
+- Realtime, cache, Kill Switch, Shadow Mode nao sao afetados
