@@ -726,7 +726,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                         <Textarea
                           value={rule.keywords || ""}
                           onChange={(e) => updateConditionRule(idx, "keywords", e.target.value)}
-                          placeholder="Palavras-chave separadas por vírgula"
+                          placeholder="Uma frase por linha (Enter para nova frase)"
                           className="min-h-[40px] text-xs"
                         />
                       </div>
