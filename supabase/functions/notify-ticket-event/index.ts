@@ -7,7 +7,7 @@ const corsHeaders = {
 
 interface TicketEventPayload {
   ticket_id: string;
-  event_type: 'created' | 'assigned' | 'status_changed' | 'transferred' | 'resolved' | 'closed' | 'attachment_removed' | 'attachment_restored';
+  event_type: 'created' | 'assigned' | 'status_changed' | 'transferred' | 'resolved' | 'closed' | 'attachment_removed' | 'attachment_restored' | 'approval_requested';
   actor_id: string;
   old_value?: string;
   new_value?: string;
@@ -190,8 +190,25 @@ Deno.serve(async (req) => {
       });
     }
 
+    // For approval_requested: also notify financial_manager, admin, general_manager
+    if (event_type === 'approval_requested') {
+      const { data: approverRoles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .in("role", ['admin', 'financial_manager', 'general_manager']);
+
+      if (approverRoles) {
+        for (const r of approverRoles) {
+          if (r.user_id !== actor_id) {
+            usersToNotify.add(r.user_id);
+          }
+        }
+        console.log(`[notify-ticket-event] Added ${approverRoles.length} approvers to notify list`);
+      }
+    }
+
     // 4. Create in-app notifications for notifiable events (with dedupe)
-    const notifiableEvents = ['created', 'resolved', 'closed', 'transferred', 'assigned'];
+    const notifiableEvents = ['created', 'resolved', 'closed', 'transferred', 'assigned', 'approval_requested'];
     let inAppCreated = 0;
 
     if (activeChannels.includes('in_app') && notifiableEvents.includes(event_type) && usersToNotify.size > 0) {
@@ -226,6 +243,11 @@ Deno.serve(async (req) => {
             .eq("id", new_value)
             .single();
           message = `Ticket #${ticket.ticket_number} foi atribuído para ${newAssignee?.full_name || 'novo agente'}`;
+          break;
+        case 'approval_requested':
+          title = "Aprovação Financeira Pendente";
+          message = `Ticket #${ticket.ticket_number} aguarda aprovação de reembolso. Solicitado por ${actorName}.`;
+          notifType = 'ticket_status';
           break;
       }
 
@@ -358,6 +380,24 @@ Deno.serve(async (req) => {
               ${ticketUrl ? `<p style="margin:16px 0"><a href="${ticketUrl}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Abrir ticket</a></p>` : ''}
               <hr style="border:none;border-top:1px solid #eee;margin:20px 0"/>
               <small style="color:#999">Você recebeu isso porque está envolvido neste ticket.</small>
+            </div>
+          `;
+          break;
+        case 'approval_requested':
+          emailSubject = `Aprovação pendente - Ticket #${ticketNumber}: ${ticket.subject}`;
+          emailBody = `
+            <div style="font-family:Arial,sans-serif;font-size:14px;color:#333;max-width:600px;margin:0 auto">
+              <h2 style="margin:0 0 12px;color:#b45309">⚠️ Aprovação Financeira Pendente</h2>
+              <p>O ticket abaixo foi enviado para aprovação de reembolso:</p>
+              <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+                <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold;width:120px">Ticket</td><td style="padding:6px 12px;border:1px solid #eee">#${ticketNumber}</td></tr>
+                <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Assunto</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.subject}</td></tr>
+                <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Prioridade</td><td style="padding:6px 12px;border:1px solid #eee">${ticket.priority}</td></tr>
+                <tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:bold">Solicitado por</td><td style="padding:6px 12px;border:1px solid #eee">${actorName}</td></tr>
+              </table>
+              ${ticketUrl ? `<p style="margin:16px 0"><a href="${ticketUrl}" style="display:inline-block;padding:10px 20px;background:#b45309;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Revisar e Aprovar</a></p>` : ''}
+              <hr style="border:none;border-top:1px solid #eee;margin:20px 0"/>
+              <small style="color:#999">Você recebeu isso porque é gestor financeiro ou administrador.</small>
             </div>
           `;
           break;

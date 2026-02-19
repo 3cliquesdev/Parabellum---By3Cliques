@@ -28,7 +28,21 @@ export function useRequestApproval() {
         created_by: user?.id,
       });
 
-      // 3. Notificar gerentes via edge function
+      // 3. Criar evento canônico para deduplicação
+      const { data: createdEvent } = await supabase
+        .from("ticket_events")
+        .insert({
+          ticket_id: ticketId,
+          event_type: "approval_requested" as any,
+          actor_id: user?.id || null,
+          old_value: data.status,
+          new_value: "pending_approval",
+          metadata: { subject: data.subject, priority: data.priority },
+        })
+        .select("id")
+        .single();
+
+      // 4. Notificar gestores via edge function (com deduplicação e email)
       try {
         await supabase.functions.invoke("notify-ticket-event", {
           body: {
@@ -37,6 +51,8 @@ export function useRequestApproval() {
             actor_id: user?.id,
             old_value: data.status,
             new_value: "pending_approval",
+            ticket_event_id: createdEvent?.id,
+            channels: ["email", "in_app"],
           },
         });
       } catch (notifyError) {
