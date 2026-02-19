@@ -116,6 +116,7 @@ export function NotificationBell() {
       case 'deal_escalation':
       case 'deal_escalated':
         return md.deal_id ? `/deals?deal=${md.deal_id}` : '/deals';
+      case 'passive_learning_pending':
       case 'knowledge_approval':
       case 'ai_learning':
         return '/settings/ai-audit';
@@ -149,6 +150,7 @@ export function NotificationBell() {
       case "subscription_renewal":
       case "payment_pending_validation":
         return <Info className="h-4 w-4 text-muted-foreground flex-shrink-0" />;
+      case "passive_learning_pending":
       case "knowledge_approval":
       case "ai_learning":
         return <Info className="h-4 w-4 text-primary flex-shrink-0" />;
