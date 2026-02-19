@@ -153,23 +153,44 @@ export function FinancialApprovalBar({ ticketId, ticketStatus, hasEvidence, tick
     );
   }
 
-  // Estado 1: Aguardando aprovação
-  return (
-    <>
-      <Card className={`border-2 ${isPendingApproval ? 'border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20' : 'border-muted bg-muted/20'}`}>
+  // Estado: Sem solicitação formal de aprovação - apenas informativo
+  if (!isPendingApproval) {
+    return (
+      <Card className="border border-muted bg-muted/10">
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
-            <div className={`p-3 rounded-lg ${isPendingApproval ? 'bg-yellow-500/10' : 'bg-muted'}`}>
-              <AlertTriangle className={`w-6 h-6 ${isPendingApproval ? 'text-yellow-600 dark:text-yellow-500' : 'text-muted-foreground'}`} />
+            <div className="p-3 rounded-lg bg-muted">
+              <Banknote className="w-6 h-6 text-muted-foreground" />
             </div>
             <div className="flex-1">
-              <h3 className={`font-semibold ${isPendingApproval ? 'text-yellow-900 dark:text-yellow-100' : 'text-foreground'}`}>
-                ⚖️ {isPendingApproval ? 'Aprovação Gerencial Pendente' : 'Aprovação Financeira'}
+              <h3 className="font-semibold text-foreground">
+                💰 Ticket Financeiro
               </h3>
-              <p className={`text-sm ${isPendingApproval ? 'text-yellow-700 dark:text-yellow-300' : 'text-muted-foreground'}`}>
-                {isPendingApproval 
-                  ? 'Este ticket aguarda sua decisão para aprovar ou rejeitar o reembolso.'
-                  : 'Ticket financeiro disponível para revisão.'}
+              <p className="text-sm text-muted-foreground">
+                Aguardando solicitação de aprovação pelo agente.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Estado 1: Aguardando aprovação (pending_approval)
+  return (
+    <>
+      <Card className="border-2 border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-yellow-500/10">
+              <AlertTriangle className="w-6 h-6 text-yellow-600 dark:text-yellow-500" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-yellow-900 dark:text-yellow-100">
+                ⚖️ Aprovação Gerencial Pendente
+              </h3>
+              <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                Este ticket aguarda sua decisão para aprovar ou rejeitar o reembolso.
               </p>
             </div>
             <div className="flex gap-2">
