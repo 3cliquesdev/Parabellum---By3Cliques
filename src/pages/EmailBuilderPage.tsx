@@ -29,6 +29,16 @@ const TRIGGER_TYPES = [
   { value: "ticket_closed", label: "Ticket - Fechado" },
   { value: "ticket_assigned", label: "Ticket - Atribuído" },
   { value: "playbook_step", label: "Etapa de Playbook" },
+  // Kiwify
+  { value: "order_paid", label: "Kiwify - Compra Aprovada" },
+  { value: "upsell_paid", label: "Kiwify - Upsell Aprovado" },
+  { value: "subscription_renewed", label: "Kiwify - Assinatura Renovada" },
+  { value: "refunded", label: "Kiwify - Reembolso" },
+  { value: "churned", label: "Kiwify - Cancelamento/Churn" },
+  { value: "cart_abandoned", label: "Kiwify - Carrinho Abandonado" },
+  { value: "payment_refused", label: "Kiwify - Pagamento Recusado" },
+  { value: "subscription_late", label: "Kiwify - Assinatura Atrasada" },
+  { value: "subscription_card_declined", label: "Kiwify - Cartão Recusado" },
 ];
 
 export default function EmailBuilderPage() {

@@ -271,6 +271,16 @@ export default function EmailBuilderV2Page() {
                           <SelectItem value="contact_created">Contato Criado</SelectItem>
                           <SelectItem value="playbook_step">Etapa de Playbook</SelectItem>
                           <SelectItem value="form_submission">Envio de Formulário</SelectItem>
+                          {/* Kiwify */}
+                          <SelectItem value="order_paid">Kiwify - Compra Aprovada</SelectItem>
+                          <SelectItem value="upsell_paid">Kiwify - Upsell Aprovado</SelectItem>
+                          <SelectItem value="subscription_renewed">Kiwify - Assinatura Renovada</SelectItem>
+                          <SelectItem value="refunded">Kiwify - Reembolso</SelectItem>
+                          <SelectItem value="churned">Kiwify - Cancelamento/Churn</SelectItem>
+                          <SelectItem value="cart_abandoned">Kiwify - Carrinho Abandonado</SelectItem>
+                          <SelectItem value="payment_refused">Kiwify - Pagamento Recusado</SelectItem>
+                          <SelectItem value="subscription_late">Kiwify - Assinatura Atrasada</SelectItem>
+                          <SelectItem value="subscription_card_declined">Kiwify - Cartão Recusado</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
