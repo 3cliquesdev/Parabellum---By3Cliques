@@ -1,6 +1,5 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import TiptapLink from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
 import { useEffect } from "react";
@@ -43,10 +42,9 @@ export function TextBlock({ block, isSelected, onUpdate, onStyleUpdate, readOnly
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // Enable basic formatting
-      }),
-      TiptapLink.configure({
-        openOnClick: false,
+        link: {
+          openOnClick: false,
+        },
       }),
       Placeholder.configure({
         placeholder: "Digite seu texto aqui... Use {{variável}} para personalização",
