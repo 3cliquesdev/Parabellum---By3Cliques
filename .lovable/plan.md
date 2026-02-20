@@ -1,25 +1,34 @@
 
 
-## Corrigir Loop Infinito na Exportacao de Relatorios
+## Adicionar Botao "Filtrar" no Relatorio de Conversas
 
-### Causa Raiz
-O `PAGE_SIZE` esta configurado como 2.000, mas o backend tem um limite padrao de 1.000 linhas por chamada RPC. Quando a RPC retorna 1.000 linhas (cap do backend), o codigo interpreta como "ultima pagina" (1.000 < 2.000) e para prematuramente -- exportando apenas 1.000 de 4.440 linhas. O toast de progresso fica travado mostrando "Buscando dados... 1.000 de ~4.440".
+### Problema
+Atualmente os filtros aplicam automaticamente a cada mudanca (data, departamento, agente, etc.), o que pode confundir alguns usuarios. Falta um botao explicito "Filtrar" para tornar a experiencia mais intuitiva.
 
 ### Solucao
-Reduzir o `PAGE_SIZE` de 2.000 para 1.000 no utilitario `fetchAllRpcPages.ts`. Com isso:
+Mudar a logica para que os filtros sejam "staged" (pendentes) ate o usuario clicar no botao "Filtrar". Isso segue o mesmo padrao ja usado no relatorio de Playbook Email Sequence (`PlaybookEmailSequenceReport.tsx`), que tem um botao "Buscar".
 
-- Cada chamada solicita 1.000 linhas (dentro do limite do backend)
-- Se retornar exatamente 1.000, o loop sabe que ha mais paginas e continua
-- Paginacao funciona corretamente: 1.000 + 1.000 + 1.000 + 1.000 + 440 = 4.440
+### Detalhes Tecnicos
 
-### Arquivo Afetado
+**Arquivo: `src/pages/ConversationsReport.tsx`**
 
-**`src/lib/fetchAllRpcPages.ts`**
-- Unica alteracao: `PAGE_SIZE = 2000` para `PAGE_SIZE = 1000`
+1. Criar estados separados para filtros "pendentes" (o que o usuario esta selecionando) e filtros "aplicados" (o que a query usa):
+   - Os selects e inputs atualizam os estados pendentes
+   - O botao "Filtrar" copia os pendentes para os aplicados e reseta a pagina
+
+2. Adicionar botao "Filtrar" com icone de Search ao lado dos filtros existentes
+
+3. Adicionar botao "Limpar" para resetar todos os filtros de uma vez
+
+4. A query `useCommercialConversationsReport` passa a usar somente os filtros aplicados
+
+### Comportamento
+- Usuario abre a pagina: carrega com filtros padrao (mes atual, sem departamento, etc.)
+- Usuario muda qualquer filtro: nada acontece na tabela ainda
+- Usuario clica "Filtrar": tabela atualiza com os novos filtros
+- Usuario clica "Limpar": todos os filtros voltam ao padrao e tabela atualiza
 
 ### Impacto
-- Todas as exportacoes (Conversas, Comercial, Suporte, Tickets, Playbook) se beneficiam automaticamente
-- Mais roundtrips (5 em vez de 3 para 4.440 linhas), mas cada um mais rapido e confiavel
-- Nenhuma outra feature e afetada
-- Zero risco de regressao
-
+- Upgrade de UX: mais claro e previsivel para o usuario
+- Zero regressao: mesma query, mesmos dados, mesmo export
+- Padrao consistente com o relatorio de Playbook que ja funciona assim
