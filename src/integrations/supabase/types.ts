@@ -9540,6 +9540,7 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: Json
       }
+      exec_report_sql: { Args: { p_sql: string }; Returns: Json }
       find_similar_articles: {
         Args: {
           article_id: string

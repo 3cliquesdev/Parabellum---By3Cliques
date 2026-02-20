@@ -118,6 +118,7 @@ export const universalMenuGroups: MenuGroup[] = [
       { title: "Definir Metas", href: "/goals-management", icon: Target, permission: "goals.set" },
       { title: "Solicitações Internas", href: "/internal-requests", icon: ClipboardList, permission: "tickets.view" },
       { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
+      { title: "Report Builder", href: "/report-builder", icon: FileText, permission: "analytics.view" },
       { title: "Distribuição CS", href: "/reports/consultant-distribution", icon: BarChart3, permission: "reports.distribution" },
       { title: "Distribuição Vendas", href: "/reports/sales-distribution", icon: BarChart3, permission: "reports.lead_distribution" },
       { title: "Detecção de Fraude", href: "/reports/fraud-detection", icon: AlertTriangle, permission: "reports.fraud_detection" },
