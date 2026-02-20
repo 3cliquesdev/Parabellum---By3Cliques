@@ -399,3 +399,6 @@ verify_jwt = false
 [functions.whatsapp-window-keeper.cron]
 schedule = "*/5 * * * *"
 region = "us-east-1"
+
+[functions.report-query-engine]
+verify_jwt = false

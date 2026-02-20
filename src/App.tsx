@@ -123,7 +123,7 @@ const CommercialConversationsReport = lazy(() => import("./pages/CommercialConve
 const TicketsExportReport = lazy(() => import("./pages/TicketsExportReport"));
 const ConversationsReport = lazy(() => import("./pages/ConversationsReport"));
 const PlaybookEmailSequenceReport = lazy(() => import("./pages/PlaybookEmailSequenceReport"));
-
+const ReportBuilder = lazy(() => import("./pages/ReportBuilder"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -203,6 +203,7 @@ const App = () => {
               <Route path="/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Analytics /></Layout></ProtectedRoute>} />
               <Route path="/subscriptions" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Subscriptions /></Layout></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute requiredPermission="analytics.export"><Layout><Reports /></Layout></ProtectedRoute>} />
+              <Route path="/report-builder" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ReportBuilder /></Layout></ProtectedRoute>} />
               <Route path="/reports/consultant-distribution" element={<ProtectedRoute requiredPermission="reports.distribution"><Layout><ConsultantDistribution /></Layout></ProtectedRoute>} />
               <Route path="/reports/fiscal-export" element={<ProtectedRoute requiredPermission="reports.fiscal_export"><Layout><FiscalExport /></Layout></ProtectedRoute>} />
               <Route path="/reports/fraud-detection" element={<ProtectedRoute requiredPermission="reports.fraud_detection"><Layout><FraudDetection /></Layout></ProtectedRoute>} />
