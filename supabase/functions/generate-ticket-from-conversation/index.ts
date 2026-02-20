@@ -25,7 +25,24 @@ Deno.serve(async (req) => {
     // Initialize Supabase client with service role for full access
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Extract actor (creator) from JWT if present
+    let actorId: string | null = null;
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader) {
+      try {
+        const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: { user } } = await userClient.auth.getUser();
+        actorId = user?.id ?? null;
+        console.log('👤 Actor extracted from JWT:', actorId);
+      } catch (authErr) {
+        console.warn('⚠️ Failed to extract actor from JWT (non-blocking):', authErr);
+      }
+    }
 
     console.log('🎫 Starting ticket generation from conversation');
 
@@ -165,18 +182,36 @@ Deno.serve(async (req) => {
         console.log('⏰ SLA: Default - 24 hours');
     }
 
-    // 5. Combine description with message snapshot
+    // 5. Map category to department
+    const categoryToDept: Record<string, string> = {
+      financeiro: 'Financeiro',
+      tecnico: 'Suporte Sistema',
+      bug: 'Suporte',
+    };
+    const deptName = categoryToDept[category];
+    let departmentId: string | null = null;
+    if (deptName) {
+      const { data: dept } = await supabase
+        .from('departments')
+        .select('id')
+        .ilike('name', deptName)
+        .maybeSingle();
+      departmentId = dept?.id ?? null;
+      console.log(`🏢 Category "${category}" → Department "${deptName}" → ID: ${departmentId}`);
+    }
+
+    // 6. Combine description with message snapshot
     const fullDescription = description
       ? `${description}\n\n---\n\n## 📋 Histórico da Conversa (Últimas 10 Mensagens):\n\n${messageSnapshot}`
       : `## 📋 Histórico da Conversa (Últimas 10 Mensagens):\n\n${messageSnapshot}`;
 
-    // 6. Create ticket with all data
+    // 7. Create ticket with all data
     console.log('🎫 Creating ticket...');
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
       .insert({
         customer_id: conversation.contact_id,
-        source_conversation_id: conversation_id, // Bidirectional link 1
+        source_conversation_id: conversation_id,
         subject,
         description: fullDescription,
         priority,
@@ -185,6 +220,8 @@ Deno.serve(async (req) => {
         assigned_to,
         due_date: dueDate.toISOString(),
         internal_note,
+        created_by: actorId,
+        department_id: departmentId,
       })
       .select()
       .single();
