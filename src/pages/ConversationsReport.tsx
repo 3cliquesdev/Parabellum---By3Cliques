@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { toast } from "sonner";
-import { startOfMonth, endOfMonth, addDays } from "date-fns";
-import { MessageSquare, ArrowLeft } from "lucide-react";
+import { startOfMonth, endOfMonth } from "date-fns";
+import { MessageSquare, ArrowLeft, Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,27 @@ import { DateRange } from "react-day-picker";
 
 const PAGE_SIZE = 50;
 
+interface Filters {
+  dateRange: DateRange;
+  departmentId?: string;
+  agentId?: string;
+  status?: string;
+  channel?: string;
+  search: string;
+}
+
+const getDefaultFilters = (): Filters => ({
+  dateRange: {
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  },
+  departmentId: undefined,
+  agentId: undefined,
+  status: undefined,
+  channel: undefined,
+  search: "",
+});
+
 export default function ConversationsReport() {
   const navigate = useNavigate();
   const departmentsQuery = useDepartments();
@@ -30,52 +51,50 @@ export default function ConversationsReport() {
   const departments = departmentsQuery.data;
   const profiles = profilesQuery.data;
 
-  // Filters - no default department (show all)
-  const [dateRange, setDateRange] = useState<DateRange>({
-    from: startOfMonth(new Date()),
-    to: endOfMonth(new Date()),
-  });
-  const [departmentId, setDepartmentId] = useState<string | undefined>(undefined);
-  const [agentId, setAgentId] = useState<string | undefined>(undefined);
-  const [status, setStatus] = useState<string | undefined>(undefined);
-  const [channel, setChannel] = useState<string | undefined>(undefined);
-  const [search, setSearch] = useState("");
+  // Pending filters (UI state)
+  const [pending, setPending] = useState<Filters>(getDefaultFilters);
+  // Applied filters (used by query)
+  const [applied, setApplied] = useState<Filters>(getDefaultFilters);
   const [page, setPage] = useState(0);
 
+  const handleApply = useCallback(() => {
+    setApplied(pending);
+    setPage(0);
+  }, [pending]);
+
+  const handleClear = useCallback(() => {
+    const defaults = getDefaultFilters();
+    setPending(defaults);
+    setApplied(defaults);
+    setPage(0);
+  }, []);
+
   const baseFilters = {
-    startDate: dateRange?.from || startOfMonth(new Date()),
-    endDate: dateRange?.to || endOfMonth(new Date()),
-    departmentId: departmentId || undefined,
-    agentId: agentId || undefined,
-    status: status || undefined,
-    channel: channel || undefined,
+    startDate: applied.dateRange?.from || startOfMonth(new Date()),
+    endDate: applied.dateRange?.to || endOfMonth(new Date()),
+    departmentId: applied.departmentId,
+    agentId: applied.agentId,
+    status: applied.status,
+    channel: applied.channel,
   };
 
   const reportQuery = useCommercialConversationsReport({
     ...baseFilters,
-    search: search || undefined,
+    search: applied.search || undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
   });
   const { exportCSV, isExporting } = useExportConversationsCSV();
 
   const handleExport = () => {
-    // Open popup synchronously (user gesture) for reliable download in iframes
     const w = window.open("", "_blank");
     if (!w) {
       toast.info("Popups bloqueados. Permita popups para baixar a planilha.");
     }
     exportCSV({
       ...baseFilters,
-      search: search || undefined,
+      search: applied.search || undefined,
     }, { downloadWindow: w });
-  };
-
-  const handleDateChange = (range: DateRange | undefined) => {
-    if (range?.from) {
-      setDateRange(range);
-      setPage(0);
-    }
   };
 
   return (
@@ -97,13 +116,18 @@ export default function ConversationsReport() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-4 p-4 bg-muted/30 rounded-lg border">
+      <div className="flex flex-wrap gap-4 p-4 bg-muted/30 rounded-lg border items-end">
         <DateRangePicker
-          value={dateRange}
-          onChange={handleDateChange}
+          value={pending.dateRange}
+          onChange={(range) => {
+            if (range?.from) setPending((p) => ({ ...p, dateRange: range }));
+          }}
         />
 
-        <Select value={departmentId || "all"} onValueChange={(v) => { setDepartmentId(v === "all" ? undefined : v); setPage(0); }}>
+        <Select
+          value={pending.departmentId || "all"}
+          onValueChange={(v) => setPending((p) => ({ ...p, departmentId: v === "all" ? undefined : v }))}
+        >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Departamento" />
           </SelectTrigger>
@@ -115,7 +139,10 @@ export default function ConversationsReport() {
           </SelectContent>
         </Select>
 
-        <Select value={agentId || "all"} onValueChange={(v) => { setAgentId(v === "all" ? undefined : v); setPage(0); }}>
+        <Select
+          value={pending.agentId || "all"}
+          onValueChange={(v) => setPending((p) => ({ ...p, agentId: v === "all" ? undefined : v }))}
+        >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Agente" />
           </SelectTrigger>
@@ -127,7 +154,10 @@ export default function ConversationsReport() {
           </SelectContent>
         </Select>
 
-        <Select value={status || "all"} onValueChange={(v) => { setStatus(v === "all" ? undefined : v); setPage(0); }}>
+        <Select
+          value={pending.status || "all"}
+          onValueChange={(v) => setPending((p) => ({ ...p, status: v === "all" ? undefined : v }))}
+        >
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -138,7 +168,10 @@ export default function ConversationsReport() {
           </SelectContent>
         </Select>
 
-        <Select value={channel || "all"} onValueChange={(v) => { setChannel(v === "all" ? undefined : v); setPage(0); }}>
+        <Select
+          value={pending.channel || "all"}
+          onValueChange={(v) => setPending((p) => ({ ...p, channel: v === "all" ? undefined : v }))}
+        >
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Canal" />
           </SelectTrigger>
@@ -152,10 +185,21 @@ export default function ConversationsReport() {
 
         <Input
           placeholder="Buscar cliente..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+          value={pending.search}
+          onChange={(e) => setPending((p) => ({ ...p, search: e.target.value }))}
           className="w-[200px]"
         />
+
+        <div className="flex items-center gap-2">
+          <Button onClick={handleApply} size="default">
+            <Search className="h-4 w-4 mr-1" />
+            Filtrar
+          </Button>
+          <Button variant="outline" onClick={handleClear} size="default">
+            <X className="h-4 w-4 mr-1" />
+            Limpar
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
