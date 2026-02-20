@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from "react";
+import { useCallback, useState, useRef, useMemo } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -44,6 +44,7 @@ import { AttachmentsUploader } from "./AttachmentsUploader";
 import { PlaybookStepViewer } from "./PlaybookStepViewer";
 import { PlaybookSimulator } from "./PlaybookSimulator";
 import { useEmailTemplates } from "@/hooks/useEmailTemplates";
+import { useEmailTemplatesV2 } from "@/hooks/useEmailBuilderV2";
 import { useForms } from "@/hooks/useForms";
 import { useScoringRanges } from "@/hooks/useScoringConfig";
 import { useTestPlaybook } from "@/hooks/useTestPlaybook";
@@ -125,7 +126,34 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving, playbook
   const [pendingNodesWithoutTemplate, setPendingNodesWithoutTemplate] = useState<Node[]>([]);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { data: emailTemplates } = useEmailTemplates();
+  const { data: emailTemplatesV1 } = useEmailTemplates();
+  const { data: emailTemplatesV2Raw } = useEmailTemplatesV2();
+
+  // Merge V1 + V2 templates into a unified list
+  const emailTemplates = useMemo(() => {
+    const v1 = (emailTemplatesV1 || []).map(t => ({
+      ...t,
+      template_source: 'v1' as const,
+    }));
+    const v2 = (emailTemplatesV2Raw || []).map(t => ({
+      id: t.id,
+      name: `${t.name} (V2)`,
+      subject: t.default_subject || '',
+      html_body: '', // V2 uses blocks, rendered at send time
+      is_active: t.is_active,
+      trigger_type: t.trigger_type || null,
+      variables: null,
+      design_json: null,
+      created_at: t.created_at,
+      updated_at: t.updated_at,
+      created_by: t.created_by || null,
+      branding_id: t.branding_id || null,
+      department_id: t.department_id || null,
+      sender_id: t.sender_id || null,
+      template_source: 'v2' as const,
+    }));
+    return [...v1, ...v2];
+  }, [emailTemplatesV1, emailTemplatesV2Raw]);
   const { data: forms } = useForms();
   const { data: scoringRanges = [] } = useScoringRanges();
   const testPlaybook = useTestPlaybook();
@@ -509,6 +537,7 @@ function PlaybookEditorInner({ initialFlow, onSave, onCancel, isSaving, playbook
                       // Update all fields at once to avoid state sync issues
                       updateNodeDataMultiple({
                         template_id: value,
+                        template_source: template?.template_source || 'v1',
                         subject: template?.subject || "",
                         label: template?.name || selectedNode.data.label
                       });
