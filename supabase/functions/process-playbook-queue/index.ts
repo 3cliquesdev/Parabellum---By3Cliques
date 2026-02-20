@@ -407,6 +407,155 @@ Deno.serve(async (req) => {
   }
 });
 
+// =============================================
+// V2 EMAIL TEMPLATE RENDERER (server-side)
+// Converts email_template_blocks to responsive HTML
+// Mirror of src/utils/emailHtmlGenerator.ts
+// =============================================
+
+function resolveColor(color?: string): string {
+  if (!color) return "";
+  if (color.startsWith("#") || color.startsWith("rgb")) return color;
+  if (color.includes("var(--")) {
+    if (color.includes("--primary")) return "#2563eb";
+    if (color.includes("--primary-foreground")) return "#ffffff";
+    if (color.includes("--border")) return "#e2e8f0";
+    if (color.includes("--muted")) return "#f1f5f9";
+    return "#1e293b";
+  }
+  return color;
+}
+
+function parsePadding(padding?: string): { top: string; right: string; bottom: string; left: string } {
+  if (!padding) return { top: "16px", right: "16px", bottom: "16px", left: "16px" };
+  const parts = padding.split(" ").map((p: string) => p.trim());
+  if (parts.length === 1) return { top: parts[0], right: parts[0], bottom: parts[0], left: parts[0] };
+  if (parts.length === 2) return { top: parts[0], right: parts[1], bottom: parts[0], left: parts[1] };
+  if (parts.length === 3) return { top: parts[0], right: parts[1], bottom: parts[2], left: parts[1] };
+  return { top: parts[0], right: parts[1], bottom: parts[2], left: parts[3] };
+}
+
+function renderV2Block(block: any): string {
+  const styles = block.styles || {};
+  const content = block.content || {};
+  const padding = parsePadding(styles.padding);
+  const padStr = `${padding.top} ${padding.right} ${padding.bottom} ${padding.left}`;
+
+  switch (block.block_type) {
+    case "text": {
+      const color = resolveColor(styles.color) || "#1e293b";
+      const bg = resolveColor(styles.backgroundColor) || "#ffffff";
+      const fontSize = styles.fontSize || "16px";
+      const textAlign = styles.textAlign || "left";
+      return `<tr><td style="padding:${padStr};background-color:${bg};"><div style="font-size:${fontSize};color:${color};text-align:${textAlign};line-height:1.6;">${content.html || content.text || ""}</div></td></tr>`;
+    }
+    case "image": {
+      const bg = resolveColor(styles.backgroundColor) || "transparent";
+      const textAlign = styles.textAlign || "center";
+      const borderRadius = styles.borderRadius || "0";
+      const imgTag = `<img src="${content.src || ""}" alt="${content.alt || "Email image"}" style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:${borderRadius};" />`;
+      const linked = content.url ? `<a href="${content.url}" target="_blank" style="text-decoration:none;">${imgTag}</a>` : imgTag;
+      return `<tr><td style="padding:${padStr};text-align:${textAlign};background-color:${bg};">${linked}</td></tr>`;
+    }
+    case "button": {
+      const bg = resolveColor(styles.backgroundColor) || "#2563eb";
+      const color = resolveColor(styles.color) || "#ffffff";
+      const borderRadius = styles.borderRadius || "6px";
+      const fontSize = styles.fontSize || "14px";
+      const textAlign = styles.textAlign || "center";
+      const label = content.buttonText || content.text || "Clique aqui";
+      const href = content.url || "#";
+      return `<tr><td style="padding:16px 24px;text-align:${textAlign};"><table role="presentation" cellspacing="0" cellpadding="0" border="0" align="${textAlign === 'center' ? 'center' : textAlign === 'right' ? 'right' : 'left'}"><tr><td style="background-color:${bg};border-radius:${borderRadius};"><a href="${href}" target="_blank" style="display:inline-block;padding:${padStr};font-size:${fontSize};font-weight:500;color:${color};text-decoration:none;border-radius:${borderRadius};">${label}</a></td></tr></table></td></tr>`;
+    }
+    case "spacer": {
+      const height = content.height || 40;
+      return `<tr><td style="height:${height}px;font-size:1px;line-height:1px;">&nbsp;</td></tr>`;
+    }
+    case "divider": {
+      const color = resolveColor(styles.color) || "#e2e8f0";
+      return `<tr><td style="padding:${padStr};"><hr style="border:0;border-top:1px solid ${color};margin:0;" /></td></tr>`;
+    }
+    case "banner": {
+      const bg = resolveColor(styles.backgroundColor) || "#1e293b";
+      const color = resolveColor(styles.color) || "#ffffff";
+      const textAlign = styles.textAlign || "center";
+      const bgImage = content.src ? `background-image:url('${content.src}');background-size:cover;background-position:center;` : "";
+      return `<tr><td style="padding:${padStr};background-color:${bg};${bgImage}color:${color};text-align:${textAlign};">${content.html || ""}</td></tr>`;
+    }
+    case "signature": {
+      const color = resolveColor(styles.color) || "#1e293b";
+      const avatar = content.src ? `<td valign="top"><img src="${content.src}" alt="${content.name || 'Avatar'}" width="64" height="64" style="border-radius:50%;margin-right:16px;" /></td>` : "";
+      return `<tr><td style="padding:${padStr};"><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>${avatar}<td valign="top"><p style="margin:0 0 4px 0;font-weight:600;color:${color};">${content.name || "Nome"}</p><p style="margin:0 0 4px 0;font-size:14px;color:#64748b;">${content.role || "Cargo"}</p>${content.email ? `<a href="mailto:${content.email}" style="font-size:14px;color:#2563eb;">${content.email}</a>` : ""}</td></tr></table></td></tr>`;
+    }
+    case "social": {
+      const textAlign = styles.textAlign || "center";
+      const links = content.links || [];
+      const COLORS: Record<string, string> = { facebook: "#1877F2", twitter: "#1DA1F2", instagram: "#E4405F", linkedin: "#0A66C2", youtube: "#FF0000", website: "#6B7280" };
+      const LABELS: Record<string, string> = { facebook: "FB", twitter: "X", instagram: "IG", linkedin: "IN", youtube: "YT", website: "W" };
+      const socialHtml = links.map((l: any) => `<td style="padding:0 8px;"><a href="${l.url || "#"}" target="_blank" style="display:inline-block;width:36px;height:36px;line-height:36px;text-align:center;background-color:${COLORS[l.platform] || "#6B7280"};color:#ffffff;border-radius:50%;text-decoration:none;font-size:12px;font-weight:600;">${LABELS[l.platform] || "L"}</a></td>`).join("");
+      return `<tr><td style="padding:${padStr};text-align:${textAlign};"><table role="presentation" cellspacing="0" cellpadding="0" border="0" align="${textAlign === 'center' ? 'center' : 'left'}"><tr>${socialHtml}</tr></table></td></tr>`;
+    }
+    case "html": {
+      const bg = resolveColor(styles.backgroundColor) || "#ffffff";
+      return `<tr><td style="padding:${padStr};background-color:${bg};">${content.html || ""}</td></tr>`;
+    }
+    default:
+      return "";
+  }
+}
+
+function renderV2BlocksToHtml(blocks: any[], preheader?: string): string {
+  if (!blocks || blocks.length === 0) {
+    return '<p>Email sem conteúdo</p>';
+  }
+
+  // Check if it's a migrated template (single HTML block with full document)
+  if (blocks.length === 1 && blocks[0]?.block_type === "html") {
+    const htmlContent = blocks[0]?.content?.html || blocks[0]?.content?.value || "";
+    const s = htmlContent.trimStart().toLowerCase();
+    if (s.startsWith("<!doctype") || s.startsWith("<html")) {
+      return htmlContent;
+    }
+  }
+
+  const sorted = [...blocks].sort((a, b) => a.position - b.position);
+  const blocksHtml = sorted.map(renderV2Block).join("\n");
+
+  const preheaderHtml = preheader ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${preheader}</div>` : "";
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <style>
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+    body { height: 100% !important; margin: 0 !important; padding: 0 !important; width: 100% !important; }
+    table { border-collapse: collapse !important; }
+    @media screen and (max-width: 600px) {
+      .mobile-padding { padding: 16px !important; }
+      .mobile-stack { display: block !important; width: 100% !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  ${preheaderHtml}
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#f1f5f9;">
+    <tr>
+      <td align="center" style="padding:20px 0;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">
+          ${blocksHtml}
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 async function executeEmailNode(supabase: any, item: QueueItem, contact: any, execution: PlaybookExecution) {
   console.log(`Executing email node: ${item.node_id}`);
   
@@ -416,29 +565,68 @@ async function executeEmailNode(supabase: any, item: QueueItem, contact: any, ex
   
   // 1. Se tem template_id, buscar o template do banco
   if (emailData.template_id) {
-    console.log(`Fetching email template: ${emailData.template_id}`);
+    const templateSource = emailData.template_source || 'v1';
+    console.log(`Fetching email template: ${emailData.template_id} (source: ${templateSource})`);
     
-    const { data: template, error: templateError } = await supabase
-      .from('email_templates')
-      .select('html_body, subject, name')
-      .eq('id', emailData.template_id)
-      .single();
-    
-    if (templateError || !template) {
-      console.error('Template not found:', templateError);
-      return { success: false, error: `Template não encontrado: ${emailData.template_id}` };
+    if (templateSource === 'v2') {
+      // V2 template: fetch from email_templates_v2 + render blocks to HTML
+      const { data: templateV2, error: v2Error } = await supabase
+        .from('email_templates_v2')
+        .select('name, default_subject, default_preheader')
+        .eq('id', emailData.template_id)
+        .single();
+      
+      if (v2Error || !templateV2) {
+        console.error('V2 Template not found:', v2Error);
+        return { success: false, error: `Template V2 não encontrado: ${emailData.template_id}` };
+      }
+      
+      console.log(`V2 Template loaded: ${templateV2.name}`);
+      
+      // Fetch blocks for this V2 template
+      const { data: blocks, error: blocksError } = await supabase
+        .from('email_template_blocks')
+        .select('*')
+        .eq('template_id', emailData.template_id)
+        .is('variant_id', null)
+        .order('position', { ascending: true });
+      
+      if (blocksError) {
+        console.error('Error fetching V2 blocks:', blocksError);
+        return { success: false, error: `Erro ao buscar blocos V2: ${blocksError.message}` };
+      }
+      
+      // Render blocks to HTML using the same logic as the frontend
+      htmlContent = renderV2BlocksToHtml(blocks || [], templateV2.default_preheader);
+      
+      if (!emailData.subject && templateV2.default_subject) {
+        subject = templateV2.default_subject;
+      }
+    } else {
+      // V1 template: original logic
+      const { data: template, error: templateError } = await supabase
+        .from('email_templates')
+        .select('html_body, subject, name')
+        .eq('id', emailData.template_id)
+        .single();
+      
+      if (templateError || !template) {
+        console.error('Template not found:', templateError);
+        return { success: false, error: `Template não encontrado: ${emailData.template_id}` };
+      }
+      
+      console.log(`Template loaded: ${template.name}`);
+      
+      if (!emailData.subject && template.subject) {
+        subject = template.subject;
+      }
+      
+      htmlContent = template.html_body || '';
     }
     
-    console.log(`Template loaded: ${template.name}`);
-    
-    // Usar subject do template se não tiver no node
-    if (!emailData.subject && template.subject) {
-      subject = template.subject;
-    }
-    
-    // 2. Substituir variáveis no template
+    // 2. Substituir variáveis no template (V1 e V2)
     const today = new Date().toLocaleDateString('pt-BR');
-    htmlContent = (template.html_body || '')
+    htmlContent = htmlContent
       // Variáveis em inglês (backward compatibility)
       .replace(/\{\{first_name\}\}/gi, contact.first_name || 'Cliente')
       .replace(/\{\{last_name\}\}/gi, contact.last_name || '')
