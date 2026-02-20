@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const PAGE_SIZE = 2000;
+const PAGE_SIZE = 1000;
 const SAFETY_LIMIT = 50000;
 
 interface FetchAllOptions {
