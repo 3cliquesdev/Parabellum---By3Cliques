@@ -124,6 +124,9 @@ const TicketsExportReport = lazy(() => import("./pages/TicketsExportReport"));
 const ConversationsReport = lazy(() => import("./pages/ConversationsReport"));
 const PlaybookEmailSequenceReport = lazy(() => import("./pages/PlaybookEmailSequenceReport"));
 const ReportBuilder = lazy(() => import("./pages/ReportBuilder"));
+const AnalyticsPremium = lazy(() => import("./pages/AnalyticsPremium"));
+const DashboardsList = lazy(() => import("./pages/DashboardsList"));
+const DashboardView = lazy(() => import("./pages/DashboardView"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -201,6 +204,9 @@ const App = () => {
               <Route path="/onboarding-builder" element={<ProtectedRoute requiredPermission="playbooks.view"><Layout><OnboardingBuilder /></Layout></ProtectedRoute>} />
               <Route path="/playbook-executions" element={<ProtectedRoute requiredPermission="playbooks.view_executions"><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
               <Route path="/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Analytics /></Layout></ProtectedRoute>} />
+              <Route path="/analytics/premium" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><AnalyticsPremium /></Layout></ProtectedRoute>} />
+              <Route path="/dashboards" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><DashboardsList /></Layout></ProtectedRoute>} />
+              <Route path="/dashboard/:id" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><DashboardView /></Layout></ProtectedRoute>} />
               <Route path="/subscriptions" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Subscriptions /></Layout></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute requiredPermission="analytics.export"><Layout><Reports /></Layout></ProtectedRoute>} />
               <Route path="/report-builder" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ReportBuilder /></Layout></ProtectedRoute>} />
