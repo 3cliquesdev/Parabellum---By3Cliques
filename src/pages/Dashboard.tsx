@@ -36,6 +36,13 @@ import {
 export default function Dashboard() {
   const [searchParams] = useSearchParams();
   const view = searchParams.get("view") || "overview";
+  
+  // Deep-link: /?tab=sales ou /?tab=vendas
+  const tabParam = searchParams.get("tab");
+  const TAB_ALIAS: Record<string, string> = { vendas: "sales" };
+  const VALID_TABS = ["overview", "sales", "support", "financial", "operations"];
+  const resolvedTab = TAB_ALIAS[tabParam || ""] || tabParam || "";
+  const initialTab = VALID_TABS.includes(resolvedTab) ? resolvedTab : "overview";
   const { role, loading } = useUserRole();
   const { user } = useAuth();
   
@@ -127,7 +134,7 @@ export default function Dashboard() {
         <DateRangePicker value={dateRange} onChange={setDateRange} />
       </PageHeader>
       <PageContent>
-        <Tabs defaultValue="overview" className="w-full">
+        <Tabs defaultValue={initialTab} className="w-full">
           <TabsList className="mb-6 bg-muted/50 p-1">
             <TabsTrigger value="overview" className="gap-2">
               <LayoutGrid className="h-4 w-4" />

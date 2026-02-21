@@ -1,6 +1,6 @@
 import { useUserRole } from "@/hooks/useUserRole";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
 import { BarChart3, Sparkles, LayoutGrid, TrendingUp, Headphones, UserMinus, Target, Settings } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -73,6 +73,12 @@ export default function Analytics() {
             <p className="text-sm text-muted-foreground">
               Business Intelligence Unificado
             </p>
+            <Link
+              to="/?tab=vendas"
+              className="text-xs text-primary hover:underline mt-1 inline-block"
+            >
+              Ver Dashboard de Vendas (Sistema)
+            </Link>
           </div>
         </div>
 
