@@ -5,6 +5,9 @@ import { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Users } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
@@ -29,7 +32,7 @@ export default function TicketsExportReport() {
   const [filters, setFilters] = useState<TicketExportFilters>({
     dateRange: undefined,
     departmentId: "all",
-    agentId: "all",
+    agentIds: [],
     status: "all",
     priority: "all",
     search: "",
@@ -123,15 +126,50 @@ export default function TicketsExportReport() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filters.agentId} onValueChange={(v) => updateFilter("agentId", v)}>
-              <SelectTrigger><SelectValue placeholder="Agente" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos Agentes</SelectItem>
-                {agents?.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="justify-start gap-2 font-normal">
+                  <Users className="h-4 w-4" />
+                  {filters.agentIds.length === 0
+                    ? "Todos Agentes"
+                    : `${filters.agentIds.length} agente${filters.agentIds.length > 1 ? "s" : ""}`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-3" align="start">
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {agents?.map((a) => (
+                    <div key={a.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`agent-${a.id}`}
+                        checked={filters.agentIds.includes(a.id)}
+                        onCheckedChange={() => {
+                          const next = filters.agentIds.includes(a.id)
+                            ? filters.agentIds.filter((id) => id !== a.id)
+                            : [...filters.agentIds, a.id];
+                          updateFilter("agentIds", next);
+                        }}
+                      />
+                      <label htmlFor={`agent-${a.id}`} className="text-sm cursor-pointer flex-1">
+                        {a.full_name || "Sem nome"}
+                      </label>
+                    </div>
+                  ))}
+                  {(!agents || agents.length === 0) && (
+                    <p className="text-sm text-muted-foreground">Nenhum agente encontrado</p>
+                  )}
+                </div>
+                {filters.agentIds.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={() => updateFilter("agentIds", [])}
+                  >
+                    Limpar seleção
+                  </Button>
+                )}
+              </PopoverContent>
+            </Popover>
             <Select value={filters.status} onValueChange={(v) => updateFilter("status", v)}>
               <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>

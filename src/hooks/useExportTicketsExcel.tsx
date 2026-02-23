@@ -52,7 +52,7 @@ export function useExportTicketsExcel() {
         params.p_end = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T23:59:59`;
       }
       if (filters.departmentId && filters.departmentId !== "all") params.p_department_id = filters.departmentId;
-      if (filters.agentId && filters.agentId !== "all") params.p_agent_id = filters.agentId;
+      if (filters.agentIds && filters.agentIds.length > 0) params.p_agent_ids = filters.agentIds;
       if (filters.status && filters.status !== "all") params.p_status = filters.status;
       if (filters.priority && filters.priority !== "all") params.p_priority = filters.priority;
       if (filters.search) params.p_search = filters.search;
