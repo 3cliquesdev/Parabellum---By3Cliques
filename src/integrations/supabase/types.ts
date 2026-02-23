@@ -9985,89 +9985,47 @@ export type Database = {
           total_revenue: number
         }[]
       }
-      get_tickets_export_report:
-        | {
-            Args: {
-              p_agent_id?: string
-              p_department_id?: string
-              p_end?: string
-              p_limit?: number
-              p_offset?: number
-              p_priority?: string
-              p_search?: string
-              p_start?: string
-              p_status?: string
-            }
-            Returns: {
-              assigned_to_name: string
-              category: string
-              channel: string
-              contact_email: string
-              contact_name: string
-              contact_phone: string
-              created_at: string
-              department_name: string
-              due_date: string
-              first_response_at: string
-              frt_minutes: number
-              operation_name: string
-              origin_name: string
-              priority: string
-              requesting_department_name: string
-              resolution_minutes: number
-              resolved_at: string
-              sla_resolution_time_unit: string
-              sla_resolution_time_value: number
-              sla_response_time_unit: string
-              sla_response_time_value: number
-              status: string
-              subject: string
-              tags_list: string
-              ticket_number: string
-              total_count: number
-            }[]
-          }
-        | {
-            Args: {
-              p_agent_ids?: string[]
-              p_department_id?: string
-              p_end?: string
-              p_limit?: number
-              p_offset?: number
-              p_priority?: string
-              p_search?: string
-              p_start?: string
-              p_status?: string
-            }
-            Returns: {
-              assigned_to_name: string
-              category: string
-              channel: string
-              contact_email: string
-              contact_name: string
-              contact_phone: string
-              created_at: string
-              department_name: string
-              due_date: string
-              first_response_at: string
-              frt_minutes: number
-              operation_name: string
-              origin_name: string
-              priority: string
-              requesting_department_name: string
-              resolution_minutes: number
-              resolved_at: string
-              sla_resolution_time_unit: string
-              sla_resolution_time_value: number
-              sla_response_time_unit: string
-              sla_response_time_value: number
-              status: string
-              subject: string
-              tags_list: string
-              ticket_number: string
-              total_count: number
-            }[]
-          }
+      get_tickets_export_report: {
+        Args: {
+          p_agent_ids?: string[]
+          p_department_id?: string
+          p_end?: string
+          p_limit?: number
+          p_offset?: number
+          p_priority?: string
+          p_search?: string
+          p_start?: string
+          p_status?: string
+        }
+        Returns: {
+          assigned_to_name: string
+          category: string
+          channel: string
+          contact_email: string
+          contact_name: string
+          contact_phone: string
+          created_at: string
+          department_name: string
+          due_date: string
+          first_response_at: string
+          frt_minutes: number
+          operation_name: string
+          origin_name: string
+          priority: string
+          requesting_department_name: string
+          resolution_minutes: number
+          resolved_at: string
+          sla_resolution_time_unit: string
+          sla_resolution_time_value: number
+          sla_response_time_unit: string
+          sla_response_time_value: number
+          status: string
+          subject: string
+          tags_list: string
+          ticket_number: string
+          total_count: number
+        }[]
+      }
       get_volume_resolution_consolidated: {
         Args: { p_end: string; p_start: string }
         Returns: {
