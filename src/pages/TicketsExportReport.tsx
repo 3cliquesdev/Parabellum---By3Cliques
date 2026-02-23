@@ -47,10 +47,29 @@ export default function TicketsExportReport() {
     },
   });
 
+  const INTERNAL_ROLES = [
+    'admin', 'general_manager', 'manager', 'sales_rep', 'consultant',
+    'support_agent', 'support_manager', 'financial_manager', 'financial_agent',
+    'cs_manager', 'ecommerce_analyst'
+  ] as const;
+
   const { data: agents } = useQuery({
-    queryKey: ["agents-list"],
+    queryKey: ["internal-agents-list"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, full_name").order("full_name");
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .in("role", INTERNAL_ROLES);
+
+      const ids = roles?.map(r => r.user_id) || [];
+      if (ids.length === 0) return [];
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", ids)
+        .order("full_name");
+
       return data ?? [];
     },
   });
