@@ -1,63 +1,73 @@
 
-# Unificar visual dos tickets no Inbox com o menu de Tickets
+# Alinhar dialog de Ticket do Inbox com o padrao do menu de Tickets
 
 ## Problema
 
-Os tickets exibidos na aba "Tickets" do painel lateral do Inbox (`ContactDetailsSidebar.tsx`) usam um layout simplificado (apenas assunto, badge de status basico, SLA e data). Ja no menu de Tickets (`support/TicketCard.tsx`), o card e muito mais completo, com:
+O dialog "Criar Ticket a partir da Conversa" (`CreateTicketFromInboxDialog.tsx`) esta incompleto comparado ao dialog principal (`CreateTicketDialog.tsx`). Faltam:
 
-- Numero do ticket (#00001)
-- Status com cores dinamicas e icones (carregados da tabela `ticket_statuses`)
-- Alerta de SLA vencido (icone pulsante + borda vermelha)
-- Badge de prioridade (Baixa, Media, Alta, Urgente)
-- Tempo relativo ("ha 2 horas")
-- Seta de navegacao
+- Campo **Operacao** (obrigatorio conforme configuracao)
+- Campo **Origem do Ticket** (obrigatorio conforme configuracao)
+- Campo **Tags** (obrigatorio conforme configuracao)
+- Validacao via `useTicketFieldSettings` (campos obrigatorios dinamicos)
+- O botao de submit nao bloqueia quando campos obrigatorios estao vazios
 
 ## Solucao
 
-Substituir o bloco de renderizacao inline dos tickets no `ContactDetailsSidebar.tsx` (linhas 251-276) por uma versao compacta que reutilize os mesmos padroes visuais do `TicketCard` do menu.
+Adicionar os 3 campos ausentes + validacao dinamica ao `CreateTicketFromInboxDialog`, seguindo exatamente o mesmo padrao visual e logico do `CreateTicketDialog` do menu.
 
-Como o `TicketCard` do menu e projetado para uma lista vertical com mais espaco, criaremos uma versao **compacta** dentro do sidebar que inclua:
+## Mudancas
 
-1. **Numero do ticket** (ex.: #00001)
-2. **Status com cor dinamica** usando `useActiveTicketStatuses` + `getStatusIcon` (mesmo sistema do menu)
-3. **Indicador de SLA vencido** (borda vermelha + icone)
-4. **Badge de prioridade** com cores consistentes
-5. **Tempo relativo** (formatDistanceToNow)
-6. **Click para navegar** ao detalhe do ticket (`/support/ticket/:id`)
+### 1. Frontend: `src/components/CreateTicketFromInboxDialog.tsx`
 
-## Detalhes tecnicos
+**Novos imports:**
+- `useTicketOperations` - lista de operacoes
+- `useTicketOrigins` - lista de origens
+- `useTags` - lista de tags universais
+- `useTicketFieldSettings` - config de campos obrigatorios
 
-### Arquivo: `src/components/ContactDetailsSidebar.tsx`
+**Novos estados:**
+- `operationId` (string)
+- `originId` (string)
+- `selectedTagIds` (string[])
+- `tagSearch` (string)
+- `tagPopoverOpen` (boolean)
 
-1. Adicionar imports necessarios:
-   - `useActiveTicketStatuses` de `@/hooks/useTicketStatuses`
-   - `getStatusIcon` de `@/lib/ticketStatusIcons`
-   - `formatDistanceToNow` de `date-fns`
-   - `AlertTriangle` de `lucide-react`
-   - `useNavigate` de `react-router-dom`
+**Novos campos no formulario** (inseridos entre "Assignee" e "Description"):
+- **Operacao**: Select com label dinamico (obrigatorio/opcional conforme config)
+- **Origem do Ticket**: Select com label dinamico
+- **Tags**: Popover com busca + badges selecionadas, label dinamico com asterisco quando obrigatorio
 
-2. Dentro do componente, adicionar:
-   - `const { data: ticketStatuses } = useActiveTicketStatuses()`
-   - `const navigate = useNavigate()`
-   - Config de prioridade igual ao `TicketCard` do menu
-   - Fallback de status com cores igual ao `TicketCard` do menu
+**Validacao de submit:**
+- Regra `canSubmit` igual ao dialog principal: bloqueia se campo obrigatorio estiver vazio
+- Helper `fieldLabel` para exibir asterisco vermelho ou "(opcional)"
 
-3. Substituir o bloco de renderizacao (linhas 251-276) por cards compactos com:
-   - Linha 1: `#ticket_number` + Badge de status (cor dinamica + icone)
-   - Linha 2: Assunto (line-clamp-1)
-   - Linha 3: SLA Badge + prioridade + tempo relativo
-   - Borda vermelha lateral se SLA vencido
-   - `onClick` navegando para `/support/ticket/${ticket.id}`
+**Reset do form:** Limpar novos campos quando dialog fecha.
 
-4. Remover a funcao local `getStatusBadge` (linhas 138-147) que sera substituida pelo sistema dinamico.
+**Payload do submit:** Enviar `operation_id`, `origin_id`, `tag_ids` junto com os dados atuais.
 
-### Dados
+### 2. Backend: `supabase/functions/generate-ticket-from-conversation/index.ts`
 
-O hook `useContactTickets` ja retorna `*` (todos os campos), entao `ticket_number`, `priority`, `due_date`, `status` ja estao disponiveis. Nenhuma mudanca no hook necessaria.
+**Ampliar interface `CreateTicketRequest`:**
+- Adicionar `operation_id?: string`
+- Adicionar `origin_id?: string`
+- Adicionar `tag_ids?: string[]`
+
+**No insert do ticket:**
+- Incluir `operation_id` e `origin_id` no payload de criacao
+
+**Apos criar ticket:**
+- Se `tag_ids` tiver itens, inserir em `ticket_tags` (mesmo padrao do `useCreateTicket`)
+
+### 3. Hook: `src/hooks/useGenerateTicketFromConversation.tsx`
+
+**Ampliar interface `GenerateTicketRequest`:**
+- Adicionar `operation_id?: string`
+- Adicionar `origin_id?: string`
+- Adicionar `tag_ids?: string[]`
 
 ## Zero regressao
 
-- Apenas mudanca visual no sidebar do Inbox
-- Dados ja existem, nenhuma query nova
-- `TicketCard` do menu nao e alterado
+- Dialog principal de Tickets (`CreateTicketDialog`) nao e alterado
+- Edge function so adiciona campos opcionais - requisicoes antigas continuam funcionando
 - Kill Switch, CSAT, fluxos: sem impacto
+- Validacao segue a mesma config `system_configurations` ja existente
