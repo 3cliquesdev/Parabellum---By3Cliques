@@ -1,53 +1,63 @@
 
-
-# Registrar envio de template na timeline do contato
+# Unificar visual dos tickets no Inbox com o menu de Tickets
 
 ## Problema
 
-Quando um template de reengajamento e enviado, a mensagem aparece no chat (via edge function), mas nao e registrado nenhum evento na timeline de interacoes do contato. O painel lateral mostra "Nenhum evento registrado" mesmo apos envios de templates.
+Os tickets exibidos na aba "Tickets" do painel lateral do Inbox (`ContactDetailsSidebar.tsx`) usam um layout simplificado (apenas assunto, badge de status basico, SLA e data). Ja no menu de Tickets (`support/TicketCard.tsx`), o card e muito mais completo, com:
+
+- Numero do ticket (#00001)
+- Status com cores dinamicas e icones (carregados da tabela `ticket_statuses`)
+- Alerta de SLA vencido (icone pulsante + borda vermelha)
+- Badge de prioridade (Baixa, Media, Alta, Urgente)
+- Tempo relativo ("ha 2 horas")
+- Seta de navegacao
 
 ## Solucao
 
-Adicionar um INSERT na tabela `interactions` apos o envio bem-sucedido do template, registrando o evento como tipo `whatsapp_msg` (ou um tipo dedicado) com os detalhes do template enviado.
+Substituir o bloco de renderizacao inline dos tickets no `ContactDetailsSidebar.tsx` (linhas 251-276) por uma versao compacta que reutilize os mesmos padroes visuais do `TicketCard` do menu.
 
-## Mudanca
+Como o `TicketCard` do menu e projetado para uma lista vertical com mais espaco, criaremos uma versao **compacta** dentro do sidebar que inclua:
 
-### Arquivo: `src/components/inbox/ReengageTemplateDialog.tsx`
+1. **Numero do ticket** (ex.: #00001)
+2. **Status com cor dinamica** usando `useActiveTicketStatuses` + `getStatusIcon` (mesmo sistema do menu)
+3. **Indicador de SLA vencido** (borda vermelha + icone)
+4. **Badge de prioridade** com cores consistentes
+5. **Tempo relativo** (formatDistanceToNow)
+6. **Click para navegar** ao detalhe do ticket (`/support/ticket/:id`)
 
-Dentro do `onSuccess` da mutation (apos o envio funcionar), inserir uma interacao na tabela `interactions`:
+## Detalhes tecnicos
 
-```typescript
-// Dentro de onSuccess, antes de invalidar queries:
-if (conversation.contact_id) {
-  await supabase.from("interactions").insert({
-    customer_id: conversation.contact_id,
-    type: "whatsapp_msg",
-    channel: "whatsapp",
-    direction: "outbound",
-    content: `📋 Template enviado: ${selectedTemplate?.name}`,
-    metadata: {
-      template_name: selectedTemplate?.name,
-      template_category: selectedTemplate?.category,
-      conversation_id: conversation.id,
-      sent_by: user?.id,
-    },
-  });
-}
-```
+### Arquivo: `src/components/ContactDetailsSidebar.tsx`
 
-Tambem invalidar a query de timeline para o contato aparecer atualizado:
+1. Adicionar imports necessarios:
+   - `useActiveTicketStatuses` de `@/hooks/useTicketStatuses`
+   - `getStatusIcon` de `@/lib/ticketStatusIcons`
+   - `formatDistanceToNow` de `date-fns`
+   - `AlertTriangle` de `lucide-react`
+   - `useNavigate` de `react-router-dom`
 
-```typescript
-queryClient.invalidateQueries({ queryKey: ["unified-timeline", conversation.contact_id] });
-queryClient.invalidateQueries({ queryKey: ["customer-timeline", conversation.contact_id] });
-```
+2. Dentro do componente, adicionar:
+   - `const { data: ticketStatuses } = useActiveTicketStatuses()`
+   - `const navigate = useNavigate()`
+   - Config de prioridade igual ao `TicketCard` do menu
+   - Fallback de status com cores igual ao `TicketCard` do menu
 
-**Nota tecnica**: O `onSuccess` precisa virar `async` para aguardar o insert. Alternativamente, o insert pode ser fire-and-forget (sem await), ja que e apenas registro de auditoria e nao deve bloquear o fluxo principal.
+3. Substituir o bloco de renderizacao (linhas 251-276) por cards compactos com:
+   - Linha 1: `#ticket_number` + Badge de status (cor dinamica + icone)
+   - Linha 2: Assunto (line-clamp-1)
+   - Linha 3: SLA Badge + prioridade + tempo relativo
+   - Borda vermelha lateral se SLA vencido
+   - `onClick` navegando para `/support/ticket/${ticket.id}`
+
+4. Remover a funcao local `getStatusBadge` (linhas 138-147) que sera substituida pelo sistema dinamico.
+
+### Dados
+
+O hook `useContactTickets` ja retorna `*` (todos os campos), entao `ticket_number`, `priority`, `due_date`, `status` ja estao disponiveis. Nenhuma mudanca no hook necessaria.
 
 ## Zero regressao
 
-- O envio do template nao muda - continua via edge function
-- Apenas adiciona um registro de auditoria na tabela `interactions`
-- Kill Switch, CSAT guard, fluxos: sem impacto
-- Timeline existente continua funcionando, apenas ganha mais um evento
-
+- Apenas mudanca visual no sidebar do Inbox
+- Dados ja existem, nenhuma query nova
+- `TicketCard` do menu nao e alterado
+- Kill Switch, CSAT, fluxos: sem impacto
