@@ -295,7 +295,7 @@ serve(async (req) => {
     );
 
     const body = await req.json();
-    const { conversationId, userMessage, flowId, manualTrigger, contractViolation, violationReason, activateTransfer } = body;
+    const { conversationId, userMessage, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck } = body;
     
     if (!conversationId) {
       return new Response(
@@ -445,10 +445,75 @@ serve(async (req) => {
       }
 
       if (!flow.is_active) {
-        return new Response(
-          JSON.stringify({ error: "Fluxo está inativo", useAI: true }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
+        // ============================================================
+        // 🧪 DRAFT-TEST: Permitir execução de rascunho com tripla validação
+        // 1. bypassActiveCheck === true (enviado pelo frontend)
+        // 2. is_test_mode === true (conversa em modo teste)
+        // 3. Role privilegiado (admin/manager/etc.)
+        // ============================================================
+        if (!bypassActiveCheck) {
+          return new Response(
+            JSON.stringify({ error: "Fluxo está inativo", useAI: true }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          );
+        }
+
+        if (!isTestMode) {
+          return new Response(
+            JSON.stringify({ error: "Ative o Modo Teste no header desta conversa para rodar fluxos em rascunho." }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+          );
+        }
+
+        // Verificar role do usuário chamador
+        const authHeader = req.headers.get('Authorization');
+        let callerUserId: string | null = null;
+        if (authHeader) {
+          try {
+            const token = authHeader.replace('Bearer ', '');
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            callerUserId = payload.sub || null;
+          } catch (e) {
+            console.error('[process-chat-flow] Failed to parse JWT:', e);
+          }
+        }
+
+        const PRIVILEGED_ROLES = ['admin', 'manager', 'general_manager', 'support_manager', 'cs_manager', 'financial_manager'];
+        let hasPrivilegedRole = false;
+
+        if (callerUserId) {
+          const { data: roleData } = await supabaseClient
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', callerUserId)
+            .single();
+          
+          if (roleData && PRIVILEGED_ROLES.includes(roleData.role)) {
+            hasPrivilegedRole = true;
+          }
+        }
+
+        if (!hasPrivilegedRole) {
+          return new Response(
+            JSON.stringify({ error: "Apenas administradores e gestores podem testar fluxos em rascunho." }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+          );
+        }
+
+        // ✅ Tripla validação OK — log + audit
+        console.log(`[DRAFT-TEST] Flow draft executed in test mode | flow: ${flow.name} (${flowId}) | user: ${callerUserId} | conversation: ${conversationId}`);
+
+        await supabaseClient.from('audit_logs').insert({
+          user_id: callerUserId,
+          action: 'draft_flow_test',
+          table_name: 'chat_flows',
+          record_id: flowId,
+          new_data: {
+            conversation_id: conversationId,
+            flow_name: flow.name,
+            is_draft: true,
+          },
+        });
       }
 
       // Cancelar qualquer fluxo ativo anterior

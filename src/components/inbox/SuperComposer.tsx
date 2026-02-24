@@ -8,6 +8,7 @@ import { MacrosPopover } from "@/components/MacrosPopover";
 import { FileDropZone } from "./FileDropZone";
 import { AudioRecorder } from "./AudioRecorder";
 import { FlowPickerButton } from "./FlowPickerButton";
+import { useTestModeToggle } from "@/hooks/useTestModeToggle";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useSendMessage } from "@/hooks/useMessages";
 import { useSendMessageInstant } from "@/hooks/useSendMessageInstant";
@@ -82,6 +83,7 @@ export function SuperComposer({
   const { user } = useAuth();
   const sendMessage = useSendMessage();
   const { sendInstant } = useSendMessageInstant();
+  const { isTestMode } = useTestModeToggle(conversationId);
 
   // Preload FFmpeg WASM when conversation opens (async, non-blocking)
   useEffect(() => {
@@ -678,6 +680,7 @@ export function SuperComposer({
               <FlowPickerButton
                 conversationId={conversationId}
                 disabled={isDisabled || isSending}
+                isTestMode={isTestMode}
               />
 
               {/* Macros Button */}
