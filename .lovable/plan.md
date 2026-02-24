@@ -1,40 +1,43 @@
 
-
-# Atualizar Status do Atendente em Tempo Real
+# Corrigir Validacao de Tags ao Encerrar Conversa
 
 ## Problema
 
-Quando o status de um atendente e alterado (por ele mesmo ou por um admin), a atualizacao nao aparece imediatamente na sidebar do Inbox e em outros componentes. O delay ocorre por dois motivos:
+A validacao de tags obrigatorias ao encerrar conversa aceita **qualquer tag**, independente da categoria. Se o usuario adicionar uma tag pessoal (categoria "customer", "interesse", "fonte", etc.) na conversa, o sistema considera a exigencia cumprida e permite encerrar. O correto e exigir pelo menos uma tag da categoria **"conversation"**.
 
-1. O hook `useAgentConversations` tem `staleTime: 30000` (30 segundos), o que faz com que invalidacoes nao disparem refetch imediato se os dados ainda estiverem "frescos"
-2. O hook `useManageAvailabilityStatus` (usado por admins para mudar status de outros agentes) nao invalida `agent-conversations-stats`, que e a query usada na sidebar do Inbox
+Alem disso, o encerramento em lote (`useBulkCloseConversations`) ignora completamente a validacao de tags.
 
 ## Alteracoes
 
-### 1. Corrigir `useManageAvailabilityStatus.tsx`
+### 1. Filtrar por categoria "conversation" no `useConversationTags` usado pelo dialog
 
-Adicionar invalidacoes que faltam no `onSuccess`:
-- `agent-conversations-stats` (lista de agentes na sidebar)
-- `agent-conversations-list` (lista de conversas por agente)
-- `team-online-count` (contador de online)
-- `profiles` (dados gerais)
-- `support-agents` (lista de agentes de suporte)
+**Arquivo:** `src/components/CloseConversationDialog.tsx`
 
-### 2. Ajustar `useAgentConversations.tsx`
+- Alterar a logica de `hasTags` para verificar se existe pelo menos uma tag com `category === "conversation"` entre as tags da conversa
+- O hook `useConversationTags` ja retorna o campo `category` no select (`tag:tags(id, name, color, category)`)
+- Filtrar: `const hasConversationTags = conversationTags.some(t => t.category === "conversation")`
+- Usar `hasConversationTags` ao inves de `hasTags` na variavel `missingTags`
+- Atualizar o texto do alerta para esclarecer que sao tags de conversa (nao pessoais)
 
-Reduzir o `staleTime` de 30s para 5s para que invalidacoes vindas do Realtime disparem refetch quase imediato. Manter `refetchInterval` de 60s como fallback.
+### 2. Adicionar validacao de tags no encerramento em lote
 
-### 3. Ajustar `useAvailabilityStatus.tsx`
+**Arquivo:** `src/hooks/useBulkCloseConversations.tsx`
 
-No `onSuccess` da mutation, adicionar invalidacoes cruzadas para que quando o proprio agente mude seu status, as queries de outros componentes tambem sejam atualizadas:
-- `agent-conversations-stats`
-- `team-online-status`
-- `team-online-count`
-- `profiles`
+- Antes de encerrar, consultar `conversation_tags` com JOIN em `tags` filtrando `category = 'conversation'` para cada conversa
+- Identificar conversas sem tags de conversa
+- Se `tagsRequired` estiver ativo e houver conversas sem tags: bloquear e retornar erro com lista das conversas pendentes
+- Receber `tagsRequired` como parametro da mutation
+
+### 3. Propagar validacao no Inbox (bulk close)
+
+**Arquivo:** `src/pages/Inbox.tsx`
+
+- Passar `tagsRequired` (do hook `useConversationCloseSettings`) para a logica de bulk close
+- Exibir toast informando quais conversas nao puderam ser encerradas por falta de tags
 
 ## Impacto
 
-- Zero regressao: nenhuma logica existente e alterada, apenas adicionadas invalidacoes e reduzido cache
-- Upgrade puro: status muda instantaneamente em todas as telas (sidebar, widget, header)
-- A infraestrutura de Realtime ja esta no lugar (`profiles` ja esta na publicacao `supabase_realtime` e `useProfilesRealtime` ja escuta globalmente), o ajuste e apenas garantir que as queries corretas sejam invalidadas e refetched sem delay
-
+- Zero regressao: tags pessoais continuam sendo exibidas normalmente na conversa
+- Upgrade de governanca: so tags de categoria "conversation" satisfazem a exigencia
+- Encerramento em lote passa a respeitar a mesma regra do encerramento individual
+- Backend (Edge Function `close-conversation`) nao precisa de alteracao -- a validacao e feita no frontend antes de chamar
