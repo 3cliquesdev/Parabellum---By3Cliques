@@ -1,135 +1,122 @@
 
+# Contrato de Paridade: Admin = Gerentes (FULL_ACCESS_ROLES)
 
-# Tag Universal Sincronizada: Uma Tag, Dois Locais, Tudo Sincronizado
+## Diagnostico
 
-## Objetivo
+O editor de fluxos (Chat Flow Editor) ja e identico para todos os roles com permissao `settings.chat_flows`. Nao ha nenhum filtro de role dentro dos componentes do editor. Os screenshots mostram a mesma interface com scroll e tema diferentes.
 
-Quando o usuario escolhe uma tag em qualquer lugar (header ou sidebar), o sistema:
-1. Define essa tag na **conversa** (`conversation_tags`) E no **contato** (`customer_tags`)
-2. Remove qualquer tag anterior automaticamente (swap)
-3. Permite apenas **1 tag por vez** em ambos
-4. Qualquer uma das duas vale para liberar o encerramento da conversa
+Porem, existem areas do sistema com restricoes exclusivas de admin que precisam ser abertas para gerentes conforme o contrato de paridade.
 
-## Arquitetura
+## Areas com Restricao Exclusiva de Admin (a corrigir)
 
-```text
-+---------------------+       +----------------------+
-|  Header (Tag btn)   |       |  Sidebar (Tags)      |
-+---------------------+       +----------------------+
-         |                              |
-         v                              v
-  +----------------------------------------------+
-  |        Hook: useUniversalTag()               |
-  |  - Lê conversation_tags + customer_tags      |
-  |  - selectTag(): grava em ambas tabelas       |
-  |  - removeTag(): remove de ambas tabelas      |
-  |  - currentTag: tag ativa (1 só)              |
-  +----------------------------------------------+
-         |                    |
-         v                    v
-  conversation_tags      customer_tags
-  (1 registro max)       (1 registro max)
+| Area | Arquivo | Restricao Atual | Proposta |
+|---|---|---|---|
+| Super Admin Panel | `SuperAdminPanel.tsx` | `isAdmin` only | Abrir para `hasFullAccess(role)` |
+| Instagram Secrets | `InstagramSecretsCard.tsx` | `isAdmin` only | Abrir para `hasFullAccess(role)` |
+| Restaurar evidencia | `useRestoreTicketAttachment.tsx` | `isAdmin` only | Abrir para `hasFullAccess(role)` |
+| Permissao `super_admin.access` | `role_permissions` | Verificar quais roles tem | Garantir que gerentes tenham |
+
+## Implementacao
+
+### 1. SuperAdminPanel.tsx -- Abrir para gerentes
+
+**Arquivo:** `src/pages/SuperAdminPanel.tsx`
+
+Mudar de:
+```typescript
+if (!isAdmin) {
+  return <Navigate to="/" replace />;
+}
 ```
 
-## Mudancas
+Para:
+```typescript
+const { role } = useUserRole();
+if (!hasFullAccess(role)) {
+  return <Navigate to="/" replace />;
+}
+```
 
-### 1. Novo hook: `src/hooks/useUniversalTag.ts`
+Importar `hasFullAccess` de `@/config/roles`.
 
-Centraliza toda a logica de tag unica sincronizada:
+### 2. InstagramSecretsCard.tsx -- Abrir para gerentes
 
-- **Leitura**: busca `conversation_tags` da conversa atual para determinar a tag ativa
-- **selectTag(tagId)**: 
-  - Remove tag anterior da conversa (`conversation_tags`) se existir
-  - Remove tag anterior do contato (`customer_tags`) se existir
-  - Insere nova tag na conversa
-  - Insere nova tag no contato
-- **removeTag()**: remove de ambas as tabelas
-- **currentTag**: retorna a tag ativa (ou null)
-- Invalida queries de `conversation-tags` e `contact-tags` ao mudar
+**Arquivo:** `src/components/settings/InstagramSecretsCard.tsx`
 
-### 2. Refatorar `src/components/inbox/ConversationTagsSection.tsx`
+Mudar de:
+```typescript
+if (!isAdmin) return null;
+```
 
-- Substituir hooks individuais por `useUniversalTag(conversationId, contactId)`
-- Receber `contactId` como prop adicional
-- Usar `currentTag` do hook universal
-- `handleSelectTag` chama `universalTag.select(tagId)`
-- Comportamento visual permanece identico (radio-like, 1 badge)
+Para:
+```typescript
+if (!hasFullAccess(role)) return null;
+```
 
-### 3. Refatorar `src/components/inbox/ContactTagsSection.tsx`
+### 3. useRestoreTicketAttachment.tsx -- Abrir para gerentes
 
-- Substituir hooks individuais por `useUniversalTag(conversationId, contactId)`
-- Receber `conversationId` como prop adicional
-- Trocar Checkbox por radio-like (mesmo visual do header)
-- Limitar a 1 tag exibida
-- `handleSelectTag` chama `universalTag.select(tagId)`
-- Fechar popover apos selecao
+**Arquivo:** `src/hooks/useRestoreTicketAttachment.tsx`
 
-### 4. Atualizar `src/components/ContactDetailsSidebar.tsx`
+Mudar de:
+```typescript
+if (!isAdmin) {
+  throw new Error("Apenas administradores podem restaurar evidencias");
+}
+```
 
-- Passar `conversationId` para `ContactTagsSection`:
-  ```
-  <ContactTagsSection contactId={contact.id} conversationId={conversation.id} />
-  ```
+Para:
+```typescript
+if (!hasFullAccess(role)) {
+  throw new Error("Apenas administradores e gerentes podem restaurar evidencias");
+}
+```
 
-### 5. Atualizar onde `ConversationTagsSection` e usado
+### 4. Permissao `super_admin.access` no banco
 
-- Localizar onde `ConversationTagsSection` e renderizado e garantir que `contactId` tambem e passado como prop
+Garantir que os roles de gestao (`manager`, `general_manager`, `support_manager`, `cs_manager`, `financial_manager`) tenham `super_admin.access = true` na tabela `role_permissions`.
 
-### 6. `CloseConversationDialog.tsx` -- Sem alteracao necessaria
+```sql
+UPDATE role_permissions 
+SET enabled = true, updated_at = now()
+WHERE permission_key = 'super_admin.access' 
+AND role IN ('manager', 'general_manager', 'support_manager', 'cs_manager', 'financial_manager');
+```
 
-- Ja valida `conversationTags.length > 0` (qualquer tag)
-- Como o hook universal sempre sincroniza, ao adicionar tag por qualquer local, `conversation_tags` tera a tag e a validacao passa
+### 5. Contrato formalizado em `src/config/roles.ts`
 
-### 7. Edge Function `close-conversation` -- Sem alteracao necessaria
-
-- Ja verifica `conversationTags?.length > 0` sem filtro de categoria
-- A sincronizacao garante que a tag sempre estara em `conversation_tags`
-
-## Detalhes Tecnicos do Hook Universal
+Adicionar comentario-contrato no arquivo de roles para futuras implementacoes:
 
 ```typescript
-// Pseudocodigo do useUniversalTag
-function useUniversalTag(conversationId, contactId) {
-  const conversationTags = useConversationTags(conversationId)
-  const contactTags = useContactTags(contactId)
-  const currentTag = conversationTags[0] || null
-
-  async function selectTag(tagId) {
-    // 1. Remove tag antiga da conversa (se existir)
-    if (currentTag) await removeConversationTag(conversationId, currentTag.id)
-    // 2. Remove TODAS tags antigas do contato
-    for (tag of contactTags) await removeContactTag(contactId, tag.id)
-    // 3. Adiciona nova tag na conversa
-    await addConversationTag(conversationId, tagId)
-    // 4. Adiciona nova tag no contato
-    await addContactTag(contactId, tagId)
-    // 5. Invalidar queries
-  }
-
-  async function removeTag() {
-    if (currentTag) {
-      await removeConversationTag(conversationId, currentTag.id)
-      await removeContactTag(contactId, currentTag.id)
-    }
-  }
-
-  return { currentTag, selectTag, removeTag, allTags, isLoading }
-}
+/**
+ * CONTRATO DE PARIDADE:
+ * Todos os roles em FULL_ACCESS_ROLES devem ter acesso identico
+ * a todas as funcionalidades do sistema.
+ * 
+ * REGRA: Nunca usar `isAdmin` sozinho para restringir acesso.
+ * Sempre usar `hasFullAccess(role)` que inclui todos os gerentes.
+ * 
+ * Unica excecao: alteracao de permissoes do role "admin" 
+ * (auto-protecao em RolePermissionsManager).
+ */
 ```
 
 ## Resumo
 
-| Componente | Antes | Depois |
+| O que muda | Antes | Depois |
 |---|---|---|
-| Header (ConversationTagsSection) | 1 tag na conversa so | 1 tag sincronizada (conversa + contato) |
-| Sidebar (ContactTagsSection) | Multiplas tags no contato, checkbox | 1 tag sincronizada, radio-like |
-| Encerramento | So conta conversation_tags | Continua (tag sempre estara la) |
-| Hook | Hooks separados | Hook unico `useUniversalTag` |
+| SuperAdminPanel | So admin | Admin + todos gerentes |
+| InstagramSecretsCard | So admin | Admin + todos gerentes |
+| Restaurar evidencia | So admin | Admin + todos gerentes |
+| Permissao super_admin.access | Verificar | Todos gerentes habilitados |
+| Contrato de paridade | Informal | Formalizado em `roles.ts` |
+
+## Sobre o Editor de Fluxos
+
+O editor de fluxos (`ChatFlowEditor`, `AIResponsePropertiesPanel`, `RAGSourcesSection`, `BehaviorControlsSection`, `SmartCollectionSection`) **ja e identico para todos**. Nao ha nenhuma logica de role dentro dos componentes. Qualquer usuario com permissao `settings.chat_flows` ve exatamente a mesma interface.
 
 ## Impacto
 
-- Zero regressao: validacao de encerramento continua identica
-- Upgrade: tag e universal, usuario escolhe de qualquer lugar
-- Sincronizacao bidirecional: header e sidebar sempre mostram a mesma tag
-- Backend inalterado: edge function ja aceita qualquer tag
-
+- Zero regressao: admin continua com acesso total
+- Upgrade: gerentes ganham acesso ao painel Super Admin e configuracoes
+- Padrao futuro: `hasFullAccess(role)` e a unica forma correta de verificar acesso privilegiado
+- Seguranca mantida: roles operacionais (agentes, consultores, vendedores) continuam sem acesso
