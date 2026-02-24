@@ -20,6 +20,7 @@ interface FlowPickerButtonProps {
   contactId?: string;
   disabled?: boolean;
   isTestMode?: boolean;
+  hasActiveFlow?: boolean;
 }
 
 export function FlowPickerButton({ 
@@ -27,6 +28,7 @@ export function FlowPickerButton({
   contactId,
   disabled = false,
   isTestMode = false,
+  hasActiveFlow = false,
 }: FlowPickerButtonProps) {
   const { data: flows, isLoading } = useChatFlows();
   const [isStarting, setIsStarting] = useState<string | null>(null);
@@ -37,6 +39,11 @@ export function FlowPickerButton({
   const handleStartFlow = async (flowId: string, flowName: string, isDraft: boolean) => {
     if (!conversationId) {
       toast.error("Nenhuma conversa selecionada");
+      return;
+    }
+
+    if (hasActiveFlow) {
+      toast.error("Já existe um fluxo em execução nesta conversa. Cancele-o antes de iniciar outro.");
       return;
     }
 

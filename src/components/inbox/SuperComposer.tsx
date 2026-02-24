@@ -9,6 +9,7 @@ import { FileDropZone } from "./FileDropZone";
 import { AudioRecorder } from "./AudioRecorder";
 import { FlowPickerButton } from "./FlowPickerButton";
 import { useTestModeToggle } from "@/hooks/useTestModeToggle";
+import { useActiveFlowState } from "@/hooks/useActiveFlowState";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useSendMessage } from "@/hooks/useMessages";
 import { useSendMessageInstant } from "@/hooks/useSendMessageInstant";
@@ -70,6 +71,7 @@ export function SuperComposer({
   whatsappProvider,
   contactPhone,
 }: SuperComposerProps) {
+  const { activeFlow } = useActiveFlowState(conversationId);
   const [message, setMessage] = useState("");
   const [messageMode, setMessageMode] = useState<MessageMode>("public");
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
@@ -681,6 +683,7 @@ export function SuperComposer({
                 conversationId={conversationId}
                 disabled={isDisabled || isSending}
                 isTestMode={isTestMode}
+                hasActiveFlow={!!activeFlow}
               />
 
               {/* Macros Button */}
