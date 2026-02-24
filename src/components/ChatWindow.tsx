@@ -49,6 +49,7 @@ import { useMarkAsRead } from "@/hooks/useUnreadCount";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
+import { hasFullAccess } from "@/config/roles";
 import { useAIGlobalConfig } from "@/hooks/useAIGlobalConfig";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
@@ -87,7 +88,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const [pendingTakeControl, setPendingTakeControl] = useState<{ conversationId: string; contactId: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
-  const { isAdmin, isManager, isSalesRep } = useUserRole();
+  const { isAdmin, isManager, isSalesRep, role } = useUserRole();
   const { hasPermission } = useRolePermissions();
   const { data: messages = [], isLoading: isMessagesLoading, fetchOlderMessages, hasMoreOlder, isFetchingOlder } = useMessages(conversation?.id || null);
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
@@ -510,15 +511,15 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
               {/* Botões de ação - lado direito */}
               <div className="flex items-center gap-1.5 shrink-0">
                 {/* 🧪 Botão de Modo de Teste - controlado por permissão inbox.test_mode */}
-                {hasPermission('inbox.test_mode') && !isAIGlobalEnabled && isAutopilot && (
+                {hasPermission('inbox.test_mode') && hasFullAccess(role) && (
                   <Button
                     variant={isTestMode ? "default" : "outline"}
                     size="sm"
                     onClick={() => toggleTestMode(!isTestMode)}
                     disabled={isTestModePending}
                     title={isTestMode 
-                      ? "Modo Teste ATIVO - IA responde apenas nesta conversa" 
-                      : "Ativar Modo Teste - IA responderá nesta conversa mesmo com IA Global desligada"
+                      ? "Modo Teste ATIVO - Fluxos de rascunho disponíveis e IA responde nesta conversa" 
+                      : "Ativar Modo Teste - Permite testar fluxos em rascunho nesta conversa"
                     }
                     className={cn(
                       "h-7 gap-1 px-2",
