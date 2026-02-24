@@ -75,6 +75,24 @@ export default function PlaybookEmailSequenceReport() {
   }
   const previewRows = Array.from(grouped.values()).slice(0, 10);
 
+  // Detect template names per position for preview headers
+  const maxPreviewCols = Math.max(3, ...Array.from(grouped.values()).map(g => g.emails.length));
+  const positionLabels: string[] = [];
+  for (let i = 0; i < maxPreviewCols; i++) {
+    const freq = new Map<string, number>();
+    for (const g of grouped.values()) {
+      const name = g.emails[i]?.email_template_name;
+      if (name) freq.set(name, (freq.get(name) || 0) + 1);
+    }
+    let best = `Email ${i + 1}`;
+    let bestCount = 0;
+    for (const [name, count] of freq) {
+      if (count > bestCount) { best = name; bestCount = count; }
+    }
+    positionLabels.push(best);
+  }
+  const displayCols = data.length > 0 ? Math.min(maxPreviewCols, Math.max(3, maxPreviewCols)) : 3;
+
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
       <div className="flex items-center gap-4">
@@ -154,9 +172,9 @@ export default function PlaybookEmailSequenceReport() {
                       <TableHead>Cliente</TableHead>
                       <TableHead>Playbook</TableHead>
                       <TableHead>Data Venda</TableHead>
-                      {[1, 2, 3].map((n) => (
-                        <TableHead key={n} className="bg-primary/5">
-                          Email {n}
+                     {positionLabels.slice(0, displayCols).map((label, i) => (
+                        <TableHead key={i} className="bg-primary/5 text-xs">
+                          {label}
                         </TableHead>
                       ))}
                     </TableRow>
@@ -167,14 +185,13 @@ export default function PlaybookEmailSequenceReport() {
                         <TableCell className="font-medium">{g.meta.contact_name}</TableCell>
                         <TableCell>{g.meta.playbook_name}</TableCell>
                         <TableCell>{fmtDate(g.meta.sale_date)} {fmtTime(g.meta.sale_date)}</TableCell>
-                        {[0, 1, 2].map((i) => {
+                        {positionLabels.slice(0, displayCols).map((_, i) => {
                           const email = g.emails[i];
                           if (!email) return <TableCell key={i} className="text-muted-foreground">—</TableCell>;
                           const status = getEmailStatus(email);
                           return (
                             <TableCell key={i}>
                               <div className="text-xs space-y-0.5">
-                                <div className="font-medium truncate max-w-[180px]">{email.email_template_name || email.email_subject}</div>
                                 <div className="text-muted-foreground">{fmtDate(email.email_sent_at)} {fmtTime(email.email_sent_at)}</div>
                                 <div className={getStatusColor(status)}>{status}</div>
                               </div>

@@ -23,6 +23,24 @@ function getEmailStatus(row: EmailSequenceRow): string {
   return "Pendente";
 }
 
+function getPositionLabels(grouped: Map<string, { meta: EmailSequenceRow; emails: EmailSequenceRow[] }>, maxEmails: number): string[] {
+  const labels: string[] = [];
+  for (let i = 0; i < maxEmails; i++) {
+    const freq = new Map<string, number>();
+    for (const g of grouped.values()) {
+      const name = g.emails[i]?.email_template_name;
+      if (name) freq.set(name, (freq.get(name) || 0) + 1);
+    }
+    let best = `Email ${i + 1}`;
+    let bestCount = 0;
+    for (const [name, count] of freq) {
+      if (count > bestCount) { best = name; bestCount = count; }
+    }
+    labels.push(best);
+  }
+  return labels;
+}
+
 export function useExportPlaybookEmailSequence() {
   const exportToExcel = (rows: EmailSequenceRow[]) => {
     if (!rows.length) {
@@ -50,6 +68,9 @@ export function useExportPlaybookEmailSequence() {
         if (g.emails.length > maxEmails) maxEmails = g.emails.length;
       }
 
+      // Detect template names per position
+      const posLabels = getPositionLabels(grouped, maxEmails);
+
       // Build rows
       const excelRows: Record<string, string>[] = [];
       for (const g of grouped.values()) {
@@ -62,12 +83,11 @@ export function useExportPlaybookEmailSequence() {
         };
 
         for (let i = 0; i < maxEmails; i++) {
-          const n = i + 1;
+          const label = posLabels[i];
           const email = g.emails[i];
-          row[`Email ${n} - Template`] = email?.email_template_name || email?.email_subject || "";
-          row[`Email ${n} - Data`] = email ? fmtDate(email.email_sent_at) : "";
-          row[`Email ${n} - Hora`] = email ? fmtTime(email.email_sent_at) : "";
-          row[`Email ${n} - Status`] = email ? getEmailStatus(email) : "";
+          row[`${label} - Data`] = email ? fmtDate(email.email_sent_at) : "";
+          row[`${label} - Hora`] = email ? fmtTime(email.email_sent_at) : "";
+          row[`${label} - Status`] = email ? getEmailStatus(email) : "";
         }
 
         excelRows.push(row);
