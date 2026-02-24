@@ -67,6 +67,9 @@ export function RAGSourcesSection({
           <div className="flex items-center gap-2">
             <BookOpen className="h-4 w-4 text-blue-500" />
             <Label className="text-sm font-medium">Artigos e FAQ</Label>
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-blue-500/40 text-blue-600 dark:text-blue-400 bg-blue-500/10">
+              Supabase
+            </Badge>
           </div>
           <Switch
             checked={selectedNode.data.use_knowledge_base !== false}
@@ -133,6 +136,9 @@ export function RAGSourcesSection({
           <div className="flex items-center gap-2">
             <Package className="h-4 w-4 text-orange-500" />
             <Label className="text-sm font-medium">Rastreio de Envio</Label>
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-orange-500/40 text-orange-600 dark:text-orange-400 bg-orange-500/10">
+              Logística
+            </Badge>
           </div>
           <Switch
             checked={selectedNode.data.use_tracking === true}
