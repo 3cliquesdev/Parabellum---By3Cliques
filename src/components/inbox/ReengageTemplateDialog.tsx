@@ -85,7 +85,7 @@ export function ReengageTemplateDialog({
       // 1. Send template via send-meta-whatsapp
       const { data, error } = await supabase.functions.invoke("send-meta-whatsapp", {
         body: {
-          to: conversation.contacts.phone,
+          phone_number: conversation.contacts.phone,
           instance_id: instanceId,
           template: {
             name: selectedTemplate.name,
