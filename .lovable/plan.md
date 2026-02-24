@@ -1,63 +1,87 @@
 
-# Corrigir visualizacao de conversas encerradas no Inbox
+# Conversas Anteriores na Timeline do Sidebar
 
-## Problema encontrado
+## O que muda
 
-A query que busca conversas encerradas usa `order("updated_at", ascending: true)` com `limit(500)`. Isso retorna as **500 conversas mais antigas** (de 10/02) em vez das **mais recentes** (de hoje). Com 7.293 conversas fechadas no banco, o usuario nunca ve as que acabou de encerrar.
+A aba **Timeline** do painel lateral direito (ContactDetailsSidebar) sera dividida em duas secoes:
 
-Para conversas ativas, `ascending: true` faz sentido (mais antigas = maior prioridade de atendimento). Mas para encerradas, o usuario espera ver as mais recentes primeiro.
+1. **Conversas Anteriores** (topo) -- ate 5 conversas, ordenadas da mais recente para a mais antiga, clicaveis
+2. **Outros Eventos** (abaixo) -- tickets, deals, interacoes, onboarding (sem mensagens individuais)
 
-## Correcao
+Mensagens individuais (`type === 'message'`) serao removidas do sidebar (ja estao dentro de cada conversa).
 
-### Arquivo: `src/hooks/useInboxView.tsx`
+## Arquivo impactado
 
-**Mudanca na funcao `fetchInboxData` (linhas 82-84):**
+`src/components/ContactDetailsSidebar.tsx`
 
-Usar ordem descendente para scope `archived` (mais recentes primeiro) e aumentar o limite para 1000:
+## Mudancas tecnicas
 
-```typescript
-// Antes:
-query = query
-  .order("updated_at", { ascending: true })
-  .limit(500);
-
-// Depois:
-const isArchived = scope === 'archived';
-query = query
-  .order("updated_at", { ascending: !isArchived })
-  .limit(isArchived ? 1000 : 500);
-```
-
-**Mudanca na funcao `sortInboxItemsByPriority` (linhas 251-255):**
-
-Manter consistencia: conversas encerradas devem ser exibidas com as mais recentes no topo da lista. O sort no `filteredData` ja e aplicado pelo `useMemo` usando `applyFilters`, mas o `ConversationList` recebe os dados na ordem que vem. Precisamos ajustar a ordenacao no `filteredConversations` do `Inbox.tsx`.
-
-### Arquivo: `src/pages/Inbox.tsx`
-
-**Mudanca na ordenacao (funcao `orderedConversations`):**
-
-Para o filtro `archived`, inverter a ordem para que as encerradas mais recentes aparecam primeiro:
+### 1. Separar e ordenar arrays (linha 80, substituir `recentTimeline`)
 
 ```typescript
-// No useMemo de orderedConversations, adicionar logica:
-if (filter === "archived") {
-  result.sort((a, b) => 
-    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  );
-}
+const conversations = unifiedTimeline
+  .filter(e => e.type === 'conversation')
+  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  .slice(0, 5);
+
+const otherEvents = unifiedTimeline
+  .filter(e => e.type !== 'conversation' && e.type !== 'message')
+  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  .slice(0, 5);
 ```
 
-## Impacto
+### 2. Adicionar import do `useNavigate` (linha 1 area)
 
-| Item | Status |
-|------|--------|
-| Conversas ativas | Sem mudanca (ascending = true mantido) |
-| Conversas encerradas | Agora mostra as 1000 mais recentes, ordenadas da mais nova para a mais antiga |
-| Realtime/cache | Sem impacto (merge continua funcionando normalmente) |
-| Performance | Minimo (1000 vs 500 rows para archived apenas) |
+```typescript
+import { useNavigate } from "react-router-dom";
+```
 
-## Zero regressao
+E dentro do componente:
+```typescript
+const navigate = useNavigate();
+```
 
-- Kill Switch, Shadow Mode, CSAT guard: sem impacto
-- Filtros ativos (Minhas, Fila IA, etc.): sem mudanca
-- Cache realtime: merge e scope continuam identicos
+### 3. Adicionar icone `MessageSquare` ao import do lucide-react (linha 8)
+
+### 4. Substituir conteudo da TabsContent "timeline" (linhas 303-332)
+
+Nova UI com duas secoes:
+
+**Secao "Conversas Anteriores":**
+- Header com contagem
+- Cards com: canal (WhatsApp/Webchat), status (badge verde=aberta, cinza=fechada), quantidade de mensagens, nome do atendente, data
+- `cursor-pointer` + `hover:bg-accent/50` + `onClick={() => navigate('/inbox?conversation=' + event.id)}`
+
+**Secao "Outros Eventos":**
+- Header com contagem
+- Cards iguais ao layout atual (icon, title, description, date)
+- Sem interatividade de click
+
+### 5. Helper para badge de status da conversa
+
+```typescript
+const getConversationStatusBadge = (status: string) => {
+  if (status === 'closed') return { label: 'Fechada', className: 'bg-gray-100 text-gray-700' };
+  if (status === 'open') return { label: 'Aberta', className: 'bg-green-100 text-green-700' };
+  return { label: status, className: 'bg-blue-100 text-blue-700' };
+};
+```
+
+### 6. Helper para label do canal
+
+```typescript
+const getChannelLabel = (channel: string) => {
+  if (channel === 'whatsapp') return 'WhatsApp';
+  if (channel === 'webchat') return 'Webchat';
+  if (channel === 'email') return 'Email';
+  return channel;
+};
+```
+
+## Criterios de aceite
+
+- Timeline mostra "Conversas Anteriores" no topo com ate 5 itens
+- Timeline nao mostra itens type=message no sidebar
+- Clique em conversa navega para `/inbox?conversation=ID`
+- "Outros Eventos" continua funcionando (tickets/deals/interacoes/onboarding)
+- Zero regressao nas abas Tickets e Negocios
