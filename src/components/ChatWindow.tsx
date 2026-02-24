@@ -656,7 +656,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                     <p className="text-sm text-green-700 dark:text-green-400 font-medium">
                       Esta conversa foi encerrada
                     </p>
-                    {conversation.channel === "whatsapp" && (conversation as any).closed_reason === "whatsapp_window_expired" && conversation.whatsapp_instance_id && (
+                    {conversation.channel === "whatsapp" && (conversation.whatsapp_instance_id || conversation.whatsapp_meta_instance_id) && (
                       <Button
                         size="sm"
                         variant="outline"

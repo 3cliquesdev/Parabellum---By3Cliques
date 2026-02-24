@@ -26,6 +26,7 @@ interface ReengageTemplateDialogProps {
     contact_id: string | null;
     channel: string;
     whatsapp_instance_id: string | null;
+    whatsapp_meta_instance_id?: string | null;
     contacts: {
       phone: string | null;
       first_name: string;
@@ -45,20 +46,22 @@ export function ReengageTemplateDialog({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [variables, setVariables] = useState<Record<number, string>>({});
 
+  const instanceId = conversation.whatsapp_meta_instance_id || conversation.whatsapp_instance_id;
+
   const { data: templates = [], isLoading } = useQuery({
-    queryKey: ["whatsapp-templates-active", conversation.whatsapp_instance_id],
+    queryKey: ["whatsapp-templates-active", instanceId],
     queryFn: async () => {
-      if (!conversation.whatsapp_instance_id) return [];
+      if (!instanceId) return [];
       const { data, error } = await supabase
         .from("whatsapp_message_templates" as any)
         .select("*")
-        .eq("instance_id", conversation.whatsapp_instance_id)
+        .eq("instance_id", instanceId)
         .eq("is_active", true)
         .order("name");
       if (error) throw error;
       return data as any[];
     },
-    enabled: open && !!conversation.whatsapp_instance_id,
+    enabled: open && !!instanceId,
   });
 
   const selectedTemplate = templates.find((t: any) => t.id === selectedTemplateId);
@@ -83,7 +86,7 @@ export function ReengageTemplateDialog({
       const { data, error } = await supabase.functions.invoke("send-meta-whatsapp", {
         body: {
           to: conversation.contacts.phone,
-          instance_id: conversation.whatsapp_instance_id,
+          instance_id: instanceId,
           template: {
             name: selectedTemplate.name,
             language_code: selectedTemplate.language_code,
