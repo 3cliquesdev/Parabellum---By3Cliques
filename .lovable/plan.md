@@ -1,14 +1,10 @@
 
-# Conversas Anteriores na Timeline do Sidebar
+
+# Pop-up de Historico da Conversa no Sidebar
 
 ## O que muda
 
-A aba **Timeline** do painel lateral direito (ContactDetailsSidebar) sera dividida em duas secoes:
-
-1. **Conversas Anteriores** (topo) -- ate 5 conversas, ordenadas da mais recente para a mais antiga, clicaveis
-2. **Outros Eventos** (abaixo) -- tickets, deals, interacoes, onboarding (sem mensagens individuais)
-
-Mensagens individuais (`type === 'message'`) serao removidas do sidebar (ja estao dentro de cada conversa).
+Ao clicar em uma conversa na secao "Conversas Anteriores" do sidebar, em vez de navegar para o Inbox, abre um **Dialog** com o historico completo de mensagens. O usuario ve o contexto sem sair da tela atual.
 
 ## Arquivo impactado
 
@@ -16,72 +12,72 @@ Mensagens individuais (`type === 'message'`) serao removidas do sidebar (ja esta
 
 ## Mudancas tecnicas
 
-### 1. Separar e ordenar arrays (linha 80, substituir `recentTimeline`)
+### 1. Imports adicionais (topo do arquivo)
+
+- `useState` do React
+- `Dialog, DialogContent, DialogHeader, DialogTitle` de `@/components/ui/dialog`
+
+### 2. Converter para componente com hooks (mover useNavigate antes dos early returns)
+
+O `useNavigate` na linha 80 esta depois de early returns, o que viola regras de hooks. Mover para antes dos early returns junto com os novos states.
+
+### 3. Novos states (dentro do componente, antes dos early returns)
 
 ```typescript
-const conversations = unifiedTimeline
-  .filter(e => e.type === 'conversation')
-  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  .slice(0, 5);
-
-const otherEvents = unifiedTimeline
-  .filter(e => e.type !== 'conversation' && e.type !== 'message')
-  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  .slice(0, 5);
+const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+const [selectedConversationMeta, setSelectedConversationMeta] = useState<any>(null);
 ```
 
-### 2. Adicionar import do `useNavigate` (linha 1 area)
+### 4. Query para buscar mensagens da conversa selecionada
 
 ```typescript
-import { useNavigate } from "react-router-dom";
+const { data: conversationMessages = [], isLoading: isLoadingMessages } = useQuery({
+  queryKey: ["conversation-history-messages", selectedConversationId],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from("messages")
+      .select("id, content, created_at, sender_type, is_ai_generated, is_internal, sender:profiles!sender_id(full_name)")
+      .eq("conversation_id", selectedConversationId!)
+      .order("created_at", { ascending: true })
+      .limit(500);
+    return data || [];
+  },
+  enabled: !!selectedConversationId,
+});
 ```
 
-E dentro do componente:
+### 5. Alterar onClick das conversas (linha 342)
+
+De:
 ```typescript
-const navigate = useNavigate();
+onClick={() => navigate(`/inbox?conversation=${event.id}`)}
 ```
-
-### 3. Adicionar icone `MessageSquare` ao import do lucide-react (linha 8)
-
-### 4. Substituir conteudo da TabsContent "timeline" (linhas 303-332)
-
-Nova UI com duas secoes:
-
-**Secao "Conversas Anteriores":**
-- Header com contagem
-- Cards com: canal (WhatsApp/Webchat), status (badge verde=aberta, cinza=fechada), quantidade de mensagens, nome do atendente, data
-- `cursor-pointer` + `hover:bg-accent/50` + `onClick={() => navigate('/inbox?conversation=' + event.id)}`
-
-**Secao "Outros Eventos":**
-- Header com contagem
-- Cards iguais ao layout atual (icon, title, description, date)
-- Sem interatividade de click
-
-### 5. Helper para badge de status da conversa
-
+Para:
 ```typescript
-const getConversationStatusBadge = (status: string) => {
-  if (status === 'closed') return { label: 'Fechada', className: 'bg-gray-100 text-gray-700' };
-  if (status === 'open') return { label: 'Aberta', className: 'bg-green-100 text-green-700' };
-  return { label: status, className: 'bg-blue-100 text-blue-700' };
-};
+onClick={() => {
+  setSelectedConversationId(event.id);
+  setSelectedConversationMeta({ ...event.metadata, date: event.date });
+}}
 ```
 
-### 6. Helper para label do canal
+### 6. Adicionar Dialog apos o fechamento do Tabs (antes do ultimo `</div>`)
 
-```typescript
-const getChannelLabel = (channel: string) => {
-  if (channel === 'whatsapp') return 'WhatsApp';
-  if (channel === 'webchat') return 'Webchat';
-  if (channel === 'email') return 'Email';
-  return channel;
-};
-```
+Dialog controlado por `selectedConversationId !== null`:
 
-## Criterios de aceite
+- **Header**: canal, status (badge), data, atendente
+- **Body**: `ScrollArea` com mensagens em bolhas:
+  - `sender_type === 'contact'`: alinhada a esquerda, fundo `bg-muted`
+  - `sender_type === 'agent'` ou `is_ai_generated`: alinhada a direita, fundo `bg-primary/10`
+  - `is_internal === true`: fundo amarelo (nota interna)
+  - Cada bolha mostra: nome do remetente, horario (`HH:mm`), conteudo
+- **Footer**: botao "Abrir no Inbox" que navega para `/inbox?conversation=ID`
+- `onOpenChange`: quando false, limpa `selectedConversationId` e `selectedConversationMeta`
+- Aviso se atingiu 500 mensagens
 
-- Timeline mostra "Conversas Anteriores" no topo com ate 5 itens
-- Timeline nao mostra itens type=message no sidebar
-- Clique em conversa navega para `/inbox?conversation=ID`
-- "Outros Eventos" continua funcionando (tickets/deals/interacoes/onboarding)
-- Zero regressao nas abas Tickets e Negocios
+## Zero regressao
+
+- `useUnifiedTimeline` nao muda
+- Abas Tickets e Negocios sem impacto
+- Navegacao para inbox preservada como botao no footer do dialog
+- Kill Switch, Shadow Mode, CSAT guard: sem impacto
+
