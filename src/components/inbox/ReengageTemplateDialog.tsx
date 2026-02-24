@@ -128,7 +128,27 @@ export function ReengageTemplateDialog({
       // 3. Message is now saved by the edge function with provider_message_id (wamid)
       // No manual insert needed - delivery tracking (sent/delivered/read) will work automatically
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Registrar na timeline do contato
+      if (conversation.contact_id) {
+        supabase.from("interactions").insert({
+          customer_id: conversation.contact_id,
+          type: "whatsapp_msg",
+          channel: "whatsapp",
+          direction: "outbound",
+          content: `📋 Template enviado: ${selectedTemplate?.name}`,
+          metadata: {
+            template_name: selectedTemplate?.name,
+            template_category: selectedTemplate?.category,
+            conversation_id: conversation.id,
+            sent_by: user?.id,
+          },
+        }).then(() => {
+          queryClient.invalidateQueries({ queryKey: ["unified-timeline", conversation.contact_id] });
+          queryClient.invalidateQueries({ queryKey: ["customer-timeline", conversation.contact_id] });
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
       queryClient.invalidateQueries({ queryKey: ["messages", conversation.id] });
