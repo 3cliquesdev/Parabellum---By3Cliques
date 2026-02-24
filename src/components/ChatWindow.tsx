@@ -382,10 +382,17 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
       .from("conversations")
       .update({ status: "open", closed_at: null })
       .eq("id", conversation.id);
-    if (!error) {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      toast({ title: "Conversa reaberta" });
+    if (error) {
+      console.error('[ChatWindow] Erro ao reabrir conversa:', error);
+      toast({
+        title: "Erro ao reabrir conversa",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
     }
+    queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    toast({ title: "Conversa reaberta" });
   };
 
   const effectiveAIMode = (aiMode as any) ?? (conversation?.ai_mode as any);
@@ -715,7 +722,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                 <span className="text-sm text-amber-700 dark:text-amber-400 font-medium">
                   Esta conversa foi encerrada
                 </span>
-                {conversation.channel === "whatsapp" && (conversation.whatsapp_instance_id || conversation.whatsapp_meta_instance_id) ? (
+                {(conversation.channel === "whatsapp" || conversation.whatsapp_provider || conversation.whatsapp_meta_instance_id || conversation.whatsapp_instance_id) ? (
                   <Button size="sm" onClick={() => setReengageDialogOpen(true)} className="bg-primary hover:bg-primary/90">
                     <Send className="h-3.5 w-3.5 mr-1" />
                     Reengajar via Template

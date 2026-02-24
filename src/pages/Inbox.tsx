@@ -162,7 +162,7 @@ export default function Inbox() {
       ai_mode: item.ai_mode,
       assigned_to: item.assigned_to,
       department: item.department,
-      channel: item.last_channel,
+      channel: item.channel || (item.whatsapp_provider ? 'whatsapp' : item.last_channel),
       created_at: item.created_at,
       last_message_at: item.last_message_at,
       updated_at: item.updated_at,
