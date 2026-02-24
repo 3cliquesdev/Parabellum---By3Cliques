@@ -38,7 +38,7 @@ interface MessageBubbleProps {
   contactInitials?: string;
   channel?: string;
   showChannel?: boolean;
-  status?: "sending" | "sent" | "delivered" | "failed";
+  status?: "sending" | "sent" | "delivered" | "read" | "failed";
   errorDetail?: string;
   usedArticles?: any[];
   isAdmin?: boolean;

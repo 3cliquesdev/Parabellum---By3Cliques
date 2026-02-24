@@ -249,7 +249,7 @@ export function MessagesWithMedia({
             contactInitials={`${contact?.first_name?.[0] || ''}${contact?.last_name?.[0] || ''}`}
             channel={conversation.channel}
             showChannel={false}
-            status={message.status as "sending" | "sent" | "delivered" | "failed" | undefined}
+            status={message.status as "sending" | "sent" | "delivered" | "read" | "failed" | undefined}
             errorDetail={errorDetail}
             usedArticles={usedArticles}
             isAdmin={isAdmin}

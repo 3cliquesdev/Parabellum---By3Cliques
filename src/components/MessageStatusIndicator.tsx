@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/tooltip";
 
 interface MessageStatusIndicatorProps {
-  status: 'sending' | 'sent' | 'delivered' | 'failed';
+  status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   className?: string;
   errorDetail?: string;
 }
@@ -22,7 +22,9 @@ export function MessageStatusIndicator({ status, className, errorDetail }: Messa
     case 'sent':
       return <Check className={cn(iconClass, "text-muted-foreground")} aria-label="Enviado" />;
     case 'delivered':
-      return <CheckCheck className={cn(iconClass, "text-primary")} aria-label="Entregue" />;
+      return <CheckCheck className={cn(iconClass, "text-muted-foreground")} aria-label="Entregue" />;
+    case 'read':
+      return <CheckCheck className={cn(iconClass, "text-blue-500")} aria-label="Lido" />;
     case 'failed': {
       const icon = <AlertCircle className={cn(iconClass, "text-destructive")} aria-label="Falha no envio" />;
       const detail = errorDetail || "Falha no envio";
