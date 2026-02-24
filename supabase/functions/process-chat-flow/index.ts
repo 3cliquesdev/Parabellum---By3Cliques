@@ -516,12 +516,12 @@ serve(async (req) => {
         });
       }
 
-      // Cancelar qualquer fluxo ativo anterior
+      // Cancelar qualquer fluxo ativo anterior (todos os status possíveis)
       await supabaseClient
         .from('chat_flow_states')
-        .update({ status: 'cancelled' })
+        .update({ status: 'cancelled', completed_at: new Date().toISOString() })
         .eq('conversation_id', conversationId)
-        .eq('status', 'active');
+        .in('status', ['active', 'waiting_input', 'in_progress']);
 
       // Iniciar o fluxo
       const flowDef = flow.flow_definition as any;
@@ -536,15 +536,126 @@ serve(async (req) => {
       const targetIds = new Set((flowDef.edges || []).map((e: any) => e.target));
       const startNode = flowDef.nodes.find((n: any) => !targetIds.has(n.id)) || flowDef.nodes[0];
 
-      // Criar estado do fluxo
+      // ============================================================
+      // 🆕 TRAVESSIA AUTOMÁTICA: Atravessar nós sem conteúdo (start/input/condition)
+      // até encontrar o primeiro nó executável (message/ask_options/ai_response/transfer)
+      // Reutiliza a mesma lógica do Master Flow para consistência
+      // ============================================================
+      const NO_CONTENT_MANUAL = new Set(['input', 'start', 'condition']);
+      const MAX_TRAVERSAL_MANUAL = 12;
+
+      // Carregar dados de contato/conversa para avaliação de condições
+      const { data: manualConversation } = await supabaseClient
+        .from('conversations')
+        .select('id, contact_id')
+        .eq('id', conversationId)
+        .maybeSingle();
+
+      let manualContactData: any = null;
+      if (manualConversation?.contact_id) {
+        const { data: contact } = await supabaseClient
+          .from('contacts')
+          .select('*')
+          .eq('id', manualConversation.contact_id)
+          .maybeSingle();
+        manualContactData = contact;
+      }
+
+      const manualCollectedData: Record<string, any> = {};
+
+      // Função para avaliar condição no contexto manual
+      function manualEvalCond(data: any): boolean {
+        const { condition_type, condition_field, condition_value } = data || {};
+        let fieldValue = condition_field
+          ? (manualCollectedData?.[condition_field] ?? (manualContactData ? manualContactData[condition_field] : null))
+          : '';
+
+        if (condition_field === 'is_validated_customer' || condition_field === 'isValidatedCustomer') {
+          fieldValue = manualContactData?.kiwify_validated ?? false;
+        }
+
+        console.log('[process-chat-flow] 🔍 Manual condition evaluation:', { condition_type, condition_field, condition_value, fieldValue });
+
+        switch (condition_type) {
+          case 'has_data':
+          case 'not_empty':
+            return !!fieldValue && String(fieldValue).trim().length > 0;
+          case 'is_empty':
+          case 'no_data':
+            return !fieldValue || String(fieldValue).trim().length === 0;
+          case 'equals':
+            return String(fieldValue ?? '').toLowerCase() === String(condition_value ?? '').toLowerCase();
+          case 'not_equals':
+            return String(fieldValue ?? '').toLowerCase() !== String(condition_value ?? '').toLowerCase();
+          case 'is_true':
+            return fieldValue === true || fieldValue === 'true';
+          case 'is_false':
+            return fieldValue === false || fieldValue === 'false' || !fieldValue;
+          case 'contains':
+            return String(fieldValue ?? '').toLowerCase().includes(String(condition_value ?? '').toLowerCase());
+          default:
+            console.log('[process-chat-flow] ⚠️ Unknown condition_type:', condition_type);
+            return false;
+        }
+      }
+
+      // Loop de travessia
+      let contentNode: any = startNode;
+      let traversalSteps = 0;
+
+      while (contentNode && NO_CONTENT_MANUAL.has(contentNode.type) && traversalSteps < MAX_TRAVERSAL_MANUAL) {
+        traversalSteps++;
+        console.log(`[process-chat-flow] ⏩ Manual Traversing[${traversalSteps}] ${contentNode.type} (${contentNode.id})`);
+
+        if (contentNode.type === 'condition') {
+          const hasMultiRules = contentNode.data?.condition_rules?.length > 0;
+          let next: any = null;
+
+          if (hasMultiRules) {
+            const path = evaluateConditionPath(contentNode.data, manualCollectedData, '');
+            console.log(`[process-chat-flow] 🔀 Manual multi-rule path: "${path}"`);
+            next = findNextNode(flowDef, contentNode, path);
+          } else {
+            const result = manualEvalCond(contentNode.data);
+            console.log(`[process-chat-flow] 🔀 Manual classic condition: ${result}`);
+            const handles = result ? ['true', 'yes', '1'] : ['false', 'no', '2'];
+            for (const h of handles) {
+              next = findNextNode(flowDef, contentNode, h);
+              if (next) break;
+            }
+          }
+
+          if (!next) {
+            console.log('[process-chat-flow] ⚠️ Manual traversal: no next node for condition');
+            break;
+          }
+          contentNode = next;
+        } else {
+          const next = findNextNode(flowDef, contentNode);
+          if (!next) {
+            console.log('[process-chat-flow] ⚠️ Manual traversal: no next node');
+            break;
+          }
+          contentNode = next;
+        }
+      }
+
+      console.log(`[process-chat-flow] 📍 Manual content node: ${contentNode?.type} (${contentNode?.id}) steps=${traversalSteps}`);
+
+      // Determinar status inicial baseado no tipo do nó
+      const initialStatus = (contentNode.type === 'ask_options' || contentNode.type === 'ask_input')
+        ? 'waiting_input'
+        : 'active';
+
+      // Criar estado do fluxo no nó de conteúdo (não no start)
       const { data: newState, error: createError } = await supabaseClient
         .from('chat_flow_states')
         .insert({
           conversation_id: conversationId,
           flow_id: flow.id,
-          current_node_id: startNode.id,
-          collected_data: {},
-          status: 'active',
+          current_node_id: contentNode.id,
+          collected_data: manualCollectedData,
+          status: initialStatus,
         })
         .select()
         .single();
@@ -557,11 +668,44 @@ serve(async (req) => {
         );
       }
 
-      console.log('[process-chat-flow] ✅ Manual flow started:', newState.id);
+      console.log('[process-chat-flow] ✅ Manual flow started:', newState.id, 'at node:', contentNode.id);
 
-      const startMessage = startNode.data?.message || "";
-      const options = startNode.type === 'ask_options' 
-        ? (startNode.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value }))
+      // Montar resposta baseada no tipo do nó de conteúdo alcançado
+      if (contentNode.type === 'ai_response') {
+        return new Response(
+          JSON.stringify({
+            useAI: true,
+            response: null,
+            flowId: flow.id,
+            flowStarted: true,
+            manualTrigger: true,
+            personaId: contentNode.data?.persona_id || null,
+            kbCategories: contentNode.data?.kb_categories || null,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (contentNode.type === 'transfer') {
+        return new Response(
+          JSON.stringify({
+            useAI: false,
+            response: contentNode.data?.message || null,
+            flowId: flow.id,
+            flowStarted: true,
+            manualTrigger: true,
+            transfer: {
+              departmentId: contentNode.data?.department_id || null,
+              aiMode: contentNode.data?.ai_mode || 'waiting_human',
+            },
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const startMessage = contentNode.data?.message || null;
+      const options = contentNode.type === 'ask_options' 
+        ? (contentNode.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value }))
         : null;
 
       return new Response(
@@ -585,7 +729,7 @@ serve(async (req) => {
       .from('chat_flow_states')
       .select('*, chat_flows(*)')
       .eq('conversation_id', conversationId)
-      .eq('status', 'active')
+      .in('status', ['active', 'waiting_input', 'in_progress'])
       .order('started_at', { ascending: false })
       .limit(1);
 
@@ -1056,12 +1200,15 @@ serve(async (req) => {
 
     if (!matchedFlow) {
       // 🆕 PROTEÇÃO: Verificar se existe estado ativo ANTES de iniciar Master Flow
-      const { data: existingActiveFlowState } = await supabaseClient
+      const { data: existingActiveFlowStates } = await supabaseClient
         .from('chat_flow_states')
         .select('id, flow_id, current_node_id')
         .eq('conversation_id', conversationId)
-        .eq('status', 'active')
-        .maybeSingle();
+        .in('status', ['active', 'waiting_input', 'in_progress'])
+        .order('started_at', { ascending: false })
+        .limit(1);
+
+      const existingActiveFlowState = existingActiveFlowStates?.[0] || null;
 
       if (existingActiveFlowState) {
         console.log('[process-chat-flow] ⚠️ Estado ativo encontrado - NÃO iniciar Master Flow');
