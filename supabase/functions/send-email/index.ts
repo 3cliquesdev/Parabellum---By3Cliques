@@ -258,7 +258,6 @@ serve(async (req) => {
     // Só registrar tracking e interaction para emails reais (com customer_id)
     if (customer_id && !isTest) {
       // Registrar em email_sends para tracking completo (idempotente)
-      // NOTA: Removido template_id do payload - a FK estava causando erros quando o template não existe
       const emailSendPayload = {
         contact_id: customer_id,
         resend_email_id: resendData.id,
@@ -269,7 +268,7 @@ serve(async (req) => {
         variables_used: { to_name: recipientName, branding: brandName },
         playbook_execution_id: playbook_execution_id || null,
         playbook_node_id: playbook_node_id || null,
-        // template_id removido - FK causava erros quando template não existe em email_templates_v2
+        template_id: request_template_id || null,
       };
 
       const { error: sendError } = await supabase
