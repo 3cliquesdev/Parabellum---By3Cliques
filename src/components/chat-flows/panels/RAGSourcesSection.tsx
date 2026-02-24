@@ -8,7 +8,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Database, 
   BookOpen, 
-  ShoppingCart, 
   Package,
   Info
 } from "lucide-react";
@@ -46,7 +45,7 @@ export function RAGSourcesSection({
       <div className="flex items-center gap-2">
         <Database className="h-4 w-4 text-primary" />
         <Label className="text-xs font-semibold uppercase tracking-wide">
-          Fontes de Dados (RAG)
+          De onde a IA busca informação
         </Label>
         <TooltipProvider>
           <Tooltip>
@@ -55,8 +54,7 @@ export function RAGSourcesSection({
             </TooltipTrigger>
             <TooltipContent side="right" className="max-w-xs">
               <p className="text-xs">
-                O RAG (Retrieval-Augmented Generation) busca informações dessas fontes 
-                para enriquecer as respostas da IA e evitar alucinações.
+                Escolha de onde a IA vai puxar as informações para responder o cliente.
               </p>
             </TooltipContent>
           </Tooltip>
@@ -68,7 +66,7 @@ export function RAGSourcesSection({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BookOpen className="h-4 w-4 text-blue-500" />
-            <Label className="text-sm font-medium">Base de Conhecimento</Label>
+            <Label className="text-sm font-medium">Artigos e FAQ</Label>
           </div>
           <Switch
             checked={selectedNode.data.use_knowledge_base !== false}
@@ -79,7 +77,7 @@ export function RAGSourcesSection({
         {selectedNode.data.use_knowledge_base !== false && (
           <div className="space-y-2 pt-2">
             <Label className="text-[11px] text-muted-foreground">
-              Filtrar por categorias (vazio = todas):
+              Buscar apenas nestas categorias:
             </Label>
             
             {loadingCategories ? (
@@ -129,42 +127,12 @@ export function RAGSourcesSection({
         )}
       </div>
 
-      {/* Dados do Cliente (Kiwify/CRM) */}
-      <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4 text-green-500" />
-            <Label className="text-sm font-medium">Dados do Cliente (CRM)</Label>
-          </div>
-          <Switch
-            checked={selectedNode.data.use_customer_data === true}
-            onCheckedChange={(checked) => updateNodeData("use_customer_data", checked)}
-          />
-        </div>
-
-        {selectedNode.data.use_customer_data && (
-          <div className="space-y-1.5 pt-2">
-            <label className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/50 px-2 py-1 rounded">
-              <Checkbox
-                checked={selectedNode.data.use_order_history === true}
-                onCheckedChange={(checked) => updateNodeData("use_order_history", checked)}
-                className="h-3.5 w-3.5"
-              />
-              <span>Consultar histórico de pedidos</span>
-            </label>
-            <p className="text-[10px] text-muted-foreground px-2">
-              A IA terá acesso a pedidos, status e dados de compra do cliente
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Rastreio Logístico */}
+      {/* Rastreio de Envio */}
       <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Package className="h-4 w-4 text-orange-500" />
-            <Label className="text-sm font-medium">Rastreio de Pedidos</Label>
+            <Label className="text-sm font-medium">Rastreio de Envio</Label>
           </div>
           <Switch
             checked={selectedNode.data.use_tracking === true}
@@ -174,7 +142,7 @@ export function RAGSourcesSection({
 
         {selectedNode.data.use_tracking && (
           <p className="text-[10px] text-muted-foreground px-2 pt-1">
-            A IA consultará status de envio e código de rastreio automaticamente
+            A IA consulta onde está o pacote do cliente
           </p>
         )}
       </div>

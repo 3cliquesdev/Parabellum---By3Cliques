@@ -53,7 +53,7 @@ export function SmartCollectionSection({
         <div className="flex items-center gap-2">
           <Wand2 className="h-4 w-4 text-amber-500" />
           <Label className="text-xs font-semibold uppercase tracking-wide">
-            Coleta Inteligente
+            Pedir Dados do Cliente
           </Label>
           <TooltipProvider>
             <Tooltip>
@@ -62,9 +62,8 @@ export function SmartCollectionSection({
               </TooltipTrigger>
               <TooltipContent side="right" className="max-w-xs">
                 <p className="text-xs">
-                  A IA solicitará dados faltantes do cliente de forma natural durante 
-                  a conversa, sem precisar de blocos manuais de coleta.
-                </p>
+                   A IA pede os dados que faltam do cliente durante a conversa, de forma natural.
+                 </p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -78,7 +77,7 @@ export function SmartCollectionSection({
       {smartCollectionEnabled && (
         <div className="p-3 rounded-lg border bg-amber-500/5 border-amber-500/20 space-y-3">
           <p className="text-xs text-muted-foreground">
-            Dados que a IA pode solicitar quando necessário:
+            A IA pode pedir esses dados se não tiver:
           </p>
 
           <div className="grid grid-cols-2 gap-2">
@@ -121,8 +120,7 @@ export function SmartCollectionSection({
           )}
 
           <p className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 p-2 rounded">
-            💡 A IA coletará esses dados de forma conversacional, um por vez, 
-            apenas quando ainda não estiverem cadastrados no contato.
+            💡 A IA pede um dado por vez, só se ainda não tiver no cadastro.
           </p>
         </div>
       )}

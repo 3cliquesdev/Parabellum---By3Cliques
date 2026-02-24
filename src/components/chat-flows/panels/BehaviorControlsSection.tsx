@@ -37,7 +37,7 @@ export function BehaviorControlsSection({
       <div className="flex items-center gap-2">
         <Shield className="h-4 w-4 text-purple-500" />
         <Label className="text-xs font-semibold uppercase tracking-wide">
-          Controles de Comportamento
+          Como a IA deve responder
         </Label>
         <TooltipProvider>
           <Tooltip>
@@ -46,8 +46,7 @@ export function BehaviorControlsSection({
             </TooltipTrigger>
             <TooltipContent side="right" className="max-w-xs">
               <p className="text-xs">
-                Defina o objetivo específico da IA neste ponto do fluxo e restrinja 
-                comportamentos indesejados para garantir respostas determinísticas.
+                Configure como a IA vai se comportar neste ponto do fluxo.
               </p>
             </TooltipContent>
           </Tooltip>
@@ -58,25 +57,25 @@ export function BehaviorControlsSection({
       <div className="space-y-2 p-3 rounded-lg border bg-purple-500/5 border-purple-500/20">
         <div className="flex items-center gap-2">
           <Target className="h-4 w-4 text-purple-500" />
-          <Label className="text-sm font-medium">Objetivo da IA</Label>
+          <Label className="text-sm font-medium">O que a IA deve fazer aqui</Label>
         </div>
         
         <Textarea
           value={objective}
           onChange={(e) => updateNodeData("objective", e.target.value)}
-          placeholder="Ex: Responder dúvidas sobre rastreio de pedidos"
+          placeholder="Ex: Tirar dúvidas sobre entrega do pedido"
           rows={2}
           className="resize-none text-sm"
         />
         <p className="text-[10px] text-muted-foreground">
-          A IA responderá SOMENTE sobre este objetivo específico.
+          A IA só vai falar sobre esse assunto.
         </p>
       </div>
 
       {/* Máximo de Frases */}
       <div className="space-y-3 p-3 rounded-lg border bg-muted/30">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">Máximo de Frases</Label>
+          <Label className="text-sm font-medium">Tamanho da resposta</Label>
           <Badge variant="secondary" className="text-xs px-2">
             {maxSentences} {maxSentences === 1 ? 'frase' : 'frases'}
           </Badge>
@@ -100,17 +99,17 @@ export function BehaviorControlsSection({
       {/* Restrições de Comportamento */}
       <div className="space-y-3 p-3 rounded-lg border bg-red-500/5 border-red-500/20">
         <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-          Restrições Anti-Alucinação
+          O que a IA NÃO pode fazer
         </Label>
 
-        {/* Proibir Perguntas */}
+        {/* Não fazer perguntas */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <MessageSquareOff className="h-4 w-4 text-red-400" />
             <div>
-              <Label className="text-sm font-medium">Proibir Perguntas</Label>
+              <Label className="text-sm font-medium">Não fazer perguntas</Label>
               <p className="text-[10px] text-muted-foreground">
-                IA não pode fazer perguntas ao cliente
+                A IA só responde, não pergunta nada
               </p>
             </div>
           </div>
@@ -125,9 +124,9 @@ export function BehaviorControlsSection({
           <div className="flex items-center gap-2">
             <ListX className="h-4 w-4 text-red-400" />
             <div>
-              <Label className="text-sm font-medium">Proibir Opções</Label>
+              <Label className="text-sm font-medium">Não dar opções numeradas</Label>
               <p className="text-[10px] text-muted-foreground">
-                IA não pode oferecer múltipla escolha
+                A IA não oferece lista de opções (1, 2, 3...)
               </p>
             </div>
           </div>

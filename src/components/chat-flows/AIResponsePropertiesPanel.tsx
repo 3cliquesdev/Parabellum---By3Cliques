@@ -117,13 +117,13 @@ export function AIResponsePropertiesPanel({
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-amber-500" />
-          <Label className="text-xs font-semibold uppercase tracking-wide">Contexto Adicional</Label>
+          <Label className="text-xs font-semibold uppercase tracking-wide">Instruções Extras</Label>
         </div>
         
         <Textarea
           value={selectedNode.data.context_prompt || ""}
           onChange={(e) => updateNodeData("context_prompt", e.target.value)}
-          placeholder="Instruções adicionais para a IA responder neste ponto do fluxo..."
+          placeholder="Diga algo a mais para a IA seguir aqui..."
           rows={3}
           className="resize-none text-sm"
         />
@@ -144,7 +144,7 @@ export function AIResponsePropertiesPanel({
               : "text-red-500 animate-pulse"
           )} />
           <Label className="text-xs font-semibold uppercase tracking-wide">
-            Mensagem de Fallback
+            Resposta quando não souber
           </Label>
           {!selectedNode.data.fallback_message && (
             <Badge variant="destructive" className="text-[9px] px-1.5">Obrigatório</Badge>
@@ -158,7 +158,7 @@ export function AIResponsePropertiesPanel({
           className="resize-none text-sm"
         />
         <p className="text-[10px] text-muted-foreground">
-          Exibida quando a IA não encontra resposta ou viola restrições
+          O que a IA diz quando não tem a informação
         </p>
       </div>
     </div>
