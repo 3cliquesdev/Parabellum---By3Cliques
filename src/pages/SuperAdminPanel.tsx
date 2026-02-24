@@ -1,6 +1,7 @@
 import { Crown, Shield, Settings2, Users, BarChart3 } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Navigate } from "react-router-dom";
+import { hasFullAccess } from "@/config/roles";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SystemMetricsCard } from "@/components/super-admin/SystemMetricsCard";
@@ -14,7 +15,7 @@ import SecretsConfigCard from "@/components/settings/SecretsConfigCard";
 import WebhooksConfigCard from "@/components/settings/WebhooksConfigCard";
 
 export default function SuperAdminPanel() {
-  const { isAdmin, loading } = useUserRole();
+  const { role, loading } = useUserRole();
 
   if (loading) {
     return (
@@ -25,7 +26,7 @@ export default function SuperAdminPanel() {
   }
 
   // Double-check: only admins can access
-  if (!isAdmin) {
+  if (!hasFullAccess(role)) {
     return <Navigate to="/" replace />;
   }
 

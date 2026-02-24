@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { hasFullAccess } from "@/config/roles";
 
 interface RestoreAttachmentParams {
   ticketId: string;
@@ -18,13 +19,13 @@ export function useRestoreTicketAttachment() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { role } = useUserRole();
 
   return useMutation({
     mutationFn: async ({ ticketId, attachment, eventId }: RestoreAttachmentParams) => {
       // Verificar permissão no frontend
-      if (!isAdmin) {
-        throw new Error("Apenas administradores podem restaurar evidências");
+      if (!hasFullAccess(role)) {
+        throw new Error("Apenas administradores e gerentes podem restaurar evidências");
       }
 
       // 1. Buscar attachments atuais do ticket

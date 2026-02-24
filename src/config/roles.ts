@@ -1,6 +1,16 @@
 // ========== FONTE ÚNICA DA VERDADE PARA ROLES ==========
 // Centraliza todas as definições de roles com acesso total
 // e home pages por role para evitar duplicação no código
+//
+// CONTRATO DE PARIDADE:
+// Todos os roles em FULL_ACCESS_ROLES devem ter acesso idêntico
+// a todas as funcionalidades do sistema.
+//
+// REGRA: Nunca usar `isAdmin` sozinho para restringir acesso.
+// Sempre usar `hasFullAccess(role)` que inclui todos os gerentes.
+//
+// Única exceção: alteração de permissões do role "admin"
+// (auto-proteção em RolePermissionsManager).
 
 export const FULL_ACCESS_ROLES = [
   "admin",
