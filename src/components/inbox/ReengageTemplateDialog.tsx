@@ -98,6 +98,16 @@ export function ReengageTemplateDialog({
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
+      // 1.5 Close any other open conversation for same contact to avoid unique constraint
+      if (conversation.contact_id) {
+        await supabase
+          .from("conversations")
+          .update({ status: "closed", closed_at: new Date().toISOString(), closed_reason: "reopened_elsewhere" })
+          .eq("contact_id", conversation.contact_id)
+          .eq("status", "open")
+          .neq("id", conversation.id);
+      }
+
       // 2. Reopen conversation
       const { error: updateError } = await supabase
         .from("conversations")
