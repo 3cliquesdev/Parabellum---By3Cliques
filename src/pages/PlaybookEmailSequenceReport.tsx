@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, FileSpreadsheet, Search } from "lucide-react";
 import { DateRange } from "react-day-picker";
@@ -13,16 +13,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePlaybookEmailSequenceReport, EmailSequenceRow } from "@/hooks/usePlaybookEmailSequenceReport";
 import { useExportPlaybookEmailSequence } from "@/hooks/useExportPlaybookEmailSequence";
 
-function fmtDate(iso: string | null): string {
+function fmtDateTime(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function fmtTime(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+function getStatusDateTime(row: EmailSequenceRow): string | null {
+  if (row.email_bounced_at) return row.email_bounced_at;
+  if (row.email_clicked_at) return row.email_clicked_at;
+  if (row.email_opened_at) return row.email_opened_at;
+  if (row.email_sent_at) return row.email_sent_at;
+  return null;
 }
 
 function getEmailStatus(row: EmailSequenceRow): string {
@@ -169,13 +171,15 @@ export default function PlaybookEmailSequenceReport() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Cliente</TableHead>
+                       <TableHead>Cliente</TableHead>
                       <TableHead>Playbook</TableHead>
                       <TableHead>Data Venda</TableHead>
                      {positionLabels.slice(0, displayCols).map((label, i) => (
-                        <TableHead key={i} className="bg-primary/5 text-xs">
-                          {label}
-                        </TableHead>
+                        <React.Fragment key={i}>
+                          <TableHead className="bg-primary/5 text-xs">{label}</TableHead>
+                          <TableHead className="bg-primary/5 text-xs">{label} - Status</TableHead>
+                          <TableHead className="bg-primary/5 text-xs">{label} - Status data/hora</TableHead>
+                        </React.Fragment>
                       ))}
                     </TableRow>
                   </TableHeader>
@@ -184,18 +188,23 @@ export default function PlaybookEmailSequenceReport() {
                       <TableRow key={g.meta.execution_id}>
                         <TableCell className="font-medium">{g.meta.contact_name}</TableCell>
                         <TableCell>{g.meta.playbook_name}</TableCell>
-                        <TableCell>{fmtDate(g.meta.sale_date)} {fmtTime(g.meta.sale_date)}</TableCell>
+                        <TableCell>{fmtDateTime(g.meta.sale_date)}</TableCell>
                         {positionLabels.slice(0, displayCols).map((_, i) => {
                           const email = g.emails[i];
-                          if (!email) return <TableCell key={i} className="text-muted-foreground">—</TableCell>;
+                          if (!email) return (
+                            <React.Fragment key={i}>
+                              <TableCell className="text-muted-foreground">—</TableCell>
+                              <TableCell className="text-muted-foreground">—</TableCell>
+                              <TableCell className="text-muted-foreground">—</TableCell>
+                            </React.Fragment>
+                          );
                           const status = getEmailStatus(email);
                           return (
-                            <TableCell key={i}>
-                              <div className="text-xs space-y-0.5">
-                                <div className="text-muted-foreground">{fmtDate(email.email_sent_at)} {fmtTime(email.email_sent_at)}</div>
-                                <div className={getStatusColor(status)}>{status}</div>
-                              </div>
-                            </TableCell>
+                            <React.Fragment key={i}>
+                              <TableCell className="text-xs">{fmtDateTime(email.email_sent_at)}</TableCell>
+                              <TableCell className={`text-xs ${getStatusColor(status)}`}>{status}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{fmtDateTime(getStatusDateTime(email))}</TableCell>
+                            </React.Fragment>
                           );
                         })}
                       </TableRow>

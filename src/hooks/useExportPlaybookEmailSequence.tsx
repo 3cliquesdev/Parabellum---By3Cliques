@@ -2,16 +2,18 @@ import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { EmailSequenceRow } from "./usePlaybookEmailSequenceReport";
 
-function fmtDate(iso: string | null): string {
+function fmtDateTime(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function fmtTime(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+function getStatusDateTime(row: EmailSequenceRow): string | null {
+  if (row.email_bounced_at) return row.email_bounced_at;
+  if (row.email_clicked_at) return row.email_clicked_at;
+  if (row.email_opened_at) return row.email_opened_at;
+  if (row.email_sent_at) return row.email_sent_at;
+  return null;
 }
 
 function getEmailStatus(row: EmailSequenceRow): string {
@@ -78,16 +80,15 @@ export function useExportPlaybookEmailSequence() {
           "Cliente": g.meta.contact_name,
           "Email": g.meta.contact_email || "",
           "Playbook": g.meta.playbook_name,
-          "Data Venda": fmtDate(g.meta.sale_date),
-          "Hora Venda": fmtTime(g.meta.sale_date),
+          "Data Venda": fmtDateTime(g.meta.sale_date),
         };
 
         for (let i = 0; i < maxEmails; i++) {
           const label = posLabels[i];
           const email = g.emails[i];
-          row[`${label} - Data`] = email ? fmtDate(email.email_sent_at) : "";
-          row[`${label} - Hora`] = email ? fmtTime(email.email_sent_at) : "";
+          row[`${label}`] = email ? fmtDateTime(email.email_sent_at) : "";
           row[`${label} - Status`] = email ? getEmailStatus(email) : "";
+          row[`${label} - Status data e hora`] = email ? fmtDateTime(getStatusDateTime(email)) : "";
         }
 
         excelRows.push(row);
