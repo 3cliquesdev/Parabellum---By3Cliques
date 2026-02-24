@@ -26,6 +26,7 @@ import { ArrowLeft, User, CheckSquare, X } from "lucide-react";
 import { useIsMobileBreakpoint } from "@/hooks/useBreakpoint";
 import { useBulkReactivateAI } from "@/hooks/useBulkReactivateAI";
 import { useBulkCloseConversations } from "@/hooks/useBulkCloseConversations";
+import { useConversationCloseSettings } from "@/hooks/useConversationCloseSettings";
 
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -80,6 +81,7 @@ export default function Inbox() {
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(true);
   const bulkReactivate = useBulkReactivateAI();
   const bulkClose = useBulkCloseConversations();
+  const { tagsRequired } = useConversationCloseSettings();
   
   // Smart default filter based on role
   const defaultFilter = (role === 'admin' || role === 'manager') ? 'all' : 'human_queue';
@@ -412,11 +414,12 @@ export default function Inbox() {
 
   const handleBulkCloseConversations = useCallback(() => {
     if (selectedIds.size > 0) {
-      bulkClose.mutate(Array.from(selectedIds), {
-        onSuccess: handleClearSelection
-      });
+      bulkClose.mutate(
+        { conversationIds: Array.from(selectedIds), tagsRequired },
+        { onSuccess: handleClearSelection }
+      );
     }
-  }, [selectedIds, bulkClose, handleClearSelection]);
+  }, [selectedIds, bulkClose, handleClearSelection, tagsRequired]);
 
   const toggleSelectionMode = useCallback(() => {
     setSelectionMode(prev => !prev);

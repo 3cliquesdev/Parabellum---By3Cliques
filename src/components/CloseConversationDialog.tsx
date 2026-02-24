@@ -46,8 +46,8 @@ export default function CloseConversationDialog({
 
   if (!conversation) return null;
 
-  const hasTags = conversationTags.length > 0;
-  const missingTags = tagsRequired && !hasTags && !loadingSettings && !loadingTags;
+  const hasConversationTags = conversationTags.some(t => t.category === "conversation");
+  const missingTags = tagsRequired && !hasConversationTags && !loadingSettings && !loadingTags;
 
   const handleClose = () => {
     closeConversation.mutate(
@@ -86,9 +86,9 @@ export default function CloseConversationDialog({
                 <div className="flex items-start gap-3 rounded-lg border border-destructive/50 bg-destructive/10 p-3">
                   <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
                   <div className="space-y-2">
-                    <p className="font-medium text-destructive">Tags obrigatórias</p>
+                    <p className="font-medium text-destructive">Tags de conversa obrigatórias</p>
                     <p className="text-xs text-muted-foreground">
-                      Adicione pelo menos uma tag antes de encerrar esta conversa. Tags ajudam na classificação e análise dos atendimentos.
+                      Adicione pelo menos uma tag da categoria <strong>"conversa"</strong> antes de encerrar. Tags pessoais ou de contato não são válidas para esta exigência.
                     </p>
                     <Button
                       variant="outline"
