@@ -12,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/useUserRole";
+import { hasFullAccess } from "@/config/roles";
 
 interface InstagramSecret {
   key: string;
@@ -48,7 +49,7 @@ const INSTAGRAM_SECRETS: InstagramSecret[] = [
 export default function InstagramSecretsCard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAdmin } = useUserRole();
+  const { role } = useUserRole();
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [isEditing, setIsEditing] = useState(false);
@@ -80,7 +81,7 @@ export default function InstagramSecretsCard() {
 
       return response.json();
     },
-    enabled: isAdmin,
+    enabled: hasFullAccess(role),
   });
 
   // Save configuration mutation using integrations-set
@@ -176,7 +177,7 @@ export default function InstagramSecretsCard() {
   };
 
   // Only admins can see this card
-  if (!isAdmin) {
+  if (!hasFullAccess(role)) {
     return null;
   }
 
