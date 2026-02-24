@@ -1,52 +1,57 @@
 
-# Corrigir Gravacao do template_id na Tabela email_sends
 
-## Problema
-O campo `template_id` foi removido do payload de insert em `email_sends` na Edge Function `send-email/index.ts` (linhas 261-272). O comentario diz que uma FK causava erros, mas a FK ja foi removida da tabela -- nao existe mais nenhuma foreign key em `email_sends`. Resultado: 12.073 emails enviados com `template_id = NULL`.
+# Ajustar Formato das Colunas no Relatorio de Sequencia de E-mails
 
-## Solucao
+## Formato Atual (por template)
+- `{Template} - Data` (apenas data)
+- `{Template} - Hora` (apenas hora)
+- `{Template} - Status` (texto)
 
-### Arquivo: `supabase/functions/send-email/index.ts`
+## Formato Desejado (por template)
+- `{Template}` -- data e hora do envio juntos (ex: "23/02/2026 19:58")
+- `{Template} - Status` -- texto do status (Enviado, Aberto, Clicado, Bounce)
+- `{Template} - Status data e hora` -- data e hora do evento de status (opened_at para Aberto, clicked_at para Clicado, bounced_at para Bounce, sent_at para Enviado)
 
-Adicionar de volta o campo `template_id` no payload de insert do `email_sends` (linha ~262-273):
+Este padrao se repete para cada template na sequencia do fluxo.
 
-**Antes:**
-```typescript
-const emailSendPayload = {
-  contact_id: customer_id,
-  resend_email_id: resendData.id,
-  subject,
-  recipient_email: to,
-  status: 'sent',
-  sent_at: new Date().toISOString(),
-  variables_used: { to_name: recipientName, branding: brandName },
-  playbook_execution_id: playbook_execution_id || null,
-  playbook_node_id: playbook_node_id || null,
-  // template_id removido - FK causava erros quando template não existe em email_templates_v2
-};
+## Logica da "data e hora do status"
+
+Cada status tem um timestamp diferente:
+- Bounce: `email_bounced_at`
+- Clicado: `email_clicked_at`
+- Aberto: `email_opened_at`
+- Enviado: `email_sent_at`
+- Erro/Pendente: vazio
+
+## Alteracoes
+
+### 1. `src/hooks/useExportPlaybookEmailSequence.tsx`
+
+Adicionar funcao `fmtDateTime` que combina data e hora num unico valor (ex: "23/02/2026 20:37").
+
+Adicionar funcao `getStatusDateTime` que retorna o timestamp do evento de status correspondente.
+
+Alterar a geracao das colunas por template de:
+```text
+{label} - Data
+{label} - Hora
+{label} - Status
+```
+Para:
+```text
+{label}                        -> fmtDateTime(email_sent_at)
+{label} - Status               -> getEmailStatus(email)
+{label} - Status data e hora   -> fmtDateTime(getStatusDateTime(email))
 ```
 
-**Depois:**
-```typescript
-const emailSendPayload = {
-  contact_id: customer_id,
-  resend_email_id: resendData.id,
-  subject,
-  recipient_email: to,
-  status: 'sent',
-  sent_at: new Date().toISOString(),
-  variables_used: { to_name: recipientName, branding: brandName },
-  playbook_execution_id: playbook_execution_id || null,
-  playbook_node_id: playbook_node_id || null,
-  template_id: request_template_id || null,
-};
-```
+### 2. `src/pages/PlaybookEmailSequenceReport.tsx`
 
-A variavel `request_template_id` ja existe no destructuring do request (linha ~49). Basta adiciona-la ao payload.
+Alterar o preview da tabela para exibir o mesmo formato:
+- Na celula de cada template, mostrar: data/hora envio, status, e data/hora do status
+- Ou expandir as colunas do preview para refletir o mesmo layout do Excel (3 sub-colunas por template)
 
 ## Impacto
-- Apenas adiciona um campo nullable que ja existe na tabela
-- Nao ha FK -- nenhum risco de erro de constraint
-- Emails futuros passarao a ser rastreados por template
-- Emails antigos continuam com `template_id = NULL` (sem efeito retroativo)
-- Zero impacto em features existentes
+- Apenas mudanca visual no Excel e no preview
+- Dados continuam os mesmos
+- Zero impacto em logica de negocio
+- Compativel com multiplos templates no fluxo (repete o padrao para cada posicao)
