@@ -1,83 +1,87 @@
 
-# Indicador de Fluxo Ativo na Conversa
 
-## Resumo
+# Unificar Teste de Fluxo em Um Unico Clique
 
-Criar um sistema visual que mostra qual fluxo esta rodando na conversa atual, com nome, tipo (ativo/rascunho), e opcao de cancelar. Tambem bloquear inicio de novo fluxo se ja houver um em andamento.
+## Problema Atual
 
-## Alteracoes
+O usuario precisa de **dois cliques em dois botoes diferentes** para testar um fluxo de rascunho:
+1. Clicar no botao "Testar" (header) para ativar o modo teste
+2. Procurar e clicar no botao "Workflow" (composer) para selecionar o fluxo
 
-### 1. Criar hook `useActiveFlowState` (novo arquivo)
+Isso e confuso e pouco intuitivo. O usuario espera que ao clicar em "Testar", ja possa escolher o fluxo.
 
-**Arquivo:** `src/hooks/useActiveFlowState.ts`
+## Solucao Proposta
 
-- Query em `chat_flow_states` filtrando `conversation_id` e `status = 'in_progress'`
-- JOIN com `chat_flows` para trazer `name` e `is_active`
-- Realtime subscribe em `chat_flow_states` com filtro `conversation_id=eq.<id>` para INSERT/UPDATE
-- Funcao `cancelFlow(stateId)` que faz update `status='cancelled', completed_at=now()`
-- Retorna: `{ activeFlow, isLoading, cancelFlow, isCancelling }`
-  - `activeFlow`: `{ stateId, flowId, flowName, flowIsActive, currentNodeId, startedAt }` ou `null`
+Transformar o botao "Testar" em um **dropdown com duas funcoes**:
+- Toggle do modo teste (liga/desliga)
+- Lista de fluxos de rascunho para iniciar diretamente
 
-### 2. Criar componente `ActiveFlowIndicator` (novo arquivo)
+### Comportamento do Botao "Testar" (novo)
 
-**Arquivo:** `src/components/inbox/ActiveFlowIndicator.tsx`
+**Clique no botao principal:** Toggle do modo teste (comportamento atual preservado)
 
-- Recebe `conversationId` como prop
-- Usa `useActiveFlowState(conversationId)`
-- Se nao ha fluxo `in_progress`: retorna `null` (nao renderiza nada)
-- Se ha fluxo ativo, renderiza um banner compacto:
-  - Icone `Workflow`
-  - Texto: `Fluxo: "Nome do Fluxo"`
-  - Badge: "Rascunho" (amarelo) se `flowIsActive === false`, ou "Ativo" (verde) se `flowIsActive === true`
-  - Botao "Cancelar" que chama `cancelFlow(stateId)` com confirmacao
-- Estilo: banner amber sutil para rascunho, azul/verde para ativo, dentro de um `Alert` compacto
+**Seta/dropdown ao lado:** Abre lista de fluxos disponíveis para teste (rascunhos + ativos), similar ao FlowPickerButton mas posicionado no header.
 
-### 3. Integrar `ActiveFlowIndicator` no `ChatWindow.tsx`
+**OU alternativa mais simples:**
 
-- Importar o componente
-- Posicionar logo apos o alert de "Assumir/IA" (linha ~670) e antes da area de mensagens (linha 672)
-- Passa `conversationId={conversation.id}`
+Transformar o botao "Testar" em um **DropdownMenu** que:
+1. Primeiro item: "Ativar/Desativar Modo Teste" (toggle)
+2. Separador
+3. Secao "Iniciar Fluxo de Rascunho" com lista dos fluxos inativos
+4. Secao "Iniciar Fluxo Ativo" com lista dos fluxos ativos
 
-### 4. Bloquear novo fluxo no `FlowPickerButton.tsx`
+Ao selecionar um fluxo de rascunho, o sistema:
+- Ativa o modo teste automaticamente (se nao estiver ativo)
+- Inicia o fluxo selecionado
+- Tudo em um unico clique
 
-- Receber nova prop `hasActiveFlow: boolean` (vinda do hook no ChatWindow ou SuperComposer)
-- Antes de chamar `handleStartFlow`, verificar `hasActiveFlow`
-- Se `true`: exibir toast "Ja existe um fluxo em execucao nesta conversa. Cancele-o antes de iniciar outro." e nao executar
-- O dropdown continua visivel mas os itens ficam bloqueados
+### Alteracoes Tecnicas
 
-### 5. Propagar `hasActiveFlow` via SuperComposer
+**Arquivo: `src/components/ChatWindow.tsx`**
 
-- No `SuperComposer`, importar `useActiveFlowState` e passar `hasActiveFlow={!!activeFlow}` para o `FlowPickerButton`
+- Substituir o `Button` simples do teste (linhas 515-534) por um `DropdownMenu`
+- Importar `useChatFlows` para listar os fluxos disponiveis
+- Importar `useActiveFlowState` para verificar se ja ha fluxo ativo
+- Ao selecionar um fluxo rascunho:
+  1. Se `isTestMode` for `false`, chamar `toggleTestMode(true)` primeiro
+  2. Depois chamar `supabase.functions.invoke("process-chat-flow", { body: { conversationId, flowId, manualTrigger: true, bypassActiveCheck: true } })`
+- Se ja houver fluxo ativo (`activeFlow` nao nulo), mostrar toast bloqueando
 
-### 6. Habilitar Realtime na tabela `chat_flow_states`
+**Arquivo: `src/components/inbox/FlowPickerButton.tsx`**
 
-- Criar migracao SQL: `ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_flow_states;`
-- Isso permite que o hook receba updates em tempo real quando o fluxo avanca, completa ou e cancelado
+- Manter como esta (sem mudancas) — ele continua funcional no composer para quem preferir usar por la
 
-## Fluxo Visual
+### UX do Dropdown
 
 ```text
-Header da conversa
+[🧪 Testar v]
   |
-  v
-[Alert de IA/Assumir] (existente)
+  +-- [Toggle] Modo Teste: Ativo/Inativo
   |
-  v
-[ActiveFlowIndicator] <-- NOVO
-  | Se in_progress: banner com nome + badge + cancelar
-  | Se nao: invisivel
-  v
-[Area de mensagens]
+  +-- ---- separador ----
   |
-  v
-[SuperComposer com FlowPickerButton]
-  | Se hasActiveFlow: bloqueia inicio de novo fluxo
+  +-- Rascunhos (teste):
+  |     > Fluxo Vendas v2
+  |     > Fluxo Suporte Beta
+  |
+  +-- ---- separador ----
+  |
+  +-- Ativos:
+  |     > Fluxo Principal
+  |     > Fluxo Suporte
 ```
 
-## Impacto
+### Logica de Seguranca (preservada)
 
-- Zero regressao: nenhuma logica existente e alterada
-- Upgrade puro de UX: o usuario sempre sabe qual fluxo esta rodando
-- Previne conflito entre fluxos simultaneos no frontend
-- Realtime garante que o banner desaparece automaticamente quando o fluxo termina
-- Backend ja cancela fluxos anteriores ao iniciar novo (linha 519-523 do process-chat-flow), entao a protecao frontend e complementar
+- Dropdown so aparece para `hasPermission('inbox.test_mode') && hasFullAccess(role)`
+- Fluxos de rascunho enviam `bypassActiveCheck: true` (validacao tripla no backend)
+- Se ha fluxo ativo, bloqueia inicio de outro
+- Modo teste e ativado automaticamente ao selecionar rascunho
+
+### Impacto
+
+- Zero regressao: FlowPickerButton no composer continua funcionando
+- Upgrade de UX: usuario testa rascunho com um unico clique no lugar obvio
+- Backend inalterado: mesma Edge Function, mesmas validacoes
+- ActiveFlowIndicator continua mostrando qual fluxo esta rodando
+
