@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useInboxView, useInboxCounts, type InboxFilters as InboxViewFiltersType, type InboxCounts } from "@/hooks/useInboxView";
@@ -89,6 +89,10 @@ export default function Inbox() {
   const teamFilter = searchParams.get("team");
   const tagFilter = searchParams.get("tag");
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
+  
+  // Deep-link: selecionar conversa via ?conversation=ID
+  const conversationFromUrl = searchParams.get("conversation");
+  const deepLinkHandledRef = useRef<string | null>(null);
   
   // ✅ ESTABILIZAR filtros com useMemo para evitar refetch desnecessário
   const inboxViewFilters = useMemo<InboxViewFiltersType>(() => ({
@@ -355,7 +359,24 @@ export default function Inbox() {
     return result;
   }, [filteredConversations, filters.waitingTime, hasActiveSearch]);
 
-  // Bulk selection handlers (after filteredConversations is defined)
+  // Deep-link: auto-selecionar conversa quando lista carrega
+  useEffect(() => {
+    if (!conversationFromUrl) return;
+    if (deepLinkHandledRef.current === conversationFromUrl) return;
+    if (activeConversation?.id === conversationFromUrl) {
+      deepLinkHandledRef.current = conversationFromUrl;
+      return;
+    }
+    
+    const target = orderedConversations.find(c => c.id === conversationFromUrl);
+    if (target) {
+      setActiveConversation(target);
+      deepLinkHandledRef.current = conversationFromUrl;
+      if (isMobile) setMobileView("chat");
+    }
+  }, [conversationFromUrl, orderedConversations, activeConversation?.id, isMobile]);
+
+
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev);

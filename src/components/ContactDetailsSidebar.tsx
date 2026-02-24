@@ -435,106 +435,111 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-          <DialogHeader className="flex-none">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <MessageSquare className="h-4 w-4" />
+        <DialogContent className="max-w-2xl p-0 overflow-hidden" style={{ maxHeight: '85vh' }}>
+          <div className="flex flex-col" style={{ height: '85vh', maxHeight: '85vh' }}>
+            <DialogHeader className="flex-none px-6 pt-6 pb-3">
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <MessageSquare className="h-4 w-4" />
+                {selectedConversationMeta && (
+                  <>
+                    Conversa {getChannelLabel(selectedConversationMeta.channel || '')}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${getConversationStatusBadge(selectedConversationMeta.status || 'open').className}`}>
+                      {getConversationStatusBadge(selectedConversationMeta.status || 'open').label}
+                    </span>
+                  </>
+                )}
+              </DialogTitle>
               {selectedConversationMeta && (
-                <>
-                  Conversa {getChannelLabel(selectedConversationMeta.channel || '')}
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${getConversationStatusBadge(selectedConversationMeta.status || 'open').className}`}>
-                    {getConversationStatusBadge(selectedConversationMeta.status || 'open').label}
-                  </span>
-                </>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {selectedConversationMeta.profiles?.full_name && (
+                    <span>Atendente: {selectedConversationMeta.profiles.full_name}</span>
+                  )}
+                  {selectedConversationMeta.date && (
+                    <span>· {format(new Date(selectedConversationMeta.date), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
+                  )}
+                </div>
               )}
-            </DialogTitle>
-            {selectedConversationMeta && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {selectedConversationMeta.profiles?.full_name && (
-                  <span>Atendente: {selectedConversationMeta.profiles.full_name}</span>
-                )}
-                {selectedConversationMeta.date && (
-                  <span>· {format(new Date(selectedConversationMeta.date), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
-                )}
-              </div>
-            )}
-          </DialogHeader>
+            </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0 pr-2">
-            {isLoadingMessages ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                <span className="ml-2 text-sm text-muted-foreground">Carregando mensagens...</span>
-              </div>
-            ) : conversationMessages.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-12">
-                Nenhuma mensagem encontrada
-              </p>
-            ) : (
-              <div className="space-y-2 py-2">
-                {conversationMessages.map((msg: any) => {
-                  const isContact = msg.sender_type === 'contact';
-                  const isInternal = msg.is_internal === true;
-                  const senderName = isContact
-                    ? 'Cliente'
-                    : msg.is_ai_generated
-                    ? 'IA'
-                    : msg.sender?.full_name || 'Agente';
+            <div className="flex-1 min-h-0 overflow-y-auto px-6">
+              {isLoadingMessages ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Carregando mensagens...</span>
+                </div>
+              ) : conversationMessages.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-12">
+                  Nenhuma mensagem encontrada
+                </p>
+              ) : (
+                <div className="space-y-2 py-2">
+                  {conversationMessages.map((msg: any) => {
+                    const isContact = msg.sender_type === 'contact';
+                    const isInternal = msg.is_internal === true;
+                    const senderName = isContact
+                      ? 'Cliente'
+                      : msg.is_ai_generated
+                      ? 'IA'
+                      : msg.sender?.full_name || 'Agente';
 
-                  if (isInternal) {
-                    return (
-                      <div key={msg.id} className="flex justify-center">
-                        <div className="max-w-[85%] p-2.5 rounded-lg bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-[10px] font-medium text-yellow-700 dark:text-yellow-300">📝 Nota Interna</span>
-                            <span className="text-[10px] text-yellow-600 dark:text-yellow-400">· {senderName}</span>
+                    if (isInternal) {
+                      return (
+                        <div key={msg.id} className="flex justify-center">
+                          <div className="max-w-[85%] p-2.5 rounded-lg bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="text-[10px] font-medium text-yellow-700 dark:text-yellow-300">📝 Nota Interna</span>
+                              <span className="text-[10px] text-yellow-600 dark:text-yellow-400">· {senderName}</span>
+                            </div>
+                            <p className="text-xs text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap">{msg.content}</p>
+                            <span className="text-[9px] text-yellow-600 dark:text-yellow-400 mt-1 block text-right">
+                              {format(new Date(msg.created_at), "HH:mm")}
+                            </span>
                           </div>
-                          <p className="text-xs text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap">{msg.content}</p>
-                          <span className="text-[9px] text-yellow-600 dark:text-yellow-400 mt-1 block text-right">
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={msg.id} className={`flex ${isContact ? 'justify-start' : 'justify-end'}`}>
+                        <div className={`max-w-[75%] p-2.5 rounded-lg ${isContact ? 'bg-muted' : 'bg-primary/10'}`}>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-[10px] font-semibold text-foreground">{senderName}</span>
+                          </div>
+                          <p className="text-xs text-foreground whitespace-pre-wrap break-words">{msg.content}</p>
+                          <span className="text-[9px] text-muted-foreground mt-1 block text-right">
                             {format(new Date(msg.created_at), "HH:mm")}
                           </span>
                         </div>
                       </div>
                     );
-                  }
+                  })}
+                  {conversationMessages.length >= 500 && (
+                    <p className="text-[10px] text-center text-muted-foreground py-2">
+                      ⚠️ Mostrando apenas as 500 primeiras mensagens
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
 
-                  return (
-                    <div key={msg.id} className={`flex ${isContact ? 'justify-start' : 'justify-end'}`}>
-                      <div className={`max-w-[75%] p-2.5 rounded-lg ${isContact ? 'bg-muted' : 'bg-primary/10'}`}>
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className="text-[10px] font-semibold text-foreground">{senderName}</span>
-                        </div>
-                        <p className="text-xs text-foreground whitespace-pre-wrap break-words">{msg.content}</p>
-                        <span className="text-[9px] text-muted-foreground mt-1 block text-right">
-                          {format(new Date(msg.created_at), "HH:mm")}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-                {conversationMessages.length >= 500 && (
-                  <p className="text-[10px] text-center text-muted-foreground py-2">
-                    ⚠️ Mostrando apenas as 500 primeiras mensagens
-                  </p>
-                )}
-              </div>
-            )}
-          </ScrollArea>
-
-          <div className="flex-none pt-3 border-t border-border">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full gap-2"
-              onClick={() => {
-                setSelectedConversationId(null);
-                setSelectedConversationMeta(null);
-                window.location.href = `/inbox?conversation=${selectedConversationId}`;
-              }}
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Abrir no Inbox
-            </Button>
+            <div className="flex-none px-6 py-3 border-t border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2"
+                onClick={() => {
+                  const convId = selectedConversationId;
+                  const convStatus = selectedConversationMeta?.status;
+                  setSelectedConversationId(null);
+                  setSelectedConversationMeta(null);
+                  const filterParam = convStatus === 'closed' ? '&filter=archived' : '';
+                  navigate(`/inbox?conversation=${convId}${filterParam}`);
+                }}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Abrir no Inbox
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
