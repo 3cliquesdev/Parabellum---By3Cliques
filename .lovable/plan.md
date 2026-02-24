@@ -1,60 +1,63 @@
 
+# Corrigir visualizacao de conversas encerradas no Inbox
 
-# Corrigir botao "Reengajar via Template" que nunca aparece
+## Problema encontrado
 
-## Problema raiz
+A query que busca conversas encerradas usa `order("updated_at", ascending: true)` com `limit(500)`. Isso retorna as **500 conversas mais antigas** (de 10/02) em vez das **mais recentes** (de hoje). Com 7.293 conversas fechadas no banco, o usuario nunca ve as que acabou de encerrar.
 
-O botao "Reengajar via Template" esta invisivel para 97% das conversas WhatsApp porque o codigo verifica `whatsapp_instance_id` (Evolution API legada), mas quase todas as conversas usam `whatsapp_meta_instance_id` (Meta Cloud API).
+Para conversas ativas, `ascending: true` faz sentido (mais antigas = maior prioridade de atendimento). Mas para encerradas, o usuario espera ver as mais recentes primeiro.
 
-Alem disso, o botao so aparece quando `closed_reason === "whatsapp_window_expired"`, ignorando conversas fechadas por outros motivos onde o template tambem seria necessario para reabrir o contato.
+## Correcao
 
-## Correcoes planejadas
+### Arquivo: `src/hooks/useInboxView.tsx`
 
-### 1. ChatWindow.tsx - Condicao de visibilidade do botao (linha 659)
+**Mudanca na funcao `fetchInboxData` (linhas 82-84):**
 
-**Antes:**
+Usar ordem descendente para scope `archived` (mais recentes primeiro) e aumentar o limite para 1000:
+
+```typescript
+// Antes:
+query = query
+  .order("updated_at", { ascending: true })
+  .limit(500);
+
+// Depois:
+const isArchived = scope === 'archived';
+query = query
+  .order("updated_at", { ascending: !isArchived })
+  .limit(isArchived ? 1000 : 500);
 ```
-conversation.channel === "whatsapp" 
-  && (conversation as any).closed_reason === "whatsapp_window_expired" 
-  && conversation.whatsapp_instance_id
+
+**Mudanca na funcao `sortInboxItemsByPriority` (linhas 251-255):**
+
+Manter consistencia: conversas encerradas devem ser exibidas com as mais recentes no topo da lista. O sort no `filteredData` ja e aplicado pelo `useMemo` usando `applyFilters`, mas o `ConversationList` recebe os dados na ordem que vem. Precisamos ajustar a ordenacao no `filteredConversations` do `Inbox.tsx`.
+
+### Arquivo: `src/pages/Inbox.tsx`
+
+**Mudanca na ordenacao (funcao `orderedConversations`):**
+
+Para o filtro `archived`, inverter a ordem para que as encerradas mais recentes aparecam primeiro:
+
+```typescript
+// No useMemo de orderedConversations, adicionar logica:
+if (filter === "archived") {
+  result.sort((a, b) => 
+    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
+}
 ```
 
-**Depois:**
-```
-conversation.channel === "whatsapp" 
-  && (conversation.whatsapp_instance_id || conversation.whatsapp_meta_instance_id)
-```
+## Impacto
 
-Isso mostra o botao em **qualquer conversa WhatsApp fechada** que tenha uma instancia configurada (seja Evolution ou Meta). O agente pode decidir se quer reengajar ou nao.
-
-### 2. ReengageTemplateDialog.tsx - Suporte a Meta Cloud API
-
-O dialog atualmente usa `whatsapp_instance_id` em 3 pontos:
-- Interface de props
-- Query de templates
-- Envio via `send-meta-whatsapp`
-
-Correcoes:
-- Adicionar `whatsapp_meta_instance_id` na interface
-- Criar variavel `instanceId = conversation.whatsapp_meta_instance_id || conversation.whatsapp_instance_id`
-- Usar `instanceId` na query de templates e no envio
-- Na query de templates, filtrar por `instance_id` correto (Meta usa a tabela `whatsapp_message_templates` com o `instance_id` da instancia Meta)
-
-### 3. ChatWindow.tsx - Passar `whatsapp_meta_instance_id` para o dialog
-
-Adicionar `whatsapp_meta_instance_id` no objeto conversation passado ao `ReengageTemplateDialog`.
-
-## Arquivos impactados
-
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/components/ChatWindow.tsx` | Relaxar condicao do botao + passar `whatsapp_meta_instance_id` ao dialog |
-| `src/components/inbox/ReengageTemplateDialog.tsx` | Suportar `whatsapp_meta_instance_id` em props, query e envio |
+| Item | Status |
+|------|--------|
+| Conversas ativas | Sem mudanca (ascending = true mantido) |
+| Conversas encerradas | Agora mostra as 1000 mais recentes, ordenadas da mais nova para a mais antiga |
+| Realtime/cache | Sem impacto (merge continua funcionando normalmente) |
+| Performance | Minimo (1000 vs 500 rows para archived apenas) |
 
 ## Zero regressao
 
-- Conversas Evolution (3%) continuam funcionando igual (fallback para `whatsapp_instance_id`)
-- Conversas Meta (97%) passam a ver o botao
-- Nenhuma outra feature e afetada
 - Kill Switch, Shadow Mode, CSAT guard: sem impacto
-
+- Filtros ativos (Minhas, Fila IA, etc.): sem mudanca
+- Cache realtime: merge e scope continuam identicos
