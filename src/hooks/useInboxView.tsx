@@ -111,7 +111,7 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
 }
 
 // Função para aplicar filtros client-side (PURAMENTE SÍNCRONA)
-function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?: Set<string>): InboxViewItem[] {
+function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?: Set<string>, scope?: 'active' | 'archived'): InboxViewItem[] {
   if (!filters) return items;
 
   let result = [...items];
@@ -139,10 +139,10 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
     );
   }
 
-  // Status filter
+  // Status filter — skip default exclusion for archived scope (all items are closed)
   if (filters.status.length > 0) {
     result = result.filter(item => filters.status.includes(item.status));
-  } else if (!hasActiveSearch) {
+  } else if (!hasActiveSearch && scope !== 'archived') {
     result = result.filter(item => item.status !== 'closed');
   }
 
@@ -318,8 +318,8 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
 
   // ✅ Filtragem instantânea via useMemo (0ms, sem rede)
   const filteredData = useMemo(
-    () => applyFilters(query.data ?? [], filters, tagIdsSet),
-    [query.data, filters, tagIdsSet]
+    () => applyFilters(query.data ?? [], filters, tagIdsSet, scope),
+    [query.data, filters, tagIdsSet, scope]
   );
 
   // Realtime subscription com merge incremental e catch-up
