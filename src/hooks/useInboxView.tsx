@@ -79,9 +79,10 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
     query = query.neq("status", "closed");
   }
 
+  const isArchivedScope = scope === 'archived';
   query = query
-    .order("updated_at", { ascending: true })
-    .limit(500);
+    .order("updated_at", { ascending: !isArchivedScope })
+    .limit(isArchivedScope ? 1000 : 500);
 
   // Aplicar filtros de role no nível do banco
   if (role && userId && !hasFullInboxAccess(role)) {

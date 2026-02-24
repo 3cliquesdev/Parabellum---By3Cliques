@@ -332,6 +332,14 @@ export default function Inbox() {
       return result;
     }
     
+    // Encerradas: mais recentes primeiro (descending by updated_at)
+    if (isArchived) {
+      result.sort((a, b) => 
+        new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+      );
+      return result;
+    }
+
     // Ordenar por tempo de espera
     if (filters.waitingTime === 'newest') {
       result.sort((a, b) => 
