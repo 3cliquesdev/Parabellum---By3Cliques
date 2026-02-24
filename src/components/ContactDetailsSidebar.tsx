@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket } from "lucide-react";
+import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket, MessageSquare } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import ContactTagsSection from "./inbox/ContactTagsSection";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,8 +77,31 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
     );
   }
 
+  const navigate = useNavigate();
   const openTickets = contactTickets.filter(t => t.status !== 'closed' && t.status !== 'resolved');
-  const recentTimeline = unifiedTimeline.slice(0, 10);
+  
+  const conversations = unifiedTimeline
+    .filter(e => e.type === 'conversation')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 5);
+
+  const otherEvents = unifiedTimeline
+    .filter(e => e.type !== 'conversation' && e.type !== 'message')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 5);
+
+  const getConversationStatusBadge = (status: string) => {
+    if (status === 'closed') return { label: 'Fechada', className: 'bg-muted text-muted-foreground' };
+    if (status === 'open') return { label: 'Aberta', className: 'bg-success/10 text-success' };
+    return { label: status, className: 'bg-info/10 text-info' };
+  };
+
+  const getChannelLabel = (channel: string) => {
+    if (channel === 'whatsapp') return 'WhatsApp';
+    if (channel === 'webchat') return 'Webchat';
+    if (channel === 'email') return 'Email';
+    return channel;
+  };
   
   // Verificar se sessão está verificada
   const metadata = conversation.customer_metadata as any;
@@ -299,36 +323,81 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
                 )}
               </TabsContent>
 
-              {/* Timeline Tab - Unified Timeline */}
-              <TabsContent value="timeline" className="mt-3 space-y-2">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase">
-                  Histórico Unificado
-                </p>
-                {recentTimeline.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {recentTimeline.map((event) => (
-                      <div
-                        key={event.id}
-                        className="p-2 rounded-md border-l-2 border-primary/30 bg-muted/50"
-                      >
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <span className="text-xs">{event.icon}</span>
-                          <span className="text-[10px] font-medium text-foreground truncate">{event.title}</span>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground line-clamp-1">
-                          {event.description}
-                        </p>
-                        <span className="text-[9px] text-muted-foreground">
-                          {format(new Date(event.date), "dd/MM HH:mm", { locale: ptBR })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground text-center py-3">
-                    Nenhum histórico registrado
+              {/* Timeline Tab - Conversas + Outros Eventos */}
+              <TabsContent value="timeline" className="mt-3 space-y-4">
+                {/* Seção: Conversas Anteriores */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase">
+                    Conversas Anteriores ({conversations.length})
                   </p>
-                )}
+                  {conversations.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {conversations.map((event) => {
+                        const meta = event.metadata || {};
+                        const statusBadge = getConversationStatusBadge(meta.status || 'open');
+                        return (
+                          <div
+                            key={event.id}
+                            className="p-2 rounded-md border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+                            onClick={() => navigate(`/inbox?conversation=${event.id}`)}
+                          >
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                <span className="text-[10px] font-medium text-foreground truncate">
+                                  {getChannelLabel(meta.channel || '')}
+                                </span>
+                              </div>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${statusBadge.className}`}>
+                                {statusBadge.label}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                              <span>{meta.message_count || 0} msgs{meta.profiles?.full_name ? ` · ${meta.profiles.full_name}` : ''}</span>
+                              <span>{format(new Date(event.date), "dd/MM HH:mm", { locale: ptBR })}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      Nenhuma conversa registrada
+                    </p>
+                  )}
+                </div>
+
+                {/* Seção: Outros Eventos */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase">
+                    Outros Eventos ({otherEvents.length})
+                  </p>
+                  {otherEvents.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {otherEvents.map((event) => (
+                        <div
+                          key={event.id}
+                          className="p-2 rounded-md border-l-2 border-primary/30 bg-muted/50"
+                        >
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <span className="text-xs">{event.icon}</span>
+                            <span className="text-[10px] font-medium text-foreground truncate">{event.title}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground line-clamp-1">
+                            {event.description}
+                          </p>
+                          <span className="text-[9px] text-muted-foreground">
+                            {format(new Date(event.date), "dd/MM HH:mm", { locale: ptBR })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      Nenhum evento registrado
+                    </p>
+                  )}
+                </div>
               </TabsContent>
             </Tabs>
           </div>
