@@ -1,57 +1,95 @@
 
 
-# Ajustar Formato das Colunas no Relatorio de Sequencia de E-mails
+# Modo Rascunho Testavel -- 4 Ajustes de Seguranca + UX
 
-## Formato Atual (por template)
-- `{Template} - Data` (apenas data)
-- `{Template} - Hora` (apenas hora)
-- `{Template} - Status` (texto)
+## Resumo
 
-## Formato Desejado (por template)
-- `{Template}` -- data e hora do envio juntos (ex: "23/02/2026 19:58")
-- `{Template} - Status` -- texto do status (Enviado, Aberto, Clicado, Bounce)
-- `{Template} - Status data e hora` -- data e hora do evento de status (opened_at para Aberto, clicked_at para Clicado, bounced_at para Bounce, sent_at para Enviado)
-
-Este padrao se repete para cada template na sequencia do fluxo.
-
-## Logica da "data e hora do status"
-
-Cada status tem um timestamp diferente:
-- Bounce: `email_bounced_at`
-- Clicado: `email_clicked_at`
-- Aberto: `email_opened_at`
-- Enviado: `email_sent_at`
-- Erro/Pendente: vazio
+Implementar os 4 ajustes solicitados para que fluxos em rascunho possam ser testados com seguranca total: visibilidade condicional, validacao de role no backend, log persistente em audit_logs, e mensagens de erro claras com CTA.
 
 ## Alteracoes
 
-### 1. `src/hooks/useExportPlaybookEmailSequence.tsx`
+### 1. Frontend -- `src/components/inbox/FlowPickerButton.tsx`
 
-Adicionar funcao `fmtDateTime` que combina data e hora num unico valor (ex: "23/02/2026 20:37").
+**Receber prop `isTestMode`** do SuperComposer e controlar a visibilidade dos fluxos:
 
-Adicionar funcao `getStatusDateTime` que retorna o timestamp do evento de status correspondente.
+- Se `isTestMode === false`: mostrar apenas fluxos ativos (comportamento atual)
+- Se `isTestMode === true`: mostrar ativos + inativos, separados em duas secoes com labels "Ativos" e "Rascunhos (teste)"
+- Fluxos inativos usam icone `FlaskConical` (beaker) e badge textual "Rascunho"
+- Ao clicar num fluxo inativo, enviar `bypassActiveCheck: true` no body da request
+- Quando nao ha fluxos (nem ativos nem rascunhos em test mode), mostrar botao desabilitado com tooltip adequado
 
-Alterar a geracao das colunas por template de:
+### 2. Frontend -- `src/components/inbox/SuperComposer.tsx`
+
+- Importar `useTestModeToggle` para obter `isTestMode` da conversa atual
+- Passar `isTestMode` como prop ao `FlowPickerButton`
+
+### 3. Backend -- `supabase/functions/process-chat-flow/index.ts`
+
+Substituir o bloco de rejeicao de fluxo inativo (linhas 447-452) por logica condicional:
+
 ```text
-{label} - Data
-{label} - Hora
-{label} - Status
+Se flow.is_active:
+  -> prosseguir normalmente (sem mudanca)
+
+Se !flow.is_active:
+  -> Verificar bypassActiveCheck no body da request
+  -> Verificar is_test_mode da conversa (ja consultado na linha 314-320)
+  -> Verificar role do usuario chamador via user_roles (admin/manager/general_manager/support_manager/cs_manager/financial_manager)
+  
+  Se bypassActiveCheck + isTestMode + role privilegiado:
+    -> Permitir execucao
+    -> Log console: "[DRAFT-TEST] Flow draft executed in test mode"
+    -> Inserir registro em audit_logs (user_id, action: "draft_flow_test", table_name: "chat_flows", record_id: flowId, new_data com conversation_id e flow_name)
+  
+  Se falta isTestMode:
+    -> Retornar erro: "Ative o Modo Teste no header desta conversa para rodar fluxos em rascunho."
+  
+  Se falta role:
+    -> Retornar erro: "Apenas administradores e gestores podem testar fluxos em rascunho."
 ```
-Para:
+
+Para verificar o role, extrair o JWT do header Authorization e consultar `user_roles` no banco.
+
+### 4. Frontend -- Tratamento de erro no `FlowPickerButton`
+
+- Quando `data?.error` retornar do backend, exibir toast com a mensagem exata (que ja inclui o CTA textual)
+- Isso ja funciona no codigo atual (linha 56), entao nenhuma mudanca adicional e necessaria -- o backend e que precisa retornar a mensagem correta
+
+## Fluxo de Decisao no Backend
+
 ```text
-{label}                        -> fmtDateTime(email_sent_at)
-{label} - Status               -> getEmailStatus(email)
-{label} - Status data e hora   -> fmtDateTime(getStatusDateTime(email))
+manualTrigger + flowId
+  |
+  v
+Buscar fluxo
+  |
+  v
+flow.is_active?
+  |-- SIM --> prosseguir (zero mudanca)
+  |-- NAO --> bypassActiveCheck?
+                |-- NAO --> erro "Fluxo esta inativo"
+                |-- SIM --> isTestMode?
+                              |-- NAO --> erro "Ative o Modo Teste..."
+                              |-- SIM --> role privilegiado?
+                                            |-- NAO --> erro "Sem permissao..."
+                                            |-- SIM --> executar + audit_log + log console
 ```
 
-### 2. `src/pages/PlaybookEmailSequenceReport.tsx`
+## Criterios de Aceite
 
-Alterar o preview da tabela para exibir o mesmo formato:
-- Na celula de cada template, mostrar: data/hora envio, status, e data/hora do status
-- Ou expandir as colunas do preview para refletir o mesmo layout do Excel (3 sub-colunas por template)
+1. Sem test mode: botao mostra apenas fluxos ativos
+2. Com test mode: mostra ativos + rascunhos separados visualmente
+3. Executar rascunho sem test mode: toast com erro claro e CTA
+4. Executar rascunho sem role privilegiado: toast com erro de permissao
+5. Executar rascunho com test mode + admin/manager: executa normalmente
+6. Nenhum rascunho dispara automaticamente (somente manualTrigger)
+7. Cada execucao de rascunho gera registro em audit_logs
 
 ## Impacto
-- Apenas mudanca visual no Excel e no preview
-- Dados continuam os mesmos
-- Zero impacto em logica de negocio
-- Compativel com multiplos templates no fluxo (repete o padrao para cada posicao)
+
+- Zero regressao: fluxos ativos continuam identicos
+- Fluxos inativos nunca disparam automaticamente
+- Tripla validacao no backend (bypassActiveCheck + isTestMode + role)
+- Auditoria persistente em audit_logs
+- Upgrade puro sem downgrade
+
