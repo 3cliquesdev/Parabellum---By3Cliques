@@ -87,6 +87,8 @@ export function ReengageTemplateDialog({
         body: {
           phone_number: conversation.contacts.phone,
           instance_id: instanceId,
+          conversation_id: conversation.id,
+          sender_id: user?.id,
           template: {
             name: selectedTemplate.name,
             language_code: selectedTemplate.language_code,
@@ -123,17 +125,8 @@ export function ReengageTemplateDialog({
 
       if (updateError) throw updateError;
 
-      // 3. Insert history message
-      const { error: msgError } = await supabase.from("messages").insert({
-        conversation_id: conversation.id,
-        content: `📋 Template enviado: ${selectedTemplate.name}`,
-        sender_type: "system",
-        sender_id: user?.id,
-        is_internal_note: false,
-        is_bot_message: false,
-      });
-
-      if (msgError) console.error("Erro ao inserir mensagem de histórico:", msgError);
+      // 3. Message is now saved by the edge function with provider_message_id (wamid)
+      // No manual insert needed - delivery tracking (sent/delivered/read) will work automatically
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
