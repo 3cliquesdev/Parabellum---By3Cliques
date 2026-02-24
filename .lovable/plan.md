@@ -1,102 +1,135 @@
 
-# Fix: Prioridade do Fluxo de Teste (Draft) sobre Master Flow
 
-## Problema
+# Modo Persistente no Node ai_response
 
-Quando um draft e iniciado manualmente via TestModeDropdown, tres falhas impedem o funcionamento correto:
+## Problema Atual
 
-1. **State criado no `start` node**: O manual trigger cria o estado com `current_node_id = start` (no sem conteudo), retorna `response: ""`, e o webhook nao envia nada
-2. **Cancelamento incompleto**: So cancela estados com `status = 'active'`, mas master flow pode estar em `waiting_input` ou `in_progress`
-3. **Protecao do master flow usa `maybeSingle()`**: Pode falhar silenciosamente com multiplos estados
+Quando o fluxo chega no no `ai_response`, a IA responde UMA vez. Na proxima mensagem do cliente, o motor avanca automaticamente para o proximo no via `findNextNode` (linha 857). O no de IA nao "segura" a conversa.
+
+## Solucao
+
+Transformar o no `ai_response` em uma zona de atendimento IA persistente com condicoes de saida configuraveis.
 
 ## Mudancas
 
-### 1. Manual Trigger: Travessia automatica apos detectar startNode
+### 1. Edge Function `process-chat-flow/index.ts` (linhas 853-857)
 
-**Arquivo:** `supabase/functions/process-chat-flow/index.ts` (linhas 526-577)
-
-Apos encontrar o `startNode` (linha 537), aplicar a mesma logica de travessia que ja existe no Master Flow (linhas 1125-1245):
+Adicionar tratamento especial ANTES do `findNextNode` quando `currentNode.type === 'ai_response'`:
 
 ```text
-Antes (linhas 535-562):
-  startNode = primeiro no (sem edges apontando)
-  cria state com startNode.id
-  retorna startNode.data.message (vazio para start/input)
+Logica atual (linha 853-857):
+  else if (currentNode.type === 'condition') { ... }
+  nextNode = findNextNode(flowDef, currentNode, path);
 
-Depois:
-  startNode = primeiro no
-  TRAVERSE: loop ate 12 passos
-    - start/input: seguir edge simples
-    - condition: avaliar e seguir handle correto
-    - parar no primeiro content node (message, ask_options, ai_response, transfer, etc.)
-  cria state com contentNode.id
-  retorna contentNode.data.message (mensagem real)
+Nova logica:
+  else if (currentNode.type === 'ai_response') {
+    // Inicializar ou incrementar contador
+    collectedData.__ai = collectedData.__ai || { interaction_count: 0 };
+    collectedData.__ai.interaction_count++;
+
+    const exitKeywords = currentNode.data?.exit_keywords || [];
+    const maxInteractions = currentNode.data?.max_ai_interactions ?? 0;
+    const count = collectedData.__ai.interaction_count;
+
+    // Verificar exit keyword (case-insensitive)
+    const msgLower = userMessage.toLowerCase().trim();
+    const keywordMatch = exitKeywords.some(kw => 
+      msgLower.includes(kw.toLowerCase().trim())
+    );
+
+    // Verificar max interacoes
+    const maxReached = maxInteractions > 0 && count >= maxInteractions;
+
+    if (keywordMatch || maxReached) {
+      // SAIR: limpar __ai e avancar
+      delete collectedData.__ai;
+      // Cai no findNextNode normal abaixo
+    } else {
+      // FICAR: atualizar state e retornar aiNodeActive
+      await update state com collectedData
+      return { useAI: true, aiNodeActive: true, stayOnNode: true, ... }
+    }
+  }
+  // else if condition...
+  nextNode = findNextNode(flowDef, currentNode, path);
 ```
 
-Reutilizar as mesmas funcoes auxiliares (`findNextNode`, `evaluateConditionPath`, `evalCond`) e carregar dados de contato/conversa para avaliacao de condicoes.
+A resposta de "ficar" inclui todos os campos do contrato anti-alucinacao (objective, maxSentences, forbidQuestions, forbidOptions, personaId, kbCategories, fallbackMessage) para que a IA continue respondendo com as mesmas restricoes.
 
-Para o `ai_response` node, retornar `useAI: true` com `personaId` e `kbCategories` para que o webhook acione a IA corretamente.
+### 2. UI: Nova secao em `BehaviorControlsSection.tsx`
 
-### 2. Manual Trigger: Cancelar TODOS os estados existentes
+Adicionar secao "Quando sair da IA" apos as restricoes existentes:
 
-**Arquivo:** `supabase/functions/process-chat-flow/index.ts` (linhas 519-524)
+- **Textarea "Palavras de saida"**: uma por linha (ex: "falar com atendente", "encerrar", "humano")
+- **Slider "Maximo de interacoes"**: 0 = sem limite, 1 a 50
+- **Alerta visual**: se max=0 e keywords vazio, exibir aviso amarelo "Sem condicao de saida configurada. A IA vai responder indefinidamente."
 
-Mudar de:
+### 3. Node Visual: `AIResponseNode.tsx`
+
+Novos campos na interface `AIResponseNodeData`:
+
 ```typescript
-.eq('status', 'active')
+ai_persistent?: boolean;         // default: true
+max_ai_interactions?: number;    // 0 = sem limite
+exit_keywords?: string[];        // palavras de saida
 ```
 
-Para:
-```typescript
-.in('status', ['active', 'waiting_input', 'in_progress'])
+Novos badges visuais:
+- Badge "Loop" (icone RefreshCw, cor indigo) quando `ai_persistent !== false`
+- Badge "Max N" quando `max_ai_interactions > 0`
+- Badge "Keywords" com contagem quando `exit_keywords.length > 0`
+
+### 4. Resposta de "Ficar" no node
+
+Quando a IA permanece, o retorno inclui:
+
+```json
+{
+  "useAI": true,
+  "aiNodeActive": true,
+  "stayOnNode": true,
+  "nodeId": "currentNode.id",
+  "flowId": "activeState.flow_id",
+  "contextPrompt": "...",
+  "useKnowledgeBase": true,
+  "personaId": "...",
+  "kbCategories": [...],
+  "objective": "...",
+  "maxSentences": 3,
+  "forbidQuestions": true,
+  "forbidOptions": true,
+  "fallbackMessage": "...",
+  "collectedData": { "__ai": { "interaction_count": 2 } }
+}
 ```
 
-Isso garante que o master flow seja cancelado independentemente do status em que esteja.
+## Fluxo Tecnico
 
-### 3. Protecao do Master Flow: Substituir maybeSingle por order+limit
-
-**Arquivo:** `supabase/functions/process-chat-flow/index.ts` (linhas 1059-1064)
-
-Mudar de:
-```typescript
-const { data: existingActiveFlowState } = await supabaseClient
-  .from('chat_flow_states')
-  .select('id, flow_id, current_node_id')
-  .eq('conversation_id', conversationId)
-  .eq('status', 'active')
-  .maybeSingle();
+```text
+Cliente envia mensagem
+  -> process-chat-flow detecta currentNode = ai_response
+  -> Incrementa __ai.interaction_count em collected_data
+  -> Verifica exit conditions:
+     |-- Keyword match?    -> delete __ai, findNextNode, avanca
+     |-- Max atingido?     -> delete __ai, findNextNode, avanca
+     +-- Nenhum?           -> atualiza state, retorna aiNodeActive=true + stayOnNode=true
+  -> Webhook recebe aiNodeActive=true -> chama ai-autopilot-chat
+  -> IA responde ao cliente
+  -> Cliente envia nova mensagem -> repete o ciclo
 ```
 
-Para:
-```typescript
-const { data: existingActiveFlowStates } = await supabaseClient
-  .from('chat_flow_states')
-  .select('id, flow_id, current_node_id')
-  .eq('conversation_id', conversationId)
-  .in('status', ['active', 'waiting_input', 'in_progress'])
-  .order('started_at', { ascending: false })
-  .limit(1);
+## Resumo de Arquivos
 
-const existingActiveFlowState = existingActiveFlowStates?.[0] || null;
-```
-
-Inclui `waiting_input` e `in_progress` na busca para cobrir todos os cenarios.
-
-### 4. Query principal (linha 584-590): Incluir waiting_input e in_progress
-
-Mudar o filtro de `.eq('status', 'active')` para `.in('status', ['active', 'waiting_input', 'in_progress'])` na query principal que busca estado ativo da conversa. Isso garante que o draft em qualquer status seja encontrado.
-
-## Resumo
-
-| Local | Antes | Depois |
-|---|---|---|
-| Manual trigger (start) | State no `start` node, response vazia | Traversa ate content node, response real |
-| Manual trigger (cancel) | Cancela so `active` | Cancela `active` + `waiting_input` + `in_progress` |
-| Master flow protection | `maybeSingle()` so `active` | `order+limit` com 3 status |
-| Query principal | `eq('status', 'active')` | `in('status', [...])` |
+| Arquivo | Mudanca |
+|---|---|
+| `supabase/functions/process-chat-flow/index.ts` | Logica de persistencia antes do findNextNode |
+| `src/components/chat-flows/panels/BehaviorControlsSection.tsx` | Secao "Quando sair da IA" (keywords + max slider + alerta) |
+| `src/components/chat-flows/nodes/AIResponseNode.tsx` | Campos na interface + badges Loop/Max/Keywords |
 
 ## Impacto
 
-- Zero regressao: fluxos ativos continuam identicos (mesma logica de travessia reutilizada)
-- Draft responde desde o primeiro trigger com mensagem real
-- Master flow nao interfere quando draft esta ativo em qualquer status
+- Zero regressao: fluxos sem ai_response ou com ai_persistent=false continuam identicos
+- Upgrade: ai_response agora funciona como zona de atendimento persistente
+- Kill Switch e fallback continuam respeitados (mesmo contrato anti-alucinacao)
+- Seguranca: o loop e limitado pelo max_ai_interactions ou keywords de saida
+
