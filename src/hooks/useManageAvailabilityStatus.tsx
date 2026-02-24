@@ -68,6 +68,11 @@ export function useManageAvailabilityStatus() {
       queryClient.invalidateQueries({ queryKey: ["team-online-status"] });
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["availability-status"] });
+      queryClient.invalidateQueries({ queryKey: ["agent-conversations-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["agent-conversations-list"] });
+      queryClient.invalidateQueries({ queryKey: ["team-online-count"] });
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["support-agents"] });
       
       const statusLabels = {
         online: 'Online',

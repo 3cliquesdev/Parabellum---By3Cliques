@@ -107,6 +107,10 @@ export function useAvailabilityStatus() {
     },
     onSuccess: async (newStatus) => {
       queryClient.invalidateQueries({ queryKey: ["availability-status", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["agent-conversations-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["team-online-status"] });
+      queryClient.invalidateQueries({ queryKey: ["team-online-count"] });
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
       
       // UPGRADE D4: Disparar dispatcher imediatamente quando agente fica online
       if (newStatus === 'online' && user) {

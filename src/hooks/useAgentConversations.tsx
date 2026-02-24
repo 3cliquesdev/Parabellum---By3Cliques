@@ -93,7 +93,7 @@ export function useAgentConversations() {
       // Ordenar por quantidade de conversas (maior primeiro)
       return agentStats.sort((a, b) => b.conversationCount - a.conversationCount);
     },
-    staleTime: 30 * 1000,
+    staleTime: 5 * 1000,
     refetchInterval: 60 * 1000,
   });
 }
