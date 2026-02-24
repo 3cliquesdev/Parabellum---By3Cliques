@@ -44,6 +44,7 @@ import { ReengageTemplateDialog } from "@/components/inbox/ReengageTemplateDialo
 import { MessageSkeleton } from "@/components/inbox/MessageSkeleton";
 import { MessagesWithMedia } from "@/components/inbox/MessagesWithMedia";
 import { ActiveFlowIndicator } from "@/components/inbox/ActiveFlowIndicator";
+import { TestModeDropdown } from "@/components/inbox/TestModeDropdown";
 // REMOVIDO: useCustomerTags - tags do contato não devem aparecer no header do chat
 // Tags da conversa são gerenciadas por ConversationTagsSection
 import { useMarkAsRead } from "@/hooks/useUnreadCount";
@@ -511,27 +512,14 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
 
               {/* Botões de ação - lado direito */}
               <div className="flex items-center gap-1.5 shrink-0">
-                {/* 🧪 Botão de Modo de Teste - controlado por permissão inbox.test_mode */}
+                {/* 🧪 Dropdown de Modo de Teste + Seletor de Fluxos */}
                 {hasPermission('inbox.test_mode') && hasFullAccess(role) && (
-                  <Button
-                    variant={isTestMode ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => toggleTestMode(!isTestMode)}
-                    disabled={isTestModePending}
-                    title={isTestMode 
-                      ? "Modo Teste ATIVO - Fluxos de rascunho disponíveis e IA responde nesta conversa" 
-                      : "Ativar Modo Teste - Permite testar fluxos em rascunho nesta conversa"
-                    }
-                    className={cn(
-                      "h-7 gap-1 px-2",
-                      isTestMode && "bg-amber-500 hover:bg-amber-600 text-white border-amber-500"
-                    )}
-                  >
-                    <FlaskConical className="h-3.5 w-3.5" />
-                    <span className="text-xs hidden lg:inline">
-                      {isTestMode ? "Teste" : "Testar"}
-                    </span>
-                  </Button>
+                  <TestModeDropdown
+                    isTestMode={isTestMode}
+                    toggleTestMode={toggleTestMode}
+                    isTestModePending={isTestModePending}
+                    conversationId={conversation.id}
+                  />
                 )}
 
                 {canShowTakeControl && (
