@@ -43,6 +43,7 @@ import { SuperComposer } from "@/components/inbox/SuperComposer";
 import { ReengageTemplateDialog } from "@/components/inbox/ReengageTemplateDialog";
 import { MessageSkeleton } from "@/components/inbox/MessageSkeleton";
 import { MessagesWithMedia } from "@/components/inbox/MessagesWithMedia";
+import { ActiveFlowIndicator } from "@/components/inbox/ActiveFlowIndicator";
 // REMOVIDO: useCustomerTags - tags do contato não devem aparecer no header do chat
 // Tags da conversa são gerenciadas por ConversationTagsSection
 import { useMarkAsRead } from "@/hooks/useUnreadCount";
@@ -668,6 +669,9 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
               </AlertDescription>
             </Alert>
           )}
+
+          {/* Active Flow Indicator */}
+          <ActiveFlowIndicator conversationId={conversation.id} />
 
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto bg-[hsl(var(--chat-bg))]">
             <div className="px-4 py-6 md:px-6">
