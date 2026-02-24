@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { NodeProps } from "reactflow";
-import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target } from "lucide-react";
+import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound } from "lucide-react";
 import { ChatFlowNodeWrapper } from "../ChatFlowNodeWrapper";
 import { Badge } from "@/components/ui/badge";
 
@@ -9,22 +9,22 @@ interface AIResponseNodeData {
   context_prompt?: string;
   use_knowledge_base: boolean;
   fallback_message?: string;
-  // Campos para seleção de persona e KB
   persona_id?: string;
   persona_name?: string;
   kb_categories?: string[];
-  // Fontes de dados expandidas
   use_customer_data?: boolean;
   use_order_history?: boolean;
   use_tracking?: boolean;
-  // Coleta inteligente
   smart_collection_enabled?: boolean;
   smart_collection_fields?: string[];
-  // 🆕 FASE 1: Controles de Comportamento Anti-Alucinação
   objective?: string;
   max_sentences?: number;
   forbid_questions?: boolean;
   forbid_options?: boolean;
+  // 🆕 Modo Persistente
+  ai_persistent?: boolean;
+  max_ai_interactions?: number;
+  exit_keywords?: string[];
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
@@ -122,6 +122,30 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
           </Badge>
         )}
         
+        {/* 🆕 Badge de Modo Persistente (Loop) */}
+        {data.ai_persistent !== false && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 gap-0.5 border-indigo-500/50 text-indigo-600">
+            <RefreshCw className="h-2.5 w-2.5" />
+            Loop
+          </Badge>
+        )}
+
+        {/* 🆕 Badge Max Interações */}
+        {(data.max_ai_interactions ?? 0) > 0 && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 gap-0.5 border-indigo-500/50 text-indigo-600">
+            <Hash className="h-2.5 w-2.5" />
+            Max {data.max_ai_interactions}
+          </Badge>
+        )}
+
+        {/* 🆕 Badge Keywords de saída */}
+        {data.exit_keywords && data.exit_keywords.length > 0 && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 gap-0.5 border-indigo-500/50 text-indigo-600">
+            <KeyRound className="h-2.5 w-2.5" />
+            {data.exit_keywords.length}
+          </Badge>
+        )}
+
         {/* Badge de fallback configurado */}
         {data.fallback_message && (
           <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 opacity-60">

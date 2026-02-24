@@ -9,7 +9,9 @@ import {
   MessageSquareOff,
   ListX,
   Target,
-  Info
+  Info,
+  LogOut,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Tooltip,
@@ -154,6 +156,74 @@ export function BehaviorControlsSection({
             </Badge>
           )}
         </div>
+      </div>
+
+      {/* 🆕 Seção: Quando sair da IA */}
+      <div className="space-y-3 p-3 rounded-lg border bg-indigo-500/5 border-indigo-500/20">
+        <div className="flex items-center gap-2">
+          <LogOut className="h-4 w-4 text-indigo-500" />
+          <Label className="text-xs font-semibold uppercase tracking-wide">
+            Quando sair da IA
+          </Label>
+        </div>
+
+        {/* Palavras de saída */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Palavras de saída</Label>
+          <Textarea
+            value={(selectedNode.data.exit_keywords || []).join("\n")}
+            onChange={(e) => {
+              const keywords = e.target.value
+                .split("\n")
+                .map((k: string) => k.trim())
+                .filter(Boolean);
+              updateNodeData("exit_keywords", keywords);
+            }}
+            placeholder={"falar com atendente\nencerrar\nhumano"}
+            rows={3}
+            className="resize-none text-sm"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Uma por linha. Se o cliente digitar uma dessas, o fluxo avança.
+          </p>
+        </div>
+
+        {/* Máximo de interações */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">Máximo de interações</Label>
+            <Badge variant="secondary" className="text-xs px-2">
+              {(selectedNode.data.max_ai_interactions ?? 0) === 0
+                ? "Sem limite"
+                : `${selectedNode.data.max_ai_interactions} msgs`}
+            </Badge>
+          </div>
+
+          <Slider
+            value={[selectedNode.data.max_ai_interactions ?? 0]}
+            onValueChange={(value) => updateNodeData("max_ai_interactions", value[0])}
+            min={0}
+            max={50}
+            step={1}
+            className="w-full"
+          />
+
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>Sem limite</span>
+            <span>50 msgs</span>
+          </div>
+        </div>
+
+        {/* Alerta: sem condição de saída */}
+        {(selectedNode.data.max_ai_interactions ?? 0) === 0 &&
+          (!selectedNode.data.exit_keywords || selectedNode.data.exit_keywords.length === 0) && (
+          <div className="flex items-start gap-2 p-2 rounded bg-yellow-500/10 border border-yellow-500/30">
+            <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
+            <p className="text-[11px] text-yellow-700">
+              Sem condição de saída configurada. A IA vai responder indefinidamente até o cliente sair do fluxo manualmente.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Garantias */}

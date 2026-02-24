@@ -852,6 +852,68 @@ serve(async (req) => {
         collectedData[currentNode.data?.save_as || 'choice'] = selectedOption.value || selectedOption.label;
       } else if (currentNode.type === 'condition') {
         path = evaluateConditionPath(currentNode.data, collectedData, userMessage);
+      } else if (currentNode.type === 'ai_response') {
+        // ============================================================
+        // 🆕 MODO PERSISTENTE: IA responde múltiplas perguntas
+        // O nó ai_response "segura" a conversa até condição de saída
+        // ============================================================
+        collectedData.__ai = collectedData.__ai || { interaction_count: 0 };
+        collectedData.__ai.interaction_count++;
+        const aiCount = collectedData.__ai.interaction_count;
+
+        const exitKeywords: string[] = currentNode.data?.exit_keywords || [];
+        const maxInteractions: number = currentNode.data?.max_ai_interactions ?? 0;
+
+        // Verificar exit keyword (case-insensitive includes)
+        const msgLower = userMessage.toLowerCase().trim();
+        const keywordMatch = exitKeywords.length > 0 && exitKeywords.some((kw: string) =>
+          msgLower.includes(kw.toLowerCase().trim())
+        );
+
+        // Verificar max interações
+        const maxReached = maxInteractions > 0 && aiCount >= maxInteractions;
+
+        if (keywordMatch || maxReached) {
+          // SAIR: limpar __ai e avançar para próximo nó
+          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: keyword=${keywordMatch} maxReached=${maxReached} count=${aiCount}`);
+          delete collectedData.__ai;
+          // Cai no findNextNode normal abaixo
+        } else {
+          // FICAR: atualizar state e retornar aiNodeActive
+          console.log(`[process-chat-flow] 🔄 AI persistent STAY: interaction #${aiCount} (max=${maxInteractions}, keywords=${exitKeywords.length})`);
+          
+          await supabaseClient
+            .from('chat_flow_states')
+            .update({
+              collected_data: collectedData,
+              current_node_id: currentNode.id,
+            })
+            .eq('id', activeState.id);
+
+          return new Response(
+            JSON.stringify({
+              useAI: true,
+              aiNodeActive: true,
+              stayOnNode: true,
+              nodeId: currentNode.id,
+              flowId: activeState.flow_id,
+              contextPrompt: currentNode.data?.context_prompt,
+              useKnowledgeBase: currentNode.data?.use_knowledge_base !== false,
+              collectedData,
+              allowedSources: currentNode.data?.allowed_sources || ['kb', 'crm', 'tracking'],
+              responseFormat: 'text_only',
+              personaId: currentNode.data?.persona_id || null,
+              personaName: currentNode.data?.persona_name || null,
+              kbCategories: currentNode.data?.kb_categories || null,
+              fallbackMessage: currentNode.data?.fallback_message || null,
+              objective: currentNode.data?.objective || null,
+              maxSentences: currentNode.data?.max_sentences ?? 3,
+              forbidQuestions: currentNode.data?.forbid_questions ?? true,
+              forbidOptions: currentNode.data?.forbid_options ?? true,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
       }
 
       nextNode = findNextNode(flowDef, currentNode, path);
