@@ -15,6 +15,7 @@ import { ConversionFunnelCard } from "@/components/widgets/ConversionFunnelCard"
 import { StageConversionChart } from "@/components/widgets/StageConversionChart";
 import RottenDealsWidget from "@/components/widgets/RottenDealsWidget";
 import LostReasonsWidget from "@/components/widgets/LostReasonsWidget";
+import { FormLeadsChartWidget } from "@/components/widgets/FormLeadsChartWidget";
 
 interface SalesDashboardTabProps {
   dateRange?: DateRange;
@@ -101,6 +102,11 @@ export function SalesDashboardTab({ dateRange }: SalesDashboardTabProps) {
       </BentoCard>
       <BentoCard span="2">
         <LostReasonsWidget />
+      </BentoCard>
+      
+      {/* ROW 6: Leads de Formulários */}
+      <BentoCard span="full">
+        <FormLeadsChartWidget dateRange={dateRange} />
       </BentoCard>
     </BentoGrid>
   );
