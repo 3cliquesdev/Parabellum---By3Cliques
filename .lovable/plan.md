@@ -1,73 +1,57 @@
 
 
-# Plano: Permitir Seleção de Fluxo no Dropdown de Teste
+# Plano: ID de Protocolo Visível no Inbox
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
 ## Diagnóstico
 
-O problema está na linha 119 e 141 do `TestModeDropdown.tsx`:
+O `short_id` já existe nos relatórios (derivado como `LEFT(conversation_id::TEXT, 8)`), mas **nunca aparece na interface do inbox** — nem na lista de conversas (`ConversationListItem`), nem no header do chat (`ChatWindow`).
 
-```tsx
-disabled={!!activeFlow || isStarting}
-```
-
-Quando existe um fluxo ativo na conversa (status `in_progress`, `active` ou `waiting_input`), **todos os itens de fluxo ficam desabilitados**. O usuário vê os fluxos listados mas não consegue clicar em nenhum.
-
-Na screenshot, o badge "Ativo" com X confirma que há um fluxo em execução, o que desativa todos os itens do dropdown.
-
-Além disso, o `handleStartFlow` faz uma verificação redundante na linha 39:
-```tsx
-if (activeFlow) {
-  toast.error("Já existe um fluxo em execução...");
-  return;
-}
-```
+A `inbox_view` (tabela materializada) também não possui coluna `short_id`. Os relatórios geram o valor on-the-fly via SQL.
 
 ## Solução
 
-Alterar o comportamento para **cancelar automaticamente o fluxo ativo** antes de iniciar o novo, em vez de bloquear a seleção. Isso é seguro porque:
+Abordagem em 2 camadas:
 
-- O contexto é de teste manual (ação intencional do agente/admin)
-- O cancelamento já existe via `cancelFlow` no hook `useActiveFlowState`
-- É uma operação atômica (update status para `cancelled`)
+### 1. Banco de dados — Adicionar `short_id` na `inbox_view`
 
-### Alterações no arquivo `src/components/inbox/TestModeDropdown.tsx`
+Criar migration que adiciona coluna `short_id TEXT` à tabela `inbox_view`, populada automaticamente com `LEFT(conversation_id::TEXT, 8)` (primeiros 8 caracteres do UUID, formato `#a1e17320`).
 
-1. **Importar `cancelFlow`** do hook `useActiveFlowState`
-2. **Remover `disabled={!!activeFlow}`** dos DropdownMenuItems de fluxo
-3. **Substituir o bloqueio** no `handleStartFlow` por cancelamento automático:
+Também criar trigger para popular automaticamente em novos INSERTs e UPDATEs, garantindo que o valor esteja sempre presente.
 
-```tsx
-// Antes (bloqueia):
-if (activeFlow) {
-  toast.error("Já existe um fluxo em execução...");
-  return;
-}
+### 2. Frontend — Exibir protocolo em 2 locais
 
-// Depois (cancela e continua):
-if (activeFlow) {
-  await cancelFlow(activeFlow.stateId);
-  await new Promise((r) => setTimeout(r, 500)); // aguarda propagação
-}
+**a) `ConversationListItem.tsx`** — Mostrar `#XXXXXXXX` discreto abaixo do nome do contato, na linha do preview ou badges:
+
+```
+Nome do Contato              2 min
+#a1e17320 → Última mensagem...
+[Cliente] [Comercial] [Agente]
 ```
 
-4. **Manter `disabled={isStarting}`** para evitar cliques duplos durante execução
+O `short_id` será derivado diretamente do `conversation.id` no frontend (`conversation.id.slice(0, 8).toUpperCase()`), sem depender de campo extra do banco. Isso é mais simples e evita migration complexa.
 
-### Resumo de mudanças
+**b) `ChatWindow.tsx`** — Mostrar o protocolo no header do chat, ao lado do nome do contato, como badge copiável (click-to-copy).
 
-| Local | Mudança |
+### 3. Busca — Já funciona
+
+O `useInboxSearch` já busca por UUID completo. Buscar pelos 8 primeiros caracteres **não funcionaria** com a estratégia atual (requer UUID completo). Podemos adicionar suporte a busca parcial por short_id.
+
+## Detalhamento técnico
+
+| Arquivo | Mudança |
 |---|---|
-| `TestModeDropdown.tsx` linha 32 | Extrair `cancelFlow` do hook |
-| `TestModeDropdown.tsx` linhas 38-42 | Substituir bloqueio por auto-cancel |
-| `TestModeDropdown.tsx` linhas 119, 141 | Remover `!!activeFlow` do `disabled` |
+| `ConversationListItem.tsx` | Adicionar `#` + 8 chars do ID ao lado do preview da mensagem |
+| `ChatWindow.tsx` | Adicionar badge de protocolo copiável no header |
+| `useInboxSearch.tsx` | Adicionar estratégia para busca por short_id (8 hex chars) |
 
 ### Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim -- apenas altera comportamento de teste manual |
+| Regressão zero | Sim — apenas adiciona informação visual |
 | Kill Switch | Não afetado |
-| Proteção de simultaneidade | Preservada -- cancela antes de iniciar |
-| Governança de rascunhos | Preservada -- mesmas regras de permissão |
+| Performance | Zero — derivado do ID existente, sem queries extras |
+| Migration | Não necessária — tudo derivado client-side |
 
