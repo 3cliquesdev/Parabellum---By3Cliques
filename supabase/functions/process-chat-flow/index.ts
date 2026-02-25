@@ -533,12 +533,7 @@ serve(async (req) => {
         });
       }
 
-      // Cancelar qualquer fluxo ativo anterior (todos os status possíveis)
-      await supabaseClient
-        .from('chat_flow_states')
-        .update({ status: 'cancelled', completed_at: new Date().toISOString() })
-        .eq('conversation_id', conversationId)
-        .in('status', ['active', 'waiting_input', 'in_progress']);
+      // ✅ FIX: Removido UPDATE redundante — o DELETE abaixo (linha ~668) já limpa todos os estados
 
       // Iniciar o fluxo
       const flowDef = flow.flow_definition as any;
@@ -664,12 +659,12 @@ serve(async (req) => {
         ? 'waiting_input'
         : 'active';
 
-      // Limpar TODOS os estados ativos da conversa, independente do flow_id (evita unique_active_flow constraint)
+      // ✅ FIX: Limpar TODOS os estados da conversa (incluindo cancelled antigos que podem colidir com unique_active_flow)
       const { error: deleteError } = await supabaseClient
         .from('chat_flow_states')
         .delete()
         .eq('conversation_id', conversationId)
-        .in('status', ['active', 'waiting_input', 'in_progress']);
+        .in('status', ['active', 'waiting_input', 'in_progress', 'cancelled']);
 
       if (deleteError) {
         console.error('[process-chat-flow] Error cleaning up old states:', deleteError);
@@ -826,6 +821,74 @@ serve(async (req) => {
 
       // 🆕 Entregar mensagem + opções ao cliente
       await deliverManualMessage(startMessage, options);
+
+      // ✅ FIX: Auto-avanço em nós 'message' — nós message são display-only,
+      // o estado deve avançar para o próximo nó que aceita input (ask_options, ask_input, ai_response)
+      if (contentNode.type === 'message' && newState) {
+        console.log('[process-chat-flow] ⏩ Auto-advancing from message node:', contentNode.id);
+        let advanceNode = contentNode;
+        let advanceSteps = 0;
+        const MAX_ADVANCE = 12;
+
+        while (advanceSteps < MAX_ADVANCE) {
+          advanceSteps++;
+          const nextNode = findNextNode(flowDef, advanceNode);
+          if (!nextNode) {
+            console.log('[process-chat-flow] ⚠️ Auto-advance: no next node after message');
+            break;
+          }
+
+          if (nextNode.type === 'condition') {
+            // Avaliar condição e seguir caminho
+            const hasMultiRules = nextNode.data?.condition_rules?.length > 0;
+            let condNext: any = null;
+            if (hasMultiRules) {
+              const path = evaluateConditionPath(nextNode.data, manualCollectedData, '');
+              condNext = findNextNode(flowDef, nextNode, path);
+            } else {
+              const result = manualEvalCond(nextNode.data);
+              const handles = result ? ['true', 'yes', '1'] : ['false', 'no', '2'];
+              for (const h of handles) {
+                condNext = findNextNode(flowDef, nextNode, h);
+                if (condNext) break;
+              }
+            }
+            if (!condNext) break;
+            advanceNode = condNext;
+          } else if (nextNode.type === 'input' || nextNode.type === 'start') {
+            advanceNode = nextNode;
+          } else {
+            // Reached a content node (ask_options, ask_input, ai_response, transfer, message)
+            advanceNode = nextNode;
+            break;
+          }
+        }
+
+        if (advanceNode.id !== contentNode.id) {
+          const advanceStatus = (advanceNode.type === 'ask_options' || advanceNode.type === 'ask_input')
+            ? 'waiting_input' : 'active';
+
+          const { error: advErr } = await supabaseClient
+            .from('chat_flow_states')
+            .update({ current_node_id: advanceNode.id, status: advanceStatus })
+            .eq('id', newState.id);
+
+          if (advErr) {
+            console.error('[process-chat-flow] ❌ Auto-advance update error:', advErr);
+          } else {
+            console.log(`[process-chat-flow] ✅ Auto-advanced to ${advanceNode.type} (${advanceNode.id}) status=${advanceStatus}`);
+          }
+
+          // Se avançou para ask_options, entregar as opções ao cliente
+          if (advanceNode.type === 'ask_options') {
+            const advMsg = advanceNode.data?.message || null;
+            const advOpts = (advanceNode.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value }));
+            await deliverManualMessage(advMsg, advOpts);
+          } else if (advanceNode.type === 'message') {
+            await deliverManualMessage(advanceNode.data?.message || null);
+          }
+        }
+      }
 
       return new Response(
         JSON.stringify({
