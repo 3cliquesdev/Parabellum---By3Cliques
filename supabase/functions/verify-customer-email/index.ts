@@ -68,7 +68,71 @@ serve(async (req) => {
       );
     }
 
-    console.log('[verify-customer-email] ❌ Email não encontrado como customer:', targetEmail);
+    console.log('[verify-customer-email] ⚠️ Não encontrado como customer, verificando kiwify_events...');
+
+    // FALLBACK: Buscar na kiwify_events por evento 'paid'
+    const { data: kiwifyEvent, error: kiwifyErr } = await supabase
+      .from('kiwify_events')
+      .select('customer_email, customer_name, event_type')
+      .eq('event_type', 'paid')
+      .ilike('customer_email', targetEmail)
+      .limit(1)
+      .maybeSingle();
+
+    if (kiwifyErr) {
+      console.error('[verify-customer-email] ❌ Erro ao buscar kiwify_events:', kiwifyErr);
+    }
+
+    if (kiwifyEvent) {
+      console.log('[verify-customer-email] ✅ Encontrado na kiwify_events como paid:', kiwifyEvent.customer_email);
+
+      // Buscar contato existente (qualquer status) para promover
+      const { data: existingContact, error: contactErr } = await supabase
+        .from('contacts')
+        .select('id, email, first_name, last_name, status, phone, consultant_id')
+        .ilike('email', targetEmail)
+        .maybeSingle();
+
+      if (contactErr) {
+        console.error('[verify-customer-email] ❌ Erro ao buscar contato existente:', contactErr);
+      }
+
+      if (existingContact) {
+        // Promover para customer
+        const { error: updateErr } = await supabase
+          .from('contacts')
+          .update({ status: 'customer' })
+          .eq('id', existingContact.id);
+
+        if (updateErr) {
+          console.error('[verify-customer-email] ❌ Erro ao promover contato:', updateErr);
+        } else {
+          console.log('[verify-customer-email] ✅ Contato promovido para customer:', existingContact.id);
+        }
+
+        return new Response(
+          JSON.stringify({
+            found: true,
+            promoted: true,
+            customer: {
+              id: existingContact.id,
+              email: existingContact.email,
+              name: `${existingContact.first_name || ''} ${existingContact.last_name || ''}`.trim(),
+              phone: existingContact.phone,
+              first_name: existingContact.first_name,
+              last_name: existingContact.last_name,
+              consultant_id: existingContact.consultant_id || null
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Contato não existe na base — não deveria acontecer segundo os dados, mas log para segurança
+      console.log('[verify-customer-email] ⚠️ Evento paid encontrado mas sem contato na base para:', targetEmail);
+    }
+
+    console.log('[verify-customer-email] ❌ Email não encontrado em nenhuma base:', targetEmail);
     return new Response(
       JSON.stringify({ found: false }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
