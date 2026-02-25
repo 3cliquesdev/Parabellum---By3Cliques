@@ -909,7 +909,21 @@ serve(async (req) => {
                           contact_id: contact.id,
                           whatsapp_provider: "meta",
                           whatsapp_meta_instance_id: instance.id,
-                          flow_context: flowData.flow_context || {}, // Contexto do fluxo para a IA
+                          flow_context: flowData.flow_context || {
+                            flow_id: flowData.flowId,
+                            node_id: flowData.nodeId,
+                            node_type: 'ai_response',
+                            allowed_sources: (flowData as any).allowedSources || ['kb'],
+                            response_format: 'text_only',
+                            personaId: (flowData as any).personaId || null,
+                            kbCategories: (flowData as any).kbCategories || null,
+                            contextPrompt: (flowData as any).contextPrompt || null,
+                            fallbackMessage: (flowData as any).fallbackMessage || null,
+                            objective: (flowData as any).objective || null,
+                            maxSentences: (flowData as any).maxSentences ?? 3,
+                            forbidQuestions: (flowData as any).forbidQuestions ?? true,
+                            forbidOptions: (flowData as any).forbidOptions ?? true,
+                          },
                         }),
                       }
                     );

@@ -8,6 +8,22 @@ const corsHeaders = {
 };
 
 // ============================================================
+// 🆕 HELPER: Construir allowedSources a partir dos toggles individuais do nó
+// Fontes: use_knowledge_base, use_crm_data, use_kiwify_data, use_tracking, use_sandbox_data
+// ============================================================
+function buildAllowedSources(nodeData: any): string[] {
+  const sources: string[] = [];
+  if (nodeData?.use_knowledge_base !== false) sources.push('kb');
+  if (nodeData?.use_crm_data === true) sources.push('crm');
+  if (nodeData?.use_kiwify_data === true) sources.push('kiwify');
+  if (nodeData?.use_tracking === true) sources.push('tracking');
+  if (nodeData?.use_sandbox_data === true) sources.push('sandbox');
+  // Fallback: se nenhuma fonte selecionada, pelo menos KB
+  if (sources.length === 0) sources.push('kb');
+  return sources;
+}
+
+// ============================================================
 // 🆕 MATCHER ESTRITO PARA ask_options (Contrato v2.3)
 // ============================================================
 interface AskOption {
@@ -900,7 +916,7 @@ serve(async (req) => {
               contextPrompt: currentNode.data?.context_prompt,
               useKnowledgeBase: currentNode.data?.use_knowledge_base !== false,
               collectedData,
-              allowedSources: currentNode.data?.allowed_sources || ['kb', 'crm', 'tracking'],
+              allowedSources: buildAllowedSources(currentNode.data),
               responseFormat: 'text_only',
               personaId: currentNode.data?.persona_id || null,
               personaName: currentNode.data?.persona_name || null,
@@ -1060,7 +1076,7 @@ serve(async (req) => {
             useKnowledgeBase: nextNode.data?.use_knowledge_base !== false,
             collectedData,
             // Campos do contrato fluxo ↔ IA
-            allowedSources: nextNode.data?.allowed_sources || ['kb', 'crm', 'tracking'],
+            allowedSources: buildAllowedSources(nextNode.data),
             responseFormat: 'text_only',
             personaId: nextNode.data?.persona_id || null,
             personaName: nextNode.data?.persona_name || null,
@@ -1514,7 +1530,7 @@ serve(async (req) => {
               flowStarted: true,
               masterFlowId: masterFlow.id,
               masterFlowName: masterFlow.name,
-              allowedSources: node.data?.allowed_sources || ['kb', 'crm', 'tracking'],
+              allowedSources: buildAllowedSources(node.data),
               responseFormat: 'text_only',
               personaId: node.data?.persona_id || null,
               kbCategories: node.data?.kb_categories || null,
@@ -1702,7 +1718,7 @@ serve(async (req) => {
           flowId: matchedFlow.id,
           flowStarted: true,
           // Campos do contrato fluxo ↔ IA
-          allowedSources: startNode.data?.allowed_sources || ['kb', 'crm', 'tracking'],
+          allowedSources: buildAllowedSources(startNode.data),
           responseFormat: 'text_only',
           personaId: startNode.data?.persona_id || null,
           kbCategories: startNode.data?.kb_categories || null,

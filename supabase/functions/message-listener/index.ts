@@ -309,7 +309,7 @@ serve(async (req) => {
           flow_id: flowData.flowId || flowData.masterFlowId,
           node_id: flowData.nodeId,
           node_type: 'ai_response',
-          allowed_sources: flowData.allowedSources || ['kb', 'crm', 'tracking'],
+          allowed_sources: flowData.allowedSources || ['kb'],
           response_format: 'text_only',
           personaId: flowData.personaId,
           kbCategories: flowData.kbCategories,

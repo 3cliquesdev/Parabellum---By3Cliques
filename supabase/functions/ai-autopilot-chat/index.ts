@@ -220,20 +220,17 @@ function logSourceViolationIfAny(
   allowedSources: string[],
   kbUsed: boolean,
   crmUsed: boolean,
-  trackingUsed: boolean
+  trackingUsed: boolean,
+  kiwifyUsed: boolean = false,
+  sandboxUsed: boolean = false
 ): void {
   const violations: string[] = [];
   
-  // Verificar se IA usou fonte não autorizada
-  if (!allowedSources.includes('kb') && kbUsed) {
-    violations.push('kb_not_allowed');
-  }
-  if (!allowedSources.includes('crm') && crmUsed) {
-    violations.push('crm_not_allowed');
-  }
-  if (!allowedSources.includes('tracking') && trackingUsed) {
-    violations.push('tracking_not_allowed');
-  }
+  if (!allowedSources.includes('kb') && kbUsed) violations.push('kb_not_allowed');
+  if (!allowedSources.includes('crm') && crmUsed) violations.push('crm_not_allowed');
+  if (!allowedSources.includes('tracking') && trackingUsed) violations.push('tracking_not_allowed');
+  if (!allowedSources.includes('kiwify') && kiwifyUsed) violations.push('kiwify_not_allowed');
+  if (!allowedSources.includes('sandbox') && sandboxUsed) violations.push('sandbox_not_allowed');
   
   if (violations.length > 0) {
     console.warn('[ai-autopilot-chat] ⚠️ SOURCE VIOLATION (não bloqueante):', {
@@ -1108,7 +1105,7 @@ interface FlowContext {
   flow_id: string;
   node_id: string;
   node_type: 'ai_response';
-  allowed_sources: ('kb' | 'crm' | 'tracking')[];
+  allowed_sources: ('kb' | 'crm' | 'tracking' | 'kiwify' | 'sandbox')[];
   response_format: 'text_only';
   personaId?: string;
   kbCategories?: string[];
@@ -3011,12 +3008,30 @@ Como posso ajudar você hoje?`;
       tracking_data: false
     };
     
-    const canAccessCustomerData = personaDataAccess.customer_data !== false;
-    const canAccessKnowledgeBase = personaDataAccess.knowledge_base !== false;
-    const canAccessFinancialData = personaDataAccess.financial_data === true;
-    const canAccessTracking = personaDataAccess.tracking_data === true || personaDataAccess.order_history === true;
+    let canAccessCustomerData = personaDataAccess.customer_data !== false;
+    let canAccessKnowledgeBase = personaDataAccess.knowledge_base !== false;
+    let canAccessFinancialData = personaDataAccess.financial_data === true;
+    let canAccessTracking = personaDataAccess.tracking_data === true || personaDataAccess.order_history === true;
     
-    console.log('[ai-autopilot-chat] 🔐 Permissões calculadas:', {
+    // 🆕 FASE 2: Intersectar permissões da persona com toggles do nó de fluxo
+    // Se flow_context.allowed_sources existe, restringir ainda mais
+    if (flow_context?.allowed_sources) {
+      const flowSources = flow_context.allowed_sources;
+      if (!flowSources.includes('kb')) canAccessKnowledgeBase = false;
+      if (!flowSources.includes('crm')) canAccessCustomerData = false;
+      if (!flowSources.includes('kiwify')) canAccessFinancialData = false;
+      if (!flowSources.includes('tracking')) canAccessTracking = false;
+      
+      console.log('[ai-autopilot-chat] 🔐 Flow-level source gating applied:', {
+        flowSources,
+        canAccessKnowledgeBase,
+        canAccessCustomerData,
+        canAccessFinancialData,
+        canAccessTracking
+      });
+    }
+    
+    console.log('[ai-autopilot-chat] 🔐 Permissões finais:', {
       canAccessCustomerData,
       canAccessKnowledgeBase,
       canAccessFinancialData,
