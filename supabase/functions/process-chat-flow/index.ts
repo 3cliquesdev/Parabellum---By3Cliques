@@ -1,4 +1,4 @@
-// process-chat-flow v2.1 - fix unique_active_flow cleanup
+// process-chat-flow v2.2 - fix cleanup ALL flows + quota handling
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/ai-config-cache.ts";
@@ -664,12 +664,11 @@ serve(async (req) => {
         ? 'waiting_input'
         : 'active';
 
-      // Limpar TODOS os estados anteriores deste fluxo nesta conversa (evita unique_active_flow constraint)
+      // Limpar TODOS os estados ativos da conversa, independente do flow_id (evita unique_active_flow constraint)
       const { error: deleteError } = await supabaseClient
         .from('chat_flow_states')
         .delete()
         .eq('conversation_id', conversationId)
-        .eq('flow_id', flow.id)
         .in('status', ['active', 'waiting_input', 'in_progress']);
 
       if (deleteError) {

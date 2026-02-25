@@ -7386,6 +7386,86 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       const errorMessage = aiError instanceof Error ? aiError.message : 'Unknown error';
       const errorStack = aiError instanceof Error ? aiError.stack : undefined;
       
+      // 🆕 Detectar erro de quota vs erro técnico real
+      const isQuotaError = errorMessage.includes('QUOTA_ERROR') || errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('rate_limit');
+      
+      if (isQuotaError) {
+        // QUOTA ERROR: NÃO transferir, apenas avisar o cliente e manter na IA
+        console.warn('[ai-autopilot-chat] ⚠️ QUOTA_ERROR detectado — NÃO transferir, apenas avisar cliente');
+        
+        const quotaMessage = "Estou com alta demanda no momento. Por favor, tente novamente em alguns instantes. 🙏";
+        
+        // Salvar mensagem de aviso
+        await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: quotaMessage,
+          sender_type: 'user',
+          sender_id: null,
+          is_ai_generated: true,
+          channel: responseChannel,
+          status: 'sent'
+        });
+        
+        // Se WhatsApp, enviar via Meta
+        if (responseChannel === 'whatsapp' && contact?.phone && conversation) {
+          try {
+            const whatsappResult = await getWhatsAppInstanceWithProvider(
+              supabaseClient,
+              conversationId,
+              conversation.whatsapp_instance_id,
+              conversation.whatsapp_provider,
+              conversation.whatsapp_meta_instance_id
+            );
+            if (whatsappResult && whatsappResult.provider === 'meta') {
+              const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+              await supabaseClient.functions.invoke('send-meta-whatsapp', {
+                body: {
+                  instance_id: whatsappResult.instance.id,
+                  phone_number: targetNumber,
+                  message: quotaMessage,
+                  conversation_id: conversationId,
+                  skip_db_save: true,
+                  is_bot_message: true
+                }
+              });
+              console.log('[ai-autopilot-chat] ✅ Quota warning sent via Meta WhatsApp');
+            }
+          } catch (waErr) {
+            console.error('[ai-autopilot-chat] ❌ Erro ao enviar aviso de quota via WhatsApp:', waErr);
+          }
+        }
+        
+        // Registrar no failure log mas SEM handoff
+        await supabaseClient.from('ai_failure_logs').insert({
+          conversation_id: conversationId,
+          error_message: `QUOTA_ERROR: ${errorMessage}`,
+          customer_message: customerMessage,
+          contact_id: conversation?.contacts?.id,
+          notified_admin: true
+        });
+        
+        // Notificar admin sobre quota
+        await supabaseClient.functions.invoke('send-admin-alert', {
+          body: {
+            type: 'ai_quota_warning',
+            message: `⚠️ IA sem cota/saldo. Verifique o faturamento da API.`,
+            error: errorMessage,
+            conversationId
+          }
+        });
+        
+        return new Response(JSON.stringify({ 
+          status: 'quota_error',
+          message: quotaMessage,
+          handoff_triggered: false,
+          retry_suggested: true
+        }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // ERRO TÉCNICO REAL: manter protocolo de emergência com handoff
       try {
         // 1. Registrar falha no banco para monitoramento
         const { data: failureLog } = await supabaseClient
