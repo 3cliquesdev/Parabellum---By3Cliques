@@ -1,83 +1,53 @@
 
 
-# Plano: Cópia do Fluxo Principal com IA na Entrada
+# Plano: Corrigir Busca de Tickets para Mostrar Todos os Status
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Conceito
+## Problema Identificado
 
-Criar um **rascunho** (cópia inativa) do fluxo principal onde um nó de **IA Persistente** é inserido logo após o Start, **antes** de qualquer menu ou condição. A IA tenta resolver a dúvida do cliente direto. Se não conseguir, o fluxo segue normalmente para a triagem por menus (já é cliente? → qual produto? → etc.).
+A busca de tickets não encontra tickets com status `resolved` ou `closed` porque:
 
-```text
-FLUXO ATUAL:
-Start → Condição (Onboarding/Carnaval/Outros) → Menus → Transfer
+1. **`useSearchTickets` (modal de mesclagem):** Filtra apenas `open`, `in_progress`, `waiting_customer` na linha 29 — exclui 636 dos 714 tickets (89%).
 
-FLUXO NOVO (RASCUNHO):
-Start → Boas-vindas → IA Persistente (tenta resolver)
-                          │
-                          ├─ Resolveu? → Encerra naturalmente
-                          │
-                          └─ Não resolveu / pediu humano / max interações
-                              → Condição (Onboarding/Carnaval/Outros) → Menus → Transfer
-                              (fluxo original continua normalmente)
-```
-
-## O que muda em relação ao fluxo principal
-
-| Elemento | Fluxo Principal | Rascunho Novo |
-|---|---|---|
-| Primeiro nó após Start | Condição (triagem) | IA Persistente |
-| IA tenta resolver antes? | Não | Sim (até 10 interações) |
-| Menus aparecem quando? | Sempre | Só se IA não resolver |
-| Fluxo principal afetado? | — | Não (é um INSERT separado) |
-
-## Configuração do nó IA na entrada
-
-- `ai_persistent: true` — loop até resolver ou escalar
-- `max_ai_interactions: 10`
-- `exit_keywords: ["atendente", "humano", "transferir", "falar com alguem", "menu", "opcoes"]`
-- `use_knowledge_base: true`
-- `use_customer_data: true`
-- `use_tracking: true`
-- `objective: "Resolver a dúvida do cliente usando a base de conhecimento. Se não souber, diga que vai direcionar para o menu de atendimento."`
-- `fallback_message: "Vou te direcionar para nosso menu de atendimento para encontrar o especialista certo!"`
-- `max_sentences: 4`
-- `forbid_options: true`
-- `persona: Helper (0d2f4c7c...)`
-
-## Estrutura do rascunho
+2. **`useTickets` (tela principal /support):** O filtro padrão da sidebar `all` aplica apenas status ativos (não-arquivados: `open`, `in_progress`, `waiting_customer`). A busca é **client-side** sobre esse conjunto já filtrado — portanto tickets resolvidos/fechados nunca aparecem na busca, mesmo digitando o número exato.
 
 ```text
-Nós (total: todos os originais + 2 novos):
+Dados atuais:
+  resolved:         551 tickets (77%)
+  closed:            85 tickets (12%)
+  open:              51 tickets  (7%)
+  returned:          23 tickets  (3%)
+  waiting_customer:   4 tickets  (1%)
 
-[start] → [welcome_ia] (message: "Oi! Sou a assistente virtual da 3 Cliques...")
-         → [ia_entrada] (ai_response persistente)
-         → [1769459229369] (Condição original: Onboarding/Carnaval/Outros)
-         → ... todo o resto do fluxo original idêntico ...
+→ Busca atual só "vê" ~8% dos tickets
 ```
 
-**Edges alteradas:**
-- `start` → aponta para `welcome_ia` (novo) em vez de `1769459229369`
-- `welcome_ia` → aponta para `ia_entrada` (novo)
-- `ia_entrada` → aponta para `1769459229369` (condição original, como fallback)
-- Todas as outras edges e nós permanecem idênticos
+## Solução
 
-## Detalhamento técnico
+### Upgrade 1: Busca global na tela de tickets (`useTickets`)
 
-### Ação: INSERT na tabela `chat_flows`
+Quando o usuário digita um termo de busca (`advancedFilters.search` não vazio), **remover o filtro de status** para que a busca percorra TODOS os tickets, independentemente do status. Isso é feito na lógica `getHookParams()` do `Support.tsx`:
 
-Um único INSERT com:
-- `name: "Master Flow + IA Entrada (Rascunho)"`
-- `is_active: false` (rascunho para teste)
-- `is_master_flow: false`
-- `flow_definition`: JSON completo com todos os nós originais + 2 novos (`welcome_ia` e `ia_entrada`) + edges redirecionadas
+- Se `search` está preenchido e nenhum status foi selecionado manualmente → não aplicar filtro de status (busca global)
+- Se o usuário selecionou status específicos no filtro avançado → respeitar a seleção
 
-### Impacto
+### Upgrade 2: Busca expandida no `useSearchTickets` (mesclagem)
+
+Remover o filtro `.in("status", [...])` da linha 29 para que a busca de mesclagem encontre tickets em qualquer status ativo (exceto já mesclados).
+
+## Arquivos Alterados
+
+| Arquivo | Mudança |
+|---|---|
+| `src/pages/Support.tsx` | Em `getHookParams()`, quando há search ativo e status não foi explicitamente filtrado, não aplicar filtro de status |
+| `src/hooks/useSearchTickets.tsx` | Remover `.in("status", [...])` restritivo |
+
+## Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — INSERT novo, fluxo principal intocado |
-| Kill Switch | Preservado — motor valida antes de executar IA |
-| Rollback | Deletar o registro |
-| Teste | Via botão 🧪 no inbox |
+| Regressão zero | Sim — busca retorna mais resultados, não menos |
+| Performance | Sem impacto significativo — busca client-side já processa todos os dados retornados |
+| Rollback | Restaurar filtro de status nas duas linhas |
 
