@@ -1,100 +1,83 @@
 
 
-# Plano: Upgrade Anti-Alucinação + Telemetria de IA
+# Plano: Cópia do Fluxo Principal com IA na Entrada
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Diagnóstico — O que JÁ existe vs O que FALTA
+## Conceito
 
-| Requisito | Status | Detalhe |
-|---|---|---|
-| Modo Persistente (loop IA) | ✅ Existe | `ai_persistent`, `max_ai_interactions`, `exit_keywords` — motor funcional |
-| Score de Confiança | ✅ Existe | `calculateConfidenceScore` com thresholds dinâmicos (direct/cautious/handoff) |
-| Modo Estrito Anti-Alucinação | ✅ Existe | `strictMode` filtra artigos < 80% similaridade |
-| Prompt "não invente" | ✅ Existe | Regras no prompt: "NUNCA invente", "cite a fonte" |
-| Fontes RAG configuráveis | ✅ Existe | `allowedSources` por nó (KB, CRM, tracking, sandbox) |
-| Kill Switch | ✅ Existe | `ai_global_enabled = false` bloqueia tudo |
-| Tabela `ai_events` | ⚠️ Estrutura existe | Tabela criada mas **NUNCA recebe dados** — zero logging |
-| Logging de confiança | ❌ Falta | `ConfidenceLog` é definido como interface mas nunca é persistido |
-| Tag `resolved_by_ai` | ❌ Falta | Nenhum marcador de resolução pela IA |
-| Motivo de transferência | ❌ Falta | Quando transfere, não registra se foi por keyword, limite, sem base, ou pedido |
-| Artigos utilizados na resposta | ❌ Falta | IA usa artigos mas não registra quais foram citados |
-| Métricas de loop persistente | ❌ Falta | Contador existe no estado mas não é logado em `ai_events` |
-
-## Solução — 3 Upgrades Cirúrgicos
-
-### Upgrade 1: Logging em `ai_events` (Telemetria Real)
-
-Após cada resposta da IA no `ai-autopilot-chat`, inserir registro em `ai_events` com:
+Criar um **rascunho** (cópia inativa) do fluxo principal onde um nó de **IA Persistente** é inserido logo após o Start, **antes** de qualquer menu ou condição. A IA tenta resolver a dúvida do cliente direto. Se não conseguir, o fluxo segue normalmente para a triagem por menus (já é cliente? → qual produto? → etc.).
 
 ```text
-entity_type: 'conversation'
-entity_id: conversation_id
-event_type: 'ai_response' | 'ai_transfer' | 'ai_fallback'
-output_json: {
-  confidence_score: 0.85,
-  confidence_action: 'direct' | 'cautious' | 'handoff',
-  articles_used: ['titulo-1', 'titulo-2'],
-  articles_count: 2,
-  interaction_number: 3,        // qual interação no loop
-  max_interactions: 10,
-  exit_reason: null | 'keyword' | 'max_reached' | 'no_kb' | 'user_request',
-  query_preview: 'como rastrear meu pedido...',
-  persistent_mode: true
-}
-tokens_used: (do response)
-latency_ms: (tempo da chamada)
-department_id: (da conversa)
+FLUXO ATUAL:
+Start → Condição (Onboarding/Carnaval/Outros) → Menus → Transfer
+
+FLUXO NOVO (RASCUNHO):
+Start → Boas-vindas → IA Persistente (tenta resolver)
+                          │
+                          ├─ Resolveu? → Encerra naturalmente
+                          │
+                          └─ Não resolveu / pediu humano / max interações
+                              → Condição (Onboarding/Carnaval/Outros) → Menus → Transfer
+                              (fluxo original continua normalmente)
 ```
 
-**Onde:** No bloco principal de resposta do `ai-autopilot-chat` (~linhas 7050-7150), após gerar a resposta e antes de retornar.
+## O que muda em relação ao fluxo principal
 
-### Upgrade 2: Motivo de Transferência Estruturado
+| Elemento | Fluxo Principal | Rascunho Novo |
+|---|---|---|
+| Primeiro nó após Start | Condição (triagem) | IA Persistente |
+| IA tenta resolver antes? | Não | Sim (até 10 interações) |
+| Menus aparecem quando? | Sempre | Só se IA não resolver |
+| Fluxo principal afetado? | — | Não (é um INSERT separado) |
 
-Quando o motor persistente (`process-chat-flow`) decide sair do loop, registrar o motivo:
+## Configuração do nó IA na entrada
 
-| Motivo | Quando |
-|---|---|
-| `exit_keyword` | Cliente disse "atendente", "humano", etc. |
-| `max_interactions` | Atingiu `max_ai_interactions` |
-| `low_confidence` | Score abaixo do mínimo (modo estrito) |
-| `user_frustration` | Padrão de frustração detectado (futuro) |
+- `ai_persistent: true` — loop até resolver ou escalar
+- `max_ai_interactions: 10`
+- `exit_keywords: ["atendente", "humano", "transferir", "falar com alguem", "menu", "opcoes"]`
+- `use_knowledge_base: true`
+- `use_customer_data: true`
+- `use_tracking: true`
+- `objective: "Resolver a dúvida do cliente usando a base de conhecimento. Se não souber, diga que vai direcionar para o menu de atendimento."`
+- `fallback_message: "Vou te direcionar para nosso menu de atendimento para encontrar o especialista certo!"`
+- `max_sentences: 4`
+- `forbid_options: true`
+- `persona: Helper (0d2f4c7c...)`
 
-**Onde:** No bloco de saída do loop persistente em `process-chat-flow` (~linhas 963-985), inserir em `ai_events` com `event_type: 'ai_transfer'`.
+## Estrutura do rascunho
 
-### Upgrade 3: Tag de Resolução (`resolved_by_ai`)
+```text
+Nós (total: todos os originais + 2 novos):
 
-Quando a conversa é encerrada e a IA foi a última a interagir (sem transferência), marcar na conversa:
+[start] → [welcome_ia] (message: "Oi! Sou a assistente virtual da 3 Cliques...")
+         → [ia_entrada] (ai_response persistente)
+         → [1769459229369] (Condição original: Onboarding/Carnaval/Outros)
+         → ... todo o resto do fluxo original idêntico ...
+```
 
-- Adicionar coluna `resolved_by` na tabela `conversations` (valores: `ai`, `human`, `mixed`, `null`)
-- Preencher automaticamente no fechamento
+**Edges alteradas:**
+- `start` → aponta para `welcome_ia` (novo) em vez de `1769459229369`
+- `welcome_ia` → aponta para `ia_entrada` (novo)
+- `ia_entrada` → aponta para `1769459229369` (condição original, como fallback)
+- Todas as outras edges e nós permanecem idênticos
 
-**Implementação:** Migration SQL para adicionar a coluna + lógica no fluxo de fechamento.
+## Detalhamento técnico
 
-## Arquivos Alterados
+### Ação: INSERT na tabela `chat_flows`
 
-| Arquivo | Mudança |
-|---|---|
-| `supabase/functions/ai-autopilot-chat/index.ts` | Inserir log em `ai_events` após cada resposta |
-| `supabase/functions/process-chat-flow/index.ts` | Log de transferência com motivo no bloco persistente |
-| Migration SQL | `ALTER TABLE conversations ADD COLUMN resolved_by TEXT` |
+Um único INSERT com:
+- `name: "Master Flow + IA Entrada (Rascunho)"`
+- `is_active: false` (rascunho para teste)
+- `is_master_flow: false`
+- `flow_definition`: JSON completo com todos os nós originais + 2 novos (`welcome_ia` e `ia_entrada`) + edges redirecionadas
 
-## Impacto
+### Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — são INSERTs de logging, não alteram lógica existente |
-| Performance | Mínimo — 1 INSERT extra por interação IA (async) |
-| Kill Switch | Não afetado |
-| Rollback | Remover os INSERTs; DROP COLUMN `resolved_by` |
-
-## O que NÃO precisa de upgrade (já funciona)
-
-- Score de confiança com thresholds dinâmicos ✅
-- Modo estrito anti-alucinação ✅
-- Prompt com regras de "não inventar" ✅
-- Citação de fontes no prompt ✅
-- Fontes RAG configuráveis por nó ✅
-- Modo persistente com exit_keywords ✅
-- Auto-traversal de nós ✅
+| Regressão zero | Sim — INSERT novo, fluxo principal intocado |
+| Kill Switch | Preservado — motor valida antes de executar IA |
+| Rollback | Deletar o registro |
+| Teste | Via botão 🧪 no inbox |
 
