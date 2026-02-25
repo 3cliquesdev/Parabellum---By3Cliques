@@ -1,80 +1,59 @@
 
 
-# Plano: Expandir Verificação de Email para Incluir Base Kiwify
+# Plano: Adicionar Todas as Bases de Dados ao Painel de Fontes RAG do Nó IA
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Problema Identificado
+## Problema
 
-A função `verify-customer-email` busca **apenas** contatos com `status = 'customer'` na tabela `contacts`. Porém, existem **986 contatos** que possuem eventos `paid` na Kiwify mas estão com status `lead` ou `churned` — ou seja, são clientes reais que o sistema não reconhece.
+O painel "DE ONDE A IA BUSCA INFORMAÇÃO" do nó Resposta IA só mostra **2 fontes**: Artigos/FAQ e Rastreio de Envio. Faltam as demais bases que o sistema já possui:
 
-Quando um desses clientes fornece o email, o sistema retorna `found: false` e trata como lead novo, quebrando a vinculação e o redirecionamento ao consultor.
-
-## Dados Concretos
-
-| Situação | Quantidade |
+| Base | Status no Painel |
 |---|---|
-| Contatos `customer` com email | 13.309 |
-| Contatos com evento `paid` na Kiwify mas status ≠ `customer` | 986 |
-| Emails Kiwify sem contato algum | 0 |
+| Artigos e FAQ | ✅ Presente |
+| Rastreio de Envio | ✅ Presente |
+| **Clientes / CRM** | ❌ Ausente |
+| **Kiwify (Vendas/Financeiro)** | ❌ Ausente |
+| **Treinamento Sandbox** | ❌ Ausente |
 
-## Solução em 2 Partes
+O widget `KnowledgeSourcesWidget` na página AI Trainer já lista 5 fontes. O painel do nó precisa espelhar isso.
 
-### Parte 1: Correção em Massa (Migration SQL)
+## Solução
 
-Atualizar os 986 contatos que têm evento `paid` na `kiwify_events` mas status ≠ `customer` para `status = 'customer'`. Isso resolve o problema na raiz — a base de contatos passa a refletir a realidade da Kiwify.
+Adicionar 3 novas fontes toggleáveis ao `RAGSourcesSection.tsx`:
 
-```sql
-UPDATE contacts c
-SET status = 'customer', updated_at = now()
-FROM (
-  SELECT DISTINCT lower(ke.customer_email) as email
-  FROM kiwify_events ke
-  WHERE ke.event_type = 'paid'
-  AND ke.customer_email IS NOT NULL
-) k
-WHERE lower(c.email) = k.email
-AND c.status IN ('lead', 'churned');
-```
+### 1. CRM / Clientes
+- Ícone: `Users` (lucide)
+- Badge: `CRM`
+- Campo no nó: `use_crm_data` (boolean)
+- Descrição: "A IA consulta dados do cliente (nome, email, status, consultor)"
 
-### Parte 2: Fallback na `verify-customer-email`
+### 2. Kiwify (Vendas/Financeiro)
+- Ícone: `ShoppingCart` (lucide)
+- Badge: `Kiwify`
+- Campo no nó: `use_kiwify_data` (boolean)
+- Descrição: "A IA consulta pedidos e status de pagamento"
 
-Para evitar que isso aconteça novamente no futuro, adicionar um fallback: se o email não for encontrado como `customer` na `contacts`, buscar na `kiwify_events` por evento `paid`. Se encontrado, promover o contato para `customer` automaticamente e retornar `found: true`.
+### 3. Treinamento Sandbox
+- Ícone: `GraduationCap` (lucide)
+- Badge: `Sandbox`
+- Campo no nó: `use_sandbox_data` (boolean)
+- Descrição: "A IA consulta regras aprendidas por correção manual"
 
-**Fluxo atualizado:**
-
-```text
-Email recebido
-    │
-    ├── Busca em contacts WHERE status='customer'
-    │   ├── Encontrou → Retorna found:true (atual)
-    │   └── Não encontrou ↓
-    │
-    ├── Busca em kiwify_events WHERE event_type='paid' AND customer_email = email
-    │   ├── Encontrou → Promove contato para 'customer' + Retorna found:true
-    │   └── Não encontrou → Retorna found:false (atual)
-```
-
-**Alteração em `verify-customer-email/index.ts`** (após linha 71):
-- Buscar `kiwify_events` pelo email com `event_type = 'paid'`
-- Se encontrar, fazer UPDATE no contato existente para `status = 'customer'`
-- Se não existir contato, criar um novo com os dados do payload Kiwify
-- Retornar `found: true` com os dados do contato (incluindo `consultant_id`)
+Cada fonte segue o mesmo padrão visual já existente (card com Switch + Badge de origem + descrição condicional).
 
 ## Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — lógica atual mantida, fallback é adicional |
-| Kill Switch | Não afetado — verificação não envia mensagens |
-| Fluxo existente | Preservado — só adiciona caminho alternativo |
-| CSAT guard | Não afetado |
-| Auditoria | Log no console da Edge Function |
+| Regressão zero | Sim — fontes existentes não são alteradas |
+| Kill Switch | Não afetado — só configura UI |
+| Fluxo existente | Preservado — campos novos são opcionais (default false) |
+| Auditoria | N/A — configuração de nó de fluxo |
 
-## Arquivos
+## Arquivo
 
 | Arquivo | Mudança |
 |---|---|
-| Migration SQL | UPDATE em massa dos 986 contatos com `paid` para `customer` |
-| `supabase/functions/verify-customer-email/index.ts` | Adicionar fallback de busca na `kiwify_events` |
+| `src/components/chat-flows/panels/RAGSourcesSection.tsx` | Adicionar 3 blocos de fonte (CRM, Kiwify, Sandbox) com switches toggleáveis |
 
