@@ -34,7 +34,7 @@ serve(async (req) => {
     // Buscar cliente existente pelo email COM status = 'customer'
     const { data: customer, error } = await supabase
       .from('contacts')
-      .select('id, email, first_name, last_name, status, phone')
+      .select('id, email, first_name, last_name, status, phone, consultant_id')
       .eq('email', targetEmail)
       .eq('status', 'customer')
       .maybeSingle();
@@ -60,7 +60,8 @@ serve(async (req) => {
             name: `${customer.first_name || ''} ${customer.last_name || ''}`.trim(),
             phone: customer.phone,
             first_name: customer.first_name,
-            last_name: customer.last_name
+            last_name: customer.last_name,
+            consultant_id: customer.consultant_id || null
           }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

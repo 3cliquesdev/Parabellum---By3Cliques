@@ -2757,9 +2757,52 @@ Como posso ajudar você hoje?`;
                 .eq('id', conversationId);
             }
             
-            // 🆕 NÃO retornar mensagem de menu legado - deixar Master Flow assumir
-            console.log('[ai-autopilot-chat] ✅ Email verificado - Master Flow assumirá a triagem');
-            autoResponse = foundMessage;
+            // 🆕 CONSULTANT REDIRECT: Se cliente tem consultor, redirecionar direto
+            const consultantId = verifyResult.customer?.consultant_id;
+            
+            if (consultantId) {
+              console.log('[ai-autopilot-chat] 🎯 CONSULTANT REDIRECT: Cliente tem consultor, redirecionando direto:', consultantId);
+              
+              // Atribuir conversa ao consultor em modo copilot
+              await supabaseClient.from('conversations')
+                .update({
+                  assigned_to: consultantId,
+                  ai_mode: 'copilot',
+                  customer_metadata: {
+                    ...(conversation.customer_metadata || {}),
+                    email_verified_at: new Date().toISOString(),
+                    consultant_redirect: true,
+                    consultant_redirect_at: new Date().toISOString()
+                  }
+                })
+                .eq('id', conversationId);
+              
+              // Persistir consultant_id no contato do lead (se diferente)
+              await supabaseClient.from('contacts')
+                .update({ consultant_id: consultantId })
+                .eq('id', contact.id)
+                .is('consultant_id', null);
+              
+              // Chamar route-conversation para enfileirar distribuição
+              await supabaseClient.functions.invoke('route-conversation', {
+                body: { conversationId, assigned_to: consultantId }
+              });
+              
+              // Registrar nota de auditoria
+              await supabaseClient.from('interactions').insert({
+                customer_id: contact.id,
+                type: 'internal_note',
+                content: `🎯 **Redirecionamento Automático para Consultor**\n\nEmail verificado: ${maskedEmailResponse}\nCliente encontrado com consultor designado.\nConversa atribuída ao consultor (copilot).`,
+                channel: responseChannel
+              });
+              
+              // Mensagem personalizada (sem menu)
+              autoResponse = `Encontrei seu cadastro, ${verifyResult.customer?.name || contact.first_name || 'cliente'}! 🎉\n\nVou te conectar com seu consultor. Aguarde um momento! 🤝`;
+            } else {
+              // Sem consultor - comportamento atual (Master Flow assume triagem)
+              console.log('[ai-autopilot-chat] ✅ Email verificado sem consultor - Master Flow assumirá a triagem');
+              autoResponse = foundMessage;
+            }
           } else if (!verifyResult.found) {
             // 🎯 TRIAGEM: Email não encontrado = Lead → Rotear para Comercial
             console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email não encontrado - roteando para Comercial');
