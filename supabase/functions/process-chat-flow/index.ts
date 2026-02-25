@@ -663,6 +663,22 @@ serve(async (req) => {
         ? 'waiting_input'
         : 'active';
 
+      // Limpar estado ativo anterior (evita unique_active_flow constraint)
+      await supabaseClient
+        .from('chat_flow_states')
+        .delete()
+        .eq('conversation_id', conversationId)
+        .eq('flow_id', flow.id)
+        .eq('status', 'active');
+
+      // Também limpar estados waiting_input do mesmo fluxo
+      await supabaseClient
+        .from('chat_flow_states')
+        .delete()
+        .eq('conversation_id', conversationId)
+        .eq('flow_id', flow.id)
+        .eq('status', 'waiting_input');
+
       // Criar estado do fluxo no nó de conteúdo (não no start)
       const { data: newState, error: createError } = await supabaseClient
         .from('chat_flow_states')

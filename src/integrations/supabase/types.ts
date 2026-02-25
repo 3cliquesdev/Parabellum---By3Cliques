@@ -10282,7 +10282,7 @@ export type Database = {
         | "ticket_resolved"
         | "ticket_closed"
         | "internal_note"
-      message_status: "sending" | "sent" | "delivered" | "failed"
+      message_status: "sending" | "sent" | "delivered" | "failed" | "read"
       quote_status:
         | "draft"
         | "sent"
@@ -10528,7 +10528,7 @@ export const Constants = {
         "ticket_closed",
         "internal_note",
       ],
-      message_status: ["sending", "sent", "delivered", "failed"],
+      message_status: ["sending", "sent", "delivered", "failed", "read"],
       quote_status: [
         "draft",
         "sent",
