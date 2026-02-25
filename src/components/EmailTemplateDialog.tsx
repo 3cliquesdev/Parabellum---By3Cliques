@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -20,13 +21,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCreateEmailTemplate } from "@/hooks/useCreateEmailTemplate";
@@ -77,11 +71,27 @@ const AVAILABLE_VARIABLES = {
   ],
 };
 
+const TRIGGER_OPTIONS = [
+  { value: "deal_won", label: "Negócio Ganho" },
+  { value: "deal_created", label: "Negócio Criado" },
+  { value: "deal_lost", label: "Negócio Perdido" },
+  { value: "contact_created", label: "Contato Criado" },
+  { value: "order_paid", label: "🛒 Compra Aprovada (Kiwify)" },
+  { value: "subscription_renewed", label: "🔄 Assinatura Renovada" },
+  { value: "cart_abandoned", label: "🛒 Carrinho Abandonado" },
+  { value: "payment_refused", label: "❌ Cartão Recusado" },
+  { value: "subscription_card_declined", label: "💳 Cartão Assinatura Recusado" },
+  { value: "subscription_late", label: "⏰ Assinatura em Atraso" },
+  { value: "upsell_paid", label: "💰 Upsell Aprovado" },
+  { value: "refunded", label: "↩️ Reembolso Processado" },
+  { value: "churned", label: "🚪 Churn/Cancelamento" },
+];
+
 const formSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   subject: z.string().min(1, "Assunto é obrigatório"),
   html_body: z.string().min(1, "Corpo do email é obrigatório"),
-  trigger_type: z.string().optional().nullable(),
+  trigger_types: z.array(z.string()).default([]),
   is_active: z.boolean().default(true),
 });
 
@@ -108,7 +118,7 @@ export function EmailTemplateDialog({
       name: "",
       subject: "",
       html_body: "",
-      trigger_type: null,
+      trigger_types: [],
       is_active: true,
     },
   });
@@ -119,7 +129,7 @@ export function EmailTemplateDialog({
         name: template.name,
         subject: template.subject,
         html_body: template.html_body,
-        trigger_type: template.trigger_type,
+        trigger_types: (template.trigger_types as string[]) || (template.trigger_type ? [template.trigger_type] : []),
         is_active: template.is_active,
       });
     } else {
@@ -127,7 +137,7 @@ export function EmailTemplateDialog({
         name: "",
         subject: "",
         html_body: "",
-        trigger_type: null,
+        trigger_types: [],
         is_active: true,
       });
     }
@@ -154,7 +164,8 @@ export function EmailTemplateDialog({
           name: data.name,
           subject: data.subject,
           html_body: data.html_body,
-          trigger_type: data.trigger_type,
+          trigger_type: data.trigger_types[0] || null,
+          trigger_types: data.trigger_types,
           is_active: data.is_active,
           variables: variables,
         });
@@ -163,7 +174,8 @@ export function EmailTemplateDialog({
           name: data.name,
           subject: data.subject,
           html_body: data.html_body,
-          trigger_type: data.trigger_type || null,
+          trigger_type: data.trigger_types[0] || null,
+          trigger_types: data.trigger_types,
           is_active: data.is_active,
           variables: variables,
           design_json: null,
@@ -246,40 +258,36 @@ export function EmailTemplateDialog({
 
                 <FormField
                   control={form.control}
-                  name="trigger_type"
+                  name="trigger_types"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Tipo de Gatilho (Opcional)</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value || undefined}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione um gatilho" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {/* Gatilhos CRM */}
-                          <SelectItem value="deal_won">Negócio Ganho</SelectItem>
-                          <SelectItem value="deal_created">Negócio Criado</SelectItem>
-                          <SelectItem value="deal_lost">Negócio Perdido</SelectItem>
-                          <SelectItem value="contact_created">Contato Criado</SelectItem>
-                          
-                          {/* Gatilhos Kiwify */}
-                          <SelectItem value="order_paid">🛒 Compra Aprovada (Kiwify)</SelectItem>
-                          <SelectItem value="subscription_renewed">🔄 Assinatura Renovada</SelectItem>
-                          <SelectItem value="cart_abandoned">🛒 Carrinho Abandonado</SelectItem>
-                          <SelectItem value="payment_refused">❌ Cartão Recusado</SelectItem>
-                          <SelectItem value="subscription_card_declined">💳 Cartão Assinatura Recusado</SelectItem>
-                          <SelectItem value="subscription_late">⏰ Assinatura em Atraso</SelectItem>
-                          <SelectItem value="upsell_paid">💰 Upsell Aprovado</SelectItem>
-                          <SelectItem value="refunded">↩️ Reembolso Processado</SelectItem>
-                          <SelectItem value="churned">🚪 Churn/Cancelamento</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>Gatilhos (Opcional — múltipla seleção)</FormLabel>
+                      <div className="grid grid-cols-2 gap-2 rounded-lg border p-3 max-h-[200px] overflow-y-auto">
+                        {TRIGGER_OPTIONS.map((option) => {
+                          const isChecked = (field.value || []).includes(option.value);
+                          return (
+                            <label
+                              key={option.value}
+                              className="flex items-center gap-2 cursor-pointer rounded-md p-1.5 hover:bg-accent transition-colors text-sm"
+                            >
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={(checked) => {
+                                  const current = field.value || [];
+                                  if (checked) {
+                                    field.onChange([...current, option.value]);
+                                  } else {
+                                    field.onChange(current.filter((v: string) => v !== option.value));
+                                  }
+                                }}
+                              />
+                              <span>{option.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                       <FormDescription>
-                        Associe este template a um gatilho específico para uso automático
+                        Selecione um ou mais gatilhos para disparo automático
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

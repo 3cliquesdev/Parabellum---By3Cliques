@@ -205,9 +205,19 @@ export default function EmailTemplates() {
                   >
                     {template.is_active ? "● Ativo" : "○ Inativo"}
                   </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    {getTriggerLabel(template.trigger_type)}
-                  </Badge>
+                  {((template as any).trigger_types?.length > 0 
+                    ? (template as any).trigger_types 
+                    : template.trigger_type ? [template.trigger_type] : []
+                  ).map((t: string) => (
+                    <Badge key={t} variant="outline" className="text-xs">
+                      {getTriggerLabel(t)}
+                    </Badge>
+                  ))}
+                  {!((template as any).trigger_types?.length > 0 || template.trigger_type) && (
+                    <Badge variant="outline" className="text-xs">
+                      {getTriggerLabel(null)}
+                    </Badge>
+                  )}
                 </div>
 
                 {/* Title and Subject */}

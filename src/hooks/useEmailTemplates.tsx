@@ -9,6 +9,7 @@ export interface EmailTemplate {
   subject: string;
   html_body: string;
   trigger_type: string | null;
+  trigger_types: string[] | null;
   is_active: boolean;
   variables: Json | null;
   design_json: Json | null;
@@ -84,6 +85,7 @@ export function useCreateEmailTemplate() {
       subject: string;
       html_body: string;
       trigger_type?: string | null;
+      trigger_types?: string[] | null;
       is_active?: boolean;
       variables?: Json;
       design_json?: Json | null;
@@ -98,6 +100,7 @@ export function useCreateEmailTemplate() {
           subject: template.subject,
           html_body: template.html_body,
           trigger_type: template.trigger_type || null,
+          trigger_types: template.trigger_types || [],
           is_active: template.is_active ?? true,
           variables: template.variables || null,
           design_json: template.design_json || null,
@@ -151,6 +154,7 @@ export function useDuplicateEmailTemplate() {
           subject: original.subject,
           html_body: original.html_body,
           trigger_type: null, // Remove trigger to avoid conflicts
+          trigger_types: [], // Remove triggers to avoid conflicts
           is_active: false, // Inactive by default
           variables: original.variables,
           design_json: original.design_json,
@@ -196,6 +200,7 @@ export function useUpdateEmailTemplate() {
         subject?: string;
         html_body?: string;
         trigger_type?: string | null;
+        trigger_types?: string[] | null;
         is_active?: boolean;
         variables?: Json;
         design_json?: Json | null;

@@ -63,16 +63,15 @@ serve(async (req) => {
       throw new Error("trigger_type is required");
     }
 
-    // 1. Buscar template ATIVO com trigger_type correspondente
-    const { data: template, error: templateError } = await supabase
+    // 1. Buscar templates ATIVOS com trigger_types contendo o gatilho
+    const { data: templates, error: templateError } = await supabase
       .from("email_templates")
       .select("*, email_branding(*), email_senders(*)")
-      .eq("trigger_type", trigger_type)
-      .eq("is_active", true)
-      .single();
+      .contains("trigger_types", [trigger_type])
+      .eq("is_active", true);
 
     // Se não encontrar template ativo, retornar silenciosamente (sem erro)
-    if (templateError && templateError.code === "PGRST116") {
+    if (templateError || !templates || templates.length === 0) {
       console.log("[send-triggered-email] No active template for trigger:", trigger_type);
       return new Response(
         JSON.stringify({ 
@@ -85,11 +84,9 @@ serve(async (req) => {
       );
     }
 
-    if (templateError) {
-      throw templateError;
-    }
+    console.log(`[send-triggered-email] Found ${templates.length} template(s) for trigger: ${trigger_type}`);
 
-    // 2. Buscar email do contato se não foi fornecido
+    // 2. Buscar email do contato se não foi fornecido (shared across templates)
     let recipientEmail = contact_email;
     let recipientName = variables.CUSTOMER_FULL_NAME || variables.CUSTOMER_FIRST_NAME || '';
 
@@ -128,94 +125,16 @@ serve(async (req) => {
       }
     }
 
-    // Adicionar variáveis contextuais
     const now = new Date();
     processedVariables.CURRENT_DATE = now.toLocaleDateString('pt-BR');
     processedVariables.CURRENT_TIME = now.toLocaleTimeString('pt-BR');
     processedVariables.CURRENT_YEAR = now.getFullYear().toString();
 
-    // 4. Substituir variáveis no subject e html_body
-    const processedSubject = replaceVariables(template.subject, processedVariables);
-    const processedBody = replaceVariables(template.html_body, processedVariables);
-
-    console.log("[send-triggered-email] Template found:", template.name);
-    console.log("[send-triggered-email] Sending to:", recipientEmail);
-
-    // 5. Buscar branding
-    let branding = template.email_branding;
-    if (!branding) {
-      const { data: defaultBranding } = await supabase
-        .from("email_branding")
-        .select("*")
-        .eq("is_default_customer", true)
-        .single();
-      branding = defaultBranding;
-    }
-
-    // 6. Buscar sender
-    let sender = template.email_senders;
-    if (!sender) {
-      const { data: defaultSender } = await supabase
-        .from("email_senders")
-        .select("*")
-        .eq("is_default", true)
-        .single();
-      sender = defaultSender;
-    }
-
-    // Valores de fallback
-    const fromName = sender?.from_name || branding?.name || "3Cliques";
-    const fromEmail = sender?.from_email || "contato@mail.3cliques.net";
-    const headerColor = branding?.header_color || "#1e3a5f";
-    const brandName = branding?.name || "3Cliques";
-    const footerText = branding?.footer_text || `${brandName} - Equipe de Suporte`;
-    const logoUrl = branding?.logo_url;
-
-    // 7. Construir HTML final com branding
-    const emailHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
-  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, ${headerColor} 0%, ${headerColor}dd 100%); padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-      ${logoUrl 
-        ? `<img src="${logoUrl}" alt="${brandName}" style="max-height: 40px; max-width: 200px;" />`
-        : `<h2 style="color: white; margin: 0; font-size: 24px;">${brandName}</h2>`
-      }
-    </div>
-    
-    <!-- Content -->
-    <div style="border: 1px solid #e5e7eb; border-top: none; padding: 30px; background: #ffffff; border-radius: 0 0 8px 8px;">
-      ${processedBody}
-    </div>
-    
-    <!-- Footer -->
-    <div style="margin-top: 20px; padding: 20px; text-align: center; background: ${headerColor}; border-radius: 8px;">
-      ${branding?.footer_logo_url 
-        ? `<img src="${branding.footer_logo_url}" alt="${brandName}" style="max-height: 30px; margin-bottom: 10px;" /><br/>`
-        : ''
-      }
-      <p style="color: #94a3b8; margin: 0; font-size: 12px;">
-        ${footerText}
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-    `;
-
-    // 8. Enviar email via Resend
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     if (!resendApiKey) {
       throw new Error('RESEND_API_KEY not configured');
     }
 
-    // Sanitizar nome removendo caracteres não-ASCII
     const sanitizeName = (name: string): string => {
       return name
         .normalize('NFD')
@@ -224,80 +143,151 @@ serve(async (req) => {
         .trim();
     };
 
-    const resendResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: `${sanitizeName(fromName)} <${fromEmail}>`,
-        to: [recipientEmail],
-        subject: processedSubject,
-        html: emailHtml,
-        tags: [
-          { name: 'trigger_type', value: trigger_type },
-          { name: 'template_id', value: template.id },
-          ...(contact_id ? [{ name: 'contact_id', value: contact_id }] : [])
-        ]
-      }),
-    });
+    // Process each matching template
+    const results = [];
+    for (const template of templates) {
+      try {
+        const processedSubject = replaceVariables(template.subject, processedVariables);
+        const processedBody = replaceVariables(template.html_body, processedVariables);
 
-    if (!resendResponse.ok) {
-      const errorData = await resendResponse.text();
-      console.error('[send-triggered-email] Resend API error:', errorData);
-      throw new Error(`Resend API error: ${errorData}`);
-    }
+        console.log("[send-triggered-email] Processing template:", template.name);
 
-    const resendData = await resendResponse.json();
-    console.log('[send-triggered-email] Email sent successfully:', resendData.id);
+        let branding = template.email_branding;
+        if (!branding) {
+          const { data: defaultBranding } = await supabase
+            .from("email_branding")
+            .select("*")
+            .eq("is_default_customer", true)
+            .single();
+          branding = defaultBranding;
+        }
 
-    // 9. Registrar tracking event
-    const { error: trackingError } = await supabase
-      .from('email_tracking_events')
-      .insert({
-        email_id: resendData.id,
-        customer_id: contact_id || null,
-        event_type: 'sent',
-        metadata: {
-          trigger_type,
+        let sender = template.email_senders;
+        if (!sender) {
+          const { data: defaultSender } = await supabase
+            .from("email_senders")
+            .select("*")
+            .eq("is_default", true)
+            .single();
+          sender = defaultSender;
+        }
+
+        const fromName = sender?.from_name || branding?.name || "3Cliques";
+        const fromEmail = sender?.from_email || "contato@mail.3cliques.net";
+        const headerColor = branding?.header_color || "#1e3a5f";
+        const brandName = branding?.name || "3Cliques";
+        const footerText = branding?.footer_text || `${brandName} - Equipe de Suporte`;
+        const logoUrl = branding?.logo_url;
+
+        const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, ${headerColor} 0%, ${headerColor}dd 100%); padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+      ${logoUrl 
+        ? `<img src="${logoUrl}" alt="${brandName}" style="max-height: 40px; max-width: 200px;" />`
+        : `<h2 style="color: white; margin: 0; font-size: 24px;">${brandName}</h2>`
+      }
+    </div>
+    <div style="border: 1px solid #e5e7eb; border-top: none; padding: 30px; background: #ffffff; border-radius: 0 0 8px 8px;">
+      ${processedBody}
+    </div>
+    <div style="margin-top: 20px; padding: 20px; text-align: center; background: ${headerColor}; border-radius: 8px;">
+      ${branding?.footer_logo_url 
+        ? `<img src="${branding.footer_logo_url}" alt="${brandName}" style="max-height: 30px; margin-bottom: 10px;" /><br/>`
+        : ''
+      }
+      <p style="color: #94a3b8; margin: 0; font-size: 12px;">${footerText}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+        const resendResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: `${sanitizeName(fromName)} <${fromEmail}>`,
+            to: [recipientEmail],
+            subject: processedSubject,
+            html: emailHtml,
+            tags: [
+              { name: 'trigger_type', value: trigger_type },
+              { name: 'template_id', value: template.id },
+              ...(contact_id ? [{ name: 'contact_id', value: contact_id }] : [])
+            ]
+          }),
+        });
+
+        if (!resendResponse.ok) {
+          const errorData = await resendResponse.text();
+          console.error('[send-triggered-email] Resend API error for template', template.id, ':', errorData);
+          results.push({ template_id: template.id, success: false, error: errorData });
+          continue;
+        }
+
+        const resendData = await resendResponse.json();
+        console.log('[send-triggered-email] Email sent successfully:', resendData.id);
+
+        await supabase
+          .from('email_tracking_events')
+          .insert({
+            email_id: resendData.id,
+            customer_id: contact_id || null,
+            event_type: 'sent',
+            metadata: {
+              trigger_type,
+              template_id: template.id,
+              template_name: template.name,
+              to: recipientEmail,
+              subject: processedSubject,
+              variables: Object.keys(processedVariables)
+            }
+          });
+
+        if (contact_id) {
+          await supabase
+            .from('interactions')
+            .insert({
+              customer_id: contact_id,
+              type: 'email_sent',
+              content: `Email automático enviado: ${processedSubject} (Trigger: ${trigger_type})`,
+              channel: 'email',
+              metadata: {
+                email_id: resendData.id,
+                trigger_type,
+                template_id: template.id,
+                template_name: template.name
+              }
+            });
+        }
+
+        results.push({
           template_id: template.id,
           template_name: template.name,
-          to: recipientEmail,
-          subject: processedSubject,
-          variables: Object.keys(processedVariables)
-        }
-      });
-
-    if (trackingError) {
-      console.warn('[send-triggered-email] Warning: Failed to insert tracking event:', trackingError);
-    }
-
-    // 10. Registrar interaction se tiver contact_id
-    if (contact_id) {
-      await supabase
-        .from('interactions')
-        .insert({
-          customer_id: contact_id,
-          type: 'email_sent',
-          content: `Email automático enviado: ${processedSubject} (Trigger: ${trigger_type})`,
-          channel: 'email',
-          metadata: {
-            email_id: resendData.id,
-            trigger_type,
-            template_id: template.id,
-            template_name: template.name
-          }
+          email_id: resendData.id,
+          success: true
         });
+      } catch (templateError: any) {
+        console.error('[send-triggered-email] Error processing template', template.id, ':', templateError);
+        results.push({ template_id: template.id, success: false, error: templateError.message });
+      }
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        email_id: resendData.id,
         trigger_type,
-        template_id: template.id,
-        template_name: template.name,
+        templates_processed: results.length,
+        results,
         recipient: recipientEmail
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

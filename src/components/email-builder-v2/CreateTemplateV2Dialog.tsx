@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -61,7 +62,7 @@ export function CreateTemplateV2Dialog({
     name: "",
     description: "",
     category: "transactional",
-    trigger_type: "manual",
+    trigger_types: [] as string[],
     default_subject: "",
     default_preheader: "",
     is_active: true,
@@ -82,7 +83,7 @@ export function CreateTemplateV2Dialog({
         name: formData.name,
         description: formData.description || null,
         category: formData.category,
-        trigger_type: formData.trigger_type,
+        trigger_type: formData.trigger_types[0] || "manual",
         default_subject: formData.default_subject || null,
         default_preheader: formData.default_preheader || null,
         is_active: formData.is_active,
@@ -101,7 +102,7 @@ export function CreateTemplateV2Dialog({
       name: "",
       description: "",
       category: "transactional",
-      trigger_type: "manual",
+      trigger_types: [],
       default_subject: "",
       default_preheader: "",
       is_active: true,
@@ -176,24 +177,30 @@ export function CreateTemplateV2Dialog({
             </div>
 
             <div className="space-y-2">
-              <Label>Gatilho</Label>
-              <Select
-                value={formData.trigger_type}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, trigger_type: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {triggerTypes.map((trigger) => (
-                    <SelectItem key={trigger.value} value={trigger.value}>
-                      {trigger.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Gatilhos</Label>
+              <div className="grid grid-cols-2 gap-2 rounded-lg border p-3 max-h-[180px] overflow-y-auto">
+                {triggerTypes.map((trigger) => {
+                  const isChecked = formData.trigger_types.includes(trigger.value);
+                  return (
+                    <label
+                      key={trigger.value}
+                      className="flex items-center gap-2 cursor-pointer rounded-md p-1.5 hover:bg-accent transition-colors text-sm"
+                    >
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setFormData({ ...formData, trigger_types: [...formData.trigger_types, trigger.value] });
+                          } else {
+                            setFormData({ ...formData, trigger_types: formData.trigger_types.filter(v => v !== trigger.value) });
+                          }
+                        }}
+                      />
+                      <span>{trigger.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </div>
 

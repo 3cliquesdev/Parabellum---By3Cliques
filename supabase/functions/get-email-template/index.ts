@@ -67,17 +67,31 @@ serve(async (req) => {
       if (error) throw new Error(`Template not found: ${error.message}`);
       template = data;
     } else if (trigger_type) {
-      const { data, error } = await supabase
+      // Try trigger_types array first, fallback to trigger_type column
+      const { data: arrayData, error: arrayError } = await supabase
         .from("email_templates")
         .select("*")
-        .eq("trigger_type", trigger_type)
+        .contains("trigger_types", [trigger_type])
         .eq("is_active", true)
+        .limit(1)
         .single();
       
-      if (error && error.code !== "PGRST116") {
-        console.log("[get-email-template] No template found for trigger:", trigger_type);
+      if (arrayData) {
+        template = arrayData;
+      } else {
+        // Fallback to legacy trigger_type column
+        const { data, error } = await supabase
+          .from("email_templates")
+          .select("*")
+          .eq("trigger_type", trigger_type)
+          .eq("is_active", true)
+          .single();
+        
+        if (error && error.code !== "PGRST116") {
+          console.log("[get-email-template] No template found for trigger:", trigger_type);
+        }
+        template = data;
       }
-      template = data;
     }
 
     // 2. Get branding (from template, or default)

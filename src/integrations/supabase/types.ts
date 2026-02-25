@@ -3495,6 +3495,7 @@ export type Database = {
           sender_id: string | null
           subject: string
           trigger_type: string | null
+          trigger_types: string[] | null
           updated_at: string
           variables: Json | null
         }
@@ -3511,6 +3512,7 @@ export type Database = {
           sender_id?: string | null
           subject: string
           trigger_type?: string | null
+          trigger_types?: string[] | null
           updated_at?: string
           variables?: Json | null
         }
@@ -3527,6 +3529,7 @@ export type Database = {
           sender_id?: string | null
           subject?: string
           trigger_type?: string | null
+          trigger_types?: string[] | null
           updated_at?: string
           variables?: Json | null
         }

@@ -8,6 +8,7 @@ type EmailTemplateUpdate = {
   subject?: string;
   html_body?: string;
   trigger_type?: string | null;
+  trigger_types?: string[] | null;
   variables?: any;
   is_active?: boolean;
   design_json?: any;

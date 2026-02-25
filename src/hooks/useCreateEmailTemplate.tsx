@@ -8,6 +8,7 @@ interface EmailTemplateInsert {
   subject: string;
   html_body: string;
   trigger_type?: string | null;
+  trigger_types?: string[] | null;
   is_active?: boolean;
   variables?: Json | null;
   design_json?: Json | null;
@@ -29,6 +30,7 @@ export function useCreateEmailTemplate() {
           subject: data.subject,
           html_body: data.html_body,
           trigger_type: data.trigger_type || null,
+          trigger_types: data.trigger_types || [],
           is_active: data.is_active ?? true,
           variables: data.variables || null,
           design_json: data.design_json || null,
