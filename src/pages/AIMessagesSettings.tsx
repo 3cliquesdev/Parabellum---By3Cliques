@@ -11,8 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, MessageSquare, Search, Info } from 'lucide-react';
+import { Plus, Edit2, Trash2, MessageSquare, Search, Info, Mail } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTicketEmailConfig } from '@/hooks/useTicketEmailConfig';
+import { useUserRole } from '@/hooks/useUserRole';
+import { hasFullAccess } from '@/config/roles';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AIMessageTemplate {
   id: string;
@@ -220,6 +224,10 @@ export default function AIMessagesSettings() {
     return CATEGORIES.find(c => c.value === category) || CATEGORIES[4];
   };
 
+  const { role } = useUserRole();
+  const { config: emailConfig, isLoading: emailConfigLoading, toggleConfig, isToggling } = useTicketEmailConfig();
+  const showEmailConfig = hasFullAccess(role);
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -234,6 +242,63 @@ export default function AIMessagesSettings() {
           Nova Mensagem
         </Button>
       </div>
+
+      {/* Email notification config card */}
+      {showEmailConfig && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-primary" />
+              <CardTitle className="text-base">Notificações por Email ao Cliente</CardTitle>
+            </div>
+            <CardDescription>
+              Controle quais eventos enviam email automático para o cliente
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {emailConfigLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-6 w-11 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="email-created" className="cursor-pointer">Ticket criado</Label>
+                  <Switch
+                    id="email-created"
+                    checked={emailConfig.created}
+                    onCheckedChange={(checked) => toggleConfig("ticket_email_customer_created", checked)}
+                    disabled={isToggling}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="email-resolved" className="cursor-pointer">Ticket resolvido</Label>
+                  <Switch
+                    id="email-resolved"
+                    checked={emailConfig.resolved}
+                    onCheckedChange={(checked) => toggleConfig("ticket_email_customer_resolved", checked)}
+                    disabled={isToggling}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="email-comment" className="cursor-pointer">Comentário público</Label>
+                  <Switch
+                    id="email-comment"
+                    checked={emailConfig.comment}
+                    onCheckedChange={(checked) => toggleConfig("ticket_email_customer_comment", checked)}
+                    disabled={isToggling}
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <div className="flex gap-4 items-center">

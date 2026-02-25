@@ -16,6 +16,39 @@ interface TicketEventPayload {
   channels?: string[];
 }
 
+// ---- Ticket email config cache (TTL 60s) ----
+interface TicketEmailCfg {
+  created: boolean;
+  resolved: boolean;
+  comment: boolean;
+}
+let _emailCfgCache: { value: TicketEmailCfg; expiresAt: number } | null = null;
+
+function parseBool(v: string | undefined | null, fallback = true): boolean {
+  if (v === undefined || v === null) return fallback;
+  return v !== 'false';
+}
+
+async function getTicketEmailConfig(sb: any): Promise<TicketEmailCfg> {
+  const now = Date.now();
+  if (_emailCfgCache && _emailCfgCache.expiresAt > now) return _emailCfgCache.value;
+
+  const { data } = await sb
+    .from('system_configurations')
+    .select('key, value')
+    .in('key', ['ticket_email_customer_created', 'ticket_email_customer_resolved', 'ticket_email_customer_comment']);
+
+  const result: TicketEmailCfg = {
+    created: parseBool(data?.find((c: any) => c.key === 'ticket_email_customer_created')?.value),
+    resolved: parseBool(data?.find((c: any) => c.key === 'ticket_email_customer_resolved')?.value),
+    comment: parseBool(data?.find((c: any) => c.key === 'ticket_email_customer_comment')?.value),
+  };
+
+  _emailCfgCache = { value: result, expiresAt: now + 60_000 };
+  return result;
+}
+// ---- End ticket email config cache ----
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -462,9 +495,12 @@ Deno.serve(async (req) => {
       emailsSent = emailResults.filter(r => r.status === 'fulfilled' && r.value === true).length;
     }
 
-    // 5b. Send email to CUSTOMER (contact) on ticket creation/resolved/closed
+    // 5b. Send email to CUSTOMER (contact) on ticket creation/resolved
     let customerEmailSent = false;
-    const customerEmailEvents = ['created', 'resolved'];
+    const emailCfg = await getTicketEmailConfig(supabase);
+    const customerEmailEvents: string[] = [];
+    if (emailCfg.created) customerEmailEvents.push('created');
+    if (emailCfg.resolved) customerEmailEvents.push('resolved');
     if (customerEmailEvents.includes(event_type) && ticket.customer_id && ticket_event_id) {
       try {
         // Fetch customer contact

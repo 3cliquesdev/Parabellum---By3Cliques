@@ -38,6 +38,22 @@ export function useCreateComment() {
       // Guard: only send email for public comments
       if (variables.is_internal) return;
 
+      // Check if comment email is enabled in system_configurations
+      try {
+        const { data: configRow } = await supabase
+          .from("system_configurations")
+          .select("value")
+          .eq("key", "ticket_email_customer_comment")
+          .maybeSingle();
+
+        if (configRow?.value === "false") {
+          console.log("[useCreateComment] Comment email disabled by config, skipping");
+          return;
+        }
+      } catch (cfgErr) {
+        console.warn("[useCreateComment] Failed to check email config, proceeding with send:", cfgErr);
+      }
+
       // Notify customer via email (isolated — failure doesn't affect comment)
       try {
         const { error: emailError } = await supabase.functions.invoke("send-ticket-email-reply", {
