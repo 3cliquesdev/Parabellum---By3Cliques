@@ -28,11 +28,41 @@ export function useCreateComment() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: async (data, variables) => {
+      // Invalidate queries and toast FIRST — comment is saved regardless of email
       queryClient.invalidateQueries({ queryKey: ["ticket-comments", variables.ticket_id] });
       toast({
         title: "Comentário adicionado",
       });
+
+      // Guard: only send email for public comments
+      if (variables.is_internal) return;
+
+      // Notify customer via email (isolated — failure doesn't affect comment)
+      try {
+        const { error: emailError } = await supabase.functions.invoke("send-ticket-email-reply", {
+          body: {
+            ticket_id: variables.ticket_id,
+            message_content: data.content,
+          },
+        });
+
+        if (emailError) {
+          console.error("[useCreateComment] Email notification failed:", emailError);
+          toast({
+            title: "Comentário salvo, mas email não enviado",
+            description: "O cliente não foi notificado por email.",
+            variant: "destructive",
+          });
+        }
+      } catch (err) {
+        console.error("[useCreateComment] Email notification error:", err);
+        toast({
+          title: "Comentário salvo, mas email não enviado",
+          description: "O cliente não foi notificado por email.",
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: Error) => {
       toast({

@@ -464,7 +464,7 @@ Deno.serve(async (req) => {
 
     // 5b. Send email to CUSTOMER (contact) on ticket creation/resolved/closed
     let customerEmailSent = false;
-    const customerEmailEvents = ['created', 'resolved', 'closed'];
+    const customerEmailEvents = ['created', 'resolved'];
     if (customerEmailEvents.includes(event_type) && ticket.customer_id && ticket_event_id) {
       try {
         // Fetch customer contact
