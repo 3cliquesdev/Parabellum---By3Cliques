@@ -1,49 +1,49 @@
 
 
-# Email de Confirmação para o Cliente ao Criar Ticket
+# Plano Ajustado: Email ao Cliente — Resolved + Comentários Públicos
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Diagnóstico
+## Mudanças
 
-O sistema **não envia email para o cliente** quando um ticket é criado. A Edge Function `notify-ticket-event` notifica apenas **stakeholders internos** (agentes, admins) — usuários com conta no sistema. O cliente (tabela `contacts`) não é incluído na lista de destinatários.
+### 1. `supabase/functions/notify-ticket-event/index.ts` — Remover `closed`
 
-| O que existe | Para quem |
-|---|---|
-| `notify-ticket-event` → email + in_app | Agentes/admins internos |
-| `send-ticket-email-reply` | Cliente (mas só para respostas manuais) |
-| Email ao criar ticket para o cliente | **NÃO EXISTE** |
+Linha 467: alterar de `['created', 'resolved', 'closed']` para `['created', 'resolved']`.
 
-## Solução
+### 2. `src/hooks/useCreateComment.tsx` — Notificar cliente em comentário público
 
-Adicionar ao fluxo de `notify-ticket-event`, no evento `created`, um **email de confirmação para o cliente** (contato) quando `customer_id` estiver presente e o contato tiver email.
+Após o insert bem-sucedido (no `onSuccess`), adicionar lógica:
 
-### Mudança única: `supabase/functions/notify-ticket-event/index.ts`
+1. **Guarda `is_internal`**: se `variables.is_internal === true`, não faz nada
+2. **Invocar `send-ticket-email-reply`** com `{ ticket_id: variables.ticket_id, message_content: data.content }`
+   - A função `send-ticket-email-reply` já exige `ticket_id` + `message_content` (validação nas linhas 41-43)
+   - Ela já busca o `customer_id` do ticket, o email do contato, aplica branding, e faz threading
+   - Não é possível passar apenas `comment_id` porque a função não suporta — ela espera `message_content` como texto
+3. **Tratamento de erro isolado**: envolver em `try/catch` — se falhar, exibir toast informativo ("Comentário salvo, mas email não enviado"), sem impedir o fluxo principal
+4. Mover a invalidação de queries e o toast de sucesso para **antes** da tentativa de email, garantindo que o comentário é tratado como salvo independentemente
 
-Após o bloco de emails internos (linha ~490), adicionar:
+### 3. Template — Não criar
 
-1. Verificar se `ticket.customer_id` existe
-2. Buscar email do contato na tabela `contacts`
-3. Se tiver email, buscar branding configurado (`email_branding` + `email_senders`)
-4. Enviar email via Resend com template de confirmação: "Seu ticket #XXX foi criado com sucesso"
-5. Dedupe via `ticket_notification_sends` com channel `email_customer`
-
-### Conteúdo do email para o cliente
-
-- Assunto: `Ticket #XXX criado — {subject}`
-- Corpo: saudação com nome do cliente, número do ticket, assunto, e instrução de que será atendido em breve
-- Branding: usa o `email_branding` e `email_senders` já configurados (mesmo visual do `send-ticket-email-reply`)
-- Link para acompanhar: `/my-tickets` (se o portal estiver ativo)
+`send-ticket-email-reply` já tem template próprio com branding. Sem duplicação.
 
 ## Arquivos modificados
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/notify-ticket-event/index.ts` | Adicionar envio de email de confirmação ao cliente no evento `created` |
+| `supabase/functions/notify-ticket-event/index.ts` | Linha 467: remover `'closed'` do array |
+| `src/hooks/useCreateComment.tsx` | `onSuccess`: invocar `send-ticket-email-reply` para comentários públicos com error handling isolado |
+
+## Critérios de aceite
+
+| Critério | Status |
+|---|---|
+| Ticket closed não envia email ao cliente | Coberto pela remoção de `closed` |
+| Ticket resolved envia email ao cliente | Já funciona (mantido) |
+| Comentário público → cliente recebe email | Coberto pela invocação no `onSuccess` |
+| Comentário interno → não envia | Coberto pelo guard `is_internal` |
+| Falha no email não impede salvar comentário | Coberto pelo `try/catch` isolado |
 
 ## Impacto
-- **Zero regressão**: emails internos continuam iguais
-- **Upgrade**: cliente recebe confirmação automática por email ao ter ticket aberto
-- **Segurança**: usa Resend API já configurada, sem expor dados sensíveis
-- **Deduplicação**: protegido contra envio duplicado via `ticket_notification_sends`
+- Zero regressão: comentários salvam normalmente, emails internos inalterados
+- Upgrade: cliente passa a ser notificado de comentários públicos
 
