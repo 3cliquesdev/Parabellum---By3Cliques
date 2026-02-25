@@ -296,14 +296,19 @@ function ConversationListItemComponent({
           </div>
         </div>
 
-        {/* Linha 2: Preview da última mensagem */}
-        {lastMessagePreview && (
-          <p className="text-xs text-muted-foreground truncate mb-1.5">
-            {lastMessage?.sender_type === 'contact' ? '' : '→ '}
-            {lastMessagePreview}
-            {lastMessage?.content?.length > 50 ? '...' : ''}
-          </p>
-        )}
+        {/* Linha 2: Protocol ID + Preview da última mensagem */}
+        <p className="text-xs text-muted-foreground truncate mb-1.5">
+          <span className="font-mono text-[10px] text-muted-foreground/70 mr-1">
+            #{conversation.id.slice(0, 8).toUpperCase()}
+          </span>
+          {lastMessagePreview && (
+            <>
+              {lastMessage?.sender_type === 'contact' ? '' : '→ '}
+              {lastMessagePreview}
+              {lastMessage?.content?.length > 50 ? '...' : ''}
+            </>
+          )}
+        </p>
 
         {/* Linha 3: Badges */}
         <div className="flex items-center gap-1.5 flex-wrap">

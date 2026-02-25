@@ -16,6 +16,13 @@ function isEmail(term: string): boolean {
   return term.includes("@") && term.includes(".");
 }
 
+// Hex string de 6-8 chars (short_id / protocolo)
+const SHORT_ID_REGEX = /^#?[0-9a-f]{6,8}$/i;
+
+function isShortId(term: string): boolean {
+  return SHORT_ID_REGEX.test(term.trim());
+}
+
 function isLikelyPhone(term: string): boolean {
   // Se contém 6+ dígitos, provavelmente é telefone
   const digits = term.replace(/\D/g, "");
@@ -85,8 +92,23 @@ export function useInboxSearch(searchTerm: string) {
       let data: InboxViewItem[] | null = null;
       let error: any = null;
 
+      // 🔍 ESTRATÉGIA 0: Busca por short_id (protocolo #XXXXXXXX)
+      if (isShortId(searchLower)) {
+        const cleanId = searchLower.replace(/^#/, "").toLowerCase();
+        console.log("[useInboxSearch] Modo: Short ID (protocolo)", cleanId);
+        
+        const result = await supabase
+          .from("inbox_view")
+          .select("*")
+          .ilike("conversation_id", `${cleanId}%`)
+          .order("last_message_at", { ascending: false })
+          .limit(50);
+        
+        data = result.data;
+        error = result.error;
+      }
       // 🔍 ESTRATÉGIA 1: Busca por UUID (conversation_id ou contact_id)
-      if (isUUID(searchLower)) {
+      else if (isUUID(searchLower)) {
         console.log("[useInboxSearch] Modo: UUID");
         
         // Tentar encontrar por conversation_id primeiro

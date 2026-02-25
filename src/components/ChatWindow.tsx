@@ -473,6 +473,18 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                     <p className="font-medium text-slate-900 dark:text-zinc-100 truncate">
                       {contact?.first_name} {contact?.last_name}
                     </p>
+                    <Badge 
+                      variant="outline" 
+                      className="text-[10px] px-1.5 py-0 h-5 font-mono cursor-pointer shrink-0 select-all"
+                      title="Clique para copiar protocolo"
+                      onClick={() => {
+                        const protocolId = `#${conversation.id.slice(0, 8).toUpperCase()}`;
+                        navigator.clipboard.writeText(protocolId);
+                        toast({ title: "Protocolo copiado!", description: protocolId });
+                      }}
+                    >
+                      #{conversation.id.slice(0, 8).toUpperCase()}
+                    </Badge>
                     <span className="text-xs text-slate-500 dark:text-zinc-400 truncate hidden sm:inline">
                       {contact?.email || contact?.phone}
                     </span>
