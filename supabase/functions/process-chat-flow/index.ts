@@ -686,8 +686,92 @@ serve(async (req) => {
 
       console.log('[process-chat-flow] ✅ Manual flow started:', newState.id, 'at node:', contentNode.id);
 
+      // === DELIVERY: Entregar mensagem ao cliente no manual trigger ===
+      const { data: convForDelivery } = await supabaseClient
+        .from('conversations')
+        .select('channel, contact_id, whatsapp_meta_instance_id, whatsapp_instance_id, whatsapp_provider')
+        .eq('id', conversationId)
+        .maybeSingle();
+
+      let deliveryPhone: string | null = null;
+      let deliveryContactId: string | null = convForDelivery?.contact_id || null;
+      if (convForDelivery?.contact_id) {
+        const { data: contactData } = await supabaseClient
+          .from('contacts')
+          .select('phone, whatsapp_id')
+          .eq('id', convForDelivery.contact_id)
+          .maybeSingle();
+        // Priorizar whatsapp_id numérico sobre phone
+        const waId = contactData?.whatsapp_id;
+        if (waId && !waId.includes('@lid')) {
+          const cleaned = waId.replace(/[^0-9]/g, '');
+          if (cleaned.length >= 10) deliveryPhone = cleaned;
+        }
+        if (!deliveryPhone) {
+          deliveryPhone = contactData?.phone?.replace(/\D/g, '') || null;
+        }
+      }
+
+      // Helper para formatar mensagem e entregar (DB + WhatsApp)
+      async function deliverManualMessage(messageText: string | null, optionsList?: any[] | null) {
+        if (!messageText && (!optionsList || optionsList.length === 0)) return;
+        
+        // Montar texto final (com opções numeradas se existirem)
+        let finalText = messageText || '';
+        if (optionsList && optionsList.length > 0) {
+          const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+          const optionsText = optionsList.map((opt: any, i: number) => 
+            `${emojis[i] || `${i+1}.`} ${opt.label}`
+          ).join('\n');
+          finalText = finalText ? `${finalText}\n\n${optionsText}` : optionsText;
+        }
+        
+        if (!finalText.trim()) return;
+
+        console.log('[process-chat-flow] 📤 Delivering manual trigger message:', { 
+          channel: convForDelivery?.channel, 
+          hasPhone: !!deliveryPhone,
+          textLength: finalText.length 
+        });
+
+        // 1. Salvar na tabela messages
+        await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: finalText,
+          sender_type: 'user',
+          sender_id: null,
+          is_ai_generated: true,
+          channel: convForDelivery?.channel || 'web_chat',
+          status: 'pending'
+        });
+
+        // 2. Se WhatsApp, enviar via send-meta-whatsapp
+        if (convForDelivery?.channel === 'whatsapp' && deliveryPhone) {
+          if (convForDelivery?.whatsapp_meta_instance_id) {
+            try {
+              await supabaseClient.functions.invoke('send-meta-whatsapp', {
+                body: {
+                  instance_id: convForDelivery.whatsapp_meta_instance_id,
+                  phone_number: deliveryPhone,
+                  message: finalText,
+                  conversation_id: conversationId,
+                  skip_db_save: true,
+                  is_bot_message: true
+                }
+              });
+              console.log('[process-chat-flow] ✅ Manual message sent via Meta WhatsApp');
+            } catch (waErr) {
+              console.error('[process-chat-flow] ❌ Error sending via Meta WhatsApp:', waErr);
+            }
+          } else {
+            console.warn('[process-chat-flow] ⚠️ No WhatsApp Meta instance for delivery');
+          }
+        }
+      }
+
       // Montar resposta baseada no tipo do nó de conteúdo alcançado
       if (contentNode.type === 'ai_response') {
+        // ai_response: não entregar mensagem aqui, a IA vai processar
         return new Response(
           JSON.stringify({
             useAI: true,
@@ -703,6 +787,8 @@ serve(async (req) => {
       }
 
       if (contentNode.type === 'transfer') {
+        // Entregar mensagem de transfer se houver
+        await deliverManualMessage(contentNode.data?.message || null);
         return new Response(
           JSON.stringify({
             useAI: false,
@@ -723,6 +809,9 @@ serve(async (req) => {
       const options = contentNode.type === 'ask_options' 
         ? (contentNode.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value }))
         : null;
+
+      // 🆕 Entregar mensagem + opções ao cliente
+      await deliverManualMessage(startMessage, options);
 
       return new Response(
         JSON.stringify({

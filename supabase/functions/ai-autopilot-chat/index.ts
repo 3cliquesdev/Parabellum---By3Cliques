@@ -7368,18 +7368,63 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         console.log('[ai-autopilot-chat] 📝 Falha registrada no log:', failureLog?.id);
         
         // 2. Enviar mensagem de fallback ao cliente
-        await supabaseClient
+        const fallbackMessage = "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano!";
+        const { data: fallbackMsgData } = await supabaseClient
           .from('messages')
           .insert({
             conversation_id: conversationId,
-            content: "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano!",
+            content: fallbackMessage,
             sender_type: 'user',
             sender_id: null,
             is_ai_generated: true,
-            channel: responseChannel
-          });
+            channel: responseChannel,
+            status: 'pending'
+          })
+          .select('id')
+          .single();
         
-        console.log('[ai-autopilot-chat] 💬 Mensagem de fallback enviada ao cliente');
+        console.log('[ai-autopilot-chat] 💬 Mensagem de fallback salva no banco:', fallbackMsgData?.id);
+
+        // 2b. Se WhatsApp, enviar via send-meta-whatsapp
+        if (responseChannel === 'whatsapp' && contact?.phone && conversation) {
+          try {
+            const whatsappResult = await getWhatsAppInstanceWithProvider(
+              supabaseClient,
+              conversationId,
+              conversation.whatsapp_instance_id,
+              conversation.whatsapp_provider,
+              conversation.whatsapp_meta_instance_id
+            );
+
+            if (whatsappResult && whatsappResult.provider === 'meta') {
+              const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+              
+              await supabaseClient.functions.invoke('send-meta-whatsapp', {
+                body: {
+                  instance_id: whatsappResult.instance.id,
+                  phone_number: targetNumber,
+                  message: fallbackMessage,
+                  conversation_id: conversationId,
+                  skip_db_save: true,
+                  is_bot_message: true
+                }
+              });
+
+              if (fallbackMsgData?.id) {
+                await supabaseClient
+                  .from('messages')
+                  .update({ status: 'sent' })
+                  .eq('id', fallbackMsgData.id);
+              }
+
+              console.log('[ai-autopilot-chat] ✅ Fallback enviado via Meta WhatsApp');
+            } else {
+              console.warn('[ai-autopilot-chat] ⚠️ Sem instância Meta para enviar fallback');
+            }
+          } catch (waFallbackErr) {
+            console.error('[ai-autopilot-chat] ❌ Erro ao enviar fallback via WhatsApp:', waFallbackErr);
+          }
+        }
         
         // 3. Trigger handoff automático (copilot mode)
         await supabaseClient
