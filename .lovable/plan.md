@@ -1,97 +1,59 @@
 
 
-# Plano Refinado: "Não Respondidas" — Fix Trigger + Backfill + Frontend
+# Plano: Transferência Marca "Não Respondida" para Novo Agente
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Diagnóstico Confirmado
+## Diagnóstico
 
-A função `update_inbox_view_on_message_insert()` (linha 137 da migration `20260122`) faz:
+A RPC `transfer_conversation_secure` (migration `20260130143125`) atualiza `conversations` (assigned_to, department, ai_mode) mas **não toca no `inbox_view.last_sender_type`**. O trigger de inbox só dispara em INSERT de `messages`, não em UPDATE de `conversations`. Resultado: conversa transferida mantém `last_sender_type = 'user'` e o novo agente não a vê em "Não respondidas".
 
-```sql
-last_sender_type = NEW.sender_type
-```
+## Solução
 
-Isso significa que mensagens `system` (ex: "Atendente X entrou na conversa") sobrescrevem `last_sender_type`, tirando a conversa do filtro "Não respondidas" (`last_sender_type = 'contact'`).
+Uma migration SQL que recria `transfer_conversation_secure` adicionando um UPDATE no `inbox_view` após o UPDATE em `conversations`.
 
-Os `sender_type` válidos no enum são: `user`, `contact`, `system`.
+### Alteração na RPC (única mudança)
 
-## Implementação em 3 Fases
-
-### Fase A — Trigger (fix definitivo)
-
-**Migration SQL** — Recriar `update_inbox_view_on_message_insert()` com guarda:
+Após a linha 69 (UPDATE conversations), adicionar:
 
 ```sql
-last_sender_type = CASE
-  WHEN NEW.sender_type IN ('contact', 'user') THEN NEW.sender_type::TEXT
-  ELSE last_sender_type  -- mantém valor anterior para 'system' e qualquer outro
-END
+-- Reset inbox_view para que novo agente veja como "não respondida"
+UPDATE inbox_view
+SET assigned_to = p_to_user_id,
+    department = p_to_department_id,
+    last_sender_type = 'contact'
+WHERE conversation_id = p_conversation_id;
 ```
 
-Mesma lógica aplicada no upsert da função `update_inbox_view_on_message()` (a função principal que faz INSERT ... ON CONFLICT):
+O reset para `'contact'` é correto porque:
+- Se já era `'contact'`, é idempotente
+- Se era `'user'` (agente anterior respondeu), o novo agente ainda não respondeu — deve ver como pendente
+- Não depende de mensagem `system` — UPDATE direto, atômico dentro da mesma transação
 
-```sql
-last_sender_type = CASE
-  WHEN EXCLUDED.last_sender_type IN ('contact', 'user') THEN EXCLUDED.last_sender_type
-  ELSE inbox_view.last_sender_type
-END
-```
-
-Isso garante que **apenas mensagens reais** (cliente ou agente) alteram o `last_sender_type`. Mensagens de sistema, notas internas, ou qualquer tipo futuro são ignoradas.
-
-### Fase B — Backfill de dados legados
-
-**Migration SQL** — Corrigir conversas que ficaram "presas" com `last_sender_type = 'system'`:
-
-```sql
-UPDATE inbox_view iv
-SET last_sender_type = sub.real_sender_type
-FROM (
-  SELECT DISTINCT ON (m.conversation_id)
-    m.conversation_id,
-    m.sender_type::TEXT AS real_sender_type
-  FROM messages m
-  WHERE m.sender_type IN ('contact', 'user')
-  ORDER BY m.conversation_id, m.created_at DESC
-) sub
-WHERE sub.conversation_id = iv.conversation_id
-  AND iv.last_sender_type = 'system';
-```
-
-Isso pega a última mensagem real (não-system) de cada conversa e restaura o `last_sender_type` correto.
-
-### Fase C — Frontend e Counts (filtro puro, sem fallback)
-
-Com o trigger corrigido (Fase A) e os dados legados limpos (Fase B), **não precisamos do fallback `IN ('contact', 'system')`**. O filtro permanece limpo:
-
-- `useMyNotRespondedInboxItems.tsx`: mantém `.eq("last_sender_type", "contact")` — sem mudança
-- `get-inbox-counts/index.ts`: mantém `.eq("last_sender_type", "contact")` — sem mudança
-
-**Nenhuma alteração no frontend ou na edge function é necessária.** O fix é 100% no banco.
-
-## Arquivos a Alterar
+### Arquivo
 
 | Arquivo | Mudança |
 |---|---|
-| **Migration SQL (única)** | Recriar ambas as funções de trigger com guarda `IN ('contact','user')` + backfill de legados |
+| **Migration SQL (nova)** | `CREATE OR REPLACE FUNCTION transfer_conversation_secure` com UPDATE adicional no `inbox_view` |
+
+A função completa será idêntica à versão atual (migration `20260130143125`), com a adição do bloco acima entre o step 5 (UPDATE conversations) e o step 6 (audit log).
+
+## Fluxo Corrigido
+
+```text
+1. Cliente envia msg         → last_sender_type = 'contact'  ✅ "Não respondida" para A
+2. Agente A responde          → last_sender_type = 'user'    ✅ sai de "Não respondidas"
+3. A transfere para B         → last_sender_type = 'contact' ✅ "Não respondida" para B
+4. B responde                 → last_sender_type = 'user'    ✅ sai de "Não respondidas"
+```
 
 ## Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — triggers existentes apenas ganham guarda, sem remoção de lógica |
+| Regressão zero | Sim — apenas adiciona UPDATE, sem remover lógica existente |
 | Kill Switch | Não afetado |
-| Fluxos existentes | Preservados |
-| Badge/counts consistência | Sim — critério `contact` permanece consistente entre hook e edge function |
-| Dados legados | Corrigidos pelo backfill na mesma migration |
-
-## Fluxo Corrigido
-
-```text
-1. Cliente envia msg        → last_sender_type = 'contact'     ✅ aparece em "Não respondidas"
-2. Sistema: "Agente entrou" → last_sender_type = 'contact'     ✅ permanece (trigger ignora 'system')
-3. Agente responde          → last_sender_type = 'user'        ✅ sai de "Não respondidas"
-4. Cliente responde de novo → last_sender_type = 'contact'     ✅ volta para "Não respondidas"
-```
+| Trigger guard (system) | Preservado — este UPDATE é direto, não via mensagem |
+| Badge/counts | Consistente — critério `contact` mantido |
+| Atomicidade | Sim — mesmo bloco transacional da RPC |
 
