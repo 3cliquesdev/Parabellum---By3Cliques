@@ -1,69 +1,100 @@
 
 
-# Plano: Criar Fluxo Rascunho com IA Persistente para Suporte
+# Plano: Upgrade Anti-Alucinação + Telemetria de IA
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Estratégia
+## Diagnóstico — O que JÁ existe vs O que FALTA
 
-Criar um **novo fluxo rascunho** (`is_active: false`) independente do Master Flow, com a seguinte estrutura simplificada para teste:
+| Requisito | Status | Detalhe |
+|---|---|---|
+| Modo Persistente (loop IA) | ✅ Existe | `ai_persistent`, `max_ai_interactions`, `exit_keywords` — motor funcional |
+| Score de Confiança | ✅ Existe | `calculateConfidenceScore` com thresholds dinâmicos (direct/cautious/handoff) |
+| Modo Estrito Anti-Alucinação | ✅ Existe | `strictMode` filtra artigos < 80% similaridade |
+| Prompt "não invente" | ✅ Existe | Regras no prompt: "NUNCA invente", "cite a fonte" |
+| Fontes RAG configuráveis | ✅ Existe | `allowedSources` por nó (KB, CRM, tracking, sandbox) |
+| Kill Switch | ✅ Existe | `ai_global_enabled = false` bloqueia tudo |
+| Tabela `ai_events` | ⚠️ Estrutura existe | Tabela criada mas **NUNCA recebe dados** — zero logging |
+| Logging de confiança | ❌ Falta | `ConfidenceLog` é definido como interface mas nunca é persistido |
+| Tag `resolved_by_ai` | ❌ Falta | Nenhum marcador de resolução pela IA |
+| Motivo de transferência | ❌ Falta | Quando transfere, não registra se foi por keyword, limite, sem base, ou pedido |
+| Artigos utilizados na resposta | ❌ Falta | IA usa artigos mas não registra quais foram citados |
+| Métricas de loop persistente | ❌ Falta | Contador existe no estado mas não é logado em `ai_events` |
+
+## Solução — 3 Upgrades Cirúrgicos
+
+### Upgrade 1: Logging em `ai_events` (Telemetria Real)
+
+Após cada resposta da IA no `ai-autopilot-chat`, inserir registro em `ai_events` com:
 
 ```text
-Start
-  |
-  v
-Boas-vindas (message)
-  "Oi! Sou a IA de suporte da 3 Cliques.
-   Posso te ajudar com duvidas sobre sistema,
-   acesso, pedidos e mais. Me conta o que precisa!"
-  |
-  v
-IA Suporte (ai_response - PERSISTENTE)
-  - ai_persistent: true
-  - max_ai_interactions: 10
-  - exit_keywords: ["atendente","humano","transferir","falar com alguem"]
-  - use_knowledge_base: true
-  - use_customer_data: true
-  - use_tracking: true
-  - persona: Helper
-  - objective: "Resolver duvidas de suporte do cliente sobre sistema, acesso, pedidos e assuntos gerais antes de transferir para humano"
-  - max_sentences: 4
-  - forbid_options: true
-  - fallback: "Nao consegui resolver essa questao. Vou te transferir para um especialista!"
-  |
-  v
-Transfer Suporte (transfer)
-  - department: Suporte Sistema (fd4fcc90...)
+entity_type: 'conversation'
+entity_id: conversation_id
+event_type: 'ai_response' | 'ai_transfer' | 'ai_fallback'
+output_json: {
+  confidence_score: 0.85,
+  confidence_action: 'direct' | 'cautious' | 'handoff',
+  articles_used: ['titulo-1', 'titulo-2'],
+  articles_count: 2,
+  interaction_number: 3,        // qual interação no loop
+  max_interactions: 10,
+  exit_reason: null | 'keyword' | 'max_reached' | 'no_kb' | 'user_request',
+  query_preview: 'como rastrear meu pedido...',
+  persistent_mode: true
+}
+tokens_used: (do response)
+latency_ms: (tempo da chamada)
+department_id: (da conversa)
 ```
 
-## Como testar
+**Onde:** No bloco principal de resposta do `ai-autopilot-chat` (~linhas 7050-7150), após gerar a resposta e antes de retornar.
 
-1. Abrir uma conversa no inbox
-2. Clicar no botao de teste (frasco)
-3. Selecionar o rascunho na lista
-4. O fluxo envia a mensagem de boas-vindas ao cliente
-5. O cliente responde, e a IA tenta resolver usando a KB
-6. Se o cliente pedir "atendente" ou atingir 10 interacoes, transfere automaticamente
+### Upgrade 2: Motivo de Transferência Estruturado
 
-## Detalhamento tecnico
+Quando o motor persistente (`process-chat-flow`) decide sair do loop, registrar o motivo:
 
-### Acao unica: INSERT na tabela `chat_flows`
+| Motivo | Quando |
+|---|---|
+| `exit_keyword` | Cliente disse "atendente", "humano", etc. |
+| `max_interactions` | Atingiu `max_ai_interactions` |
+| `low_confidence` | Score abaixo do mínimo (modo estrito) |
+| `user_frustration` | Padrão de frustração detectado (futuro) |
 
-Inserir um novo registro com `is_active: false` (rascunho) contendo o `flow_definition` JSON com 4 nos e 3 edges:
+**Onde:** No bloco de saída do loop persistente em `process-chat-flow` (~linhas 963-985), inserir em `ai_events` com `event_type: 'ai_transfer'`.
 
-| No | Tipo | Funcao |
-|---|---|---|
-| `start` | `input` | Inicio do fluxo |
-| `welcome_msg` | `message` | Mensagem de boas-vindas |
-| `ai_suporte` | `ai_response` | IA persistente (loop ate resolver ou escalar) |
-| `transfer_suporte` | `transfer` | Transfere para Suporte Sistema |
+### Upgrade 3: Tag de Resolução (`resolved_by_ai`)
 
-### Impacto
+Quando a conversa é encerrada e a IA foi a última a interagir (sem transferência), marcar na conversa:
+
+- Adicionar coluna `resolved_by` na tabela `conversations` (valores: `ai`, `human`, `mixed`, `null`)
+- Preencher automaticamente no fechamento
+
+**Implementação:** Migration SQL para adicionar a coluna + lógica no fluxo de fechamento.
+
+## Arquivos Alterados
+
+| Arquivo | Mudança |
+|---|---|
+| `supabase/functions/ai-autopilot-chat/index.ts` | Inserir log em `ai_events` após cada resposta |
+| `supabase/functions/process-chat-flow/index.ts` | Log de transferência com motivo no bloco persistente |
+| Migration SQL | `ALTER TABLE conversations ADD COLUMN resolved_by TEXT` |
+
+## Impacto
 
 | Regra | Status |
 |---|---|
-| Regressao zero | Sim — e um INSERT novo, nao altera o fluxo principal |
-| Kill Switch | Preservado — motor valida kill switch antes de executar |
-| Fluxo principal | Intocado — rascunho so executa via trigger manual |
-| Rollback | Deletar o registro do rascunho |
+| Regressão zero | Sim — são INSERTs de logging, não alteram lógica existente |
+| Performance | Mínimo — 1 INSERT extra por interação IA (async) |
+| Kill Switch | Não afetado |
+| Rollback | Remover os INSERTs; DROP COLUMN `resolved_by` |
+
+## O que NÃO precisa de upgrade (já funciona)
+
+- Score de confiança com thresholds dinâmicos ✅
+- Modo estrito anti-alucinação ✅
+- Prompt com regras de "não inventar" ✅
+- Citação de fontes no prompt ✅
+- Fontes RAG configuráveis por nó ✅
+- Modo persistente com exit_keywords ✅
+- Auto-traversal de nós ✅
 
