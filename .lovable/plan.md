@@ -1,59 +1,73 @@
 
 
-# Plano: Transferência Marca "Não Respondida" para Novo Agente
+# Plano: Permitir Seleção de Fluxo no Dropdown de Teste
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
 ## Diagnóstico
 
-A RPC `transfer_conversation_secure` (migration `20260130143125`) atualiza `conversations` (assigned_to, department, ai_mode) mas **não toca no `inbox_view.last_sender_type`**. O trigger de inbox só dispara em INSERT de `messages`, não em UPDATE de `conversations`. Resultado: conversa transferida mantém `last_sender_type = 'user'` e o novo agente não a vê em "Não respondidas".
+O problema está na linha 119 e 141 do `TestModeDropdown.tsx`:
+
+```tsx
+disabled={!!activeFlow || isStarting}
+```
+
+Quando existe um fluxo ativo na conversa (status `in_progress`, `active` ou `waiting_input`), **todos os itens de fluxo ficam desabilitados**. O usuário vê os fluxos listados mas não consegue clicar em nenhum.
+
+Na screenshot, o badge "Ativo" com X confirma que há um fluxo em execução, o que desativa todos os itens do dropdown.
+
+Além disso, o `handleStartFlow` faz uma verificação redundante na linha 39:
+```tsx
+if (activeFlow) {
+  toast.error("Já existe um fluxo em execução...");
+  return;
+}
+```
 
 ## Solução
 
-Uma migration SQL que recria `transfer_conversation_secure` adicionando um UPDATE no `inbox_view` após o UPDATE em `conversations`.
+Alterar o comportamento para **cancelar automaticamente o fluxo ativo** antes de iniciar o novo, em vez de bloquear a seleção. Isso é seguro porque:
 
-### Alteração na RPC (única mudança)
+- O contexto é de teste manual (ação intencional do agente/admin)
+- O cancelamento já existe via `cancelFlow` no hook `useActiveFlowState`
+- É uma operação atômica (update status para `cancelled`)
 
-Após a linha 69 (UPDATE conversations), adicionar:
+### Alterações no arquivo `src/components/inbox/TestModeDropdown.tsx`
 
-```sql
--- Reset inbox_view para que novo agente veja como "não respondida"
-UPDATE inbox_view
-SET assigned_to = p_to_user_id,
-    department = p_to_department_id,
-    last_sender_type = 'contact'
-WHERE conversation_id = p_conversation_id;
+1. **Importar `cancelFlow`** do hook `useActiveFlowState`
+2. **Remover `disabled={!!activeFlow}`** dos DropdownMenuItems de fluxo
+3. **Substituir o bloqueio** no `handleStartFlow` por cancelamento automático:
+
+```tsx
+// Antes (bloqueia):
+if (activeFlow) {
+  toast.error("Já existe um fluxo em execução...");
+  return;
+}
+
+// Depois (cancela e continua):
+if (activeFlow) {
+  await cancelFlow(activeFlow.stateId);
+  await new Promise((r) => setTimeout(r, 500)); // aguarda propagação
+}
 ```
 
-O reset para `'contact'` é correto porque:
-- Se já era `'contact'`, é idempotente
-- Se era `'user'` (agente anterior respondeu), o novo agente ainda não respondeu — deve ver como pendente
-- Não depende de mensagem `system` — UPDATE direto, atômico dentro da mesma transação
+4. **Manter `disabled={isStarting}`** para evitar cliques duplos durante execução
 
-### Arquivo
+### Resumo de mudanças
 
-| Arquivo | Mudança |
+| Local | Mudança |
 |---|---|
-| **Migration SQL (nova)** | `CREATE OR REPLACE FUNCTION transfer_conversation_secure` com UPDATE adicional no `inbox_view` |
+| `TestModeDropdown.tsx` linha 32 | Extrair `cancelFlow` do hook |
+| `TestModeDropdown.tsx` linhas 38-42 | Substituir bloqueio por auto-cancel |
+| `TestModeDropdown.tsx` linhas 119, 141 | Remover `!!activeFlow` do `disabled` |
 
-A função completa será idêntica à versão atual (migration `20260130143125`), com a adição do bloco acima entre o step 5 (UPDATE conversations) e o step 6 (audit log).
-
-## Fluxo Corrigido
-
-```text
-1. Cliente envia msg         → last_sender_type = 'contact'  ✅ "Não respondida" para A
-2. Agente A responde          → last_sender_type = 'user'    ✅ sai de "Não respondidas"
-3. A transfere para B         → last_sender_type = 'contact' ✅ "Não respondida" para B
-4. B responde                 → last_sender_type = 'user'    ✅ sai de "Não respondidas"
-```
-
-## Impacto
+### Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — apenas adiciona UPDATE, sem remover lógica existente |
+| Regressão zero | Sim -- apenas altera comportamento de teste manual |
 | Kill Switch | Não afetado |
-| Trigger guard (system) | Preservado — este UPDATE é direto, não via mensagem |
-| Badge/counts | Consistente — critério `contact` mantido |
-| Atomicidade | Sim — mesmo bloco transacional da RPC |
+| Proteção de simultaneidade | Preservada -- cancela antes de iniciar |
+| Governança de rascunhos | Preservada -- mesmas regras de permissão |
 
