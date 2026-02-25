@@ -1,26 +1,45 @@
 
-# Correção dos 5 registros de email_sends
 
-## Dados confirmados
+# Múltiplos Gatilhos por Template de Email
 
-Os 5 registros sem `template_id` foram confirmados via query:
+## Problema Atual
+Cada template de email aceita apenas **um** `trigger_type` (string). Se o usuário quer que o mesmo template dispare em "churned" **e** "refunded", precisa duplicar o template.
 
-| ID | Subject | template_id atual |
-|---|---|---|
-| c811c272-... | (Teste) Feedback sobre o cancelamento... | NULL |
-| 8c26d805-... | (Teste) Feedback sobre o cancelamento... | NULL |
-| fb1d226f-... | (Teste) Feedback sobre o cancelamento... | NULL |
-| 3f7736a1-... | (Teste) Feedback sobre o cancelamento... | NULL |
-| 9a405753-... | (Teste) Feedback sobre o cancelamento... | NULL |
+## Solução
 
-## Correção
+### 1. Migração do Banco de Dados
+- Adicionar coluna `trigger_types text[]` na tabela `email_templates`
+- Migrar dados existentes: copiar valor de `trigger_type` para `trigger_types` como array de 1 elemento
+- Manter `trigger_type` temporariamente para compatibilidade (pode ser removido depois)
 
-Criar uma Edge Function temporária (`fix-email-sends-template`) que executa um UPDATE nos 5 registros, setando `template_id = 'a3bd24d3-1ee0-47de-baf2-ff323d397eb0'`.
+### 2. Frontend — Multi-select com Checkboxes
+- No `EmailTemplateDialog.tsx`: substituir o `<Select>` único por uma lista de checkboxes (ou dropdown multi-select) onde o usuário marca múltiplos gatilhos
+- No `CreateTemplateV2Dialog.tsx`: mesma mudança
+- Salvar como array `trigger_types` no banco
 
-Após execução e confirmação, a function será removida.
+### 3. Backend — Edge Functions
+- **`send-triggered-email`**: alterar query de `.eq("trigger_type", trigger_type)` para `.contains("trigger_types", [trigger_type])` — busca templates cujo array contém o gatilho disparado
+- **`get-email-template`**: mesma alteração
+- **`kiwify-webhook`**: sem mudança (já passa o trigger como string, o backend resolve)
+
+### 4. Hooks e Types
+- Atualizar `useEmailTemplates`, `useCreateEmailTemplate`, `useUpdateEmailTemplate` para trabalhar com `trigger_types: string[]`
+- Atualizar tipos em `emailBuilderV2.ts`
 
 ## Impacto
+- **Zero regressão**: dados existentes migrados automaticamente
+- **Backward-compatible**: templates com 1 gatilho continuam funcionando
+- **Importante**: quando um evento dispara, pode encontrar **múltiplos templates** ativos — o `send-triggered-email` precisará usar `.select()` sem `.single()` e iterar para enviar todos
 
-- Zero regressão: apenas atualiza 5 registros específicos por ID
-- Métricas do template "Cancelamento de assinatura" passarão a mostrar 5 envios corretamente
-- Nenhuma tabela ou schema alterado
+## Arquivos Modificados
+| Arquivo | Mudança |
+|---|---|
+| Migration SQL | Nova coluna + migração de dados |
+| `src/components/EmailTemplateDialog.tsx` | Multi-select de gatilhos |
+| `src/components/email-builder-v2/CreateTemplateV2Dialog.tsx` | Multi-select de gatilhos |
+| `supabase/functions/send-triggered-email/index.ts` | Query com `contains` |
+| `supabase/functions/get-email-template/index.ts` | Query com `contains` |
+| `src/hooks/useEmailTemplates.tsx` | Suporte a `trigger_types[]` |
+| `src/hooks/useCreateEmailTemplate.tsx` | Suporte a `trigger_types[]` |
+| `src/hooks/useUpdateEmailTemplate.tsx` | Suporte a `trigger_types[]` |
+
