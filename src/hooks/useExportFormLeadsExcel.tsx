@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
+import { DetailedRow } from "./useFormLeadsConversionReport";
 
 interface DailyRow {
   date: string;
@@ -10,8 +11,19 @@ interface DailyRow {
   revenue: number;
 }
 
+const statusLabels: Record<string, string> = {
+  won: "Ganho",
+  lost: "Perdido",
+  open: "Aberto",
+};
+
 export function useExportFormLeadsExcel() {
-  const exportToExcel = (dailyData: DailyRow[], kpis: { totalLeads: number; totalWon: number; totalLost: number; conversionRate: number; totalRevenue: number }) => {
+  const exportToExcel = (
+    dailyData: DailyRow[],
+    kpis: { totalLeads: number; totalWon: number; totalLost: number; conversionRate: number; totalRevenue: number },
+    detailedData?: DetailedRow[]
+  ) => {
+    // Sheet 1: Resumo Diário
     const rows = dailyData.map((d) => ({
       Data: d.date,
       "Leads Criados": d.leads,
@@ -30,14 +42,31 @@ export function useExportFormLeadsExcel() {
       "Receita (R$)": kpis.totalRevenue,
     });
 
-    const ws = XLSX.utils.json_to_sheet(rows);
+    const ws1 = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Leads vs Conversão");
+    XLSX.utils.book_append_sheet(wb, ws1, "Resumo Diário");
 
-    const colWidths = [
+    ws1["!cols"] = [
       { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 18 }, { wch: 14 },
     ];
-    ws["!cols"] = colWidths;
+
+    // Sheet 2: Detalhado
+    if (detailedData && detailedData.length > 0) {
+      const detailedRows = detailedData.map((d) => ({
+        "Data Preenchimento": d.submissionDate ? format(new Date(d.submissionDate), "dd/MM/yyyy HH:mm") : "—",
+        Contato: d.contactName,
+        Formulário: d.formName,
+        "Status Deal": d.dealStatus ? (statusLabels[d.dealStatus] ?? d.dealStatus) : "Sem deal",
+        "Data Fechamento": d.closingDate ? format(new Date(d.closingDate), "dd/MM/yyyy HH:mm") : "—",
+        "Valor (R$)": d.dealValue ?? 0,
+      }));
+
+      const ws2 = XLSX.utils.json_to_sheet(detailedRows);
+      ws2["!cols"] = [
+        { wch: 20 }, { wch: 25 }, { wch: 20 }, { wch: 14 }, { wch: 20 }, { wch: 14 },
+      ];
+      XLSX.utils.book_append_sheet(wb, ws2, "Detalhado");
+    }
 
     const fileName = `leads-vs-conversao-${format(new Date(), "yyyy-MM-dd")}.xlsx`;
     XLSX.writeFile(wb, fileName);

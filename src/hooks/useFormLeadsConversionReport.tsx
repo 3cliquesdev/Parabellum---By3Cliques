@@ -20,6 +20,15 @@ interface KPIs {
   totalRevenue: number;
 }
 
+export interface DetailedRow {
+  submissionDate: string;
+  closingDate: string | null;
+  contactName: string;
+  formName: string;
+  dealStatus: string | null;
+  dealValue: number | null;
+}
+
 export function useFormLeadsConversionReport(dateRange: DateRange | undefined, formId?: string) {
   const startDate = dateRange?.from?.toISOString() ?? "";
   const endDate = dateRange?.to?.toISOString() ?? "";
@@ -72,7 +81,42 @@ export function useFormLeadsConversionReport(dateRange: DateRange | undefined, f
     enabled: !!startDate && !!endDate,
   });
 
-  const isLoading = leadsQuery.isLoading || wonQuery.isLoading || lostQuery.isLoading;
+  // Detailed query: form_submissions with contact and form name
+  const detailedSubmissionsQuery = useQuery({
+    queryKey: ["form-leads-report", "detailed-submissions", startDate, endDate, formId],
+    queryFn: async () => {
+      let query = supabase
+        .from("form_submissions")
+        .select(`
+          id, created_at, form_id, contact_id,
+          contacts!form_submissions_contact_id_fkey(id, first_name, last_name),
+          forms!form_submissions_form_id_fkey(name)
+        `)
+        .gte("created_at", startDate)
+        .lte("created_at", endDate);
+      if (formId) query = query.eq("form_id", formId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!startDate && !!endDate,
+  });
+
+  // Deals for detailed view (all statuses)
+  const detailedDealsQuery = useQuery({
+    queryKey: ["form-leads-report", "detailed-deals", startDate, endDate],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("deals")
+        .select("id, contact_id, status, closed_at, value")
+        .eq("lead_source", "formulario");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!startDate && !!endDate,
+  });
+
+  const isLoading = leadsQuery.isLoading || wonQuery.isLoading || lostQuery.isLoading || detailedSubmissionsQuery.isLoading || detailedDealsQuery.isLoading;
 
   const { dailyData, kpis } = (() => {
     if (!dateRange?.from || !dateRange?.to || !leadsQuery.data || !wonQuery.data || !lostQuery.data) {
@@ -137,5 +181,41 @@ export function useFormLeadsConversionReport(dateRange: DateRange | undefined, f
     };
   })();
 
-  return { dailyData, kpis, isLoading };
+  // Build detailed data
+  const detailedData: DetailedRow[] = (() => {
+    if (!detailedSubmissionsQuery.data || !detailedDealsQuery.data) return [];
+
+    // Group deals by contact_id
+    const dealsByContact: Record<string, { status: string; closed_at: string | null; value: number | null }> = {};
+    for (const deal of detailedDealsQuery.data) {
+      if (deal.contact_id) {
+        // Keep the most recent deal per contact
+        if (!dealsByContact[deal.contact_id] || (deal.closed_at && (!dealsByContact[deal.contact_id].closed_at || deal.closed_at > dealsByContact[deal.contact_id].closed_at))) {
+          dealsByContact[deal.contact_id] = {
+            status: deal.status,
+            closed_at: deal.closed_at,
+            value: deal.value != null ? Number(deal.value) : null,
+          };
+        }
+      }
+    }
+
+    return detailedSubmissionsQuery.data.map((sub: any) => {
+      const contact = sub.contacts;
+      const form = sub.forms;
+      const contactId = sub.contact_id;
+      const deal = contactId ? dealsByContact[contactId] : null;
+
+      return {
+        submissionDate: sub.created_at ?? "",
+        closingDate: deal?.closed_at ?? null,
+        contactName: contact ? `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim() : "—",
+        formName: form?.name ?? "—",
+        dealStatus: deal?.status ?? null,
+        dealValue: deal?.value ?? null,
+      };
+    }).sort((a: DetailedRow, b: DetailedRow) => b.submissionDate.localeCompare(a.submissionDate));
+  })();
+
+  return { dailyData, kpis, detailedData, isLoading };
 }
