@@ -75,7 +75,7 @@ export default function FormLeadsConversionReport() {
           </Button>
           <h1 className="text-2xl font-bold">Leads Formulário vs Conversão</h1>
         </div>
-        <Button onClick={() => exportToExcel(dailyData, kpis, detailedData)} disabled={isLoading || dailyData.length === 0}>
+        <Button onClick={() => exportToExcel(dailyData, kpis, detailedData)} disabled={isLoading || (dailyData.length === 0 && detailedData.length === 0)}>
           <Download className="h-4 w-4 mr-2" /> Exportar Excel
         </Button>
       </div>

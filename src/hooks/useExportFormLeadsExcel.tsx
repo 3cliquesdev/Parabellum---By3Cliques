@@ -50,23 +50,23 @@ export function useExportFormLeadsExcel() {
       { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 18 }, { wch: 14 },
     ];
 
-    // Sheet 2: Detalhado
-    if (detailedData && detailedData.length > 0) {
-      const detailedRows = detailedData.map((d) => ({
-        "Data Preenchimento": d.submissionDate ? format(new Date(d.submissionDate), "dd/MM/yyyy HH:mm") : "—",
-        Contato: d.contactName,
-        Formulário: d.formName,
-        "Status Deal": d.dealStatus ? (statusLabels[d.dealStatus] ?? d.dealStatus) : "Sem deal",
-        "Data Fechamento": d.closingDate ? format(new Date(d.closingDate), "dd/MM/yyyy HH:mm") : "—",
-        "Valor (R$)": d.dealValue ?? 0,
-      }));
+    // Sheet 2: Detalhado (sempre presente)
+    const detailedRows = (detailedData ?? []).map((d) => ({
+      "Data Preenchimento": d.submissionDate ? format(new Date(d.submissionDate), "dd/MM/yyyy HH:mm") : "—",
+      Contato: d.contactName,
+      Formulário: d.formName,
+      "Status Deal": d.dealStatus ? (statusLabels[d.dealStatus] ?? d.dealStatus) : "Sem deal",
+      "Data Fechamento": d.closingDate ? format(new Date(d.closingDate), "dd/MM/yyyy HH:mm") : "—",
+      "Valor (R$)": d.dealValue ?? 0,
+    }));
 
-      const ws2 = XLSX.utils.json_to_sheet(detailedRows);
-      ws2["!cols"] = [
-        { wch: 20 }, { wch: 25 }, { wch: 20 }, { wch: 14 }, { wch: 20 }, { wch: 14 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws2, "Detalhado");
-    }
+    const ws2 = detailedRows.length > 0
+      ? XLSX.utils.json_to_sheet(detailedRows)
+      : XLSX.utils.aoa_to_sheet([["Data Preenchimento", "Contato", "Formulário", "Status Deal", "Data Fechamento", "Valor (R$)"]]);
+    ws2["!cols"] = [
+      { wch: 20 }, { wch: 25 }, { wch: 20 }, { wch: 14 }, { wch: 20 }, { wch: 14 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws2, "Detalhado");
 
     const fileName = `leads-vs-conversao-${format(new Date(), "yyyy-MM-dd")}.xlsx`;
     XLSX.writeFile(wb, fileName);
