@@ -133,7 +133,7 @@ export default function ChatFlows() {
       ) : flows && flows.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {flows.map((flow) => (
-            <Card key={flow.id} className={`group hover:shadow-lg transition-shadow ${flow.is_master_flow ? 'ring-2 ring-yellow-500/50 bg-yellow-500/5' : ''}`}>
+            <Card key={flow.id} className={`group hover:shadow-lg transition-shadow cursor-pointer ${flow.is_master_flow ? 'ring-2 ring-yellow-500/50 bg-yellow-500/5' : ''}`} onClick={() => handleEditFlow(flow)}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
@@ -157,7 +157,7 @@ export default function ChatFlows() {
                     )}
                   </div>
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>

@@ -42,14 +42,16 @@ export function useChatFlow(id: string | null) {
       if (!id) return null;
       const { data, error } = await supabase
         .from("chat_flows")
-        .select("*")
+        .select("id, name, description, triggers, trigger_keywords, department_id, support_channel_id, flow_definition, is_active, is_master_flow, priority, created_by, created_at, updated_at")
         .eq("id", id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      return data as ChatFlow;
+      return data as ChatFlow | null;
     },
     enabled: !!id,
+    retry: 2,
+    retryDelay: 1000,
   });
 }
 

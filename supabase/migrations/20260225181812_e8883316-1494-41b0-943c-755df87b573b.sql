@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "support_manager_can_manage_chat_flows" ON chat_flows;
