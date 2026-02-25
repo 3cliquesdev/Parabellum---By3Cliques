@@ -462,9 +462,10 @@ Deno.serve(async (req) => {
       emailsSent = emailResults.filter(r => r.status === 'fulfilled' && r.value === true).length;
     }
 
-    // 5b. Send confirmation email to CUSTOMER (contact) on ticket creation
+    // 5b. Send email to CUSTOMER (contact) on ticket creation/resolved/closed
     let customerEmailSent = false;
-    if (event_type === 'created' && ticket.customer_id && ticket_event_id) {
+    const customerEmailEvents = ['created', 'resolved', 'closed'];
+    if (customerEmailEvents.includes(event_type) && ticket.customer_id && ticket_event_id) {
       try {
         // Fetch customer contact
         const { data: customer } = await supabase
@@ -522,6 +523,36 @@ Deno.serve(async (req) => {
             const appUrl = Deno.env.get("APP_URL") || Deno.env.get("SITE_URL") || "";
             const portalUrl = appUrl ? `${appUrl}/my-tickets` : "";
 
+            // Fetch configurable template from ai_message_templates
+            const templateKey = `ticket_customer_${event_type}`;
+            let templateContent = "";
+            const { data: tpl } = await supabase
+              .from("ai_message_templates")
+              .select("content, is_active")
+              .eq("key", templateKey)
+              .single();
+
+            if (tpl && tpl.is_active && tpl.content) {
+              // Replace variables in template
+              templateContent = tpl.content
+                .replace(/\{\{nome_cliente\}\}/gi, customerName)
+                .replace(/\{\{ticket_number\}\}/gi, ticketNumber)
+                .replace(/\{\{assunto\}\}/gi, ticket.subject)
+                .replace(/\{\{nome_empresa\}\}/gi, brandName)
+                .replace(/\{\{link_portal\}\}/gi, portalUrl || "")
+                .replace(/\n/g, '<br/>');
+              console.log(`[notify-ticket-event] Using configurable template: ${templateKey}`);
+            } else {
+              // Fallback default content
+              const defaults: Record<string, string> = {
+                created: `Seu ticket <strong>#${ticketNumber}</strong> foi criado com sucesso.<br/><br/>Assunto: <strong>${ticket.subject}</strong><br/><br/>Nossa equipe já está ciente e você será atendido em breve.`,
+                resolved: `Seu ticket <strong>#${ticketNumber}</strong> foi resolvido.<br/><br/>Assunto: <strong>${ticket.subject}</strong><br/><br/>Se o problema persistir, responda a este email.`,
+                closed: `Seu ticket <strong>#${ticketNumber}</strong> foi fechado.<br/><br/>Assunto: <strong>${ticket.subject}</strong><br/><br/>Caso precise de mais ajuda, não hesite em nos contatar.`,
+              };
+              templateContent = defaults[event_type] || defaults.created;
+              console.log(`[notify-ticket-event] Using default template for ${event_type}`);
+            }
+
             const customerEmailHtml = `
 <!DOCTYPE html>
 <html>
@@ -533,15 +564,7 @@ Deno.serve(async (req) => {
     </div>
     <div style="border:1px solid #e5e7eb;border-top:none;padding:30px;border-radius:0 0 8px 8px;">
       <p style="margin:0 0 20px 0;">Olá <strong>${customerName}</strong>,</p>
-      <p style="margin:0 0 20px 0;">
-        Seu ticket <strong>#${ticketNumber}</strong> foi criado com sucesso.
-      </p>
-      <div style="background:#f9fafb;padding:16px;border-left:4px solid #2563eb;margin:20px 0;">
-        <p style="margin:0;font-weight:bold;">${ticket.subject}</p>
-      </div>
-      <p style="margin:0 0 20px 0;">
-        Nossa equipe já está ciente e você será atendido em breve. Fique tranquilo!
-      </p>
+      <div style="margin:0 0 20px 0;">${templateContent}</div>
       ${portalUrl ? `<p style="margin:20px 0;"><a href="${portalUrl}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">Acompanhar meus tickets</a></p>` : ''}
       <p style="margin:20px 0 0 0;font-size:14px;color:#6b7280;">
         Se precisar, responda a este email e sua mensagem será adicionada ao ticket.
@@ -556,6 +579,13 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
 
+            const subjectMap: Record<string, string> = {
+              created: `Ticket #${ticketNumber} criado — ${ticket.subject}`,
+              resolved: `Ticket #${ticketNumber} resolvido — ${ticket.subject}`,
+              closed: `Ticket #${ticketNumber} fechado — ${ticket.subject}`,
+            };
+            const emailSubjectCustomer = subjectMap[event_type] || subjectMap.created;
+
             const resendApiKey = Deno.env.get("RESEND_API_KEY");
             if (resendApiKey) {
               const resendRes = await fetch("https://api.resend.com/emails", {
@@ -567,42 +597,41 @@ Deno.serve(async (req) => {
                 body: JSON.stringify({
                   from: `${fromName} <${fromEmail}>`,
                   to: [customer.email],
-                  subject: `Ticket #${ticketNumber} criado — ${ticket.subject}`,
+                  subject: emailSubjectCustomer,
                   html: customerEmailHtml,
                   tags: [
                     { name: "ticket_id", value: ticket_id },
-                    { name: "type", value: "customer_confirmation" },
+                    { name: "type", value: `customer_${event_type}` },
                   ],
                 }),
               });
 
               if (resendRes.ok) {
                 customerEmailSent = true;
-                console.log(`[notify-ticket-event] Customer confirmation email sent to ${customer.email}`);
+                console.log(`[notify-ticket-event] Customer ${event_type} email sent to ${customer.email}`);
               } else {
                 const errText = await resendRes.text();
                 console.error(`[notify-ticket-event] Resend error for customer email:`, errText);
               }
             } else {
-              // Fallback: try send-email function
               try {
                 await supabase.functions.invoke("send-email", {
                   body: {
                     to: customer.email,
                     to_name: customerName,
-                    subject: `Ticket #${ticketNumber} criado — ${ticket.subject}`,
+                    subject: emailSubjectCustomer,
                     html: customerEmailHtml,
                   },
                 });
                 customerEmailSent = true;
-                console.log(`[notify-ticket-event] Customer confirmation sent via send-email to ${customer.email}`);
+                console.log(`[notify-ticket-event] Customer ${event_type} sent via send-email to ${customer.email}`);
               } catch (fallbackErr) {
                 console.error(`[notify-ticket-event] Fallback send-email failed:`, fallbackErr);
               }
             }
           }
         } else {
-          console.log(`[notify-ticket-event] Customer ${ticket.customer_id} has no email, skipping confirmation`);
+          console.log(`[notify-ticket-event] Customer ${ticket.customer_id} has no email, skipping`);
         }
       } catch (custErr) {
         console.error(`[notify-ticket-event] Error sending customer email:`, custErr);

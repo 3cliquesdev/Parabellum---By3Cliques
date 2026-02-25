@@ -32,6 +32,7 @@ const CATEGORIES = [
   { value: 'verificacao', label: 'Verificação', color: 'bg-blue-500' },
   { value: 'saudacao', label: 'Saudação', color: 'bg-purple-500' },
   { value: 'suporte', label: 'Suporte', color: 'bg-orange-500' },
+  { value: 'ticket_cliente', label: 'Ticket (Cliente)', color: 'bg-cyan-500' },
   { value: 'geral', label: 'Geral', color: 'bg-muted-foreground' },
 ];
 
