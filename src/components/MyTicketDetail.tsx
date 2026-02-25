@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -22,7 +23,10 @@ import {
   Paperclip,
   Download,
   ArrowRightLeft,
-  Image as ImageIcon
+  Image as ImageIcon,
+  X,
+  FileText,
+  Film
 } from "lucide-react";
 
 interface TicketAttachment {
@@ -143,69 +147,120 @@ export default function MyTicketDetail({
 }: MyTicketDetailProps) {
   const [newComment, setNewComment] = useState("");
   const [sending, setSending] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'video/mp4', 'video/quicktime'];
+  const MAX_SIZE = 10 * 1024 * 1024;
 
   const status = statusConfig[ticket.status] || statusConfig.open;
   const ticketNumber = ticket.ticket_number || ticket.id.substring(0, 8).toUpperCase();
   const isClosed = ticket.status === "closed";
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const valid: File[] = [];
+    for (const file of files) {
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        toast({ title: "Tipo não permitido", description: `${file.name}: use JPG, PNG, WEBP, GIF, PDF, MP4 ou MOV.`, variant: "destructive" });
+        continue;
+      }
+      if (file.size > MAX_SIZE) {
+        toast({ title: "Arquivo grande demais", description: `${file.name}: máximo 10MB.`, variant: "destructive" });
+        continue;
+      }
+      valid.push(file);
+    }
+    setSelectedFiles(prev => [...prev, ...valid]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadFiles = async (): Promise<TicketAttachment[]> => {
+    const attachments: TicketAttachment[] = [];
+    for (let i = 0; i < selectedFiles.length; i++) {
+      setUploadProgress(Math.round(((i) / selectedFiles.length) * 100));
+      const file = selectedFiles[i];
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const res = await fetch(`https://${projectId}.supabase.co/functions/v1/upload-ticket-attachment`, {
+        method: 'POST',
+        headers: { 'apikey': anonKey },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+        throw new Error(err.error || `Falha ao enviar ${file.name}`);
+      }
+
+      const result = await res.json();
+      attachments.push({ url: result.url, name: result.name, type: result.type, size: result.size });
+    }
+    setUploadProgress(100);
+    return attachments;
+  };
+
   const handleSendComment = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() && selectedFiles.length === 0) return;
     
-    // Validação crítica do contactId
     if (!contactId) {
       console.error('[MyTicketDetail] contactId está vazio ou undefined');
-      toast({
-        title: "Erro de identificação",
-        description: "Sua sessão expirou. Por favor, volte e identifique-se novamente.",
-        variant: "destructive"
-      });
+      toast({ title: "Erro de identificação", description: "Sua sessão expirou. Por favor, volte e identifique-se novamente.", variant: "destructive" });
       return;
     }
     
     setSending(true);
     try {
+      let attachments: TicketAttachment[] = [];
+
+      // Upload files first
+      if (selectedFiles.length > 0) {
+        setUploading(true);
+        attachments = await uploadFiles();
+        setUploading(false);
+      }
+
+      const content = newComment.trim() || (attachments.length > 0 ? `📎 ${attachments.length} anexo(s) enviado(s)` : '');
+
       console.log('[MyTicketDetail] Enviando comentário:', {
         ticket_id: ticket.id,
         contact_id: contactId,
-        content_length: newComment.trim().length
+        content_length: content.length,
+        attachments_count: attachments.length,
       });
 
       const { data, error } = await supabase.functions.invoke('add-customer-comment', {
         body: {
           ticket_id: ticket.id,
           contact_id: contactId,
-          content: newComment.trim()
+          content,
+          attachments: attachments.length > 0 ? attachments : undefined,
         }
       });
 
-      console.log('[MyTicketDetail] Resposta da edge function:', { data, error });
-
-      if (error) {
-        console.error('[MyTicketDetail] Erro de invocação:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       if (data?.error) {
-        // Tratar erros específicos da edge function
-        if (data.error === 'Unauthorized') {
-          throw new Error('Você não tem permissão para comentar neste ticket.');
-        }
-        if (data.error === 'Ticket not found') {
-          throw new Error('Ticket não encontrado.');
-        }
-        if (data.error === 'Cannot add comment to closed ticket') {
-          throw new Error('Não é possível comentar em um ticket fechado.');
-        }
+        if (data.error === 'Unauthorized') throw new Error('Você não tem permissão para comentar neste ticket.');
+        if (data.error === 'Ticket not found') throw new Error('Ticket não encontrado.');
+        if (data.error === 'Cannot add comment to closed ticket') throw new Error('Não é possível comentar em um ticket fechado.');
         throw new Error(data.error);
       }
 
       if (data?.success) {
         setNewComment("");
-        toast({
-          title: "Resposta enviada",
-          description: "Sua mensagem foi adicionada ao ticket.",
-        });
+        setSelectedFiles([]);
+        toast({ title: "Resposta enviada", description: "Sua mensagem foi adicionada ao ticket." });
         onCommentAdded();
       } else {
         throw new Error("Resposta inesperada do servidor");
@@ -219,7 +274,15 @@ export default function MyTicketDetail({
       });
     } finally {
       setSending(false);
+      setUploading(false);
+      setUploadProgress(0);
     }
+  };
+
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return <ImageIcon className="w-4 h-4" />;
+    if (type.startsWith('video/')) return <Film className="w-4 h-4" />;
+    return <FileText className="w-4 h-4" />;
   };
 
   return (
@@ -418,10 +481,64 @@ export default function MyTicketDetail({
                 className="mb-3 min-h-[100px]"
                 disabled={sending}
               />
-              <div className="flex justify-end">
+
+              {/* Selected files preview */}
+              {selectedFiles.length > 0 && (
+                <div className="mb-3 space-y-2">
+                  {selectedFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-muted rounded-lg p-2 text-sm">
+                      {getFileIcon(file.type)}
+                      <span className="flex-1 truncate">{file.name}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {(file.size / 1024 / 1024).toFixed(1)}MB
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => removeFile(idx)}
+                        disabled={sending}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload progress */}
+              {uploading && (
+                <div className="mb-3 space-y-1">
+                  <Progress value={uploadProgress} className="h-2" />
+                  <p className="text-xs text-muted-foreground">Enviando arquivos... {uploadProgress}%</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,video/mp4,video/quicktime"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending}
+                  >
+                    <Paperclip className="w-4 h-4 mr-1" />
+                    Anexar
+                  </Button>
+                </div>
                 <Button 
                   onClick={handleSendComment} 
-                  disabled={!newComment.trim() || sending}
+                  disabled={(!newComment.trim() && selectedFiles.length === 0) || sending}
                 >
                   {sending ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

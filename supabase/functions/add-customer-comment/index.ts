@@ -13,12 +13,13 @@ serve(async (req) => {
   }
 
   try {
-    const { ticket_id, contact_id, content } = await req.json();
+    const { ticket_id, contact_id, content, attachments } = await req.json();
 
     console.log('[add-customer-comment] Dados recebidos:', {
       ticket_id: ticket_id || 'VAZIO',
       contact_id: contact_id || 'VAZIO',
-      content_length: content?.length || 0
+      content_length: content?.length || 0,
+      attachments_count: attachments?.length || 0
     });
 
     if (!ticket_id || !contact_id || !content) {
@@ -75,16 +76,21 @@ serve(async (req) => {
       );
     }
 
-    // Insert the comment
+    // Insert the comment (with optional attachments)
+    const insertData: Record<string, unknown> = {
+      ticket_id,
+      content,
+      is_internal: false,
+      source: 'customer',
+      created_by: null,
+    };
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      insertData.attachments = attachments;
+    }
+
     const { data: comment, error: commentError } = await supabase
       .from('ticket_comments')
-      .insert({
-        ticket_id,
-        content,
-        is_internal: false,
-        source: 'customer',
-        created_by: null // Customer comments don't have a profile ID
-      })
+      .insert(insertData)
       .select()
       .single();
 
