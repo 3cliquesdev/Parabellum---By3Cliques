@@ -1,3 +1,4 @@
+// process-chat-flow v2.1 - fix unique_active_flow cleanup
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/ai-config-cache.ts";
@@ -663,21 +664,19 @@ serve(async (req) => {
         ? 'waiting_input'
         : 'active';
 
-      // Limpar estado ativo anterior (evita unique_active_flow constraint)
-      await supabaseClient
+      // Limpar TODOS os estados anteriores deste fluxo nesta conversa (evita unique_active_flow constraint)
+      const { error: deleteError } = await supabaseClient
         .from('chat_flow_states')
         .delete()
         .eq('conversation_id', conversationId)
         .eq('flow_id', flow.id)
-        .eq('status', 'active');
+        .in('status', ['active', 'waiting_input', 'in_progress']);
 
-      // Também limpar estados waiting_input do mesmo fluxo
-      await supabaseClient
-        .from('chat_flow_states')
-        .delete()
-        .eq('conversation_id', conversationId)
-        .eq('flow_id', flow.id)
-        .eq('status', 'waiting_input');
+      if (deleteError) {
+        console.error('[process-chat-flow] Error cleaning up old states:', deleteError);
+      } else {
+        console.log('[process-chat-flow] 🧹 Cleaned up old flow states for manual trigger');
+      }
 
       // Criar estado do fluxo no nó de conteúdo (não no start)
       const { data: newState, error: createError } = await supabaseClient
