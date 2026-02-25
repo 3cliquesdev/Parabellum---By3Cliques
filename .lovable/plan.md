@@ -1,57 +1,85 @@
 
 
-# Plano: ID de Protocolo Visível no Inbox
+# Plano: Entregar Mensagens do Fluxo Manual via WhatsApp
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
 ## Diagnóstico
 
-O `short_id` já existe nos relatórios (derivado como `LEFT(conversation_id::TEXT, 8)`), mas **nunca aparece na interface do inbox** — nem na lista de conversas (`ConversationListItem`), nem no header do chat (`ChatWindow`).
+O problema está dividido em duas partes:
 
-A `inbox_view` (tabela materializada) também não possui coluna `short_id`. Os relatórios geram o valor on-the-fly via SQL.
+### Parte 1 — Manual Trigger não entrega mensagens
+Quando o `TestModeDropdown` inicia um fluxo manualmente:
+1. Chama `process-chat-flow` com `manualTrigger: true`
+2. A edge function retorna a resposta do fluxo (mensagem + opções) no JSON
+3. **O frontend ignora o `data` retornado** — só verifica `error`
+4. **A edge function não salva no banco nem envia para WhatsApp**
+5. Resultado: o fluxo inicia, o estado é criado, mas nenhuma mensagem chega ao cliente
+
+### Parte 2 — Fallback da IA só salva no banco
+A mensagem "Desculpe, estou com dificuldades técnicas" (linha 7375 do `ai-autopilot-chat`) é inserida na tabela `messages` mas **nunca invoca `send-meta-whatsapp`** para entregá-la no WhatsApp do cliente.
 
 ## Solução
 
-Abordagem em 2 camadas:
+### 1. `process-chat-flow/index.ts` — Entregar mensagem no manual trigger
 
-### 1. Banco de dados — Adicionar `short_id` na `inbox_view`
+Após criar o estado do fluxo (linha 687), antes de retornar, o motor deve:
+- Buscar os dados da conversa (channel, contact, whatsapp instance)
+- Se o canal for WhatsApp: salvar a mensagem na tabela `messages` E invocar `send-meta-whatsapp`
+- Se for web_chat: apenas salvar na tabela `messages` (o realtime cuida da entrega)
 
-Criar migration que adiciona coluna `short_id TEXT` à tabela `inbox_view`, populada automaticamente com `LEFT(conversation_id::TEXT, 8)` (primeiros 8 caracteres do UUID, formato `#a1e17320`).
+Trecho a adicionar após linha 687, antes dos `if (contentNode.type === ...)`:
 
-Também criar trigger para popular automaticamente em novos INSERTs e UPDATEs, garantindo que o valor esteja sempre presente.
+```typescript
+// === DELIVERY: Entregar mensagem ao cliente no manual trigger ===
+const { data: convForDelivery } = await supabaseClient
+  .from('conversations')
+  .select('channel, contact_id, whatsapp_meta_instance_id')
+  .eq('id', conversationId)
+  .maybeSingle();
 
-### 2. Frontend — Exibir protocolo em 2 locais
+let deliveryPhone: string | null = null;
+if (convForDelivery?.contact_id) {
+  const { data: contactData } = await supabaseClient
+    .from('contacts')
+    .select('phone, whatsapp_id')
+    .eq('id', convForDelivery.contact_id)
+    .maybeSingle();
+  deliveryPhone = contactData?.whatsapp_id || contactData?.phone;
+}
 
-**a) `ConversationListItem.tsx`** — Mostrar `#XXXXXXXX` discreto abaixo do nome do contato, na linha do preview ou badges:
+// Montar mensagem formatada
+const deliveryMessage = /* construir baseado no tipo do nó */;
 
+if (deliveryMessage) {
+  // 1. Salvar na tabela messages
+  await supabaseClient.from('messages').insert({...});
+  
+  // 2. Se WhatsApp, enviar via send-meta-whatsapp
+  if (convForDelivery?.channel === 'whatsapp' && convForDelivery?.whatsapp_meta_instance_id) {
+    await supabaseClient.functions.invoke('send-meta-whatsapp', {...});
+  }
+}
 ```
-Nome do Contato              2 min
-#a1e17320 → Última mensagem...
-[Cliente] [Comercial] [Agente]
-```
 
-O `short_id` será derivado diretamente do `conversation.id` no frontend (`conversation.id.slice(0, 8).toUpperCase()`), sem depender de campo extra do banco. Isso é mais simples e evita migration complexa.
+### 2. `ai-autopilot-chat/index.ts` — Entregar fallback via WhatsApp
 
-**b) `ChatWindow.tsx`** — Mostrar o protocolo no header do chat, ao lado do nome do contato, como badge copiável (click-to-copy).
+Na seção de fallback (linhas 7370-7382), após inserir a mensagem no banco, adicionar envio via WhatsApp usando a mesma lógica de delivery que já existe no bloco principal (linhas 7086-7150).
 
-### 3. Busca — Já funciona
-
-O `useInboxSearch` já busca por UUID completo. Buscar pelos 8 primeiros caracteres **não funcionaria** com a estratégia atual (requer UUID completo). Podemos adicionar suporte a busca parcial por short_id.
-
-## Detalhamento técnico
+### Arquivos alterados
 
 | Arquivo | Mudança |
 |---|---|
-| `ConversationListItem.tsx` | Adicionar `#` + 8 chars do ID ao lado do preview da mensagem |
-| `ChatWindow.tsx` | Adicionar badge de protocolo copiável no header |
-| `useInboxSearch.tsx` | Adicionar estratégia para busca por short_id (8 hex chars) |
+| `supabase/functions/process-chat-flow/index.ts` | Adicionar delivery (DB + WhatsApp) no bloco de manual trigger, antes dos returns |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Adicionar `send-meta-whatsapp` no bloco de fallback (linhas 7370-7382) |
 
-### Impacto
+### Impacto e segurança
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — apenas adiciona informação visual |
-| Kill Switch | Não afetado |
-| Performance | Zero — derivado do ID existente, sem queries extras |
-| Migration | Não necessária — tudo derivado client-side |
+| Regressão zero | Sim — só adiciona delivery onde faltava, não altera fluxo existente |
+| Kill Switch | Preservado — manual trigger já valida kill switch + test mode |
+| Anti-duplicação | `skip_db_save: true` no WhatsApp, mensagem já salva manualmente |
+| Pipeline existente | Preservado — webhook continua funcionando normalmente para mensagens recebidas |
+| CSAT guard | Não afetado |
 
