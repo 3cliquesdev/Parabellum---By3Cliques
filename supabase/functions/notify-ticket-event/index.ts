@@ -462,6 +462,153 @@ Deno.serve(async (req) => {
       emailsSent = emailResults.filter(r => r.status === 'fulfilled' && r.value === true).length;
     }
 
+    // 5b. Send confirmation email to CUSTOMER (contact) on ticket creation
+    let customerEmailSent = false;
+    if (event_type === 'created' && ticket.customer_id && ticket_event_id) {
+      try {
+        // Fetch customer contact
+        const { data: customer } = await supabase
+          .from("contacts")
+          .select("id, email, first_name, last_name")
+          .eq("id", ticket.customer_id)
+          .single();
+
+        if (customer?.email) {
+          // Dedupe check for customer email
+          const { data: dedupeInserted, error: dedupeErr } = await supabase
+            .from("ticket_notification_sends")
+            .upsert(
+              { ticket_event_id, recipient_user_id: customer.id, channel: "email_customer" },
+              { onConflict: "ticket_event_id,recipient_user_id,channel", ignoreDuplicates: true }
+            )
+            .select("id");
+
+          if (dedupeErr && dedupeErr.code === '23505') {
+            console.log(`[notify-ticket-event] Customer email already sent (23505), skipping`);
+          } else if (dedupeErr) {
+            console.warn(`[notify-ticket-event] Customer dedupe error:`, dedupeErr);
+          } else if (dedupeInserted && dedupeInserted.length > 0) {
+            // Fetch branding
+            let headerColor = "#1e3a5f";
+            let brandName = "3Cliques";
+            let footerText = "3Cliques - Equipe de Suporte";
+            let fromName = "3Cliques Suporte";
+            let fromEmail = "contato@mail.3cliques.net";
+
+            try {
+              const { data: branding } = await supabase
+                .from("email_branding")
+                .select("*")
+                .eq("is_default_customer", true)
+                .single();
+              if (branding) {
+                headerColor = branding.header_color || headerColor;
+                brandName = branding.name || brandName;
+                footerText = branding.footer_text || footerText;
+              }
+              const { data: sender } = await supabase
+                .from("email_senders")
+                .select("*")
+                .eq("is_default", true)
+                .single();
+              if (sender) {
+                fromName = sender.from_name;
+                fromEmail = sender.from_email;
+              }
+            } catch (_) { /* use defaults */ }
+
+            const ticketNumber = ticket.ticket_number || ticket.id.slice(0, 8).toUpperCase();
+            const customerName = customer.first_name || "Cliente";
+            const appUrl = Deno.env.get("APP_URL") || Deno.env.get("SITE_URL") || "";
+            const portalUrl = appUrl ? `${appUrl}/my-tickets` : "";
+
+            const customerEmailHtml = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+  <div style="max-width:600px;margin:0 auto;padding:20px;">
+    <div style="background:linear-gradient(135deg,${headerColor} 0%,${headerColor}dd 100%);padding:20px;text-align:center;border-radius:8px 8px 0 0;">
+      <h2 style="color:white;margin:0;">${brandName}</h2>
+    </div>
+    <div style="border:1px solid #e5e7eb;border-top:none;padding:30px;border-radius:0 0 8px 8px;">
+      <p style="margin:0 0 20px 0;">Olá <strong>${customerName}</strong>,</p>
+      <p style="margin:0 0 20px 0;">
+        Seu ticket <strong>#${ticketNumber}</strong> foi criado com sucesso.
+      </p>
+      <div style="background:#f9fafb;padding:16px;border-left:4px solid #2563eb;margin:20px 0;">
+        <p style="margin:0;font-weight:bold;">${ticket.subject}</p>
+      </div>
+      <p style="margin:0 0 20px 0;">
+        Nossa equipe já está ciente e você será atendido em breve. Fique tranquilo!
+      </p>
+      ${portalUrl ? `<p style="margin:20px 0;"><a href="${portalUrl}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">Acompanhar meus tickets</a></p>` : ''}
+      <p style="margin:20px 0 0 0;font-size:14px;color:#6b7280;">
+        Se precisar, responda a este email e sua mensagem será adicionada ao ticket.
+      </p>
+    </div>
+    <div style="margin-top:20px;padding:20px;text-align:center;background:${headerColor};border-radius:8px;">
+      <p style="color:#94a3b8;margin:0;font-size:12px;">
+        ${footerText}<br/>Ambiente Seguro
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+            const resendApiKey = Deno.env.get("RESEND_API_KEY");
+            if (resendApiKey) {
+              const resendRes = await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${resendApiKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  from: `${fromName} <${fromEmail}>`,
+                  to: [customer.email],
+                  subject: `Ticket #${ticketNumber} criado — ${ticket.subject}`,
+                  html: customerEmailHtml,
+                  tags: [
+                    { name: "ticket_id", value: ticket_id },
+                    { name: "type", value: "customer_confirmation" },
+                  ],
+                }),
+              });
+
+              if (resendRes.ok) {
+                customerEmailSent = true;
+                console.log(`[notify-ticket-event] Customer confirmation email sent to ${customer.email}`);
+              } else {
+                const errText = await resendRes.text();
+                console.error(`[notify-ticket-event] Resend error for customer email:`, errText);
+              }
+            } else {
+              // Fallback: try send-email function
+              try {
+                await supabase.functions.invoke("send-email", {
+                  body: {
+                    to: customer.email,
+                    to_name: customerName,
+                    subject: `Ticket #${ticketNumber} criado — ${ticket.subject}`,
+                    html: customerEmailHtml,
+                  },
+                });
+                customerEmailSent = true;
+                console.log(`[notify-ticket-event] Customer confirmation sent via send-email to ${customer.email}`);
+              } catch (fallbackErr) {
+                console.error(`[notify-ticket-event] Fallback send-email failed:`, fallbackErr);
+              }
+            }
+          }
+        } else {
+          console.log(`[notify-ticket-event] Customer ${ticket.customer_id} has no email, skipping confirmation`);
+        }
+      } catch (custErr) {
+        console.error(`[notify-ticket-event] Error sending customer email:`, custErr);
+      }
+    }
+
     // 6. Record in ticket_events table (only if not already created by caller)
     if (!ticket_event_id) {
       await supabase
@@ -482,6 +629,7 @@ Deno.serve(async (req) => {
         stakeholders_notified: usersToNotify.size,
         in_app_created: inAppCreated,
         emails_sent: emailsSent,
+        customer_email_sent: customerEmailSent,
         timeline_logged: !!ticket.customer_id,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
