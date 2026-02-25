@@ -8,7 +8,7 @@
 |---|---|
 | Re-deploy `process-chat-flow` | ✅ Concluído |
 | Limpeza de estados órfãos | ✅ Já limpo (nenhum registro encontrado) |
-| CHECK constraint | ⏳ Pendente — precisa de migration |
+| CHECK constraint | ✅ Concluído |
 
 ## O que falta
 
