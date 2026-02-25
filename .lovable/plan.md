@@ -1,53 +1,58 @@
 
 
-# Plano: Corrigir Busca de Tickets para Mostrar Todos os Status
+# Plano: Condição ANTES da IA no Rascunho
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Problema Identificado
+## Conceito
 
-A busca de tickets não encontra tickets com status `resolved` ou `closed` porque:
-
-1. **`useSearchTickets` (modal de mesclagem):** Filtra apenas `open`, `in_progress`, `waiting_customer` na linha 29 — exclui 636 dos 714 tickets (89%).
-
-2. **`useTickets` (tela principal /support):** O filtro padrão da sidebar `all` aplica apenas status ativos (não-arquivados: `open`, `in_progress`, `waiting_customer`). A busca é **client-side** sobre esse conjunto já filtrado — portanto tickets resolvidos/fechados nunca aparecem na busca, mesmo digitando o número exato.
+Reestruturar o rascunho "Master Flow + IA Entrada" para que a **Condição seja avaliada antes da IA**. Se o cliente mandar uma mensagem que casa com uma condição (Onboarding, Carnaval, ou futuras), ele segue direto para o caminho específico **sem passar pela IA**. Apenas o caminho "Outros" (else) vai para a IA Persistente.
 
 ```text
-Dados atuais:
-  resolved:         551 tickets (77%)
-  closed:            85 tickets (12%)
-  open:              51 tickets  (7%)
-  returned:          23 tickets  (3%)
-  waiting_customer:   4 tickets  (1%)
+ESTRUTURA ATUAL DO RASCUNHO:
+Start → Boas-vindas → IA Persistente → Condição → caminhos
 
-→ Busca atual só "vê" ~8% dos tickets
+NOVA ESTRUTURA:
+Start → Boas-vindas → Condição
+                        ├─ Onboarding → caminho Onboarding (direto, sem IA)
+                        ├─ Carnaval → caminho Carnaval (direto, sem IA)
+                        └─ Outros (else) → IA Persistente → Menu principal
 ```
 
-## Solução
+## O que muda
 
-### Upgrade 1: Busca global na tela de tickets (`useTickets`)
-
-Quando o usuário digita um termo de busca (`advancedFilters.search` não vazio), **remover o filtro de status** para que a busca percorra TODOS os tickets, independentemente do status. Isso é feito na lógica `getHookParams()` do `Support.tsx`:
-
-- Se `search` está preenchido e nenhum status foi selecionado manualmente → não aplicar filtro de status (busca global)
-- Se o usuário selecionou status específicos no filtro avançado → respeitar a seleção
-
-### Upgrade 2: Busca expandida no `useSearchTickets` (mesclagem)
-
-Remover o filtro `.in("status", [...])` da linha 29 para que a busca de mesclagem encontre tickets em qualquer status ativo (exceto já mesclados).
-
-## Arquivos Alterados
-
-| Arquivo | Mudança |
+| Antes | Depois |
 |---|---|
-| `src/pages/Support.tsx` | Em `getHookParams()`, quando há search ativo e status não foi explicitamente filtrado, não aplicar filtro de status |
-| `src/hooks/useSearchTickets.tsx` | Remover `.in("status", [...])` restritivo |
+| IA intercepta TUDO, inclusive condições | Condições são avaliadas primeiro |
+| Cliente precisa dizer "menu" para sair da IA | Cliente com mensagem de condição vai direto |
+| Só 1 caminho (tudo pela IA) | Caminhos específicos pulam a IA |
+| Futuras condições exigem mais exit_keywords | Futuras condições só precisam de nova regra no nó |
 
-## Impacto
+## Detalhamento técnico
+
+### Ação: UPDATE no flow_definition do rascunho (id: `20a05c59-da7e-4eb9-89f7-731b1b7fb3db`)
+
+Alteração de 4 edges no JSON:
+
+| Edge | Antes | Depois |
+|---|---|---|
+| `welcome_ia` → | `ia_entrada` | `1769459229369` (condição) |
+| `ia_entrada` → | `1769459229369` (condição) | `1769459318164` (menu principal) |
+| Condição `else` → | `1769459318164` | `ia_entrada` (IA) |
+| Condição `false` → | `1769459318164` | `ia_entrada` (IA) |
+
+Edges de Onboarding e Carnaval **permanecem iguais** (já apontam direto para seus caminhos).
+
+### Escalabilidade
+
+Esta estrutura é **preparada para o futuro**: para adicionar novas condições, basta criar nova regra no nó de Condição com seu handle apontando para o caminho desejado. O caminho "Outros" (else) continua enviando para a IA. Nenhuma alteração de código é necessária.
+
+### Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — busca retorna mais resultados, não menos |
-| Performance | Sem impacto significativo — busca client-side já processa todos os dados retornados |
-| Rollback | Restaurar filtro de status nas duas linhas |
+| Regressão zero | Sim — apenas UPDATE no rascunho inativo |
+| Fluxo principal | Intocado |
+| Kill Switch | Preservado — IA só é chamada no caminho "Outros" |
+| Rollback | Reverter edges para a ordem anterior |
 
