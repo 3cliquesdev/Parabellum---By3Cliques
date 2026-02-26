@@ -2959,6 +2959,7 @@ export type Database = {
       }
       departments: {
         Row: {
+          ai_auto_close_minutes: number | null
           auto_close_enabled: boolean | null
           auto_close_minutes: number | null
           color: string | null
@@ -2973,6 +2974,7 @@ export type Database = {
           whatsapp_number: string | null
         }
         Insert: {
+          ai_auto_close_minutes?: number | null
           auto_close_enabled?: boolean | null
           auto_close_minutes?: number | null
           color?: string | null
@@ -2987,6 +2989,7 @@ export type Database = {
           whatsapp_number?: string | null
         }
         Update: {
+          ai_auto_close_minutes?: number | null
           auto_close_enabled?: boolean | null
           auto_close_minutes?: number | null
           color?: string | null

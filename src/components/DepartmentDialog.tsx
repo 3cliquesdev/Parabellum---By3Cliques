@@ -26,6 +26,8 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
   const [autoCloseEnabled, setAutoCloseEnabled] = useState(false);
   const [autoCloseMinutes, setAutoCloseMinutes] = useState<number | "">("");
   const [sendRatingOnClose, setSendRatingOnClose] = useState(true);
+  const [aiAutoCloseEnabled, setAiAutoCloseEnabled] = useState(false);
+  const [aiAutoCloseMinutes, setAiAutoCloseMinutes] = useState<number | "">("");
 
   const createMutation = useCreateDepartment();
   const updateMutation = useUpdateDepartment();
@@ -39,6 +41,8 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
       setAutoCloseEnabled(department.auto_close_enabled ?? false);
       setAutoCloseMinutes(department.auto_close_minutes ?? "");
       setSendRatingOnClose(department.send_rating_on_close ?? true);
+      setAiAutoCloseEnabled(department.ai_auto_close_minutes != null);
+      setAiAutoCloseMinutes(department.ai_auto_close_minutes ?? "");
     } else {
       setName("");
       setDescription("");
@@ -47,6 +51,8 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
       setAutoCloseEnabled(false);
       setAutoCloseMinutes("");
       setSendRatingOnClose(true);
+      setAiAutoCloseEnabled(false);
+      setAiAutoCloseMinutes("");
     }
   }, [department, open]);
 
@@ -55,6 +61,10 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
 
     const autoCloseMinutesValue = autoCloseEnabled && autoCloseMinutes !== "" 
       ? Number(autoCloseMinutes) 
+      : null;
+
+    const aiAutoCloseMinutesValue = aiAutoCloseEnabled && aiAutoCloseMinutes !== ""
+      ? Number(aiAutoCloseMinutes)
       : null;
 
     if (department) {
@@ -67,6 +77,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
         auto_close_enabled: autoCloseEnabled,
         auto_close_minutes: autoCloseMinutesValue,
         send_rating_on_close: sendRatingOnClose,
+        ai_auto_close_minutes: aiAutoCloseMinutesValue,
       });
     } else {
       await createMutation.mutateAsync({
@@ -77,6 +88,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
         auto_close_enabled: autoCloseEnabled,
         auto_close_minutes: autoCloseMinutesValue,
         send_rating_on_close: sendRatingOnClose,
+        ai_auto_close_minutes: aiAutoCloseMinutesValue,
       });
     }
 
@@ -202,6 +214,41 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
                     />
                   </div>
                 </>
+              )}
+
+              <Separator className="my-2" />
+
+              {/* AI Auto-close settings */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="aiAutoCloseEnabled">Encerrar conversas com IA por inatividade</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Fecha conversas no modo autopilot quando o cliente não responde à IA
+                  </p>
+                </div>
+                <Switch
+                  id="aiAutoCloseEnabled"
+                  checked={aiAutoCloseEnabled}
+                  onCheckedChange={setAiAutoCloseEnabled}
+                />
+              </div>
+
+              {aiAutoCloseEnabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="aiAutoCloseMinutes">Tempo de inatividade da IA (minutos)</Label>
+                  <Input
+                    id="aiAutoCloseMinutes"
+                    type="number"
+                    min={1}
+                    max={1440}
+                    placeholder="Ex: 5"
+                    value={aiAutoCloseMinutes}
+                    onChange={(e) => setAiAutoCloseMinutes(e.target.value ? Number(e.target.value) : "")}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Mínimo 1 minuto. Encerra quando o cliente não responde à IA neste período.
+                  </p>
+                </div>
               )}
             </div>
           </div>

@@ -12,6 +12,7 @@ interface UpdateDepartmentParams {
   auto_close_enabled?: boolean;
   auto_close_minutes?: number | null;
   send_rating_on_close?: boolean;
+  ai_auto_close_minutes?: number | null;
 }
 
 export function useUpdateDepartment() {

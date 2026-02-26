@@ -13,6 +13,7 @@ export interface Department {
   auto_close_enabled: boolean;
   auto_close_minutes: number | null;
   send_rating_on_close: boolean;
+  ai_auto_close_minutes: number | null;
   created_at: string;
   updated_at: string;
 }

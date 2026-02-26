@@ -169,6 +169,12 @@ export default function Departments() {
                         )}
                       </div>
                     )}
+                    {department.ai_auto_close_minutes != null && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Timer className="h-4 w-4" />
+                        <span>IA auto-fecha em {department.ai_auto_close_minutes} min</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Switch

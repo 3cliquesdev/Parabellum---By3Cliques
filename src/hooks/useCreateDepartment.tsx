@@ -10,6 +10,7 @@ interface CreateDepartmentParams {
   auto_close_enabled?: boolean;
   auto_close_minutes?: number | null;
   send_rating_on_close?: boolean;
+  ai_auto_close_minutes?: number | null;
 }
 
 export function useCreateDepartment() {
@@ -28,6 +29,7 @@ export function useCreateDepartment() {
           auto_close_enabled: params.auto_close_enabled ?? false,
           auto_close_minutes: params.auto_close_minutes ?? null,
           send_rating_on_close: params.send_rating_on_close ?? true,
+          ai_auto_close_minutes: params.ai_auto_close_minutes ?? null,
         })
         .select()
         .single();
