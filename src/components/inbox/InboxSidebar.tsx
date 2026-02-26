@@ -82,14 +82,14 @@ function FilterItem({ icon, label, count, isActive, onClick, variant = "default"
         variant === "danger" && !isActive && "text-red-600 dark:text-red-400"
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 min-w-0">
         {icon}
-        <span>{label}</span>
+        <span className="truncate">{label}</span>
       </div>
       <Badge 
         variant={isActive ? "default" : "secondary"} 
         className={cn(
-          "min-w-6 justify-center",
+          "min-w-6 justify-center shrink-0",
           count === 0 && "opacity-60",
           variant === "danger" && !isActive && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
           variant === "warning" && !isActive && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"

@@ -550,7 +550,7 @@ export default function Inbox() {
   return (
     <div className="flex h-full overflow-hidden min-w-0">
       {/* Filter Sidebar - fixed width */}
-      <div className="w-56 flex-shrink-0 border-r border-border" data-tour="inbox-filters">
+      <div className="w-60 flex-shrink-0 border-r border-border" data-tour="inbox-filters">
         <InboxSidebar counts={sidebarCounts} />
       </div>
       
