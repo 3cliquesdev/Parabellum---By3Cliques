@@ -1,48 +1,34 @@
 
 
-# Seletor de Fluxo — Visibilidade no Header
+# Diagnóstico: Fluxo cancelado mas não permite iniciar outro
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Situação Atual
+## Causa Raiz
 
-A consolidação anterior removeu a lista de fluxos do **TestModeDropdown** (header) para evitar duplicação. Porém, o **FlowPickerButton** continua existindo no **compositor de mensagens** (área inferior) — ele ainda permite escolher e iniciar fluxos (ativos + rascunhos quando test mode está ligado).
+No `useActiveFlowState.ts`, quando o fluxo é cancelado (linha 91), o código chama `invalidateQueries` — isso marca a query como "stale" e agenda um refetch. Porém, o refetch é **assíncrono** e pode levar alguns milissegundos. Se o usuário clicar no FlowPickerButton logo após ver o toast "Fluxo cancelado", o `activeFlow` ainda contém o valor antigo (não-null), e o guard `hasActiveFlow` bloqueia com o erro.
 
-O problema é que o botão no compositor (ícone de Workflow `⎇`) pode não estar visível ou óbvio para o usuário.
+Além disso, `staleTime: 10_000` (10s) pode impedir refetches em certos cenários.
 
-## Proposta
+## Solução
 
-Adicionar um **FlowPickerButton** também no header, ao lado do toggle de teste, mantendo a proteção de `hasActiveFlow` para evitar o bug anterior de dois fluxos simultâneos.
+Adicionar um **optimistic update** no `cancelFlow`: setar o cache da query para `null` imediatamente antes de invalidar.
 
-| Mudança | Arquivo | Descrição |
-|---|---|---|
-| Adicionar FlowPickerButton no header | `ChatWindow.tsx` | Renderizar o componente ao lado do TestModeDropdown, passando `hasActiveFlow` e `isTestMode` |
-| Nenhuma mudança | `FlowPickerButton.tsx` | Já possui toda a lógica necessária com validação |
-| Nenhuma mudança | `TestModeDropdown.tsx` | Permanece como toggle simples |
+### Mudança única em `useActiveFlowState.ts`
 
-### Detalhamento
+Na função `cancelFlow` (linha 90), após o `toast.success`, adicionar `queryClient.setQueryData(queryKey, null)` **antes** do `invalidateQueries`. Isso garante que todos os componentes que consomem essa query (ChatWindow, ActiveFlowIndicator, SuperComposer) vejam `activeFlow = null` instantaneamente.
 
-**ChatWindow.tsx** — após o `<TestModeDropdown>`, adicionar:
-
-```tsx
-<FlowPickerButton
-  conversationId={conversation.id}
-  contactId={conversation.contact_id}
-  isTestMode={isTestMode}
-  hasActiveFlow={!!activeFlow}
-/>
+```typescript
+// cancelFlow — após toast.success:
+queryClient.setQueryData(queryKey, null);   // ← NOVO: optimistic update
+queryClient.invalidateQueries({ queryKey }); // mantém refetch para confirmar
 ```
-
-Isso garante:
-- Um **único componente** (`FlowPickerButton`) gerencia o início de fluxos
-- A proteção `hasActiveFlow` está centralizada — impede dois fluxos simultâneos
-- O botão fica visível no header, onde o usuário espera encontrá-lo
 
 ### Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — mesmo componente, mesma lógica, mesmo guard |
-| Upgrade | Sim — melhora discoverability sem duplicar lógica |
-| Bug anterior | Não retorna — proteção `hasActiveFlow` está no componente |
+| Regressão zero | Sim — apenas adiciona optimistic update, sem remover lógica |
+| Upgrade | Sim — elimina race condition entre cancel e novo início |
+| Componentes afetados | Todos que usam `useActiveFlowState` se beneficiam automaticamente |
 
