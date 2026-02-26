@@ -416,17 +416,105 @@ Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
     }
 
     console.log(`[Auto-Close] ✅ Stage 3 complete - AI closed ${aiClosedCount} conversations`);
-    console.log(`[Auto-Close] ✅ All stages complete - total: ${totalClosedCount + aiClosedCount} inactivity + ${windowExpiredCount} expired`);
+
+    // ============================
+    // ETAPA 3b: AI inactivity para conversas SEM departamento (fallback 5 min)
+    // ============================
+    console.log('[Auto-Close] Starting no-department AI inactivity check (Stage 3b)...');
+
+    let noDeptClosedCount = 0;
+    const noDeptThreshold = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    try {
+      const { data: noDeptConvos, error: noDeptError } = await supabase
+        .from('conversations')
+        .select('id, contact_id, last_message_at, ai_mode, channel, department, whatsapp_instance_id, whatsapp_meta_instance_id, whatsapp_provider')
+        .eq('status', 'open')
+        .eq('ai_mode', 'autopilot')
+        .is('department', null)
+        .lt('last_message_at', noDeptThreshold);
+
+      if (noDeptError) {
+        console.error('[Auto-Close] Error fetching no-dept conversations:', noDeptError);
+      } else if (noDeptConvos && noDeptConvos.length > 0) {
+        console.log(`[Auto-Close] Found ${noDeptConvos.length} no-department AI conversations inactive >5min`);
+
+        for (const conv of noDeptConvos as ConversationToClose[]) {
+          if (closedIds.includes(conv.id)) continue;
+
+          try {
+            // Verificar última mensagem - só fechar se IA/sistema respondeu e cliente não
+            const { data: lastMsg } = await supabase
+              .from('messages')
+              .select('sender_type')
+              .eq('conversation_id', conv.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+
+            if (!lastMsg || lastMsg.sender_type === 'contact') {
+              console.log(`[Auto-Close] No-dept skip ${conv.id} - last msg from contact`);
+              continue;
+            }
+
+            const AI_CLOSE_MESSAGE = `Não recebi sua resposta nos últimos minutos, então estou encerrando este atendimento para liberar o canal. 😊
+
+Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
+
+            // Inserir mensagem de encerramento
+            await supabase.from('messages').insert({
+              conversation_id: conv.id,
+              content: AI_CLOSE_MESSAGE,
+              sender_type: 'user',
+            });
+
+            // Tag "Desistência"
+            await supabase.from('conversation_tags').upsert({
+              conversation_id: conv.id,
+              tag_id: DESISTENCIA_TAG_ID,
+            }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+
+            // Enviar via WhatsApp se necessário (sem CSAT - não há departamento)
+            if (conv.channel === 'whatsapp') {
+              await sendWhatsAppMessages(supabase, conv, AI_CLOSE_MESSAGE, null);
+            }
+
+            // Fechar conversa (sem CSAT - sem departamento para consultar config)
+            await supabase.from('conversations').update({
+              status: 'closed',
+              auto_closed: true,
+              closed_at: new Date().toISOString(),
+              closed_reason: 'ai_inactivity',
+              ai_mode: 'disabled',
+            }).eq('id', conv.id);
+
+            noDeptClosedCount++;
+            closedIds.push(conv.id);
+            console.log(`[Auto-Close] ✅ No-dept AI closed conversation ${conv.id} - ai_inactivity (no department)`);
+          } catch (err) {
+            console.error(`[Auto-Close] Error closing no-dept conversation ${conv.id}:`, err);
+          }
+        }
+      } else {
+        console.log('[Auto-Close] No no-department AI conversations to close');
+      }
+    } catch (err) {
+      console.error('[Auto-Close] Error in no-department AI step:', err);
+    }
+
+    console.log(`[Auto-Close] ✅ Stage 3b complete - no-dept AI closed ${noDeptClosedCount} conversations`);
+    console.log(`[Auto-Close] ✅ All stages complete - total: ${totalClosedCount + aiClosedCount + noDeptClosedCount} inactivity + ${windowExpiredCount} expired`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        closed_count: totalClosedCount + aiClosedCount,
+        closed_count: totalClosedCount + aiClosedCount + noDeptClosedCount,
         whatsapp_window_expired_count: windowExpiredCount,
         ai_inactivity_closed_count: aiClosedCount,
+        no_dept_closed_count: noDeptClosedCount,
         closed_ids: closedIds,
         by_department: results,
-        message: `Closed ${totalClosedCount} by inactivity + ${aiClosedCount} by AI inactivity + ${windowExpiredCount} by WhatsApp window expired` 
+        message: `Closed ${totalClosedCount} by inactivity + ${aiClosedCount} by AI inactivity + ${noDeptClosedCount} no-dept AI + ${windowExpiredCount} by WhatsApp window expired` 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
