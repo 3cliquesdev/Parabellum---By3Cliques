@@ -695,6 +695,20 @@ serve(async (req) => {
 
       console.log('[process-chat-flow] ✅ Manual flow started:', newState.id, 'at node:', contentNode.id);
 
+      // 🧪 SEPARADOR VISUAL: Inserir mensagem de sistema para marcar início do teste
+      if (isTestMode) {
+        const draftLabel = !flow.is_active ? ' (Rascunho)' : '';
+        await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: `🧪 ─── TESTE DE FLUXO INICIADO ───\nFluxo: "${flow.name}"${draftLabel}`,
+          sender_type: 'system',
+          is_ai_generated: false,
+          channel: 'web_chat',
+          status: 'sent'
+        });
+        console.log('[process-chat-flow] 🧪 System separator message inserted');
+      }
+
       // === DELIVERY: Entregar mensagem ao cliente no manual trigger ===
       const { data: convForDelivery } = await supabaseClient
         .from('conversations')
