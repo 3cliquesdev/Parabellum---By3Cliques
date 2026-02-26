@@ -1147,80 +1147,29 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log transfer reason:', logErr);
           }
 
-          // ========= UPGRADE 2: max_interactions → humano (não avança) =========
+          // ✅ UPGRADE: max_interactions deve AVANÇAR para próximo nó
           if (maxReached && !keywordMatch) {
-            const fallbackMsg =
-              currentNode.data?.fallback_message ||
-              'Vou te transferir para um atendente humano para continuar o atendimento.';
-
-            // Buscar conversa para delivery (mesmo padrão do manualTrigger)
-            const { data: convExit } = await supabaseClient
-              .from('conversations')
-              .select('channel, contact_id, whatsapp_meta_instance_id')
-              .eq('id', conversationId)
-              .maybeSingle();
-
-            // Salvar mensagem de fallback
-            await supabaseClient.from('messages').insert({
-              conversation_id: conversationId,
-              content: fallbackMsg,
-              sender_type: 'system',
-              is_ai_generated: true,
-              channel: convExit?.channel || 'web_chat',
-              status: 'sent',
-            });
-
-            // Enviar via WhatsApp se aplicável
-            if (convExit?.channel === 'whatsapp' && convExit?.contact_id) {
-              const { data: contactExit } = await supabaseClient
-                .from('contacts')
-                .select('phone, whatsapp_id')
-                .eq('id', convExit.contact_id)
-                .maybeSingle();
-              const exitPhone = contactExit?.whatsapp_id || contactExit?.phone;
-              if (exitPhone && convExit.whatsapp_meta_instance_id) {
-                try {
-                  await supabaseClient.functions.invoke('send-meta-whatsapp', {
-                    body: {
-                      instance_id: convExit.whatsapp_meta_instance_id,
-                      phone_number: exitPhone,
-                      message: fallbackMsg,
-                      conversation_id: conversationId,
-                      skip_db_save: true,
-                      is_bot_message: true,
-                    },
-                  });
-                } catch (sendErr) {
-                  console.error('[process-chat-flow] ⚠️ Failed to send fallback via WhatsApp:', sendErr);
-                }
+            const fallbackMsg = currentNode.data?.fallback_message;
+            if (fallbackMsg && String(fallbackMsg).trim().length > 0) {
+              try {
+                await supabaseClient.from('messages').insert({
+                  conversation_id: conversationId,
+                  content: String(fallbackMsg),
+                  sender_type: 'system',
+                  is_ai_generated: true,
+                  is_internal: false,
+                  status: 'sent',
+                  channel: conversation?.channel || 'web_chat',
+                });
+                console.log('[process-chat-flow] ✅ fallback_message inserted on max_interactions (will advance)');
+              } catch (sendErr) {
+                console.error('[process-chat-flow] ⚠️ Failed to insert fallback_message:', sendErr);
               }
             }
-
-            // Marcar waiting_human + completar flow
-            await supabaseClient
-              .from('conversations')
-              .update({ ai_mode: 'waiting_human' })
-              .eq('id', conversationId);
-
-            await supabaseClient
-              .from('chat_flow_states')
-              .update({ status: 'completed', collected_data: collectedData })
-              .eq('id', activeState.id);
-
-            return new Response(
-              JSON.stringify({
-                success: true,
-                useAI: false,
-                completed: true,
-                exitReason: 'max_interactions_human_transfer',
-                fallbackMessage: fallbackMsg,
-              }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            console.log(`[process-chat-flow] 🔄 AI max_interactions reached (${aiCount}/${maxInteractions}) - advancing to next node`);
           }
-          // ================================================================
 
-          // EXIT por keyword: limpar __ai e avançar para próximo nó (comportamento atual)
+          // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir
           delete collectedData.__ai;
           // Cai no findNextNode normal abaixo
         } else {
