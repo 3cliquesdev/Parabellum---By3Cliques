@@ -649,6 +649,9 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
             </div>
           </div>
 
+          {/* Active Flow Indicator - fixed in header */}
+          <ActiveFlowIndicator conversationId={conversation.id} />
+
           {canShowTakeControl && (
             <Alert className={cn(
               "m-4 mb-0",
@@ -679,9 +682,6 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
               </AlertDescription>
             </Alert>
           )}
-
-          {/* Active Flow Indicator */}
-          <ActiveFlowIndicator conversationId={conversation.id} />
 
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto bg-[hsl(var(--chat-bg))]">
             <div className="px-4 py-6 md:px-6">
