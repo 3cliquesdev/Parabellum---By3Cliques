@@ -1,53 +1,108 @@
 
 
-# Auto-close IA por departamento — campo separado
+# Nova tool `classify_and_resolve_ticket` no Autopilot
 
-## Situação atual
+## Contexto
 
-A Etapa 2 do `auto-close-conversations` já fecha conversas `autopilot` usando `auto_close_minutes` do departamento. Porém, esse campo mistura o conceito de timeout de IA com timeout geral (humano). Para dar controle independente, adicionaremos um campo específico para IA.
+Após `close_conversation` encerrar a conversa, a IA precisa documentar/classificar a resolução. Tool separada (Opção A), sem alterar `close_conversation`.
 
-## Alterações
+## Schema confirmado (zero migrations necessárias)
 
-### 1. Nova coluna no banco: `ai_auto_close_minutes`
-```sql
-ALTER TABLE departments 
-  ADD COLUMN ai_auto_close_minutes integer DEFAULT NULL;
+- `tickets`: tem `category` (enum), `status` (enum), `internal_note`, `resolved_at`, `source_conversation_id`, `subject`, `description`, `customer_id`, `department_id`
+- `conversations`: tem `related_ticket_id`, `customer_metadata`
+- `ai_events`: tem `entity_id`, `entity_type`, `event_type`, `model`, `output_json`
 
-COMMENT ON COLUMN departments.ai_auto_close_minutes IS 
-  'Minutos de inatividade do cliente para encerrar conversa com IA automaticamente. NULL = não encerrar.';
+## Alterações — único arquivo
+
+### `supabase/functions/ai-autopilot-chat/index.ts`
+
+**1. Adicionar tool na lista (após `close_conversation`, ~linha 5922)**
+
+```typescript
+{
+  type: 'function',
+  function: {
+    name: 'classify_and_resolve_ticket',
+    description: 'Classifica e registra resolução após encerramento confirmado. Use APÓS close_conversation com customer_confirmed=true.',
+    parameters: {
+      type: 'object',
+      properties: {
+        category: { type: 'string', enum: ['financeiro','tecnico','bug','outro','devolucao','reclamacao','saque'] },
+        summary: { type: 'string', description: 'Resumo curto da resolução (máx 200 chars)' },
+        resolution_notes: { type: 'string', description: 'Detalhes de como foi resolvido' },
+        severity: { type: 'string', enum: ['low','medium','high'] },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Tags descritivas' }
+      },
+      required: ['category', 'summary', 'resolution_notes']
+    }
+  }
+}
 ```
 
-### 2. Edge Function `auto-close-conversations/index.ts` — Etapa 3: AI inactivity
+**2. Adicionar handler (após handler de `close_conversation`, ~linha 7080)**
 
-Adicionar nova etapa após a Etapa 2:
-- Buscar departamentos com `ai_auto_close_minutes IS NOT NULL`
-- Buscar conversas `status = open`, `ai_mode = autopilot`, `last_message_at < threshold`
-- Excluir conversas já fechadas nas etapas anteriores
-- Verificar última mensagem não é do contato (IA respondeu, cliente não)
-- Enviar mensagem de encerramento por inatividade
-- Fechar com `closed_reason: 'ai_inactivity'`, tag "Desistência"
-- Respeitar `send_rating_on_close` do departamento para CSAT
+Fluxo exato:
 
-### 3. UI — `DepartmentDialog.tsx`
+1. Parse args
+2. Buscar configs: `ai_global_enabled`, `ai_shadow_mode`
+3. **Kill switch** → retorna erro, loga `ai_events` com `event_type: 'ai_ticket_classification'`
+4. **Guard**: checar `conversation.status === 'closed'` OU `customer_metadata.awaiting_close_confirmation` removido (confirma que close já aconteceu)
+5. **Anti-duplicação**: buscar ticket existente por `conversations.related_ticket_id` → se não, buscar por `source_conversation_id = conversationId` → se não, criar novo
+6. **Shadow mode** → não executa UPDATE/INSERT em tickets, loga `ai_events` com `shadow_mode: true`, insere `ai_suggestions` com `suggestion_type: 'ticket_classification'`
+7. **Execução normal**:
+   - Se ticket existente: `UPDATE tickets SET status='resolved', category=X, internal_note=formatted, resolved_at=now()`
+   - Se novo: `INSERT INTO tickets (subject, description, status, category, internal_note, source_conversation_id, customer_id, department_id, resolved_at) VALUES (...)`
+   - Atualizar `conversations.related_ticket_id` se null
+8. **Auditoria**: inserir `ai_events` com `event_type: 'ai_ticket_classification'`, `output_json: { category, summary, severity, tags, ticket_id, action: 'created'|'updated', shadow_mode }`
+9. **Retorno**: `assistantMessage = "Ticket classificado como [category] e registrado como resolvido."`
 
-Adicionar novo campo no bloco de "Encerramento Automático":
-- Switch: "Encerrar conversas com IA por inatividade"
-- Input: "Tempo de inatividade da IA (minutos)" — mínimo 1, placeholder "Ex: 5"
-- Descrição: "Fecha conversas no modo autopilot quando o cliente não responde à IA"
+**Formato do `internal_note`:**
+```
+[AI RESOLVED]
+Categoria: {category}
+Resumo: {summary}
+Resolução: {resolution_notes}
+Severidade: {severity || 'N/A'}
+Tags: {tags?.join(', ') || 'N/A'}
+Conversa: {conversationId}
+```
 
-### 4. Hooks e tipos
+**3. Instrução no system prompt (~linha 5741)**
 
-- `useDepartments.tsx`: Adicionar `ai_auto_close_minutes: number | null` na interface
-- `useCreateDepartment.tsx`: Incluir `ai_auto_close_minutes` nos params
-- `useUpdateDepartment.tsx`: Incluir `ai_auto_close_minutes` nos params
-- `Departments.tsx`: Mostrar o tempo de IA no card quando configurado
+Adicionar após a linha do `close_conversation`:
+```
+- classify_and_resolve_ticket: Após encerrar conversa (close_conversation confirmado), classifique e registre a resolução. Use a categoria mais adequada do enum. Escreva summary curto e resolution_notes objetivo.
+```
 
-### 5. Página Departments — card info
+**4. Flag no close (linha ~1726)**
 
-Exibir "IA auto-fecha em X min" ao lado do auto-close existente quando `ai_auto_close_minutes` estiver configurado.
+Após o `close-conversation` ser invocado com sucesso, adicionar flag no `customer_metadata`:
+```typescript
+customer_metadata: {
+  ...cleanMeta,
+  ai_can_classify_ticket: true,
+  ai_last_closed_at: new Date().toISOString(),
+  ai_last_closed_by: 'autopilot'
+}
+```
+
+E no handler de `classify_and_resolve_ticket`, validar `conversation.customer_metadata.ai_can_classify_ticket === true` antes de executar. Limpar flag após execução.
+
+## Guard rails
+
+- Kill switch → bloqueia, loga
+- Shadow mode → não altera DB, loga `ai_events` + `ai_suggestions`
+- Anti-duplicação → busca ticket existente antes de criar
+- Flag guard → só executa se `ai_can_classify_ticket === true`
+- Limpa flag após execução (não reclassifica)
 
 ## Impacto
-- Zero regressão: Etapas 1 e 2 intocadas
-- `auto_close_minutes` continua disponível para uso futuro (timeout humano)
-- Cada departamento controla independentemente o timeout da IA
+
+- Zero regressão: `close_conversation` e `create_ticket` inalterados
+- Tool aditiva — não altera nenhum fluxo existente
+- Auditoria completa via `ai_events`
+
+## Atualização do `ai-tools-schema.ts`
+
+Adicionar `classify_and_resolve_ticket` ao schema e ao type `ToolName`.
 
