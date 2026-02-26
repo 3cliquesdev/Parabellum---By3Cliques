@@ -2845,10 +2845,23 @@ Como posso ajudar você hoje?`;
           // Montar resposta baseada no resultado
           const maskedEmailResponse = maskEmail(emailInMessage);
           let autoResponse = '';
+          let skipEarlyReturn = false;
           
           if (verifyResult.found) {
-            // 🎯 TRIAGEM: Email encontrado = Cliente identificado (SEM OTP) → Menu de departamentos
-            console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email encontrado - mostrando menu de departamentos');
+            // 🎯 TRIAGEM: Email encontrado = Cliente identificado (SEM OTP)
+            console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email encontrado');
+            
+            // 🆕 Recuperar original_intent do metadata (salvo quando IA pediu email)
+            const custMeta = (conversation.customer_metadata || {}) as Record<string, any>;
+            const originalIntent = custMeta.original_intent || null;
+            const originalIntentCategory = custMeta.original_intent_category || null;
+            // skipEarlyReturn já declarado no escopo externo
+            
+            console.log('[ai-autopilot-chat] 🔍 Original intent recovery:', {
+              originalIntent: originalIntent ? originalIntent.substring(0, 60) : null,
+              originalIntentCategory,
+              hasOriginalIntent: !!originalIntent
+            });
             
             // 🆕 CORREÇÃO: Verificar se o email pertence a OUTRO contato existente
             const existingCustomerId = verifyResult.customer?.id;
@@ -2878,15 +2891,24 @@ Como posso ajudar você hoje?`;
               // Revincula a conversa ao contato correto
               console.log('[ai-autopilot-chat] 🔄 Revinculando conversa ao cliente existente:', existingCustomerId);
               
+              const updatedMeta: Record<string, any> = {
+                ...(conversation.customer_metadata || {}),
+                email_verified_at: new Date().toISOString(),
+                original_contact_id: contact.id, // Guardar referência do lead original
+                rebind_reason: 'email_matched_existing_customer'
+              };
+              
+              // 🆕 Limpar original_intent após recuperação
+              if (originalIntent) {
+                delete updatedMeta.original_intent;
+                delete updatedMeta.original_intent_category;
+                delete updatedMeta.original_intent_timestamp;
+              }
+              
               await supabaseClient.from('conversations')
                 .update({
                   contact_id: existingCustomerId,
-                  customer_metadata: {
-                    ...(conversation.customer_metadata || {}),
-                    email_verified_at: new Date().toISOString(),
-                    original_contact_id: contact.id, // Guardar referência do lead original
-                    rebind_reason: 'email_matched_existing_customer'
-                  }
+                  customer_metadata: updatedMeta
                 })
                 .eq('id', conversationId);
               
@@ -2902,13 +2924,22 @@ Como posso ajudar você hoje?`;
                 })
                 .eq('id', contact.id);
               
+              const updatedMeta: Record<string, any> = {
+                ...(conversation.customer_metadata || {}),
+                email_verified_at: new Date().toISOString()
+              };
+              
+              // 🆕 Limpar original_intent após recuperação
+              if (originalIntent) {
+                delete updatedMeta.original_intent;
+                delete updatedMeta.original_intent_category;
+                delete updatedMeta.original_intent_timestamp;
+              }
+              
               // Email verificado - continuar processamento normal (Master Flow assume)
               await supabaseClient.from('conversations')
                 .update({
-                  customer_metadata: {
-                    ...(conversation.customer_metadata || {}),
-                    email_verified_at: new Date().toISOString()
-                  }
+                  customer_metadata: updatedMeta
                 })
                 .eq('id', conversationId);
             }
@@ -2954,6 +2985,19 @@ Como posso ajudar você hoje?`;
               
               // Mensagem personalizada (sem menu)
               autoResponse = `Encontrei seu cadastro, ${contact.first_name || verifyResult.customer?.name || 'cliente'}! 🎉\n\nVou te conectar com seu consultor. Aguarde um momento! 🤝`;
+            } else if (originalIntent) {
+              // 🆕 FIX: Tem original_intent → NÃO enviar menu, deixar IA processar a pergunta original
+              console.log('[ai-autopilot-chat] 🎯 ORIGINAL INTENT RECOVERY: Recuperando contexto original em vez de menu genérico');
+              
+              const customerName = contact.first_name || verifyResult.customer?.name || 'cliente';
+              autoResponse = `Encontrei seu cadastro, ${customerName}! ✅\n\nVoltando à sua dúvida...`;
+              
+              // 🆕 Substituir a mensagem do cliente pelo intent original para que a IA processe
+              // Isso faz o fluxo continuar após o early return com o contexto correto
+              skipEarlyReturn = true;
+              customerMessage = originalIntent;
+              
+              console.log('[ai-autopilot-chat] 🔄 Mensagem substituída pelo original_intent:', originalIntent.substring(0, 80));
             } else if (consultantId && flow_context) {
               // flow_context ativo: IA continua ajudando, não redireciona
               console.log('[ai-autopilot-chat] ℹ️ Consultor encontrado mas flow_context ativo - IA continua ajudando');
@@ -2964,13 +3008,15 @@ Como posso ajudar você hoje?`;
                 .eq('id', contact.id)
                 .is('consultant_id', null);
               
-              autoResponse = foundMessage;
+              autoResponse = `Encontrei seu cadastro! ✅ Continuando seu atendimento...`;
+              skipEarlyReturn = true; // Deixar IA continuar com flow_context
             } else if (!consultantId && flow_context) {
               // flow_context ativo sem consultor: confirmar email e deixar IA continuar
               console.log('[ai-autopilot-chat] ✅ Email verificado com flow_context ativo - IA continua sem menu');
               autoResponse = `Encontrei seu cadastro! ✅ Continuando seu atendimento...`;
+              skipEarlyReturn = true; // Deixar IA continuar com flow_context
             } else {
-              // Sem consultor, sem flow_context - Master Flow assume triagem
+              // Sem consultor, sem flow_context, sem intent - Master Flow assume triagem
               console.log('[ai-autopilot-chat] ✅ Email verificado sem consultor - Master Flow assumirá a triagem');
               autoResponse = foundMessage;
             }
@@ -3052,21 +3098,29 @@ Como posso ajudar você hoje?`;
             }
           }
           
-          // RETURN EARLY - Email processado, não chamar IA
-          return new Response(JSON.stringify({
-            response: autoResponse,
-            messageId: savedMsg?.id,
-            emailDetected: emailInMessage,
-            emailProcessed: true,
-            debug: {
-              reason: 'auto_email_detection_bypass',
-              email_found_in_db: verifyResult.found,
-              otp_sent: verifyResult.otp_sent || false,
-              bypassed_ai: true
-            }
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          // 🆕 Se skipEarlyReturn = true, NÃO retornar early → deixar IA processar o original_intent
+          if (skipEarlyReturn) {
+            console.log('[ai-autopilot-chat] 🔄 skipEarlyReturn=true - IA vai processar a mensagem original após confirmação de email');
+            // autoResponse já foi enviada via WhatsApp acima como confirmação
+            // customerMessage foi substituído pelo original_intent
+            // O fluxo continua normalmente para a IA processar
+          } else {
+            // RETURN EARLY - Email processado, não chamar IA
+            return new Response(JSON.stringify({
+              response: autoResponse,
+              messageId: savedMsg?.id,
+              emailDetected: emailInMessage,
+              emailProcessed: true,
+              debug: {
+                reason: 'auto_email_detection_bypass',
+                email_found_in_db: verifyResult.found,
+                otp_sent: verifyResult.otp_sent || false,
+                bypassed_ai: true
+              }
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
         }
       } catch (error) {
         console.error('[ai-autopilot-chat] ❌ Erro ao processar email detectado:', error);
