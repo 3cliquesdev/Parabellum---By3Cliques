@@ -45,6 +45,8 @@ import { MessageSkeleton } from "@/components/inbox/MessageSkeleton";
 import { MessagesWithMedia } from "@/components/inbox/MessagesWithMedia";
 import { ActiveFlowIndicator } from "@/components/inbox/ActiveFlowIndicator";
 import { TestModeDropdown } from "@/components/inbox/TestModeDropdown";
+import { FlowPickerButton } from "@/components/inbox/FlowPickerButton";
+import { useActiveFlowState } from "@/hooks/useActiveFlowState";
 // REMOVIDO: useCustomerTags - tags do contato não devem aparecer no header do chat
 // Tags da conversa são gerenciadas por ConversationTagsSection
 import { useMarkAsRead } from "@/hooks/useUnreadCount";
@@ -102,6 +104,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const returnToAutopilot = useReturnToAutopilot();
   const { isAIEnabled: isAIGlobalEnabled } = useAIGlobalConfig();
   const { isTestMode, toggle: toggleTestMode, isPending: isTestModePending } = useTestModeToggle(conversation?.id || null);
+  const { activeFlow } = useActiveFlowState(conversation?.id || "");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -533,6 +536,13 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                     conversationId={conversation.id}
                   />
                 )}
+
+                <FlowPickerButton
+                  conversationId={conversation.id}
+                  contactId={conversation.contact_id}
+                  isTestMode={isTestMode}
+                  hasActiveFlow={!!activeFlow}
+                />
 
                 {canShowTakeControl && (
                   <Button
