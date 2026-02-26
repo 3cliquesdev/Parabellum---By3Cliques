@@ -1,16 +1,22 @@
 
 
-# Fix: Textarea "Palavras de saída" não permite scroll/expandir
+# Fix: Shift+Enter não funciona no textarea "Palavras de saída"
 
 ## Problema
-O `Textarea` de palavras de saída tem `rows={3}` e `className="resize-none"`, impedindo o usuário de ver ou adicionar mais palavras quando ultrapassa 3 linhas.
+O ReactFlow intercepta eventos de teclado (Enter, Backspace, Delete) quando o painel de propriedades está aberto. Isso impede que Shift+Enter insira novas linhas no textarea.
 
 ## Solução
 
-### `src/components/chat-flows/panels/BehaviorControlsSection.tsx` (linha 183-184)
-- Mudar `rows={3}` para `rows={4}` (mais espaço inicial)
-- Trocar `resize-none` por `resize-y` para permitir redimensionar verticalmente
-- Adicionar `min-h-[80px] max-h-[200px] overflow-y-auto` para garantir scroll quando necessário
+### `src/components/chat-flows/panels/BehaviorControlsSection.tsx` (linha 173)
+Adicionar `onKeyDown={(e) => e.stopPropagation()}` no Textarea de palavras de saída para impedir que o ReactFlow capture o evento de teclado.
 
-Mudança única, zero regressão — apenas CSS no textarea.
+```tsx
+<Textarea
+  onKeyDown={(e) => e.stopPropagation()}
+  value={...}
+  ...
+/>
+```
+
+Mudança de 1 linha, zero regressão.
 
