@@ -1189,7 +1189,7 @@ serve(async (req) => {
                   node_id: currentNode.id,
                 },
                 input_summary: (userMessage || '').substring(0, 200),
-                department_id: conversation?.department_id || null,
+                department_id: null,
               });
             console.log(`[process-chat-flow] 📊 Transfer reason logged: ${exitReason}`);
           } catch (logErr) {
@@ -1208,7 +1208,7 @@ serve(async (req) => {
                   is_ai_generated: true,
                   is_internal: false,
                   status: 'sent',
-                  channel: conversation?.channel || 'web_chat',
+                  channel: 'web_chat',
                 });
                 console.log('[process-chat-flow] ✅ fallback_message inserted on max_interactions (will advance)');
               } catch (sendErr) {
@@ -1273,6 +1273,14 @@ serve(async (req) => {
         if (nextNode.type === 'condition') {
           // ⏱ Inactivity condition: stop and wait (save metadata)
           if (nextNode.data?.condition_type === 'inactivity' && !inactivityTimeout) {
+            // 🔧 FIX: Se o usuário ACABOU de enviar mensagem, ele está ATIVO
+            // Seguir caminho "Não" (ativo) imediatamente em vez de parar e esperar
+            if (userMessage && userMessage.trim().length > 0) {
+              console.log(`[process-chat-flow] ⏱ Inactivity condition reached but user just sent a message — treating as ACTIVE (path false)`);
+              nextNode = findNextNode(flowDef, nextNode, 'false');
+              continue; // continua o while de auto-traverse
+            }
+
             console.log(`[process-chat-flow] ⏱ Inactivity condition reached during traversal — saving waiting_input with timeout metadata`);
             const timeoutMinutes = parseInt(nextNode.data?.condition_value || '5', 10);
             const inactivityMeta = {
