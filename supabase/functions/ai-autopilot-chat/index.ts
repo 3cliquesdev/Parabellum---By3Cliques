@@ -3016,9 +3016,12 @@ Como posso ajudar você hoje?`;
               autoResponse = `Encontrei seu cadastro! ✅ Continuando seu atendimento...`;
               skipEarlyReturn = true; // Deixar IA continuar com flow_context
             } else {
-              // Sem consultor, sem flow_context, sem intent - Master Flow assume triagem
-              console.log('[ai-autopilot-chat] ✅ Email verificado sem consultor - Master Flow assumirá a triagem');
-              autoResponse = foundMessage;
+              // 🆕 FIX: Sempre continuar com contexto da conversa, nunca enviar menu genérico
+              // A IA tem acesso ao histórico completo e pode responder sobre o assunto que o cliente já mencionou
+              console.log('[ai-autopilot-chat] 🎯 Email verificado - continuando com contexto da conversa (sem menu genérico)');
+              const customerName = contact.first_name || verifyResult.customer?.name || 'cliente';
+              autoResponse = `Encontrei seu cadastro, ${customerName}! ✅\n\nVoltando à sua dúvida...`;
+              skipEarlyReturn = true;
             }
           } else if (!verifyResult.found) {
             // 🎯 TRIAGEM: Email não encontrado = Lead → Rotear para Comercial
