@@ -503,7 +503,70 @@ Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
     }
 
     console.log(`[Auto-Close] ✅ Stage 3b complete - no-dept AI closed ${noDeptClosedCount} conversations`);
-    console.log(`[Auto-Close] ✅ All stages complete - total: ${totalClosedCount + aiClosedCount + noDeptClosedCount} inactivity + ${windowExpiredCount} expired`);
+
+    // ============================
+    // ETAPA 4: Flow inactivity timeout check
+    // Verifica flow states parados em nós de inatividade que excederam o timeout
+    // ============================
+    console.log('[Auto-Close] Starting flow inactivity timeout check (Stage 4)...');
+    let flowInactivityCount = 0;
+
+    try {
+      // Buscar flow states em waiting_input
+      const { data: waitingStates, error: waitError } = await supabase
+        .from('chat_flow_states')
+        .select('id, conversation_id, flow_id, current_node_id, collected_data, status')
+        .eq('status', 'waiting_input');
+
+      if (waitError) {
+        console.error('[Auto-Close] Error fetching waiting flow states:', waitError);
+      } else if (waitingStates && waitingStates.length > 0) {
+        const now = Date.now();
+
+        for (const state of waitingStates) {
+          const collected = state.collected_data as any;
+          if (!collected?.__inactivity?.timeout_minutes || !collected?.__inactivity?.started_at) {
+            continue; // Not an inactivity condition
+          }
+
+          const startedAt = new Date(collected.__inactivity.started_at).getTime();
+          const timeoutMs = collected.__inactivity.timeout_minutes * 60 * 1000;
+
+          if (now - startedAt < timeoutMs) {
+            continue; // Not expired yet
+          }
+
+          console.log(`[Auto-Close] ⏱ Inactivity timeout expired for flow state ${state.id} (conv: ${state.conversation_id}, timeout: ${collected.__inactivity.timeout_minutes}min)`);
+
+          try {
+            // Call process-chat-flow with inactivityTimeout flag to advance via "true" path
+            const { data: flowResult, error: flowError } = await supabase.functions.invoke('process-chat-flow', {
+              body: {
+                conversationId: state.conversation_id,
+                userMessage: '',
+                inactivityTimeout: true,
+              }
+            });
+
+            if (flowError) {
+              console.error(`[Auto-Close] Error invoking process-chat-flow for inactivity timeout (${state.id}):`, flowError);
+            } else {
+              flowInactivityCount++;
+              console.log(`[Auto-Close] ✅ Flow inactivity timeout processed: state=${state.id} conv=${state.conversation_id}`, flowResult);
+            }
+          } catch (invokeErr) {
+            console.error(`[Auto-Close] Error processing inactivity timeout for ${state.id}:`, invokeErr);
+          }
+        }
+      } else {
+        console.log('[Auto-Close] No waiting flow states found');
+      }
+    } catch (err) {
+      console.error('[Auto-Close] Error in flow inactivity check:', err);
+    }
+
+    console.log(`[Auto-Close] ✅ Stage 4 complete - processed ${flowInactivityCount} flow inactivity timeouts`);
+    console.log(`[Auto-Close] ✅ All stages complete - total: ${totalClosedCount + aiClosedCount + noDeptClosedCount} inactivity + ${windowExpiredCount} expired + ${flowInactivityCount} flow timeouts`);
 
     return new Response(
       JSON.stringify({ 
@@ -512,9 +575,10 @@ Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
         whatsapp_window_expired_count: windowExpiredCount,
         ai_inactivity_closed_count: aiClosedCount,
         no_dept_closed_count: noDeptClosedCount,
+        flow_inactivity_timeout_count: flowInactivityCount,
         closed_ids: closedIds,
         by_department: results,
-        message: `Closed ${totalClosedCount} by inactivity + ${aiClosedCount} by AI inactivity + ${noDeptClosedCount} no-dept AI + ${windowExpiredCount} by WhatsApp window expired` 
+        message: `Closed ${totalClosedCount} by inactivity + ${aiClosedCount} by AI inactivity + ${noDeptClosedCount} no-dept AI + ${windowExpiredCount} by WhatsApp window expired + ${flowInactivityCount} flow inactivity timeouts` 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

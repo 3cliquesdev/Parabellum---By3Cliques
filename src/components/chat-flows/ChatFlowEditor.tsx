@@ -631,7 +631,8 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                   currentField !== "__message__";
 
                 const conditionType = selectedNode.data.condition_type || "contains";
-                const hideValueField = conditionType === "has_data" || conditionType === "not_has_data";
+                const hideValueField = conditionType === "has_data" || conditionType === "not_has_data" || conditionType === "inactivity";
+                const isInactivity = conditionType === "inactivity";
 
                 return (
                 <div className="space-y-3">
@@ -652,9 +653,27 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                         <SelectItem value="greater_than">Maior que</SelectItem>
                         <SelectItem value="less_than">Menor que</SelectItem>
                         <SelectItem value="regex">Regex</SelectItem>
+                        <SelectItem value="inactivity">⏱ Tempo de inatividade</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+                  {isInactivity && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Minutos sem resposta</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={1440}
+                        value={selectedNode.data.condition_value || ""}
+                        onChange={(e) => updateNodeData("condition_value", e.target.value)}
+                        placeholder="Ex: 5"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Se o cliente não responder em X minutos, segue pelo caminho "Sim" (inativo). Se responder antes, segue pelo "Não".
+                      </p>
+                    </div>
+                  )}
+                  {!isInactivity && (
                   <div className="space-y-1.5">
                     <Label className="text-xs">Campo a verificar</Label>
                     <Select
@@ -699,7 +718,8 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       </SelectContent>
                     </Select>
                   </div>
-                  {(isCustomField || (currentField === "" && selectedNode.data.condition_field !== undefined && selectedNode.data.condition_field !== "")) && (
+                  )}
+                  {!isInactivity && (isCustomField || (currentField === "" && selectedNode.data.condition_field !== undefined && selectedNode.data.condition_field !== "")) && (
                     <div className="space-y-1.5">
                       <Label className="text-xs">Nome do campo personalizado</Label>
                       <Input

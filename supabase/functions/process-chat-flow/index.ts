@@ -155,11 +155,15 @@ function replaceVariables(text: string, collectedData: Record<string, any>): str
 }
 
 // Avaliar condição
-function evaluateCondition(condition: any, collectedData: Record<string, any>, userMessage: string): boolean {
+function evaluateCondition(condition: any, collectedData: Record<string, any>, userMessage: string, extraFlags?: { inactivityTimeout?: boolean }): boolean {
   const { condition_type, condition_field, condition_value } = condition;
   const fieldValue = condition_field ? (collectedData[condition_field] || "") : userMessage;
   
   switch (condition_type) {
+    case "inactivity":
+      // Se chamado pelo cron com flag inactivityTimeout = true → inativo (true)
+      // Se chamado por mensagem do cliente → não inativo (false)
+      return extraFlags?.inactivityTimeout === true;
     case "contains": {
       const terms = (condition_value || "").split(",").map((t: string) => t.trim().toLowerCase()).filter(Boolean);
       const msg = userMessage.toLowerCase();
@@ -197,7 +201,7 @@ function evaluateCondition(condition: any, collectedData: Record<string, any>, u
 // 🆕 Avaliar condição com suporte a multi-regra (condition_rules)
 // Retorna: para multi-regra, o ID da regra que bateu ou "else"
 //          para modo clássico, "true" ou "false"
-function evaluateConditionPath(nodeData: any, collectedData: Record<string, any>, userMessage: string): string {
+function evaluateConditionPath(nodeData: any, collectedData: Record<string, any>, userMessage: string, extraFlags?: { inactivityTimeout?: boolean }): string {
   const rules = nodeData.condition_rules;
   
   // Multi-regra: iterar cada regra e retornar a primeira que bater
@@ -223,7 +227,7 @@ function evaluateConditionPath(nodeData: any, collectedData: Record<string, any>
   }
   
   // Modo clássico: true/false
-  const result = evaluateCondition(nodeData, collectedData, userMessage);
+  const result = evaluateCondition(nodeData, collectedData, userMessage, extraFlags);
   return result ? 'true' : 'false';
 }
 async function handleFetchOrderNode(
@@ -312,7 +316,7 @@ serve(async (req) => {
     );
 
     const body = await req.json();
-    const { conversationId, userMessage, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck } = body;
+    const { conversationId, userMessage, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck, inactivityTimeout } = body;
     
     if (!conversationId) {
       return new Response(
@@ -627,6 +631,12 @@ serve(async (req) => {
           const hasMultiRules = contentNode.data?.condition_rules?.length > 0;
           let next: any = null;
 
+          // ⏱ Inactivity condition: always stop during manual traversal (needs timeout)
+          if (contentNode.data?.condition_type === 'inactivity') {
+            console.log('[process-chat-flow] 🛑 Manual traversal: inactivity condition — stopping as waiting_input');
+            break;
+          }
+
         if (hasMultiRules) {
             // 🆕 FIX: Multi-regra com keywords precisa de mensagem real do usuário
             // Na travessia manual inicial não há userMessage — parar aqui e aguardar input
@@ -679,13 +689,24 @@ serve(async (req) => {
       }
 
       // Criar estado do fluxo no nó de conteúdo (não no start)
+      // Add inactivity metadata if stopped at inactivity condition
+      const collectedDataForState: Record<string, any> = { ...manualCollectedData, __manual_test: true };
+      if (contentNode.type === 'condition' && contentNode.data?.condition_type === 'inactivity') {
+        const timeoutMinutes = parseInt(contentNode.data?.condition_value || '5', 10);
+        collectedDataForState.__inactivity = {
+          timeout_minutes: timeoutMinutes,
+          started_at: new Date().toISOString(),
+          node_id: contentNode.id,
+        };
+      }
+
       const { data: newState, error: createError } = await supabaseClient
         .from('chat_flow_states')
         .insert({
           conversation_id: conversationId,
           flow_id: flow.id,
           current_node_id: contentNode.id,
-          collected_data: { ...manualCollectedData, __manual_test: true },
+          collected_data: collectedDataForState,
           status: initialStatus,
         })
         .select()
@@ -1096,7 +1117,13 @@ serve(async (req) => {
         path = selectedOption.id;
         collectedData[currentNode.data?.save_as || 'choice'] = selectedOption.value || selectedOption.label;
       } else if (currentNode.type === 'condition') {
-        path = evaluateConditionPath(currentNode.data, collectedData, userMessage);
+        // Inactivity condition: client responded → false (not inactive)
+        if (currentNode.data?.condition_type === 'inactivity' && !inactivityTimeout) {
+          console.log('[process-chat-flow] ⏱ Inactivity condition: client responded → path=false');
+          path = 'false';
+        } else {
+          path = evaluateConditionPath(currentNode.data, collectedData, userMessage, { inactivityTimeout });
+        }
       } else if (currentNode.type === 'ai_response') {
         // ============================================================
         // 🆕 MODO PERSISTENTE: IA responde múltiplas perguntas
@@ -1244,7 +1271,40 @@ serve(async (req) => {
         console.log(`[process-chat-flow] ⏩ Auto-traverse[${traversalSteps}] ${nextNode.type} (${nextNode.id})`);
         
         if (nextNode.type === 'condition') {
-          const condPath = evaluateConditionPath(nextNode.data, collectedData, userMessage);
+          // ⏱ Inactivity condition: stop and wait (save metadata)
+          if (nextNode.data?.condition_type === 'inactivity' && !inactivityTimeout) {
+            console.log(`[process-chat-flow] ⏱ Inactivity condition reached during traversal — saving waiting_input with timeout metadata`);
+            const timeoutMinutes = parseInt(nextNode.data?.condition_value || '5', 10);
+            const inactivityMeta = {
+              ...collectedData,
+              __inactivity: {
+                timeout_minutes: timeoutMinutes,
+                started_at: new Date().toISOString(),
+                node_id: nextNode.id,
+              }
+            };
+            await supabaseClient
+              .from('chat_flow_states')
+              .update({
+                current_node_id: nextNode.id,
+                collected_data: inactivityMeta,
+                status: 'waiting_input',
+              })
+              .eq('id', activeState.id);
+
+            return new Response(
+              JSON.stringify({
+                useAI: false,
+                response: null,
+                flowId: activeState.flow_id,
+                waitingInactivity: true,
+                timeoutMinutes,
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          const condPath = evaluateConditionPath(nextNode.data, collectedData, userMessage, { inactivityTimeout });
           console.log(`[process-chat-flow] 🔀 Condition ${nextNode.id}: → path ${condPath}`);
           nextNode = findNextNode(flowDef, nextNode, condPath);
         } else {

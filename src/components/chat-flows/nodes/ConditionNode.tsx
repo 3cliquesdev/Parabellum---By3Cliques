@@ -12,7 +12,7 @@ interface ConditionRule {
 
 interface ConditionNodeData {
   label: string;
-  condition_type: "contains" | "equals" | "regex" | "has_data";
+  condition_type: "contains" | "equals" | "regex" | "has_data" | "inactivity";
   condition_field?: string;
   condition_value?: string;
   condition_rules?: ConditionRule[];
@@ -26,6 +26,7 @@ const conditionLabels: Record<string, string> = {
   not_has_data: "Não tem dado",
   greater_than: "Maior que",
   less_than: "Menor que",
+  inactivity: "Inatividade",
 };
 
 const friendlyFieldNames: Record<string, string> = {
@@ -130,6 +131,12 @@ export const ChatFlowConditionNode = memo(({ data, selected }: NodeProps<Conditi
 
   // === MODO CLÁSSICO (Sim/Não) ===
   let subtitle = conditionLabels[conditionType] || conditionType;
+  
+  // Inatividade: subtitle especial
+  if (conditionType === 'inactivity') {
+    const minutes = data.condition_value || '?';
+    subtitle = `⏱ Inativo há ${minutes} min`;
+  } else {
   const fieldLabel = data.condition_field
     ? (friendlyFieldNames[data.condition_field] || data.condition_field)
     : friendlyFieldNames[""];
@@ -148,6 +155,7 @@ export const ChatFlowConditionNode = memo(({ data, selected }: NodeProps<Conditi
       subtitle += `: "${data.condition_value}"`;
     }
   }
+  } // close else for non-inactivity
 
   return (
     <ChatFlowNodeWrapper
