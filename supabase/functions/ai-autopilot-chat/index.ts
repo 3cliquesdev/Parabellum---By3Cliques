@@ -5095,7 +5095,7 @@ Por favor, **digite o código** que você recebeu para continuar com o saque.`;
     }
     
     // 🆕 CORREÇÃO: Só pedir email se NÃO for cliente conhecido pelo telefone
-    if (!contactHasEmail && !isPhoneVerified && !isCustomerInDatabase && !isKiwifyValidated && responseChannel === 'whatsapp') {
+    if (!contactHasEmail && !isPhoneVerified && !isCustomerInDatabase && !isKiwifyValidated && responseChannel === 'whatsapp' && !flow_context) {
       // FASE 4: Lead NOVO (não tem email E não está no banco por telefone) - seguir Identity Wall
       priorityInstruction = `=== INSTRUÇÃO PRIORITÁRIA - IGNORE TUDO ABAIXO ATÉ SEGUIR ISSO ===
 
