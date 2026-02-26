@@ -180,8 +180,8 @@ export function BehaviorControlsSection({
               updateNodeData("exit_keywords", keywords);
             }}
             placeholder={"falar com atendente\nencerrar\nhumano"}
-            rows={3}
-            className="resize-none text-sm"
+            rows={4}
+            className="resize-y text-sm min-h-[80px] max-h-[200px] overflow-y-auto"
           />
           <p className="text-[10px] text-muted-foreground">
             Uma por linha. Se o cliente digitar uma dessas, o fluxo avança.
