@@ -221,8 +221,9 @@ Deno.serve(async (req) => {
           throw new Error(`Playbook not found: ${(execution as PlaybookExecution).playbook_id}`);
         }
 
-        // ✅ Verificar se playbook está ativo antes de processar
-        if (!playbook.is_active) {
+        // ✅ Verificar se playbook está ativo antes de processar (exceto em modo teste)
+        const isTestMode = item.node_data?._test_mode === true;
+        if (!playbook.is_active && !isTestMode) {
           console.log(`⏸️ Playbook pausado (${playbook.name}), cancelando item da fila: ${item.id}`);
           
           await supabaseAdmin
@@ -232,8 +233,31 @@ Deno.serve(async (req) => {
               last_error: 'Playbook desativado'
             })
             .eq('id', item.id);
+
+          // Bug fix: atualizar test_run para 'failed' se existir
+          const { data: testRun } = await supabaseAdmin
+            .from('playbook_test_runs')
+            .select('id')
+            .eq('execution_id', (execution as PlaybookExecution).id)
+            .eq('status', 'running')
+            .maybeSingle();
+
+          if (testRun) {
+            await supabaseAdmin
+              .from('playbook_test_runs')
+              .update({ 
+                status: 'failed', 
+                error_message: 'Playbook estava desativado durante o teste' 
+              })
+              .eq('id', testRun.id);
+            console.log(`🔴 Test run ${testRun.id} marcado como failed (playbook desativado)`);
+          }
           
           continue; // Pular para o próximo item
+        }
+        
+        if (!playbook.is_active && isTestMode) {
+          console.log(`🧪 Playbook pausado mas em modo teste — prosseguindo: ${item.id}`);
         }
 
         const flow = playbook.flow_definition as PlaybookFlow;
