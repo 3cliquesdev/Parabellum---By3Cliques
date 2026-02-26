@@ -2757,7 +2757,7 @@ Como posso ajudar você hoje?`;
             // 🆕 CONSULTANT REDIRECT: Se cliente tem consultor, redirecionar direto
             const consultantId = verifyResult.customer?.consultant_id;
             
-            if (consultantId) {
+            if (consultantId && !flow_context) {
               console.log('[ai-autopilot-chat] 🎯 CONSULTANT REDIRECT: Cliente tem consultor, redirecionando direto:', consultantId);
               
               // Atribuir conversa ao consultor em modo copilot
@@ -2795,6 +2795,17 @@ Como posso ajudar você hoje?`;
               
               // Mensagem personalizada (sem menu)
               autoResponse = `Encontrei seu cadastro, ${verifyResult.customer?.name || contact.first_name || 'cliente'}! 🎉\n\nVou te conectar com seu consultor. Aguarde um momento! 🤝`;
+            } else if (consultantId && flow_context) {
+              // flow_context ativo: IA continua ajudando, não redireciona
+              console.log('[ai-autopilot-chat] ℹ️ Consultor encontrado mas flow_context ativo - IA continua ajudando');
+              
+              // Salvar consultant_id no contato para uso futuro (pós-fluxo)
+              await supabaseClient.from('contacts')
+                .update({ consultant_id: consultantId })
+                .eq('id', contact.id)
+                .is('consultant_id', null);
+              
+              autoResponse = foundMessage;
             } else {
               // Sem consultor - comportamento atual (Master Flow assume triagem)
               console.log('[ai-autopilot-chat] ✅ Email verificado sem consultor - Master Flow assumirá a triagem');
@@ -5514,7 +5525,7 @@ ${knowledgeContext}${identityWallNote}
 - Nome: ${contactName}${contactCompany}
 - Status: ${contactStatus}
 - Canal: ${responseChannel}
-${contactEmail ? `- Email: ${safeEmail}` : '- Email: NÃO CADASTRADO - SOLICITAR'}
+${contactEmail ? `- Email: ${safeEmail}` : (flow_context ? '- Email: Não identificado (a IA pode ajudar sem email)' : '- Email: NÃO CADASTRADO - SOLICITAR')}
 ${contact.phone ? `- Telefone: ${safePhone}` : ''}
 - CPF: ${maskedCPF}
 
