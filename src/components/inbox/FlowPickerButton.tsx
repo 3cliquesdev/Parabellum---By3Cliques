@@ -44,11 +44,6 @@ export function FlowPickerButton({
       return;
     }
 
-    if (hasActiveFlow) {
-      toast.error("Já existe um fluxo em execução nesta conversa. Cancele-o antes de iniciar outro.");
-      return;
-    }
-
     setIsStarting(flowId);
 
     try {

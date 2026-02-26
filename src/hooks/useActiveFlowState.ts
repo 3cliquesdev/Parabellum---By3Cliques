@@ -50,7 +50,7 @@ export function useActiveFlowState(conversationId: string | undefined) {
       };
     },
     enabled: !!conversationId,
-    staleTime: 10_000,
+    staleTime: 2_000,
   });
 
   // Realtime subscription
