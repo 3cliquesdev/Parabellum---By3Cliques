@@ -171,6 +171,7 @@ export function BehaviorControlsSection({
         <div className="space-y-2">
           <Label className="text-sm font-medium">Palavras de saída</Label>
           <Textarea
+            onKeyDown={(e) => e.stopPropagation()}
             value={(selectedNode.data.exit_keywords || []).join("\n")}
             onChange={(e) => {
               const keywords = e.target.value
