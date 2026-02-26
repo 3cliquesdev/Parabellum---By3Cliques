@@ -1,108 +1,60 @@
 
 
-# Nova tool `classify_and_resolve_ticket` no Autopilot
+# Trava Financeira no Nó de Resposta IA
 
-## Contexto
+## Alterações (5 arquivos)
 
-Após `close_conversation` encerrar a conversa, a IA precisa documentar/classificar a resolução. Tool separada (Opção A), sem alterar `close_conversation`.
+### 1. `src/components/chat-flows/panels/BehaviorControlsSection.tsx`
+- Adicionar import `DollarSign` do lucide-react
+- Na seção "O que a IA NÃO pode fazer" (bloco vermelho, após o switch de "Não dar opções numeradas" ~linha 172), adicionar novo switch:
+  - Ícone: `DollarSign` vermelho
+  - Label: "Não resolver assuntos financeiros"
+  - Descrição: "A IA transfere para humano ao detectar saque, reembolso ou devolução"
+  - Campo: `forbid_financial` (default `false`)
+- Adicionar badge `💰 Sem financeiro` na lista de badges ativas (~linha 175-191)
 
-## Schema confirmado (zero migrations necessárias)
+### 2. `src/components/chat-flows/nodes/AIResponseNode.tsx`
+- Adicionar `forbid_financial?: boolean` na interface `AIResponseNodeData`
+- Adicionar import `DollarSign` do lucide-react
+- Renderizar badge `Sem financeiro` (variant destructive, ícone DollarSign) quando `data.forbid_financial === true`
 
-- `tickets`: tem `category` (enum), `status` (enum), `internal_note`, `resolved_at`, `source_conversation_id`, `subject`, `description`, `customer_id`, `department_id`
-- `conversations`: tem `related_ticket_id`, `customer_metadata`
-- `ai_events`: tem `entity_id`, `entity_type`, `event_type`, `model`, `output_json`
+### 3. `src/components/chat-flows/ChatFlowEditor.tsx`
+- Adicionar `forbid_financial: false` nos defaults do nó ai_response (~linha 188)
 
-## Alterações — único arquivo
+### 4. `supabase/functions/process-chat-flow/index.ts`
+- Nos 4 locais onde já passa `forbidQuestions`/`forbidOptions` (linhas ~1227, ~1387, ~1883, ~2094), adicionar:
+  ```
+  forbidFinancial: node.data?.forbid_financial ?? false,
+  ```
 
-### `supabase/functions/ai-autopilot-chat/index.ts`
+### 5. `supabase/functions/ai-autopilot-chat/index.ts`
 
-**1. Adicionar tool na lista (após `close_conversation`, ~linha 5922)**
-
+**5a. Ler flag (~linha 1273):**
 ```typescript
-{
-  type: 'function',
-  function: {
-    name: 'classify_and_resolve_ticket',
-    description: 'Classifica e registra resolução após encerramento confirmado. Use APÓS close_conversation com customer_confirmed=true.',
-    parameters: {
-      type: 'object',
-      properties: {
-        category: { type: 'string', enum: ['financeiro','tecnico','bug','outro','devolucao','reclamacao','saque'] },
-        summary: { type: 'string', description: 'Resumo curto da resolução (máx 200 chars)' },
-        resolution_notes: { type: 'string', description: 'Detalhes de como foi resolvido' },
-        severity: { type: 'string', enum: ['low','medium','high'] },
-        tags: { type: 'array', items: { type: 'string' }, description: 'Tags descritivas' }
-      },
-      required: ['category', 'summary', 'resolution_notes']
-    }
-  }
-}
+const flowForbidFinancial: boolean = flow_context?.forbidFinancial ?? false;
 ```
 
-**2. Adicionar handler (após handler de `close_conversation`, ~linha 7080)**
-
-Fluxo exato:
-
-1. Parse args
-2. Buscar configs: `ai_global_enabled`, `ai_shadow_mode`
-3. **Kill switch** → retorna erro, loga `ai_events` com `event_type: 'ai_ticket_classification'`
-4. **Guard**: checar `conversation.status === 'closed'` OU `customer_metadata.awaiting_close_confirmation` removido (confirma que close já aconteceu)
-5. **Anti-duplicação**: buscar ticket existente por `conversations.related_ticket_id` → se não, buscar por `source_conversation_id = conversationId` → se não, criar novo
-6. **Shadow mode** → não executa UPDATE/INSERT em tickets, loga `ai_events` com `shadow_mode: true`, insere `ai_suggestions` com `suggestion_type: 'ticket_classification'`
-7. **Execução normal**:
-   - Se ticket existente: `UPDATE tickets SET status='resolved', category=X, internal_note=formatted, resolved_at=now()`
-   - Se novo: `INSERT INTO tickets (subject, description, status, category, internal_note, source_conversation_id, customer_id, department_id, resolved_at) VALUES (...)`
-   - Atualizar `conversations.related_ticket_id` se null
-8. **Auditoria**: inserir `ai_events` com `event_type: 'ai_ticket_classification'`, `output_json: { category, summary, severity, tags, ticket_id, action: 'created'|'updated', shadow_mode }`
-9. **Retorno**: `assistantMessage = "Ticket classificado como [category] e registrado como resolvido."`
-
-**Formato do `internal_note`:**
+**5b. Injetar no system prompt (onde já injeta restrições de forbidQuestions/forbidOptions):**
+Se `flowForbidFinancial === true`, adicionar bloco:
 ```
-[AI RESOLVED]
-Categoria: {category}
-Resumo: {summary}
-Resolução: {resolution_notes}
-Severidade: {severity || 'N/A'}
-Tags: {tags?.join(', ') || 'N/A'}
-Conversa: {conversationId}
+🔒 TRAVA FINANCEIRA ATIVA:
+Você NÃO pode resolver assuntos financeiros (saque, reembolso, estorno, devolução, cancelamento, cobrança, pagamento).
+Se o cliente mencionar qualquer assunto financeiro, responda EXATAMENTE:
+"Esse tipo de solicitação precisa ser tratada por um atendente. Vou te transferir agora!"
+E use request_human_agent imediatamente.
+Você PODE: coletar dados (email, CPF, ID do pedido) e resumir o caso. NÃO PODE: instruir processos financeiros ou prometer resolução.
 ```
 
-**3. Instrução no system prompt (~linha 5741)**
-
-Adicionar após a linha do `close_conversation`:
-```
-- classify_and_resolve_ticket: Após encerrar conversa (close_conversation confirmado), classifique e registre a resolução. Use a categoria mais adequada do enum. Escreva summary curto e resolution_notes objetivo.
-```
-
-**4. Flag no close (linha ~1726)**
-
-Após o `close-conversation` ser invocado com sucesso, adicionar flag no `customer_metadata`:
-```typescript
-customer_metadata: {
-  ...cleanMeta,
-  ai_can_classify_ticket: true,
-  ai_last_closed_at: new Date().toISOString(),
-  ai_last_closed_by: 'autopilot'
-}
-```
-
-E no handler de `classify_and_resolve_ticket`, validar `conversation.customer_metadata.ai_can_classify_ticket === true` antes de executar. Limpar flag após execução.
-
-## Guard rails
-
-- Kill switch → bloqueia, loga
-- Shadow mode → não altera DB, loga `ai_events` + `ai_suggestions`
-- Anti-duplicação → busca ticket existente antes de criar
-- Flag guard → só executa se `ai_can_classify_ticket === true`
-- Limpa flag após execução (não reclassifica)
+**5c. Validação pós-resposta (~linha 7774, após validateResponseRestrictions):**
+Adicionar `validateFinancialRestriction(assistantMessage, forbidFinancial)`:
+- Regex no conteúdo da mensagem da IA detectando afirmações de resolução financeira:
+  ```
+  /(j[áa] processei|foi estornado|solicitei reembolso|vou reembolsar|pode sacar|liberei o saque|reembolso aprovado|estorno realizado|cancelamento confirmado|pagamento devolvido)/i
+  ```
+- Se detectar: substituir por fallback "Esse tipo de solicitação precisa ser tratada por um atendente." + forçar `request_human_agent` (ou retornar com flag `force_human_transfer: true`)
 
 ## Impacto
-
-- Zero regressão: `close_conversation` e `create_ticket` inalterados
-- Tool aditiva — não altera nenhum fluxo existente
-- Auditoria completa via `ai_events`
-
-## Atualização do `ai-tools-schema.ts`
-
-Adicionar `classify_and_resolve_ticket` ao schema e ao type `ToolName`.
+- Zero regressão: toggles existentes inalterados
+- Aditivo: novo campo `forbid_financial` opcional no nó
+- Dupla camada: prompt + validação pós-resposta
 
