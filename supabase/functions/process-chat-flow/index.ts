@@ -744,15 +744,19 @@ serve(async (req) => {
         });
 
         // 1. Salvar na tabela messages
-        await supabaseClient.from('messages').insert({
+        const { error: insertError } = await supabaseClient.from('messages').insert({
           conversation_id: conversationId,
           content: finalText,
           sender_type: 'user',
           sender_id: null,
           is_ai_generated: true,
           channel: convForDelivery?.channel || 'web_chat',
-          status: 'pending'
+          status: 'sent'
         });
+
+        if (insertError) {
+          console.error('[process-chat-flow] ❌ Error saving manual trigger message:', insertError);
+        }
 
         // 2. Se WhatsApp, enviar via send-meta-whatsapp
         if (convForDelivery?.channel === 'whatsapp' && deliveryPhone) {
