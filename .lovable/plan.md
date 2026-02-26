@@ -1,93 +1,72 @@
 
 
-# Diagnóstico: Fluxo principal chamado junto com o teste + mensagens não aparecem
+# Plano: Bloquear Master Flow / Auto-Triggers em Modo Teste
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Causa Raiz Identificada (com evidência dos logs e banco)
+## Causa Raiz
 
-### Problema Principal: Mensagens do manual trigger NÃO são salvas no banco
+Quando `is_test_mode = true`, a flag so serve para:
+1. Bypassar o Kill Switch (linha 339)
+2. Permitir execucao de drafts (linha 478)
 
-A função `deliverManualMessage` no `process-chat-flow/index.ts` (linha 747-755) insere mensagens com `status: 'pending'`. Porém, o enum `message_status` do banco aceita apenas: `{sending, sent, delivered, failed, read}`.
+Mas **nao bloqueia** o Master Flow nem os trigger keywords de rodarem automaticamente. Resultado: se o draft flow completa, ou se a conversa nao tem estado ativo, o Master Flow entra e "contamina" o teste.
 
-**`pending` não existe no enum.** O insert falha silenciosamente porque não há tratamento de erro.
-
-Resultado:
-- As mensagens do fluxo de teste SÃO enviadas ao WhatsApp (logs confirmam: "✅ Manual message sent via Meta WhatsApp")
-- Mas NÃO aparecem no chat da UI (não foram salvas no banco)
-- O usuário vê apenas as mensagens antigas do Fluxo Principal (que foram salvas corretamente pelo webhook)
-- Isso cria a ilusão de que "o fluxo principal está rodando junto com o teste"
-
-### Evidência
+## Evidencia nos Logs
 
 ```
--- Enum válidos:
-{sending, sent, delivered, failed, read}
-
--- Valor usado no deliverManualMessage:
-status: 'pending'  ← INVÁLIDO, insert falha silenciosamente
+01:30:24 Manual trigger → draft flow 20a05c59 starts (correct)
+01:30:47 User "Oi" → invalidOption from draft flow (correct)
 ```
 
-```
--- Mensagens do manual trigger no banco (01:20:28 a 01:20:40):
-SELECT ... WHERE created_at BETWEEN '01:20:28' AND '01:20:40'
-→ ZERO resultados
-```
+Mas se o draft completar e o usuario enviar nova mensagem, o fluxo cairia em:
+- Linha 1326: busca `chat_flows` ativos
+- Linha 1477-1510: sem trigger match → inicia Master Flow
+- Resultado: Master Flow roda na conversa de teste
 
-```
--- Logs confirmam envio ao WhatsApp:
-01:20:32 ✅ Manual message sent via Meta WhatsApp
-01:20:34 ✅ Manual message sent via Meta WhatsApp
-```
+## Solucao
 
-### Estado real no banco
+### Mudanca unica: `process-chat-flow/index.ts`
 
-- Apenas 1 flow state ativo: draft flow `20a05c59` em `waiting_input` ✅
-- O Fluxo Principal NÃO tem estado ativo — foi corretamente limpo pelo manual trigger ✅
-- O fluxo de teste ESTÁ respondendo corretamente (invalidOption para "Boa noite") ✅
-
-## Mudanças Necessárias
-
-### 1. `process-chat-flow/index.ts` — Corrigir status do insert de mensagem
-
-**Linha 754:** Alterar `status: 'pending'` para `status: 'sent'`
-
-### 2. `process-chat-flow/index.ts` — Adicionar tratamento de erro no insert
-
-Na função `deliverManualMessage`, capturar e logar erros do insert para evitar falhas silenciosas futuras:
+Apos o bloco de processamento de estado ativo (linha ~1316) e antes da verificacao de triggers (linha ~1318), adicionar guard:
 
 ```typescript
-const { error: insertError } = await supabaseClient.from('messages').insert({
-  conversation_id: conversationId,
-  content: finalText,
-  sender_type: 'user',
-  sender_id: null,
-  is_ai_generated: true,
-  channel: convForDelivery?.channel || 'web_chat',
-  status: 'sent'  // FIX: 'pending' não existe no enum message_status
-});
-
-if (insertError) {
-  console.error('[process-chat-flow] ❌ Error saving manual trigger message:', insertError);
+// 🧪 MODO TESTE: Bloquear triggers e Master Flow automaticos
+// Em modo teste, APENAS fluxos iniciados manualmente devem rodar
+if (isTestMode && !manualTrigger) {
+  console.log('[process-chat-flow] 🧪 TEST MODE: Bloqueando auto-triggers e Master Flow');
+  return new Response(JSON.stringify({
+    useAI: false,
+    aiNodeActive: false,
+    skipAutoResponse: true,
+    reason: 'test_mode_manual_only',
+    message: 'Modo teste ativo - apenas fluxos manuais permitidos'
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  });
 }
 ```
 
-| Arquivo | Linha | Mudança |
-|---|---|---|
-| `process-chat-flow/index.ts` | 747-755 | `status: 'pending'` → `status: 'sent'` + error handling |
+**Posicao**: Inserir na linha 1317, DEPOIS do `}` que fecha o bloco `if (activeState)` e ANTES do `if (!userMessage)`.
+
+Isso garante que:
+- Se existe estado ativo (draft flow em andamento), ele e processado normalmente (linhas 943-1316)
+- Se NAO existe estado ativo e a conversa esta em modo teste, NADA automatico roda
+- Manual trigger continua funcionando (ja retorna antes na linha 447-907)
+
+### O que NAO muda
+
+- Draft flow em andamento continua sendo processado (invalidOption, avancos, etc.)
+- Manual trigger continua funcionando
+- Kill Switch bypass em modo teste continua funcionando
+- Conversas normais (nao-teste) nao sao afetadas
 
 ## Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — apenas corrige bug, não altera lógica |
-| Upgrade | Sim — mensagens do manual trigger passam a aparecer no chat |
-| Kill Switch | Não afetado |
-| Fluxo nunca mudo | Corrigido — a mensagem de boas-vindas do fluxo agora aparece no chat |
-
-## Resultado esperado
-
-1. Iniciar fluxo de teste → mensagem de boas-vindas aparece no chat imediatamente ✅
-2. Indicador mostra o fluxo correto (já funciona) ✅
-3. Fluxo Principal NÃO interfere (já funciona, era ilusão visual) ✅
+| Regressao zero | Sim - so adiciona guard, nao altera logica existente |
+| Upgrade | Sim - isola testes de fluxos automaticos |
+| Kill Switch | Nao afetado |
+| Fluxo nunca mudo | Nao afetado - draft continua respondendo quando ativo |
 
