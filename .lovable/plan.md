@@ -1,90 +1,82 @@
 
 
-# Plano: Diagnóstico Final + Fix Visual para Modo Teste
+# Plano: Fix do Auto-Avanço que Pula o Nó AI Response
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Diagnóstico com EVIDÊNCIA DO BANCO
+## Diagnóstico com Evidência
 
-O Fluxo Principal **NÃO ESTÁ rodando**. Evidência:
+O problema é um bug no **auto-avanço de nós `message`** (linhas 843-908 de `process-chat-flow/index.ts`).
+
+### Caminho real do fluxo no manual trigger:
 
 ```text
-chat_flow_states (agora):
-  flow_id: 20a05c59 (Rascunho) ← ÚNICO estado ativo
-  status: waiting_input
-  Nenhum estado do Fluxo Principal (3ea0d227) existe.
-
-Logs process-chat-flow:
-  02:18:01 → manualTrigger=true, flowId=20a05c59 (Rascunho) ✅
-  02:18:27 → manualTrigger=false, "Oi" → encontra estado ativo do Rascunho → invalidOption ✅
-  Nenhuma chamada ao Fluxo Principal.
+start → welcome_ia (message) → condition (false) → ia_entrada (ai_response) → ask_options
 ```
 
-O guard na linha 1332 (`isTestMode && !manualTrigger`) está funcionando. As mensagens que parecem do Principal são do **Rascunho** — que é uma cópia com conteúdo idêntico. Sem flow_id nas mensagens, é impossível distinguir visualmente.
+### O que acontece:
 
-## Problema Real
+1. Traversal inicial encontra `welcome_ia` (message) como primeiro nó de conteúdo
+2. Estado salvo em `welcome_ia`, mensagem de boas-vindas entregue
+3. **Auto-avanço** entra (linha 845: `if contentNode.type === 'message'`)
+4. Iteração 1: `findNextNode(welcome_ia)` → condição → avalia false → `advanceNode = ia_entrada` — **SEM break** (estava dentro do handler de condição)
+5. Iteração 2: `findNextNode(ia_entrada)` → `ask_options` → **break** (nó de conteúdo)
+6. Estado atualizado para `ask_options` com `waiting_input`
+7. Opções entregues ao cliente
 
-As mensagens do fluxo não carregam identificação de qual fluxo as gerou. Quando o rascunho tem o mesmo conteúdo do Principal, parecem duplicadas/vindas do Principal.
+**O nó `ia_entrada` (ai_response) é completamente pulado** porque o loop de auto-avanço não para em nós de conteúdo que foram alcançados via avaliação de condição.
 
-## Solução: Identificar cada mensagem com o nome do fluxo
-
-### Mudança 1: `process-chat-flow/index.ts` — Adicionar flow_name no metadata de TODA mensagem do fluxo
-
-Em TODAS as respostas do process-chat-flow que incluem `flowId`, adicionar também `flowName` para o frontend exibir.
-
-Locais afetados:
-- Resposta do manual trigger (linhas ~911-920)
-- Resposta de invalidOption (linhas ~1034-1046)
-- Resposta de próximo nó (linhas ~1321-1329)
-- Resposta de ai_response (linhas ~1280-1304)
-
-Adicionar `flowName: flow.name || activeState.chat_flows?.name` em cada JSON de resposta.
-
-### Mudança 2: `meta-whatsapp-webhook/index.ts` — Salvar flow_name no metadata da mensagem
-
-Quando o webhook salva a resposta do fluxo no banco (via send-meta-whatsapp), incluir no metadata da mensagem o `flowData.flowName`. Assim cada mensagem fica rastreável.
+### Código com bug (linhas 859-882):
 
 ```typescript
-// Ao salvar mensagem de resposta do fluxo
-metadata: {
-  flow_id: flowData.flowId,
-  flow_name: flowData.flowName,
+if (nextNode.type === 'condition') {
+  // avalia condição...
+  advanceNode = condNext;  // ← SEM break! Continua o loop.
+} else if (nextNode.type === 'input' || nextNode.type === 'start') {
+  advanceNode = nextNode;  // ← SEM break
+} else {
+  advanceNode = nextNode;
+  break;  // ← Só para aqui (content nodes diretos)
 }
 ```
 
-### Mudança 3: `MessagesWithMedia.tsx` — Exibir badge com nome do fluxo
+O `ia_entrada` é definido como `advanceNode` pelo handler de condição, mas como não há `break`, a próxima iteração avança para `ask_options`.
 
-Quando uma mensagem tem `metadata.flow_name`, exibir um badge pequeno abaixo do bubble:
+## Solução
 
-```text
-┌──────────────────────────────┐
-│ Seja bem-vindo à 3 Cliques!  │
-│ ...                          │
-│                   23:18 ✓    │
-└──────────────────────────────┘
-  🔧 Master Flow + IA (Rascunho)
+Adicionar verificação de tipo de conteúdo após setar `advanceNode` dentro do handler de condição. Se o nó alcançado via condição é um nó de conteúdo (`ai_response`, `ask_options`, `ask_input`, `transfer`, `message`), fazer `break`.
+
+### Mudança: `process-chat-flow/index.ts` (linhas 873-875)
+
+Após `advanceNode = condNext;`, adicionar:
+
+```typescript
+if (condNext) break;
+advanceNode = condNext;
 ```
 
-Isso elimina 100% da confusão: cada mensagem mostra de qual fluxo veio.
+Não, mais simples — após `advanceNode = condNext;` verificar se é nó de conteúdo:
 
-### Mudança 4: Nenhuma mudança no guard de bloqueio
+```typescript
+advanceNode = condNext;
+// Se alcançou um nó de conteúdo via condição, parar aqui
+if (!['condition', 'input', 'start'].includes(advanceNode.type)) break;
+```
 
-O guard na linha 1332 já funciona corretamente. Não precisa de alteração.
+Isso garante que quando a condição leva a um `ai_response`, o auto-avanço para ali em vez de continuar para o próximo nó.
 
-## Resumo de arquivos
+## Resumo
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/process-chat-flow/index.ts` | Adicionar `flowName` em todas as respostas JSON |
-| `supabase/functions/meta-whatsapp-webhook/index.ts` | Salvar `flow_name` no metadata da mensagem no banco |
-| `src/components/inbox/MessagesWithMedia.tsx` | Exibir badge com nome do fluxo quando disponível no metadata |
+| `supabase/functions/process-chat-flow/index.ts` | Adicionar `break` após condição levar a nó de conteúdo no auto-avanço (1 linha) |
 
 ## Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — apenas adiciona informação, não altera lógica |
-| Upgrade | Sim — elimina confusão visual entre fluxos |
+| Regressão zero | Sim — apenas corrige caso onde condição leva a ai_response; ask_options diretos continuam funcionando |
+| Upgrade | Sim — ai_response agora é respeitado como ponto de parada no auto-avanço |
 | Kill Switch | Não afetado |
-| Fluxo nunca mudo | Não afetado |
+| Fluxo nunca mudo | Não afetado — o nó ai_response será ativado corretamente e a IA vai responder |
 
