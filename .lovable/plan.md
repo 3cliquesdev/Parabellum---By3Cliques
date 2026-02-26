@@ -1,60 +1,49 @@
 
 
-# Trava Financeira no Nó de Resposta IA
+# Fix: Auto-close para conversas sem departamento
 
-## Alterações (5 arquivos)
+## Problema
 
-### 1. `src/components/chat-flows/panels/BehaviorControlsSection.tsx`
-- Adicionar import `DollarSign` do lucide-react
-- Na seção "O que a IA NÃO pode fazer" (bloco vermelho, após o switch de "Não dar opções numeradas" ~linha 172), adicionar novo switch:
-  - Ícone: `DollarSign` vermelho
-  - Label: "Não resolver assuntos financeiros"
-  - Descrição: "A IA transfere para humano ao detectar saque, reembolso ou devolução"
-  - Campo: `forbid_financial` (default `false`)
-- Adicionar badge `💰 Sem financeiro` na lista de badges ativas (~linha 175-191)
+A query da Etapa 3 (`auto-close-conversations`) filtra por `department = dept.id`, ignorando conversas com `department IS NULL`. Das 20 conversas abertas com +5 min de inatividade, 18 não têm departamento atribuído.
 
-### 2. `src/components/chat-flows/nodes/AIResponseNode.tsx`
-- Adicionar `forbid_financial?: boolean` na interface `AIResponseNodeData`
-- Adicionar import `DollarSign` do lucide-react
-- Renderizar badge `Sem financeiro` (variant destructive, ícone DollarSign) quando `data.forbid_financial === true`
+## Solução
 
-### 3. `src/components/chat-flows/ChatFlowEditor.tsx`
-- Adicionar `forbid_financial: false` nos defaults do nó ai_response (~linha 188)
+Adicionar uma **Etapa 3b** na edge function `auto-close-conversations` que processa conversas em autopilot **sem departamento** usando um fallback global de 5 minutos.
 
-### 4. `supabase/functions/process-chat-flow/index.ts`
-- Nos 4 locais onde já passa `forbidQuestions`/`forbidOptions` (linhas ~1227, ~1387, ~1883, ~2094), adicionar:
-  ```
-  forbidFinancial: node.data?.forbid_financial ?? false,
-  ```
+### Arquivo: `supabase/functions/auto-close-conversations/index.ts`
 
-### 5. `supabase/functions/ai-autopilot-chat/index.ts`
+**Após a Etapa 3 (~linha 418), adicionar Etapa 3b:**
 
-**5a. Ler flag (~linha 1273):**
-```typescript
-const flowForbidFinancial: boolean = flow_context?.forbidFinancial ?? false;
+1. Buscar conversas `status='open'`, `ai_mode='autopilot'`, `department IS NULL`, `last_message_at < NOW() - 5 min`
+2. Para cada conversa:
+   - Verificar que última mensagem **não** é do contact (mesmo guard da Etapa 3)
+   - Inserir mensagem de encerramento por inatividade
+   - Aplicar tag "Desistência"
+   - Fechar com `closed_reason: 'ai_inactivity'`, `auto_closed: true`
+   - **Não** enviar CSAT (sem departamento = sem config de rating)
+3. Usar o mesmo `AI_CLOSE_MESSAGE` já existente
+4. Adicionar ao `closedIds` para não duplicar
+
+### Detalhes técnicos
+
+```sql
+-- Query a adicionar
+SELECT id, contact_id, last_message_at, ai_mode, channel, 
+       whatsapp_instance_id, whatsapp_meta_instance_id, whatsapp_provider
+FROM conversations
+WHERE status = 'open'
+  AND ai_mode = 'autopilot'
+  AND department IS NULL
+  AND last_message_at < (NOW() - INTERVAL '5 minutes')
 ```
 
-**5b. Injetar no system prompt (onde já injeta restrições de forbidQuestions/forbidOptions):**
-Se `flowForbidFinancial === true`, adicionar bloco:
-```
-🔒 TRAVA FINANCEIRA ATIVA:
-Você NÃO pode resolver assuntos financeiros (saque, reembolso, estorno, devolução, cancelamento, cobrança, pagamento).
-Se o cliente mencionar qualquer assunto financeiro, responda EXATAMENTE:
-"Esse tipo de solicitação precisa ser tratada por um atendente. Vou te transferir agora!"
-E use request_human_agent imediatamente.
-Você PODE: coletar dados (email, CPF, ID do pedido) e resumir o caso. NÃO PODE: instruir processos financeiros ou prometer resolução.
-```
+- Fallback fixo de 5 minutos (padrão seguro)
+- Sem CSAT (não há departamento para consultar `send_rating_on_close`)
+- Mesma mensagem de cortesia e tag "Desistência"
+- Log claro: `[Auto-Close] ✅ No-dept AI closed conversation {id} - ai_inactivity (no department)`
 
-**5c. Validação pós-resposta (~linha 7774, após validateResponseRestrictions):**
-Adicionar `validateFinancialRestriction(assistantMessage, forbidFinancial)`:
-- Regex no conteúdo da mensagem da IA detectando afirmações de resolução financeira:
-  ```
-  /(j[áa] processei|foi estornado|solicitei reembolso|vou reembolsar|pode sacar|liberei o saque|reembolso aprovado|estorno realizado|cancelamento confirmado|pagamento devolvido)/i
-  ```
-- Se detectar: substituir por fallback "Esse tipo de solicitação precisa ser tratada por um atendente." + forçar `request_human_agent` (ou retornar com flag `force_human_transfer: true`)
-
-## Impacto
-- Zero regressão: toggles existentes inalterados
-- Aditivo: novo campo `forbid_financial` opcional no nó
-- Dupla camada: prompt + validação pós-resposta
+### Impacto
+- Zero regressão: Etapas 1, 2 e 3 inalteradas
+- Aditiva: nova etapa 3b só pega o que as outras não pegam
+- Resolve as 18+ conversas órfãs imediatamente no próximo ciclo (10 min)
 
