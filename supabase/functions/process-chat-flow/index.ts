@@ -679,7 +679,7 @@ serve(async (req) => {
           conversation_id: conversationId,
           flow_id: flow.id,
           current_node_id: contentNode.id,
-          collected_data: manualCollectedData,
+          collected_data: { ...manualCollectedData, __manual_test: true },
           status: initialStatus,
         })
         .select()
@@ -954,6 +954,25 @@ serve(async (req) => {
         JSON.stringify({ useAI: true, reason: "Error fetching flow state" }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // 🧪 TEST MODE GUARD: Cancelar estados residuais de fluxos automáticos
+    if (activeState && isTestMode && !manualTrigger) {
+      const isManualTestState = (activeState.collected_data as any)?.__manual_test === true;
+      if (!isManualTestState) {
+        console.log('[process-chat-flow] 🧪 TEST MODE: Cancelando estado residual de fluxo automático:', activeState.flow_id);
+        await supabaseClient
+          .from('chat_flow_states')
+          .update({ status: 'cancelled' })
+          .eq('id', activeState.id);
+
+        return new Response(JSON.stringify({
+          useAI: false,
+          skipAutoResponse: true,
+          reason: 'test_mode_residual_cancelled',
+          message: 'Modo teste ativo - estado residual cancelado',
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
 
     // 2. Se tem estado ativo, processar resposta do usuário
