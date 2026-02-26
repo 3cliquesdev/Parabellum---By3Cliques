@@ -1,43 +1,53 @@
 
 
-# Diagnóstico: Teste do "Onboarding v3 (escuro)" travado em 0/1 nós 0%
+# Auto-close IA por departamento — campo separado
 
-## Causa Raiz
+## Situação atual
 
-O playbook **"Cancelamento (teste)"** (onde o template "Onboarding v3 (escuro)" está configurado) tem `is_active = false`.
+A Etapa 2 do `auto-close-conversations` já fecha conversas `autopilot` usando `auto_close_minutes` do departamento. Porém, esse campo mistura o conceito de timeout de IA com timeout geral (humano). Para dar controle independente, adicionaremos um campo específico para IA.
 
-Quando o `process-playbook-queue` pega o item da fila, ele verifica `playbook.is_active` na **linha 225** e, como está `false`, **cancela o item** com `last_error: "Playbook desativado"` — mesmo sendo um **teste**.
+## Alterações
 
-Os 3 testes recentes (25/fev e 26/fev) todos foram cancelados pelo mesmo motivo. O teste anterior de "Cancelamento de assinatura" funcionou porque na época o playbook estava ativo.
-
-## Correção
-
-### Arquivo: `supabase/functions/process-playbook-queue/index.ts` (linha ~224-237)
-
-Adicionar exceção para itens em **modo teste** (`_test_mode: true` no `node_data`):
-
-```typescript
-// Verificar se playbook está ativo (exceto em modo teste)
-const isTestMode = item.node_data?._test_mode === true;
-if (!playbook.is_active && !isTestMode) {
-  // cancela normalmente...
-}
-```
-
-Isso permite que o "Testar para Mim" funcione mesmo com o playbook desativado, mantendo a proteção para execuções reais.
-
-### Atualizar execuções travadas
-
-Marcar os 3 test runs com `status: running` como `failed` (já que foram cancelados na fila mas o test_run ficou em `running` eternamente — bug secundário):
-
+### 1. Nova coluna no banco: `ai_auto_close_minutes`
 ```sql
-UPDATE playbook_test_runs 
-SET status = 'failed', error_message = 'Playbook estava desativado durante o teste'
-WHERE execution_id IN ('37547c94-...', '39f87ab1-...', 'e52bc293-...');
+ALTER TABLE departments 
+  ADD COLUMN ai_auto_close_minutes integer DEFAULT NULL;
+
+COMMENT ON COLUMN departments.ai_auto_close_minutes IS 
+  'Minutos de inatividade do cliente para encerrar conversa com IA automaticamente. NULL = não encerrar.';
 ```
+
+### 2. Edge Function `auto-close-conversations/index.ts` — Etapa 3: AI inactivity
+
+Adicionar nova etapa após a Etapa 2:
+- Buscar departamentos com `ai_auto_close_minutes IS NOT NULL`
+- Buscar conversas `status = open`, `ai_mode = autopilot`, `last_message_at < threshold`
+- Excluir conversas já fechadas nas etapas anteriores
+- Verificar última mensagem não é do contato (IA respondeu, cliente não)
+- Enviar mensagem de encerramento por inatividade
+- Fechar com `closed_reason: 'ai_inactivity'`, tag "Desistência"
+- Respeitar `send_rating_on_close` do departamento para CSAT
+
+### 3. UI — `DepartmentDialog.tsx`
+
+Adicionar novo campo no bloco de "Encerramento Automático":
+- Switch: "Encerrar conversas com IA por inatividade"
+- Input: "Tempo de inatividade da IA (minutos)" — mínimo 1, placeholder "Ex: 5"
+- Descrição: "Fecha conversas no modo autopilot quando o cliente não responde à IA"
+
+### 4. Hooks e tipos
+
+- `useDepartments.tsx`: Adicionar `ai_auto_close_minutes: number | null` na interface
+- `useCreateDepartment.tsx`: Incluir `ai_auto_close_minutes` nos params
+- `useUpdateDepartment.tsx`: Incluir `ai_auto_close_minutes` nos params
+- `Departments.tsx`: Mostrar o tempo de IA no card quando configurado
+
+### 5. Página Departments — card info
+
+Exibir "IA auto-fecha em X min" ao lado do auto-close existente quando `ai_auto_close_minutes` estiver configurado.
 
 ## Impacto
-- Zero regressão: execuções reais continuam bloqueadas quando playbook está inativo
-- Apenas modo teste (`_test_mode: true`) ganha bypass
-- Bug secundário corrigido: quando a fila cancela, o test_run deve ser atualizado para `failed` em vez de ficar eternamente `running`
+- Zero regressão: Etapas 1 e 2 intocadas
+- `auto_close_minutes` continua disponível para uso futuro (timeout humano)
+- Cada departamento controla independentemente o timeout da IA
 
