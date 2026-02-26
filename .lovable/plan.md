@@ -1,54 +1,62 @@
 
 
-# Fix: IA envia menu genérico após email — SEMPRE continuar com contexto da conversa
+# Diagnóstico: A KB está alimentando a IA instantaneamente?
 
-## Problema Identificado (Conversa #18FDE6F4)
+## Status Atual
 
+| Aspecto | Status | Detalhe |
+|---|---|---|
+| Artigos publicados | 48 | OK |
+| Com embedding | 47/48 | **1 artigo sem embedding** ("Cancelamento de Assinatura Kiwify") |
+| Trigger automático de embedding | **NÃO EXISTE** | Embeddings só são gerados manualmente (botão "Gerar Embeddings" ou ao salvar artigo via UI) |
+| Busca semântica no autopilot | ✅ Funciona | `match_knowledge_articles` com threshold 0.50 |
+| Busca keyword fallback | ✅ Funciona | Fallback quando embedding falha |
+
+## Problemas Encontrados
+
+### 1. Sem trigger automático de embedding
+Quando um artigo é criado/editado **fora da UI** (ex: via `train-ai-pair`, importação de spreadsheet, `extract-knowledge-from-chat`), o embedding **NÃO é gerado automaticamente**. Só é gerado quando:
+- O usuário salva pelo dialog `KnowledgeArticleDialog` (linha 103-106)
+- O usuário clica "Gerar Embeddings" manualmente
+- O candidato é aprovado via `useApproveCandidate`
+
+### 2. 1 artigo publicado sem embedding
+"Cancelamento de Assinatura Kiwify" está publicado mas **invisível para a busca semântica**.
+
+## Plano de Correção
+
+### 1. Criar trigger no banco para gerar embedding automaticamente
+Usar `pg_net` para chamar a edge function `generate-article-embedding` automaticamente sempre que um artigo for inserido ou atualizado com `is_published = true`.
+
+```sql
+CREATE OR REPLACE FUNCTION public.trigger_generate_embedding()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.is_published = true AND (
+    OLD IS NULL OR 
+    OLD.content IS DISTINCT FROM NEW.content OR 
+    OLD.is_published IS DISTINCT FROM NEW.is_published
+  ) THEN
+    PERFORM net.http_post(
+      url := '<supabase_url>/functions/v1/generate-article-embedding',
+      headers := '{"Content-Type":"application/json","Authorization":"Bearer <anon_key>"}'::jsonb,
+      body := json_build_object('article_id', NEW.id, 'content', NEW.content)::jsonb
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_article_publish
+  AFTER INSERT OR UPDATE ON knowledge_articles
+  FOR EACH ROW EXECUTE FUNCTION trigger_generate_embedding();
 ```
-Cliente: "Comprei mais não recebi acesso"
-IA: "Qual produto?"
-Cliente: "Associado Premium"
-IA: "Me informe o email"
-Cliente: libertecdados@gmail.com
-IA: "Encontrei! 1-Pedidos 2-Sistema" ← ERRADO
-```
 
-**Causa raiz**: O `original_intent` só é salvo quando a IA pede email via **Identity Wall** (linha 4558). Neste caso, a IA pediu email como parte da conversa natural — o email foi capturado pelo **detector genérico** (linha 2822), que não tem `original_intent` salvo no metadata. Resultado: cai no else final (linha 3018) e envia o menu hardcoded.
+### 2. Gerar embedding do artigo faltante
+Executar embedding para o artigo "Cancelamento de Assinatura Kiwify" que está sem.
 
-## Solução
-
-### `supabase/functions/ai-autopilot-chat/index.ts` — Bloco else final (linhas 3018-3022)
-
-Quando não há consultor, nem flow_context, nem original_intent salvo — em vez de enviar o menu, **sempre continuar com contexto da conversa** (skipEarlyReturn = true). A IA já tem todo o histórico de mensagens e sabe que o cliente falou sobre "acesso" e "Associado Premium".
-
-**Antes:**
-```typescript
-} else {
-  // Sem consultor, sem flow_context, sem intent - Master Flow assume triagem
-  autoResponse = foundMessage; // ← MENU "1-Pedidos 2-Sistema"
-}
-```
-
-**Depois:**
-```typescript
-} else {
-  // 🆕 FIX: Sempre continuar com contexto da conversa, nunca enviar menu genérico
-  // A IA tem acesso ao histórico completo e pode responder sobre o assunto que o cliente já mencionou
-  console.log('[ai-autopilot-chat] 🎯 Email verificado - continuando com contexto da conversa (sem menu genérico)');
-  const customerName = contact.first_name || verifyResult.customer?.name || 'cliente';
-  autoResponse = `Encontrei seu cadastro, ${customerName}! ✅\n\nVoltando à sua dúvida...`;
-  skipEarlyReturn = true;
-}
-```
-
-Isso faz a IA:
-1. Confirmar que encontrou o cadastro
-2. Continuar processando normalmente — usando o histórico de mensagens que já contém "Comprei mas não recebi acesso" + "Associado Premium"
-3. Buscar na KB e responder com a informação correta
-
-## Governança
-- Zero regressão: o menu nunca era útil nesse cenário — a conversa já tinha contexto
-- O bloco do consultant redirect (linha 2950) permanece intacto
-- O bloco do flow_context (linhas 3001-3017) permanece intacto
-- O bloco do original_intent (linha 2988) permanece intacto (continua funcionando quando Identity Wall salva contexto)
+## Resultado Esperado
+- Qualquer artigo publicado (via UI, train-ai-pair, import, passive learning) terá embedding gerado **automaticamente em segundos**
+- A IA sempre terá acesso semântico ao conteúdo mais recente
+- Zero intervenção manual necessária
 
