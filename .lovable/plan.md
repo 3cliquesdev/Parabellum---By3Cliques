@@ -1,47 +1,41 @@
 
 
-# Diagnóstico: Mensagens do fluxo de teste nao aparecem + fluxo anterior permanece ativo
+# Plano: Fase 1 + Fase 2 — Fluxo anterior cancela automaticamente + UI reativa
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Causa Raiz (2 problemas)
+## Diagnóstico Atualizado
 
-### Problema 1: Mensagens nao aparecem no chat
-Quando o `FlowPickerButton.handleStartFlow` chama `process-chat-flow` com sucesso, ele mostra um toast mas **nao invalida a query de mensagens**. As mensagens geradas pelo fluxo (inseridas server-side pela edge function) so aparecerao quando o realtime entregar o evento — que pode demorar ou falhar silenciosamente.
+Após analisar o backend, descobri que a **Fase 2 já está implementada no backend**. Na linha 662-673 de `process-chat-flow/index.ts`, o manual trigger já deleta todos os estados anteriores (`active`, `waiting_input`, `in_progress`, `cancelled`) antes de criar o novo. Ou seja, o banco já fica limpo.
 
-### Problema 2: Fluxo anterior permanece ativo
-Quando um novo fluxo e iniciado, o fluxo anterior nao e cancelado automaticamente. O `hasActiveFlow` guard bloqueia novos fluxos, mas se o usuario conseguiu iniciar (ex: via race condition ou fluxo completado parcialmente), o `useActiveFlowState` pode continuar mostrando o fluxo antigo por causa do `staleTime: 10_000`.
+O problema real é **100% frontend/cache**:
 
-## Solucao
+1. **`hasActiveFlow` guard bloqueia** — o `FlowPickerButton` recusa iniciar se `hasActiveFlow=true`, mas o cache ainda mostra o fluxo antigo por causa do `staleTime: 10_000`
+2. **`staleTime: 10_000`** — mantém o dado "velho" por até 10 segundos, impedindo refetch mesmo com invalidação em certos cenários
 
-### Mudanca 1: `FlowPickerButton.tsx` — Invalidar queries apos iniciar fluxo
+## Mudanças Necessárias
 
-Apos o sucesso de `handleStartFlow`, invalidar tanto a query de mensagens quanto a de flow state:
+### 1. `useActiveFlowState.ts` — Reduzir `staleTime`
 
-```typescript
-// Dentro do handleStartFlow, após toast.success:
-const queryClient = useQueryClient();
-// ...
-queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
-queryClient.invalidateQueries({ queryKey: ["active-flow-state", conversationId] });
-```
+Alterar `staleTime` de `10_000` para `2_000` (2 segundos). Suficiente para evitar spam de requests, mas rápido o bastante para reagir a mudanças.
 
-Isso forca o refetch imediato das mensagens geradas pelo fluxo e atualiza o indicador de fluxo ativo.
+**Linha 53:** `staleTime: 10_000` → `staleTime: 2_000`
 
-### Mudanca 2: `FlowPickerButton.tsx` — Adicionar import do `useQueryClient`
+### 2. `FlowPickerButton.tsx` — Remover guard `hasActiveFlow`
 
-Importar `useQueryClient` do tanstack e instanciar dentro do componente.
+Como o backend já limpa estados anteriores automaticamente no manual trigger, o guard frontend é desnecessário e causa o bug. Remover o bloco das linhas 47-50 que impede iniciar novo fluxo quando `hasActiveFlow=true`.
 
-| Arquivo | Mudanca | Descricao |
-|---|---|---|
-| `FlowPickerButton.tsx` | Adicionar `useQueryClient` + invalidar queries | Forca refetch de mensagens e flow state apos iniciar fluxo |
+Isso é seguro porque:
+- O backend (linha 662-673) já faz `DELETE FROM chat_flow_states WHERE conversation_id = X AND status IN (...)` antes de criar o novo
+- Não há risco de múltiplos fluxos simultâneos
+- A prop `hasActiveFlow` pode ser mantida na interface mas ignorada (ou removida)
 
 ### Impacto
 
 | Regra | Status |
 |---|---|
-| Regressao zero | Sim — apenas adiciona invalidacoes, sem remover logica |
-| Upgrade | Sim — garante que mensagens e estado do fluxo sao atualizados imediatamente |
-| Kill Switch | Nao afetado |
-| Fluxo nunca mudo | Nao afetado — so melhora a exibicao no frontend |
+| Regressão zero | Sim — backend já protegia contra duplicação |
+| Upgrade | Sim — elimina bloqueio falso por cache |
+| Kill Switch | Não afetado |
+| Fluxo nunca mudo | Não afetado |
 
