@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Node } from "reactflow";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -23,6 +24,37 @@ import {
 interface BehaviorControlsSectionProps {
   selectedNode: Node;
   updateNodeData: (field: string, value: any) => void;
+}
+
+function ExitKeywordsTextarea({ selectedNode, updateNodeData }: BehaviorControlsSectionProps) {
+  const [exitText, setExitText] = useState(
+    (selectedNode.data.exit_keywords || []).join("\n")
+  );
+
+  useEffect(() => {
+    setExitText((selectedNode.data.exit_keywords || []).join("\n"));
+  }, [selectedNode.id]);
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium">Palavras de saída</Label>
+      <Textarea
+        onKeyDown={(e) => e.stopPropagation()}
+        value={exitText}
+        onChange={(e) => setExitText(e.target.value)}
+        onBlur={() => {
+          const keywords = exitText.split("\n").map((k: string) => k.trim()).filter(Boolean);
+          updateNodeData("exit_keywords", keywords);
+        }}
+        placeholder={"falar com atendente\nencerrar\nhumano"}
+        rows={4}
+        className="resize-y text-sm min-h-[80px] max-h-[200px] overflow-y-auto"
+      />
+      <p className="text-[10px] text-muted-foreground">
+        Uma por linha. Se o cliente digitar uma dessas, o fluxo avança.
+      </p>
+    </div>
+  );
 }
 
 export function BehaviorControlsSection({
@@ -168,27 +200,10 @@ export function BehaviorControlsSection({
           </Label>
         </div>
 
-        {/* Palavras de saída */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Palavras de saída</Label>
-          <Textarea
-            onKeyDown={(e) => e.stopPropagation()}
-            value={(selectedNode.data.exit_keywords || []).join("\n")}
-            onChange={(e) => {
-              const keywords = e.target.value
-                .split("\n")
-                .map((k: string) => k.trim())
-                .filter(Boolean);
-              updateNodeData("exit_keywords", keywords);
-            }}
-            placeholder={"falar com atendente\nencerrar\nhumano"}
-            rows={4}
-            className="resize-y text-sm min-h-[80px] max-h-[200px] overflow-y-auto"
-          />
-          <p className="text-[10px] text-muted-foreground">
-            Uma por linha. Se o cliente digitar uma dessas, o fluxo avança.
-          </p>
-        </div>
+        <ExitKeywordsTextarea
+          selectedNode={selectedNode}
+          updateNodeData={updateNodeData}
+        />
 
         {/* Máximo de interações */}
         <div className="space-y-3">
