@@ -1,34 +1,41 @@
 
 
-# Diagnóstico: Fluxo cancelado mas não permite iniciar outro
+# Indicador de Fluxo Ativo — Mover para Header
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Causa Raiz
+## Situação Atual
 
-No `useActiveFlowState.ts`, quando o fluxo é cancelado (linha 91), o código chama `invalidateQueries` — isso marca a query como "stale" e agenda um refetch. Porém, o refetch é **assíncrono** e pode levar alguns milissegundos. Se o usuário clicar no FlowPickerButton logo após ver o toast "Fluxo cancelado", o `activeFlow` ainda contém o valor antigo (não-null), e o guard `hasActiveFlow` bloqueia com o erro.
+O `ActiveFlowIndicator` está renderizado na linha 684 do `ChatWindow.tsx`, **dentro da área de chat** (entre o alert de "Assumir" e o scroll de mensagens). Isso faz com que ele fique pouco visível, especialmente quando há muitas mensagens.
 
-Além disso, `staleTime: 10_000` (10s) pode impedir refetches em certos cenários.
+Na screenshot, o usuário quer que o indicador de fluxo ativo fique visível no **header** da conversa, junto aos botões de ação (Teste, Assumir, Negócio, etc.).
 
-## Solução
+## Proposta
 
-Adicionar um **optimistic update** no `cancelFlow`: setar o cache da query para `null` imediatamente antes de invalidar.
+Mover o `<ActiveFlowIndicator>` da área de conteúdo (linha 684) para o **header**, logo abaixo da barra de ações. Isso garante visibilidade permanente sem scroll.
 
-### Mudança única em `useActiveFlowState.ts`
+| Mudança | Arquivo | Descrição |
+|---|---|---|
+| Mover ActiveFlowIndicator | `ChatWindow.tsx` | Remover da linha 684 e colocar após o fechamento do header (linha ~650), antes do alert de "Assumir" |
 
-Na função `cancelFlow` (linha 90), após o `toast.success`, adicionar `queryClient.setQueryData(queryKey, null)` **antes** do `invalidateQueries`. Isso garante que todos os componentes que consomem essa query (ChatWindow, ActiveFlowIndicator, SuperComposer) vejam `activeFlow = null` instantaneamente.
+### Detalhamento
 
-```typescript
-// cancelFlow — após toast.success:
-queryClient.setQueryData(queryKey, null);   // ← NOVO: optimistic update
-queryClient.invalidateQueries({ queryKey }); // mantém refetch para confirmar
-```
+**ChatWindow.tsx:**
+- Remover `<ActiveFlowIndicator conversationId={conversation.id} />` da posição atual (linha 684)
+- Inserir o componente logo após o `</div>` que fecha o header (linha 650), antes do bloco `canShowTakeControl`
+- O componente já possui toda a lógica: mostra nome do fluxo, badge ativo/rascunho, botão de cancelar
+
+### Resultado visual
+
+O indicador ficará fixo no topo da conversa, sempre visível, mostrando:
+- Ícone de fluxo + nome do fluxo entre aspas
+- Badge "Ativo" ou "Rascunho"  
+- Botão X para cancelar
 
 ### Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — apenas adiciona optimistic update, sem remover lógica |
-| Upgrade | Sim — elimina race condition entre cancel e novo início |
-| Componentes afetados | Todos que usam `useActiveFlowState` se beneficiam automaticamente |
+| Regressão zero | Sim — mesmo componente, apenas reposicionado |
+| Upgrade | Sim — melhora visibilidade do fluxo ativo |
 
