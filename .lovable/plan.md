@@ -1,132 +1,80 @@
 
 
-# Plano: Patch exato no bloco `ai_response` do `process-chat-flow`
+# Plano: Corrigir IA pedindo email e redirecionando para consultor durante fluxo
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Diagnóstico
+## Diagnóstico (3 problemas encontrados)
 
-O bloco `ai_response` em `supabase/functions/process-chat-flow/index.ts` (linhas 1059–1149) tem dois problemas:
+### Problema 1: System prompt manda pedir email mesmo com bypass
+**Linha 5517** do `ai-autopilot-chat/index.ts`:
+```typescript
+${contactEmail ? `- Email: ${safeEmail}` : '- Email: NÃO CADASTRADO - SOLICITAR'}
+```
+Quando o contato não tem email, o prompt diz **"SOLICITAR"** — o GPT-5 obedece e pede email, mesmo que a Identity Wall esteja bypassed pelo `flow_context`. O `identityWallNote` diz "NÃO peça email" mas a instrução "SOLICITAR" no contexto do cliente contradiz.
 
-1. **Sem anti-duplicação** — mensagens duplicadas (mesmo texto em <5s) incrementam o contador, causando EXIT prematuro
-2. **EXIT por `max_interactions` avança no fluxo** — deveria transferir para humano (`waiting_human`) e encerrar o flow state
+### Problema 2: CONSULTANT REDIRECT interrompe o atendimento
+Quando o usuário fornece email e o `verify_customer_email` encontra o cliente com `consultant_id`, o código **automaticamente** (linhas 2760-2797):
+- Atribui conversa ao consultor
+- Muda `ai_mode` para `copilot`
+- Envia "Encontrei seu cadastro, Ronny teste Ronny teste! Vou te conectar com seu consultor"
+- **Para de ajudar com a pergunta original** (pedido)
 
-## Solução — Patch exato (linhas 1059–1149)
+O usuário quer que a IA ajude PRIMEIRO, não redirecione imediatamente.
 
-Substituir o bloco inteiro `else if (currentNode.type === 'ai_response') { ... }` pelo código do usuário, com uma adaptação:
+### Problema 3: Nome duplicado "Ronny teste Ronny teste"
+O contato com email `libertecdados@gmail.com` tem `first_name: "Ronny teste"` e `last_name: "Ronny teste"` — dado incorreto no banco. O template concatena os dois.
 
-**O helper `sendMetaWhatsAppMessage` não existe** neste escopo. Para enviar a fallback message via WhatsApp, o código precisa:
-1. Buscar dados da conversa (`channel`, `contact_id`, `whatsapp_meta_instance_id`)
-2. Buscar o phone do contato (`phone`, `whatsapp_id`)
-3. Salvar na tabela `messages`
-4. Invocar `send-meta-whatsapp` (mesmo padrão usado no bloco `manualTrigger` nas linhas 713–796)
+## Solução
 
-### Código final do bloco (resumo das mudanças)
+### Mudança 1: Remover "SOLICITAR" do contexto do cliente quando há flow_context
+**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts` (linha 5517)
+
+Quando `flow_context` existe, o email no contexto deve dizer "Não identificado (aguardando)" em vez de "NÃO CADASTRADO - SOLICITAR":
 
 ```typescript
-} else if (currentNode.type === 'ai_response') {
-  // UPGRADE 1: Anti-duplicação (texto + janela 5s)
-  collectedData.__ai = collectedData.__ai || { interaction_count: 0 };
-  const now = Date.now();
-  const msgLower = (userMessage || '').toLowerCase().trim();
-  const lastMsg = String(collectedData.__ai.last_message || '').toLowerCase().trim();
-  const lastTs = Number(collectedData.__ai.last_timestamp || 0);
-  const isDuplicate = msgLower.length > 0 && msgLower === lastMsg && (now - lastTs) < 5000;
+// ANTES:
+${contactEmail ? `- Email: ${safeEmail}` : '- Email: NÃO CADASTRADO - SOLICITAR'}
 
-  if (!isDuplicate) {
-    collectedData.__ai.interaction_count++;
-    collectedData.__ai.last_message = userMessage || '';
-    collectedData.__ai.last_timestamp = now;
-  } else {
-    console.log('[process-chat-flow] ⚠️ Duplicate detected, skip counter');
-  }
+// DEPOIS:
+${contactEmail ? `- Email: ${safeEmail}` : (flow_context ? '- Email: Não identificado (a IA pode ajudar sem email)' : '- Email: NÃO CADASTRADO - SOLICITAR')}
+```
 
-  const aiCount = Number(collectedData.__ai.interaction_count || 0);
-  // ... exit keywords + max check (igual) ...
+### Mudança 2: Desabilitar CONSULTANT REDIRECT quando há flow_context ativo
+**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts` (linhas 2760-2797)
 
-  if (keywordMatch || maxReached) {
-    // ... ai_events log (igual) ...
+Quando o nó `ai_response` do fluxo está ativo, o cliente deve ser ajudado pela IA — não redirecionado automaticamente para consultor. O redirect só deve ocorrer fora de fluxo ativo ou quando o usuário pedir explicitamente.
 
-    // UPGRADE 2: max_interactions → humano (não avança)
-    if (maxReached && !keywordMatch) {
-      const fallbackMsg = currentNode.data?.fallback_message
-        || 'Vou te transferir para um atendente humano...';
-
-      // Buscar conversa para delivery (mesmo padrão do manualTrigger)
-      const { data: convExit } = await supabaseClient
-        .from('conversations')
-        .select('channel, contact_id, whatsapp_meta_instance_id')
-        .eq('id', conversationId).maybeSingle();
-
-      // Salvar mensagem + enviar via WhatsApp se aplicável
-      await supabaseClient.from('messages').insert({
-        conversation_id: conversationId,
-        content: fallbackMsg,
-        sender_type: 'system',
-        is_ai_generated: true,
-        channel: convExit?.channel || 'web_chat',
-        status: 'sent'
-      });
-
-      if (convExit?.channel === 'whatsapp' && convExit?.contact_id) {
-        const { data: contactExit } = await supabaseClient
-          .from('contacts').select('phone, whatsapp_id')
-          .eq('id', convExit.contact_id).maybeSingle();
-        const exitPhone = contactExit?.whatsapp_id || contactExit?.phone;
-        if (exitPhone && convExit.whatsapp_meta_instance_id) {
-          await supabaseClient.functions.invoke('send-meta-whatsapp', {
-            body: {
-              instance_id: convExit.whatsapp_meta_instance_id,
-              phone_number: exitPhone,
-              message: fallbackMsg,
-              conversation_id: conversationId,
-              skip_db_save: true,
-              is_bot_message: true
-            }
-          });
-        }
-      }
-
-      // Marcar waiting_human + completar flow
-      await supabaseClient.from('conversations')
-        .update({ ai_mode: 'waiting_human' }).eq('id', conversationId);
-      await supabaseClient.from('chat_flow_states')
-        .update({ status: 'completed', collected_data: collectedData })
-        .eq('id', activeState.id);
-
-      return new Response(JSON.stringify({
-        success: true, useAI: false, completed: true,
-        exitReason: 'max_interactions_human_transfer',
-        fallbackMessage: fallbackMsg
-      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    // EXIT por keyword: avança no fluxo (comportamento atual)
-    delete collectedData.__ai;
-  } else {
-    // STAY: igual ao atual
-    // ... (sem mudanças) ...
-  }
+```typescript
+// Adicionar verificação de flow_context antes do redirect
+if (consultantId && !flow_context) {
+  // ... redirect atual ...
+} else if (consultantId && flow_context) {
+  console.log('[ai-autopilot-chat] ℹ️ Consultor encontrado mas flow_context ativo - IA continua ajudando');
+  // Salvar consultant_id para uso futuro mas NÃO redirecionar
+  autoResponse = foundMessage; // Usar resposta normal de confirmação
+} else {
+  // Sem consultor - comportamento atual
+  autoResponse = foundMessage;
 }
 ```
 
-## Arquivo e linhas
+### Mudança 3 (dados): Nome duplicado
+O contato com `libertecdados@gmail.com` tem `first_name` e `last_name` idênticos ("Ronny teste"). Isso é um problema de dados, não de código. Pode ser corrigido manualmente no CRM. Não é mudança de código.
 
-| Arquivo | Linhas | Mudança |
+## Resumo
+
+| Arquivo | Linha | Mudança |
 |---|---|---|
-| `supabase/functions/process-chat-flow/index.ts` | 1059–1149 | Substituir bloco `ai_response` inteiro |
-
-## Deploy
-
-Automático após salvar o arquivo (edge function `process-chat-flow`).
+| `ai-autopilot-chat/index.ts` | 5517 | Remover "SOLICITAR" quando `flow_context` existe |
+| `ai-autopilot-chat/index.ts` | 2760 | Não redirecionar para consultor quando `flow_context` está ativo |
 
 ## Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | Sim — `exit_keyword` continua avançando igual |
-| Upgrade | Sim — dedup + max_interactions transfere para humano |
-| Fluxo nunca mudo | Sim — fallback_message é enviado antes da transferência |
+| Regressão zero | Sim — fora de fluxo, comportamento idêntico ao atual |
+| Upgrade | Sim — IA ajuda antes de transferir, não pede email desnecessariamente |
 | Kill Switch | Não afetado |
-| Delivery WhatsApp | Usa mesmo padrão do `manualTrigger` (linhas 713-796) |
+| CONSULTANT REDIRECT sem fluxo | Mantido — só desabilita durante fluxo ativo |
 
