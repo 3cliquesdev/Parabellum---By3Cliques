@@ -88,6 +88,7 @@ export function useActiveFlowState(conversationId: string | undefined) {
 
       if (error) throw error;
       toast.success("Fluxo cancelado");
+      queryClient.setQueryData(queryKey, null);
       queryClient.invalidateQueries({ queryKey });
     } catch (err) {
       console.error("[useActiveFlowState] cancel error:", err);
