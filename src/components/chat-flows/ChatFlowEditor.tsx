@@ -185,6 +185,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         max_sentences: 3,
         forbid_questions: true,
         forbid_options: true,
+        forbid_financial: false,
         objective: ""
       },
       transfer: { label: "Transferir", message: "Transferindo para atendimento humano...", transfer_type: "department" },

@@ -13,6 +13,7 @@ import {
   Info,
   LogOut,
   AlertTriangle,
+  DollarSign,
 } from "lucide-react";
 import {
   Tooltip,
@@ -64,6 +65,7 @@ export function BehaviorControlsSection({
   const maxSentences = selectedNode.data.max_sentences ?? 3;
   const forbidQuestions = selectedNode.data.forbid_questions ?? true;
   const forbidOptions = selectedNode.data.forbid_options ?? true;
+  const forbidFinancial = selectedNode.data.forbid_financial ?? false;
   const objective = selectedNode.data.objective || "";
 
   return (
@@ -171,6 +173,23 @@ export function BehaviorControlsSection({
           />
         </div>
 
+        {/* Não resolver financeiro */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-red-400" />
+            <div>
+              <Label className="text-sm font-medium">Não resolver assuntos financeiros</Label>
+              <p className="text-[10px] text-muted-foreground">
+                A IA transfere para humano ao detectar saque, reembolso ou devolução
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidFinancial}
+            onCheckedChange={(checked) => updateNodeData("forbid_financial", checked)}
+          />
+        </div>
+
         {/* Status das Restrições */}
         <div className="flex flex-wrap gap-1 pt-1">
           {forbidQuestions && (
@@ -183,7 +202,12 @@ export function BehaviorControlsSection({
               Sem opções
             </Badge>
           )}
-          {!forbidQuestions && !forbidOptions && (
+          {forbidFinancial && (
+            <Badge variant="destructive" className="text-[10px] px-1.5">
+              💰 Sem financeiro
+            </Badge>
+          )}
+          {!forbidQuestions && !forbidOptions && !forbidFinancial && (
             <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">
               Sem restrições ativas
             </Badge>

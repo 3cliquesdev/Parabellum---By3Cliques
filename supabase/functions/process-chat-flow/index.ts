@@ -1226,6 +1226,7 @@ serve(async (req) => {
               maxSentences: currentNode.data?.max_sentences ?? 3,
               forbidQuestions: currentNode.data?.forbid_questions ?? true,
               forbidOptions: currentNode.data?.forbid_options ?? true,
+              forbidFinancial: currentNode.data?.forbid_financial ?? false,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -1386,6 +1387,7 @@ serve(async (req) => {
             maxSentences: nextNode.data?.max_sentences ?? 3,
             forbidQuestions: nextNode.data?.forbid_questions ?? true,
             forbidOptions: nextNode.data?.forbid_options ?? true,
+            forbidFinancial: nextNode.data?.forbid_financial ?? false,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -1882,6 +1884,7 @@ serve(async (req) => {
               maxSentences: node.data?.max_sentences ?? 3,
               forbidQuestions: node.data?.forbid_questions ?? true,
               forbidOptions: node.data?.forbid_options ?? true,
+              forbidFinancial: node.data?.forbid_financial ?? false,
               debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -2093,6 +2096,7 @@ serve(async (req) => {
           maxSentences: startNode.data?.max_sentences ?? 3,
           forbidQuestions: startNode.data?.forbid_questions ?? true,
           forbidOptions: startNode.data?.forbid_options ?? true,
+          forbidFinancial: startNode.data?.forbid_financial ?? false,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

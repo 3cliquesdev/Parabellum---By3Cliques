@@ -1116,6 +1116,7 @@ interface FlowContext {
   maxSentences?: number;
   forbidQuestions?: boolean;
   forbidOptions?: boolean;
+  forbidFinancial?: boolean;
 }
 
 // 🆕 FASE 1: Função para gerar prompt RESTRITIVO baseado no flow_context
@@ -1125,6 +1126,7 @@ function generateRestrictedPrompt(flowContext: FlowContext, contactName: string,
   const objective = flowContext.objective || 'Responder a dúvida do cliente';
   const forbidQuestions = flowContext.forbidQuestions ?? true;
   const forbidOptions = flowContext.forbidOptions ?? true;
+  const forbidFinancial = flowContext.forbidFinancial ?? false;
   
   let restrictions = `Você é um assistente corporativo.
 Responda SOMENTE ao seguinte objetivo: "${objective}"
@@ -1137,6 +1139,15 @@ Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;
   
   if (forbidOptions) {
     restrictions += '\nNÃO ofereça opções ou múltipla escolha.';
+  }
+
+  if (forbidFinancial) {
+    restrictions += `\n\n🔒 TRAVA FINANCEIRA ATIVA:
+Você NÃO pode resolver assuntos financeiros (saque, reembolso, estorno, devolução, cancelamento, cobrança, pagamento).
+Se o cliente mencionar qualquer assunto financeiro, responda EXATAMENTE:
+"Esse tipo de solicitação precisa ser tratada por um atendente. Vou te transferir agora!"
+E use request_human_agent imediatamente.
+Você PODE: coletar dados (email, CPF, ID do pedido) e resumir o caso. NÃO PODE: instruir processos financeiros ou prometer resolução.`;
   }
   
   restrictions += `
@@ -1271,16 +1282,18 @@ serve(async (req) => {
     const flowMaxSentences: number = flow_context?.maxSentences ?? 3;
     const flowForbidQuestions: boolean = flow_context?.forbidQuestions ?? true;
     const flowForbidOptions: boolean = flow_context?.forbidOptions ?? true;
+    const flowForbidFinancial: boolean = flow_context?.forbidFinancial ?? false;
     
     // 🆕 FASE 1: Flag para usar prompt restritivo
-    const useRestrictedPrompt = !!(flow_context && (flowObjective || flowForbidQuestions || flowForbidOptions));
+    const useRestrictedPrompt = !!(flow_context && (flowObjective || flowForbidQuestions || flowForbidOptions || flowForbidFinancial));
     
     if (useRestrictedPrompt) {
       console.log('[ai-autopilot-chat] 🎯 FASE 1: Modo restritivo ATIVO:', {
         objective: flowObjective?.substring(0, 50),
         maxSentences: flowMaxSentences,
         forbidQuestions: flowForbidQuestions,
-        forbidOptions: flowForbidOptions
+        forbidOptions: flowForbidOptions,
+        forbidFinancial: flowForbidFinancial
       });
     }
 
@@ -7771,6 +7784,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       // 🆕 FASE 1: Validação de restrições de comportamento (forbidQuestions, forbidOptions)
       const forbidQuestions = flow_context.forbidQuestions ?? true;
       const forbidOptions = flow_context.forbidOptions ?? true;
+      const forbidFinancial = flow_context.forbidFinancial ?? false;
       const restrictionCheck = validateResponseRestrictions(assistantMessage, forbidQuestions, forbidOptions);
       
       if (!restrictionCheck.valid) {
@@ -7782,6 +7796,23 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         assistantMessage = fallbackMessage;
         
         console.log('[ai-autopilot-chat] ✅ Resposta substituída por fallback');
+      } else if (forbidFinancial) {
+        // 🔒 Validação pós-resposta: Trava Financeira
+        const financialResolutionPattern = /(j[áa] processei|foi estornado|solicitei reembolso|vou reembolsar|pode sacar|liberei o saque|reembolso aprovado|estorno realizado|cancelamento confirmado|pagamento devolvido|já estornei|processando.*reembolso|aprovei.*devolu[çc][ãa]o)/i;
+        if (financialResolutionPattern.test(assistantMessage)) {
+          console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA: IA tentou resolver assunto financeiro, substituindo resposta');
+          assistantMessage = 'Esse tipo de solicitação precisa ser tratada por um atendente. Vou te transferir agora!';
+          // Forçar transferência para humano
+          try {
+            await supabaseClient
+              .from('conversations')
+              .update({ ai_mode: 'waiting_human', assigned_to: null })
+              .eq('id', conversationId);
+            console.log('[ai-autopilot-chat] 🔒 Conversa transferida para humano (trava financeira)');
+          } catch (transferErr) {
+            console.error('[ai-autopilot-chat] Erro ao transferir (trava financeira):', transferErr);
+          }
+        }
       } else {
         // 🆕 FASE 1: Enforce limite de frases no pós-processamento
         const maxSentences = flow_context.maxSentences ?? 3;
