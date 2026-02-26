@@ -873,6 +873,8 @@ serve(async (req) => {
             }
             if (!condNext) break;
             advanceNode = condNext;
+            // Se alcançou um nó de conteúdo via condição, parar aqui
+            if (!['condition', 'input', 'start'].includes(advanceNode.type)) break;
           } else if (nextNode.type === 'input' || nextNode.type === 'start') {
             advanceNode = nextNode;
           } else {
