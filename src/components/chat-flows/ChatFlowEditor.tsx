@@ -245,6 +245,23 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
       ...selectedNode,
       data: { ...selectedNode.data, [field]: value }
     });
+
+    // Auto-clean orphan edges when condition mode changes
+    if (selectedNode.type === 'condition' && field === 'condition_rules') {
+      const rules = value as Array<{ id: string }> | undefined;
+      if (rules && rules.length > 0) {
+        // Multi-rule mode: remove old true/false handles
+        const validHandles = new Set([...rules.map(r => r.id), 'else']);
+        setEdges((eds) => eds.filter(
+          (e) => e.source !== selectedNode.id || !e.sourceHandle || validHandles.has(e.sourceHandle)
+        ));
+      } else {
+        // Classic mode: remove rule_* and else handles
+        setEdges((eds) => eds.filter(
+          (e) => e.source !== selectedNode.id || !e.sourceHandle || ['true', 'false'].includes(e.sourceHandle)
+        ));
+      }
+    }
   };
 
   const deleteNode = () => {
