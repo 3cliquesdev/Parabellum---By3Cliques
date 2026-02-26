@@ -163,16 +163,16 @@ export default function ChatFlows() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEditFlow(flow)}>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditFlow(flow); }}>
                         <Pencil className="h-4 w-4 mr-2" />
                         Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => duplicateFlow.mutate(flow)}>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); duplicateFlow.mutate(flow); }}>
                         <Copy className="h-4 w-4 mr-2" />
                         Duplicar
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => toggleActive.mutate({ id: flow.id, is_active: !flow.is_active })}
+                        onClick={(e) => { e.stopPropagation(); toggleActive.mutate({ id: flow.id, is_active: !flow.is_active }); }}
                       >
                         {flow.is_active ? (
                           <>
@@ -188,7 +188,7 @@ export default function ChatFlows() {
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        onClick={() => setMasterFlow.mutate({ flowId: flow.id, setAsMaster: !flow.is_master_flow })}
+                        onClick={(e) => { e.stopPropagation(); setMasterFlow.mutate({ flowId: flow.id, setAsMaster: !flow.is_master_flow }); }}
                         className={flow.is_master_flow ? "text-yellow-600" : ""}
                       >
                         <Crown className={`h-4 w-4 mr-2 ${flow.is_master_flow ? 'text-yellow-500' : ''}`} />
@@ -197,9 +197,10 @@ export default function ChatFlows() {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem 
                         className="text-destructive"
-                        onClick={() => {
-                          setSelectedFlow(flow);
-                          setShowDeleteDialog(true);
+                        onClick={(e) => {
+                           e.stopPropagation();
+                           setSelectedFlow(flow);
+                           setShowDeleteDialog(true);
                         }}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
