@@ -1724,7 +1724,12 @@ serve(async (req) => {
             }
             
             await supabaseClient.from('conversations')
-              .update({ customer_metadata: cleanMeta })
+              .update({ customer_metadata: {
+                ...cleanMeta,
+                ai_can_classify_ticket: true,
+                ai_last_closed_at: new Date().toISOString(),
+                ai_last_closed_by: 'autopilot'
+              } })
               .eq('id', conversationId);
             
             return new Response(JSON.stringify({ status: 'applied', action: 'conversation_closed' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -5739,6 +5744,7 @@ Resolução desejada: Reembolso integral"
 - request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver.
 - check_tracking: Consulta rastreio de pedidos. Use quando cliente perguntar sobre entrega ou status de envio.
 - close_conversation: Encerre a conversa quando detectar que o assunto foi resolvido (cliente agradece, diz "era só isso", "obrigado, resolveu"). SEMPRE pergunte antes (customer_confirmed=false). Só use customer_confirmed=true após cliente confirmar "sim". Se cliente disser "não" ou tiver mais dúvidas, continue normalmente.
+- classify_and_resolve_ticket: Após encerrar conversa (close_conversation confirmado), classifique e registre a resolução. Use a categoria mais adequada do enum. Escreva summary curto e resolution_notes objetivo.
 
 ${knowledgeContext}${identityWallNote}
 
@@ -5917,6 +5923,25 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
               customer_confirmed: { type: 'boolean', description: 'true SOMENTE após cliente confirmar explicitamente que pode encerrar' }
             },
             required: ['reason', 'customer_confirmed']
+          }
+        }
+      },
+      // 🆕 Tool: classify_and_resolve_ticket - Classificação e registro de resolução pós-encerramento
+      {
+        type: 'function',
+        function: {
+          name: 'classify_and_resolve_ticket',
+          description: 'Classifica e registra resolução após encerramento confirmado. Use APÓS close_conversation com customer_confirmed=true. Cria ticket resolvido ou atualiza existente.',
+          parameters: {
+            type: 'object',
+            properties: {
+              category: { type: 'string', enum: ['financeiro','tecnico','bug','outro','devolucao','reclamacao','saque'], description: 'Categoria do atendimento' },
+              summary: { type: 'string', description: 'Resumo curto da resolução (máx 200 chars)' },
+              resolution_notes: { type: 'string', description: 'Detalhes de como foi resolvido' },
+              severity: { type: 'string', enum: ['low','medium','high'], description: 'Gravidade do problema' },
+              tags: { type: 'array', items: { type: 'string' }, description: 'Tags descritivas' }
+            },
+            required: ['category', 'summary', 'resolution_notes']
           }
         }
       }
@@ -7076,6 +7101,167 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
           } catch (error) {
             console.error('[ai-autopilot-chat] ❌ Erro em close_conversation:', error);
             assistantMessage = 'Ocorreu um erro. Posso ajudar com mais alguma coisa?';
+          }
+        }
+        // TOOL: classify_and_resolve_ticket - Classificação pós-encerramento
+        else if (toolCall.function.name === 'classify_and_resolve_ticket') {
+          try {
+            const args = JSON.parse(toolCall.function.arguments);
+            console.log('[ai-autopilot-chat] 📋 classify_and_resolve_ticket chamado:', args);
+
+            // 1. Buscar configs globais
+            const { data: configs } = await supabaseClient
+              .from('system_configurations')
+              .select('key, value')
+              .in('key', ['ai_global_enabled', 'ai_shadow_mode']);
+            
+            const configMap = new Map<string, string>();
+            if (configs) for (const c of configs) configMap.set(c.key, c.value);
+            
+            const aiEnabled = configMap.get('ai_global_enabled') !== 'false';
+            const shadowMode = configMap.get('ai_shadow_mode') === 'true';
+
+            // 2. Kill switch guard
+            if (!aiEnabled) {
+              console.log('[ai-autopilot-chat] 🚫 classify_and_resolve_ticket BLOQUEADO (kill switch)');
+              await supabaseClient.from('ai_events').insert({
+                entity_id: conversationId,
+                entity_type: 'conversation',
+                event_type: 'ai_ticket_classification',
+                model: ragConfig.model,
+                output_json: { category: args.category, summary: args.summary, blocked: true, reason: 'kill_switch' }
+              });
+              assistantMessage = 'Classificação não executada (sistema em manutenção).';
+              break;
+            }
+
+            // 3. Flag guard - só executa se close já aconteceu
+            const { data: convData } = await supabaseClient
+              .from('conversations')
+              .select('related_ticket_id, customer_id, contact_id, customer_metadata, department, status')
+              .eq('id', conversationId)
+              .single();
+
+            const convMeta = convData?.customer_metadata || {};
+            if (!convMeta.ai_can_classify_ticket) {
+              console.log('[ai-autopilot-chat] ⚠️ classify_and_resolve_ticket: flag ai_can_classify_ticket não ativa');
+              assistantMessage = 'Classificação disponível apenas após encerramento confirmado.';
+              break;
+            }
+
+            // 4. Formatar internal_note
+            const internalNote = `[AI RESOLVED]
+Categoria: ${args.category}
+Resumo: ${args.summary}
+Resolução: ${args.resolution_notes}
+Severidade: ${args.severity || 'N/A'}
+Tags: ${args.tags?.join(', ') || 'N/A'}
+Conversa: ${conversationId}`;
+
+            // 5. Shadow mode → só loga, não altera DB
+            if (shadowMode) {
+              console.log('[ai-autopilot-chat] 👁️ classify_and_resolve_ticket em SHADOW MODE');
+              await supabaseClient.from('ai_events').insert({
+                entity_id: conversationId,
+                entity_type: 'conversation',
+                event_type: 'ai_ticket_classification',
+                model: ragConfig.model,
+                output_json: { category: args.category, summary: args.summary, severity: args.severity, tags: args.tags, shadow_mode: true, action: 'suggested_only' }
+              });
+              await supabaseClient.from('ai_suggestions').insert({
+                conversation_id: conversationId,
+                suggested_reply: internalNote,
+                suggestion_type: 'ticket_classification',
+                confidence_score: 1.0,
+                context: { category: args.category, summary: args.summary, resolution_notes: args.resolution_notes, severity: args.severity, tags: args.tags }
+              });
+              assistantMessage = `Classificação sugerida: ${args.category} (shadow mode - não aplicada).`;
+              break;
+            }
+
+            // 6. Anti-duplicação: buscar ticket existente
+            let ticketId = convData?.related_ticket_id;
+            let ticketAction = 'updated';
+
+            if (!ticketId) {
+              // Buscar por source_conversation_id
+              const { data: existingTicket } = await supabaseClient
+                .from('tickets')
+                .select('id')
+                .eq('source_conversation_id', conversationId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              ticketId = existingTicket?.id;
+            }
+
+            if (ticketId) {
+              // UPDATE ticket existente
+              const { error: updateErr } = await supabaseClient.from('tickets')
+                .update({
+                  status: 'resolved',
+                  category: args.category,
+                  internal_note: internalNote,
+                  resolved_at: new Date().toISOString()
+                })
+                .eq('id', ticketId);
+              if (updateErr) console.error('[ai-autopilot-chat] ❌ Erro ao atualizar ticket:', updateErr);
+              else console.log('[ai-autopilot-chat] ✅ Ticket atualizado:', ticketId);
+            } else {
+              // INSERT novo ticket resolvido
+              ticketAction = 'created';
+              const { data: newTicket, error: insertErr } = await supabaseClient.from('tickets')
+                .insert({
+                  subject: `[AI] ${args.summary.substring(0, 100)}`,
+                  description: args.resolution_notes,
+                  status: 'resolved',
+                  category: args.category,
+                  internal_note: internalNote,
+                  source_conversation_id: conversationId,
+                  customer_id: convData?.contact_id || null,
+                  department_id: convData?.department || null,
+                  resolved_at: new Date().toISOString()
+                })
+                .select('id')
+                .single();
+              
+              if (insertErr) {
+                console.error('[ai-autopilot-chat] ❌ Erro ao criar ticket:', insertErr);
+              } else {
+                ticketId = newTicket?.id;
+                console.log('[ai-autopilot-chat] ✅ Ticket criado:', ticketId);
+              }
+            }
+
+            // 7. Vincular ticket à conversa se necessário
+            if (ticketId && !convData?.related_ticket_id) {
+              await supabaseClient.from('conversations')
+                .update({ related_ticket_id: ticketId })
+                .eq('id', conversationId);
+            }
+
+            // 8. Limpar flag (anti re-classificação)
+            const cleanMetaClassify = { ...convMeta };
+            delete cleanMetaClassify.ai_can_classify_ticket;
+            await supabaseClient.from('conversations')
+              .update({ customer_metadata: cleanMetaClassify })
+              .eq('id', conversationId);
+
+            // 9. Auditoria
+            await supabaseClient.from('ai_events').insert({
+              entity_id: conversationId,
+              entity_type: 'conversation',
+              event_type: 'ai_ticket_classification',
+              model: ragConfig.model,
+              output_json: { category: args.category, summary: args.summary, severity: args.severity, tags: args.tags, ticket_id: ticketId, action: ticketAction, shadow_mode: false }
+            });
+
+            assistantMessage = `Ticket classificado como "${args.category}" e registrado como resolvido.`;
+            console.log('[ai-autopilot-chat] ✅ classify_and_resolve_ticket concluído:', { ticketId, action: ticketAction, category: args.category });
+
+          } catch (error) {
+            console.error('[ai-autopilot-chat] ❌ Erro em classify_and_resolve_ticket:', error);
+            assistantMessage = 'Ocorreu um erro ao classificar o ticket. O atendimento já foi encerrado normalmente.';
           }
         }
       }

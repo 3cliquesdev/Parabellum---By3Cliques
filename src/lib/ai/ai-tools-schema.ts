@@ -217,6 +217,39 @@ export const AI_TOOLS_SCHEMA = {
         },
         required: ["reason", "customer_confirmed"]
       }
+    },
+    {
+      name: "classify_and_resolve_ticket",
+      description: "Classifica e registra resolução após encerramento confirmado. Use APÓS close_conversation com customer_confirmed=true.",
+      input_schema: {
+        type: "object",
+        properties: {
+          category: {
+            type: "string",
+            enum: ["financeiro", "tecnico", "bug", "outro", "devolucao", "reclamacao", "saque"],
+            description: "Categoria do atendimento"
+          },
+          summary: {
+            type: "string",
+            description: "Resumo curto da resolução (máx 200 chars)"
+          },
+          resolution_notes: {
+            type: "string",
+            description: "Detalhes de como foi resolvido"
+          },
+          severity: {
+            type: "string",
+            enum: ["low", "medium", "high"],
+            description: "Gravidade do problema"
+          },
+          tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Tags descritivas"
+          }
+        },
+        required: ["category", "summary", "resolution_notes"]
+      }
     }
   ]
 };
@@ -231,7 +264,8 @@ export type ToolName =
   | 'summarize_for_handoff'
   | 'check_customer_eligibility'
   | 'schedule_callback'
-  | 'close_conversation';
+  | 'close_conversation'
+  | 'classify_and_resolve_ticket';
 
 export interface ToolCall {
   name: ToolName;
