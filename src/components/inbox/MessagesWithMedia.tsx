@@ -248,6 +248,9 @@ export function MessagesWithMedia({
           }
         }
 
+        // Extrair flow_name do metadata para badge
+        const flowName = message.metadata?.flow_name as string | undefined;
+
         return (
           <div key={message.id} className={isInTestZone ? "border-l-2 border-amber-400 pl-2" : undefined}>
             <MessageBubble
@@ -271,6 +274,11 @@ export function MessagesWithMedia({
               isManager={isManager}
               attachments={attachments}
             />
+            {flowName && (
+              <p className="text-[10px] text-muted-foreground mt-0.5 ml-10 opacity-70">
+                🔧 {flowName}
+              </p>
+            )}
           </div>
         );
       })}

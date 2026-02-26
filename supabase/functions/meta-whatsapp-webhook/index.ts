@@ -762,7 +762,8 @@ serve(async (req) => {
                       message: formattedMessage,
                       conversation_id: conversation.id,
                       skip_db_save: false,
-                      is_bot_message: true, // 🆕 Resposta do fluxo - NÃO mudar ai_mode
+                      is_bot_message: true,
+                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
                     },
                   });
                   

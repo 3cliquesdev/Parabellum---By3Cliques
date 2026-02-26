@@ -443,6 +443,7 @@ serve(async (req) => {
           whatsapp_provider: "meta",
           sent_via: "send-meta-whatsapp",
           phone_number_id: instance.phone_number_id,
+          ...(body.metadata || {}),
         },
       });
       

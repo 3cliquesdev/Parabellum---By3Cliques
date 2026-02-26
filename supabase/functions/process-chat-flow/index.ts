@@ -914,6 +914,7 @@ serve(async (req) => {
           response: startMessage,
           options,
           flowId: flow.id,
+          flowName: flow.name,
           flowStarted: true,
           manualTrigger: true,
         }),
@@ -1038,9 +1039,10 @@ serve(async (req) => {
               options: formattedOptions,
               retry: true,
               flowId: activeState.flow_id,
-              nodeId: currentNode.id, // Mantém no mesmo nó
+              flowName: activeState.chat_flows?.name || null,
+              nodeId: currentNode.id,
               invalidOption: true,
-              preventAI: true, // 🆕 Flag crítica: impede IA de responder
+              preventAI: true,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -1281,20 +1283,19 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             useAI: true,
-            aiNodeActive: true, // 🆕 Flag obrigatória para IA rodar
+            aiNodeActive: true,
             nodeId: nextNode.id,
             flowId: activeState.flow_id,
+            flowName: activeState.chat_flows?.name || null,
             contextPrompt: nextNode.data?.context_prompt,
             useKnowledgeBase: nextNode.data?.use_knowledge_base !== false,
             collectedData,
-            // Campos do contrato fluxo ↔ IA
             allowedSources: buildAllowedSources(nextNode.data),
             responseFormat: 'text_only',
             personaId: nextNode.data?.persona_id || null,
             personaName: nextNode.data?.persona_name || null,
             kbCategories: nextNode.data?.kb_categories || null,
             fallbackMessage: nextNode.data?.fallback_message || null,
-            // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
             objective: nextNode.data?.objective || null,
             maxSentences: nextNode.data?.max_sentences ?? 3,
             forbidQuestions: nextNode.data?.forbid_questions ?? true,
@@ -1324,6 +1325,7 @@ serve(async (req) => {
           response: nextMessage,
           options,
           flowId: activeState.flow_id,
+          flowName: activeState.chat_flows?.name || null,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
