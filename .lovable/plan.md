@@ -1,53 +1,47 @@
 
 
-# Diagnóstico: Mensagem "Concluí o onboarding" indo para IA em vez de transferir
+# Fix: Condição com multi-regras não deve avaliar com mensagem vazia
 
-## Causa Raiz
+## Problema
 
-O nó de **Condição** no Master Flow ("Fluxo Principal") foi configurado com **multi-regras** (Onboarding + Carnaval), mas as **conexões (edges)** ainda usam os handles antigos `true`/`false` do modo clássico.
+Quando o fluxo inicia (manual ou automático) e encontra um nó de **Condição com multi-regras** (keywords), a travessia inicial avalia a condição com mensagem vazia `""` → nunca dá match → cai no `else` → vai direto para a IA, ignorando completamente as regras configuradas (Onboarding, Carnaval).
 
-```text
-COMO ESTÁ (QUEBRADO):
-┌──────────────┐    sourceHandle="false"    ┌──────────────────┐
-│  Condição    │ ──────────────────────────> │  Múltipla Escolha │
-│ (multi-rule) │    sourceHandle="true"      │  "Seja bem-vindo" │
-│              │ ──────────────────────────> │  (outro nó)       │
-└──────────────┘                            └──────────────────┘
+O fluxo "Master Flow + IA Entrada (Rascunho)" também tem **edges órfãs** (`true`/`false`) junto com os novos rule IDs, causando conflitos.
 
-COMO DEVERIA SER:
-┌──────────────┐    sourceHandle="rule_1771439085235"   ┌──────────────┐
-│  Condição    │ ──────────────────────────────────────> │  Transfer CS │
-│ (multi-rule) │    sourceHandle="rule_1771439103779"   │              │
-│              │ ──────────────────────────────────────> │  (Carnaval)  │
-│              │    sourceHandle="else"                  │              │
-│              │ ──────────────────────────────────────> │  IA / Menu   │
-└──────────────┘                                        └──────────────┘
+## Correção
+
+### 1. Edge Function `process-chat-flow/index.ts` — Parar na condição quando não tem mensagem
+
+**Travessia manual (linha ~626-633)**: Se o nó é `condition` com multi-regras de keywords e não há `userMessage`, **parar a travessia** e salvar o estado como `waiting_input` nesse nó. Na próxima mensagem do usuário, a condição será avaliada corretamente.
+
+**Travessia de novo fluxo (linha ~1950-1957)**: Mesma lógica — se `userMessage` está vazio ou é apenas o trigger automático, parar na condição.
+
+Lógica:
+```
+if (hasMultiRules && !userMessage) {
+  // Parar aqui — aguardar mensagem real do usuário
+  contentNode = currentNode; // mantém na condição
+  break;
+}
 ```
 
-Quando a mensagem "Concluí o onboarding" chega:
-1. `evaluateConditionPath` retorna `rule_1771439085235` (match correto ✅)
-2. `findNextNode` busca edge com `sourceHandle === "rule_1771439085235"` → **não encontra** ❌
-3. Cai no fallback "any edge" → pega o `false` → vai para "Seja bem-vindo" (errado)
-4. Como não tem estado ativo, o Master Flow redireciona para IA
+Quando o usuário enviar a próxima mensagem, o fluxo ativo terá `current_node_id` apontando para o nó de condição, e o código existente de "processar fluxo ativo" (que já usa `userMessage`) avaliará corretamente.
 
-## Solução: Duas correções
+### 2. Limpar edges órfãs do fluxo rascunho
 
-### 1. Fix imediato — Reconectar edges no banco de dados
+SQL: Remover edges com `sourceHandle` = `true` ou `false` do nó de condição `1769459229369` no fluxo `20a05c59-da7e-4eb9-89f7-731b1b7fb3db`.
 
-Atualizar as edges do Master Flow para usar os rule IDs corretos. Isso corrige o fluxo SEM mudar código:
+### 3. Tratamento no fluxo ativo — Condição como nó corrente
 
-- Edge `sourceHandle: "true"` → mudar para `sourceHandle: "rule_1771439085235"` (Onboarding → Transfer CS)
-- Edge `sourceHandle: "false"` → mudar para `sourceHandle: "else"` (Outros → Múltipla Escolha)
-- Adicionar nova edge: `sourceHandle: "rule_1771439103779"` (Carnaval → destino apropriado)
+Quando `current_node_id` aponta para um nó `condition` e chega uma mensagem:
+- Avaliar a condição com a mensagem real
+- Seguir o path correto (rule ID ou else)
+- Continuar a travessia normal
 
-### 2. Fix preventivo — Auto-migrar edges no editor
-
-No `ChatFlowEditor`, quando o usuário muda um nó de condição de modo clássico para multi-regra (ou vice-versa), **deletar automaticamente as edges órfãs** que usam handles inválidos. Isso previne o mesmo problema no futuro.
-
-Implementação no `onNodesChange` ou `onNodeDataChange`: detectar mudança de `condition_rules` e limpar edges com handles `true`/`false` que não existem mais.
+Verificar que o código existente já trata isso no bloco de "processar fluxo ativo" (linhas ~1080-1081).
 
 ## Impacto
-
-- **Zero regressão**: apenas corrige edges do Master Flow e adiciona proteção no editor
-- A lógica do `evaluateConditionPath` e `findNextNode` está correta — o problema são os dados (edges desconectadas)
+- **Zero regressão**: Condições clássicas (`has_data`, `is_true`) não usam `userMessage` e continuam funcionando
+- Apenas condições de **keyword** (multi-regra com `contains`) passam a esperar mensagem real
+- O nó de condição fica como `waiting_input` até o usuário mandar a primeira mensagem
 
