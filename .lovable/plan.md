@@ -1,67 +1,71 @@
 
 
-# Plano: max_interactions avança para próximo nó (não abandona cliente)
+# Plano: Modo Teste bloqueado por ai_mode=waiting_human (regressão)
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## O que muda
+## Diagnóstico
 
-Substituir o bloco de `max_interactions` (linhas 1150-1220) em `supabase/functions/process-chat-flow/index.ts` que atualmente:
-- Hardcoda `waiting_human`
-- Completa o flow state
-- Retorna `completed: true` (abandona o cliente)
+Na conversa `#7D091C1D`, após o fluxo anterior atingir `max_interactions` e o fix avançar para o próximo nó, a conversa ficou com `ai_mode = waiting_human`. Quando você tenta ativar o Modo Teste novamente:
 
-Pelo comportamento correto:
-- Opcionalmente envia `fallback_message` como `sender_type: 'system'`
-- Limpa `__ai` do `collectedData`
-- **Não** retorna — cai no `findNextNode` (linha 1264) igual ao `exit_keyword`
+1. `TestModeDropdown` seta `is_test_mode = true` e chama `process-chat-flow` com `manualTrigger: true`
+2. `process-chat-flow` chega na **linha 371** — proteção de `ai_mode`
+3. Como `ai_mode = waiting_human`, retorna `PROTEÇÃO: ai_mode=waiting_human - NÃO processar` **antes** de chegar no handler de `manualTrigger` (linha 447)
+4. O bypass de `isTestMode` só existe para o Kill Switch (linha 339), **não** para a proteção de `ai_mode`
 
-## Segurança do inbox
+Os logs confirmam: `🛡️ PROTEÇÃO: ai_mode=waiting_human - NÃO processar fluxo/IA` aparece repetidamente.
 
-A trigger `update_inbox_view_on_message` já ignora `sender_type = 'system'` (migração `20260225183436`), então inserir a fallback_message com `sender_type: 'system'` **não afeta** o filtro "Não respondidas".
+## Solução
 
-## Mudança exata
+Duas mudanças coordenadas:
 
-**Arquivo:** `supabase/functions/process-chat-flow/index.ts`
-**Linhas:** 1150-1225
+### Mudança 1: `process-chat-flow/index.ts` — linha 371
 
-Substituir todo o bloco `if (maxReached && !keywordMatch) { ... }` + o comentário de exit keyword por:
+Adicionar `isTestMode` como bypass na proteção de `ai_mode`, igual já existe no Kill Switch:
 
 ```typescript
-          // ✅ UPGRADE: max_interactions deve AVANÇAR para próximo nó
-          if (maxReached && !keywordMatch) {
-            const fallbackMsg = currentNode.data?.fallback_message;
-            if (fallbackMsg && String(fallbackMsg).trim().length > 0) {
-              try {
-                await supabaseClient.from('messages').insert({
-                  conversation_id: conversationId,
-                  content: String(fallbackMsg),
-                  sender_type: 'system',
-                  is_ai_generated: true,
-                  is_internal: false,
-                  status: 'sent',
-                  channel: conversation?.channel || 'web_chat',
-                });
-                console.log('[process-chat-flow] ✅ fallback_message inserted on max_interactions (will advance)');
-              } catch (sendErr) {
-                console.error('[process-chat-flow] ⚠️ Failed to insert fallback_message:', sendErr);
-              }
-            }
-            console.log(`[process-chat-flow] 🔄 AI max_interactions reached (${aiCount}/${maxInteractions}) - advancing to next node`);
-          }
+// ANTES (linha 371):
+if (currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') {
 
-          // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir
-          delete collectedData.__ai;
-          // Cai no findNextNode normal abaixo (linha 1264)
+// DEPOIS:
+if ((currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') && !isTestMode) {
 ```
+
+E adicionar log quando test mode bypassa:
+
+```typescript
+if (isTestMode && (currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled')) {
+  console.log(`[process-chat-flow] 🧪 TEST MODE: Bypassing ai_mode=${currentAiMode} protection`);
+}
+```
+
+### Mudança 2: `TestModeDropdown.tsx` — `handleSelectFlow`
+
+Ao ativar teste, resetar `ai_mode` para `autopilot` junto com `is_test_mode: true`:
+
+```typescript
+// ANTES:
+.update({ is_test_mode: true })
+
+// DEPOIS:
+.update({ is_test_mode: true, ai_mode: 'autopilot' })
+```
+
+Isso garante que mesmo que o bypass do `process-chat-flow` falhe, a conversa volta ao estado correto para aceitar fluxos.
+
+## Arquivos e linhas
+
+| Arquivo | Linhas | Mudança |
+|---|---|---|
+| `supabase/functions/process-chat-flow/index.ts` | 371 | Adicionar `&& !isTestMode` na proteção de ai_mode |
+| `src/components/inbox/TestModeDropdown.tsx` | 67 | Resetar `ai_mode: 'autopilot'` ao ativar teste |
 
 ## Impacto
 
 | Regra | Status |
 |---|---|
-| Regressão zero | ✅ exit_keyword continua igual; anti-duplicação mantida |
-| Upgrade | ✅ cliente não fica abandonado, fluxo avança naturalmente |
-| Kill Switch | Não afetado |
-| Fluxo nunca mudo | ✅ avança para próximo nó (menu, transfer, etc.) |
-| Inbox "Não respondidas" | ✅ sender_type='system' já é ignorado pela trigger |
+| Regressão zero | Sim — proteção de ai_mode continua funcionando para conversas normais (não teste) |
+| Upgrade | Sim — teste pode ser reativado em qualquer estado da conversa |
+| Kill Switch | Não afetado — bypass de Kill Switch já existia separadamente |
+| Segurança | Sim — apenas `is_test_mode=true` permite bypass; operação atômica no frontend |
 
