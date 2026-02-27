@@ -1,78 +1,75 @@
 
 
-# Análise: Todos os nós estão sendo executados pelo engine?
+# Fix: Trava Financeira no `ai-autopilot-chat` não avança o fluxo
 
-## Nós registrados no Frontend (Editor)
-| Nó | Tipo |
-|---|---|
-| Mensagem | `message` |
-| Perguntar Nome | `ask_name` |
-| Perguntar Email | `ask_email` |
-| Perguntar Telefone | `ask_phone` |
-| Perguntar CPF | `ask_cpf` |
-| Múltipla Escolha | `ask_options` |
-| Pergunta Aberta | `ask_text` |
-| Condição | `condition` |
-| Resposta IA | `ai_response` |
-| Transferir | `transfer` |
-| Fim | `end` |
-| Buscar Pedido | `fetch_order` |
+## Diagnóstico da conversa #9B65FDF7
 
-## Status no Engine (`process-chat-flow/index.ts`)
+**O que aconteceu:**
+1. Contato enviou mensagem com "pagamento" enquanto no nó `ia_entrada` (ai_response)
+2. `process-chat-flow` retornou `aiNodeActive: true` → webhook chamou `ai-autopilot-chat`
+3. `ai-autopilot-chat` detectou "pagamento" no padrão financeiro → setou `ai_mode = waiting_human` e retornou `financialBlocked: true`
+4. **Porém**, `ai-autopilot-chat` NÃO atualizou o `chat_flow_states` para avançar o nó
+5. O flow state ficou preso em `ia_entrada` com status `active`
+6. Todas as mensagens seguintes ("???", "??") entram em `process-chat-flow` que vê `ai_mode = waiting_human` → retorna `skipAutoResponse` → fluxo travado para sempre
 
-| Nó | Tratado? | Detalhes |
-|---|---|---|
-| `message` | ✅ | Entrega mensagem + auto-avanço para próximo nó interativo |
-| `ask_name` | ✅ | Validação de nome + coleta `save_as` |
-| `ask_email` | ✅ | Validação de email regex |
-| `ask_phone` | ✅ | Validação 10-11 dígitos |
-| `ask_cpf` | ✅ | Validação 11 dígitos |
-| `ask_options` | ✅ | Match estrito (número ou texto exato), reenvio se inválido |
-| `ask_text` | ⚠️ **Parcial** | Funciona pela lógica genérica (linha 1498-1521), mas **não entra como `waiting_input`** na criação do estado (linha 674 falta `ask_text`) |
-| `condition` | ✅ | Clássica, multi-regra e inatividade |
-| `ai_response` | ✅ | Modo persistente, exit keywords, max interactions, trava financeira |
-| `transfer` | ✅ | Mensagem + dados de transferência |
-| `end` | ✅ | Mensagem final, marca `completed` |
-| `fetch_order` | ✅ | Handler especial com auto-avanço |
+**Causa raiz:** A trava financeira no `ai-autopilot-chat` (linhas 1300-1352) seta `waiting_human` e retorna early, mas **não avança o flow state para o próximo nó**. A responsabilidade de avançar deveria estar no `process-chat-flow`, que já tem essa lógica (linhas 1170-1261), mas o `ai-autopilot-chat` "curto-circuita" antes.
 
-## Problema encontrado: `ask_text`
+## Solução
 
-O nó `ask_text` funciona na prática porque cai na lógica genérica (salva `save_as`, avança), **mas** há um bug sutil:
+Existem duas opções. A mais segura é **mover a interceptação financeira para dentro do `process-chat-flow`**, que já tem a lógica de `findNextNode`. Porém isso é uma refatoração grande.
 
-Na **linha 674**, o `initialStatus` para fluxos manuais só define `waiting_input` para `ask_options`, `ask_input` e `condition`. O tipo `ask_text` (e `ask_name`, `ask_email`, `ask_phone`, `ask_cpf`) ficam como `active` em vez de `waiting_input`.
+A solução mais cirúrgica: **quando `ai-autopilot-chat` retorna `financialBlocked: true`, o webhook deve notificar o `process-chat-flow` para avançar o nó**.
 
-Isso significa que o hook `useActiveFlowState` (que busca estados `in_progress`, `active`, `waiting_input`) **ainda encontra** esses nós. Porém, conceitualmente, todos os nós `ask_*` deveriam ser `waiting_input` porque esperam resposta do usuário.
+### Opção escolhida: Fix no webhook (`meta-whatsapp-webhook`)
 
-### Fix proposto
+**Arquivo:** `supabase/functions/meta-whatsapp-webhook/index.ts`
+
+Após receber resposta do `ai-autopilot-chat` com `financialBlocked: true`, fazer uma segunda chamada ao `process-chat-flow` com flag `forceAdvanceFromAI: true` para que ele avance o flow state.
 
 **Arquivo:** `supabase/functions/process-chat-flow/index.ts`
 
-**Linha 674** — Expandir a condição para incluir todos os nós `ask_*`:
+Adicionar handler para `forceAdvanceFromAI: true` que:
+1. Busca o flow state ativo
+2. Deleta `collectedData.__ai`
+3. Chama `findNextNode` a partir do nó atual
+4. Atualiza o flow state para o próximo nó
 
+### Alternativa mais simples
+
+Diretamente no `ai-autopilot-chat`, quando `financialBlocked` é detectado, **também completar/cancelar o flow state** para que o fluxo não fique órfão:
+
+**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts` (linhas ~1308-1318)
+
+Adicionar após o update de `ai_mode`:
 ```typescript
-const initialStatus = (
-  contentNode.type === 'ask_options' || 
-  contentNode.type === 'ask_input' || 
-  contentNode.type === 'ask_text' || 
-  contentNode.type === 'ask_name' || 
-  contentNode.type === 'ask_email' || 
-  contentNode.type === 'ask_phone' || 
-  contentNode.type === 'ask_cpf' || 
-  contentNode.type === 'condition'
-) ? 'waiting_input' : 'active';
+// Avançar flow state para próximo nó (evitar fluxo órfão)
+const { data: activeFlowState } = await supabaseClient
+  .from('chat_flow_states')
+  .select('id, flow_id, current_node_id, collected_data')
+  .eq('conversation_id', conversationId)
+  .in('status', ['active', 'waiting_input', 'in_progress'])
+  .order('started_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+if (activeFlowState) {
+  // Marcar o flow state como completado/transferido para desbloquear
+  await supabaseClient
+    .from('chat_flow_states')
+    .update({
+      status: 'transferred',
+      completed_at: new Date().toISOString(),
+    })
+    .eq('id', activeFlowState.id);
+  console.log('[ai-autopilot-chat] 🔒 Flow state finalizado (trava financeira):', activeFlowState.id);
+}
 ```
 
-Ou de forma mais limpa:
+### Impacto
+- Zero regressão: apenas adiciona finalização do flow state quando trava financeira ativa
+- Conversas futuras com "pagamento" no nó AI terão o fluxo encerrado corretamente
+- A conversa será liberada para atendimento humano sem flow state órfão
 
-```typescript
-const initialStatus = contentNode.type.startsWith('ask_') || contentNode.type === 'condition'
-  ? 'waiting_input' : 'active';
-```
-
-## Resumo
-
-- **11 de 12 nós** funcionam corretamente no engine
-- `ask_text` funciona mas com status semântico errado (`active` em vez de `waiting_input`)
-- O fix é uma linha — mudar a condição de `initialStatus` para cobrir todos os tipos `ask_*`
-- Impacto zero em funcionalidade existente (upgrade puro de consistência semântica)
+### Fix imediato para #9B65FDF7
+- Atualizar manualmente o flow state `8d52149c-ddcf-4e76-96b1-ff676a9a6f5b` para `status = 'transferred'`
 
