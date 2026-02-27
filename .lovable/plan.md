@@ -1,41 +1,48 @@
 
-Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-1) Diagnóstico confirmado (#EBD7F562)
-- Conversa `ebd7f562-b8cc-4b21-bd9a-98c2e31d5376` ainda está com `chat_flow_states.status = active` no nó `ia_entrada`.
-- Nó `ia_entrada` está com `forbid_financial: true`, mas a trava não acionou para frases como “retirar valor que tenho em caixa”.
-- `ai-autopilot-chat` entrou em modo restritivo (`forbidFinancial: true`), porém ainda executou `create_ticket` e abriu ticket financeiro `770f5f1d-eccd-4ad8-b2f9-35da418c8089`.
+# Fix: Busca de ticket #622 não aparece para gerentes/admins
 
-2) Implementação (upgrade sem regressão)
-- Arquivo: `supabase/functions/process-chat-flow/index.ts`
-  - Expandir `financialIntentPattern` do nó `ai_response` para cobrir variações reais: `retirar`, `retirada`, `caixa`, `carteira`, `pix`, `transferir saldo`, `tirar dinheiro`, etc.
-  - Manter comportamento atual ao detectar financeiro: limpar `__ai` e avançar para próximo nó (transfer/end/menu), sem ficar preso.
-- Arquivo: `supabase/functions/ai-autopilot-chat/index.ts`
-  - Expandir também o regex de interceptação de entrada (mesmo conjunto do `process-chat-flow`) para consistência.
-  - Adicionar guarda hard no handler de tool-call `create_ticket`: se `flow_context.forbidFinancial === true` e `issue_type` for financeiro/saque/reembolso/devolução/cobrança, bloquear criação de ticket e retornar caminho semântico de transferência (`waiting_human` + resposta fixa + log).
-  - Adicionar log estruturado específico de bloqueio por tool (`ai_blocked_financial_tool_call`) em `ai_events`.
-- Arquivo: `supabase/functions/meta-whatsapp-webhook/index.ts`
-  - Após resposta do `ai-autopilot-chat`, tratar `financialBlocked === true` para garantir envio imediato da mensagem de handoff ao cliente (sem depender de geração posterior) e evitar qualquer continuidade automática da IA.
+## Diagnóstico
 
-3) Correção imediata de dados (caso atual)
-- Encerrar estado órfão da conversa `#EBD7F562`:
-  - `chat_flow_states.id = 3063b03e-c6f0-4735-829e-1fe0896b2e40` → `status='transferred'`, `completed_at=now()`.
-- Validar se `conversations.ai_mode` deve permanecer `autopilot` ou ir para `waiting_human` conforme regra operacional da trava financeira (proponho `waiting_human` para coerência).
+O problema está no `getHookParams()` em `Support.tsx`. Quando o sidebar está em filtros como `my_open`, `unassigned`, ou um status dinâmico, a busca textual funciona **apenas dentro do subconjunto filtrado pelo sidebar**. Ou seja:
 
-4) Testes obrigatórios (antes de entrega)
-- E2E WhatsApp com nó `ai_response` + `forbid_financial=true`:
-  - frases: “quero sacar”, “retirar valor da carteira”, “como tirar meu dinheiro do caixa”, “reembolso”.
-  - esperado: não criar ticket automático, não responder fluxo financeiro, sair do nó IA, encaminhar humano.
-- Regressão:
-  - `ask_options`, `condition`, `transfer`, `end` continuam iguais.
-  - fluxos não financeiros continuam permitindo resposta da IA normalmente.
-- Logs:
-  - confirmar novos eventos: `ai_blocked_financial` e `ai_blocked_financial_tool_call`.
-- Banco:
-  - sem novos tickets financeiros automáticos quando `forbidFinancial=true`.
-  - estado de fluxo não fica órfão em `active`.
+- Admin com sidebar em "Meus abertos" → busca "622" → query adiciona `assigned_to = user.id` → ticket #622 não aparece porque está atribuído a outro agente
+- Isso contradiz a regra existente (memória do projeto): **"ticket search is global across all statuses"** — mas a globalidade se aplica apenas a status, não a assignment/sidebar
 
-5) Impacto, mitigação e rollback rápido
-- Impacto: apenas cenários com `forbidFinancial=true` ficam mais restritos e seguros.
-- Mitigação: regex compartilhado e guarda no tool-call evitam falso negativo por variação linguística.
-- Rollback rápido: reverter 3 blocos pontuais (regex expandido, guarda no `create_ticket`, tratamento `financialBlocked` no webhook) sem mexer na arquitetura do fluxo.
+## Causa raiz
+
+`getHookParams()` (linhas 183-235 de `Support.tsx`) aplica `assignedFilter` (mine, unassigned, created_by_me) **mesmo quando há busca ativa**. O bypass só acontece para status (linhas 218-221).
+
+## Solução
+
+**Arquivo: `src/pages/Support.tsx`** — função `getHookParams()`
+
+Quando há busca ativa (`debouncedFilters.search` não vazio), ignorar o sidebar completamente e retornar apenas os filtros avançados sem `assignedFilter` e sem status default:
+
+```typescript
+const getHookParams = () => {
+  const baseFilters: TicketFilters = {
+    ...debouncedFilters,
+    search: debouncedFilters.search || searchTerm,
+  };
+
+  // BUSCA GLOBAL: quando há termo de busca, ignorar sidebar
+  const hasActiveSearch = !!(baseFilters.search && baseFilters.search.trim().length > 0);
+  if (hasActiveSearch) {
+    return { advancedFilters: baseFilters }; // Sem assignedFilter, sem status default
+  }
+
+  // ... resto da lógica existente do switch (sidebarFilter) inalterada
+};
+```
+
+Isso garante que:
+- Busca por "622" sempre encontra o ticket, independente do sidebar ativo
+- Sem busca, o sidebar continua funcionando normalmente
+- Zero regressão nos filtros existentes
+
+## Impacto
+- Apenas o caminho com busca ativa muda (bypass do sidebar)
+- Sidebar sem busca: comportamento idêntico ao atual
+- Rollback: reverter 5 linhas em `getHookParams()`
+
