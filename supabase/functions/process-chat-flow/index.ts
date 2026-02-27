@@ -1157,18 +1157,52 @@ serve(async (req) => {
 
         const exitKeywords: string[] = currentNode.data?.exit_keywords || [];
         const maxInteractions: number = currentNode.data?.max_ai_interactions ?? 0;
+        const forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
+
+        // 🔒 TRAVA FINANCEIRA: Detectar intenção financeira como exit do nó AI
+        const financialIntentPattern = /saque|sacar|reembolso|estorno|devolu[çc][ãa]o|devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a/i;
+        const financialIntentMatch = forbidFinancial && msgLower.length > 0 && financialIntentPattern.test(userMessage || '');
+
+        if (financialIntentMatch) {
+          console.log(`[process-chat-flow] 🔒 TRAVA FINANCEIRA: Intenção financeira detectada no nó AI, tratando como exit`);
+          
+          // Registrar evento
+          try {
+            await supabaseClient
+              .from('ai_events')
+              .insert({
+                entity_type: 'conversation',
+                entity_id: conversationId,
+                event_type: 'ai_blocked_financial',
+                model: 'process-chat-flow',
+                output_json: {
+                  phase: 'flow_node_exit',
+                  node_id: currentNode.id,
+                  flow_id: activeState.flow_id,
+                  interaction_count: aiCount,
+                  message_preview: (userMessage || '').substring(0, 200),
+                },
+                input_summary: (userMessage || '').substring(0, 200),
+              });
+          } catch (logErr) {
+            console.error('[process-chat-flow] ⚠️ Failed to log financial block event:', logErr);
+          }
+
+          // Limpar __ai e deixar cair no findNextNode
+          delete collectedData.__ai;
+        }
 
         // Verificar exit keyword (case-insensitive includes)
-        const keywordMatch = exitKeywords.length > 0 && exitKeywords.some((kw: string) =>
+        const keywordMatch = !financialIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) =>
           msgLower.includes(String(kw || '').toLowerCase().trim())
         );
 
         // Verificar max interações
-        const maxReached = maxInteractions > 0 && aiCount >= maxInteractions;
+        const maxReached = !financialIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
 
-        if (keywordMatch || maxReached) {
-          const exitReason = keywordMatch ? 'exit_keyword' : 'max_interactions';
-          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} count=${aiCount}`);
+        if (financialIntentMatch || keywordMatch || maxReached) {
+          const exitReason = financialIntentMatch ? 'financial_blocked' : keywordMatch ? 'exit_keyword' : 'max_interactions';
+          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} count=${aiCount}`);
 
           // Log de transferência estruturado em ai_events
           try {

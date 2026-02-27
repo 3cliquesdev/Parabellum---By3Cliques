@@ -1297,6 +1297,60 @@ serve(async (req) => {
       });
     }
 
+    // 🔒 TRAVA FINANCEIRA — Interceptação na ENTRADA (antes de chamar LLM)
+    const financialIntentPattern = /saque|sacar|reembolso|estorno|devolu[çc][ãa]o|devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a/i;
+    
+    if (flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && financialIntentPattern.test(customerMessage)) {
+      console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
+      
+      const fixedMessage = 'Entendi. Para assuntos financeiros (saque, reembolso, devolução), vou te encaminhar para um atendente humano agora.';
+      
+      // 1) Atualizar conversa para waiting_human
+      try {
+        await supabaseClient
+          .from('conversations')
+          .update({ ai_mode: 'waiting_human', assigned_to: null })
+          .eq('id', conversationId);
+        console.log('[ai-autopilot-chat] 🔒 Conversa transferida para humano (trava financeira - entrada)');
+      } catch (transferErr) {
+        console.error('[ai-autopilot-chat] Erro ao transferir (trava financeira - entrada):', transferErr);
+      }
+
+      // 2) Registrar evento de auditoria
+      try {
+        await supabaseClient
+          .from('ai_events')
+          .insert({
+            entity_type: 'conversation',
+            entity_id: conversationId,
+            event_type: 'ai_blocked_financial',
+            model: 'ai-autopilot-chat',
+            output_json: {
+              phase: 'input_interception',
+              pattern: 'financialIntentPattern',
+              message_preview: customerMessage.substring(0, 200),
+              forbid_financial: true,
+            },
+            input_summary: customerMessage.substring(0, 200),
+          });
+      } catch (logErr) {
+        console.error('[ai-autopilot-chat] ⚠️ Failed to log financial block event:', logErr);
+      }
+
+      // 3) Retornar early — NÃO chamar o LLM
+      return new Response(JSON.stringify({
+        ok: true,
+        financialBlocked: true,
+        exitKeywordDetected: true,
+        response: fixedMessage,
+        message: fixedMessage,
+        aiResponse: fixedMessage,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // 🚨 FASE 3: Fallback Gracioso - Try-catch interno para capturar falhas da IA
     try {
       // 1. Buscar conversa e informações do contato (ANTES do cache)
@@ -7798,7 +7852,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         console.log('[ai-autopilot-chat] ✅ Resposta substituída por fallback');
       } else if (forbidFinancial) {
         // 🔒 Validação pós-resposta: Trava Financeira
-        const financialResolutionPattern = /(j[áa] processei|foi estornado|solicitei reembolso|vou reembolsar|pode sacar|liberei o saque|reembolso aprovado|estorno realizado|cancelamento confirmado|pagamento devolvido|já estornei|processando.*reembolso|aprovei.*devolu[çc][ãa]o)/i;
+        const financialResolutionPattern = /(j[áa] processei|foi estornado|solicitei reembolso|vou reembolsar|pode sacar|liberei o saque|reembolso aprovado|estorno realizado|cancelamento confirmado|pagamento devolvido|já estornei|processando.*reembolso|aprovei.*devolu[çc][ãa]o|cancelar.*assinatura|sacar.*saldo|saque.*(realizado|solicitado)|op[çc][ãa]o.*(saque|reembolso|estorno)|para\s+prosseguir\s+com\s+o\s+(saque|reembolso|estorno)|confirmar.*dados.*(saque|reembolso|estorno)|devolver.*dinheiro)/i;
         if (financialResolutionPattern.test(assistantMessage)) {
           console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA: IA tentou resolver assunto financeiro, substituindo resposta');
           assistantMessage = 'Esse tipo de solicitação precisa ser tratada por um atendente. Vou te transferir agora!';
