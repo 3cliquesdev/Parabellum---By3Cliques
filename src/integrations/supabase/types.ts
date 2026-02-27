@@ -4260,6 +4260,7 @@ export type Database = {
           last_message_at: string | null
           last_sender_type: string | null
           last_snippet: string | null
+          short_id: string | null
           sla_status: string | null
           status: string | null
           unread_count: number | null
@@ -4291,6 +4292,7 @@ export type Database = {
           last_message_at?: string | null
           last_sender_type?: string | null
           last_snippet?: string | null
+          short_id?: string | null
           sla_status?: string | null
           status?: string | null
           unread_count?: number | null
@@ -4322,6 +4324,7 @@ export type Database = {
           last_message_at?: string | null
           last_sender_type?: string | null
           last_snippet?: string | null
+          short_id?: string | null
           sla_status?: string | null
           status?: string | null
           unread_count?: number | null
