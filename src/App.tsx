@@ -127,6 +127,7 @@ const FormLeadsConversionReport = lazy(() => import("./pages/FormLeadsConversion
 const ReportBuilder = lazy(() => import("./pages/ReportBuilder"));
 const AnalyticsPremium = lazy(() => import("./pages/AnalyticsPremium"));
 const DashboardsList = lazy(() => import("./pages/DashboardsList"));
+const InboxTimeReport = lazy(() => import("./pages/InboxTimeReport"));
 const DashboardView = lazy(() => import("./pages/DashboardView"));
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -222,6 +223,7 @@ const App = () => {
               <Route path="/reports/conversations" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ConversationsReport /></Layout></ProtectedRoute>} />
               <Route path="/reports/playbook-email-sequence" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><PlaybookEmailSequenceReport /></Layout></ProtectedRoute>} />
               <Route path="/reports/form-leads-conversion" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><FormLeadsConversionReport /></Layout></ProtectedRoute>} />
+              <Route path="/reports/inbox-time" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><InboxTimeReport /></Layout></ProtectedRoute>} />
               <Route path="/goals" element={<ProtectedRoute requiredPermission="goals.view_own"><Layout><Goals /></Layout></ProtectedRoute>} />
               <Route path="/goals-management" element={<ProtectedRoute requiredPermission="goals.set"><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
               <Route path="/internal-requests" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><InternalRequests /></Layout></ProtectedRoute>} />
