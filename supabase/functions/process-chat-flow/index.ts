@@ -1020,7 +1020,7 @@ serve(async (req) => {
 
     // 2. Se tem estado ativo, processar resposta do usuário
     if (activeState) {
-      console.log('[process-chat-flow] Active flow found:', activeState.flow_id);
+      console.log(`[process-chat-flow] 📌 Active flow found: flow=${activeState.flow_id} node=${activeState.current_node_id} status=${activeState.status}`);
       
       const flowDef = activeState.chat_flows?.flow_definition as any;
       if (!flowDef?.nodes) {
@@ -1039,6 +1039,8 @@ serve(async (req) => {
       }
 
       let collectedData = (activeState.collected_data || {}) as Record<string, any>;
+
+      console.log(`[process-chat-flow] 🔄 Processing node: type=${currentNode.type} id=${currentNode.id} msg="${(userMessage || '').slice(0, 60)}" collectedKeys=[${Object.keys(collectedData).filter(k => !k.startsWith('__')).join(',')}]`);
       
       // Validar resposta baseado no tipo de nó
       let validationType = 'text';
@@ -1051,7 +1053,7 @@ serve(async (req) => {
       if (currentNode.data?.validate !== false && validators[validationType]) {
         const validation = validators[validationType](userMessage);
         if (!validation.valid) {
-          console.log('[process-chat-flow] Validation failed:', validation.error);
+          console.log(`[process-chat-flow] ❌ Validation failed: type=${validationType} node=${currentNode.id} error="${validation.error}" input="${(userMessage || '').slice(0, 40)}"`);
           return new Response(
             JSON.stringify({
               useAI: false,
@@ -1066,6 +1068,7 @@ serve(async (req) => {
 
       // Salvar dado coletado
       if (currentNode.data?.save_as) {
+        console.log(`[process-chat-flow] 💾 Saving data: key="${currentNode.data.save_as}" value="${(userMessage || '').slice(0, 50)}" node=${currentNode.id}`);
         collectedData[currentNode.data.save_as] = userMessage;
       }
 
@@ -1113,16 +1116,17 @@ serve(async (req) => {
         }
         
         // ✅ Opção válida - avança normalmente
-        console.log('[process-chat-flow] ✅ Valid option selected:', selectedOption.label);
+        console.log(`[process-chat-flow] ✅ ask_options: selected="${selectedOption.label}" (value=${selectedOption.value}) input="${userMessage}" node=${currentNode.id}`);
         path = selectedOption.id;
         collectedData[currentNode.data?.save_as || 'choice'] = selectedOption.value || selectedOption.label;
       } else if (currentNode.type === 'condition') {
         // Inactivity condition: client responded → false (not inactive)
         if (currentNode.data?.condition_type === 'inactivity' && !inactivityTimeout) {
-          console.log('[process-chat-flow] ⏱ Inactivity condition: client responded → path=false');
+          console.log(`[process-chat-flow] ⏱ condition: type=inactivity node=${currentNode.id} → client responded → path=false`);
           path = 'false';
         } else {
           path = evaluateConditionPath(currentNode.data, collectedData, userMessage, { inactivityTimeout });
+          console.log(`[process-chat-flow] 🔀 condition: type=${currentNode.data?.condition_type} node=${currentNode.id} → path="${path}"`);
         }
       } else if (currentNode.type === 'ai_response') {
         // ============================================================
@@ -1295,6 +1299,7 @@ serve(async (req) => {
       }
 
       nextNode = findNextNode(flowDef, currentNode, path);
+      console.log(`[process-chat-flow] ➡️ Transition: from=${currentNode.type}(${currentNode.id}) path=${path || 'default'} → next=${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
 
       // 🆕 Auto-travessia de nós sem conteúdo (condition, input, start)
       let traversalSteps = 0;
@@ -1402,6 +1407,7 @@ serve(async (req) => {
 
       // Se não há próximo nó ou é um nó de fim
       if (!nextNode || nextNode.type === 'end') {
+        console.log(`[process-chat-flow] 🏁 Flow completed: flow=${activeState.flow_id} node=${nextNode?.id || 'none'} collectedKeys=[${Object.keys(collectedData).filter(k => !k.startsWith('__')).join(',')}]`);
         // Marcar fluxo como completo
         await supabaseClient
           .from('chat_flow_states')
@@ -1435,6 +1441,7 @@ serve(async (req) => {
 
       // Se é um nó de transferência
       if (nextNode.type === 'transfer') {
+        console.log(`[process-chat-flow] 🔄 Transfer node: id=${nextNode.id} dept=${nextNode.data?.department_id || 'none'} flow=${activeState.flow_id}`);
         await supabaseClient
           .from('chat_flow_states')
           .update({
@@ -1459,6 +1466,7 @@ serve(async (req) => {
 
       // Se é um nó de resposta IA
       if (nextNode.type === 'ai_response') {
+        console.log(`[process-chat-flow] 🤖 AI response node: id=${nextNode.id} persona=${nextNode.data?.persona_id || 'default'} maxInteractions=${nextNode.data?.max_ai_interactions || 0} exitKeywords=[${(nextNode.data?.exit_keywords || []).join(',')}]`);
         await supabaseClient
           .from('chat_flow_states')
           .update({
@@ -1496,6 +1504,7 @@ serve(async (req) => {
       }
 
       // Atualizar estado e retornar próxima pergunta
+      console.log(`[process-chat-flow] 📋 Next node: type=${nextNode.type} id=${nextNode.id} hasOptions=${nextNode.type === 'ask_options'} save_as=${nextNode.data?.save_as || 'none'}`);
       await supabaseClient
         .from('chat_flow_states')
         .update({
