@@ -1,33 +1,63 @@
 
 
-# Fix: Auto-close cron running every HOUR instead of every 10 minutes
+# Fix: Dashboard Suporte -- filtros de data nos KPIs
 
-## Root Cause
+## Problema Identificado
 
-The cron job `auto-close-inactive-conversations` in the database has schedule `0 * * * *` (once per hour, at minute 0). This is why conversations stay open for 40+ minutes — the cron only runs at :00 of each hour.
+Os KPIs do dashboard de suporte (SLA em Risco, Tickets Abertos, Conversas) filtram por `created_at` dentro do período selecionado. Quando o usuário seleciona "Hoje", só aparecem tickets/conversas **criados hoje** que ainda estão abertos -- não o total real de itens abertos.
 
-The `config.toml` says `*/10 * * * *` but the actual database cron was never updated to match.
+Exemplo real:
+- **Tickets abertos totais:** 97
+- **"Este Mês" mostra:** 80 (criados em fev que ainda estão abertos)
+- **"Hoje" mostra:** 4 (criados hoje que ainda estão abertos)
+- **O usuário espera ver:** 97 em qualquer filtro (todos os tickets abertos agora)
 
-**Evidence from logs:** Job runs at 09:00, 10:00, 11:00, 12:00, 13:00 — exactly hourly.
+Os gráficos (Volume vs Resolução, SLA Compliance) devem usar o filtro de data normalmente. Apenas os KPIs de "estado atual" precisam mostrar valores absolutos.
 
-## Fix (1 migration)
+## Solução
 
-Update the cron schedule from `0 * * * *` to `*/10 * * * *`:
+### 1. Atualizar RPC `get_support_dashboard_counts`
+
+Separar KPIs em dois grupos:
+- **KPIs operacionais (sem filtro de data):** tickets_open, conversations_open, sla_risk -- representam o estado ATUAL
+- **KPIs de período (com filtro):** conversations_closed, tickets_created_period, conversations_created_period
 
 ```sql
-SELECT cron.alter_job(
-  job_id := 4,
-  schedule := '*/10 * * * *'
-);
+-- tickets_open: ALL open tickets (no date filter)
+SELECT COUNT(*) INTO v_tickets_open
+FROM tickets
+WHERE status NOT IN ('resolved', 'closed');
+
+-- conversations_open: ALL open conversations (no date filter)  
+SELECT COUNT(*) INTO v_conversations_open
+FROM conversations
+WHERE status NOT IN ('closed', 'resolved');
+
+-- sla_risk: ALL tickets currently at risk (no date filter)
+SELECT COUNT(*) INTO v_sla_risk
+FROM tickets
+WHERE due_date IS NOT NULL
+  AND due_date < now()
+  AND status NOT IN ('resolved', 'closed');
+
+-- conversations_closed: closed IN PERIOD (keep date filter)
+SELECT COUNT(*) INTO v_conversations_closed
+FROM conversations
+WHERE closed_at >= p_start AND closed_at < p_end;
 ```
 
-This single change will make the auto-close check run every 10 minutes, meaning conversations will be closed within ~15 minutes of inactivity threshold (configured time + up to 10 min cron delay).
+### 2. Passar datas para `SentimentDistributionWidget`
 
-## Files
+No `SupportDashboardTab.tsx`, passar `startDate` e `endDate` para `SentimentDistributionWidget` que já aceita esses props mas não os recebe.
 
-| File | Action |
+### 3. Sem alteração nos gráficos
+
+`VolumeResolutionWidget`, `SLAComplianceWidget`, `TopTagsWidget`, `TopTopicsWidget` continuam filtrando por período normalmente -- isso é o comportamento correto para gráficos de tendência.
+
+## Arquivos
+
+| Arquivo | Ação |
 |---|---|
-| Migration SQL | Update cron schedule to `*/10 * * * *` |
-
-No frontend or edge function changes needed — the auto-close logic itself is working correctly (logs confirm it closes conversations when it runs).
+| Migration SQL | Recriar `get_support_dashboard_counts` com KPIs operacionais sem filtro de data |
+| `src/components/dashboard/SupportDashboardTab.tsx` | Passar `startDate`/`endDate` para `SentimentDistributionWidget` |
 
