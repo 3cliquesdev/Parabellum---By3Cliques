@@ -930,6 +930,7 @@ serve(async (req) => {
                             maxSentences: (flowData as any).maxSentences ?? 3,
                             forbidQuestions: (flowData as any).forbidQuestions ?? true,
                             forbidOptions: (flowData as any).forbidOptions ?? true,
+                            forbidFinancial: (flowData as any).forbidFinancial ?? false,
                           },
                         }),
                       }
