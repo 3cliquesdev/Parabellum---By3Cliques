@@ -939,6 +939,55 @@ serve(async (req) => {
                     if (!autopilotResponse.ok) {
                       console.error("[meta-whatsapp-webhook] ❌ Autopilot error:", await autopilotResponse.text());
                     } else {
+                      // Verificar se financialBlocked veio na resposta
+                      try {
+                        const autopilotData = await autopilotResponse.json();
+                        if (autopilotData?.financialBlocked) {
+                          console.log("[meta-whatsapp-webhook] 🔒 financialBlocked=true → enviando handoff msg imediatamente");
+                          
+                          const handoffMsg = autopilotData.response || 'Entendi. Para assuntos financeiros, vou te encaminhar para um atendente humano agora.';
+                          
+                          // Enviar mensagem de handoff via Meta API
+                          try {
+                            const metaToken = instance.whatsapp_meta_token || Deno.env.get("WHATSAPP_META_TOKEN");
+                            const phoneNumberId = instance.whatsapp_meta_phone_id || Deno.env.get("WHATSAPP_META_PHONE_NUMBER_ID");
+                            
+                            if (metaToken && phoneNumberId) {
+                              await fetch(
+                                `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    Authorization: `Bearer ${metaToken}`,
+                                  },
+                                  body: JSON.stringify({
+                                    messaging_product: "whatsapp",
+                                    to: senderPhone,
+                                    type: "text",
+                                    text: { body: handoffMsg },
+                                  }),
+                                }
+                              );
+                              console.log("[meta-whatsapp-webhook] ✅ Handoff message sent (financial block)");
+                              
+                              // Salvar a mensagem no banco
+                              await supabase.from("messages").insert({
+                                conversation_id: conversation.id,
+                                content: handoffMsg,
+                                sender_type: "system",
+                                message_type: "text",
+                              });
+                            }
+                          } catch (sendErr) {
+                            console.error("[meta-whatsapp-webhook] ⚠️ Error sending handoff msg:", sendErr);
+                          }
+                          
+                          continue; // Não continuar processamento normal
+                        }
+                      } catch {
+                        // Se não conseguiu parsear JSON, segue normalmente
+                      }
                       console.log("[meta-whatsapp-webhook] ✅ Autopilot triggered with flow_context");
                     }
                   } catch (err) {

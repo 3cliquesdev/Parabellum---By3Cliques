@@ -1164,7 +1164,7 @@ serve(async (req) => {
         const forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
 
         // 🔒 TRAVA FINANCEIRA: Detectar intenção financeira como exit do nó AI
-        const financialIntentPattern = /saque|sacar|reembolso|estorno|devolu[çc][ãa]o|devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a/i;
+        const financialIntentPattern = /saque|sacar|reembolso|estorno|devolu[çc][ãa]o|devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a|retirar|retirada|caixa|carteira|pix|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|ressarcimento/i;
         const financialIntentMatch = forbidFinancial && msgLower.length > 0 && financialIntentPattern.test(userMessage || '');
 
         if (financialIntentMatch) {

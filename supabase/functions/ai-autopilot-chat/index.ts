@@ -1298,7 +1298,7 @@ serve(async (req) => {
     }
 
     // 🔒 TRAVA FINANCEIRA — Interceptação na ENTRADA (antes de chamar LLM)
-    const financialIntentPattern = /saque|sacar|reembolso|estorno|devolu[çc][ãa]o|devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a/i;
+    const financialIntentPattern = /saque|sacar|reembolso|estorno|devolu[çc][ãa]o|devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a|retirar|retirada|caixa|carteira|pix|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|ressarcimento/i;
     
     if (flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && financialIntentPattern.test(customerMessage)) {
       console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
@@ -6655,6 +6655,65 @@ Você quer:
             const args = JSON.parse(toolCall.function.arguments);
             console.log('[ai-autopilot-chat] 🎫 Criando ticket automaticamente:', args);
 
+            // 🔒 HARD GUARD: Bloquear criação de ticket financeiro quando forbidFinancial ativo
+            const financialIssueTypes = ['saque', 'reembolso', 'estorno', 'devolucao', 'devolução', 'financeiro', 'cobrança', 'cobranca', 'cancelamento'];
+            const isFinancialTicket = financialIssueTypes.includes((args.issue_type || '').toLowerCase());
+            
+            if (flow_context?.forbidFinancial && isFinancialTicket) {
+              console.warn('[ai-autopilot-chat] 🔒 HARD GUARD: Bloqueando create_ticket financeiro com forbidFinancial=true. issue_type:', args.issue_type);
+              
+              // Registrar bloqueio em ai_events
+              try {
+                await supabaseClient.from('ai_events').insert({
+                  entity_type: 'conversation',
+                  entity_id: conversationId,
+                  event_type: 'ai_blocked_financial_tool_call',
+                  model: 'ai-autopilot-chat',
+                  output_json: {
+                    phase: 'tool_call_guard',
+                    tool: 'create_ticket',
+                    issue_type: args.issue_type,
+                    subject: args.subject,
+                    forbid_financial: true,
+                    blocked: true,
+                  },
+                  input_summary: (customerMessage || '').substring(0, 200),
+                });
+              } catch (logErr) {
+                console.error('[ai-autopilot-chat] ⚠️ Failed to log financial tool-call block:', logErr);
+              }
+
+              // Transferir para humano
+              try {
+                await supabaseClient
+                  .from('conversations')
+                  .update({ ai_mode: 'waiting_human', assigned_to: null })
+                  .eq('id', conversationId);
+              } catch {}
+
+              // Finalizar flow state
+              try {
+                const { data: activeFS } = await supabaseClient
+                  .from('chat_flow_states')
+                  .select('id')
+                  .eq('conversation_id', conversationId)
+                  .in('status', ['active', 'waiting_input', 'in_progress'])
+                  .order('started_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (activeFS) {
+                  await supabaseClient
+                    .from('chat_flow_states')
+                    .update({ status: 'transferred', completed_at: new Date().toISOString() })
+                    .eq('id', activeFS.id);
+                }
+              } catch {}
+
+              assistantMessage = 'Entendi. Para assuntos financeiros, vou te encaminhar para um atendente humano agora.';
+              // Skip ticket creation entirely - jump to after ticket block
+              throw { __financialGuardSkip: true, message: assistantMessage };
+            }
+
             // 🔐 SECURITY NOTE: Rate limiting is handled at conversation level (AI autopilot only runs for authenticated conversations)
             // Public ticket creation via forms should implement rate limiting separately
 
@@ -6796,10 +6855,16 @@ Via: Atendimento Automatizado (IA)`;
                 ticket.ticket_number
               );
             }
-          } catch (error) {
-            console.error('[ai-autopilot-chat] ❌ Erro ao processar tool call (ignorando):', error);
-            // ⚠️ NÃO sobrescrever assistantMessage aqui
-            // Deixar que o detector de fallback lide com o handoff se necessário
+          } catch (error: any) {
+            // 🔒 Financial guard skip - not a real error
+            if (error?.__financialGuardSkip) {
+              assistantMessage = error.message;
+              console.log('[ai-autopilot-chat] 🔒 create_ticket blocked by financial guard');
+            } else {
+              console.error('[ai-autopilot-chat] ❌ Erro ao processar tool call (ignorando):', error);
+              // ⚠️ NÃO sobrescrever assistantMessage aqui
+              // Deixar que o detector de fallback lide com o handoff se necessário
+            }
           }
         }
         // TOOL: check_order_status - Consultar pedidos do cliente
