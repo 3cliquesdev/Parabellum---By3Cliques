@@ -76,7 +76,8 @@ export function useExportConversationsCSV() {
       }
 
       const rows = (data as any[]).map((r) => ({
-        "ID": r.short_id || "",
+        "Protocolo": r.short_id ? `#${r.short_id}` : "",
+        "ID Conversa": r.conversation_id || "",
         "Status": r.status === "open" ? "Aberta" : r.status === "closed" ? "Fechada" : r.status || "",
         "Nome": r.contact_name || "",
         "Email": r.contact_email || "",
