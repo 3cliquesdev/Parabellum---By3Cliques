@@ -1,29 +1,19 @@
 
 
-# Fix: RPC `get_support_dashboard_counts` quebrada - coluna inexistente
+# Fix: RPC `get_inbox_time_report` — type mismatch
 
 ## Causa Raiz
 
-A ultima migration (`20260227133023`) referencia a coluna `sla_deadline` na tabela `tickets`, mas essa coluna **nao existe**. O nome correto e `due_date`. Isso faz a RPC inteira crashar com erro SQL, retornando erro para todos os 4 KPIs. O frontend trata o erro como fallback silencioso = mostra 0, 0, 0.
+A RPC retorna erro 400: `"Returned type numeric does not match expected type double precision in column 14"`.
 
-Confirmei executando a RPC diretamente no banco:
-```
-ERROR: 42703: column "sla_deadline" does not exist
-```
+`EXTRACT(EPOCH FROM ...)` e `PERCENTILE_CONT(...)` retornam `numeric` no Postgres, mas o `RETURNS TABLE` declara essas colunas como `double precision`.
 
-## Plano (2 passos)
+## Solução
 
-### 1. Migration: Corrigir RPC (trocar `sla_deadline` por `due_date`)
+Uma migration para recriar a RPC com casts explícitos `::double precision` em todas as colunas numéricas calculadas:
 
-Recriar `get_support_dashboard_counts` identica a atual, apenas corrigindo `sla_deadline` -> `due_date` na query de SLA risk.
+- Linhas 136-141 (metrics): `m.ai_fr_sec::double precision`, etc.
+- Linhas 145-153 (aggregates): `a.avg_ai_fr::double precision`, `a.p50_ai_fr::double precision`, etc.
 
-### 2. Frontend: Mostrar erro explicito nos KPIs quando RPC falhar
-
-No `SupportDashboardTab.tsx` e `OverviewDashboardTab.tsx`, tratar o estado `isError` dos hooks para exibir indicador visual em vez de zeros enganosos.
-
-## Impacto
-
-- Zero risco de regressao: apenas corrige nome de coluna errado
-- Ambas as telas (Dashboard aba Suporte + Visao Geral) serao corrigidas
-- Nenhum widget existente e alterado alem do tratamento de erro
+Nenhuma mudança no frontend necessária — apenas o cast de tipo no SQL.
 
