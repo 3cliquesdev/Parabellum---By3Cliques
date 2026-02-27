@@ -100,7 +100,7 @@ export function useInboxSearch(searchTerm: string) {
         const result = await supabase
           .from("inbox_view")
           .select("*")
-          .ilike("conversation_id", `${cleanId}%`)
+          .ilike("short_id", `${cleanId}%`)
           .order("last_message_at", { ascending: false })
           .limit(50);
         
