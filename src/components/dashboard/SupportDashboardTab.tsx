@@ -11,6 +11,8 @@ import { SentimentDistributionWidget } from "@/components/widgets/SentimentDistr
 import { TopTopicsWidget } from "@/components/widgets/TopTopicsWidget";
 import { TopTagsWidget } from "@/components/widgets/TopTagsWidget";
 import { useSupportMetrics, useSupportDashboardCounts } from "@/hooks/useSupportMetrics";
+import { AlertCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SupportDashboardTabProps {
   dateRange?: DateRange;
@@ -20,8 +22,21 @@ export function SupportDashboardTab({ dateRange }: SupportDashboardTabProps) {
   const startDate = dateRange?.from || startOfMonth(new Date());
   const endDate = dateRange?.to || endOfMonth(new Date());
 
-  const { data: supportMetrics } = useSupportMetrics(startDate, endDate);
-  const { data: counts } = useSupportDashboardCounts(startDate, endDate);
+  const { data: supportMetrics, isError: metricsError } = useSupportMetrics(startDate, endDate);
+  const { data: counts, isError: countsError } = useSupportDashboardCounts(startDate, endDate);
+
+  const hasError = metricsError || countsError;
+
+  const ErrorBadge = () => (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex items-center gap-1 text-destructive text-xs font-medium">
+          <AlertCircle className="h-3.5 w-3.5" /> Erro
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>Falha ao carregar dados. Verifique a conexão.</TooltipContent>
+    </Tooltip>
+  );
 
   const formatTime = (minutes: number | undefined) => {
     if (!minutes || minutes === 0) return "0s";
@@ -44,33 +59,33 @@ export function SupportDashboardTab({ dateRange }: SupportDashboardTabProps) {
       <BentoCard>
         <KPICard 
           title="SLA em Risco" 
-          value={(counts?.sla_risk || 0).toString()}
+          value={countsError ? "—" : (counts?.sla_risk || 0).toString()}
           icon={Clock}
-          description="no período"
+          description={countsError ? <ErrorBadge /> : "no período"}
         />
       </BentoCard>
       <BentoCard>
         <KPICard 
           title="Tickets Abertos" 
-          value={(counts?.tickets_open || 0).toString()}
+          value={countsError ? "—" : (counts?.tickets_open || 0).toString()}
           icon={Headphones}
-          description="no período"
+          description={countsError ? <ErrorBadge /> : "no período"}
         />
       </BentoCard>
       <BentoCard>
         <KPICard 
           title="Conversas" 
-          value={(counts?.conversations_total || 0).toString()}
+          value={countsError ? "—" : (counts?.conversations_total || 0).toString()}
           icon={MessageSquare}
-          description={`${counts?.conversations_closed || 0} encerradas`}
+          description={countsError ? <ErrorBadge /> : `${counts?.conversations_closed || 0} encerradas`}
         />
       </BentoCard>
       <BentoCard>
         <KPICard 
           title="CSAT" 
-          value={supportMetrics?.avgCSAT ? `${supportMetrics.avgCSAT.toFixed(1)}/5` : "0/5"}
+          value={metricsError ? "—" : (supportMetrics?.avgCSAT ? `${supportMetrics.avgCSAT.toFixed(1)}/5` : "0/5")}
           icon={Target}
-          description={`${supportMetrics?.totalRatings || 0} avaliações`}
+          description={metricsError ? <ErrorBadge /> : `${supportMetrics?.totalRatings || 0} avaliações`}
         />
       </BentoCard>
       

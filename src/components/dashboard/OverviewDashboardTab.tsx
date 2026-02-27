@@ -1,4 +1,4 @@
-import { TrendingUp, Target, DollarSign, Clock, Headphones, MessageSquare, Users } from "lucide-react";
+import { TrendingUp, Target, DollarSign, Clock, Headphones, MessageSquare, Users, AlertCircle } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { startOfMonth, endOfMonth } from "date-fns";
 import { BentoGrid, BentoCard } from "@/components/ui/bento-grid";
@@ -43,8 +43,8 @@ export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
   const { data: kiwifyFinancials } = useKiwifyFinancials(dateRange?.from, dateRange?.to);
   const { totalPipelineValue, weightedValue } = usePipelineValue();
   const { data: conversionData } = useDealsConversionAnalysis(dateRange);
-  const { data: dashCounts } = useSupportDashboardCounts(startDate, endDate);
-  const { data: supportMetrics } = useSupportMetrics(startDate, endDate);
+  const { data: dashCounts, isError: countsError } = useSupportDashboardCounts(startDate, endDate);
+  const { data: supportMetrics, isError: metricsError } = useSupportMetrics(startDate, endDate);
   const { data: whatsappInstances } = useWhatsAppInstances();
   const { data: convCounts } = useActiveConversationCounts();
   const { data: teamOnlineCount } = useTeamOnlineCount();
@@ -75,7 +75,8 @@ export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
     return `${Math.round(minutes * 60)}s`;
   };
 
-  const activeSlaAlerts = dashCounts?.sla_risk || 0;
+  const errorLabel = <span className="inline-flex items-center gap-1 text-destructive text-xs"><AlertCircle className="h-3 w-3" />Erro</span>;
+  const activeSlaAlerts = countsError ? "—" : (dashCounts?.sla_risk || 0).toString();
   const connectedInstances = whatsappInstances?.filter(i => i.status === 'connected').length || 0;
   const totalInstances = whatsappInstances?.length || 0;
   const activeConversations = convCounts?.total || 0;
@@ -136,27 +137,27 @@ export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
             <div className="grid grid-cols-4 gap-4">
               <KPICard 
                 title="SLA em Risco" 
-                value={activeSlaAlerts.toString()}
+                value={activeSlaAlerts}
                 icon={Clock}
-                description="alertas ativos"
+                description={countsError ? errorLabel : "alertas ativos"}
               />
               <KPICard 
                 title="Tickets Abertos" 
-                value={(dashCounts?.tickets_open || 0).toString()}
+                value={countsError ? "—" : (dashCounts?.tickets_open || 0).toString()}
                 icon={Headphones}
-                description="no período"
+                description={countsError ? errorLabel : "no período"}
               />
               <KPICard 
                 title="Resposta Humana" 
-                value={formatTime(supportMetrics?.avgFRT)}
+                value={metricsError ? "—" : formatTime(supportMetrics?.avgFRT)}
                 icon={Clock}
-                description="tempo médio"
+                description={metricsError ? errorLabel : "tempo médio"}
               />
               <KPICard 
                 title="CSAT" 
-                value={supportMetrics?.avgCSAT ? `${supportMetrics.avgCSAT.toFixed(1)}/5` : "0/5"}
+                value={metricsError ? "—" : (supportMetrics?.avgCSAT ? `${supportMetrics.avgCSAT.toFixed(1)}/5` : "0/5")}
                 icon={Target}
-                description="satisfação"
+                description={metricsError ? errorLabel : "satisfação"}
               />
             </div>
           </CardContent>

@@ -1,3 +1,4 @@
+import { ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, LucideIcon } from "lucide-react";
@@ -9,7 +10,7 @@ interface KPICardProps {
   trend?: string;
   trendUp?: boolean;
   icon: LucideIcon;
-  description?: string;
+  description?: ReactNode;
 }
 
 export function KPICard({ 
