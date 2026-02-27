@@ -1,29 +1,57 @@
 
 
-# Fix: Busca por protocolo no Inbox
+# Fix: Trava Financeira — Interceptação na Entrada + Avanço de Fluxo
 
-## Problema
+## Resumo
 
-O campo `conversation_id` na tabela `inbox_view` é do tipo `UUID`. O PostgREST **não suporta** `.ilike()` em colunas UUID — a query falha silenciosamente e retorna vazio.
+A trava financeira (`forbidFinancial`) hoje só valida a **saída** da IA (pós-resposta, linha 7799-7815 do `ai-autopilot-chat`). A IA ainda processa e responde com opções financeiras antes da validação. O fix adiciona interceptação na **entrada** (antes de chamar o LLM), reforça o pós-resposta e garante avanço de nó no flow engine.
 
-Linha 103 do `useInboxSearch.tsx`:
-```
-.ilike("conversation_id", `${cleanId}%`)  // ❌ UUID não suporta ILIKE
-```
+## Implementação
 
-Confirmado: `SELECT conversation_id FROM inbox_view WHERE conversation_id::text ILIKE '9bb95b7d%'` retorna resultado, mas via PostgREST `.ilike()` em UUID falha.
+### 1. `ai-autopilot-chat/index.ts` — Interceptação na entrada (early return)
 
-## Solução
+**Após linha 1297** (onde `flowForbidFinancial` é logado), antes do `try` na linha 1300:
 
-### 1. Migration: Adicionar coluna `short_id` (TEXT) na `inbox_view`
+- Criar `financialIntentPattern` regex separado do `financialResolutionPattern`
+- Se `flowForbidFinancial === true` E `customerMessage` bate no pattern:
+  - Atualizar conversa: `ai_mode: 'waiting_human'`, `assigned_to: null`
+  - Registrar `ai_events` com `event_type: 'ai_blocked_financial'`
+  - Retornar JSON com `financialBlocked: true`, `exitKeywordDetected: true`, mensagem fixa de transferência
+  - **Não chamar o LLM**
 
-- Adicionar coluna `short_id TEXT` na tabela `inbox_view`
-- Backfill com `LEFT(conversation_id::text, 8)`
-- Criar índice `idx_inbox_view_short_id` para busca rápida
-- Atualizar triggers de INSERT e UPDATE para popular `short_id` automaticamente
+### 2. `ai-autopilot-chat/index.ts` — Expandir regex pós-resposta (linha 7801)
 
-### 2. Frontend: Usar `.ilike("short_id", ...)` no `useInboxSearch.tsx`
+Expandir `financialResolutionPattern` para também capturar:
+- Apresentação de opções financeiras: `op[çc][ãa]o.*(saque|reembolso|estorno)`
+- Procedimentos financeiros: `para prosseguir com o (saque|reembolso)`, `confirmar.*dados.*(saque|reembolso)`
+- Cancelamentos: `cancelar.*assinatura`, `sacar.*saldo`
 
-- Alterar a busca de short_id (linha 100-108) para usar a nova coluna `short_id` em vez de `conversation_id`
-- `.ilike("short_id", `${cleanId}%`)` funciona porque `short_id` é TEXT
+### 3. `process-chat-flow/index.ts` — Tratar `financialBlocked` como exit
+
+**Na seção de AI persistent (linhas 1156-1260)**, adicionar check antes do `exitKeywords`/`maxInteractions`:
+
+- Detectar intenção financeira no `userMessage` usando o mesmo `financialIntentPattern`
+- Se `forbid_financial === true` E match detectado:
+  - Limpar `collectedData.__ai`
+  - Logar em `ai_events`
+  - Cair no `findNextNode` normal (linha 1263) — avança para próximo nó do fluxo
+
+### 4. `meta-whatsapp-webhook/index.ts` — Sem mudança estrutural
+
+O webhook já delega para `ai-autopilot-chat` passando `forbidFinancial` no `flow_context` (linha 933). O early return do passo 1 já cobre este cenário — o webhook receberá a resposta com `financialBlocked: true` e a mensagem fixa.
+
+## Arquivos impactados
+
+| Arquivo | Mudança |
+|---|---|
+| `supabase/functions/ai-autopilot-chat/index.ts` | Early return (entrada) + regex expandida (saída) |
+| `supabase/functions/process-chat-flow/index.ts` | Detecção de intenção financeira como exit do nó AI |
+
+## Checklist de testes
+
+- `forbidFinancial=true` + "Devolução saldo" → não chama IA, msg fixa, `waiting_human`
+- `forbidFinancial=false` + "Devolução saldo" → fluxo normal
+- `forbidFinancial=true` + "Qual horário?" → não bloqueia
+- IA respondeu algo financeiro (bypass) → pós-validação bloqueia
+- `financialBlocked` → `process-chat-flow` avança nó
 
