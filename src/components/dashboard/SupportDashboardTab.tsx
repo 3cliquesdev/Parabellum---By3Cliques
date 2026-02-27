@@ -100,7 +100,7 @@ export function SupportDashboardTab({ dateRange }: SupportDashboardTabProps) {
       
       {/* ROW 5: Sentiment */}
       <BentoCard span="4">
-        <SentimentDistributionWidget />
+        <SentimentDistributionWidget startDate={startDate} endDate={endDate} />
       </BentoCard>
     </BentoGrid>
   );
