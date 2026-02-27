@@ -64,7 +64,7 @@ export function useInboxTimeReport(filters: InboxTimeFilters, page: number = 0, 
         p_channel: filters.channel || null,
         p_tag_id: filters.tagId || null,
         p_transferred: filters.transferred || null,
-        p_search: filters.search || null,
+        p_search: filters.search ? filters.search.replace(/^#/, '').trim() : null,
         p_limit: pageSize,
         p_offset: page * pageSize,
       } as any);
