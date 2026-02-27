@@ -1316,6 +1316,31 @@ serve(async (req) => {
         console.error('[ai-autopilot-chat] Erro ao transferir (trava financeira - entrada):', transferErr);
       }
 
+      // 1.5) Finalizar flow state ativo para evitar fluxo órfão
+      try {
+        const { data: activeFlowState } = await supabaseClient
+          .from('chat_flow_states')
+          .select('id, flow_id, current_node_id')
+          .eq('conversation_id', conversationId)
+          .in('status', ['active', 'waiting_input', 'in_progress'])
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (activeFlowState) {
+          await supabaseClient
+            .from('chat_flow_states')
+            .update({
+              status: 'transferred',
+              completed_at: new Date().toISOString(),
+            })
+            .eq('id', activeFlowState.id);
+          console.log('[ai-autopilot-chat] 🔒 Flow state finalizado (trava financeira):', activeFlowState.id);
+        }
+      } catch (flowErr) {
+        console.error('[ai-autopilot-chat] ⚠️ Erro ao finalizar flow state (trava financeira):', flowErr);
+      }
+
       // 2) Registrar evento de auditoria
       try {
         await supabaseClient
