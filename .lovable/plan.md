@@ -1,30 +1,42 @@
 
 
-# Fix: Restaurar filtro de data nos KPIs do Dashboard Suporte
+# Fix: KPI "Conversas" deve mostrar total do período
 
 ## Problema
 
-A correção anterior removeu os filtros de data dos KPIs operacionais (SLA em Risco, Tickets Abertos, Conversas) no RPC `get_support_dashboard_counts`. Agora esses valores ficam fixos (97, 50, 28) independente de selecionar "Hoje", "Ontem" ou qualquer período. O usuário quer que todos os KPIs respeitem o filtro de data selecionado.
-
-## Evidência
-
-Screenshots mostram:
-- Hoje: SLA=28, Tickets=97, Conversas=50 
-- Ontem: SLA=28, Tickets=97, Conversas=50
-- Valores idênticos = filtro não está sendo aplicado
+O card "CONVERSAS" mostra apenas conversas **abertas** criadas no período (~47-50). O usuário espera ver o **total de conversas** no período (abertas + fechadas). Esta semana o total real é ~1378.
 
 ## Solução (1 migration)
 
-Recriar `get_support_dashboard_counts` restaurando filtros `created_at >= p_start AND created_at < p_end` em todas as queries:
+Atualizar `get_support_dashboard_counts` para retornar dois campos de conversas:
+- `conversations_total`: todas as conversas criadas no período (abertas + fechadas)
+- `conversations_closed`: conversas fechadas no período (já existe)
 
-- `tickets_open`: tickets criados no período que ainda estão abertos
-- `conversations_open`: conversas criadas no período que ainda estão abertas
-- `sla_risk`: tickets criados no período com SLA estourado
-- `conversations_closed`: conversas fechadas no período (já estava correto)
+E ajustar o frontend para mostrar o total no card principal, com "X encerradas" como subtexto.
+
+### 1. Migration: Atualizar RPC
+
+```sql
+-- conversations_total: ALL conversations created in period
+SELECT COUNT(*) INTO v_conversations_total
+FROM conversations
+WHERE created_at >= p_start AND created_at < p_end;
+
+-- Remove v_conversations_open, replace with v_conversations_total in return
+```
+
+### 2. Frontend: `SupportDashboardTab.tsx`
+
+Alterar o card "Conversas" para usar `conversations_total` em vez de `conversations_open`:
+```tsx
+value={(counts?.conversations_total || 0).toString()}
+```
+
+## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| Migration SQL | `CREATE OR REPLACE FUNCTION get_support_dashboard_counts` com filtros de data restaurados |
-
-Nenhuma alteração de frontend necessária. Ambas as telas (Dashboard aba Suporte e Dashboard Suporte V2) serão corrigidas.
+| Migration SQL | Trocar `conversations_open` por `conversations_total` no RPC |
+| `SupportDashboardTab.tsx` | Usar `conversations_total` no card |
+| `useSupportMetrics.tsx` | Atualizar interface `SupportDashboardCounts` |
 
