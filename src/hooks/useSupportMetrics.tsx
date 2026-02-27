@@ -10,7 +10,7 @@ export interface SupportMetrics {
 
 export interface SupportDashboardCounts {
   tickets_open: number;
-  conversations_open: number;
+  conversations_total: number;
   conversations_closed: number;
   sla_risk: number;
 }
@@ -64,7 +64,7 @@ export function useSupportDashboardCounts(startDate: Date, endDate: Date) {
       const result = data as any;
       return {
         tickets_open: result?.tickets_open || 0,
-        conversations_open: result?.conversations_open || 0,
+        conversations_total: result?.conversations_total || 0,
         conversations_closed: result?.conversations_closed || 0,
         sla_risk: result?.sla_risk || 0,
       } as SupportDashboardCounts;

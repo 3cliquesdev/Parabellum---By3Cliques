@@ -60,7 +60,7 @@ export function SupportDashboardTab({ dateRange }: SupportDashboardTabProps) {
       <BentoCard>
         <KPICard 
           title="Conversas" 
-          value={(counts?.conversations_open || 0).toString()}
+          value={(counts?.conversations_total || 0).toString()}
           icon={MessageSquare}
           description={`${counts?.conversations_closed || 0} encerradas`}
         />
