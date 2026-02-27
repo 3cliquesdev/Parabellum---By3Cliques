@@ -1,63 +1,30 @@
 
 
-# Fix: Dashboard Suporte -- filtros de data nos KPIs
+# Fix: Restaurar filtro de data nos KPIs do Dashboard Suporte
 
-## Problema Identificado
+## Problema
 
-Os KPIs do dashboard de suporte (SLA em Risco, Tickets Abertos, Conversas) filtram por `created_at` dentro do período selecionado. Quando o usuário seleciona "Hoje", só aparecem tickets/conversas **criados hoje** que ainda estão abertos -- não o total real de itens abertos.
+A correção anterior removeu os filtros de data dos KPIs operacionais (SLA em Risco, Tickets Abertos, Conversas) no RPC `get_support_dashboard_counts`. Agora esses valores ficam fixos (97, 50, 28) independente de selecionar "Hoje", "Ontem" ou qualquer período. O usuário quer que todos os KPIs respeitem o filtro de data selecionado.
 
-Exemplo real:
-- **Tickets abertos totais:** 97
-- **"Este Mês" mostra:** 80 (criados em fev que ainda estão abertos)
-- **"Hoje" mostra:** 4 (criados hoje que ainda estão abertos)
-- **O usuário espera ver:** 97 em qualquer filtro (todos os tickets abertos agora)
+## Evidência
 
-Os gráficos (Volume vs Resolução, SLA Compliance) devem usar o filtro de data normalmente. Apenas os KPIs de "estado atual" precisam mostrar valores absolutos.
+Screenshots mostram:
+- Hoje: SLA=28, Tickets=97, Conversas=50 
+- Ontem: SLA=28, Tickets=97, Conversas=50
+- Valores idênticos = filtro não está sendo aplicado
 
-## Solução
+## Solução (1 migration)
 
-### 1. Atualizar RPC `get_support_dashboard_counts`
+Recriar `get_support_dashboard_counts` restaurando filtros `created_at >= p_start AND created_at < p_end` em todas as queries:
 
-Separar KPIs em dois grupos:
-- **KPIs operacionais (sem filtro de data):** tickets_open, conversations_open, sla_risk -- representam o estado ATUAL
-- **KPIs de período (com filtro):** conversations_closed, tickets_created_period, conversations_created_period
-
-```sql
--- tickets_open: ALL open tickets (no date filter)
-SELECT COUNT(*) INTO v_tickets_open
-FROM tickets
-WHERE status NOT IN ('resolved', 'closed');
-
--- conversations_open: ALL open conversations (no date filter)  
-SELECT COUNT(*) INTO v_conversations_open
-FROM conversations
-WHERE status NOT IN ('closed', 'resolved');
-
--- sla_risk: ALL tickets currently at risk (no date filter)
-SELECT COUNT(*) INTO v_sla_risk
-FROM tickets
-WHERE due_date IS NOT NULL
-  AND due_date < now()
-  AND status NOT IN ('resolved', 'closed');
-
--- conversations_closed: closed IN PERIOD (keep date filter)
-SELECT COUNT(*) INTO v_conversations_closed
-FROM conversations
-WHERE closed_at >= p_start AND closed_at < p_end;
-```
-
-### 2. Passar datas para `SentimentDistributionWidget`
-
-No `SupportDashboardTab.tsx`, passar `startDate` e `endDate` para `SentimentDistributionWidget` que já aceita esses props mas não os recebe.
-
-### 3. Sem alteração nos gráficos
-
-`VolumeResolutionWidget`, `SLAComplianceWidget`, `TopTagsWidget`, `TopTopicsWidget` continuam filtrando por período normalmente -- isso é o comportamento correto para gráficos de tendência.
-
-## Arquivos
+- `tickets_open`: tickets criados no período que ainda estão abertos
+- `conversations_open`: conversas criadas no período que ainda estão abertas
+- `sla_risk`: tickets criados no período com SLA estourado
+- `conversations_closed`: conversas fechadas no período (já estava correto)
 
 | Arquivo | Ação |
 |---|---|
-| Migration SQL | Recriar `get_support_dashboard_counts` com KPIs operacionais sem filtro de data |
-| `src/components/dashboard/SupportDashboardTab.tsx` | Passar `startDate`/`endDate` para `SentimentDistributionWidget` |
+| Migration SQL | `CREATE OR REPLACE FUNCTION get_support_dashboard_counts` com filtros de data restaurados |
+
+Nenhuma alteração de frontend necessária. Ambas as telas (Dashboard aba Suporte e Dashboard Suporte V2) serão corrigidas.
 
