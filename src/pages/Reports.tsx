@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileSpreadsheet, TrendingUp, Users, MessageSquare, DollarSign, Target, Clock, BarChart3, RefreshCw } from "lucide-react";
+import { FileSpreadsheet, TrendingUp, Users, MessageSquare, DollarSign, Target, Clock, BarChart3, RefreshCw, Timer } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import ReportCard from "@/components/ReportCard";
@@ -80,6 +80,13 @@ export default function Reports() {
           description: 'Lista detalhada de todas as conversas com filtros avançados e exportação CSV',
           icon: MessageSquare,
           route: '/reports/conversations',
+        },
+        {
+          id: 'inbox_time',
+          name: 'Tempo Médio (SLA + Tags)',
+          description: 'Métricas de SLA por conversa: tempo IA, fila humano, resolução, CSAT e tags',
+          icon: Timer,
+          route: '/reports/inbox-time',
         },
       ],
     },

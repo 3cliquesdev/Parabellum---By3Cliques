@@ -9851,6 +9851,55 @@ export type Database = {
           sent: number
         }[]
       }
+      get_inbox_time_report: {
+        Args: {
+          p_agent_id?: string
+          p_channel?: string
+          p_department_id?: string
+          p_end: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_start: string
+          p_status?: string
+          p_tag_id?: string
+          p_transferred?: string
+        }
+        Returns: {
+          agent_first_msg_at: string
+          ai_duration_sec: number
+          ai_first_msg_at: string
+          ai_first_response_sec: number
+          assigned_agent_name: string
+          channel: string
+          contact_name: string
+          contact_phone: string
+          conversation_id: string
+          csat_score: number
+          customer_first_msg_at: string
+          department_name: string
+          handoff_at: string
+          human_pickup_sec: number
+          human_resolution_sec: number
+          kpi_avg_ai_duration: number
+          kpi_avg_ai_first_response: number
+          kpi_avg_csat: number
+          kpi_avg_human_pickup: number
+          kpi_avg_human_resolution: number
+          kpi_avg_total_resolution: number
+          kpi_csat_response_rate: number
+          kpi_p50_ai_first_response: number
+          kpi_p90_ai_first_response: number
+          kpi_pct_resolved_no_human: number
+          resolved_at: string
+          short_id: string
+          status: string
+          tags_all: string[]
+          time_to_handoff_sec: number
+          total_count: number
+          total_resolution_sec: number
+        }[]
+      }
       get_kb_gaps_by_category: {
         Args: { p_end_date?: string; p_start_date?: string }
         Returns: {
