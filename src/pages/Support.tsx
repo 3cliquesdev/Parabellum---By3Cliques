@@ -187,6 +187,13 @@ export default function Support() {
       search: debouncedFilters.search || searchTerm,
     };
 
+    // BUSCA GLOBAL: quando há termo de busca, ignorar sidebar completamente
+    // Isso garante que admins/gerentes encontrem qualquer ticket independente do filtro lateral
+    const hasActiveSearch = !!(baseFilters.search && baseFilters.search.trim().length > 0);
+    if (hasActiveSearch) {
+      return { advancedFilters: baseFilters }; // Sem assignedFilter, sem status default
+    }
+
     // Check if it's a dynamic status from the database
     const isDynamicStatus = activeStatuses?.some(s => s.name === sidebarFilter);
     
