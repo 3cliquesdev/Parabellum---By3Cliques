@@ -10,6 +10,7 @@ import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { PageContainer, PageHeader, PageContent, PageFilters } from "@/components/ui/page-container";
 import { InboxTimeKPICards } from "@/components/reports/inbox/InboxTimeKPICards";
 import { InboxTimeTable } from "@/components/reports/inbox/InboxTimeTable";
+import { ErrorState } from "@/components/ui/error-state";
 import { useInboxTimeReport, type InboxTimeFilters } from "@/hooks/useInboxTimeReport";
 import { useExportInboxTimeCSV } from "@/hooks/useExportInboxTimeCSV";
 import { useTags } from "@/hooks/useTags";
@@ -45,7 +46,7 @@ export default function InboxTimeReport() {
     search: search || undefined,
   };
 
-  const { data, isLoading } = useInboxTimeReport(filters, page, pageSize);
+  const { data, isLoading, isError, error, refetch } = useInboxTimeReport(filters, page, pageSize);
   const { exportCSV, isExporting } = useExportInboxTimeCSV();
   const { data: tags } = useTags();
 
@@ -150,10 +151,18 @@ export default function InboxTimeReport() {
       </PageFilters>
 
       <PageContent>
-        <div className="space-y-6">
-          <InboxTimeKPICards data={data} isLoading={isLoading} />
-          <InboxTimeTable data={data} isLoading={isLoading} page={page} pageSize={pageSize} onPageChange={setPage} />
-        </div>
+        {isError ? (
+          <ErrorState
+            title="Erro ao carregar relatório"
+            description={error instanceof Error ? error.message : "Falha ao buscar dados. Verifique sua conexão e tente novamente."}
+            onRetry={() => refetch()}
+          />
+        ) : (
+          <div className="space-y-6">
+            <InboxTimeKPICards data={data} isLoading={isLoading} />
+            <InboxTimeTable data={data} isLoading={isLoading} page={page} pageSize={pageSize} onPageChange={setPage} />
+          </div>
+        )}
       </PageContent>
     </PageContainer>
   );
