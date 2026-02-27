@@ -671,7 +671,7 @@ serve(async (req) => {
 
       // Determinar status inicial baseado no tipo do nó
       // 🆕 condition (multi-regra) também fica como waiting_input quando parou sem mensagem
-      const initialStatus = (contentNode.type === 'ask_options' || contentNode.type === 'ask_input' || contentNode.type === 'condition')
+      const initialStatus = (contentNode.type.startsWith('ask_') || contentNode.type === 'condition')
         ? 'waiting_input'
         : 'active';
 
