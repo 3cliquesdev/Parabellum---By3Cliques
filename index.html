@@ -20,8 +20,6 @@
     <!-- Preload LCP image for faster discovery -->
     <link rel="preload" href="/logo-parabellum-light.png" as="image" fetchpriority="high" />
     
-    <!-- Theme Color removido - evita PWA-lite -->
-    
     <!-- SOLUÇÃO NUCLEAR: FORÇAR DARK MODE -->
     <style>
       html, body, #root {
@@ -39,36 +37,7 @@
       document.documentElement.style.colorScheme = 'dark';
     </script>
 
-    <!-- PWA NUKER: Limpa SW + CacheStorage (resolve Chrome normal lento vs anonimo OK) -->
-    <script>
-      (function () {
-        try {
-          var GUARD = "pwa_nuker_v1_done";
-          if (sessionStorage.getItem(GUARD)) return;
-          sessionStorage.setItem(GUARD, "1");
 
-          var controlled = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
-
-          var unregisterSW = Promise.resolve();
-          if ("serviceWorker" in navigator && navigator.serviceWorker.getRegistrations) {
-            unregisterSW = navigator.serviceWorker.getRegistrations().then(function (regs) {
-              return Promise.all(regs.map(function (r) { return r.unregister(); }));
-            });
-          }
-
-          var clearCaches = Promise.resolve();
-          if ("caches" in window && caches.keys) {
-            clearCaches = caches.keys().then(function (keys) {
-              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-            });
-          }
-
-          Promise.all([unregisterSW, clearCaches]).finally(function () {
-            if (controlled) setTimeout(function(){ location.reload(); }, 80);
-          });
-        } catch (e) {}
-      })();
-    </script>
     <meta name="description" content="CRM moderno com caixa de entrada unificada para gerenciar contatos, organizações, negócios e conversas" />
     <meta name="author" content="Lovable" />
     <!-- Preconnect hints for critical origins -->
