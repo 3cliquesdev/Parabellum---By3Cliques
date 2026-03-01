@@ -146,22 +146,11 @@ function findNextNode(flowDef: any, currentNode: any, path?: string): any {
 }
 
 // ============================================================
-// 🆕 HELPER: Enrich contact with is_customer (has deal with status=won)
+// 🆕 HELPER: Enrich contact with is_customer (kiwify_validated alias)
 // ============================================================
-async function enrichContactWithDeals(supabaseClient: any, contactData: any): Promise<void> {
-  if (!contactData?.id || contactData.is_customer !== undefined) return;
-  try {
-    const { count } = await supabaseClient
-      .from('deals')
-      .select('id', { count: 'exact', head: true })
-      .eq('contact_id', contactData.id)
-      .eq('status', 'won')
-      .limit(1);
-    contactData.is_customer = (count ?? 0) > 0;
-  } catch (e) {
-    console.warn('[process-chat-flow] Failed to check is_customer:', e);
-    contactData.is_customer = false;
-  }
+function enrichContactIsCustomer(contactData: any): void {
+  if (!contactData || contactData.is_customer !== undefined) return;
+  contactData.is_customer = contactData.kiwify_validated === true;
 }
 
 // ============================================================
@@ -204,7 +193,7 @@ function getVar(
   const f = field?.trim();
   if (!f) return null;
   // Aliases
-  if (f === 'is_validated_customer' || f === 'isValidatedCustomer') {
+  if (f === 'is_validated_customer' || f === 'isValidatedCustomer' || f === 'is_customer') {
     return contactData?.kiwify_validated ?? false;
   }
   return collectedData?.[f] ?? contactData?.[f] ?? conversationData?.[f] ?? null;
@@ -644,7 +633,7 @@ serve(async (req) => {
           .eq('id', manualConversation.contact_id)
           .maybeSingle();
         manualContactData = contact;
-        await enrichContactWithDeals(supabaseClient, manualContactData);
+        enrichContactIsCustomer(manualContactData);
       }
 
       const manualCollectedData: Record<string, any> = {};
@@ -1119,7 +1108,7 @@ serve(async (req) => {
             .eq('id', convData.contact_id)
             .maybeSingle();
           activeContactData = ctData;
-          await enrichContactWithDeals(supabaseClient, activeContactData);
+          enrichContactIsCustomer(activeContactData);
         }
       }
       // Helper para reconstruir variablesContext (chamado após cada mudança em collectedData)
@@ -1981,7 +1970,7 @@ serve(async (req) => {
             .eq('id', conversation.contact_id)
             .maybeSingle();
           contactData = contact;
-          await enrichContactWithDeals(supabaseClient, contactData);
+          enrichContactIsCustomer(contactData);
         }
 
         let collectedData: Record<string, any> = {};
