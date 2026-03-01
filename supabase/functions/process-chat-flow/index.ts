@@ -156,7 +156,7 @@ function buildVariablesContext(
 ): Record<string, any> {
   const ctx: Record<string, any> = { ...collectedData };
   if (contactData) {
-    for (const f of ['name','email','phone','cpf','city','state','tags','lead_score','kiwify_validated','source','company','document']) {
+    for (const f of ['name','email','phone','cpf','city','state','tags','lead_score','kiwify_validated','source','company','document','consultant_id']) {
       if (contactData[f] != null) ctx[`contact_${f}`] = contactData[f];
     }
     // Compose contact_name from first_name + last_name if not directly available
