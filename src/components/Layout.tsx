@@ -5,7 +5,6 @@ import { useTicketsRealtime } from "@/hooks/useTicketsRealtime";
 import { useDealsRealtime } from "@/hooks/useDealsRealtime";
 import { useRealtimeHealth } from "@/hooks/useRealtimeHealth";
 import { GlobalTourButton } from "@/components/tour/GlobalTourButton";
-import { UpdateAvailableBanner } from "@/components/UpdateAvailableBanner";
 import { NotificationBell } from "@/components/NotificationBell";
 import { WifiOff, RefreshCw } from "lucide-react";
 
@@ -24,9 +23,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         
         <div className="flex-1 flex flex-col bg-background min-w-0">
-          {/* Banner de atualização no topo */}
-          <UpdateAvailableBanner />
-          
           {/* Header Enterprise */}
           <header className="h-14 border-b-2 border-slate-200 dark:border-border flex items-center px-4 bg-card shadow-sm flex-shrink-0">
             <SidebarTrigger className="text-foreground hover:bg-muted" />
