@@ -36,6 +36,7 @@ const friendlyFieldNames: Record<string, string> = {
   cpf: "CPF",
   "": "Mensagem do usuário",
   consultant_id: "Tem Consultor?",
+  is_customer: "É Cliente?",
 };
 
 // Cores fixas para cada regra (mesmas do AskOptionsNode)

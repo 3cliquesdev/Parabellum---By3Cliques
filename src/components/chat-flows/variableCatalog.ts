@@ -26,6 +26,7 @@ export const CONTACT_VARS: VariableItem[] = [
   { value: "contact_company", label: "Empresa", group: "contact" },
   { value: "contact_document", label: "Documento", group: "contact" },
   { value: "contact_consultant_id", label: "Consultor do Contato", group: "contact" },
+  { value: "contact_is_customer", label: "É Cliente? (Deal Won)", group: "contact" },
 ];
 
 // Fixed conversation variables
@@ -62,6 +63,7 @@ export const CONDITION_CONTACT_FIELDS = [
   { value: "source", label: "Origem" },
   { value: "is_validated_customer", label: "Cliente Validado" },
   { value: "consultant_id", label: "Tem Consultor?" },
+  { value: "is_customer", label: "É Cliente? (Deal Won)" },
 ];
 
 // Conversation fields for condition selector

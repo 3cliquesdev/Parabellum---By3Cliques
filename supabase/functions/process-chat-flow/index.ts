@@ -146,6 +146,25 @@ function findNextNode(flowDef: any, currentNode: any, path?: string): any {
 }
 
 // ============================================================
+// 🆕 HELPER: Enrich contact with is_customer (has deal with status=won)
+// ============================================================
+async function enrichContactWithDeals(supabaseClient: any, contactData: any): Promise<void> {
+  if (!contactData?.id || contactData.is_customer !== undefined) return;
+  try {
+    const { count } = await supabaseClient
+      .from('deals')
+      .select('id', { count: 'exact', head: true })
+      .eq('contact_id', contactData.id)
+      .eq('status', 'won')
+      .limit(1);
+    contactData.is_customer = (count ?? 0) > 0;
+  } catch (e) {
+    console.warn('[process-chat-flow] Failed to check is_customer:', e);
+    contactData.is_customer = false;
+  }
+}
+
+// ============================================================
 // 🆕 HELPER: Construir contexto unificado de variáveis para templates
 // Merge: collectedData (prioridade) + contact_* + conversation_*
 // ============================================================
@@ -156,7 +175,7 @@ function buildVariablesContext(
 ): Record<string, any> {
   const ctx: Record<string, any> = { ...collectedData };
   if (contactData) {
-    for (const f of ['name','email','phone','cpf','city','state','tags','lead_score','kiwify_validated','source','company','document','consultant_id']) {
+    for (const f of ['name','email','phone','cpf','city','state','tags','lead_score','kiwify_validated','source','company','document','consultant_id','is_customer']) {
       if (contactData[f] != null) ctx[`contact_${f}`] = contactData[f];
     }
     // Compose contact_name from first_name + last_name if not directly available
@@ -625,6 +644,7 @@ serve(async (req) => {
           .eq('id', manualConversation.contact_id)
           .maybeSingle();
         manualContactData = contact;
+        await enrichContactWithDeals(supabaseClient, manualContactData);
       }
 
       const manualCollectedData: Record<string, any> = {};
@@ -1099,6 +1119,7 @@ serve(async (req) => {
             .eq('id', convData.contact_id)
             .maybeSingle();
           activeContactData = ctData;
+          await enrichContactWithDeals(supabaseClient, activeContactData);
         }
       }
       // Helper para reconstruir variablesContext (chamado após cada mudança em collectedData)
@@ -1960,6 +1981,7 @@ serve(async (req) => {
             .eq('id', conversation.contact_id)
             .maybeSingle();
           contactData = contact;
+          await enrichContactWithDeals(supabaseClient, contactData);
         }
 
         let collectedData: Record<string, any> = {};
