@@ -1210,6 +1210,57 @@ serve(async (req) => {
         // O nó ai_response "segura" a conversa até condição de saída
         // ============================================================
 
+        // 🆕 AUTO VALIDATE CUSTOMER: Triagem silenciosa antes de responder
+        if (currentNode.data?.auto_validate_customer === true && activeContactData && !activeContactData.kiwify_validated) {
+          const validateFields: string[] = currentNode.data?.validate_fields || ['phone', 'email', 'cpf'];
+          console.log(`[process-chat-flow] 🔍 Auto-validando cliente. Campos: ${validateFields.join(', ')}`);
+
+          const validationPromises: Promise<any>[] = [];
+
+          if (validateFields.includes('phone') && (activeContactData.phone || activeContactData.whatsapp_id)) {
+            validationPromises.push(
+              supabaseClient.functions.invoke('validate-by-kiwify-phone', {
+                body: { phone: activeContactData.phone, whatsapp_id: activeContactData.whatsapp_id, contact_id: activeContactData.id }
+              }).then(r => ({ type: 'phone', ...r })).catch(e => ({ type: 'phone', error: e }))
+            );
+          }
+
+          if (validateFields.includes('email') && activeContactData.email) {
+            validationPromises.push(
+              supabaseClient.functions.invoke('verify-customer-email', {
+                body: { email: activeContactData.email, contact_id: activeContactData.id }
+              }).then(r => ({ type: 'email', ...r })).catch(e => ({ type: 'email', error: e }))
+            );
+          }
+
+          if (validateFields.includes('cpf') && activeContactData.document) {
+            validationPromises.push(
+              supabaseClient.functions.invoke('validate-by-cpf', {
+                body: { cpf: activeContactData.document, contact_id: activeContactData.id }
+              }).then(r => ({ type: 'cpf', ...r })).catch(e => ({ type: 'cpf', error: e }))
+            );
+          }
+
+          if (validationPromises.length > 0) {
+            try {
+              const results = await Promise.allSettled(validationPromises);
+              for (const r of results) {
+                if (r.status === 'fulfilled' && r.value?.data?.found) {
+                  console.log(`[process-chat-flow] ✅ Cliente validado via ${r.value.type}`);
+                  activeContactData.kiwify_validated = true;
+                  activeContactData.is_customer = true;
+                  activeContactData.status = 'customer';
+                  // Atualizar variablesContext
+                  if (typeof rebuildVariablesContext === 'function') rebuildVariablesContext();
+                  break;
+                }
+              }
+            } catch (e) {
+              console.warn('[process-chat-flow] ⚠️ Erro na auto-validação (não crítico):', e);
+            }
+          }
+        }
+
         // ========= UPGRADE 1: Anti-duplicação (texto + janela 5s) =========
         collectedData.__ai = collectedData.__ai || { interaction_count: 0 };
 

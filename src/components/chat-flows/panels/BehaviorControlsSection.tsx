@@ -14,7 +14,9 @@ import {
   LogOut,
   AlertTriangle,
   DollarSign,
+  UserCheck,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tooltip,
   TooltipContent,
@@ -262,6 +264,64 @@ export function BehaviorControlsSection({
             <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
             <p className="text-[11px] text-yellow-700">
               Sem condição de saída configurada. A IA vai responder indefinidamente até o cliente sair do fluxo manualmente.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* 🆕 Seção: Validar Cliente Automaticamente */}
+      <div className="space-y-3 p-3 rounded-lg border bg-green-500/5 border-green-500/20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <UserCheck className="h-4 w-4 text-green-500" />
+            <div>
+              <Label className="text-sm font-medium">Validar Cliente Automaticamente</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Triagem silenciosa antes de responder (sem perguntar)
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={selectedNode.data.auto_validate_customer ?? false}
+            onCheckedChange={(checked) => updateNodeData("auto_validate_customer", checked)}
+          />
+        </div>
+
+        {selectedNode.data.auto_validate_customer && (
+          <div className="space-y-2 pl-6">
+            <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+              Dados para validação
+            </Label>
+            
+            {[
+              { id: "phone", label: "Telefone / WhatsApp" },
+              { id: "email", label: "Email" },
+              { id: "cpf", label: "CPF / Documento" },
+            ].map((field) => {
+              const validateFields: string[] = selectedNode.data.validate_fields || ["phone", "email", "cpf"];
+              const isChecked = validateFields.includes(field.id);
+              return (
+                <div key={field.id} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`validate-${field.id}`}
+                    checked={isChecked}
+                    onCheckedChange={(checked) => {
+                      const current: string[] = selectedNode.data.validate_fields || ["phone", "email", "cpf"];
+                      const next = checked
+                        ? [...current, field.id]
+                        : current.filter((f: string) => f !== field.id);
+                      updateNodeData("validate_fields", next.length > 0 ? next : ["phone"]);
+                    }}
+                  />
+                  <Label htmlFor={`validate-${field.id}`} className="text-sm cursor-pointer">
+                    {field.label}
+                  </Label>
+                </div>
+              );
+            })}
+            
+            <p className="text-[10px] text-muted-foreground">
+              A IA verifica os dados do contato silenciosamente e atualiza <code className="bg-muted px-1 rounded">{'{{is_customer}}'}</code>
             </p>
           </div>
         )}
