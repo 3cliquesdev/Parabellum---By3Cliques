@@ -2260,142 +2260,77 @@ serve(async (req) => {
     
       console.log(`[ai-autopilot-chat] Canal da última mensagem: ${responseChannel}, Departamento: ${department}`);
 
-    // 🆕 FASE KIWIFY: Validação automática por número Kiwify (antes do cache!)
-    // Se contato não tem email, tentar identificar automaticamente via compra Kiwify
-    const contactHasEmailForKiwify = contact.email && contact.email.trim() !== '';
-    
-    if (!contactHasEmailForKiwify && (contact.phone || contact.whatsapp_id)) {
-      console.log('[ai-autopilot-chat] 🔍 Tentando validação automática via Kiwify...');
+    // 🆕 TRIAGEM SILENCIOSA UNIFICADA — Sempre validar pela base Kiwify
+    // Só pula se já está validado (kiwify_validated = true)
+    if (!contact.kiwify_validated) {
+      console.log('[ai-autopilot-chat] 🔍 Triagem silenciosa: validando phone+email+CPF contra base Kiwify...');
       
       try {
-        // 🆕 Executar validação por telefone E por CPF em paralelo
-        const validationPromises: Promise<any>[] = [
-          supabaseClient.functions.invoke(
-            'validate-by-kiwify-phone',
-            { 
-              body: { 
-                phone: contact.phone,
-                whatsapp_id: contact.whatsapp_id,
-                contact_id: contact.id 
-              } 
-            }
-          ),
-        ];
+        const validationPromises: Promise<any>[] = [];
 
-        // Se contato tem CPF/document e não é validado, tentar por CPF também
-        if (contact.document && !contact.kiwify_validated) {
-          console.log('[ai-autopilot-chat] 🔍 Também validando por CPF/documento...');
+        // 1) Telefone
+        if (contact.phone || contact.whatsapp_id) {
           validationPromises.push(
-            supabaseClient.functions.invoke(
-              'validate-by-cpf',
-              { body: { cpf: contact.document, contact_id: contact.id } }
-            )
+            supabaseClient.functions.invoke('validate-by-kiwify-phone', {
+              body: { phone: contact.phone, whatsapp_id: contact.whatsapp_id, contact_id: contact.id }
+            }).then(r => ({ source: 'phone', ...r }))
           );
         }
 
-        const validationResults = await Promise.allSettled(validationPromises);
-        
-        // Processar resultado do telefone
-        const phoneResult = validationResults[0];
-        const kiwifyValidation = phoneResult.status === 'fulfilled' ? phoneResult.value.data : null;
-        const kiwifyError = phoneResult.status === 'fulfilled' ? phoneResult.value.error : phoneResult.reason;
+        // 2) Email
+        if (contact.email && contact.email.trim() !== '') {
+          validationPromises.push(
+            supabaseClient.functions.invoke('verify-customer-email', {
+              body: { email: contact.email, contact_id: contact.id }
+            }).then(r => ({ source: 'email', ...r }))
+          );
+        }
 
-        // Processar resultado do CPF (se existir)
-        let cpfValidation: any = null;
-        if (validationResults.length > 1) {
-          const cpfResult = validationResults[1];
-          cpfValidation = cpfResult.status === 'fulfilled' ? cpfResult.value.data : null;
-          if (cpfResult.status === 'fulfilled' && cpfResult.value.data?.found) {
-            console.log('[ai-autopilot-chat] ✅ Cliente identificado por CPF!', cpfResult.value.data);
-            // Se telefone não encontrou mas CPF sim, usar dados do CPF
-            if (!kiwifyValidation?.found) {
+        // 3) CPF/Documento
+        if (contact.document) {
+          validationPromises.push(
+            supabaseClient.functions.invoke('validate-by-cpf', {
+              body: { cpf: contact.document, contact_id: contact.id }
+            }).then(r => ({ source: 'cpf', ...r }))
+          );
+        }
+
+        if (validationPromises.length > 0) {
+          const results = await Promise.allSettled(validationPromises);
+          
+          // Verificar se qualquer um encontrou
+          let foundCustomer = false;
+          for (const result of results) {
+            if (result.status === 'fulfilled' && result.value?.data?.found) {
+              const src = result.value.source || 'unknown';
+              const customerData = result.value.data.customer;
+              console.log(`[ai-autopilot-chat] ✅ Cliente identificado via ${src}!`, {
+                name: customerData?.name,
+                email: customerData?.email
+              });
+
+              // Atualizar contato local silenciosamente
               contact.status = 'customer';
               contact.kiwify_validated = true;
-              if (cpfResult.value.data.customer?.email) {
-                contact.email = cpfResult.value.data.customer.email;
+              if (customerData?.email && (!contact.email || contact.email.trim() === '')) {
+                contact.email = customerData.email;
               }
-            }
-          }
-        }
-
-        if (!kiwifyError && kiwifyValidation?.found) {
-          console.log(`[ai-autopilot-chat] ✅ Cliente IDENTIFICADO via Kiwify!`, {
-            name: kiwifyValidation.customer?.name,
-            email: kiwifyValidation.customer?.email,
-            products: kiwifyValidation.customer?.products?.length
-          });
-
-          // Atualizar contato local com email da Kiwify para continuar o fluxo
-          contact.email = kiwifyValidation.customer?.email;
-          contact.status = 'customer';
-
-          // 🎉 Enviar mensagem de boas-vindas personalizada
-          const welcomeProducts = kiwifyValidation.customer?.products?.slice(0, 3).map((p: string) => `• ${p}`).join('\n') || '';
-          const welcomeMessage = `Olá, ${kiwifyValidation.customer?.name?.split(' ')[0] || 'cliente'}! 🎉
-
-Identificamos você automaticamente pelo seu número de WhatsApp.
-
-📦 *Seus produtos:*
-${welcomeProducts}
-
-Como posso ajudar você hoje?`;
-
-          // Salvar mensagem de boas-vindas
-          const { data: welcomeMsgData } = await supabaseClient
-            .from("messages")
-            .insert({
-              conversation_id: conversationId,
-              content: welcomeMessage,
-              sender_type: "user",
-              is_ai_generated: true,
-              channel: responseChannel,
-            })
-            .select('id')
-            .single();
-
-          // Atualizar last_message_at
-          await supabaseClient
-            .from("conversations")
-            .update({ last_message_at: new Date().toISOString() })
-            .eq("id", conversationId);
-
-          // Se WhatsApp, enviar via API correta (Meta ou Evolution)
-          if (responseChannel === 'whatsapp' && welcomeMsgData) {
-            const whatsappResult = await getWhatsAppInstanceForConversation(
-              supabaseClient, 
-              conversationId, 
-              conversation.whatsapp_instance_id,
-              conversation // passar dados da conversa para detectar provider
-            );
-
-            if (whatsappResult) {
-              const sendResult = await sendWhatsAppMessage(
-                supabaseClient,
-                whatsappResult,
-                contact.phone,
-                welcomeMessage,
-                conversationId,
-                contact.whatsapp_id
-              );
-
-              if (sendResult.success) {
-                await supabaseClient
-                  .from('messages')
-                  .update({ status: 'sent' })
-                  .eq('id', welcomeMsgData.id);
-              }
+              foundCustomer = true;
+              break; // Um match é suficiente
             }
           }
 
-          // Continuar processamento normal (agora com email identificado)
-          console.log('[ai-autopilot-chat] ✅ Continuando com cliente identificado via Kiwify');
+          if (!foundCustomer) {
+            console.log('[ai-autopilot-chat] ℹ️ Nenhuma compra Kiwify encontrada (phone/email/CPF)');
+          }
         } else {
-          console.log('[ai-autopilot-chat] ℹ️ Nenhuma compra Kiwify encontrada para este número');
+          console.log('[ai-autopilot-chat] ℹ️ Contato sem phone/email/CPF para triagem');
         }
       } catch (kiwifyErr) {
-        console.warn('[ai-autopilot-chat] ⚠️ Erro na validação Kiwify (não crítico):', kiwifyErr);
-        // Não falhar o fluxo principal se Kiwify falhar
+        console.warn('[ai-autopilot-chat] ⚠️ Erro na triagem silenciosa (não crítico):', kiwifyErr);
       }
+    } else {
+      console.log('[ai-autopilot-chat] ✅ Contato já validado (kiwify_validated=true), pulando triagem');
     }
 
     // FASE 1: Verificar se deve pular cache para experiência personalizada
