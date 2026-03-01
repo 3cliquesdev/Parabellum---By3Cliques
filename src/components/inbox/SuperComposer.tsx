@@ -297,24 +297,8 @@ export function SuperComposer({
     await upload(finalFile);
   };
 
-  // Helper para detectar tipo de mídia (Evolution API)
+  // Helper unificado para detectar tipo de mídia (Evolution + Meta API)
   const detectMediaType = (mimeType: string): 'image' | 'audio' | 'video' | 'document' => {
-    if (mimeType.startsWith('image/')) return 'image';
-    if (mimeType.startsWith('audio/')) return 'audio';
-    if (mimeType.startsWith('video/')) return 'video';
-    return 'document';
-  };
-
-  // Helper para detectar tipo de mídia (Meta API)
-  const detectMetaMediaType = (mimeType: string): 'image' | 'audio' | 'video' | 'document' | 'sticker' => {
-    if (mimeType.startsWith('image/')) return 'image';
-    if (mimeType.startsWith('audio/')) return 'audio';
-    if (mimeType.startsWith('video/')) return 'video';
-    return 'document';
-  };
-
-  // Helper para detectar tipo de mídia (Meta API)
-  const getMetaMediaType = (mimeType: string): 'image' | 'audio' | 'video' | 'document' => {
     if (mimeType.startsWith('image/')) return 'image';
     if (mimeType.startsWith('audio/')) return 'audio';
     if (mimeType.startsWith('video/')) return 'video';
@@ -394,7 +378,7 @@ export function SuperComposer({
                 instanceId: whatsappMetaInstanceId,
                 phoneNumber: contactPhone,
                 media: {
-                  type: getMetaMediaType(firstAtt.mimeType),
+                  type: detectMediaType(firstAtt.mimeType),
                   url: freshUrl,
                   filename: firstAtt.filename,
                   mimeType: firstAtt.mimeType,
@@ -424,7 +408,7 @@ export function SuperComposer({
                   instanceId: whatsappMetaInstanceId,
                   phoneNumber: contactPhone,
                   media: {
-                    type: getMetaMediaType(att.mimeType),
+                    type: detectMediaType(att.mimeType),
                     url: url,
                     filename: att.filename,
                     mimeType: att.mimeType,
