@@ -2268,16 +2268,55 @@ serve(async (req) => {
       console.log('[ai-autopilot-chat] 🔍 Tentando validação automática via Kiwify...');
       
       try {
-        const { data: kiwifyValidation, error: kiwifyError } = await supabaseClient.functions.invoke(
-          'validate-by-kiwify-phone',
-          { 
-            body: { 
-              phone: contact.phone,
-              whatsapp_id: contact.whatsapp_id,
-              contact_id: contact.id 
-            } 
+        // 🆕 Executar validação por telefone E por CPF em paralelo
+        const validationPromises: Promise<any>[] = [
+          supabaseClient.functions.invoke(
+            'validate-by-kiwify-phone',
+            { 
+              body: { 
+                phone: contact.phone,
+                whatsapp_id: contact.whatsapp_id,
+                contact_id: contact.id 
+              } 
+            }
+          ),
+        ];
+
+        // Se contato tem CPF/document e não é validado, tentar por CPF também
+        if (contact.document && !contact.kiwify_validated) {
+          console.log('[ai-autopilot-chat] 🔍 Também validando por CPF/documento...');
+          validationPromises.push(
+            supabaseClient.functions.invoke(
+              'validate-by-cpf',
+              { body: { cpf: contact.document, contact_id: contact.id } }
+            )
+          );
+        }
+
+        const validationResults = await Promise.allSettled(validationPromises);
+        
+        // Processar resultado do telefone
+        const phoneResult = validationResults[0];
+        const kiwifyValidation = phoneResult.status === 'fulfilled' ? phoneResult.value.data : null;
+        const kiwifyError = phoneResult.status === 'fulfilled' ? phoneResult.value.error : phoneResult.reason;
+
+        // Processar resultado do CPF (se existir)
+        let cpfValidation: any = null;
+        if (validationResults.length > 1) {
+          const cpfResult = validationResults[1];
+          cpfValidation = cpfResult.status === 'fulfilled' ? cpfResult.value.data : null;
+          if (cpfResult.status === 'fulfilled' && cpfResult.value.data?.found) {
+            console.log('[ai-autopilot-chat] ✅ Cliente identificado por CPF!', cpfResult.value.data);
+            // Se telefone não encontrou mas CPF sim, usar dados do CPF
+            if (!kiwifyValidation?.found) {
+              contact.status = 'customer';
+              contact.kiwify_validated = true;
+              if (cpfResult.value.data.customer?.email) {
+                contact.email = cpfResult.value.data.customer.email;
+              }
+            }
           }
-        );
+        }
 
         if (!kiwifyError && kiwifyValidation?.found) {
           console.log(`[ai-autopilot-chat] ✅ Cliente IDENTIFICADO via Kiwify!`, {

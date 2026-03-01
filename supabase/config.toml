@@ -350,6 +350,9 @@ region = "us-east-1"
 [functions.validate-by-kiwify-phone]
 verify_jwt = false
 
+[functions.validate-by-cpf]
+verify_jwt = false
+
 [functions.send-admin-alert]
 verify_jwt = true
 
