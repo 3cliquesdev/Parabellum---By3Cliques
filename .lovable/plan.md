@@ -1,105 +1,96 @@
 
 
-# Auditoria Completa do Motor de Fluxo (process-chat-flow)
+# Ajustes Finais ao Plano de Variáveis — PR-Ready
 
-## Tipos de nó auditados
+## Ajuste 1: Incluir `queue` em `buildVariablesContext()`
 
-| Nó | Frontend | Engine (início) | Engine (resposta) | Auto-avanço | Status |
-|---|---|---|---|---|---|
-| **message** | ✅ OK | ✅ Manual trigger OK | 🔴 BUG: fica preso | ✅ Manual / 🔴 Main path | ⚠️ |
-| **ask_name** | ✅ OK | ✅ OK | ✅ Validação name OK | N/A | ⚠️ |
-| **ask_email** | ✅ OK | ✅ OK | ✅ Validação email OK | N/A | ⚠️ |
-| **ask_phone** | ✅ OK | ✅ OK | ✅ Validação phone OK | N/A | ⚠️ |
-| **ask_cpf** | ✅ OK | ✅ OK | ✅ Validação CPF OK | N/A | ⚠️ |
-| **ask_text** | ✅ OK | ✅ OK | ✅ Validação text OK | N/A | ⚠️ |
-| **ask_options** | ✅ OK | ✅ OK | ✅ Validação estrita OK | N/A | ⚠️ |
-| **condition** (clássico) | ✅ OK | ✅ Avalia + traversa | ✅ Avalia + path | ✅ Auto-traverse | ✅ |
-| **condition** (multi-regra) | ✅ OK | ✅ Aguarda input | ✅ evaluateConditionPath | ✅ Auto-traverse | ✅ |
-| **condition** (inatividade) | ✅ OK | ✅ Aguarda timeout | ✅ Cron + path | ✅ | ✅ |
-| **ai_response** | ✅ OK | ✅ aiNodeActive=true | ✅ Persistente + anti-dup | N/A | ✅ |
-| **transfer** | ✅ OK | ✅ Manual trigger OK | ✅ Status=transferred | N/A | ✅ |
-| **end** | ✅ OK | N/A | ✅ Status=completed | N/A | ✅ |
-| **fetch_order** | ✅ OK | N/A | ✅ Busca + salva dados | ⚠️ Parcial | ⚠️ |
+**Backend (`process-chat-flow/index.ts`):**
+- Expandir select de conversations para incluir `queue`:
+  - Linha 1885: `'id, contact_id'` → `'id, contact_id, channel, status, priority, protocol_number, queue, created_at, resolved_at'`
+  - Linha 570: idem para manual trigger
+- Na função `buildVariablesContext()`, incluir `queue` na lista de conversation fields:
+  ```typescript
+  for (const f of ['channel','status','priority','protocol_number','queue','created_at','resolved_at']) {
+    if (conversationData[f] != null) ctx[`conversation_${f}`] = conversationData[f];
+  }
+  ```
 
 ---
 
-## 🔴 BUG 1 — CRÍTICO: Nós `message` não fazem auto-avanço no caminho principal
+## Ajuste 2: Padronizar `getVar()` — resolver único usado em TODOS os lugares
 
-**Cenário**: ask_name → **message** ("Obrigado, {{name}}!") → ask_email
-
-**O que acontece hoje**:
-1. Usuário responde o nome
-2. Engine encontra próximo nó = `message`, retorna o texto
-3. Estado fica parado no nó `message`
-4. Usuário precisa enviar **uma mensagem extra** para avançar
-5. Essa mensagem extra é "processada" pelo nó message (sem efeito) e aí sim avança para ask_email
-
-**Impacto**: UX quebrada — o usuário não sabe que precisa enviar algo após uma mensagem informativa.
-
-**Nota**: O manual trigger (linhas 886-954) JÁ tem auto-avanço para message. O caminho principal (linhas 1509-1533) NÃO tem.
-
-**Correção**: Após linhas 1509-1517, quando `nextNode.type === 'message'`, entregar a mensagem E continuar avançando até encontrar um nó que colete input (ask_*, ai_response, transfer, end). Replicar a lógica de auto-avanço que já existe no manual trigger.
-
----
-
-## 🟡 BUG 2 — MÉDIO: Status `waiting_input` não é definido nas transições do caminho principal
-
-**Linha 1511-1517**: O `update` do state NÃO inclui `status`. Para nós `ask_*`, o status deveria ser `waiting_input`.
-
-**Impacto**: Semanticamente incorreto. Funciona porque a query filtra por `['active', 'waiting_input', 'in_progress']`, mas pode causar problemas em relatórios ou lógica futura.
-
-**Correção**: Adicionar `status: nextNode.type.startsWith('ask_') || nextNode.type === 'condition' ? 'waiting_input' : 'active'` ao update.
-
----
-
-## 🟡 BUG 3 — MÉDIO: Typo `ask_input` no auto-avanço do manual trigger
-
-**Linha 931**: `advanceNode.type === 'ask_input'` — esse tipo NÃO existe. Os tipos corretos são: `ask_name`, `ask_email`, `ask_phone`, `ask_cpf`, `ask_text`, `ask_options`.
-
-**Impacto**: Nós `ask_name`, `ask_email`, `ask_phone`, `ask_cpf`, `ask_text` recebem status `active` em vez de `waiting_input` quando alcançados via auto-avanço no manual trigger.
-
-**Correção**: Mudar para `advanceNode.type.startsWith('ask_')`.
-
----
-
-## 🟢 BUG 4 — BAIXO: `fetch_order` pós-condição não faz loop completo
-
-**Linhas 1382-1408**: Após `fetch_order → condition`, se a condição leva a outro nó não-conteúdo (outra condition, input), o engine para. Faz apenas 1 nível.
-
-**Impacto**: Fluxos com `fetch_order → condition → condition → message` podem ficar presos no segundo condition.
-
-**Correção**: Reutilizar o loop de auto-traverse (enquanto `['condition','input','start']`) após o fetch_order, igual ao loop principal (linhas 1311-1363).
-
----
-
-## Plano de implementação
-
-### Arquivo: `supabase/functions/process-chat-flow/index.ts`
-
-**Fix 1** (Crítico) — Auto-avanço para message nodes no caminho principal (após linha 1517):
-- Quando `nextNode.type === 'message'`: entregar mensagem, e continuar avançando em loop até encontrar nó de input/content
-- Entregar cada mensagem intermediária ao usuário (concatenar ou enviar em sequência)
-- Parar quando encontrar: `ask_*`, `ai_response`, `transfer`, `end`, ou null
-
-**Fix 2** (Médio) — Adicionar `status` ao update na linha 1511-1517:
+Criar uma função `getVar()` que centraliza a resolução:
 ```typescript
-status: nextNode.type.startsWith('ask_') || nextNode.type === 'condition' 
-  ? 'waiting_input' : 'active'
+function getVar(
+  field: string,
+  collectedData: Record<string, any>,
+  contactData: any,
+  conversationData: any
+): any {
+  const f = field?.trim();
+  if (!f) return null;
+  // Aliases
+  if (f === 'is_validated_customer' || f === 'isValidatedCustomer') {
+    return contactData?.kiwify_validated ?? false;
+  }
+  return collectedData?.[f] ?? contactData?.[f] ?? conversationData?.[f] ?? null;
+}
 ```
 
-**Fix 3** (Médio) — Corrigir typo na linha 931:
+**Substituições:**
+- `evaluateCondition()` (linha 160): trocar `collectedData[condition_field] || ""` por `getVar(condition_field, collectedData, contactData, conversationData)`
+  - Requer adicionar `contactData` e `conversationData` como parâmetros
+- `evaluateConditionPath()` (linha 204): propagar mesmos params
+- `evalCond()` (linha 1902-1942): substituir todo o bloco de resolução manual por `getVar()`
+- `manualEvalCond()` (linha 587-595): idem
+
+Resultado: um único ponto de resolução — zero duplicação, zero chance de inconsistência.
+
+---
+
+## Ajuste 3: `getAvailableVariables()` percorre grafo backwards (não array linear)
+
+No helper `variableCatalog.ts`, ao calcular `flowVars` para um `selectedNodeId`:
+- Percorrer edges **backwards** a partir do nó selecionado (seguindo `edge.target → edge.source`) coletando os nós predecessores
+- Só incluir `save_as` de nós que são **ancestrais** do nó atual no grafo
+- Hoje o código (linha 608-613) faz `.filter((n: Node) => n.data?.save_as)` em **todos** os nós — isso mostra variáveis de branches paralelas que nunca serão alcançadas
+
 ```typescript
-// De:
-advanceNode.type === 'ask_options' || advanceNode.type === 'ask_input'
-// Para:
-advanceNode.type.startsWith('ask_')
+function getAncestorNodeIds(nodeId: string, edges: Edge[]): Set<string> {
+  const ancestors = new Set<string>();
+  const queue = [nodeId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const edge of edges) {
+      if (edge.target === current && !ancestors.has(edge.source)) {
+        ancestors.add(edge.source);
+        queue.push(edge.source);
+      }
+    }
+  }
+  return ancestors;
+}
 ```
 
-**Fix 4** (Baixo) — Loop completo após fetch_order (linhas 1382-1408):
-- Substituir a verificação single-step por um while loop idêntico ao auto-traverse principal
+Usado por autocomplete, warnings e condition selector.
 
-### Resultado
-- Fluxos com nós `message` intermediários funcionam sem exigir input extra
-- Status semântico correto em todas as transições
-- Todos os tipos de nó cobertos e testados para produção
+---
+
+## Ajuste 4: `condition_field.trim()` em todos os resolvers
+
+Na função `getVar()` centralizada (ajuste 2), já incluído o `.trim()` no campo. Isso previne bugs silenciosos quando o usuário digita espaço antes/depois do nome do campo no editor.
+
+Adicionalmente, no frontend ao salvar `condition_field`:
+- Em `ChatFlowEditor.tsx` linha 687: `updateNodeData("condition_field", v.trim())`
+
+---
+
+## Resumo de mudanças
+
+| Arquivo | Mudança |
+|---|---|
+| `supabase/functions/process-chat-flow/index.ts` | `getVar()` centralizado, `buildVariablesContext()` com `queue`, select expandido em 2 pontos |
+| `src/components/chat-flows/variableCatalog.ts` | **Novo** — `getAvailableVariables()` com traversal backwards + `getAncestorNodeIds()` |
+| `src/components/chat-flows/ChatFlowEditor.tsx` | Usar catálogo, `.trim()` no save, condition selector expandido |
+| `src/components/chat-flows/VariableAutocomplete.tsx` | **Novo** — autocomplete `{{` |
 
