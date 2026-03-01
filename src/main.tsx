@@ -96,17 +96,7 @@ if (storedVersion !== APP_SCHEMA_VERSION) {
 console.log('[Main] 🏗️ Build ID:', getCurrentBuildId());
 console.log('[Main] 📋 Schema Version:', APP_SCHEMA_VERSION);
 
-// 1. Remove service workers residuais (PWA antigo)
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    registrations.forEach((registration) => {
-      registration.unregister();
-      console.log('[Main] 🗑️ Service Worker removido');
-    });
-  });
-}
-
-// 2. Limpa IndexedDB antigo (cache Dexie) - apenas se não foi limpo acima
+// 1. Limpa IndexedDB antigo (cache Dexie) - apenas se não foi limpo acima
 if ('indexedDB' in window && storedVersion === APP_SCHEMA_VERSION) {
   try {
     indexedDB.deleteDatabase('CRMChatDB');

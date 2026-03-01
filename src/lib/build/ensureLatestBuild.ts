@@ -80,7 +80,7 @@ export async function copyBuildInfo(): Promise<boolean> {
 export async function clearAllCaches(): Promise<void> {
   console.log("[ensureLatestBuild] Iniciando limpeza agressiva de caches...");
   
-  // 1. Limpar Cache Storage (PWA)
+  // 1. Limpar Cache Storage
   if ('caches' in window) {
     try {
       const cacheNames = await caches.keys();
@@ -91,18 +91,7 @@ export async function clearAllCaches(): Promise<void> {
     }
   }
   
-  // 2. Desregistrar todos os Service Workers
-  if ('serviceWorker' in navigator) {
-    try {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      console.log("[ensureLatestBuild] Desregistrando", registrations.length, "service workers");
-      await Promise.all(registrations.map(reg => reg.unregister()));
-    } catch (e) {
-      console.warn("[ensureLatestBuild] Erro ao desregistrar service workers:", e);
-    }
-  }
-  
-  // 3. Limpar IndexedDB
+  // 2. Limpar IndexedDB
   if ('indexedDB' in window) {
     try {
       const databases = await indexedDB.databases?.() || [];
@@ -117,7 +106,7 @@ export async function clearAllCaches(): Promise<void> {
     }
   }
   
-  // 4. Limpar localStorage relacionado a build
+  // 3. Limpar localStorage relacionado a build
   try {
     Object.values(STORAGE_KEYS).forEach(key => {
       localStorage.removeItem(key);
@@ -154,7 +143,7 @@ export function forceReload(): void {
 export async function hardRefresh(): Promise<void> {
   console.log("[ensureLatestBuild] Executando Hard Refresh...");
   
-  // Limpar caches do Service Worker/PWA
+  // Limpar caches
   await clearAllCaches();
   
   // Preservar sessão de autenticação do Supabase antes de limpar
