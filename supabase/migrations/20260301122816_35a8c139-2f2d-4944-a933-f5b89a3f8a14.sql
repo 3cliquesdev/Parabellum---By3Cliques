@@ -1,0 +1,1 @@
+DELETE FROM chat_flow_states WHERE id = '6dde3546-7787-4292-a54a-b365af431ed3';

@@ -1,0 +1,1 @@
+DELETE FROM chat_flow_states WHERE conversation_id = 'f19fe7ce-6de8-4f9e-bd14-3bae72f98eca';

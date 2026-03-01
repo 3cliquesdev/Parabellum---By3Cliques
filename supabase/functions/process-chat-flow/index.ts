@@ -689,9 +689,44 @@ serve(async (req) => {
           }
 
         if (hasMultiRules) {
-            // 🆕 FIX: Multi-regra com keywords precisa de mensagem real do usuário
-            // Na travessia manual inicial não há userMessage — parar aqui e aguardar input
-            console.log('[process-chat-flow] 🛑 Manual traversal: multi-rule condition without userMessage — stopping as waiting_input');
+            // Multi-regra com keywords precisa de mensagem real do usuário
+            if (!userMessage || userMessage.trim().length === 0) {
+              console.log('[process-chat-flow] 🛑 Manual traversal: multi-rule condition without userMessage — stopping as waiting_input');
+              break;
+            }
+            // Reutilizar a mesma lógica de avaliação do fluxo normal
+            const condRules = contentNode.data?.condition_rules || [];
+            const normalizedMsg = userMessage.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            let matchedRuleId: string | null = null;
+            
+            for (const rule of condRules) {
+              const rawKw = (rule.keywords || "").toString().trim() || (rule.label || "").trim();
+              const terms = rawKw.includes("\n")
+                ? rawKw.split("\n").map((t: string) => t.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')).filter(Boolean)
+                : [rawKw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')].filter(Boolean);
+              if (terms.length > 0 && terms.some((term: string) => normalizedMsg.includes(term))) {
+                matchedRuleId = rule.id;
+                const matchedTerm = terms.find((term: string) => normalizedMsg.includes(term));
+                console.log(`[process-chat-flow] 🎯 Manual MATCH on Rule "${rule.label}" — keyword: "${matchedTerm}"`);
+                break;
+              }
+            }
+            
+            if (matchedRuleId) {
+              const next = findNextNode(flowDef, contentNode, matchedRuleId);
+              if (next) {
+                contentNode = next;
+                continue;
+              }
+            }
+            // No match — use "else" path (same as normal flow)
+            console.log('[process-chat-flow] 🔀 Manual: No multi-rule match → else');
+            const elseNext = findNextNode(flowDef, contentNode, 'else') || findNextNode(flowDef, contentNode, 'default') || findNextNode(flowDef, contentNode);
+            if (elseNext) {
+              contentNode = elseNext;
+              continue;
+            }
+            console.log('[process-chat-flow] ⚠️ Manual traversal: no matching rule and no default path');
             break;
           } else {
             const result = manualEvalCond(contentNode.data);
