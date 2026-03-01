@@ -15,7 +15,8 @@ export type ChatFlowNodeType =
   | 'ai_response'
   | 'transfer'
   | 'end'
-  | 'fetch_order';
+  | 'fetch_order'
+  | 'validate_customer';
 
 interface ChatFlowNodeWrapperProps {
   type: ChatFlowNodeType;
@@ -78,6 +79,10 @@ const typeColors: Record<ChatFlowNodeType, { header: string; border: string }> =
   fetch_order: {
     header: 'bg-teal-600 dark:bg-teal-700',
     border: 'border-teal-400 dark:border-teal-600',
+  },
+  validate_customer: {
+    header: 'bg-emerald-700 dark:bg-emerald-800',
+    border: 'border-emerald-500 dark:border-emerald-600',
   },
 };
 

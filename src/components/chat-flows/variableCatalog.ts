@@ -40,6 +40,13 @@ export const CONVERSATION_VARS: VariableItem[] = [
   { value: "conversation_resolved_at", label: "Resolvida em", group: "conversation" },
 ];
 
+// Fixed validation variables (from validate_customer nodes)
+export const CUSTOMER_VALIDATION_VARS: VariableItem[] = [
+  { value: "customer_validated", label: "Cliente Validado", group: "contact" },
+  { value: "customer_name_found", label: "Nome Encontrado", group: "contact" },
+  { value: "customer_email_found", label: "Email Encontrado", group: "contact" },
+];
+
 // Fixed order variables (from fetch_order nodes)
 export const ORDER_VARS: VariableItem[] = [
   { value: "order_found", label: "Pedido Encontrado", group: "order" },
@@ -132,13 +139,21 @@ export function getAvailableVariables(
   }
 
   // Check if any ancestor has a fetch_order node
-  const hasOrderNode = selectedNodeId
-    ? nodes.some(n => getAncestorNodeIds(selectedNodeId, edges).has(n.id) && n.type === "fetch_order")
+  const ancestorSet = selectedNodeId ? getAncestorNodeIds(selectedNodeId, edges) : null;
+  const hasOrderNode = ancestorSet
+    ? nodes.some(n => ancestorSet.has(n.id) && n.type === "fetch_order")
     : nodes.some(n => n.type === "fetch_order");
 
   const orderVars = hasOrderNode ? ORDER_VARS : [];
 
-  const all = [...flowVars, ...CONTACT_VARS, ...CONVERSATION_VARS, ...orderVars];
+  // Check if any ancestor has a validate_customer node
+  const hasValidateNode = ancestorSet
+    ? nodes.some(n => ancestorSet.has(n.id) && n.type === "validate_customer")
+    : nodes.some(n => n.type === "validate_customer");
+
+  const customerValidationVars = hasValidateNode ? CUSTOMER_VALIDATION_VARS : [];
+
+  const all = [...flowVars, ...CONTACT_VARS, ...CONVERSATION_VARS, ...orderVars, ...customerValidationVars];
 
   return {
     flowVars,

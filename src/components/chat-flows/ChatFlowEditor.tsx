@@ -24,7 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   MessageSquare, User, Mail, Phone, CreditCard, ListChecks, 
   MessageCircle, GitBranch, Sparkles, UserPlus, CheckCircle,
-  Save, X, Trash2, Plus, Play, Bot, BookOpen, Package
+  Save, X, Trash2, Plus, Play, Bot, BookOpen, Package, ShieldCheck
 } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,11 +44,13 @@ import {
   AIResponseNode,
   ChatFlowConditionNode,
   FetchOrderNode,
+  ValidateCustomerNode,
 } from "./nodes";
 import { cn } from "@/lib/utils";
 import { TransferPropertiesPanel } from "./TransferPropertiesPanel";
 import { AIResponsePropertiesPanel } from "./AIResponsePropertiesPanel";
 import { FetchOrderPropertiesPanel } from "./FetchOrderPropertiesPanel";
+import { ValidateCustomerPropertiesPanel } from "./ValidateCustomerPropertiesPanel";
 import { VariableAutocomplete } from "./VariableAutocomplete";
 import { CONDITION_CONTACT_FIELDS, CONDITION_CONVERSATION_FIELDS, getAncestorNodeIds } from "./variableCatalog";
 
@@ -66,6 +68,7 @@ export const chatFlowNodeTypes = {
   transfer: TransferNode,
   end: EndNode,
   fetch_order: FetchOrderNode,
+  validate_customer: ValidateCustomerNode,
 };
 
 const edgeTypes = {
@@ -86,6 +89,7 @@ const blockColors: Record<string, string> = {
   transfer: "bg-orange-500",
   end: "bg-emerald-500",
   fetch_order: "bg-teal-500",
+  validate_customer: "bg-emerald-700",
 };
 
 // Cores do MiniMap
@@ -103,6 +107,7 @@ const miniMapColors: Record<string, string> = {
   end: '#10b981',
   start: '#3b82f6',
   fetch_order: '#14b8a6',
+  validate_customer: '#047857',
 };
 
 interface ChatFlowEditorProps {
@@ -199,6 +204,15 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         save_found_as: "order_found",
         save_status_as: "order_status",
         save_packed_at_as: "packed_at_formatted"
+      },
+      validate_customer: {
+        label: "Validar Cliente",
+        validate_phone: true,
+        validate_email: true,
+        validate_cpf: false,
+        save_validated_as: "customer_validated",
+        save_customer_name_as: "customer_name_found",
+        save_customer_email_as: "customer_email_found",
       },
     };
     return defaults[type] || { label: `Novo ${type}` };
@@ -441,6 +455,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 <DraggableBlock type="condition" icon={GitBranch} label="Condição" color={blockColors.condition} />
                 <DraggableBlock type="ai_response" icon={Sparkles} label="IA" color={blockColors.ai_response} />
                 <DraggableBlock type="fetch_order" icon={Package} label="Pedido" color={blockColors.fetch_order} />
+                <DraggableBlock type="validate_customer" icon={ShieldCheck} label="Validar Cliente" color={blockColors.validate_customer} />
               </div>
             </div>
 
@@ -860,6 +875,14 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
               {/* Fetch Order */}
               {selectedNode.type === "fetch_order" && (
                 <FetchOrderPropertiesPanel
+                  selectedNode={selectedNode}
+                  updateNodeData={updateNodeData}
+                />
+              )}
+
+              {/* Validate Customer */}
+              {selectedNode.type === "validate_customer" && (
+                <ValidateCustomerPropertiesPanel
                   selectedNode={selectedNode}
                   updateNodeData={updateNodeData}
                 />

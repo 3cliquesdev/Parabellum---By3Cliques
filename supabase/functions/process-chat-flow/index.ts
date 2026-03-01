@@ -1539,7 +1539,138 @@ serve(async (req) => {
         }
       }
 
-      // Se não há próximo nó ou é um nó de fim
+      // 🆕 Handler especial para validate_customer
+      if (nextNode?.type === 'validate_customer') {
+        console.log('[process-chat-flow] 🛡️ Processing validate_customer node');
+        
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        
+        // Buscar dados do contato da conversa
+        const { data: vcConv } = await supabaseClient
+          .from('conversations')
+          .select('contact_id')
+          .eq('id', conversationId)
+          .maybeSingle();
+        
+        let vcContact: any = null;
+        if (vcConv?.contact_id) {
+          const { data: c } = await supabaseClient
+            .from('contacts')
+            .select('phone, email, document, whatsapp_id, first_name, last_name, kiwify_validated')
+            .eq('id', vcConv.contact_id)
+            .maybeSingle();
+          vcContact = c;
+        }
+
+        const validatedKey = nextNode.data?.save_validated_as || 'customer_validated';
+        const nameKey = nextNode.data?.save_customer_name_as || 'customer_name_found';
+        const emailKey = nextNode.data?.save_customer_email_as || 'customer_email_found';
+
+        let found = false;
+        let customerName = '';
+        let customerEmail = '';
+
+        if (vcContact && !vcContact.kiwify_validated) {
+          const validationPromises: Promise<any>[] = [];
+          
+          // Phone validation
+          if (nextNode.data?.validate_phone !== false && (vcContact.phone || vcContact.whatsapp_id)) {
+            validationPromises.push(
+              fetch(`${supabaseUrl}/functions/v1/validate-by-kiwify-phone`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                body: JSON.stringify({ phone: vcContact.phone, whatsapp_id: vcContact.whatsapp_id, contact_id: vcConv?.contact_id })
+              }).then(r => r.json()).catch(() => ({ found: false }))
+            );
+          }
+          
+          // Email validation
+          if (nextNode.data?.validate_email !== false && vcContact.email) {
+            validationPromises.push(
+              fetch(`${supabaseUrl}/functions/v1/verify-customer-email`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                body: JSON.stringify({ email: vcContact.email, contact_id: vcConv?.contact_id })
+              }).then(r => r.json()).catch(() => ({ found: false }))
+            );
+          }
+          
+          // CPF validation
+          if (nextNode.data?.validate_cpf === true && vcContact.document) {
+            validationPromises.push(
+              fetch(`${supabaseUrl}/functions/v1/validate-by-cpf`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                body: JSON.stringify({ cpf: vcContact.document, contact_id: vcConv?.contact_id })
+              }).then(r => r.json()).catch(() => ({ found: false }))
+            );
+          }
+
+          if (validationPromises.length > 0) {
+            const results = await Promise.allSettled(validationPromises);
+            for (const r of results) {
+              if (r.status === 'fulfilled' && r.value?.found) {
+                found = true;
+                if (r.value.customer?.name) customerName = r.value.customer.name;
+                if (r.value.customer?.email) customerEmail = r.value.customer.email;
+              }
+            }
+          }
+
+          if (found && vcConv?.contact_id) {
+            await supabaseClient
+              .from('contacts')
+              .update({ kiwify_validated: true, status: 'customer' })
+              .eq('id', vcConv.contact_id);
+            console.log('[process-chat-flow] ✅ Contact promoted to customer via validate_customer node');
+          }
+        } else if (vcContact?.kiwify_validated) {
+          found = true;
+          customerName = [vcContact.first_name, vcContact.last_name].filter(Boolean).join(' ');
+          customerEmail = vcContact.email || '';
+        }
+
+        collectedData[validatedKey] = found;
+        collectedData[nameKey] = customerName;
+        collectedData[emailKey] = customerEmail;
+
+        console.log('[process-chat-flow] 🛡️ Validate customer result:', { found, customerName, customerEmail });
+
+        // Update state
+        await supabaseClient
+          .from('chat_flow_states')
+          .update({ collected_data: collectedData, current_node_id: nextNode.id })
+          .eq('id', activeState.id);
+
+        // Auto-traverse to next node
+        let afterValidateNode = findNextNode(flowDef, nextNode);
+        while (afterValidateNode && ['condition', 'input', 'start'].includes(afterValidateNode.type)) {
+          if (afterValidateNode.type === 'condition') {
+            const condPath = evaluateConditionPath(afterValidateNode.data, collectedData, userMessage);
+            const resolved = findNextNode(flowDef, afterValidateNode, condPath);
+            if (!resolved || !['condition', 'input', 'start'].includes(resolved.type)) {
+              afterValidateNode = resolved;
+              break;
+            }
+            afterValidateNode = resolved;
+          } else {
+            afterValidateNode = findNextNode(flowDef, afterValidateNode);
+          }
+        }
+
+        if (afterValidateNode) {
+          nextNode = afterValidateNode;
+          const vcStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition'
+            ? 'waiting_input' : 'active';
+          await supabaseClient
+            .from('chat_flow_states')
+            .update({ collected_data: collectedData, current_node_id: nextNode.id, status: vcStatus })
+            .eq('id', activeState.id);
+        }
+      }
+
+
       if (!nextNode || nextNode.type === 'end') {
         console.log(`[process-chat-flow] 🏁 Flow completed: flow=${activeState.flow_id} node=${nextNode?.id || 'none'} collectedKeys=[${Object.keys(collectedData).filter(k => !k.startsWith('__')).join(',')}]`);
         // Marcar fluxo como completo
