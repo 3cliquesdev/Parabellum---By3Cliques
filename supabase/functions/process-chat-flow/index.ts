@@ -928,7 +928,7 @@ serve(async (req) => {
         }
 
         if (advanceNode.id !== contentNode.id) {
-          const advanceStatus = (advanceNode.type === 'ask_options' || advanceNode.type === 'ask_input')
+          const advanceStatus = advanceNode.type.startsWith('ask_') || advanceNode.type === 'condition'
             ? 'waiting_input' : 'active';
 
           const { error: advErr } = await supabaseClient
@@ -1378,33 +1378,37 @@ serve(async (req) => {
           })
           .eq('id', activeState.id);
 
-        // Avançar para o próximo nó após fetch_order (automático)
-        const nodeAfterFetch = findNextNode(flowDef, nextNode);
+        // Avançar para o próximo nó após fetch_order (automático) — loop completo
+        let afterFetchNode = findNextNode(flowDef, nextNode);
         
-        if (nodeAfterFetch) {
-          // Se próximo é condição, avaliar automaticamente
-          if (nodeAfterFetch.type === 'condition') {
-            const conditionPath = evaluateConditionPath(nodeAfterFetch.data, collectedData, userMessage);
-            nextNode = findNextNode(flowDef, nodeAfterFetch, conditionPath);
-            
-            // Atualizar estado para após a condição
-            await supabaseClient
-              .from('chat_flow_states')
-              .update({
-                collected_data: collectedData,
-                current_node_id: nextNode?.id || nodeAfterFetch.id,
-              })
-              .eq('id', activeState.id);
+        // Loop de auto-traverse: atravessar condition, input, start até conteúdo
+        while (afterFetchNode && ['condition', 'input', 'start'].includes(afterFetchNode.type)) {
+          if (afterFetchNode.type === 'condition') {
+            const condPath = evaluateConditionPath(afterFetchNode.data, collectedData, userMessage);
+            const resolved = findNextNode(flowDef, afterFetchNode, condPath);
+            if (!resolved || !['condition', 'input', 'start'].includes(resolved.type)) {
+              afterFetchNode = resolved;
+              break;
+            }
+            afterFetchNode = resolved;
           } else {
-            nextNode = nodeAfterFetch;
-            await supabaseClient
-              .from('chat_flow_states')
-              .update({
-                collected_data: collectedData,
-                current_node_id: nextNode.id,
-              })
-              .eq('id', activeState.id);
+            // input/start: atravessar
+            afterFetchNode = findNextNode(flowDef, afterFetchNode);
           }
+        }
+        
+        if (afterFetchNode) {
+          nextNode = afterFetchNode;
+          const fetchStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition'
+            ? 'waiting_input' : 'active';
+          await supabaseClient
+            .from('chat_flow_states')
+            .update({
+              collected_data: collectedData,
+              current_node_id: nextNode.id,
+              status: fetchStatus,
+            })
+            .eq('id', activeState.id);
         }
       }
 
@@ -1508,11 +1512,95 @@ serve(async (req) => {
 
       // Atualizar estado e retornar próxima pergunta
       console.log(`[process-chat-flow] 📋 Next node: type=${nextNode.type} id=${nextNode.id} hasOptions=${nextNode.type === 'ask_options'} save_as=${nextNode.data?.save_as || 'none'}`);
+      // === AUTO-AVANÇO para nós message no caminho principal ===
+      // Se o próximo nó é 'message', entregar a mensagem e continuar avançando
+      // até encontrar um nó que colete input (ask_*, ai_response, transfer, end)
+      const extraMessages: string[] = [];
+      
+      while (nextNode && nextNode.type === 'message') {
+        const msgText = replaceVariables(nextNode.data?.message || "", collectedData);
+        extraMessages.push(msgText);
+        console.log(`[process-chat-flow] 📨 Auto-advancing past message node ${nextNode.id}: "${msgText.substring(0, 50)}..."`);
+        
+        const afterMessage = findNextNode(flowDef, nextNode);
+        if (!afterMessage) {
+          // Último nó é message, sem próximo — parar aqui
+          nextNode = null;
+          break;
+        }
+        
+        // Se próximo é condition, avaliar e continuar
+        if (afterMessage.type === 'condition') {
+          const condPath = evaluateConditionPath(afterMessage.data, collectedData, userMessage);
+          const afterCond = findNextNode(flowDef, afterMessage, condPath);
+          nextNode = afterCond || null;
+        } else if (afterMessage.type === 'input' || afterMessage.type === 'start') {
+          // Nós não-conteúdo: atravessar
+          nextNode = findNextNode(flowDef, afterMessage);
+        } else {
+          nextNode = afterMessage;
+        }
+      }
+      
+      // Se acabou sem nó (todos eram message sem saída), completar o fluxo
+      if (!nextNode) {
+        console.log(`[process-chat-flow] 🏁 Flow completed after message chain`);
+        await supabaseClient
+          .from('chat_flow_states')
+          .update({
+            collected_data: collectedData,
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', activeState.id);
+
+        const lastMsg = extraMessages.length > 0 ? extraMessages.join('\n\n') : 'Fluxo finalizado.';
+        return new Response(
+          JSON.stringify({
+            useAI: false,
+            response: lastMsg,
+            flowId: activeState.flow_id,
+            flowName: activeState.chat_flows?.name || null,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Se chegou a end, completar
+      if (nextNode.type === 'end') {
+        console.log(`[process-chat-flow] 🏁 Flow completed (end node after messages)`);
+        await supabaseClient
+          .from('chat_flow_states')
+          .update({
+            collected_data: collectedData,
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', activeState.id);
+
+        const endMsg = replaceVariables(nextNode.data?.message || '', collectedData);
+        const allMessages = [...extraMessages, endMsg].filter(Boolean).join('\n\n');
+        return new Response(
+          JSON.stringify({
+            useAI: false,
+            response: allMessages || 'Atendimento finalizado.',
+            flowId: activeState.flow_id,
+            flowName: activeState.chat_flows?.name || null,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Fix 2: Status semântico correto
+      const nextStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition'
+        ? 'waiting_input' : 'active';
+
       await supabaseClient
         .from('chat_flow_states')
         .update({
           collected_data: collectedData,
           current_node_id: nextNode.id,
+          status: nextStatus,
         })
         .eq('id', activeState.id);
 
@@ -1521,13 +1609,17 @@ serve(async (req) => {
         ? (nextNode.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value }))
         : null;
 
+      // Combinar mensagens intermediárias com a mensagem do nó final
+      const allMessages = [...extraMessages, nextMessage].filter(Boolean).join('\n\n');
+
       return new Response(
         JSON.stringify({
           useAI: false,
-          response: nextMessage,
+          response: allMessages,
           options,
           flowId: activeState.flow_id,
           flowName: activeState.chat_flows?.name || null,
+          ...(nextNode.type === 'ai_response' ? { aiNodeActive: true } : {}),
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
