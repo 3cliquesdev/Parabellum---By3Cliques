@@ -2058,9 +2058,9 @@ serve(async (req) => {
             matched: matchedEssentials 
           });
           
-          // 🆕 MELHORIA: Se trigger tem 1 keyword essencial ou menos, aceitar 1 match
-          // Se trigger tem 2+ keywords essenciais, exigir pelo menos 1
-          const minMatches = essentialKeywords.length <= 1 ? 1 : 1;
+          // 🆕 MELHORIA: Exigir pelo menos 50% das keywords essenciais para match
+          // 1 keyword → 1 match; 2 keywords → 1; 3 → 2; 4 → 2; 5 → 3...
+          const minMatches = essentialKeywords.length <= 1 ? 1 : Math.ceil(essentialKeywords.length * 0.5);
           if (matchedEssentials.length >= minMatches && essentialKeywords.length > 0) {
             console.log('[process-chat-flow] ✅ Match por keywords essenciais:', matchedEssentials);
             matchedFlow = flow;
