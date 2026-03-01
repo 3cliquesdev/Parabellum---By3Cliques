@@ -1,40 +1,68 @@
 
 
-# Triagem Silenciosa Unificada — Sempre Validar pela Base Kiwify
+# Novo Nó Visual: "Validar Cliente" no Editor de Fluxos
 
-## Problema Atual
-A validação por telefone/CPF no autopilot **só roda quando o contato NÃO tem email** (condição na linha 2267: `if (!contactHasEmailForKiwify)`). Isso significa que se o contato já tem email, a validação Kiwify por telefone e CPF é pulada. O correto é **sempre validar**, usando os 3 dados disponíveis (telefone, email, CPF), tudo contra a base `kiwify_events`.
+## Objetivo
+Criar um nó dedicado `validate_customer` no editor de fluxos, similar ao `fetch_order`, que permite ao montador de fluxo arrastar e usar a validação Kiwify visualmente — com saídas de variáveis e configuração no painel lateral.
 
-## Mudanças
+## Arquivos a Criar
 
-### 1. `ai-autopilot-chat/index.ts` — Remover condição restritiva e unificar validação
-- **Remover** a condição `if (!contactHasEmailForKiwify)` que bloqueia a validação Kiwify
-- **Trocar** por: `if (!contact.kiwify_validated)` — só pula se já está validado
-- **Adicionar email** ao array de validationPromises (chamar `verify-customer-email` junto com phone e CPF)
-- Executar os 3 em paralelo: phone + email + CPF → se qualquer um retornar `found: true`, marcar como cliente
-- **Remover** a mensagem de boas-vindas verbosa (triagem silenciosa = sem perguntar, sem anunciar)
+### 1. `src/components/chat-flows/nodes/ValidateCustomerNode.tsx`
+- Nó visual com ícone ShieldCheck, cor verde-esmeralda
+- Badges indicando quais campos estão ativos (Telefone, Email, CPF)
+- Subtitle mostrando "Validar por: Telefone, Email, CPF"
 
-### 2. `process-chat-flow/index.ts` — Mesma lógica no nó AI Response
-- Já está correto (linhas 1213-1261), executa phone/email/CPF conforme `validate_fields`
-- Sem mudanças necessárias
+### 2. `src/components/chat-flows/ValidateCustomerPropertiesPanel.tsx`
+- Painel de propriedades lateral (como FetchOrderPropertiesPanel)
+- Checkboxes: Telefone, Email, CPF (quais campos usar na validação)
+- Variáveis de saída configuráveis:
+  - `is_customer` → true/false
+  - `customer_name` → Nome encontrado
+  - `customer_email` → Email encontrado
+- Preview das variáveis disponíveis após execução
 
-### 3. `BehaviorControlsSection.tsx` — Sem mudanças
-- Toggle e checkboxes já estão corretos
+## Arquivos a Modificar
 
-### 4. `validate-by-cpf/index.ts` e `validate-by-kiwify-phone/index.ts` — Sem mudanças
-- Já buscam na base `kiwify_events` corretamente
+### 3. `src/components/chat-flows/nodes/index.ts`
+- Adicionar export do `ValidateCustomerNode`
 
-## Resumo das Mudanças
-- **1 arquivo**: `ai-autopilot-chat/index.ts`
-  - Condição `!contactHasEmailForKiwify` → `!contact.kiwify_validated`
-  - Adicionar `verify-customer-email` ao array de promises paralelas
-  - Remover mensagem de boas-vindas verbosa (silencioso = só marca como cliente e continua)
+### 4. `src/components/chat-flows/ChatFlowNodeWrapper.tsx`
+- Adicionar tipo `validate_customer` ao `ChatFlowNodeType`
+- Adicionar cores (verde: `bg-green-700` / `border-green-500`)
 
-## Resultado
-Todo contato que entra e **não está validado ainda** passa por triagem silenciosa:
-- Telefone → `validate-by-kiwify-phone` (busca compras pelo número)
-- Email → `verify-customer-email` (busca na base kiwify_events)
-- CPF → `validate-by-cpf` (busca documento na base kiwify_events)
+### 5. `src/components/chat-flows/ChatFlowEditor.tsx`
+- Importar `ValidateCustomerNode` e `ValidateCustomerPropertiesPanel`
+- Registrar em `chatFlowNodeTypes`, `blockColors`, `miniMapColors`
+- Adicionar defaults no `getDefaultData`
+- Adicionar `DraggableBlock` na sidebar (seção Lógica, ícone ShieldCheck, label "Validar Cliente")
+- Adicionar renderização do painel de propriedades quando selecionado
 
-Se qualquer um encontrar, marca `kiwify_validated = true` e trata como cliente — sem perguntar nada.
+### 6. `src/components/chat-flows/variableCatalog.ts`
+- Adicionar variáveis de validação (`customer_validated`, `customer_name_found`, `customer_email_found`) similar ao pattern de ORDER_VARS
+- Detectar presença de nó `validate_customer` nos ancestrais para disponibilizar variáveis
+
+### 7. `supabase/functions/process-chat-flow/index.ts`
+- Adicionar handler para tipo `validate_customer`
+- Executar validate-by-kiwify-phone, verify-customer-email, validate-by-cpf conforme campos configurados
+- Salvar resultados nas variáveis do fluxo
+
+## Resultado Visual
+
+```text
+Sidebar do Editor:
+  [Lógica]
+    Condição | IA | Pedido | Validar Cliente  ← NOVO
+
+Nó no canvas:
+  ┌─────────────────────────┐
+  │ 🛡️ Validar Cliente       │ (header verde)
+  │ Validar por: Tel, Email  │
+  │ [Tel] [Email] [CPF]      │ (badges)
+  └─────────────────────────┘
+
+Painel lateral:
+  - Campos a validar: ☑ Telefone ☑ Email ☑ CPF
+  - Variáveis de saída: is_customer, customer_name...
+  - Preview: {{is_customer}} → true/false
+```
 
