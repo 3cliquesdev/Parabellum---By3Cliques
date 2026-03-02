@@ -2,6 +2,86 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/ai-config-cache.ts";
 
+// ============================================
+// 📦 MESSAGE BATCHING HELPERS
+// ============================================
+
+/**
+ * Saves a message to the buffer and schedules delayed processing.
+ * Uses a cooldown/debounce approach: the process-buffered-messages function
+ * checks if newer messages arrived before processing.
+ */
+async function bufferAndSchedule(
+  supabase: any,
+  conversationId: string,
+  messageContent: string,
+  delaySeconds: number,
+  metadata: {
+    contactId: string;
+    instanceId: string;
+    fromNumber: string;
+    flowContext?: Record<string, unknown>;
+    flowData?: Record<string, unknown>;
+  }
+): Promise<void> {
+  // 1. Save to buffer
+  const { data: bufferEntry, error: bufferError } = await supabase
+    .from("message_buffer")
+    .insert({
+      conversation_id: conversationId,
+      message_content: messageContent,
+    })
+    .select("id, created_at")
+    .single();
+
+  if (bufferError) {
+    console.error("[meta-whatsapp-webhook] ❌ Error saving to buffer:", bufferError);
+    throw bufferError;
+  }
+
+  console.log(`[meta-whatsapp-webhook] 📦 Message buffered: ${bufferEntry.id} (delay: ${delaySeconds}s)`);
+
+  // 2. Schedule delayed processing via setTimeout + fetch
+  // The process-buffered-messages function will check if newer messages exist
+  const triggerTimestamp = bufferEntry.created_at;
+  
+  // Fire-and-forget: wait delaySeconds then call process-buffered-messages
+  setTimeout(async () => {
+    try {
+      console.log(`[meta-whatsapp-webhook] ⏰ Timer expired for conversation ${conversationId}, triggering buffer processing`);
+      
+      const response = await fetch(
+        `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-buffered-messages`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            conversationId,
+            triggerTimestamp,
+            contactId: metadata.contactId,
+            instanceId: metadata.instanceId,
+            fromNumber: metadata.fromNumber,
+            flowContext: metadata.flowContext || null,
+            flowData: metadata.flowData || null,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        console.error("[meta-whatsapp-webhook] ❌ Buffer processing failed:", await response.text());
+      } else {
+        const result = await response.json();
+        console.log("[meta-whatsapp-webhook] ✅ Buffer processing result:", JSON.stringify(result));
+      }
+    } catch (err) {
+      console.error("[meta-whatsapp-webhook] ❌ Buffer processing exception:", err);
+    }
+  }, delaySeconds * 1000);
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -642,7 +722,25 @@ serve(async (req) => {
               }
 
               // ============================================
-              // 🔄 FLOW SOBERANO - process-chat-flow PRIMEIRO
+              // 📦 BATCH DELAY CONFIG - Buscar tempo de espera para mensagens picotadas
+              // ============================================
+              let batchDelaySeconds = 0; // 0 = desativado (comportamento instantâneo)
+              try {
+                const { data: batchConfig } = await supabase
+                  .from("system_configurations")
+                  .select("value")
+                  .eq("key", "ai_message_batch_delay_seconds")
+                  .maybeSingle();
+                
+                if (batchConfig?.value) {
+                  batchDelaySeconds = parseInt(batchConfig.value, 10) || 0;
+                }
+                console.log("[meta-whatsapp-webhook] ⏱️ Batch delay:", batchDelaySeconds, "seconds");
+              } catch (configErr) {
+                console.error("[meta-whatsapp-webhook] ⚠️ Error fetching batch config:", configErr);
+              }
+
+              // ============================================
               // ============================================
               let flowData: {
                 useAI?: boolean;
@@ -998,6 +1096,46 @@ serve(async (req) => {
               // CASO 3: Fluxo ativou AIResponseNode → Chamar IA com flow_context
               if (flowData.useAI && flowData.aiNodeActive) {
                 if (conversation.ai_mode === "autopilot" && !conversation.awaiting_rating) {
+                  
+                  // 📦 BATCHING: Se delay > 0, acumular mensagem no buffer em vez de chamar IA diretamente
+                  if (batchDelaySeconds > 0) {
+                    console.log(`[meta-whatsapp-webhook] 📦 BATCHING: Salvando mensagem no buffer (delay: ${batchDelaySeconds}s) - flow AI node`);
+                    
+                    try {
+                      await bufferAndSchedule(supabase, conversation.id, messageContent, batchDelaySeconds, {
+                        contactId: contact.id,
+                        instanceId: instance.id,
+                        fromNumber,
+                        flowContext: flowData.flow_context as Record<string, unknown> || undefined,
+                        flowData: {
+                          useAI: flowData.useAI,
+                          aiNodeActive: flowData.aiNodeActive,
+                          flowId: flowData.flowId,
+                          nodeId: flowData.nodeId,
+                          allowedSources: (flowData as any).allowedSources,
+                          personaId: (flowData as any).personaId,
+                          kbCategories: (flowData as any).kbCategories,
+                          contextPrompt: (flowData as any).contextPrompt,
+                          fallbackMessage: (flowData as any).fallbackMessage,
+                          objective: (flowData as any).objective,
+                          maxSentences: (flowData as any).maxSentences,
+                          forbidQuestions: (flowData as any).forbidQuestions,
+                          forbidOptions: (flowData as any).forbidOptions,
+                          forbidFinancial: (flowData as any).forbidFinancial,
+                          forbidCommercial: (flowData as any).forbidCommercial,
+                        },
+                      });
+                    } catch (bufferErr) {
+                      console.error("[meta-whatsapp-webhook] ❌ Buffer error, falling back to direct call:", bufferErr);
+                      // Fallback: chamar IA diretamente se buffer falhar
+                    }
+                    
+                    // Se buffer teve sucesso, skip para próxima mensagem
+                    // O timer vai processar quando expirar
+                    continue;
+                  }
+
+                  // 🔄 CHAMADA DIRETA (sem batching ou fallback)
                   console.log("[AUTO-DECISION] [WhatsApp Meta] Flow aiNodeActive=true → ai-autopilot-chat");
 
                   try {

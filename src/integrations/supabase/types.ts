@@ -5421,6 +5421,38 @@ export type Database = {
           },
         ]
       }
+      message_buffer: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          id: string
+          message_content: string
+          processed: boolean
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          id?: string
+          message_content: string
+          processed?: boolean
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          message_content?: string
+          processed?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_buffer_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_queue: {
         Row: {
           conversation_id: string | null
