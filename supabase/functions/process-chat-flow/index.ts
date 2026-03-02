@@ -1461,6 +1461,13 @@ serve(async (req) => {
           // Cai no findNextNode normal abaixo
         } else {
           // FICAR: atualizar state e retornar aiNodeActive
+          // 🆕 DIAGNOSTIC: Log quando forbid_financial=true mas não detectou intent (ajuda diagnóstico)
+          if (forbidFinancial && msgLower.length > 0) {
+            console.log(`[process-chat-flow] ⚠️ DIAGNOSTIC: forbid_financial=true mas financialIntentMatch=false. userMessage="${(userMessage || '').substring(0, 100)}" msgLower="${msgLower.substring(0, 100)}" regexTest=${financialIntentPattern.test(userMessage || '')}`);
+          }
+          if (forbidCommercial && msgLower.length > 0) {
+            console.log(`[process-chat-flow] ⚠️ DIAGNOSTIC: forbid_commercial=true mas commercialIntentMatch=false. userMessage="${(userMessage || '').substring(0, 100)}"`);
+          }
           console.log(`[process-chat-flow] 🔄 AI persistent STAY: interaction #${aiCount} (max=${maxInteractions}, keywords=${exitKeywords.length})`);
 
           await supabaseClient
