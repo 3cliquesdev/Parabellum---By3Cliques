@@ -4097,7 +4097,34 @@ Responda APENAS: skip ou search`
       if (strictResult.shouldHandoff) {
         console.log('[ai-autopilot-chat] 🚨 STRICT RAG: Handoff necessário -', strictResult.reason);
         
-        // Executar handoff
+        // 🆕 GUARD: Se flow_context existe, NÃO executar handoff direto
+        // Devolver controle ao process-chat-flow para avançar ao próximo nó
+        if (flow_context) {
+          console.log('[ai-autopilot-chat] 🔄 STRICT RAG + flow_context → retornando flow_advance_needed (soberania do fluxo)');
+          
+          // Log de qualidade
+          await supabaseClient.from('ai_quality_logs').insert({
+            conversation_id: conversationId,
+            contact_id: contact.id,
+            customer_message: customerMessage,
+            ai_response: strictResult.response,
+            action_taken: 'flow_advance',
+            handoff_reason: `strict_rag_flow_advance: ${strictResult.reason}`,
+            confidence_score: 0,
+            articles_count: knowledgeArticles.length
+          });
+          
+          return new Response(JSON.stringify({
+            status: 'flow_advance_needed',
+            reason: strictResult.reason,
+            hasFlowContext: true,
+            strict_mode: true
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        
+        // Executar handoff direto (sem flow_context — comportamento original preservado)
         const handoffTimestamp = new Date().toISOString();
         await supabaseClient
           .from('conversations')
@@ -4754,7 +4781,38 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         });
       }
       
-      // ✅ Cliente identificado → Continuar com handoff normal para Suporte
+      // 🆕 GUARD: Se flow_context existe, NÃO executar handoff direto
+      // Devolver controle ao process-chat-flow para avançar ao próximo nó
+      if (flow_context) {
+        console.log('[ai-autopilot-chat] 🔄 CONFIDENCE HANDOFF + flow_context → retornando flow_advance_needed (soberania do fluxo)', {
+          score: confidenceResult.score,
+          reason: confidenceResult.reason,
+          flow_id: flow_context.flow_id,
+          node_id: flow_context.node_id
+        });
+        
+        // Log de qualidade
+        await supabaseClient.from('ai_quality_logs').insert({
+          conversation_id: conversationId,
+          contact_id: contact.id,
+          customer_message: customerMessage,
+          action_taken: 'flow_advance',
+          handoff_reason: `confidence_flow_advance: ${confidenceResult.reason}`,
+          confidence_score: confidenceResult.score,
+          articles_count: knowledgeArticles.length
+        });
+        
+        return new Response(JSON.stringify({
+          status: 'flow_advance_needed',
+          reason: confidenceResult.reason,
+          score: confidenceResult.score,
+          hasFlowContext: true
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // ✅ Cliente identificado → Continuar com handoff normal para Suporte (sem flow_context)
       // ✅ Respeitar departamento definido pelo fluxo (nunca sobrescrever)
       const handoffDepartment = conversation.department || confidenceResult.department || DEPT_SUPORTE_ID;
       

@@ -383,7 +383,7 @@ serve(async (req) => {
     );
 
     const body = await req.json();
-    const { conversationId, userMessage, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck, inactivityTimeout, forceFinancialExit, forceCommercialExit } = body;
+    const { conversationId, userMessage, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck, inactivityTimeout, forceFinancialExit, forceCommercialExit, forceAIExit } = body;
     
     if (!conversationId) {
       return new Response(
@@ -1417,8 +1417,14 @@ serve(async (req) => {
         // Verificar max interações
         const maxReached = !financialIntentMatch && !commercialIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
 
-        if (financialIntentMatch || commercialIntentMatch || keywordMatch || maxReached) {
-          const exitReason = financialIntentMatch ? 'financial_blocked' : commercialIntentMatch ? 'commercial_blocked' : keywordMatch ? 'exit_keyword' : 'max_interactions';
+        // 🆕 forceAIExit: IA detectou handoff (strict RAG ou confidence) e quer sair do nó
+        if (forceAIExit) {
+          console.log('[process-chat-flow] 🔄 forceAIExit=true recebido do webhook, forçando exit do nó AI (IA não conseguiu resolver)');
+        }
+        const aiExitForced = !!forceAIExit;
+
+        if (financialIntentMatch || commercialIntentMatch || keywordMatch || maxReached || aiExitForced) {
+          const exitReason = financialIntentMatch ? 'financial_blocked' : commercialIntentMatch ? 'commercial_blocked' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
           console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} commercial=${commercialIntentMatch} count=${aiCount}`);
 
           // Log de transferência estruturado em ai_events
@@ -1447,8 +1453,8 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log transfer reason:', logErr);
           }
 
-          // ✅ UPGRADE: max_interactions deve AVANÇAR para próximo nó
-          if (maxReached && !keywordMatch) {
+          // ✅ UPGRADE: max_interactions ou aiExitForced deve AVANÇAR para próximo nó
+          if ((maxReached || aiExitForced) && !keywordMatch) {
             const fallbackMsg = currentNode.data?.fallback_message;
             if (fallbackMsg && String(fallbackMsg).trim().length > 0) {
               try {
@@ -1461,12 +1467,12 @@ serve(async (req) => {
                   status: 'sent',
                   channel: 'web_chat',
                 });
-                console.log('[process-chat-flow] ✅ fallback_message inserted on max_interactions (will advance)');
+                console.log('[process-chat-flow] ✅ fallback_message inserted on AI exit (will advance)');
               } catch (sendErr) {
                 console.error('[process-chat-flow] ⚠️ Failed to insert fallback_message:', sendErr);
               }
             }
-            console.log(`[process-chat-flow] 🔄 AI max_interactions reached (${aiCount}/${maxInteractions}) - advancing to next node`);
+            console.log(`[process-chat-flow] 🔄 AI exit: reason=${aiExitForced ? 'ai_handoff_exit' : 'max_interactions'} (${aiCount}/${maxInteractions}) - advancing to next node`);
           }
 
           // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir

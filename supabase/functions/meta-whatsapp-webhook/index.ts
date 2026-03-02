@@ -1426,6 +1426,126 @@ serve(async (req) => {
                           
                           continue;
                         }
+                        
+                        // 🆕 FLOW ADVANCE: IA quer sair do nó (strict RAG ou confidence handoff)
+                        // Re-invocar process-chat-flow para avançar ao próximo nó do fluxo
+                        if (autopilotData?.status === 'flow_advance_needed' && autopilotData?.hasFlowContext) {
+                          console.log("[meta-whatsapp-webhook] 🔄 flow_advance_needed → re-invocando process-chat-flow com forceAIExit", {
+                            reason: autopilotData.reason,
+                            score: autopilotData.score
+                          });
+                          
+                          try {
+                            const flowResponse = await fetch(
+                              `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                                },
+                                body: JSON.stringify({
+                                  conversationId: conversation.id,
+                                  userMessage: messageContent,
+                                  forceAIExit: true,
+                                }),
+                              }
+                            );
+                            
+                            if (flowResponse.ok) {
+                              const flowResult = await flowResponse.json();
+                              console.log("[meta-whatsapp-webhook] ✅ process-chat-flow re-invoked (forceAIExit):", JSON.stringify({
+                                transfer: flowResult.transfer,
+                                hasResponse: !!flowResult.response,
+                                nodeType: flowResult.nodeType,
+                                departmentId: flowResult.departmentId,
+                              }));
+                              
+                              const flowMessage = flowResult.response || flowResult.message;
+                              if (flowMessage) {
+                                await supabase.functions.invoke("send-meta-whatsapp", {
+                                  body: {
+                                    instance_id: instance.id,
+                                    phone_number: fromNumber,
+                                    message: flowMessage,
+                                    conversation_id: conversation.id,
+                                    skip_db_save: true,
+                                  },
+                                });
+                                
+                                await supabase.from("messages").insert({
+                                  conversation_id: conversation.id,
+                                  content: flowMessage,
+                                  sender_type: "system",
+                                  message_type: "text",
+                                });
+                                console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (AI exit)");
+                              }
+                              
+                              const transferDept = flowResult.departmentId || flowResult.department;
+                              if ((flowResult.transfer === true || flowResult.action === 'transfer') && transferDept) {
+                                await supabase
+                                  .from('conversations')
+                                  .update({
+                                    ai_mode: 'waiting_human',
+                                    department: transferDept,
+                                    assigned_to: null,
+                                  })
+                                  .eq('id', conversation.id);
+                                console.log("[meta-whatsapp-webhook] 🔄 Transfer applied from flow (AI exit) → dept:", transferDept);
+                              }
+                              
+                              continue;
+                            } else {
+                              console.error("[meta-whatsapp-webhook] ❌ process-chat-flow re-invoke failed (forceAIExit):", await flowResponse.text());
+                              
+                              // Retry
+                              try {
+                                const retryResponse = await fetch(
+                                  `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
+                                  {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                                    },
+                                    body: JSON.stringify({
+                                      conversationId: conversation.id,
+                                      userMessage: messageContent,
+                                      forceAIExit: true,
+                                    }),
+                                  }
+                                );
+                                if (retryResponse.ok) {
+                                  const retryData = await retryResponse.json();
+                                  console.log("[meta-whatsapp-webhook] ✅ forceAIExit retry succeeded");
+                                  const retryMessage = retryData.response || retryData.message;
+                                  if (retryMessage) {
+                                    await supabase.functions.invoke("send-meta-whatsapp", {
+                                      body: { instance_id: instance.id, phone_number: fromNumber, message: retryMessage, conversation_id: conversation.id, skip_db_save: true },
+                                    });
+                                    await supabase.from("messages").insert({ conversation_id: conversation.id, content: retryMessage, sender_type: "system", message_type: "text" });
+                                  }
+                                  const retryDept = retryData.departmentId || retryData.department;
+                                  if ((retryData.transfer === true || retryData.action === 'transfer') && retryDept) {
+                                    await supabase.from('conversations').update({ ai_mode: 'waiting_human', department: retryDept, assigned_to: null }).eq('id', conversation.id);
+                                  }
+                                  continue;
+                                } else {
+                                  console.error("[meta-whatsapp-webhook] ❌ forceAIExit retry also failed");
+                                }
+                              } catch (retryErr) {
+                                console.error("[meta-whatsapp-webhook] ❌ forceAIExit retry exception:", retryErr);
+                              }
+                            }
+                          } catch (flowErr) {
+                            console.error("[meta-whatsapp-webhook] ❌ Error re-invoking process-chat-flow (forceAIExit):", flowErr);
+                          }
+                          
+                          // Se ambas tentativas falharam, manter no fluxo (não fazer handoff hardcoded)
+                          console.log("[meta-whatsapp-webhook] ⚠️ flow_advance_needed mas re-invoke falhou 2x. Mantendo no fluxo.");
+                          continue;
+                        }
                       } catch {
                         // Se não conseguiu parsear JSON, segue normalmente
                       }
