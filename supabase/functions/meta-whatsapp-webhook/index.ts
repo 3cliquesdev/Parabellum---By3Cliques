@@ -500,7 +500,7 @@ serve(async (req) => {
               // Buscar conversa existente (QUALQUER provider) - priorizar aberta
               let { data: conversation } = await supabase
                 .from("conversations")
-                .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider")
+                .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata")
                 .eq("contact_id", contact.id)
                 .neq("status", "closed")
                 .order("created_at", { ascending: false })
@@ -695,6 +695,41 @@ serve(async (req) => {
               // ============================================
               
               // CASO 1: skipAutoResponse = true → Cliente na fila/copilot/disabled
+              // 🆕 GUARD: Se awaiting_close_confirmation, bypass skipAutoResponse → ai-autopilot-chat
+              const convMeta = (conversation as any).customer_metadata || {};
+              const hasAwaitingCloseConfirmation = convMeta.awaiting_close_confirmation === true;
+
+              if (flowData.skipAutoResponse && hasAwaitingCloseConfirmation) {
+                console.log("[meta-whatsapp-webhook] 🔓 BYPASS skipAutoResponse: awaiting_close_confirmation=true → chamando ai-autopilot-chat");
+                try {
+                  const closeConfirmResponse = await fetch(
+                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-autopilot-chat`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                      },
+                      body: JSON.stringify({
+                        conversationId: conversation.id,
+                        customerMessage: messageContent,
+                        contact_id: contact.id,
+                        whatsapp_provider: "meta",
+                        whatsapp_meta_instance_id: instance.id,
+                      }),
+                    }
+                  );
+                  if (!closeConfirmResponse.ok) {
+                    console.error("[meta-whatsapp-webhook] ❌ Close confirmation autopilot error:", await closeConfirmResponse.text());
+                  } else {
+                    console.log("[meta-whatsapp-webhook] ✅ Close confirmation processed by ai-autopilot-chat");
+                  }
+                } catch (closeErr) {
+                  console.error("[meta-whatsapp-webhook] ⚠️ Close confirmation exception:", closeErr);
+                }
+                continue;
+              }
+
               if (flowData.skipAutoResponse) {
                 console.log("[AUTO-DECISION] [WhatsApp Meta] Flow skipAutoResponse → waiting_human, reason:", flowData.reason);
                 
