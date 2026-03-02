@@ -23,7 +23,19 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useActiveConsultants } from "@/hooks/useConsultants";
 import { useToast } from "@/hooks/use-toast";
-import { Users, ArrowRight, Loader2, Shuffle } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
+import { hasFullAccess } from "@/config/roles";
+import { Users, ArrowRight, Loader2, Shuffle, UserMinus } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ConsultantClientsSheetProps {
   open: boolean;
@@ -44,8 +56,11 @@ export function ConsultantClientsSheet({
   const [targetConsultantId, setTargetConsultantId] = useState<string>("");
   const [distributionMode, setDistributionMode] = useState<DistributionMode>("single");
   const [selectedConsultantIds, setSelectedConsultantIds] = useState<string[]>([]);
+  const [showUnlinkDialog, setShowUnlinkDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { role } = useUserRole();
+  const canUnlink = hasFullAccess(role);
 
   const { data: consultants } = useActiveConsultants();
   const availableConsultants = consultants?.filter(c => c.id !== consultantId) || [];
@@ -137,6 +152,53 @@ export function ConsultantClientsSheet({
     },
   });
 
+  // Unlink mutation - remove consultant_id
+  const unlinkMutation = useMutation({
+    mutationFn: async (contactIds: string[]) => {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { error: updateError } = await supabase
+        .from("contacts")
+        .update({ consultant_id: null })
+        .in("id", contactIds);
+
+      if (updateError) throw updateError;
+
+      const interactions = contactIds.map(contactId => ({
+        customer_id: contactId,
+        type: "note" as const,
+        channel: "other" as const,
+        content: `Consultor ${consultantName} removido do cliente por admin/gerente`,
+        created_by: user?.id,
+        metadata: {
+          action: "consultant_removed",
+          old_consultant_id: consultantId,
+          removed_by: user?.id,
+        },
+      }));
+
+      const { error: interactionError } = await supabase
+        .from("interactions")
+        .insert(interactions);
+
+      if (interactionError) throw interactionError;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Clientes desvinculados",
+        description: `${selectedIds.length} cliente(s) removido(s) do consultor ${consultantName}`,
+      });
+      handleTransferSuccess();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao desvincular",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleTransferSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ["contacts"] });
     queryClient.invalidateQueries({ queryKey: ["consultant-clients", consultantId] });
@@ -144,6 +206,7 @@ export function ConsultantClientsSheet({
     setTargetConsultantId("");
     setSelectedConsultantIds([]);
     setDistributionMode("single");
+    setShowUnlinkDialog(false);
     onOpenChange(false);
   };
 
@@ -191,7 +254,7 @@ export function ConsultantClientsSheet({
   };
 
   const allSelected = clients && clients.length > 0 && selectedIds.length === clients.length;
-  const isPending = transferMutation.isPending || roundRobinMutation.isPending;
+  const isPending = transferMutation.isPending || roundRobinMutation.isPending || unlinkMutation.isPending;
   
   const canTransfer = distributionMode === "single" 
     ? !!targetConsultantId 
@@ -388,29 +451,69 @@ export function ConsultantClientsSheet({
                     </div>
                   )}
 
-                  <Button
-                    className="w-full gap-2"
-                    onClick={handleTransfer}
-                    disabled={!canTransfer || isPending}
-                  >
-                    {isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : distributionMode === "round_robin" ? (
-                      <Shuffle className="h-4 w-4" />
-                    ) : (
-                      <ArrowRight className="h-4 w-4" />
+                  <div className="flex gap-2">
+                    {canUnlink && (
+                      <Button
+                        variant="destructive"
+                        className="gap-2"
+                        onClick={() => setShowUnlinkDialog(true)}
+                        disabled={isPending}
+                      >
+                        <UserMinus className="h-4 w-4" />
+                        Desvincular
+                      </Button>
                     )}
-                    {distributionMode === "round_robin" 
-                      ? `Distribuir ${selectedIds.length} cliente(s)`
-                      : `Transferir ${selectedIds.length} cliente(s)`
-                    }
-                  </Button>
+                    <Button
+                      className="flex-1 gap-2"
+                      onClick={handleTransfer}
+                      disabled={!canTransfer || isPending}
+                    >
+                      {isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : distributionMode === "round_robin" ? (
+                        <Shuffle className="h-4 w-4" />
+                      ) : (
+                        <ArrowRight className="h-4 w-4" />
+                      )}
+                      {distributionMode === "round_robin" 
+                        ? `Distribuir ${selectedIds.length} cliente(s)`
+                        : `Transferir ${selectedIds.length} cliente(s)`
+                      }
+                    </Button>
+                  </div>
                 </div>
               )}
             </>
           )}
         </div>
       </SheetContent>
+
+      {/* Unlink Confirmation Dialog */}
+      <AlertDialog open={showUnlinkDialog} onOpenChange={setShowUnlinkDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desvincular clientes do consultor</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover {selectedIds.length} cliente(s) do consultor{" "}
+              <strong>{consultantName}</strong>? Os clientes ficarão sem consultor atribuído.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => unlinkMutation.mutate(selectedIds)}
+            >
+              {unlinkMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <UserMinus className="h-4 w-4 mr-2" />
+              )}
+              Desvincular
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 }

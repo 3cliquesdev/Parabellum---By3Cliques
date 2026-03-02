@@ -6,10 +6,24 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConsultants } from "@/hooks/useConsultants";
 import { useConsultantPerformance } from "@/hooks/useConsultantPerformance";
-import { Users, Search, Briefcase, Ban, Mail, UserCheck, AlertCircle } from "lucide-react";
+import { Users, Search, Briefcase, Ban, Mail, UserCheck, AlertCircle, UserMinus, Loader2 } from "lucide-react";
 import { ConsultantClientsSheet } from "@/components/contacts/ConsultantClientsSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { useUserRole } from "@/hooks/useUserRole";
+import { hasFullAccess } from "@/config/roles";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface EmailSearchResult {
   id: string;
@@ -27,6 +41,44 @@ export default function Consultants() {
   const [emailResults, setEmailResults] = useState<EmailSearchResult[]>([]);
   const [emailSearching, setEmailSearching] = useState(false);
   const [emailSearchDone, setEmailSearchDone] = useState(false);
+  const [unlinkContactId, setUnlinkContactId] = useState<string | null>(null);
+  const [unlinkContactName, setUnlinkContactName] = useState("");
+  const { role } = useUserRole();
+  const canUnlink = hasFullAccess(role);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const unlinkMutation = useMutation({
+    mutationFn: async (contactId: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { error } = await supabase
+        .from("contacts")
+        .update({ consultant_id: null })
+        .eq("id", contactId);
+
+      if (error) throw error;
+
+      await supabase.from("interactions").insert({
+        customer_id: contactId,
+        type: "note" as const,
+        channel: "other" as const,
+        content: `Consultor removido do cliente por admin/gerente`,
+        created_by: user?.id,
+        metadata: { action: "consultant_removed", removed_by: user?.id },
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Consultor removido", description: `Cliente ${unlinkContactName} desvinculado com sucesso.` });
+      setUnlinkContactId(null);
+      // Re-trigger email search
+      setEmailResults(prev => prev.map(c => c.id === unlinkContactId ? { ...c, consultant_id: null } : c));
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao remover consultor", description: error.message, variant: "destructive" });
+    },
+  });
 
   const isEmailSearch = search.includes("@");
 
@@ -132,7 +184,7 @@ export default function Consultants() {
                     </div>
                     {contact.consultant_id && consultantName ? (
                       <div className="flex items-center gap-2">
-                        <UserCheck className="h-4 w-4 text-green-500" />
+                        <UserCheck className="h-4 w-4 text-success" />
                         <span className="text-sm text-foreground font-medium">{consultantName}</span>
                         <Button
                           size="sm"
@@ -144,6 +196,19 @@ export default function Consultants() {
                         >
                           Ver clientes
                         </Button>
+                        {canUnlink && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              setUnlinkContactId(contact.id);
+                              setUnlinkContactName(`${contact.first_name} ${contact.last_name}`);
+                            }}
+                          >
+                            <UserMinus className="h-3 w-3 mr-1" />
+                            Remover
+                          </Button>
+                        )}
                       </div>
                     ) : (
                       <Badge variant="outline" className="gap-1 text-muted-foreground">
@@ -258,6 +323,33 @@ export default function Consultants() {
           onOpenChange={(open) => !open && setSelectedConsultant(null)}
         />
       )}
+
+      {/* Unlink Confirmation Dialog */}
+      <AlertDialog open={!!unlinkContactId} onOpenChange={(open) => !open && setUnlinkContactId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover consultor do cliente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover o consultor de <strong>{unlinkContactName}</strong>?
+              O cliente ficará sem consultor atribuído.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => unlinkContactId && unlinkMutation.mutate(unlinkContactId)}
+            >
+              {unlinkMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <UserMinus className="h-4 w-4 mr-2" />
+              )}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
