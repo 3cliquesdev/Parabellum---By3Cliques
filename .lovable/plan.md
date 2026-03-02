@@ -1,32 +1,50 @@
 
 
-# Atualizar consultor de clientes via planilha (email + consultor)
+# Corrigir: IA dentro de fluxo deve avançar para próximo nó em vez de fazer handoff direto
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## O que será feito
+## Problema
 
-Adicionar suporte ao campo "Consultor" no fluxo de importação existente (`/import-clients`), para que você possa subir uma planilha simples com **email** e **consultor**, e o sistema resolva automaticamente o nome do consultor para o `consultant_id` (UUID) correto.
+Quando a IA está operando dentro de um nó `ai_response` de um Chat Flow e não consegue resolver a dúvida do cliente (strict RAG handoff ou confidence handoff), ela executa o handoff diretamente: finaliza o flow state, transfere para humano e envia "vou te conectar com um especialista".
 
-## Mudanças
+Isso **quebra a soberania do fluxo**. O fluxo tem um próximo nó definido (ex: "Múltipla Escolha: Você já é nosso cliente?"), mas a IA ignora completamente e faz transferência por conta própria.
 
-### 1. Frontend — Auto-mapping + campo no ColumnMapper
-**Arquivos**: `src/pages/ImportClients.tsx`, `src/components/ColumnMapper.tsx`
+## Causa raiz
 
-- Adicionar alias `'assigned_to': ['consultor', 'consultant', 'responsavel', 'responsável', 'assigned_to']` no mapeamento automático
-- Adicionar campo "Consultor" na lista `DB_FIELDS` do ColumnMapper
-- Incluir coluna `consultor` no template CSV de download
+No `ai-autopilot-chat/index.ts`, dois blocos de handoff (strict RAG ~linha 4097 e confidence ~linha 4757) **não verificam se existe `flow_context`**. Quando há `flow_context`, o handoff deveria ser delegado de volta ao `process-chat-flow` para que o fluxo avance normalmente.
 
-### 2. Edge Function — Resolver nome → consultant_id
-**Arquivo**: `supabase/functions/bulk-import-contacts/index.ts`
+## Correção
 
-- No início do processamento, buscar todos os consultores ativos (profiles com role `consultant`)
-- Quando `assigned_to` vier preenchido, fazer match case-insensitive (trim) contra a lista de nomes
-- Se encontrar: setar `consultant_id` no update/insert do contato
-- Se não encontrar: registrar warning no log, não bloqueia importação
+**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
+
+### 1. Strict RAG handoff (linhas ~4097-4198)
+Adicionar guard: se `flow_context` existe, **não executar handoff direto**. Em vez disso, retornar `status: 'flow_advance_needed'` para que o `process-chat-flow` avance para o próximo nó do fluxo.
+
+### 2. Confidence handoff (linhas ~4757-4870)
+Mesmo tratamento: se `flow_context` existe, retornar sinal de avanço em vez de executar handoff.
+
+### Lógica do retorno quando `flow_context` está presente
+
+```text
+ai-autopilot-chat detecta handoff necessário
+  └─ flow_context existe?
+       ├─ SIM → return { status: 'flow_advance_needed', reason: '...' }
+       │         (NÃO muda ai_mode, NÃO finaliza flow state, NÃO envia mensagem)
+       │         O process-chat-flow já trata isso: quando ai_response retorna
+       │         sem resposta válida, ele avança para o próximo nó do fluxo
+       └─ NÃO → handoff direto (comportamento atual mantido)
+```
+
+### O que muda no `process-chat-flow`?
+Nada precisa mudar. O `process-chat-flow` já tem a lógica de avanço quando o nó AI atinge condição de saída (max_interactions, exit_keyword). O `ai-autopilot-chat` apenas precisa **parar de agir por conta própria** quando está dentro de um fluxo.
+
+Concretamente: quando o `ai-autopilot-chat` retorna `flow_advance_needed`, o webhook/listener que o chamou deve re-invocar `process-chat-flow` com uma flag indicando que a IA quer sair do nó — equivalente a `max_interactions` reached. Vou verificar como o webhook trata o retorno do autopilot para garantir essa integração.
+
+**Arquivo adicional**: `supabase/functions/meta-whatsapp-webhook/index.ts` — verificar tratamento do retorno do autopilot quando `flow_advance_needed`
 
 ### Sem risco de regressão
-- Contatos sem coluna consultor continuam importando normalmente
-- O campo `assigned_to` já existe no fluxo — apenas adicionamos resolução inteligente para `consultant_id`
-- Match por nome é tolerante (case-insensitive, trim)
+- Autopilot global (sem flow_context) continua com handoff direto — comportamento preservado
+- Apenas fluxos com próximo nó definido são afetados
+- A soberania do fluxo é restaurada
 
