@@ -851,9 +851,9 @@ serve(async (req) => {
                     handoff_executed_at: new Date().toISOString(),
                   };
                   
-                  if (flowData.departmentId) {
-                    updateData.department = flowData.departmentId;
-                  }
+                  // 🆕 Fallback: se flow não retornou departmentId, usar Suporte
+                  const DEPT_SUPORTE_FALLBACK = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+                  updateData.department = flowData.departmentId || DEPT_SUPORTE_FALLBACK;
 
                   // ═══════════════════════════════════════════════════════════════
                   // 🔒 TRAVA TRANSFER-PERSIST-LOCK v1.0 — 2026-02-09
@@ -954,9 +954,35 @@ serve(async (req) => {
                   if (updateError) {
                     console.error("[meta-whatsapp-webhook] ❌ Error executing transfer:", updateError);
                   } else {
-                    console.log("[meta-whatsapp-webhook] ✅ Transfer executed → department:", flowData.departmentId, 
+                    console.log("[meta-whatsapp-webhook] ✅ Transfer executed → department:", updateData.department, 
                       "ai_mode:", consultantId ? 'copilot' : 'waiting_human',
                       "assigned_to:", consultantId || 'pool');
+                    
+                    // 🆕 Chamar route-conversation para distribuir ao agente automaticamente
+                    if (!consultantId) {
+                      try {
+                        console.log("[meta-whatsapp-webhook] 🚀 Calling route-conversation for:", conversation.id);
+                        const routeResp = await fetch(
+                          `${Deno.env.get("SUPABASE_URL")}/functions/v1/route-conversation`,
+                          {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                            },
+                            body: JSON.stringify({ conversationId: conversation.id }),
+                          }
+                        );
+                        if (!routeResp.ok) {
+                          console.error("[meta-whatsapp-webhook] ❌ route-conversation error:", await routeResp.text());
+                        } else {
+                          const routeResult = await routeResp.json();
+                          console.log("[meta-whatsapp-webhook] ✅ route-conversation result:", JSON.stringify(routeResult));
+                        }
+                      } catch (routeErr) {
+                        console.error("[meta-whatsapp-webhook] ⚠️ route-conversation exception:", routeErr);
+                      }
+                    }
                   }
                 }
                 
