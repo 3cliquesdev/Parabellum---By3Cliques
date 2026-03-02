@@ -46,6 +46,7 @@ export default function ImportClients() {
         'next_payment_date': ['proximo_pagamento', 'next_payment_date', 'data_proximo_pagamento', 'próximo pagamento'],
         'recent_orders_count': ['pedidos', 'recent_orders_count', 'qtd_pedidos', 'quantidade pedidos'],
         'account_balance': ['saldo', 'account_balance', 'saldo_conta', 'balance'],
+        'assigned_to': ['consultor', 'consultant', 'responsavel', 'responsável', 'assigned_to'],
       };
 
       csvHeaders.forEach((header) => {
@@ -147,8 +148,8 @@ export default function ImportClients() {
 
   const downloadTemplate = () => {
     // Template com ponto-e-vírgula (padrão Excel Brasil) e BOM para UTF-8
-    const template = `email;nome;sobrenome;telefone;empresa;cpf/cnpj;ie;endereco;numero;complemento;bairro;cidade;estado;cep;data_nascimento;tipo;bloqueado;plano;data_cadastro;ultimo_pagamento;proximo_pagamento;pedidos_recentes;saldo
-exemplo@email.com;João;Silva;(11) 99999-9999;Empresa Exemplo;123.456.789-00;987654321;Rua Aldo Focosi;111;Sala 10;Centro;Ribeirão Preto;SP;14091-310;15/01/1990;Cliente;não;Premium;15/01/2024;01/12/2024;01/01/2025;5;1500,00`;
+    const template = `email;nome;sobrenome;telefone;empresa;cpf/cnpj;ie;endereco;numero;complemento;bairro;cidade;estado;cep;data_nascimento;tipo;bloqueado;plano;data_cadastro;ultimo_pagamento;proximo_pagamento;pedidos_recentes;saldo;consultor
+exemplo@email.com;João;Silva;(11) 99999-9999;Empresa Exemplo;123.456.789-00;987654321;Rua Aldo Focosi;111;Sala 10;Centro;Ribeirão Preto;SP;14091-310;15/01/1990;Cliente;não;Premium;15/01/2024;01/12/2024;01/01/2025;5;1500,00;Nome do Consultor`;
     
     // BOM UTF-8 para Excel reconhecer caracteres especiais
     const BOM = '\uFEFF';

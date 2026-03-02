@@ -32,6 +32,7 @@ const DB_FIELDS = [
   { value: 'next_payment_date', label: 'Próximo Pagamento' },
   { value: 'recent_orders_count', label: 'Pedidos Recentes' },
   { value: 'account_balance', label: 'Saldo da Conta' },
+  { value: 'assigned_to', label: 'Consultor' },
 ];
 
 export function ColumnMapper({ csvHeaders, mapping, onMappingChange }: ColumnMapperProps) {
