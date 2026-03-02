@@ -4,9 +4,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useConsultants } from "@/hooks/useConsultants";
+import { useConsultants, useActiveConsultants } from "@/hooks/useConsultants";
 import { useConsultantPerformance } from "@/hooks/useConsultantPerformance";
-import { Users, Search, Briefcase, Ban, Mail, UserCheck, AlertCircle, UserMinus, Loader2 } from "lucide-react";
+import { Users, Search, Briefcase, Ban, Mail, UserCheck, AlertCircle, UserMinus, Loader2, UserPlus } from "lucide-react";
 import { ConsultantClientsSheet } from "@/components/contacts/ConsultantClientsSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,14 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { hasFullAccess } from "@/config/roles";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useAuth } from "@/hooks/useAuth";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,13 +52,15 @@ export default function Consultants() {
   const [unlinkContactId, setUnlinkContactId] = useState<string | null>(null);
   const [unlinkContactName, setUnlinkContactName] = useState("");
   const { role } = useUserRole();
-  const canUnlink = hasFullAccess(role);
+  const canManage = hasFullAccess(role);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: activeConsultants } = useActiveConsultants();
+  const { user } = useAuth();
 
   const unlinkMutation = useMutation({
     mutationFn: async (contactId: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
       
       const { error } = await supabase
         .from("contacts")
@@ -64,14 +74,13 @@ export default function Consultants() {
         type: "note" as const,
         channel: "other" as const,
         content: `Consultor removido do cliente por admin/gerente`,
-        created_by: user?.id,
-        metadata: { action: "consultant_removed", removed_by: user?.id },
+        created_by: authUser?.id,
+        metadata: { action: "consultant_removed", removed_by: authUser?.id },
       });
     },
     onSuccess: () => {
       toast({ title: "Consultor removido", description: `Cliente ${unlinkContactName} desvinculado com sucesso.` });
       setUnlinkContactId(null);
-      // Re-trigger email search
       setEmailResults(prev => prev.map(c => c.id === unlinkContactId ? { ...c, consultant_id: null } : c));
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
@@ -79,6 +88,37 @@ export default function Consultants() {
       toast({ title: "Erro ao remover consultor", description: error.message, variant: "destructive" });
     },
   });
+
+  const assignMutation = useMutation({
+    mutationFn: async ({ contactId, consultantId }: { contactId: string; consultantId: string }) => {
+      const { error } = await supabase
+        .from("contacts")
+        .update({ consultant_id: consultantId })
+        .eq("id", contactId);
+
+      if (error) throw error;
+
+      const consultantName = activeConsultants?.find(c => c.id === consultantId)?.full_name || "Desconhecido";
+      await supabase.from("interactions").insert({
+        customer_id: contactId,
+        type: "note" as const,
+        channel: "other" as const,
+        content: `Consultor ${consultantName} atribuído ao cliente`,
+        created_by: user?.id,
+        metadata: { action: "consultant_assigned", consultant_id: consultantId, assigned_by: user?.id },
+      });
+    },
+    onSuccess: (_, variables) => {
+      toast({ title: "Consultor atribuído", description: "Cliente vinculado ao consultor com sucesso." });
+      setEmailResults(prev => prev.map(c => c.id === variables.contactId ? { ...c, consultant_id: variables.consultantId } : c));
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atribuir consultor", description: error.message, variant: "destructive" });
+    },
+  });
+
+
 
   const isEmailSearch = search.includes("@");
 
@@ -196,7 +236,7 @@ export default function Consultants() {
                         >
                           Ver clientes
                         </Button>
-                        {canUnlink && (
+                        {canManage && (
                           <Button
                             size="sm"
                             variant="destructive"
@@ -209,6 +249,25 @@ export default function Consultants() {
                             Remover
                           </Button>
                         )}
+                      </div>
+                    ) : canManage ? (
+                      <div className="flex items-center gap-2">
+                        <UserPlus className="h-4 w-4 text-muted-foreground" />
+                        <Select
+                          onValueChange={(value) => assignMutation.mutate({ contactId: contact.id, consultantId: value })}
+                        >
+                          <SelectTrigger className="w-[200px] h-8 text-sm">
+                            <SelectValue placeholder="Atribuir consultor..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {activeConsultants?.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.full_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {assignMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                       </div>
                     ) : (
                       <Badge variant="outline" className="gap-1 text-muted-foreground">
