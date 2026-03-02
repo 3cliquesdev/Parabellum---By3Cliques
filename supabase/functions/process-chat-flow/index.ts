@@ -1329,7 +1329,7 @@ serve(async (req) => {
         const forbidCommercial: boolean = currentNode.data?.forbid_commercial ?? false;
 
         // 🔒 TRAVA FINANCEIRA: Detectar intenção financeira como exit do nó AI
-        const financialIntentPattern = /saque|sacar|reembolso|estorno|devolu[çc][ãa]o|devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a|retirar|retirada|caixa|carteira|pix|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|ressarcimento/i;
+        const financialIntentPattern = /saque|sacar|reembolso|estorno|(?<!\bendereco\s+de\s*)(?<!\bendere[çc]o\s+de\s*)(?<!\blocal\s+de\s*)devolu[çc][ãa]o|(?<!\bendereco\s+de\s*)(?<!\bendere[çc]o\s+de\s*)(?<!\blocal\s+de\s*)devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a|retirar|retirada|caixa|carteira|pix|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|ressarcimento/i;
         const financialIntentMatch = (forceFinancialExit && forbidFinancial) || (forbidFinancial && msgLower.length > 0 && financialIntentPattern.test(userMessage || ''));
         if (forceFinancialExit) {
           console.log('[process-chat-flow] 🔒 forceFinancialExit=true recebido do webhook, forçando exit do nó AI');
@@ -1992,16 +1992,9 @@ serve(async (req) => {
       if (nextNode.type === 'transfer') {
         console.log(`[process-chat-flow] 🔄 Transfer node after message chain: ${nextNode.id}`);
 
-        // Entregar mensagens intermediárias acumuladas
-        if (extraMessages.length > 0) {
-          for (const msg of extraMessages) {
-            await deliverFlowMessage(msg);
-          }
-        }
-
-        // Entregar mensagem do transfer node
+        // Acumular mensagem do transfer node junto com mensagens intermediárias
         const transferMsg = replaceVariables(nextNode.data?.message || "Transferindo...", variablesContext);
-        await deliverFlowMessage(transferMsg);
+        const allTransferMessages = [...extraMessages, transferMsg].filter(Boolean).join('\n\n');
 
         // Completar flow state como transferred
         await supabaseClient
@@ -2016,6 +2009,7 @@ serve(async (req) => {
 
         return new Response(JSON.stringify({
           useAI: false,
+          response: allTransferMessages,
           transfer: true,
           departmentId: nextNode.data?.department_id || null,
           transferType: nextNode.data?.transfer_type,

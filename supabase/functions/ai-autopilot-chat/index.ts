@@ -1298,7 +1298,7 @@ serve(async (req) => {
     }
 
     // 🔒 TRAVA FINANCEIRA — Interceptação na ENTRADA (antes de chamar LLM)
-    const financialIntentPattern = /saque|sacar|reembolso|estorno|devolu[çc][ãa]o|devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a|retirar|retirada|caixa|carteira|pix|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|ressarcimento/i;
+    const financialIntentPattern = /saque|sacar|reembolso|estorno|(?<!\bendereco\s+de\s*)(?<!\bendere[çc]o\s+de\s*)(?<!\blocal\s+de\s*)devolu[çc][ãa]o|(?<!\bendereco\s+de\s*)(?<!\bendere[çc]o\s+de\s*)(?<!\blocal\s+de\s*)devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a|retirar|retirada|caixa|carteira|pix|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|ressarcimento/i;
     
     if (flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && financialIntentPattern.test(customerMessage)) {
       console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
