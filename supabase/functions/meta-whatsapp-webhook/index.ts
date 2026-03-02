@@ -1049,12 +1049,12 @@ serve(async (req) => {
                             
                             try {
                               const flowResponse = await fetch(
-                                `${supabaseUrl}/functions/v1/process-chat-flow`,
+                                `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
                                 {
                                   method: "POST",
                                   headers: {
                                     "Content-Type": "application/json",
-                                    Authorization: `Bearer ${supabaseServiceKey}`,
+                                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                                   },
                                   body: JSON.stringify({
                                     conversationId: conversation.id,
@@ -1083,7 +1083,7 @@ serve(async (req) => {
                                     await supabase.functions.invoke("send-meta-whatsapp", {
                                       body: {
                                         instance_id: instance.id,
-                                        phone_number: senderPhone,
+                                        phone_number: fromNumber,
                                         message: flowMessage,
                                         conversation_id: conversation.id,
                                         skip_db_save: true,
@@ -1122,12 +1122,12 @@ serve(async (req) => {
                                 console.log("[meta-whatsapp-webhook] 🔄 Retrying process-chat-flow (attempt 2)...");
                                 try {
                                   const retryResponse = await fetch(
-                                    `${supabaseUrl}/functions/v1/process-chat-flow`,
+                                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
                                     {
                                       method: "POST",
                                       headers: {
                                         "Content-Type": "application/json",
-                                        Authorization: `Bearer ${supabaseServiceKey}`,
+                                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                                       },
                                       body: JSON.stringify({
                                         conversationId: conversation.id,
@@ -1144,7 +1144,7 @@ serve(async (req) => {
                                       await supabase.functions.invoke("send-meta-whatsapp", {
                                         body: {
                                           instance_id: instance.id,
-                                          phone_number: senderPhone,
+                                          phone_number: fromNumber,
                                           message: retryMessage,
                                           conversation_id: conversation.id,
                                           skip_db_save: true,
@@ -1191,7 +1191,7 @@ serve(async (req) => {
                               await supabase.functions.invoke("send-meta-whatsapp", {
                                 body: {
                                   instance_id: instance.id,
-                                  phone_number: senderPhone,
+                                  phone_number: fromNumber,
                                   message: handoffMsg,
                                   conversation_id: conversation.id,
                                   skip_db_save: true,
@@ -1258,12 +1258,12 @@ serve(async (req) => {
                             
                             try {
                               const flowResponse = await fetch(
-                                `${supabaseUrl}/functions/v1/process-chat-flow`,
+                                `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
                                 {
                                   method: "POST",
                                   headers: {
                                     "Content-Type": "application/json",
-                                    Authorization: `Bearer ${supabaseServiceKey}`,
+                                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                                   },
                                   body: JSON.stringify({
                                     conversationId: conversation.id,
@@ -1290,7 +1290,7 @@ serve(async (req) => {
                                     await supabase.functions.invoke("send-meta-whatsapp", {
                                       body: {
                                         instance_id: instance.id,
-                                        phone_number: senderPhone,
+                                        phone_number: fromNumber,
                                         message: flowMessage,
                                         conversation_id: conversation.id,
                                         skip_db_save: true,
@@ -1328,12 +1328,12 @@ serve(async (req) => {
                                 console.log("[meta-whatsapp-webhook] 🔄 Retrying process-chat-flow (commercial, attempt 2)...");
                                 try {
                                   const retryResponse = await fetch(
-                                    `${supabaseUrl}/functions/v1/process-chat-flow`,
+                                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
                                     {
                                       method: "POST",
                                       headers: {
                                         "Content-Type": "application/json",
-                                        Authorization: `Bearer ${supabaseServiceKey}`,
+                                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                                       },
                                       body: JSON.stringify({
                                         conversationId: conversation.id,
@@ -1350,7 +1350,7 @@ serve(async (req) => {
                                       await supabase.functions.invoke("send-meta-whatsapp", {
                                         body: {
                                           instance_id: instance.id,
-                                          phone_number: senderPhone,
+                                          phone_number: fromNumber,
                                           message: retryMessage,
                                           conversation_id: conversation.id,
                                           skip_db_save: true,
@@ -1394,7 +1394,7 @@ serve(async (req) => {
                               await supabase.functions.invoke("send-meta-whatsapp", {
                                 body: {
                                   instance_id: instance.id,
-                                  phone_number: senderPhone,
+                                  phone_number: fromNumber,
                                   message: commercialHandoffMsg,
                                   conversation_id: conversation.id,
                                   skip_db_save: true,
