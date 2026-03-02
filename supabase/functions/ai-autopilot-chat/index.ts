@@ -1305,13 +1305,9 @@ serve(async (req) => {
       
       const fixedMessage = 'Entendi. Para assuntos financeiros (saque, reembolso, devolução), vou te encaminhar para um atendente humano agora.';
       
-      // Se estamos dentro de um fluxo, NÃO fazer hard transfer.
-      // Deixar o webhook re-invocar process-chat-flow com forceFinancialExit
-      // para que o fluxo avance para o próximo nó (transfer, menu, etc.)
       const hasFlowContext = !!(flow_context);
       
       if (!hasFlowContext) {
-        // SEM fluxo: hard transfer como antes
         try {
           await supabaseClient
             .from('conversations')
@@ -1325,7 +1321,6 @@ serve(async (req) => {
         console.log('[ai-autopilot-chat] 🔒 Flow context presente — delegando avanço ao process-chat-flow via forceFinancialExit');
       }
 
-      // Registrar evento de auditoria
       try {
         await supabaseClient
           .from('ai_events')
@@ -1347,7 +1342,6 @@ serve(async (req) => {
         console.error('[ai-autopilot-chat] ⚠️ Failed to log financial block event:', logErr);
       }
 
-      // Retornar early — NÃO chamar o LLM
       return new Response(JSON.stringify({
         ok: true,
         financialBlocked: true,
@@ -1356,6 +1350,67 @@ serve(async (req) => {
         response: fixedMessage,
         message: fixedMessage,
         aiResponse: fixedMessage,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 🔒 TRAVA COMERCIAL — Interceptação na ENTRADA (antes de chamar LLM)
+    const flowForbidCommercial: boolean = flow_context?.forbidCommercial ?? false;
+    const commercialIntentPattern = /comprar|quero comprar|quanto custa|pre[çc]o|proposta|or[çc]amento|cat[aá]logo|assinar|plano|tabela de pre[çc]o|conhecer.*produto|demonstra[çc][aã]o|demo|trial|teste gr[aá]tis|upgrade|downgrade|mudar.*plano/i;
+    
+    if (flowForbidCommercial && customerMessage && customerMessage.trim().length > 0 && commercialIntentPattern.test(customerMessage)) {
+      console.warn('[ai-autopilot-chat] 🛒 TRAVA COMERCIAL (ENTRADA): Intenção comercial detectada, bloqueando IA:', customerMessage.substring(0, 80));
+      
+      const commercialMsg = 'Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso.';
+      const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+      
+      const hasFlowContext = !!(flow_context);
+      
+      if (!hasFlowContext) {
+        try {
+          await supabaseClient
+            .from('conversations')
+            .update({ ai_mode: 'waiting_human', assigned_to: null, department: DEPT_COMERCIAL_ID })
+            .eq('id', conversationId);
+          console.log('[ai-autopilot-chat] 🛒 Conversa transferida para Comercial - Nacional (trava comercial, sem fluxo)');
+        } catch (transferErr) {
+          console.error('[ai-autopilot-chat] Erro ao transferir (trava comercial):', transferErr);
+        }
+      } else {
+        console.log('[ai-autopilot-chat] 🛒 Flow context presente — delegando avanço ao process-chat-flow via forceCommercialExit');
+      }
+
+      try {
+        await supabaseClient
+          .from('ai_events')
+          .insert({
+            entity_type: 'conversation',
+            entity_id: conversationId,
+            event_type: 'ai_blocked_commercial',
+            model: 'ai-autopilot-chat',
+            output_json: {
+              phase: 'input_interception',
+              pattern: 'commercialIntentPattern',
+              message_preview: customerMessage.substring(0, 200),
+              forbid_commercial: true,
+              has_flow_context: hasFlowContext,
+            },
+            input_summary: customerMessage.substring(0, 200),
+          });
+      } catch (logErr) {
+        console.error('[ai-autopilot-chat] ⚠️ Failed to log commercial block event:', logErr);
+      }
+
+      return new Response(JSON.stringify({
+        ok: true,
+        commercialBlocked: true,
+        exitKeywordDetected: true,
+        hasFlowContext,
+        response: commercialMsg,
+        message: commercialMsg,
+        aiResponse: commercialMsg,
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

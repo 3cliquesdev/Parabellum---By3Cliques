@@ -14,6 +14,7 @@ import {
   LogOut,
   AlertTriangle,
   DollarSign,
+  ShoppingCart,
   UserCheck,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -68,6 +69,7 @@ export function BehaviorControlsSection({
   const forbidQuestions = selectedNode.data.forbid_questions ?? true;
   const forbidOptions = selectedNode.data.forbid_options ?? true;
   const forbidFinancial = selectedNode.data.forbid_financial ?? false;
+  const forbidCommercial = selectedNode.data.forbid_commercial ?? false;
   const objective = selectedNode.data.objective || "";
 
   return (
@@ -192,6 +194,23 @@ export function BehaviorControlsSection({
           />
         </div>
 
+        {/* Não resolver comercial (transferir para time comercial) */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4 text-red-400" />
+            <div>
+              <Label className="text-sm font-medium">Transferir intenção de compra</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Detecta intenção comercial e transfere para o time Comercial
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidCommercial}
+            onCheckedChange={(checked) => updateNodeData("forbid_commercial", checked)}
+          />
+        </div>
+
         {/* Status das Restrições */}
         <div className="flex flex-wrap gap-1 pt-1">
           {forbidQuestions && (
@@ -209,7 +228,12 @@ export function BehaviorControlsSection({
               💰 Sem financeiro
             </Badge>
           )}
-          {!forbidQuestions && !forbidOptions && !forbidFinancial && (
+          {forbidCommercial && (
+            <Badge variant="destructive" className="text-[10px] px-1.5">
+              🛒 Comercial → Transfer
+            </Badge>
+          )}
+          {!forbidQuestions && !forbidOptions && !forbidFinancial && !forbidCommercial && (
             <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">
               Sem restrições ativas
             </Badge>

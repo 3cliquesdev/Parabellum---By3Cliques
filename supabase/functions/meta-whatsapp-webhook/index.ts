@@ -930,7 +930,8 @@ serve(async (req) => {
                             maxSentences: (flowData as any).maxSentences ?? 3,
                             forbidQuestions: (flowData as any).forbidQuestions ?? true,
                             forbidOptions: (flowData as any).forbidOptions ?? true,
-                            forbidFinancial: (flowData as any).forbidFinancial ?? false,
+                          forbidFinancial: (flowData as any).forbidFinancial ?? false,
+                          forbidCommercial: (flowData as any).forbidCommercial ?? false,
                           },
                         }),
                       }
@@ -1067,6 +1068,146 @@ serve(async (req) => {
                             }
                           } catch (sendErr) {
                             console.error("[meta-whatsapp-webhook] ⚠️ Error sending handoff msg:", sendErr);
+                          }
+                          
+                          continue;
+                        }
+                        
+                        // 🛒 TRAVA COMERCIAL: commercialBlocked
+                        if (autopilotData?.commercialBlocked) {
+                          const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+                          
+                          if (autopilotData?.hasFlowContext) {
+                            console.log("[meta-whatsapp-webhook] 🛒 commercialBlocked + hasFlowContext → re-invocando process-chat-flow com forceCommercialExit");
+                            
+                            try {
+                              const flowResponse = await fetch(
+                                `${supabaseUrl}/functions/v1/process-chat-flow`,
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    Authorization: `Bearer ${supabaseServiceKey}`,
+                                  },
+                                  body: JSON.stringify({
+                                    conversationId: conversation.id,
+                                    userMessage: messageContent,
+                                    forceCommercialExit: true,
+                                  }),
+                                }
+                              );
+                              
+                              if (flowResponse.ok) {
+                                const flowData = await flowResponse.json();
+                                console.log("[meta-whatsapp-webhook] ✅ process-chat-flow re-invoked (forceCommercialExit):", JSON.stringify({
+                                  transfer: flowData.transfer,
+                                  hasResponse: !!flowData.response,
+                                  departmentId: flowData.departmentId,
+                                }));
+                                
+                                const flowMessage = flowData.response || flowData.message;
+                                if (flowMessage) {
+                                  const metaToken = instance.whatsapp_meta_token || Deno.env.get("WHATSAPP_META_TOKEN");
+                                  const phoneNumberId = instance.whatsapp_meta_phone_id || Deno.env.get("WHATSAPP_META_PHONE_NUMBER_ID");
+                                  
+                                  if (metaToken && phoneNumberId) {
+                                    await fetch(
+                                      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+                                      {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                          Authorization: `Bearer ${metaToken}`,
+                                        },
+                                        body: JSON.stringify({
+                                          messaging_product: "whatsapp",
+                                          to: senderPhone,
+                                          type: "text",
+                                          text: { body: flowMessage },
+                                        }),
+                                      }
+                                    );
+                                    
+                                    await supabase.from("messages").insert({
+                                      conversation_id: conversation.id,
+                                      content: flowMessage,
+                                      sender_type: "system",
+                                      message_type: "text",
+                                    });
+                                    console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (commercial exit)");
+                                  }
+                                }
+                                
+                                const transferDept = flowData.departmentId || flowData.department || DEPT_COMERCIAL_ID;
+                                if ((flowData.transfer === true || flowData.action === 'transfer') && transferDept) {
+                                  await supabase
+                                    .from('conversations')
+                                    .update({
+                                      ai_mode: 'waiting_human',
+                                      department: transferDept,
+                                      assigned_to: null,
+                                    })
+                                    .eq('id', conversation.id);
+                                  console.log("[meta-whatsapp-webhook] 🔄 Transfer applied from flow (commercial exit) → dept:", transferDept);
+                                }
+                                
+                                continue;
+                              } else {
+                                console.error("[meta-whatsapp-webhook] ❌ process-chat-flow re-invoke failed (commercial):", await flowResponse.text());
+                              }
+                            } catch (flowErr) {
+                              console.error("[meta-whatsapp-webhook] ❌ Error re-invoking process-chat-flow (commercial):", flowErr);
+                            }
+                          }
+                          
+                          // Fallback: sem flow context OU re-invoke falhou → handoff direto para Comercial
+                          console.log("[meta-whatsapp-webhook] 🛒 commercialBlocked=true → enviando handoff msg para Comercial");
+                          
+                          const commercialHandoffMsg = autopilotData.response || 'Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso.';
+                          
+                          try {
+                            const metaToken = instance.whatsapp_meta_token || Deno.env.get("WHATSAPP_META_TOKEN");
+                            const phoneNumberId = instance.whatsapp_meta_phone_id || Deno.env.get("WHATSAPP_META_PHONE_NUMBER_ID");
+                            
+                            if (metaToken && phoneNumberId) {
+                              await fetch(
+                                `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    Authorization: `Bearer ${metaToken}`,
+                                  },
+                                  body: JSON.stringify({
+                                    messaging_product: "whatsapp",
+                                    to: senderPhone,
+                                    type: "text",
+                                    text: { body: commercialHandoffMsg },
+                                  }),
+                                }
+                              );
+                              console.log("[meta-whatsapp-webhook] ✅ Handoff message sent (commercial block)");
+                              
+                              await supabase.from("messages").insert({
+                                conversation_id: conversation.id,
+                                content: commercialHandoffMsg,
+                                sender_type: "system",
+                                message_type: "text",
+                              });
+                            }
+                            
+                            // Transfer direto para Comercial - Nacional
+                            await supabase
+                              .from('conversations')
+                              .update({
+                                ai_mode: 'waiting_human',
+                                department: DEPT_COMERCIAL_ID,
+                                assigned_to: null,
+                              })
+                              .eq('id', conversation.id);
+                            console.log("[meta-whatsapp-webhook] 🔄 Transfer applied (commercial block fallback) → dept:", DEPT_COMERCIAL_ID);
+                          } catch (sendErr) {
+                            console.error("[meta-whatsapp-webhook] ⚠️ Error sending commercial handoff msg:", sendErr);
                           }
                           
                           continue;

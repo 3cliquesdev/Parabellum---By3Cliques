@@ -370,7 +370,7 @@ serve(async (req) => {
     );
 
     const body = await req.json();
-    const { conversationId, userMessage, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck, inactivityTimeout, forceFinancialExit } = body;
+    const { conversationId, userMessage, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck, inactivityTimeout, forceFinancialExit, forceCommercialExit } = body;
     
     if (!conversationId) {
       return new Response(
@@ -1326,6 +1326,7 @@ serve(async (req) => {
         const exitKeywords: string[] = currentNode.data?.exit_keywords || [];
         const maxInteractions: number = currentNode.data?.max_ai_interactions ?? 0;
         const forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
+        const forbidCommercial: boolean = currentNode.data?.forbid_commercial ?? false;
 
         // 🔒 TRAVA FINANCEIRA: Detectar intenção financeira como exit do nó AI
         const financialIntentPattern = /saque|sacar|reembolso|estorno|devolu[çc][ãa]o|devolver|cancelar.*assinatura|meu dinheiro|saldo|pagamento|cobran[çc]a|retirar|retirada|caixa|carteira|pix|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|ressarcimento/i;
@@ -1334,10 +1335,16 @@ serve(async (req) => {
           console.log('[process-chat-flow] 🔒 forceFinancialExit=true recebido do webhook, forçando exit do nó AI');
         }
 
+        // 🛒 TRAVA COMERCIAL: Detectar intenção de compra como exit do nó AI
+        const commercialIntentPattern = /comprar|quero comprar|quanto custa|pre[çc]o|proposta|or[çc]amento|cat[aá]logo|assinar|plano|tabela de pre[çc]o|conhecer.*produto|demonstra[çc][aã]o|demo|trial|teste gr[aá]tis|upgrade|downgrade|mudar.*plano/i;
+        const commercialIntentMatch = (forceCommercialExit && forbidCommercial) || (forbidCommercial && msgLower.length > 0 && commercialIntentPattern.test(userMessage || ''));
+        if (forceCommercialExit) {
+          console.log('[process-chat-flow] 🛒 forceCommercialExit=true recebido do webhook, forçando exit do nó AI');
+        }
+
         if (financialIntentMatch) {
           console.log(`[process-chat-flow] 🔒 TRAVA FINANCEIRA: Intenção financeira detectada no nó AI, tratando como exit`);
           
-          // Registrar evento
           try {
             await supabaseClient
               .from('ai_events')
@@ -1359,21 +1366,47 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log financial block event:', logErr);
           }
 
-          // Limpar __ai e deixar cair no findNextNode
+          delete collectedData.__ai;
+        }
+
+        if (commercialIntentMatch) {
+          console.log(`[process-chat-flow] 🛒 TRAVA COMERCIAL: Intenção comercial detectada no nó AI, tratando como exit`);
+          
+          try {
+            await supabaseClient
+              .from('ai_events')
+              .insert({
+                entity_type: 'conversation',
+                entity_id: conversationId,
+                event_type: 'ai_blocked_commercial',
+                model: 'process-chat-flow',
+                output_json: {
+                  phase: 'flow_node_exit',
+                  node_id: currentNode.id,
+                  flow_id: activeState.flow_id,
+                  interaction_count: aiCount,
+                  message_preview: (userMessage || '').substring(0, 200),
+                },
+                input_summary: (userMessage || '').substring(0, 200),
+              });
+          } catch (logErr) {
+            console.error('[process-chat-flow] ⚠️ Failed to log commercial block event:', logErr);
+          }
+
           delete collectedData.__ai;
         }
 
         // Verificar exit keyword (case-insensitive includes)
-        const keywordMatch = !financialIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) =>
+        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) =>
           msgLower.includes(String(kw || '').toLowerCase().trim())
         );
 
         // Verificar max interações
-        const maxReached = !financialIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
+        const maxReached = !financialIntentMatch && !commercialIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
 
-        if (financialIntentMatch || keywordMatch || maxReached) {
-          const exitReason = financialIntentMatch ? 'financial_blocked' : keywordMatch ? 'exit_keyword' : 'max_interactions';
-          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} count=${aiCount}`);
+        if (financialIntentMatch || commercialIntentMatch || keywordMatch || maxReached) {
+          const exitReason = financialIntentMatch ? 'financial_blocked' : commercialIntentMatch ? 'commercial_blocked' : keywordMatch ? 'exit_keyword' : 'max_interactions';
+          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} commercial=${commercialIntentMatch} count=${aiCount}`);
 
           // Log de transferência estruturado em ai_events
           try {
@@ -1459,6 +1492,7 @@ serve(async (req) => {
               forbidQuestions: currentNode.data?.forbid_questions ?? true,
               forbidOptions: currentNode.data?.forbid_options ?? true,
               forbidFinancial: currentNode.data?.forbid_financial ?? false,
+              forbidCommercial: currentNode.data?.forbid_commercial ?? false,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -1800,6 +1834,7 @@ serve(async (req) => {
             forbidQuestions: nextNode.data?.forbid_questions ?? true,
             forbidOptions: nextNode.data?.forbid_options ?? true,
             forbidFinancial: nextNode.data?.forbid_financial ?? false,
+            forbidCommercial: nextNode.data?.forbid_commercial ?? false,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -2384,6 +2419,7 @@ serve(async (req) => {
               forbidQuestions: node.data?.forbid_questions ?? true,
               forbidOptions: node.data?.forbid_options ?? true,
               forbidFinancial: node.data?.forbid_financial ?? false,
+              forbidCommercial: node.data?.forbid_commercial ?? false,
               debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -2596,6 +2632,7 @@ serve(async (req) => {
           forbidQuestions: startNode.data?.forbid_questions ?? true,
           forbidOptions: startNode.data?.forbid_options ?? true,
           forbidFinancial: startNode.data?.forbid_financial ?? false,
+          forbidCommercial: startNode.data?.forbid_commercial ?? false,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

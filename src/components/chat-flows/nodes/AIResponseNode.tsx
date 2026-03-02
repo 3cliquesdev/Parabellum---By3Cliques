@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { NodeProps } from "reactflow";
-import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign } from "lucide-react";
+import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign, Store } from "lucide-react";
 import { ChatFlowNodeWrapper } from "../ChatFlowNodeWrapper";
 import { Badge } from "@/components/ui/badge";
 
@@ -26,6 +26,7 @@ interface AIResponseNodeData {
   ai_persistent?: boolean;
   max_ai_interactions?: number;
   exit_keywords?: string[];
+  forbid_commercial?: boolean;
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
@@ -152,6 +153,14 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
           <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 gap-0.5">
             <DollarSign className="h-2.5 w-2.5" />
             Sem financeiro
+          </Badge>
+        )}
+
+        {/* Badge de Trava Comercial */}
+        {data.forbid_commercial && (
+          <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-green-600/90">
+            <Store className="h-2.5 w-2.5" />
+            Comercial
           </Badge>
         )}
 
