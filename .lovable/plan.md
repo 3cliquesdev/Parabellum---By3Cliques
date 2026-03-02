@@ -1,44 +1,39 @@
 
 
-# Plano: Implementar Fixes da Auditoria Completa
+# Diagnóstico: Conversa #4168E4DC parou no meio do Master Flow
 
-## Escopo — 5 correções priorizadas
+Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-### 1. Trocar modelo do `analyze-ticket` para `google/gemini-2.5-flash-lite`
-- **Arquivo**: `supabase/functions/analyze-ticket/index.ts`
-- Alterar default de `openai/gpt-5-mini` para `google/gemini-2.5-flash-lite` (linhas 17, 28)
-- Tarefas de classificação (sentiment, tags, summary) não precisam de modelo pesado
-- Mantém fallback dinâmico via `system_configurations.ai_default_model`
+## O que aconteceu
 
-### 2. Adicionar retry no bloco comercial do webhook
-- **Arquivo**: `supabase/functions/meta-whatsapp-webhook/index.ts`
-- Linhas 1345-1350: quando re-invoke do `process-chat-flow` com `forceCommercialExit` falha, adicionar segunda tentativa (mesmo padrão já implementado no financeiro)
-- Se ambas falharem e `hasFlowContext=true`, manter no fluxo em vez de handoff hardcoded
+A conversa seguiu o Master Flow corretamente até o nó "Múltipla Escolha" (Pedidos/Sistema/Acesso/Outros). O cliente respondeu "1" (Pedidos), mas o fluxo travou e a conversa caiu em `waiting_human` sem avançar.
 
-### 3. Substituir `fetch` direto para Graph API por `send-meta-whatsapp`
-- **Arquivo**: `supabase/functions/meta-whatsapp-webhook/index.ts`
-- 5 ocorrências de `fetch(graph.facebook.com/...)` nos blocos financeiro e comercial (linhas 1083, 1154, 1197, 1304, 1362)
-- Substituir por `supabase.functions.invoke("send-meta-whatsapp", ...)` com `skip_db_save: true`
-- Garante tracking de `provider_message_id` e logs centralizados
+**Causa raiz**: o crash do `deliverFlowMessage is not defined` que já corrigimos na sessão anterior. Esta conversa foi afetada **antes** do fix ser deployado.
 
-### 4. Refinar regex financeira — tornar termos genéricos contextuais
-- **Arquivos**: `process-chat-flow/index.ts` e `ai-autopilot-chat/index.ts`
-- Palavras soltas como `saldo`, `pagamento`, `cobran[çc]a`, `valor` geram falsos positivos
-- Tornar contextuais: exigir verbo de ação ou contexto financeiro explícito
-  - `saldo` → `(sacar|tirar|retirar|ver|consultar|meu)\s*saldo`
-  - `pagamento` → `(fazer|realizar|efetuar|cancelar|estornar)\s*pagamento`
-  - `valor` manter apenas com pattern existente `valor\s*(que|da|do|em)`
-  - `cobran[çc]a` → `(cancelar|contestar|cobran[çc]a\s*indevida)`
+## Problema adicional: edges duplicadas no fluxo
 
-### 5. Investigar e corrigir `dispatch-conversations`
-- Ler logs da edge function para identificar causa da falha de distribuição
-- Corrigir conforme diagnóstico
+Ao analisar o `flow_definition`, cada opção do nó `ask_options` tem **duas edges** saindo do mesmo handle — uma para um nó `message` ("Trava") e outra para um nó `condition`. Exemplo da opção 1:
 
----
+```text
+opt_1769459784782 → 1772136527156 (message "Trava")
+opt_1769459784782 → 1772196913050 (condition)
+```
+
+O `findNextNode` usa `edges.find()` que retorna apenas a primeira match. O comportamento depende da ordem dos edges no JSON — isso é frágil e pode causar caminhos inesperados.
+
+## Plano de correção
+
+### 1. Resetar conversa #4168E4DC
+SQL para devolver ao nó de IA (`ai_response`) com `ai_mode: autopilot` e `status: active`, para que a próxima mensagem do cliente seja processada pela IA normalmente via Master Flow.
+
+### 2. Proteger `findNextNode` contra edges duplicadas
+No `process-chat-flow/index.ts`, quando `ask_options` encontra múltiplas edges do mesmo `sourceHandle`, priorizar nós de conteúdo (`message`, `transfer`, `ai_response`) sobre nós lógicos (`condition`, `input`, `start`). Isso garante comportamento determinístico independente da ordem no JSON.
+
+### Arquivos editados
+- `supabase/functions/process-chat-flow/index.ts` — hardening do `findNextNode`
+- Migration SQL — reset da conversa #4168E4DC
 
 ### Sem risco de regressão
-- Modelo `gemini-2.5-flash-lite` suporta os mesmos prompts (classificação simples)
-- Retry comercial segue padrão já validado no financeiro
-- `send-meta-whatsapp` já é usado em todo o resto do pipeline
-- Regex refinada continua detectando intenções financeiras reais ("quero sacar saldo", "fazer reembolso")
+- O fix do `findNextNode` apenas adiciona priorização quando existem edges duplicadas. Fluxos com edges únicas (o caso normal) não são afetados.
+- O reset da conversa restaura o estado para que o Master Flow reassuma controle.
 
