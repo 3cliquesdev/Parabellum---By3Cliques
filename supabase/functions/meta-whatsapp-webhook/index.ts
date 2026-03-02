@@ -1123,15 +1123,70 @@ serve(async (req) => {
                                 
                                 continue; // Flow handled it
                               } else {
-                                console.error("[meta-whatsapp-webhook] ❌ process-chat-flow re-invoke failed:", await flowResponse.text());
+                                console.error("[meta-whatsapp-webhook] ❌ process-chat-flow re-invoke failed (attempt 1):", await flowResponse.text());
+                                
+                                // 🆕 RETRY: Segunda tentativa antes de fallback
+                                console.log("[meta-whatsapp-webhook] 🔄 Retrying process-chat-flow (attempt 2)...");
+                                try {
+                                  const retryResponse = await fetch(
+                                    `${supabaseUrl}/functions/v1/process-chat-flow`,
+                                    {
+                                      method: "POST",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                        Authorization: `Bearer ${supabaseServiceKey}`,
+                                      },
+                                      body: JSON.stringify({
+                                        conversationId: conversation.id,
+                                        userMessage: messageContent,
+                                        forceFinancialExit: true,
+                                      }),
+                                    }
+                                  );
+                                  if (retryResponse.ok) {
+                                    const retryData = await retryResponse.json();
+                                    console.log("[meta-whatsapp-webhook] ✅ Retry succeeded:", JSON.stringify({ transfer: retryData.transfer, hasResponse: !!retryData.response, nodeType: retryData.nodeType }));
+                                    const retryMessage = retryData.response || retryData.message;
+                                    if (retryMessage) {
+                                      const metaToken2 = instance.whatsapp_meta_token || Deno.env.get("WHATSAPP_META_TOKEN");
+                                      const phoneNumberId2 = instance.whatsapp_meta_phone_id || Deno.env.get("WHATSAPP_META_PHONE_NUMBER_ID");
+                                      if (metaToken2 && phoneNumberId2) {
+                                        await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId2}/messages`, {
+                                          method: "POST",
+                                          headers: { "Content-Type": "application/json", Authorization: `Bearer ${metaToken2}` },
+                                          body: JSON.stringify({ messaging_product: "whatsapp", to: senderPhone, type: "text", text: { body: retryMessage } }),
+                                        });
+                                        await supabase.from("messages").insert({ conversation_id: conversation.id, content: retryMessage, sender_type: "system", message_type: "text" });
+                                      }
+                                    }
+                                    const retryDept = retryData.departmentId || retryData.department;
+                                    if ((retryData.transfer === true || retryData.action === 'transfer') && retryDept) {
+                                      await supabase.from('conversations').update({ ai_mode: 'waiting_human', department: retryDept, assigned_to: null }).eq('id', conversation.id);
+                                    }
+                                    continue; // Retry handled it
+                                  } else {
+                                    console.error("[meta-whatsapp-webhook] ❌ Retry also failed:", await retryResponse.text());
+                                  }
+                                } catch (retryErr) {
+                                  console.error("[meta-whatsapp-webhook] ❌ Retry exception:", retryErr);
+                                }
                               }
                             } catch (flowErr) {
                               console.error("[meta-whatsapp-webhook] ❌ Error re-invoking process-chat-flow:", flowErr);
                             }
                           }
                           
-                          // Fallback: sem flow context OU flow re-invoke falhou → handoff genérico
-                          console.log("[meta-whatsapp-webhook] 🔒 financialBlocked=true → enviando handoff msg (fallback)");
+                          // 🆕 FIX: Fallback hardcoded SOMENTE quando NÃO tem flow context ativo
+                          // Se hasFlowContext=true, o flow deveria ter resolvido acima. Não fazer handoff hardcoded.
+                          if (autopilotData?.hasFlowContext) {
+                            console.log("[meta-whatsapp-webhook] ⚠️ financialBlocked + hasFlowContext=true mas flow re-invoke falhou 2x. Mantendo no fluxo sem handoff hardcoded.");
+                            // Não fazer handoff — a conversa fica no nó atual do fluxo
+                            // O próximo message do cliente vai re-tentar o flow normalmente
+                            continue;
+                          }
+                          
+                          // Fallback: sem flow context → handoff genérico para Financeiro
+                          console.log("[meta-whatsapp-webhook] 🔒 financialBlocked=true + hasFlowContext=false → enviando handoff msg (fallback)");
                           
                           const handoffMsg = autopilotData.response || 'Entendi. Para assuntos financeiros, vou te encaminhar para um atendente humano agora.';
                           
