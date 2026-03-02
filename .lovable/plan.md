@@ -1,40 +1,32 @@
 
 
-# Diagnóstico: Mensagens de inatividade não enviadas ao WhatsApp
+# Diagnóstico: Delay de 8 minutos nas conversas #062BCD76 e #6F32B0C4
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
 ## Causa raiz
 
-A função `sendWhatsAppMessages` em `auto-close-conversations/index.ts` (linha 620) passa parâmetros com nomes **errados** para `send-meta-whatsapp`:
+As respostas de ambas conversas têm o **mesmo timestamp exato** (`18:33:44.534369`) — foram enviadas pela minha intervenção manual da sessão anterior. O webhook **não entregou** as mensagens do fluxo.
 
-```text
-Enviado:                     Esperado:
-─────────                    ─────────
-instanceId                → instance_id
-to                        → phone_number
-message                   → message ✅
-is_bot_message            → (não existe no schema)
-```
+O motivo: **mesmo bug de parâmetro** que corrigimos no `auto-close-conversations`. No webhook, os blocos de financial exit e commercial exit usam `phone: senderPhone` — mas o `send-meta-whatsapp` espera `phone_number`. A chamada falha silenciosamente (400), a mensagem é salva no banco (aparece na UI) mas nunca chega ao WhatsApp.
 
-O `send-meta-whatsapp` valida `instance_id` e `phone_number` na linha 255 — ambos são `undefined`, retorna 400. O erro é engolido pelo `catch` silencioso na linha 661.
+**20 ocorrências** de `phone: senderPhone` (errado) no webhook, contra 15 ocorrências corretas de `phone_number: fromNumber`.
 
-**Resultado**: mensagens são salvas no banco (aparecem na UI) mas nunca chegam ao WhatsApp do cliente.
+Adicionalmente, o bloco comercial principal (linhas 1290-1305) e o fallback comercial (linhas 1401-1416) ainda usam `fetch` direto para a Graph API em vez de `send-meta-whatsapp` — escaparam da correção anterior.
 
-## Correção
+## Correções
 
-Alterar a função `sendWhatsAppMessages` em `auto-close-conversations/index.ts` para usar os nomes corretos dos parâmetros:
+### 1. Corrigir `phone` → `phone_number` em todas as chamadas `send-meta-whatsapp`
+- **Arquivo**: `supabase/functions/meta-whatsapp-webhook/index.ts`
+- 20 ocorrências nas linhas: 1086, 1147, 1194, 1360
+- Trocar `phone: senderPhone` por `phone_number: senderPhone`
 
-- `instanceId` → `instance_id`
-- `to` → `phone_number`
-- Adicionar `skip_db_save: true` (mensagem já foi salva antes)
-- Adicionar `conversation_id` para tracking
-- Melhorar log de erro para não ser silencioso
-
-### Arquivo editado
-- `supabase/functions/auto-close-conversations/index.ts` — função `sendWhatsAppMessages` (linhas 620-663)
+### 2. Substituir `fetch` direto por `send-meta-whatsapp` nos blocos comerciais restantes
+- Linhas 1290-1305 (commercial exit principal)
+- Linhas 1401-1416 (commercial fallback)
+- Usar `supabase.functions.invoke("send-meta-whatsapp", ...)` com `skip_db_save: true`
 
 ### Sem risco de regressão
-- Apenas corrige nomes de parâmetros para alinhar com o contrato existente do `send-meta-whatsapp`
-- Adiciona `skip_db_save: true` que é o padrão correto (mensagem já inserida antes)
+- Apenas corrige nomes de parâmetros para alinhar com o contrato do `send-meta-whatsapp`
+- Substitui `fetch` direto pelo serviço centralizado (padrão já validado no resto do pipeline)
 
