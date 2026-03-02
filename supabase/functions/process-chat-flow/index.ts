@@ -1981,6 +1981,42 @@ serve(async (req) => {
         );
       }
 
+      // Se chegou a transfer após auto-avanço de messages, executar transferência
+      if (nextNode.type === 'transfer') {
+        console.log(`[process-chat-flow] 🔄 Transfer node after message chain: ${nextNode.id}`);
+
+        // Entregar mensagens intermediárias acumuladas
+        if (extraMessages.length > 0) {
+          for (const msg of extraMessages) {
+            await deliverFlowMessage(msg);
+          }
+        }
+
+        // Entregar mensagem do transfer node
+        const transferMsg = replaceVariables(nextNode.data?.message || "Transferindo...", variablesContext);
+        await deliverFlowMessage(transferMsg);
+
+        // Completar flow state como transferred
+        await supabaseClient
+          .from('chat_flow_states')
+          .update({
+            collected_data: collectedData,
+            current_node_id: nextNode.id,
+            status: 'transferred',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', activeState.id);
+
+        return new Response(JSON.stringify({
+          useAI: false,
+          transfer: true,
+          departmentId: nextNode.data?.department_id || null,
+          transferType: nextNode.data?.transfer_type,
+          collectedData,
+          flowId: activeState.flow_id,
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       // Fix 2: Status semântico correto
       const nextStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition'
         ? 'waiting_input' : 'active';
