@@ -1066,6 +1066,42 @@ serve(async (req) => {
                                 message_type: "text",
                               });
                             }
+                            
+                            // 🔒 FIX: Atualizar conversa para waiting_human + departamento financeiro
+                            let financialDeptId: string | null = null;
+                            try {
+                              const { data: deptRow } = await supabase
+                                .from('departments')
+                                .select('id')
+                                .ilike('name', '%financ%')
+                                .eq('is_active', true)
+                                .limit(1)
+                                .maybeSingle();
+                              financialDeptId = deptRow?.id || null;
+                            } catch (deptErr) {
+                              console.error("[meta-whatsapp-webhook] ⚠️ Erro buscando dept financeiro:", deptErr);
+                            }
+
+                            const convUpdateFallback: any = { ai_mode: 'waiting_human', assigned_to: null };
+                            if (financialDeptId) convUpdateFallback.department = financialDeptId;
+                            
+                            await supabase
+                              .from('conversations')
+                              .update(convUpdateFallback)
+                              .eq('id', conversation.id);
+                            console.log("[meta-whatsapp-webhook] ✅ Conversa atualizada para waiting_human (financial fallback), dept:", financialDeptId || 'genérico');
+
+                            // Completar flow state se existir
+                            try {
+                              await supabase
+                                .from('chat_flow_states')
+                                .update({ status: 'transferred', completed_at: new Date().toISOString() })
+                                .eq('conversation_id', conversation.id)
+                                .in('status', ['in_progress', 'active', 'waiting_input']);
+                              console.log("[meta-whatsapp-webhook] ✅ Flow state marcado como transferred (financial fallback)");
+                            } catch (flowStateErr) {
+                              console.error("[meta-whatsapp-webhook] ⚠️ Erro atualizando flow state:", flowStateErr);
+                            }
                           } catch (sendErr) {
                             console.error("[meta-whatsapp-webhook] ⚠️ Error sending handoff msg:", sendErr);
                           }

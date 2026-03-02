@@ -1502,6 +1502,66 @@ serve(async (req) => {
       nextNode = findNextNode(flowDef, currentNode, path);
       console.log(`[process-chat-flow] ➡️ Transition: from=${currentNode.type}(${currentNode.id}) path=${path || 'default'} → next=${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
 
+      // 🔒 FIX: Financial/Commercial exit SEM próximo nó → forçar handoff
+      if (!nextNode && (financialIntentMatch || commercialIntentMatch)) {
+        const exitType = financialIntentMatch ? 'financial' : 'commercial';
+        console.log(`[process-chat-flow] 🔒 ${exitType} exit com nextNode=null → forçando handoff`);
+        
+        // Buscar departamento financeiro/comercial dinamicamente
+        let targetDeptId: string | null = null;
+        const deptSearchName = financialIntentMatch ? '%financ%' : '%comerci%';
+        try {
+          const { data: deptRow } = await supabaseClient
+            .from('departments')
+            .select('id')
+            .ilike('name', deptSearchName)
+            .eq('is_active', true)
+            .limit(1)
+            .maybeSingle();
+          targetDeptId = deptRow?.id || null;
+          console.log(`[process-chat-flow] 🏢 Departamento ${exitType} encontrado:`, targetDeptId || 'nenhum (handoff genérico)');
+        } catch (deptErr) {
+          console.error(`[process-chat-flow] ⚠️ Erro buscando departamento ${exitType}:`, deptErr);
+        }
+
+        const handoffMsg = financialIntentMatch
+          ? 'Entendi. Para assuntos financeiros, vou te encaminhar para um atendente humano agora.'
+          : 'Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso.';
+
+        // Completar flow state como transferred
+        await supabaseClient
+          .from('chat_flow_states')
+          .update({
+            collected_data: collectedData,
+            current_node_id: currentNode.id,
+            status: 'transferred',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', activeState.id);
+
+        // Atualizar conversa para waiting_human
+        const convUpdate: any = { ai_mode: 'waiting_human', assigned_to: null };
+        if (targetDeptId) convUpdate.department = targetDeptId;
+        await supabaseClient
+          .from('conversations')
+          .update(convUpdate)
+          .eq('id', conversationId);
+        
+        console.log(`[process-chat-flow] ✅ Handoff ${exitType} aplicado (sem próximo nó): dept=${targetDeptId || 'genérico'}`);
+
+        return new Response(
+          JSON.stringify({
+            useAI: false,
+            response: handoffMsg,
+            transfer: true,
+            departmentId: targetDeptId,
+            collectedData,
+            exitReason: `${exitType}_blocked_no_next_node`,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // 🆕 Auto-travessia de nós sem conteúdo (condition, input, start)
       let traversalSteps = 0;
       const MAX_TRAVERSAL = 20;

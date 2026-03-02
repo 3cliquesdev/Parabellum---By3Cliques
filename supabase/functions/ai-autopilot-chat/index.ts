@@ -1308,12 +1308,29 @@ serve(async (req) => {
       const hasFlowContext = !!(flow_context);
       
       if (!hasFlowContext) {
+        // Buscar departamento financeiro dinamicamente
+        let financialDeptId: string | null = null;
         try {
+          const { data: deptRow } = await supabaseClient
+            .from('departments')
+            .select('id')
+            .ilike('name', '%financ%')
+            .eq('is_active', true)
+            .limit(1)
+            .maybeSingle();
+          financialDeptId = deptRow?.id || null;
+        } catch (deptErr) {
+          console.error('[ai-autopilot-chat] ⚠️ Erro buscando departamento financeiro:', deptErr);
+        }
+
+        try {
+          const convUpdate: any = { ai_mode: 'waiting_human', assigned_to: null };
+          if (financialDeptId) convUpdate.department = financialDeptId;
           await supabaseClient
             .from('conversations')
-            .update({ ai_mode: 'waiting_human', assigned_to: null })
+            .update(convUpdate)
             .eq('id', conversationId);
-          console.log('[ai-autopilot-chat] 🔒 Conversa transferida para humano (trava financeira - entrada, sem fluxo)');
+          console.log('[ai-autopilot-chat] 🔒 Conversa transferida para humano (trava financeira - entrada, sem fluxo), dept:', financialDeptId || 'genérico');
         } catch (transferErr) {
           console.error('[ai-autopilot-chat] Erro ao transferir (trava financeira - entrada):', transferErr);
         }
