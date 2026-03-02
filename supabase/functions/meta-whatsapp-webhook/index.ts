@@ -307,15 +307,46 @@ serve(async (req) => {
               const normalizedPhone = fromNumber.startsWith("55") ? fromNumber : `55${fromNumber}`;
               const whatsappId = `${fromNumber}@s.whatsapp.net`;
 
-              // Buscar ou criar contato
+              // Buscar ou criar contato — DEDUP CRUZADA
+              // 1. Buscar por phone/whatsapp_id (match exato)
               let { data: contact } = await supabase
                 .from("contacts")
                 .select("id")
                 .or(`phone.eq.${normalizedPhone},whatsapp_id.eq.${whatsappId}`)
                 .single();
 
+              // 2. Se não encontrou, tentar variações do telefone (com/sem 55, formatado)
               if (!contact) {
-                // Criar novo contato
+                const phoneVariations = [
+                  normalizedPhone,
+                  fromNumber,
+                  normalizedPhone.replace(/^55/, ''),
+                ];
+                // Buscar por telefone parcial (últimos 8+ dígitos)
+                const lastDigits = normalizedPhone.slice(-8);
+                const { data: phoneMatch } = await supabase
+                  .from("contacts")
+                  .select("id, phone")
+                  .or(`phone.ilike.%${lastDigits},whatsapp_id.ilike.%${lastDigits}`)
+                  .limit(1)
+                  .maybeSingle();
+
+                if (phoneMatch) {
+                  contact = phoneMatch;
+                  // Atualizar o contato existente com dados normalizados
+                  await supabase
+                    .from("contacts")
+                    .update({ 
+                      whatsapp_id: whatsappId,
+                      phone: normalizedPhone,
+                    })
+                    .eq("id", phoneMatch.id);
+                  console.log("[meta-whatsapp-webhook] 🔗 Matched existing contact by phone variation:", phoneMatch.id);
+                }
+              }
+
+              if (!contact) {
+                // 3. Criar novo contato somente se não há match algum
                 const { data: newContact } = await supabase
                   .from("contacts")
                   .insert({
