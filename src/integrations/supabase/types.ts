@@ -1732,6 +1732,7 @@ export type Database = {
           city: string | null
           company: string | null
           consultant_id: string | null
+          consultant_manually_removed: boolean | null
           created_at: string
           customer_type: string | null
           do_not_disturb: boolean
@@ -1780,6 +1781,7 @@ export type Database = {
           city?: string | null
           company?: string | null
           consultant_id?: string | null
+          consultant_manually_removed?: boolean | null
           created_at?: string
           customer_type?: string | null
           do_not_disturb?: boolean
@@ -1828,6 +1830,7 @@ export type Database = {
           city?: string | null
           company?: string | null
           consultant_id?: string | null
+          consultant_manually_removed?: boolean | null
           created_at?: string
           customer_type?: string | null
           do_not_disturb?: boolean

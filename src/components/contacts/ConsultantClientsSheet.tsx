@@ -157,12 +157,30 @@ export function ConsultantClientsSheet({
     mutationFn: async (contactIds: string[]) => {
       const { data: { user } } = await supabase.auth.getUser();
 
+      // 1. Setar consultant_id = null e flag de remoção manual
       const { error: updateError } = await supabase
         .from("contacts")
-        .update({ consultant_id: null })
+        .update({ consultant_id: null, consultant_manually_removed: true } as any)
         .in("id", contactIds);
 
       if (updateError) throw updateError;
+
+      // 2. Resetar conversas abertas para autopilot (libera Master Flow)
+      const { data: openConvos } = await supabase
+        .from("conversations")
+        .select("id")
+        .in("contact_id", contactIds)
+        .in("status", ["open"])
+        .in("ai_mode", ["waiting_human", "copilot"]);
+
+      if (openConvos && openConvos.length > 0) {
+        const convIds = openConvos.map(c => c.id);
+        await supabase
+          .from("conversations")
+          .update({ ai_mode: "autopilot" as any, assigned_to: null })
+          .in("id", convIds);
+        console.log("[ConsultantClientsSheet] Reset ai_mode→autopilot para", convIds.length, "conversas");
+      }
 
       const interactions = contactIds.map(contactId => ({
         customer_id: contactId,

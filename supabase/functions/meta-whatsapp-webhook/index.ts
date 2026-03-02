@@ -832,11 +832,18 @@ serve(async (req) => {
                   // ═══════════════════════════════════════════════════════════════
                   const { data: contactConsultantData } = await supabase
                     .from('contacts')
-                    .select('consultant_id')
+                    .select('consultant_id, consultant_manually_removed')
                     .eq('id', contact.id)
                     .maybeSingle();
 
-                  let consultantId = contactConsultantData?.consultant_id || null;
+                  // 🛡️ Se consultor foi removido manualmente, não re-atribuir
+                  if (contactConsultantData?.consultant_manually_removed) {
+                    console.log("[meta-whatsapp-webhook] 🚫 consultant_manually_removed=true, pulando TRANSFER-PERSIST-LOCK para contato:", contact.id);
+                  }
+
+                  let consultantId = contactConsultantData?.consultant_manually_removed
+                    ? null
+                    : (contactConsultantData?.consultant_id || null);
 
                   // 🆕 Se não tem consultor pelo contato, buscar pelo email coletado no fluxo
                   if (!consultantId) {
