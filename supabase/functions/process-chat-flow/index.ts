@@ -123,11 +123,24 @@ function findNextNode(flowDef: any, currentNode: any, path?: string): any {
   
   // Para nós de opções, usar o path como ID da opção
   if (currentNode.type === 'ask_options' && path) {
-    const edge = edges.find((e: any) => 
+    // Buscar TODAS as edges do mesmo sourceHandle (pode haver duplicatas)
+    const matchingEdges = edges.filter((e: any) => 
       e.source === currentNode.id && e.sourceHandle === path
     );
-    if (edge) {
-      return flowDef.nodes.find((n: any) => n.id === edge.target);
+    if (matchingEdges.length === 1) {
+      return flowDef.nodes.find((n: any) => n.id === matchingEdges[0].target);
+    }
+    if (matchingEdges.length > 1) {
+      // Priorizar nós de conteúdo sobre nós lógicos quando há edges duplicadas
+      const contentTypes = ['message', 'transfer', 'ai_response', 'ask_options', 'ask_input', 'fetch_order', 'validate_customer'];
+      const targetNodes = matchingEdges.map((e: any) => flowDef.nodes.find((n: any) => n.id === e.target)).filter(Boolean);
+      const contentNode = targetNodes.find((n: any) => contentTypes.includes(n.type));
+      if (contentNode) {
+        console.log(`[process-chat-flow] ⚠️ findNextNode: ${matchingEdges.length} duplicate edges from ${currentNode.id}/${path}, prioritizing content node ${contentNode.type}(${contentNode.id})`);
+        return contentNode;
+      }
+      // Se nenhum é conteúdo, retornar o primeiro (condition, etc.)
+      return targetNodes[0];
     }
     // Fallback: buscar edge sem handle específico
   }
