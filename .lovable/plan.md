@@ -1,37 +1,47 @@
 
 
-# Fix: Confirmação de encerramento ignorada quando conversa está em `waiting_human`
+# Fix: Transferências sem departamento — 18 conversas presas
 
 ## Problema
 
-A IA (dentro do nó `ai_response` do fluxo) perguntou "Posso encerrar seu atendimento?" e setou `awaiting_close_confirmation: true` no metadata. O cliente respondeu "Sim".
+Há **18 conversas abertas** em `waiting_human` com `department: null` e `assigned_to: null`. Incluindo a #1EBE4793.
 
-Porém, a conversa está com `ai_mode: waiting_human`, e nesse modo:
-1. `process-chat-flow` retorna `skipAutoResponse: true` (linha 434)
-2. O webhook envia "💬 Sua conversa já está na fila de atendimento" 
-3. `ai-autopilot-chat` **nunca é chamado**
-4. O handler de `awaiting_close_confirmation` (linha 1755) nunca processa o "Sim"
+**Causa raiz**: Dois caminhos de transferência no webhook não garantem departamento:
+
+1. **Linha 854**: `if (flowData.departmentId)` — quando o `process-chat-flow` retorna `transfer: true` mas `departmentId` é null/undefined, nenhum departamento é setado
+2. **Sem router**: Após o update da conversa, o webhook não chama `route-conversation` para distribuir para um agente — só faz a busca de consultor pelo TRANSFER-PERSIST-LOCK
 
 ## Solução
 
-### Adicionar check de `awaiting_close_confirmation` no webhook
+### 1. Fallback de departamento no webhook (`meta-whatsapp-webhook/index.ts`)
 
-No `meta-whatsapp-webhook/index.ts`, **antes** de processar o `skipAutoResponse`, verificar se a conversa tem `awaiting_close_confirmation: true` no `customer_metadata`. Se sim, chamar `ai-autopilot-chat` diretamente para processar a confirmação — ignorando o skip.
+Na linha 854, quando `flowData.departmentId` é falsy, aplicar fallback para departamento "Suporte" (`36ce66cd-7414-4fc8-bd4a-268fecc3f01a`):
 
-```text
-Fluxo atual:
-  message → process-chat-flow → skipAutoResponse → "fila de atendimento"
+```typescript
+// Antes:
+if (flowData.departmentId) {
+  updateData.department = flowData.departmentId;
+}
 
-Fluxo corrigido:
-  message → check awaiting_close_confirmation → se sim → ai-autopilot-chat → processa "Sim"/"Não"
-          → se não → process-chat-flow → skipAutoResponse → "fila de atendimento"
+// Depois:
+const DEPT_SUPORTE_FALLBACK = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+updateData.department = flowData.departmentId || DEPT_SUPORTE_FALLBACK;
 ```
 
-### Arquivo editado
-- `supabase/functions/meta-whatsapp-webhook/index.ts` — inserir guard de `awaiting_close_confirmation` no bloco de `skipAutoResponse` (antes da linha 698), que chama `ai-autopilot-chat` para processar a resposta de confirmação
+### 2. Chamar `route-conversation` após transfer no webhook
+
+Após o update da conversa e TRANSFER-PERSIST-LOCK, chamar `route-conversation` para distribuir automaticamente para um agente online (mesma lógica que `ai-autopilot-chat` já faz).
+
+### 3. Corrigir as 18 conversas presas (migration SQL)
+
+Update em batch para setar `department = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a'` (Suporte) em todas as conversas com `status='open'`, `ai_mode='waiting_human'`, `department IS NULL`.
+
+### Arquivos editados
+- `supabase/functions/meta-whatsapp-webhook/index.ts` — fallback de dept + chamar route-conversation
+- Migration SQL — corrigir 18 conversas presas
 
 ### Sem risco de regressão
-- Só ativa quando `awaiting_close_confirmation === true` no metadata
-- O handler existente em `ai-autopilot-chat` (linha 1755) já trata "sim"/"não" com toda a governança (kill switch, shadow mode, tags obrigatórias)
-- Conversas normais em `waiting_human` sem essa flag continuam com o comportamento atual
+- Fallback só ativa quando departmentId já era null (nada muda para transfers com dept definido)
+- Router já existe e é chamado pelo autopilot — apenas replicando no webhook
+- Conversas já atribuídas a agentes/departamentos não são afetadas
 
