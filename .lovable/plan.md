@@ -1,50 +1,67 @@
 
 
-# Corrigir: IA dentro de fluxo deve avançar para próximo nó em vez de fazer handoff direto
+# Resolver mensagens "picotadas" — IA deve esperar antes de responder
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
 ## Problema
 
-Quando a IA está operando dentro de um nó `ai_response` de um Chat Flow e não consegue resolver a dúvida do cliente (strict RAG handoff ou confidence handoff), ela executa o handoff diretamente: finaliza o flow state, transfere para humano e envia "vou te conectar com um especialista".
-
-Isso **quebra a soberania do fluxo**. O fluxo tem um próximo nó definido (ex: "Múltipla Escolha: Você já é nosso cliente?"), mas a IA ignora completamente e faz transferência por conta própria.
-
-## Causa raiz
-
-No `ai-autopilot-chat/index.ts`, dois blocos de handoff (strict RAG ~linha 4097 e confidence ~linha 4757) **não verificam se existe `flow_context`**. Quando há `flow_context`, o handoff deveria ser delegado de volta ao `process-chat-flow` para que o fluxo avance normalmente.
-
-## Correção
-
-**Arquivo**: `supabase/functions/ai-autopilot-chat/index.ts`
-
-### 1. Strict RAG handoff (linhas ~4097-4198)
-Adicionar guard: se `flow_context` existe, **não executar handoff direto**. Em vez disso, retornar `status: 'flow_advance_needed'` para que o `process-chat-flow` avance para o próximo nó do fluxo.
-
-### 2. Confidence handoff (linhas ~4757-4870)
-Mesmo tratamento: se `flow_context` existe, retornar sinal de avanço em vez de executar handoff.
-
-### Lógica do retorno quando `flow_context` está presente
-
-```text
-ai-autopilot-chat detecta handoff necessário
-  └─ flow_context existe?
-       ├─ SIM → return { status: 'flow_advance_needed', reason: '...' }
-       │         (NÃO muda ai_mode, NÃO finaliza flow state, NÃO envia mensagem)
-       │         O process-chat-flow já trata isso: quando ai_response retorna
-       │         sem resposta válida, ele avança para o próximo nó do fluxo
-       └─ NÃO → handoff direto (comportamento atual mantido)
+Clientes no WhatsApp frequentemente enviam mensagens fragmentadas:
+```
+"Oi"
+"queria saber"  
+"sobre o saque"
 ```
 
-### O que muda no `process-chat-flow`?
-Nada precisa mudar. O `process-chat-flow` já tem a lógica de avanço quando o nó AI atinge condição de saída (max_interactions, exit_keyword). O `ai-autopilot-chat` apenas precisa **parar de agir por conta própria** quando está dentro de um fluxo.
+Hoje, cada mensagem dispara o pipeline de IA independentemente. A IA responde ao "Oi" antes do cliente terminar, gerando respostas fora de contexto.
 
-Concretamente: quando o `ai-autopilot-chat` retorna `flow_advance_needed`, o webhook/listener que o chamou deve re-invocar `process-chat-flow` com uma flag indicando que a IA quer sair do nó — equivalente a `max_interactions` reached. Vou verificar como o webhook trata o retorno do autopilot para garantir essa integração.
+## Solução: Message Batching com Timer
 
-**Arquivo adicional**: `supabase/functions/meta-whatsapp-webhook/index.ts` — verificar tratamento do retorno do autopilot quando `flow_advance_needed`
+Implementar um sistema de **acumulação com debounce** — quando uma mensagem chega, o sistema aguarda X segundos por mais mensagens antes de processar. Se outra mensagem chega dentro da janela, o timer reinicia.
+
+### Arquitetura
+
+```text
+Mensagem 1 chega → salva no DB → agenda timer (ex: 8s)
+Mensagem 2 chega (3s depois) → salva no DB → cancela timer anterior → agenda novo timer (8s)
+Mensagem 3 chega (2s depois) → salva no DB → cancela timer anterior → agenda novo timer (8s)
+Timer expira → busca todas mensagens pendentes → concatena → processa como uma única mensagem
+```
+
+### Implementação
+
+**1. Nova tabela `message_buffer`**
+- `conversation_id` (FK)
+- `message_content` (text)
+- `created_at` (timestamp)
+- `processed` (boolean, default false)
+
+**2. Nova edge function `process-buffered-messages`**
+- Recebe `conversationId`
+- Busca todas mensagens não processadas dessa conversa (ordenadas por created_at)
+- Concatena com `\n`
+- Marca como processadas
+- Chama o pipeline normal (process-chat-flow → ai-autopilot-chat) com a mensagem concatenada
+
+**3. Modificar `meta-whatsapp-webhook/index.ts`**
+- Quando ai_mode é `autopilot` (IA vai responder):
+  - Salvar mensagem no buffer
+  - Chamar uma **scheduled function** ou usar `setTimeout` via edge function que verifica após X segundos se há mensagens mais recentes
+  - Se não há mensagens mais novas → processar o buffer
+  - Se há → não fazer nada (o timer mais recente processará)
+
+**4. Configuração**
+- Adicionar `ai_message_batch_delay_seconds` em `system_configurations` (padrão: 8 segundos)
+- Configurável pelo admin na página de configurações de IA
+
+### Edge cases tratados
+- **Kill Switch ativo**: mensagens vão direto para fila humana, sem buffering
+- **Fluxo ativo com `ask_options`**: não bufferiza (resposta precisa ser imediata para validação de opção)
+- **Modo copilot/waiting_human**: não bufferiza (humano responde)
+- **Apenas autopilot e ai_response em fluxo**: bufferiza
 
 ### Sem risco de regressão
-- Autopilot global (sem flow_context) continua com handoff direto — comportamento preservado
-- Apenas fluxos com próximo nó definido são afetados
-- A soberania do fluxo é restaurada
+- Buffering só ativa quando IA vai responder (autopilot/ai_response)
+- Todos os outros modos mantêm comportamento instantâneo
+- Timer configurável permite ajustar ou desativar (0 = desativado)
 
