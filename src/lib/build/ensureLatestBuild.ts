@@ -363,3 +363,40 @@ export async function checkForUpdate(): Promise<boolean> {
     return false;
   }
 }
+
+// Flag para evitar múltiplos toasts simultâneos
+let _updateToastShown = false;
+
+/**
+ * Mostra toast persistente pedindo atualização manual.
+ * Importa `toast` de sonner dinamicamente para evitar dependência circular.
+ */
+export async function showUpdateToast(): Promise<void> {
+  if (_updateToastShown) return;
+  _updateToastShown = true;
+
+  const { toast } = await import('sonner');
+
+  toast.warning('Nova versão disponível!', {
+    description: 'Clique em "Atualizar" para carregar a versão mais recente.',
+    duration: Infinity,          // persistente até o usuário agir
+    id: 'app-update-available',  // evita duplicatas
+    action: {
+      label: 'Atualizar',
+      onClick: () => {
+        setTimeout(() => forceUpdate(), 200);
+      },
+    },
+  });
+}
+
+/**
+ * Verifica update e, se houver, mostra toast persistente.
+ * Seguro para chamar repetidamente (debounce interno via _updateToastShown).
+ */
+export async function checkAndNotify(): Promise<void> {
+  const hasUpdate = await checkForUpdate();
+  if (hasUpdate) {
+    await showUpdateToast();
+  }
+}

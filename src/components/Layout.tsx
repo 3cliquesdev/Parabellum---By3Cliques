@@ -7,6 +7,9 @@ import { useRealtimeHealth } from "@/hooks/useRealtimeHealth";
 import { GlobalTourButton } from "@/components/tour/GlobalTourButton";
 import { NotificationBell } from "@/components/NotificationBell";
 import { WifiOff, RefreshCw } from "lucide-react";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { checkAndNotify } from "@/lib/build/ensureLatestBuild";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   // Realtime global para toda a aplicação
@@ -17,6 +20,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Monitoramento de saúde da conexão Realtime
   const { isConnected, forceReconnect } = useRealtimeHealth();
 
+  // Verificação de nova versão na navegação entre páginas
+  const location = useLocation();
+  useEffect(() => {
+    checkAndNotify();
+  }, [location.pathname]);
+
+  // Verificação periódica silenciosa (a cada 5 min)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkAndNotify();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full overflow-hidden">
