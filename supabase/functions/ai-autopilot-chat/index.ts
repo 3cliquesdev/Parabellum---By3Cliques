@@ -4113,6 +4113,27 @@ Responda APENAS: skip ou search`
           body: { conversationId }
         });
         
+        // Finalizar flow state ativo (se existir)
+        try {
+          const { data: activeFS } = await supabaseClient
+            .from('chat_flow_states')
+            .select('id')
+            .eq('conversation_id', conversationId)
+            .in('status', ['active', 'waiting_input', 'in_progress'])
+            .order('started_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (activeFS) {
+            await supabaseClient
+              .from('chat_flow_states')
+              .update({ status: 'transferred', completed_at: new Date().toISOString() })
+              .eq('id', activeFS.id);
+            console.log('[ai-autopilot-chat] ✅ Flow state finalizado (strict RAG handoff):', activeFS.id);
+          }
+        } catch (fsErr) {
+          console.warn('[ai-autopilot-chat] ⚠️ Erro ao finalizar flow state (strict RAG):', fsErr);
+        }
+        
         // Mensagem padronizada de handoff para modo estrito
         const strictHandoffMessage = `Olá ${contactName}! Para te ajudar da melhor forma com essa questão específica, vou te conectar com um de nossos especialistas.\n\nUm momento, por favor.`;
         
@@ -4765,6 +4786,27 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           department_id: handoffDepartment 
         }
       });
+      
+      // Finalizar flow state ativo (se existir)
+      try {
+        const { data: activeFS2 } = await supabaseClient
+          .from('chat_flow_states')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .in('status', ['active', 'waiting_input', 'in_progress'])
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (activeFS2) {
+          await supabaseClient
+            .from('chat_flow_states')
+            .update({ status: 'transferred', completed_at: new Date().toISOString() })
+            .eq('id', activeFS2.id);
+          console.log('[ai-autopilot-chat] ✅ Flow state finalizado (confidence handoff):', activeFS2.id);
+        }
+      } catch (fsErr) {
+        console.warn('[ai-autopilot-chat] ⚠️ Erro ao finalizar flow state (confidence):', fsErr);
+      }
       
       // Mensagem para cliente identificado
       const handoffMessage = `Olá ${contactName}! Para te ajudar melhor com essa questão, vou te conectar com um de nossos especialistas. Um momento, por favor.`;
