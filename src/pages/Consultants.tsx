@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConsultants, useActiveConsultants } from "@/hooks/useConsultants";
 import { useConsultantPerformance } from "@/hooks/useConsultantPerformance";
-import { Users, Search, Briefcase, Ban, Mail, UserCheck, AlertCircle, UserMinus, Loader2, UserPlus } from "lucide-react";
+import { Users, Search, Briefcase, Ban, Mail, UserCheck, AlertCircle, UserMinus, Loader2, UserPlus, Copy } from "lucide-react";
+import { toast as sonnerToast } from "sonner";
 import { ConsultantClientsSheet } from "@/components/contacts/ConsultantClientsSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -358,6 +359,23 @@ export default function Consultants() {
                     <p className="text-sm text-muted-foreground truncate">
                       {consultant.job_title || "Consultor de CS"}
                     </p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-xs text-muted-foreground font-mono">
+                        ID: {consultant.id.substring(0, 8)}...
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(consultant.id);
+                          sonnerToast.success("ID copiado!", { description: consultant.id });
+                        }}
+                        className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                        title="Copiar ID completo"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
