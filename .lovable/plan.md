@@ -1,88 +1,46 @@
 
 
-# Auditoria do Fluxo — Diagnóstico Completo
+# Plano: Remover lógica de consultor do webhook
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
----
+## O que muda
 
-## Erro Crítico Encontrado: Conversas Reabertas NÃO Resetam `ai_mode`
+Remover toda a lógica de consultor (`consultant_id`, `hasConsultant`, pré-atribuição) do `meta-whatsapp-webhook`. Toda conversa nova vai iniciar em `autopilot` com `assigned_to: null`. O roteamento para consultor será feito exclusivamente via nós de transferência no Chat Flow Editor.
 
-### O Problema
+## Arquivo: `supabase/functions/meta-whatsapp-webhook/index.ts`
 
-O ROUTING-LOCK v2.0 (implementado na mensagem anterior) corrigiu a criação de **novas** conversas — agora sempre iniciam em `autopilot`. Porém, **conversas existentes que são reabertas** (cliente retornante com conversa anterior) **mantêm o `ai_mode` antigo**.
+### Remoção (linhas 560-596)
 
-**Fluxo atual (bugado):**
+1. **Remover** a query de `contacts` que busca `consultant_id` e `consultant_manually_removed` (linhas 568-574)
+2. **Remover** a variável `hasConsultant` (linha 574)
+3. **Simplificar** o insert da conversa: `assigned_to` sempre `null` (linha 585)
+4. **Remover** o log condicional de consultor (linhas 594-596)
 
-```text
-Cliente retornante manda mensagem
-  → Conversa EXISTENTE encontrada (status: closed, ai_mode: copilot)
-  → Webhook atualiza: status=open, whatsapp_provider=meta
-  → NÃO reseta ai_mode (continua "copilot")
-  → process-chat-flow vê ai_mode=copilot → retorna skipAutoResponse
-  → Webhook não chama IA nem fluxo → conversa fica muda
-```
-
-**Onde está o bug:** `meta-whatsapp-webhook/index.ts` linhas 598-613. Quando reabre uma conversa existente, atualiza apenas `whatsapp_provider`, `last_message_at` e `status`, mas **não toca em `ai_mode`**.
-
-### A Correção
-
-Na seção de reopen de conversa existente (linhas 598-613), adicionar lógica para:
-
-1. **Se conversa estava `closed`**: resetar `ai_mode` para `autopilot`
-2. **Manter `assigned_to`** se consultor vinculado (mesma lógica do ROUTING-LOCK v2.0)
-3. **NÃO resetar** se conversa está `open` com agente ativo (conversa em andamento)
-
+**Resultado:**
 ```typescript
-// ANTES (bugado):
-await supabase.from("conversations").update({ 
-  whatsapp_provider: "meta",
-  whatsapp_meta_instance_id: instance.id,
-  whatsapp_instance_id: null,
-  last_message_at: new Date().toISOString(),
-  status: "open"
-}).eq("id", conversation.id);
+const { data: newConv } = await supabase
+  .from("conversations")
+  .insert({
+    contact_id: contact.id,
+    channel: "whatsapp",
+    status: "open",
+    ai_mode: "autopilot",
+    assigned_to: null,
+    whatsapp_provider: "meta",
+    whatsapp_meta_instance_id: instance.id,
+  })
+  .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider")
+  .single();
 
-// DEPOIS (corrigido):
-const reopenUpdate: Record<string, any> = {
-  whatsapp_provider: "meta",
-  whatsapp_meta_instance_id: instance.id,
-  whatsapp_instance_id: null,
-  last_message_at: new Date().toISOString(),
-  status: "open",
-};
-
-// Se conversa estava fechada, resetar ai_mode para autopilot
-// para que Master Flow/IA possa assumir novamente
-if (conversation.status === "closed") {
-  reopenUpdate.ai_mode = "autopilot";
-  console.log("[meta-whatsapp-webhook] 🔄 Conversa reaberta: ai_mode resetado para autopilot");
-}
-
-await supabase.from("conversations")
-  .update(reopenUpdate)
-  .eq("id", conversation.id);
+conversation = newConv;
+console.log("[meta-whatsapp-webhook] 💬 New conversation created:", conversation?.id);
 ```
 
-### Impacto da Correção
-- **Zero regressão**: conversas abertas em andamento não são afetadas
-- **Resolve o bug principal**: conversas reabertas passam pelo Master Flow normalmente
-- **Compatível com ROUTING-LOCK v2.0**: consultor pré-atribuído continua intacto
-- **Rollback**: reverter 1 bloco de código no webhook
+## Impacto
 
----
-
-## Outros Achados (Não-Críticos)
-
-| Item | Severidade | Status |
-|---|---|---|
-| `analyze-ticket` retornando 429 (rate limited) | Média | Limitação do plano Lovable — fallback para "neutral" está funcionando corretamente |
-| `email_sends` faltando coluna `delivered_at` | Baixa | Afeta apenas tracking de email, não o fluxo de conversas |
-| `useMyPendingCounts.tsx` usando `id` ao invés de `conversation_id` | Média | Causa erro 400 nos contadores do inbox (já diagnosticado anteriormente) |
-
----
-
-## Resumo
-
-O fluxo do motor está **íntegro** — `process-chat-flow`, Master Flow, soberania, anti-duplicação, exit keywords, tudo funciona. O problema é que conversas reabertas chegam ao motor com `ai_mode` errado (`copilot`/`waiting_human` da sessão anterior), e o motor corretamente bloqueia a automação nesses modos. A correção é resetar o `ai_mode` para `autopilot` no momento da reabertura.
+- Zero regressão: conversas existentes e reabertura (`closed → open`) não são afetadas
+- O `ai_mode` de reabertura continua resetando para `autopilot` (fix anterior preservado)
+- Consultor routing passa a ser 100% responsabilidade do Chat Flow
+- Rollback: restaurar o bloco de query + `hasConsultant`
 
