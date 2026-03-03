@@ -15,7 +15,7 @@ async function bufferAndSchedule(
   supabase: any,
   conversationId: string,
   messageContent: string,
-  delaySeconds: number,
+  _delaySeconds: number,
   metadata: {
     contactId: string;
     instanceId: string;
@@ -24,12 +24,17 @@ async function bufferAndSchedule(
     flowData?: Record<string, unknown>;
   }
 ): Promise<void> {
-  // 1. Save to buffer
+  // Save to buffer WITH metadata — cron will pick it up
   const { data: bufferEntry, error: bufferError } = await supabase
     .from("message_buffer")
     .insert({
       conversation_id: conversationId,
       message_content: messageContent,
+      contact_id: metadata.contactId,
+      instance_id: metadata.instanceId,
+      from_number: metadata.fromNumber,
+      flow_context: metadata.flowContext || null,
+      flow_data: metadata.flowData || null,
     })
     .select("id, created_at")
     .single();
@@ -39,47 +44,8 @@ async function bufferAndSchedule(
     throw bufferError;
   }
 
-  console.log(`[meta-whatsapp-webhook] 📦 Message buffered: ${bufferEntry.id} (delay: ${delaySeconds}s)`);
-
-  // 2. Schedule delayed processing via setTimeout + fetch
-  // The process-buffered-messages function will check if newer messages exist
-  const triggerTimestamp = bufferEntry.created_at;
-  
-  // Fire-and-forget: wait delaySeconds then call process-buffered-messages
-  setTimeout(async () => {
-    try {
-      console.log(`[meta-whatsapp-webhook] ⏰ Timer expired for conversation ${conversationId}, triggering buffer processing`);
-      
-      const response = await fetch(
-        `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-buffered-messages`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          },
-          body: JSON.stringify({
-            conversationId,
-            triggerTimestamp,
-            contactId: metadata.contactId,
-            instanceId: metadata.instanceId,
-            fromNumber: metadata.fromNumber,
-            flowContext: metadata.flowContext || null,
-            flowData: metadata.flowData || null,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        console.error("[meta-whatsapp-webhook] ❌ Buffer processing failed:", await response.text());
-      } else {
-        const result = await response.json();
-        console.log("[meta-whatsapp-webhook] ✅ Buffer processing result:", JSON.stringify(result));
-      }
-    } catch (err) {
-      console.error("[meta-whatsapp-webhook] ❌ Buffer processing exception:", err);
-    }
-  }, delaySeconds * 1000);
+  console.log(`[meta-whatsapp-webhook] 📦 Message buffered: ${bufferEntry.id} — cron will process after delay`);
+  // NO setTimeout — the cron job (process-buffered-messages) handles processing
 }
 
 const corsHeaders = {
