@@ -1,38 +1,54 @@
 
 
-# Auditoria: Limpar consultant_id de não-consultores
+# Por que o UPDATE de consultant_id não funciona
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Situação atual
+## Causa raiz: Trigger `sync_assigned_to_consultant_id`
 
-| Usuário | Role | Contatos vinculados | Ação |
-|---------|------|----:|------|
-| Fernanda | sales_rep | 1.424 | **LIMPAR** |
-| Loriani Vitoria | sales_rep | 1.178 | **LIMPAR** |
-| Paulo Lopes | consultant | 906 | Manter |
-| Danielle Martins | consultant | 905 | Manter |
-| Luiz Henrique | consultant | 902 | Manter |
-| Thaynara Cruz | sales_rep | 789 | **LIMPAR** |
-| Bruno | sales_rep | 743 | **LIMPAR** |
-| Ronildo | consultant | 356 | Manter |
-| Camila de Farias | sales_rep | 340 | **LIMPAR** |
-| Ronildo Oliveira | admin | 2 | **LIMPAR** |
+Existe um trigger **BEFORE INSERT OR UPDATE** na tabela `contacts` com esta lógica:
 
-**Total a limpar: 4.476 contatos** (6 usuários não-consultores)
+```sql
+IF NEW.assigned_to IS NOT NULL AND NEW.consultant_id IS NULL THEN
+  NEW.consultant_id := NEW.assigned_to;
+END IF;
+```
 
-## Plano
+**O que acontece:**
+1. Fazemos `UPDATE contacts SET consultant_id = NULL WHERE ...`
+2. O trigger BEFORE dispara **antes** do UPDATE ser salvo
+3. Como `assigned_to` ainda tem valor (ex: ID da Camila), o trigger imediatamente seta `consultant_id = assigned_to`
+4. O valor volta ao que era antes — parece que o UPDATE "não funcionou"
 
-Executar um UPDATE via insert tool para setar `consultant_id = NULL` em todos os contatos cujo `consultant_id` aponta para usuários que **não** têm role `consultant`:
+É por isso que todas as tentativas (migração, edge function, RPC) reportaram sucesso mas o valor nunca mudou.
 
-- Fernanda (`c190047a...`) — 1.424 contatos
-- Loriani (`522d898d...`) — 1.178 contatos
-- Thaynara (`6e8c3566...`) — 789 contatos
-- Bruno (`dfc475f0...`) — 743 contatos
-- Camila (`de03d434...`) — 340 contatos
-- Ronildo Oliveira (`697a5d4e...`) — 2 contatos
+## Plano de correção
 
-Após a limpeza, esses contatos passarão pelo fluxo normal de IA/Chat Flow na próxima interação, em vez de serem roteados diretamente para pessoas que não são consultoras.
+### 1. Corrigir o trigger para validar role
+Alterar `sync_assigned_to_consultant_id` para só sincronizar se `assigned_to` apontar para um usuário com role `consultant`:
 
-As validações no backend (`update-user` e `bulk-import-contacts`) já foram implementadas na mensagem anterior para impedir que isso ocorra novamente.
+```sql
+CREATE OR REPLACE FUNCTION sync_assigned_to_consultant_id()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.assigned_to IS NOT NULL AND NEW.consultant_id IS NULL THEN
+    -- Só sincroniza se o assigned_to for um consultant real
+    IF EXISTS (
+      SELECT 1 FROM user_roles 
+      WHERE user_id = NEW.assigned_to AND role = 'consultant'
+    ) THEN
+      NEW.consultant_id := NEW.assigned_to;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 2. Executar a limpeza dos dados
+Após corrigir o trigger, rodar o UPDATE para limpar os 4.499 contatos com `consultant_id` inválido. Desta vez o trigger não vai reverter porque a validação de role vai impedir a re-sincronização.
+
+### Sem risco de regressão
+- Contatos com consultores reais (role = consultant) continuam sincronizando normalmente
+- Apenas impede que não-consultores sejam auto-atribuídos via trigger
 
