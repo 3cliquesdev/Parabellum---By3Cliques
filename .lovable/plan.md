@@ -1,31 +1,31 @@
 
 
-# Remediação em massa + Redeploy ai-autopilot-chat
+# Adicionar suporte a ID do consultor na importação
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Estado atual
+## O que muda
 
-Verificação no banco mostra que restam **3 conversas** (não 97 — muitas já foram corrigidas ou expiraram) com fluxo ativo e `ai_mode` corrompido (`copilot` ou `disabled`).
+Atualmente a importação só aceita o **nome** do consultor (coluna `consultor`) e resolve para UUID internamente. O upgrade adiciona uma coluna **`id_consultor`** que aceita o UUID diretamente — se fornecido, tem prioridade sobre o nome.
 
-## Ações a executar
+## Alterações
 
-### 1. Script de correção em massa
-Executar UPDATE via insert tool para restaurar `ai_mode = 'autopilot'` nas 3 conversas travadas:
+### 1. Frontend — `ImportClients.tsx`
+- Adicionar `consultant_id` ao mapeamento automático com aliases: `id_consultor`, `consultant_id`, `id consultor`
+- Atualizar template de download para incluir coluna `id_consultor`
 
-```sql
-UPDATE conversations 
-SET ai_mode = 'autopilot'
-WHERE id IN (
-  SELECT c.id FROM conversations c
-  JOIN chat_flow_states cfs ON cfs.conversation_id = c.id
-  WHERE cfs.status IN ('waiting_input', 'active', 'in_progress')
-  AND c.ai_mode IN ('copilot', 'disabled')
-)
+### 2. Hook — `useImportContacts.tsx`
+- Adicionar `consultant_id` à interface `ContactRow`
+
+### 3. Edge Function — `bulk-import-contacts/index.ts`
+- Adicionar `consultant_id` à interface `ContactRow`
+- Em `prepareContactData`: se `consultant_id` vier preenchido (UUID válido + tem role consultant), usar diretamente sem resolver por nome
+- Fallback: se `consultant_id` inválido, tentar resolver por `assigned_to` (nome) como hoje
+
+### Fluxo de prioridade
+```text
+consultant_id (UUID direto) → assigned_to (nome) → null
 ```
 
-### 2. Redeploy `ai-autopilot-chat`
-Deploy da edge function com o fix preventivo (não setar `ai_mode=copilot` quando `flow_context` existe).
-
-Nenhuma alteração de código necessária — o fix já está no código. Apenas deploy.
+Sem impacto em funcionalidades existentes — é um upgrade puro com fallback mantido.
 
