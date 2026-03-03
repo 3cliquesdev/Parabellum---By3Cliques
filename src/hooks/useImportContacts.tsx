@@ -28,6 +28,7 @@ interface ContactRow {
   recent_orders_count?: string | number;
   account_balance?: string | number;
   assigned_to?: string;
+  consultant_id?: string;
 }
 
 interface ImportResult {

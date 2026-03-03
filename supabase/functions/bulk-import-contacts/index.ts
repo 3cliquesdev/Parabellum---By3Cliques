@@ -30,13 +30,27 @@ interface ContactRow {
   recent_orders_count?: string | number;
   account_balance?: string | number;
   assigned_to?: string;
+  consultant_id?: string;
 }
 
-function prepareContactData(contact: ContactRow, consultantMap: Map<string, string>) {
-  // Resolver assigned_to (nome) para consultant_id (UUID)
+function prepareContactData(contact: ContactRow, consultantMap: Map<string, string>, validConsultantIds: Set<string>) {
+  // Resolver consultant_id: prioridade UUID direto > nome > null
   // IMPORTANTE: só aceita IDs de usuários com role 'consultant'
   let consultantId: string | null = null;
-  if (contact.assigned_to?.trim()) {
+
+  // 1) Tentar consultant_id (UUID direto)
+  if (contact.consultant_id?.trim()) {
+    const directId = contact.consultant_id.trim();
+    if (validConsultantIds.has(directId)) {
+      consultantId = directId;
+      console.log(`[Bulk Import] Using direct consultant_id: ${consultantId}`);
+    } else {
+      console.warn(`[Bulk Import] consultant_id "${directId}" is not a valid/active consultant, falling back to name`);
+    }
+  }
+
+  // 2) Fallback: resolver por nome
+  if (!consultantId && contact.assigned_to?.trim()) {
     const nameKey = contact.assigned_to.toLowerCase().trim();
     consultantId = consultantMap.get(nameKey) || null;
     if (!consultantId) {
@@ -114,6 +128,7 @@ Deno.serve(async (req) => {
     
     // Buscar profiles dos consultores ativos
     let consultantMap = new Map<string, string>(); // nome_lower → id
+    const validConsultantIds = new Set<string>(consultantIds);
     if (consultantIds.length > 0) {
       const { data: consultantProfiles } = await supabase
         .from('profiles')
@@ -122,13 +137,16 @@ Deno.serve(async (req) => {
         .eq('is_blocked', false);
 
       if (consultantProfiles) {
+        // Atualizar set para só incluir consultores ativos (não bloqueados)
+        validConsultantIds.clear();
         for (const c of consultantProfiles) {
+          validConsultantIds.add(c.id);
           if (c.full_name) {
             consultantMap.set(c.full_name.toLowerCase().trim(), c.id);
           }
         }
       }
-      console.log(`[Bulk Import] Loaded ${consultantMap.size} active consultants for name resolution`);
+      console.log(`[Bulk Import] Loaded ${consultantMap.size} active consultants for name resolution, ${validConsultantIds.size} valid IDs`);
     }
 
     const results = {
@@ -150,7 +168,7 @@ Deno.serve(async (req) => {
         });
         continue;
       }
-      validContacts.push({ index: i, data: prepareContactData(contact, consultantMap) });
+      validContacts.push({ index: i, data: prepareContactData(contact, consultantMap, validConsultantIds) });
     }
 
     // Processar em lotes de 50 para evitar timeout
