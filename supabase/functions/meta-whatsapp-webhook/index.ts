@@ -600,15 +600,29 @@ serve(async (req) => {
                 if (conversation.whatsapp_provider !== "meta") {
                   console.log("[meta-whatsapp-webhook] 🔄 Migrando conversa de", conversation.whatsapp_provider, "para Meta");
                 }
+
+                const reopenUpdate: Record<string, any> = {
+                  whatsapp_provider: "meta",
+                  whatsapp_meta_instance_id: instance.id,
+                  whatsapp_instance_id: null, // Limpar referência Evolution
+                  last_message_at: new Date().toISOString(),
+                  status: "open",
+                };
+
+                // Se conversa estava fechada, resetar ai_mode para autopilot
+                // para que Master Flow/IA possa assumir novamente
+                if (conversation.status === "closed") {
+                  reopenUpdate.ai_mode = "autopilot";
+                  reopenUpdate.awaiting_rating = false;
+                  reopenUpdate.closed_at = null;
+                  reopenUpdate.closed_by = null;
+                  reopenUpdate.closed_reason = null;
+                  console.log("[meta-whatsapp-webhook] 🔄 Conversa reaberta: ai_mode resetado para autopilot");
+                }
+
                 await supabase
                   .from("conversations")
-                  .update({ 
-                    whatsapp_provider: "meta",
-                    whatsapp_meta_instance_id: instance.id,
-                    whatsapp_instance_id: null, // Limpar referência Evolution
-                    last_message_at: new Date().toISOString(),
-                    status: "open" // Reabrir se estava fechada
-                  })
+                  .update(reopenUpdate)
                   .eq("id", conversation.id);
                 console.log("[meta-whatsapp-webhook] 💬 Conversation updated to Meta provider:", conversation.id);
               }
