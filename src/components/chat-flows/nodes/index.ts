@@ -11,3 +11,4 @@ export { AIResponseNode } from "./AIResponseNode";
 export { ChatFlowConditionNode } from "./ConditionNode";
 export { FetchOrderNode } from "./FetchOrderNode";
 export { ValidateCustomerNode } from "./ValidateCustomerNode";
+export { VerifyCustomerOTPNode } from "./VerifyCustomerOTPNode";

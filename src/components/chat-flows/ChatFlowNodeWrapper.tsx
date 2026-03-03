@@ -16,7 +16,8 @@ export type ChatFlowNodeType =
   | 'transfer'
   | 'end'
   | 'fetch_order'
-  | 'validate_customer';
+  | 'validate_customer'
+  | 'verify_customer_otp';
 
 interface ChatFlowNodeWrapperProps {
   type: ChatFlowNodeType;
@@ -83,6 +84,10 @@ const typeColors: Record<ChatFlowNodeType, { header: string; border: string }> =
   validate_customer: {
     header: 'bg-emerald-700 dark:bg-emerald-800',
     border: 'border-emerald-500 dark:border-emerald-600',
+  },
+  verify_customer_otp: {
+    header: 'bg-purple-700 dark:bg-purple-800',
+    border: 'border-purple-500 dark:border-purple-600',
   },
 };
 

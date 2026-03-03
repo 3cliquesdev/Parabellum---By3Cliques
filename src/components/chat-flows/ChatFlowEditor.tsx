@@ -24,7 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   MessageSquare, User, Mail, Phone, CreditCard, ListChecks, 
   MessageCircle, GitBranch, Sparkles, UserPlus, CheckCircle,
-  Save, X, Trash2, Plus, Play, Bot, BookOpen, Package, ShieldCheck
+  Save, X, Trash2, Plus, Play, Bot, BookOpen, Package, ShieldCheck, KeyRound
 } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -45,12 +45,14 @@ import {
   ChatFlowConditionNode,
   FetchOrderNode,
   ValidateCustomerNode,
+  VerifyCustomerOTPNode,
 } from "./nodes";
 import { cn } from "@/lib/utils";
 import { TransferPropertiesPanel } from "./TransferPropertiesPanel";
 import { AIResponsePropertiesPanel } from "./AIResponsePropertiesPanel";
 import { FetchOrderPropertiesPanel } from "./FetchOrderPropertiesPanel";
 import { ValidateCustomerPropertiesPanel } from "./ValidateCustomerPropertiesPanel";
+import { VerifyCustomerOTPPropertiesPanel } from "./VerifyCustomerOTPPropertiesPanel";
 import { VariableAutocomplete } from "./VariableAutocomplete";
 import { CONDITION_CONTACT_FIELDS, CONDITION_CONVERSATION_FIELDS, getAncestorNodeIds } from "./variableCatalog";
 
@@ -69,6 +71,7 @@ export const chatFlowNodeTypes = {
   end: EndNode,
   fetch_order: FetchOrderNode,
   validate_customer: ValidateCustomerNode,
+  verify_customer_otp: VerifyCustomerOTPNode,
 };
 
 const edgeTypes = {
@@ -90,6 +93,7 @@ const blockColors: Record<string, string> = {
   end: "bg-emerald-500",
   fetch_order: "bg-teal-500",
   validate_customer: "bg-emerald-700",
+  verify_customer_otp: "bg-purple-700",
 };
 
 // Cores do MiniMap
@@ -108,6 +112,7 @@ const miniMapColors: Record<string, string> = {
   start: '#3b82f6',
   fetch_order: '#14b8a6',
   validate_customer: '#047857',
+  verify_customer_otp: '#7e22ce',
 };
 
 interface ChatFlowEditorProps {
@@ -213,6 +218,15 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         save_validated_as: "customer_validated",
         save_customer_name_as: "customer_name_found",
         save_customer_email_as: "customer_email_found",
+      },
+      verify_customer_otp: {
+        label: "Verificar Cliente + OTP",
+        message_ask_email: "Para verificar sua identidade, me informe seu email cadastrado:",
+        message_otp_sent: "Enviamos um código de 6 dígitos para {{email}}. Digite o código:",
+        message_not_found: "Não encontramos este email em nossa base. O email está correto?",
+        message_not_customer: "Vou encaminhar para nosso time comercial.",
+        save_verified_as: "customer_verified",
+        max_attempts: 3,
       },
     };
     return defaults[type] || { label: `Novo ${type}` };
@@ -456,6 +470,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 <DraggableBlock type="ai_response" icon={Sparkles} label="IA" color={blockColors.ai_response} />
                 <DraggableBlock type="fetch_order" icon={Package} label="Pedido" color={blockColors.fetch_order} />
                 <DraggableBlock type="validate_customer" icon={ShieldCheck} label="Validar Cliente" color={blockColors.validate_customer} />
+                <DraggableBlock type="verify_customer_otp" icon={KeyRound} label="OTP Cliente" color={blockColors.verify_customer_otp} />
               </div>
             </div>
 
@@ -883,6 +898,14 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
               {/* Validate Customer */}
               {selectedNode.type === "validate_customer" && (
                 <ValidateCustomerPropertiesPanel
+                  selectedNode={selectedNode}
+                  updateNodeData={updateNodeData}
+                />
+              )}
+
+              {/* Verify Customer OTP */}
+              {selectedNode.type === "verify_customer_otp" && (
+                <VerifyCustomerOTPPropertiesPanel
                   selectedNode={selectedNode}
                   updateNodeData={updateNodeData}
                 />
