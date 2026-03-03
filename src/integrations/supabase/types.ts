@@ -5423,23 +5423,38 @@ export type Database = {
       }
       message_buffer: {
         Row: {
+          contact_id: string | null
           conversation_id: string
           created_at: string
+          flow_context: Json | null
+          flow_data: Json | null
+          from_number: string | null
           id: string
+          instance_id: string | null
           message_content: string
           processed: boolean
         }
         Insert: {
+          contact_id?: string | null
           conversation_id: string
           created_at?: string
+          flow_context?: Json | null
+          flow_data?: Json | null
+          from_number?: string | null
           id?: string
+          instance_id?: string | null
           message_content: string
           processed?: boolean
         }
         Update: {
+          contact_id?: string | null
           conversation_id?: string
           created_at?: string
+          flow_context?: Json | null
+          flow_data?: Json | null
+          from_number?: string | null
           id?: string
+          instance_id?: string | null
           message_content?: string
           processed?: boolean
         }
@@ -10005,6 +10020,12 @@ export type Database = {
           playbook_name: string
         }[]
       }
+      get_ready_buffer_conversations: {
+        Args: { p_cutoff: string }
+        Returns: {
+          conversation_id: string
+        }[]
+      }
       get_sla_compliance_v2: {
         Args: {
           p_agent_id?: string
@@ -10250,6 +10271,10 @@ export type Database = {
           p_ticket_id: string
         }
         Returns: Json
+      }
+      try_lock_conversation_buffer: {
+        Args: { conv_id: string }
+        Returns: boolean
       }
       update_article_embedding: {
         Args: { article_id: string; new_embedding: string }
