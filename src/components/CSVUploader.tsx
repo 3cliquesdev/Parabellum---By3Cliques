@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 interface CSVUploaderProps {
-  onDataParsed: (data: any[], headers: string[]) => void;
+  onDataParsed: (data: any[], headers: string[], headerRowIndex?: number) => void;
 }
 
 /**
@@ -36,25 +36,118 @@ function ensureUniqueHeaders(headers: string[]): string[] {
   });
 }
 
+// Aliases conhecidos para scoring de header
+const KNOWN_HEADER_ALIASES = new Set([
+  'id', 'nome', 'name', 'first_name', 'last_name', 'sobrenome',
+  'email', 'e-mail', 'mail',
+  'telefone', 'phone', 'tel', 'celular', 'fone',
+  'empresa', 'company', 'companhia',
+  'cpf', 'cnpj', 'documento', 'document', 'cpf/cnpj', 'cnpj ou cpf',
+  'ie', 'inscricao estadual', 'state_registration',
+  'endereco', 'address', 'rua', 'logradouro', 'endereço',
+  'numero', 'number', 'num', 'número',
+  'complemento', 'complement',
+  'bairro', 'neighborhood', 'district',
+  'cidade', 'city', 'municipio', 'município',
+  'estado', 'state', 'uf',
+  'cep', 'zip', 'zipcode', 'zip_code',
+  'nascimento', 'birth_date', 'data de nascimento', 'data_nascimento',
+  'tipo', 'customer_type', 'tipo de cliente', 'tipo_cliente',
+  'bloqueado', 'blocked', 'ativo', 'status',
+  'plano', 'subscription_plan', 'assinatura', 'plano de assinatura',
+  'cadastro', 'registration_date', 'data_cadastro', 'data de cadastro', 'data cadastro', 'data de registro', 'data registro',
+  'ultimo pagamento', 'last_payment_date', 'último pagamento',
+  'proximo pagamento', 'next_payment_date', 'próximo pagamento',
+  'pedidos', 'orders', 'pedidos recentes',
+  'saldo', 'balance', 'account_balance', 'saldo da conta',
+  'consultor', 'consultant', 'responsavel', 'responsável', 'assigned_to',
+  'id_consultor', 'consultant_id', 'id consultor', 'uuid_consultor',
+]);
+
+// Padrão UUID
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * Dado um array de linhas (array de arrays), encontra a melhor linha de cabeçalho
- * nas primeiras 10 linhas: a que tiver mais células com texto não-vazio.
- * Retorna o índice da linha.
+ * Calcula score de "cara de cabeçalho" para uma linha.
+ * Quanto maior, mais provável ser header.
  */
-function findBestHeaderRow(rows: any[][], maxScan = 10): number {
+function scoreHeaderRow(row: any[]): number {
+  if (!row || row.length === 0) return -1;
+
+  let score = 0;
+  let filledCount = 0;
+
+  for (const cell of row) {
+    const val = String(cell ?? '').trim();
+    if (!val) continue;
+    filledCount++;
+
+    // Texto curto (< 40 chars) = parece nome de coluna
+    if (val.length <= 40) score += 1;
+    // Texto muito curto (< 20 chars) = bonus
+    if (val.length <= 20) score += 1;
+
+    // Match com alias conhecido = forte indicador
+    const normalized = val.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (KNOWN_HEADER_ALIASES.has(normalized)) {
+      score += 5;
+    }
+
+    // Penalizar se parece dado numérico puro
+    if (/^\d+([.,]\d+)?$/.test(val)) score -= 2;
+    // Penalizar UUID
+    if (UUID_RE.test(val)) score -= 3;
+    // Penalizar datas (dd/mm/yy, mm/dd/yy, yyyy-mm-dd)
+    if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(val) || /^\d{4}-\d{2}-\d{2}/.test(val)) score -= 2;
+    // Penalizar telefones
+    if (/^\(\d{2}\)\s?\d{4,5}-\d{4}$/.test(val)) score -= 2;
+    // Penalizar CPF/CNPJ formatados (valores, não headers)
+    if (/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(val) || /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(val)) score -= 2;
+    // Penalizar emails (valores)
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) score -= 2;
+    // Penalizar textos longos (> 50 chars) = parece dado
+    if (val.length > 50) score -= 2;
+  }
+
+  // Penalizar linhas com poucas células preenchidas
+  if (filledCount < 3) score -= 5;
+
+  return score;
+}
+
+/**
+ * Dado um array de linhas, encontra a melhor linha de cabeçalho
+ * usando scoring semântico. Escaneia até 100 linhas.
+ * Em empate, prefere a linha mais acima.
+ */
+function findBestHeaderRow(rows: any[][], maxScan = 100): number {
   let bestIdx = 0;
-  let bestCount = 0;
+  let bestScore = -Infinity;
+  const candidates: { idx: number; score: number; preview: string }[] = [];
 
   const limit = Math.min(rows.length, maxScan);
   for (let i = 0; i < limit; i++) {
     const row = rows[i];
     if (!row) continue;
-    const filled = row.filter(cell => cell != null && String(cell).trim() !== '').length;
-    if (filled > bestCount) {
-      bestCount = filled;
+    const score = scoreHeaderRow(row);
+    candidates.push({
+      idx: i,
+      score,
+      preview: row.slice(0, 5).map(c => String(c ?? '').substring(0, 20)).join(' | '),
+    });
+    if (score > bestScore) {
+      bestScore = score;
       bestIdx = i;
     }
   }
+
+  // Log top 3 candidatas
+  candidates.sort((a, b) => b.score - a.score);
+  console.log('[CSVUploader] Header detection — top 3 candidates:',
+    candidates.slice(0, 3).map(c => `row ${c.idx} (score ${c.score}): "${c.preview}"`)
+  );
+  console.log('[CSVUploader] Header row chosen: index', bestIdx, '| score:', bestScore);
+
   return bestIdx;
 }
 
@@ -74,7 +167,6 @@ function processHeaders(rawHeaders: string[], dataRows?: Record<string, string>[
   // Remover colunas que são todas vazias nos dados (se temos dados)
   if (dataRows && dataRows.length > 0) {
     headers = headers.filter(h => {
-      // Verificar se pelo menos 1 linha tem dado nesta coluna
       return dataRows.some(row => {
         const val = row[h];
         return val != null && String(val).trim() !== '';
@@ -99,42 +191,45 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
         content = content.slice(1);
       }
 
+      // Primeiro parse sem header para detectar melhor linha
       Papa.parse(content, {
-        header: true,
+        header: false,
         skipEmptyLines: true,
-        delimiter: '', // Auto-detectar delimitador
-        complete: (results) => {
-          const rawHeaders = results.meta.fields || [];
-          if (rawHeaders.length === 0 || results.data.length === 0) {
+        delimiter: '',
+        complete: (rawResults) => {
+          const allRows = rawResults.data as string[][];
+          if (allRows.length < 2) {
             alert('Arquivo vazio ou formato inválido.');
             setFile(null);
             return;
           }
 
-          // Sanitizar headers
+          const headerIdx = findBestHeaderRow(allRows);
+          const rawHeaders = allRows[headerIdx].map(cell => String(cell ?? ''));
           const sanitizedHeaders = rawHeaders.map(h => sanitizeHeader(h));
-          
-          // Reconstruir dados com headers sanitizados
-          const data = (results.data as any[]).map(row => {
-            const newRow: Record<string, string> = {};
-            rawHeaders.forEach((rawH, i) => {
-              const cleanH = sanitizedHeaders[i] || `coluna_${i + 1}`;
-              newRow[cleanH] = row[rawH] ?? '';
+          const headerKeys = sanitizedHeaders.map((h, i) => h || `coluna_${i + 1}`);
+
+          // Data = tudo após header row
+          const dataRows = allRows.slice(headerIdx + 1);
+          const data = dataRows.map(row => {
+            const obj: Record<string, string> = {};
+            headerKeys.forEach((key, i) => {
+              obj[key] = row[i] != null ? String(row[i]) : '';
             });
-            return newRow;
+            return obj;
           });
 
-          const finalHeaders = processHeaders(sanitizedHeaders, data);
+          const finalHeaders = processHeaders(headerKeys, data);
           
-          console.log('[CSVUploader] CSV parsed headers:', finalHeaders, '| total colunas:', finalHeaders.length, '| total linhas:', data.length);
+          console.log('[CSVUploader] CSV parsed headers:', finalHeaders, '| header row:', headerIdx, '| total linhas:', data.length);
           
           if (finalHeaders.length === 0) {
-            alert('Não encontramos cabeçalhos válidos no CSV. Verifique se a primeira linha contém os nomes das colunas.');
+            alert('Não encontramos cabeçalhos válidos no CSV. Verifique se há uma linha com nomes de colunas.');
             setFile(null);
             return;
           }
 
-          onDataParsed(data, finalHeaders);
+          onDataParsed(data, finalHeaders, headerIdx);
         },
         error: (error) => {
           console.error('Erro ao processar CSV:', error);
@@ -159,31 +254,27 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
         return;
       }
 
-      // Detectar melhor linha de header (não assumir rows[0])
+      // Detectar melhor linha de header com scoring semântico
       const headerIdx = findBestHeaderRow(rows);
-      console.log('[CSVUploader] Excel: melhor linha de header detectada no índice', headerIdx, '| conteúdo:', rows[headerIdx]?.map(c => String(c ?? '')));
 
       const rawHeaders = rows[headerIdx].map(cell => String(cell ?? ''));
       const sanitizedHeaders = rawHeaders.map(h => sanitizeHeader(h));
+      const headerKeys = sanitizedHeaders.map((h, i) => h || `coluna_${i + 1}`);
 
       // Dados = tudo após a linha de header
       const dataRows = rows.slice(headerIdx + 1);
 
       const data = dataRows.map(row => {
         const obj: Record<string, string> = {};
-        sanitizedHeaders.forEach((header, index) => {
-          const key = header || `coluna_${index + 1}`;
+        headerKeys.forEach((key, index) => {
           obj[key] = row[index] != null ? String(row[index]) : '';
         });
         return obj;
       });
 
-      const finalHeaders = processHeaders(
-        sanitizedHeaders.map((h, i) => h || `coluna_${i + 1}`),
-        data
-      );
+      const finalHeaders = processHeaders(headerKeys, data);
 
-      console.log('[CSVUploader] Excel parsed headers:', finalHeaders, '| total colunas:', finalHeaders.length, '| total linhas:', data.length);
+      console.log('[CSVUploader] Excel parsed headers:', finalHeaders, '| header row:', headerIdx, '| total linhas:', data.length);
 
       if (finalHeaders.length === 0) {
         alert('Não encontramos cabeçalhos válidos na planilha. Verifique se há uma linha com nomes de colunas.');
@@ -191,7 +282,7 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
         return;
       }
 
-      onDataParsed(data, finalHeaders);
+      onDataParsed(data, finalHeaders, headerIdx);
     } catch (error: any) {
       console.error('Erro ao processar Excel:', error);
       

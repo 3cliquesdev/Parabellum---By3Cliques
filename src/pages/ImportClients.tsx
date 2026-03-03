@@ -6,19 +6,23 @@ import { ImportProgress } from "@/components/ImportProgress";
 import { useImportContacts } from "@/hooks/useImportContacts";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Download } from "lucide-react";
+import { Download, AlertTriangle } from "lucide-react";
 
 export default function ImportClients() {
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [importResult, setImportResult] = useState<any>(null);
+  const [detectedHeaderRow, setDetectedHeaderRow] = useState<number | null>(null);
   
   const importMutation = useImportContacts();
 
   // Normaliza string removendo acentos e caracteres especiais
   const normalize = (str: string): string =>
     str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, " ").trim();
+
+  // Verifica se maioria dos headers parece numérica (indicador de header incorreto)
+  const headersLookNumeric = csvHeaders.length > 0 && csvHeaders.filter(h => /^\d+([.,]\d+)?$/.test(h.trim())).length > csvHeaders.length * 0.5;
 
   // Auto-mapear colunas quando CSV é carregado
   useEffect(() => {
@@ -27,41 +31,70 @@ export default function ImportClients() {
       
       console.log('[ImportClients] CSV headers parseados:', csvHeaders);
       
-      // Mapeamento automático inteligente
       const mappings: Record<string, string[]> = {
         'email': ['email', 'e-mail', 'mail'],
         'first_name': ['nome', 'first_name', 'firstname', 'first name', 'primeironome'],
         'last_name': ['sobrenome', 'last_name', 'lastname', 'last name', 'ultimonome'],
         'phone': ['telefone', 'phone', 'tel', 'celular', 'fone'],
         'company': ['empresa', 'company', 'companhia'],
-        'document': ['cpf', 'cnpj', 'documento', 'document', 'cpf/cnpj'],
-        'state_registration': ['ie', 'inscricao estadual', 'inscricao estadual', 'inscricao estadual', 'state_registration', 'inscricao_estadual'],
-        'address': ['endereco', 'endereco', 'address', 'rua', 'logradouro'],
-        'address_number': ['numero', 'numero', 'number', 'address_number', 'num'],
+        'document': ['cpf', 'cnpj', 'documento', 'document', 'cpf/cnpj', 'cnpj ou cpf'],
+        'state_registration': ['ie', 'inscricao estadual', 'state_registration', 'inscricao_estadual'],
+        'address': ['endereco', 'address', 'rua', 'logradouro'],
+        'address_number': ['numero', 'number', 'address_number', 'num'],
         'address_complement': ['complemento', 'complement', 'address_complement', 'compl'],
         'neighborhood': ['bairro', 'neighborhood', 'district'],
-        'city': ['cidade', 'city', 'municipio', 'municipio'],
+        'city': ['cidade', 'city', 'municipio'],
         'state': ['estado', 'state', 'uf'],
         'zip_code': ['cep', 'zip', 'zipcode', 'zip_code', 'postalcode'],
         'birth_date': ['nascimento', 'data_nascimento', 'birth_date', 'birthdate', 'data de nascimento'],
         'customer_type': ['tipo', 'customer_type', 'tipo_cliente', 'tipo de cliente'],
-        'blocked': ['bloqueado', 'blocked', 'bloquear', 'ativo'],
+        'blocked': ['bloqueado', 'blocked', 'bloquear'],
         'subscription_plan': ['plano', 'subscription_plan', 'plano_assinatura', 'assinatura'],
-        'registration_date': ['cadastro', 'registration_date', 'data_cadastro', 'data de cadastro'],
-        'last_payment_date': ['ultimo_pagamento', 'last_payment_date', 'data_ultimo_pagamento', 'ultimo pagamento'],
-        'next_payment_date': ['proximo_pagamento', 'next_payment_date', 'data_proximo_pagamento', 'proximo pagamento'],
+        'registration_date': ['cadastro', 'registration_date', 'data_cadastro', 'data de cadastro', 'data cadastro', 'data de registro', 'data registro'],
+        'last_payment_date': ['ultimo_pagamento', 'ultimo pagamento', 'last_payment_date', 'data_ultimo_pagamento'],
+        'next_payment_date': ['proximo_pagamento', 'proximo pagamento', 'next_payment_date', 'data_proximo_pagamento'],
         'recent_orders_count': ['pedidos', 'recent_orders_count', 'qtd_pedidos', 'quantidade pedidos', 'pedidos recentes'],
         'account_balance': ['saldo', 'account_balance', 'saldo_conta', 'balance'],
-        'assigned_to': ['consultor', 'consultant', 'responsavel', 'responsavel', 'assigned_to'],
+        'assigned_to': ['consultor', 'consultant', 'responsavel', 'assigned_to'],
         'consultant_id': ['id_consultor', 'consultant_id', 'id consultor', 'uuid_consultor'],
       };
 
+      // Priority: exact match > startsWith > includes
       csvHeaders.forEach((header) => {
         if (!header || !header.trim()) return;
         const normalizedHeader = normalize(header);
         
         for (const [dbField, possibleNames] of Object.entries(mappings)) {
-          if (!autoMapping[dbField] && possibleNames.some(name => normalizedHeader.includes(normalize(name)))) {
+          if (autoMapping[dbField]) continue;
+          // Exact match first
+          if (possibleNames.some(name => normalizedHeader === normalize(name))) {
+            autoMapping[dbField] = header;
+            break;
+          }
+        }
+      });
+
+      // Second pass: startsWith
+      csvHeaders.forEach((header) => {
+        if (!header || !header.trim()) return;
+        const normalizedHeader = normalize(header);
+        for (const [dbField, possibleNames] of Object.entries(mappings)) {
+          if (autoMapping[dbField]) continue;
+          if (possibleNames.some(name => normalizedHeader.startsWith(normalize(name)))) {
+            autoMapping[dbField] = header;
+            break;
+          }
+        }
+      });
+
+      // Third pass: includes (only for semantic-looking headers, not numeric)
+      csvHeaders.forEach((header) => {
+        if (!header || !header.trim()) return;
+        if (/^\d+([.,]\d+)?$/.test(header.trim())) return; // skip numeric headers
+        const normalizedHeader = normalize(header);
+        for (const [dbField, possibleNames] of Object.entries(mappings)) {
+          if (autoMapping[dbField]) continue;
+          if (possibleNames.some(name => normalizedHeader.includes(normalize(name)))) {
             autoMapping[dbField] = header;
             break;
           }
@@ -73,9 +106,10 @@ export default function ImportClients() {
     }
   }, [csvHeaders]);
 
-  const handleDataParsed = (data: any[], headers: string[]) => {
+  const handleDataParsed = (data: any[], headers: string[], headerRowIndex?: number) => {
     setCsvData(data);
     setCsvHeaders(headers);
+    setDetectedHeaderRow(headerRowIndex ?? null);
     setImportResult(null);
   };
 
@@ -210,11 +244,27 @@ export default function ImportClients() {
 
         {csvHeaders.length > 0 && (
           <>
-            {/* Debug: prévia dos headers detectados */}
+            {/* Header detection info */}
             <div className="text-xs border rounded-md p-2 bg-muted/20 space-y-1">
-              <p className="font-medium text-muted-foreground">📋 Headers detectados ({csvHeaders.length}):</p>
+              <p className="font-medium text-muted-foreground">
+                📋 Headers detectados ({csvHeaders.length})
+                {detectedHeaderRow !== null && (
+                  <span className="ml-2 text-xs opacity-70">— linha {detectedHeaderRow + 1} da planilha</span>
+                )}
+              </p>
               <p className="text-muted-foreground break-all">{csvHeaders.join(' | ')}</p>
             </div>
+
+            {/* Warning if headers look numeric */}
+            {headersLookNumeric && (
+              <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium">Cabeçalho possivelmente incorreto</p>
+                  <p className="text-xs mt-1">Os headers detectados parecem ser valores numéricos, não nomes de colunas. Verifique se a planilha tem uma linha de cabeçalho com nomes como "Nome", "Email", "Telefone", etc.</p>
+                </div>
+              </div>
+            )}
 
             <ColumnMapper
               csvHeaders={csvHeaders}
@@ -280,6 +330,7 @@ export default function ImportClients() {
                   setCsvHeaders([]);
                   setMapping({});
                   setImportResult(null);
+                  setDetectedHeaderRow(null);
                 }}
               >
                 Limpar
