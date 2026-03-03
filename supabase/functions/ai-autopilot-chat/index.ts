@@ -3719,14 +3719,24 @@ Responda APENAS: skip ou search`
         const flowCats = flowKbCategories as string[] | null;
         const personaCats = persona.knowledge_base_paths as string[] | null;
         
-        if (flowCats && Array.isArray(flowCats) && flowCats.length > 0) {
-          // Categorias definidas no nó ai_response do Chat Flow
+        // 🆕 UPGRADE RESILIÊNCIA: Se persona tem acesso global (knowledge_base_paths null)
+        // E as categorias vêm APENAS do flow, tratar como "sem filtro" para não
+        // bloquear artigos de categorias novas que ainda não foram adicionadas ao flow.
+        const personaHasGlobalAccess = !personaCats || personaCats.length === 0;
+        
+        if (flowCats && Array.isArray(flowCats) && flowCats.length > 0 && !personaHasGlobalAccess) {
+          // Categorias definidas no nó ai_response do Chat Flow — SÓ aplica se persona também restringe
           activeKbCategories = flowCats;
           categorySource = `Chat Flow (${flowCats.length} categorias)`;
-        } else if (personaCats && Array.isArray(personaCats) && personaCats.length > 0) {
-          // Fallback: categorias da persona
+        } else if (!personaHasGlobalAccess && personaCats && personaCats.length > 0) {
+          // Categorias da persona (restritivas)
           activeKbCategories = personaCats;
           categorySource = `Persona (${personaCats.length} categorias)`;
+        } else {
+          // Persona com acesso global → buscar em TODAS as categorias
+          categorySource = personaHasGlobalAccess 
+            ? 'ALL (persona com acesso global — ignorando filtro do flow)' 
+            : 'ALL (sem filtro)';
         }
         
         const hasPersonaCategories = activeKbCategories.length > 0;
