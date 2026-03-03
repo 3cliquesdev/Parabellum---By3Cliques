@@ -90,6 +90,7 @@ export default function Inbox() {
   const departmentFilter = searchParams.get("dept");
   const teamFilter = searchParams.get("team");
   const tagFilter = searchParams.get("tag");
+  const agentFilter = searchParams.get("agent");
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   
   // Deep-link: selecionar conversa via ?conversation=ID
@@ -277,6 +278,11 @@ export default function Inbox() {
       result = result.filter(c => c.department === departmentFilter);
     }
 
+    // Agent filter
+    if (agentFilter) {
+      result = result.filter(c => c.assigned_to === agentFilter);
+    }
+
     // Filter by URL param
     switch (filter) {
       case "ai_queue":
@@ -301,7 +307,7 @@ export default function Inbox() {
       default:
         return result.filter(c => c.status !== 'closed');
     }
-  }, [activeItems, inboxItemToConversation, departmentFilter, filter, role, user?.id]);
+  }, [activeItems, inboxItemToConversation, departmentFilter, agentFilter, filter, role, user?.id]);
 
   // ✅ Loading do activeQuery ativo (isLoading real de cada hook)
   const activeLoading = hasActiveSearch ? searchLoading :

@@ -114,9 +114,11 @@ interface AgentsSectionProps {
   agentsOpen: boolean;
   setAgentsOpen: (open: boolean) => void;
   setRedistributeAgent: (agent: { id: string; name: string } | null) => void;
+  currentAgent: string | null;
+  onAgentClick: (agentId: string) => void;
 }
 
-function AgentsSection({ agentStats, agentsOpen, setAgentsOpen, setRedistributeAgent }: AgentsSectionProps) {
+function AgentsSection({ agentStats, agentsOpen, setAgentsOpen, setRedistributeAgent, currentAgent, onAgentClick }: AgentsSectionProps) {
   const manageStatus = useManageAvailabilityStatus();
 
   const handleStatusChange = (agentId: string, newStatus: 'online' | 'busy' | 'offline') => {
@@ -142,10 +144,18 @@ function AgentsSection({ agentStats, agentsOpen, setAgentsOpen, setRedistributeA
           const hasWarning = agent.slaWarningCount > 0;
           const hasCritical = agent.slaCriticalCount > 0;
           
+          const isAgentActive = currentAgent === agent.agentId;
+          
           return (
             <div
               key={agent.agentId}
-              className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 group"
+              onClick={() => onAgentClick(agent.agentId)}
+              className={cn(
+                "flex items-center justify-between gap-2 px-3 py-2 rounded-lg cursor-pointer group transition-colors",
+                isAgentActive
+                  ? "bg-primary/10 text-primary border-l-2 border-primary font-medium"
+                  : "hover:bg-muted/50"
+              )}
             >
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <div className="relative">
@@ -157,7 +167,8 @@ function AgentsSection({ agentStats, agentsOpen, setAgentsOpen, setRedistributeA
                   </Avatar>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button 
+                      <button
+                        onClick={(e) => e.stopPropagation()}
                         className={cn(
                           "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 transition-all",
                           agent.status === "online" && "bg-green-500",
@@ -218,6 +229,7 @@ function AgentsSection({ agentStats, agentsOpen, setAgentsOpen, setRedistributeA
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <MoreVertical className="h-3.5 w-3.5" />
                     </Button>
@@ -288,6 +300,7 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
   const currentFilter = searchParams.get("filter") || "all";
   const currentDept = searchParams.get("dept");
   const currentTag = searchParams.get("tag");
+  const currentAgent = searchParams.get("agent");
 
   const setFilter = (filter: string) => {
     const params = new URLSearchParams();
@@ -311,12 +324,22 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
     navigate(`/inbox?${params.toString()}`);
   };
 
+  const setAgent = (agentId: string) => {
+    const params = new URLSearchParams();
+    if (currentAgent === agentId) {
+      // Toggle off — go back to all
+    } else {
+      params.set("agent", agentId);
+    }
+    navigate(`/inbox?${params.toString()}`);
+  };
+
   const activeDepartments = departments?.filter(d => d.is_active) || [];
   const filteredTags = tags?.filter(t => 
     t.name.toLowerCase().includes(tagSearch.toLowerCase())
   ) || [];
 
-  const isFilterActive = (filter: string) => currentFilter === filter && !currentDept && !currentTag;
+  const isFilterActive = (filter: string) => currentFilter === filter && !currentDept && !currentTag && !currentAgent;
 
   return (
     <div className="flex flex-col h-full bg-muted/30 border-r border-border">
@@ -546,6 +569,8 @@ export function InboxSidebar({ counts }: InboxSidebarProps) {
             agentsOpen={agentsOpen}
             setAgentsOpen={setAgentsOpen}
             setRedistributeAgent={setRedistributeAgent}
+            currentAgent={currentAgent}
+            onAgentClick={setAgent}
           />
         )}
 
