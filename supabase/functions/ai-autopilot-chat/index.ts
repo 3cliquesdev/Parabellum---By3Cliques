@@ -7573,7 +7573,32 @@ Conversa: ${conversationId}`;
     );
 
     if (isFallbackResponse) {
-      console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO - Executando handoff REAL');
+      console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO');
+
+      // 🆕 GUARD: Se flow_context existe, devolver ao fluxo (soberania do Master Flow)
+      if (flow_context) {
+        console.log('[ai-autopilot-chat] 🔄 FALLBACK + flow_context → retornando flow_advance_needed');
+
+        await supabaseClient.from('ai_quality_logs').insert({
+          conversation_id: conversationId,
+          contact_id: contact.id,
+          customer_message: customerMessage,
+          ai_response: assistantMessage,
+          action_taken: 'flow_advance',
+          handoff_reason: 'fallback_flow_advance',
+          confidence_score: 0,
+          articles_count: knowledgeArticles.length
+        });
+
+        return new Response(JSON.stringify({
+          status: 'flow_advance_needed',
+          reason: 'fallback_detected',
+          hasFlowContext: true,
+          fallback_message: assistantMessage
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      console.log('[ai-autopilot-chat] 🚨 Sem flow_context - Executando handoff REAL');
       
       // 🛡️ ANTI-RACE-CONDITION: Marcar handoff executado PRIMEIRO
       const handoffTimestamp = new Date().toISOString();
