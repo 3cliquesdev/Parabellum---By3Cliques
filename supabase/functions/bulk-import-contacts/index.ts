@@ -34,12 +34,13 @@ interface ContactRow {
 
 function prepareContactData(contact: ContactRow, consultantMap: Map<string, string>) {
   // Resolver assigned_to (nome) para consultant_id (UUID)
+  // IMPORTANTE: só aceita IDs de usuários com role 'consultant'
   let consultantId: string | null = null;
   if (contact.assigned_to?.trim()) {
     const nameKey = contact.assigned_to.toLowerCase().trim();
     consultantId = consultantMap.get(nameKey) || null;
     if (!consultantId) {
-      console.warn(`[Bulk Import] Consultant not found for name: "${contact.assigned_to}"`);
+      console.warn(`[Bulk Import] Consultant not found (or not a consultant role) for name: "${contact.assigned_to}"`);
     } else {
       console.log(`[Bulk Import] Resolved consultant "${contact.assigned_to}" → ${consultantId}`);
     }

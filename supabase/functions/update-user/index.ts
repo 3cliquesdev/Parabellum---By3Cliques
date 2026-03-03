@@ -95,6 +95,16 @@ Deno.serve(async (req) => {
 
     // Update user_roles table if role is provided
     if (role) {
+      // Buscar role anterior para detectar mudança de consultant → outro
+      const { data: previousRole } = await supabaseAdmin
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user_id)
+        .single();
+
+      const wasConsultant = previousRole?.role === 'consultant';
+      const isNoLongerConsultant = wasConsultant && role !== 'consultant';
+
       const { error: roleUpdateError } = await supabaseAdmin
         .from('user_roles')
         .update({ role, updated_at: new Date().toISOString() })
@@ -105,6 +115,21 @@ Deno.serve(async (req) => {
         throw new Error('Failed to update user role');
       }
       console.log('[update-user] Role updated successfully');
+
+      // Se deixou de ser consultant, limpar consultant_id dos contatos vinculados
+      if (isNoLongerConsultant) {
+        const { data: affected, error: cleanupError } = await supabaseAdmin
+          .from('contacts')
+          .update({ consultant_id: null })
+          .eq('consultant_id', user_id)
+          .select('id');
+
+        if (cleanupError) {
+          console.error('[update-user] Error cleaning up consultant_id:', cleanupError);
+        } else {
+          console.log(`[update-user] Cleared consultant_id from ${affected?.length || 0} contacts (user ${user_id} is no longer a consultant)`);
+        }
+      }
     }
 
     // Update profiles table if any profile data is provided
