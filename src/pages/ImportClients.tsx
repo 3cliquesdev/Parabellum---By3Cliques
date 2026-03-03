@@ -29,7 +29,7 @@ export default function ImportClients() {
         'phone': ['telefone', 'phone', 'tel', 'celular', 'fone'],
         'company': ['empresa', 'company', 'companhia'],
         'document': ['cpf', 'cnpj', 'documento', 'document', 'cpf/cnpj'],
-        'state_registration': ['ie', 'inscricao estadual', 'inscricão estadual', 'state_registration', 'inscricao_estadual'],
+        'state_registration': ['ie', 'inscricao estadual', 'inscricão estadual', 'inscrição estadual', 'state_registration', 'inscricao_estadual'],
         'address': ['endereco', 'endereço', 'address', 'rua', 'logradouro'],
         'address_number': ['numero', 'número', 'number', 'address_number', 'num'],
         'address_complement': ['complemento', 'complement', 'address_complement', 'compl'],
@@ -44,7 +44,7 @@ export default function ImportClients() {
         'registration_date': ['cadastro', 'registration_date', 'data_cadastro', 'data de cadastro'],
         'last_payment_date': ['ultimo_pagamento', 'last_payment_date', 'data_ultimo_pagamento', 'último pagamento'],
         'next_payment_date': ['proximo_pagamento', 'next_payment_date', 'data_proximo_pagamento', 'próximo pagamento'],
-        'recent_orders_count': ['pedidos', 'recent_orders_count', 'qtd_pedidos', 'quantidade pedidos'],
+        'recent_orders_count': ['pedidos', 'recent_orders_count', 'qtd_pedidos', 'quantidade pedidos', 'pedidos recentes'],
         'account_balance': ['saldo', 'account_balance', 'saldo_conta', 'balance'],
         'assigned_to': ['consultor', 'consultant', 'responsavel', 'responsável', 'assigned_to'],
         'consultant_id': ['id_consultor', 'consultant_id', 'id consultor', 'uuid_consultor'],
@@ -150,6 +150,14 @@ export default function ImportClients() {
   const downloadTemplate = () => {
     import('xlsx').then((XLSX) => {
       const headers = [
+        'E-mail', 'Nome', 'Sobrenome', 'Telefone', 'Empresa', 'CPF/CNPJ',
+        'Inscrição Estadual', 'Endereço', 'Número', 'Complemento', 'Bairro',
+        'Cidade', 'Estado', 'CEP', 'Data de Nascimento', 'Tipo', 'Bloqueado',
+        'Plano', 'Data de Cadastro', 'Último Pagamento', 'Próximo Pagamento',
+        'Pedidos Recentes', 'Saldo', 'Consultor', 'ID Consultor'
+      ];
+      // Headers internos para o mapeamento automático (usados no upload)
+      const internalHeaders = [
         'email', 'nome', 'sobrenome', 'telefone', 'empresa', 'cpf/cnpj', 'ie',
         'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'estado', 'cep',
         'data_nascimento', 'tipo', 'bloqueado', 'plano', 'data_cadastro',
@@ -160,12 +168,13 @@ export default function ImportClients() {
         'exemplo@email.com', 'João', 'Silva', '(11) 99999-9999', 'Empresa Exemplo',
         '123.456.789-00', '987654321', 'Rua Aldo Focosi', '111', 'Sala 10',
         'Centro', 'Ribeirão Preto', 'SP', '14091-310', '15/01/1990', 'Cliente',
-        'não', 'Premium', '15/01/2024', '01/12/2024', '01/01/2025', '5',
+        'Não', 'Premium', '15/01/2024', '01/12/2024', '01/01/2025', '5',
         '1500,00', 'Nome do Consultor', 'uuid-do-consultor-aqui'
       ];
-      const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, internalHeaders, exampleRow]);
       // Auto-ajustar largura das colunas
-      ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 2, 14) }));
+      ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 4, 16) }));
+      // Estilizar: linha 1 = headers bonitos PT-BR, linha 2 = nomes internos (referência), linha 3 = exemplo
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template');
       XLSX.writeFile(wb, 'template_importacao_clientes.xlsx');
