@@ -22,7 +22,7 @@ export function useMyPendingCounts() {
       // Buscar contagem de inbox (conversas não lidas atribuídas ao usuário)
       const { count: inboxCount, error: inboxError } = await supabase
         .from("inbox_view")
-        .select("id", { count: "exact", head: true })
+        .select("conversation_id", { count: "exact", head: true })
         .eq("assigned_to", user.id)
         .gt("unread_count", 0);
 
