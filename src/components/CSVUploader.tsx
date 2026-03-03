@@ -9,6 +9,82 @@ interface CSVUploaderProps {
   onDataParsed: (data: any[], headers: string[]) => void;
 }
 
+/**
+ * Sanitiza um header: trim, remove caracteres invisíveis (BOM, ZWNBSP, etc.)
+ */
+function sanitizeHeader(raw: string): string {
+  return raw
+    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '') // zero-width chars, BOM, NBSP
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Garante unicidade dos headers (adiciona sufixo _2, _3 em duplicados)
+ */
+function ensureUniqueHeaders(headers: string[]): string[] {
+  const seen: Record<string, number> = {};
+  return headers.map((h) => {
+    if (!h) return h;
+    const lower = h.toLowerCase();
+    if (seen[lower] !== undefined) {
+      seen[lower]++;
+      return `${h}_${seen[lower]}`;
+    }
+    seen[lower] = 1;
+    return h;
+  });
+}
+
+/**
+ * Dado um array de linhas (array de arrays), encontra a melhor linha de cabeçalho
+ * nas primeiras 10 linhas: a que tiver mais células com texto não-vazio.
+ * Retorna o índice da linha.
+ */
+function findBestHeaderRow(rows: any[][], maxScan = 10): number {
+  let bestIdx = 0;
+  let bestCount = 0;
+
+  const limit = Math.min(rows.length, maxScan);
+  for (let i = 0; i < limit; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    const filled = row.filter(cell => cell != null && String(cell).trim() !== '').length;
+    if (filled > bestCount) {
+      bestCount = filled;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+/**
+ * Processa headers brutos:
+ * 1. Sanitiza
+ * 2. Gera fallback para vazios (coluna_1, coluna_2…)
+ * 3. Remove colunas totalmente vazias nos dados
+ * 4. Garante unicidade
+ */
+function processHeaders(rawHeaders: string[], dataRows?: Record<string, string>[]): string[] {
+  let headers = rawHeaders.map((h, i) => {
+    const clean = sanitizeHeader(String(h ?? ''));
+    return clean || `coluna_${i + 1}`;
+  });
+
+  // Remover colunas que são todas vazias nos dados (se temos dados)
+  if (dataRows && dataRows.length > 0) {
+    headers = headers.filter(h => {
+      // Verificar se pelo menos 1 linha tem dado nesta coluna
+      return dataRows.some(row => {
+        const val = row[h];
+        return val != null && String(val).trim() !== '';
+      });
+    });
+  }
+
+  return ensureUniqueHeaders(headers);
+}
+
 export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -28,13 +104,37 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
         skipEmptyLines: true,
         delimiter: '', // Auto-detectar delimitador
         complete: (results) => {
-          const headers = results.meta.fields || [];
-          if (headers.length === 0 || results.data.length === 0) {
+          const rawHeaders = results.meta.fields || [];
+          if (rawHeaders.length === 0 || results.data.length === 0) {
             alert('Arquivo vazio ou formato inválido.');
             setFile(null);
             return;
           }
-          onDataParsed(results.data, headers);
+
+          // Sanitizar headers
+          const sanitizedHeaders = rawHeaders.map(h => sanitizeHeader(h));
+          
+          // Reconstruir dados com headers sanitizados
+          const data = (results.data as any[]).map(row => {
+            const newRow: Record<string, string> = {};
+            rawHeaders.forEach((rawH, i) => {
+              const cleanH = sanitizedHeaders[i] || `coluna_${i + 1}`;
+              newRow[cleanH] = row[rawH] ?? '';
+            });
+            return newRow;
+          });
+
+          const finalHeaders = processHeaders(sanitizedHeaders, data);
+          
+          console.log('[CSVUploader] CSV parsed headers:', finalHeaders, '| total colunas:', finalHeaders.length, '| total linhas:', data.length);
+          
+          if (finalHeaders.length === 0) {
+            alert('Não encontramos cabeçalhos válidos no CSV. Verifique se a primeira linha contém os nomes das colunas.');
+            setFile(null);
+            return;
+          }
+
+          onDataParsed(data, finalHeaders);
         },
         error: (error) => {
           console.error('Erro ao processar CSV:', error);
@@ -59,20 +159,42 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
         return;
       }
 
-      const headers = rows[0].map(cell => String(cell || ''));
-      const data = rows.slice(1).map(row => {
+      // Detectar melhor linha de header (não assumir rows[0])
+      const headerIdx = findBestHeaderRow(rows);
+      console.log('[CSVUploader] Excel: melhor linha de header detectada no índice', headerIdx, '| conteúdo:', rows[headerIdx]?.map(c => String(c ?? '')));
+
+      const rawHeaders = rows[headerIdx].map(cell => String(cell ?? ''));
+      const sanitizedHeaders = rawHeaders.map(h => sanitizeHeader(h));
+
+      // Dados = tudo após a linha de header
+      const dataRows = rows.slice(headerIdx + 1);
+
+      const data = dataRows.map(row => {
         const obj: Record<string, string> = {};
-        headers.forEach((header, index) => {
-          obj[header] = row[index] != null ? String(row[index]) : '';
+        sanitizedHeaders.forEach((header, index) => {
+          const key = header || `coluna_${index + 1}`;
+          obj[key] = row[index] != null ? String(row[index]) : '';
         });
         return obj;
       });
 
-      onDataParsed(data, headers);
+      const finalHeaders = processHeaders(
+        sanitizedHeaders.map((h, i) => h || `coluna_${i + 1}`),
+        data
+      );
+
+      console.log('[CSVUploader] Excel parsed headers:', finalHeaders, '| total colunas:', finalHeaders.length, '| total linhas:', data.length);
+
+      if (finalHeaders.length === 0) {
+        alert('Não encontramos cabeçalhos válidos na planilha. Verifique se há uma linha com nomes de colunas.');
+        setFile(null);
+        return;
+      }
+
+      onDataParsed(data, finalHeaders);
     } catch (error: any) {
       console.error('Erro ao processar Excel:', error);
       
-      // Verificar se é arquivo .xls (formato antigo não suportado)
       if (error?.message?.includes('invalid zip') || error?.code === 13) {
         alert('Formato .xls (Excel 97-2003) não suportado.\n\nPor favor, abra o arquivo no Excel e salve como:\n• .xlsx (Excel moderno)\n• .csv (separado por ponto-e-vírgula)');
       } else {
@@ -92,7 +214,6 @@ export function CSVUploader({ onDataParsed }: CSVUploaderProps) {
       return;
     }
 
-    // Arquivo .xls (antigo) - avisar antes de tentar processar
     if (fileName.endsWith('.xls') && !fileName.endsWith('.xlsx')) {
       alert('Formato .xls (Excel 97-2003) não suportado.\n\nPor favor, abra o arquivo no Excel e salve como:\n• .xlsx (Excel moderno)\n• .csv (separado por ponto-e-vírgula)');
       return;

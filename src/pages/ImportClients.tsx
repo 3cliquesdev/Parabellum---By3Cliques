@@ -210,6 +210,12 @@ export default function ImportClients() {
 
         {csvHeaders.length > 0 && (
           <>
+            {/* Debug: prévia dos headers detectados */}
+            <div className="text-xs border rounded-md p-2 bg-muted/20 space-y-1">
+              <p className="font-medium text-muted-foreground">📋 Headers detectados ({csvHeaders.length}):</p>
+              <p className="text-muted-foreground break-all">{csvHeaders.join(' | ')}</p>
+            </div>
+
             <ColumnMapper
               csvHeaders={csvHeaders}
               mapping={mapping}
