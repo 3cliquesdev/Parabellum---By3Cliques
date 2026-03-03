@@ -1,52 +1,58 @@
 
 
-# Resposta ao Checklist — Status Atual do Deploy
+# Status do Plano P0→P2 e Implementação Pendente
 
-Analisei o projeto atual e sigo as regras da base de conhecimento.
+## Status atual
 
-## Checklist de Deploy
+| Item | Status | Observação |
+|------|--------|-----------|
+| **P0.1** Message Buffer cron | ✅ Concluído | setTimeout removido, cron ativo, lock implementado, mensagens desbloqueadas |
+| **P0.2** Trava Financeira fallback | ✅ Já implementado | Retry 2x com re-invoke do flow, fallback para `waiting_human` + dept Financeiro, flow state `transferred`, mensagem enviada. Gap intencional: hasFlowContext=true + 2x falha → mantém no fluxo (soberania) |
+| **P1.1** Nó create_ticket | ⚠️ **Parcialmente feito** | Frontend do EndNode tem opção `create_ticket` no select, mas `process-chat-flow` **não tem handler** (linhas 2329-2333 tratam apenas `create_lead` com TODO). Nó mid-flow `CreateTicketNode` **não existe** |
+| **P1.2** Variáveis/Autocomplete/Warnings | ✅ Já implementado | `variableCatalog.ts` completo: 14 contact vars, 7 conversation vars, order vars, graph traversal, `findOrphanVariables`, `evaluateCondition` com `getVar` fallback chain, 13 condition contact fields + 5 conversation fields |
+| **P2.1** Relatório Inbox | ✅ Já implementado | RPC `get_inbox_time_report` com SLA, CSAT, tags, p50/p90, filtros. `InboxTimeTable` + `useInboxTimeReport` funcionais |
 
-| # | Item | Status |
-|---|------|--------|
-| 1 | **setTimeout removido** do webhook | ✅ Confirmado. `bufferAndSchedule()` faz apenas `insert` + metadata. Nenhum `setTimeout` no código. |
-| 2 | **Migration aplicada** — colunas novas | ✅ Confirmado. Colunas existem: `contact_id`, `instance_id`, `from_number`, `flow_context`, `flow_data`. Obs: `processed_at` **NÃO existe** (não foi incluída na migration). |
-| 3 | **RPC de lock criada** | ✅ Confirmado. Ambas funções existem: `try_lock_conversation_buffer` e `get_ready_buffer_conversations`. |
-| 4 | **Cron configurado** | ✅ Confirmado no `config.toml`: `schedule = "* * * * *"` (1/min). Logs confirmam execução contínua. |
-| 5 | **Modo scan implementado** | ✅ Confirmado. Lógica de CRON/SCAN presente com advisory lock, re-verificação de idade, e retry em erro. |
+## Trabalho restante: P1.1 — Nó create_ticket completo
 
-## Checklist de "Destravar as 6 mensagens"
+### 1. Backend: Handler no `process-chat-flow/index.ts`
 
-| Item | Status |
-|------|--------|
-| Mensagens antigas processadas | ✅ **5 das 6 foram processadas** pelo CRON às 17:27. Logs confirmam: `CRON complete: 5 processed, 0 errors` + `1 processed, 0 errors`. |
-| `processed=false` restantes | ⚠️ **1 mensagem pendente** — conversa `ceedcb3f` ("Falar com atendente"), criada 17:28, `ai_mode=autopilot`. Deve ser processada no próximo ciclo do cron. |
-| `stuck > 5min` | ✅ **0** (zero mensagens presas há mais de 5 minutos). |
+**EndNode action** (linhas 2329-2333): Adicionar handler para `end_action === 'create_ticket'`:
+- Resolver variáveis do `action_data` (subject, description) via `replaceVariables`
+- Inserir ticket na tabela `tickets` com: subject, description, category (do action_data), priority default `medium`, status `open`, `source_conversation_id`, `contact_id`
+- Idempotency key: `conversation_id + flow_state_id + node_id` para evitar duplicação em retries
+- Logar evento no `ai_events`
 
-## Checklist de Validação
+**Mid-flow CreateTicketNode**: Adicionar novo tipo de nó `create_ticket` no motor:
+- Handler no switch principal de tipos de nó
+- Cria ticket com campos configuráveis (subject template, description template, category, priority)
+- Auto-avança para próximo nó (igual `message`)
+- Mesma lógica de idempotência
 
-| Teste | Status |
-|-------|--------|
-| **A — Batching básico** | ✅ Funcionando. Logs mostram concatenação e processamento. |
-| **B — Nada fica preso** | ✅ `stuck_count = 0`. Nenhuma conversa com pendência antiga. |
-| **C — Idempotência** | ✅ Advisory lock + double-check pós-lock + mark-only-on-success implementados. |
+### 2. Frontend: Componente `CreateTicketNode`
 
-## Checklist de Monitoramento
+**Novo arquivo**: `src/components/chat-flows/nodes/CreateTicketNode.tsx`
+- Visual: ícone Ticket, campos subject/description com suporte a `{{variáveis}}`
+- Select de category (enum existente: financeiro, tecnico, bug, outro, devolucao, reclamacao, saque)
+- Select de priority (low, medium, high, urgent)
+- Badge visual indicando "Criar Ticket"
 
-| Item | Status |
-|------|--------|
-| Monitor de stuck > 5min | ❌ **Não implementado**. Não existe alerta automático. A query funciona manualmente. |
-| Health check do cron | ✅ Logs confirmam execuções constantes (~1/min). Não há tabela `cron_runs` dedicada. |
-| `processed_at` timestamp | ❌ **Coluna não existe**. Pode ser adicionada como upgrade futuro para auditoria. |
+**Properties panel** no `ChatFlowEditor.tsx`:
+- Campos editáveis: subject (com VariableAutocomplete), description (com VariableAutocomplete), category, priority
+- Preview das variáveis disponíveis
 
-## Informações técnicas
+### 3. Registro do nó
 
-- `conversation_id` é **uuid** (não text)
-- `processed_at` **não existe** na tabela atual
-- A 1 mensagem pendente (`ceedcb3f`) está em conversa `autopilot` ativa — o cron vai processá-la no próximo ciclo
+- Adicionar `CreateTicketNode` ao `nodeTypes` no `ChatFlowEditor`
+- Adicionar ao index de exports (`nodes/index.ts`)
+- Adicionar opção "Criar Ticket" no menu de adição de nós
+- Adicionar ao `nodeConfig` com ícone e cor
 
-## Recomendações (upgrades opcionais)
+### 4. Proteção contra duplicidade
 
-1. **Adicionar coluna `processed_at`** para auditoria temporal
-2. **Criar alerta automático** para `stuck > 5min` (pode ser uma query no cron que loga warning)
-3. Ambos são upgrades puros, sem impacto no existente
+Quando autopilot está ativo COM flow ativo, bloquear a tool call `classify_and_resolve_ticket` se o fluxo tem um nó `create_ticket` no caminho. Isso evita que a IA crie ticket duplicado via tool call enquanto o flow já vai criar via nó.
+
+### Impacto
+- **Upgrade puro**: Não altera nenhum comportamento existente
+- **Sem regressão**: EndNode sem `create_ticket` continua funcionando normalmente
+- **Idempotência**: Key composta previne duplicação em retries do cron/buffer
 
