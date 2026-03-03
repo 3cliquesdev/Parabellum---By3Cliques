@@ -51,15 +51,16 @@ export function TransferPropertiesPanel({ selectedNode, updateNodeData }: Transf
             <SelectItem value="department">Departamento</SelectItem>
             <SelectItem value="queue">Fila de atendimento</SelectItem>
             <SelectItem value="agent">Agente específico</SelectItem>
+            <SelectItem value="consultant">Consultor do cliente</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Selecionar Departamento - aparece para "department" e "agent" */}
-      {(transferType === "department" || transferType === "agent") && (
+      {/* Selecionar Departamento - aparece para "department", "agent" e "consultant" (fallback) */}
+      {(transferType === "department" || transferType === "agent" || transferType === "consultant") && (
         <div className="space-y-1.5">
           <Label className="text-xs">
-            {transferType === "agent" ? "Departamento do agente" : "Departamento destino"}
+            {transferType === "agent" ? "Departamento do agente" : transferType === "consultant" ? "Departamento fallback" : "Departamento destino"}
           </Label>
           <Select
             value={selectedNode.data.department_id || ""}
@@ -151,6 +152,13 @@ export function TransferPropertiesPanel({ selectedNode, updateNodeData }: Transf
               )}
             </SelectContent>
           </Select>
+        </div>
+      )}
+
+      {/* Mensagem de info para Consultor */}
+      {transferType === "consultant" && (
+        <div className="text-xs text-muted-foreground bg-muted/50 p-2.5 rounded-lg">
+          A conversa será direcionada ao consultor vinculado ao contato. Se não houver consultor, vai para o pool do departamento selecionado acima.
         </div>
       )}
 

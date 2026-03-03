@@ -902,7 +902,7 @@ serve(async (req) => {
                 
                 // 🆕 EXECUTAR TRANSFERÊNCIA SE NECESSÁRIO
                 if (flowData.transfer) {
-                  console.log("[meta-whatsapp-webhook] 🔄 Executing transfer to department:", flowData.departmentId);
+                  console.log("[meta-whatsapp-webhook] 🔄 Executing transfer to department:", flowData.departmentId, "type:", flowData.transferType);
                   
                   const updateData: Record<string, unknown> = {
                     ai_mode: 'waiting_human',
@@ -914,27 +914,24 @@ serve(async (req) => {
                   updateData.department = flowData.departmentId || DEPT_SUPORTE_FALLBACK;
 
                   // ═══════════════════════════════════════════════════════════════
-                  // 🔒 TRAVA TRANSFER-PERSIST-LOCK v1.0 — 2026-02-09
-                  // PROTEGIDO: Busca de consultor (contato/email/regex) + persistencia.
-                  //   - Busca consultor por contato, email coletado, ou regex nas msgs
-                  //   - Atribui assigned_to e ai_mode = copilot
-                  //   - Persiste consultant_id no contato para routing futuro
-                  //   - Executa transferencia de departamento
-                  // ⚠️  NAO ALTERAR sem aprovacao explicita do responsavel.
-                  // Qualquer mudanca deve: (1) ser justificada, (2) testada, (3) versionada.
+                  // 🔒 TRAVA TRANSFER-PERSIST-LOCK v1.1 — 2026-03-03
+                  // UPGRADE: transfer_type=consultant força busca de consultor
+                  //   mesmo quando consultant_manually_removed=true (vai pro pool)
                   // ═══════════════════════════════════════════════════════════════
+                  const isConsultantTransfer = flowData.transferType === 'consultant';
+                  
                   const { data: contactConsultantData } = await supabase
                     .from('contacts')
                     .select('consultant_id, consultant_manually_removed')
                     .eq('id', contact.id)
                     .maybeSingle();
 
-                  // 🛡️ Se consultor foi removido manualmente, não re-atribuir
-                  if (contactConsultantData?.consultant_manually_removed) {
+                  // 🛡️ Se consultor foi removido manualmente E NÃO é transferência explícita para consultor
+                  if (contactConsultantData?.consultant_manually_removed && !isConsultantTransfer) {
                     console.log("[meta-whatsapp-webhook] 🚫 consultant_manually_removed=true, pulando TRANSFER-PERSIST-LOCK para contato:", contact.id);
                   }
 
-                  let consultantId = contactConsultantData?.consultant_manually_removed
+                  let consultantId = (contactConsultantData?.consultant_manually_removed && !isConsultantTransfer)
                     ? null
                     : (contactConsultantData?.consultant_id || null);
 
