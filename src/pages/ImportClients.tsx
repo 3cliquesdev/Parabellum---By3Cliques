@@ -148,17 +148,28 @@ export default function ImportClients() {
   };
 
   const downloadTemplate = () => {
-    // Template com ponto-e-vírgula (padrão Excel Brasil) e BOM para UTF-8
-    const template = `email;nome;sobrenome;telefone;empresa;cpf/cnpj;ie;endereco;numero;complemento;bairro;cidade;estado;cep;data_nascimento;tipo;bloqueado;plano;data_cadastro;ultimo_pagamento;proximo_pagamento;pedidos_recentes;saldo;consultor;id_consultor
-exemplo@email.com;João;Silva;(11) 99999-9999;Empresa Exemplo;123.456.789-00;987654321;Rua Aldo Focosi;111;Sala 10;Centro;Ribeirão Preto;SP;14091-310;15/01/1990;Cliente;não;Premium;15/01/2024;01/12/2024;01/01/2025;5;1500,00;Nome do Consultor;uuid-do-consultor-aqui`;
-    
-    // BOM UTF-8 para Excel reconhecer caracteres especiais
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + template], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'template_importacao_clientes.csv';
-    link.click();
+    import('xlsx').then((XLSX) => {
+      const headers = [
+        'email', 'nome', 'sobrenome', 'telefone', 'empresa', 'cpf/cnpj', 'ie',
+        'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'estado', 'cep',
+        'data_nascimento', 'tipo', 'bloqueado', 'plano', 'data_cadastro',
+        'ultimo_pagamento', 'proximo_pagamento', 'pedidos_recentes', 'saldo',
+        'consultor', 'id_consultor'
+      ];
+      const exampleRow = [
+        'exemplo@email.com', 'João', 'Silva', '(11) 99999-9999', 'Empresa Exemplo',
+        '123.456.789-00', '987654321', 'Rua Aldo Focosi', '111', 'Sala 10',
+        'Centro', 'Ribeirão Preto', 'SP', '14091-310', '15/01/1990', 'Cliente',
+        'não', 'Premium', '15/01/2024', '01/12/2024', '01/01/2025', '5',
+        '1500,00', 'Nome do Consultor', 'uuid-do-consultor-aqui'
+      ];
+      const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
+      // Auto-ajustar largura das colunas
+      ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 2, 14) }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Template');
+      XLSX.writeFile(wb, 'template_importacao_clientes.xlsx');
+    });
   };
 
 
