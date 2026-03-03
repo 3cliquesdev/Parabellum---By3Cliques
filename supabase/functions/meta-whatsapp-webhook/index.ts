@@ -554,27 +554,8 @@ serve(async (req) => {
                 .single();
 
               if (!conversation) {
-                // ═══════════════════════════════════════════════════════════════
-                // 🔒 TRAVA ROUTING-LOCK v2.0 — 2026-03-03
-                // PROTEGIDO: Routing de cliente retornante com consultant_id.
-                //   - Busca consultant_id e consultant_manually_removed no contato
-                //   - IA/Fluxo SEMPRE roda primeiro (autopilot)
-                //   - Consultor fica pré-atribuído (assigned_to) para receber
-                //     a conversa quando o fluxo fizer transfer
-                //   - Se consultant_manually_removed=true → ignora consultor
-                // ⚠️  NAO ALTERAR sem aprovacao explicita do responsavel.
-                // Qualquer mudanca deve: (1) ser justificada, (2) testada, (3) versionada.
-                // ═══════════════════════════════════════════════════════════════
-                const { data: contactData } = await supabase
-                  .from('contacts')
-                  .select('consultant_id, consultant_manually_removed')
-                  .eq('id', contact.id)
-                  .maybeSingle();
-
-                const hasConsultant = !!contactData?.consultant_id && !contactData?.consultant_manually_removed;
-
-                // Criar nova conversa — IA/Fluxo sempre primeiro (autopilot)
-                // Consultor fica como assigned_to para transfer posterior
+                // Nova conversa — sempre autopilot, sem pré-atribuição
+                // Roteamento para consultor é 100% responsabilidade do Chat Flow
                 const { data: newConv } = await supabase
                   .from("conversations")
                   .insert({
@@ -582,7 +563,7 @@ serve(async (req) => {
                     channel: "whatsapp",
                     status: "open",
                     ai_mode: "autopilot",
-                    assigned_to: hasConsultant ? contactData.consultant_id : null,
+                    assigned_to: null,
                     whatsapp_provider: "meta",
                     whatsapp_meta_instance_id: instance.id,
                   })
@@ -590,10 +571,6 @@ serve(async (req) => {
                   .single();
 
                 conversation = newConv;
-
-                if (hasConsultant) {
-                  console.log("[meta-whatsapp-webhook] 🤖 Cliente com consultor → autopilot primeiro, consultor pré-atribuído:", contactData.consultant_id);
-                }
                 console.log("[meta-whatsapp-webhook] 💬 New conversation created:", conversation?.id);
               } else {
                 // Migrar de Evolution para Meta se necessário
