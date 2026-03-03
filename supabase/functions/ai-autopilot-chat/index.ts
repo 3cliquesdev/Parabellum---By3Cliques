@@ -7437,7 +7437,29 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
               break;
             }
 
-            // 3. Flag guard - só executa se close já aconteceu
+            // 3. Flow ativo guard — soberania do fluxo
+            const { data: activeFlowState } = await supabaseClient
+              .from('chat_flow_states')
+              .select('id')
+              .eq('conversation_id', conversationId)
+              .in('status', ['in_progress', 'active', 'waiting_input'])
+              .limit(1)
+              .maybeSingle();
+
+            if (activeFlowState) {
+              console.log('[ai-autopilot-chat] 🚫 classify_and_resolve_ticket BLOQUEADO (flow ativo):', activeFlowState.id);
+              await supabaseClient.from('ai_events').insert({
+                entity_id: conversationId,
+                entity_type: 'conversation',
+                event_type: 'ai_ticket_classification',
+                model: ragConfig.model,
+                output_json: { category: args.category, summary: args.summary, blocked: true, reason: 'active_flow', flow_state_id: activeFlowState.id }
+              });
+              assistantMessage = 'Classificação bloqueada: fluxo ativo gerencia tickets.';
+              break;
+            }
+
+            // 4. Flag guard - só executa se close já aconteceu
             const { data: convData } = await supabaseClient
               .from('conversations')
               .select('related_ticket_id, customer_id, contact_id, customer_metadata, department, status')

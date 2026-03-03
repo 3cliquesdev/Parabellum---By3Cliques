@@ -122,8 +122,12 @@ async function createTicketFromFlow(
     description: string;
     category: string;
     priority: string;
+    departmentId?: string | null;
+    internalNote?: string | null;
+    useCollectedData?: boolean;
+    collectedData?: Record<string, any>;
   }
-) {
+): Promise<{ id: string } | null> {
   const idempotencyKey = `flow:${opts.conversationId}:${opts.flowStateId}:${opts.nodeId}`;
 
   // Check idempotency — look for existing ticket with same key
@@ -138,18 +142,38 @@ async function createTicketFromFlow(
     return existing;
   }
 
+  // Build metadata
+  const metadata: Record<string, any> = {
+    flow_state_id: opts.flowStateId,
+    node_id: opts.nodeId,
+    idempotency_key: idempotencyKey,
+  };
+  if (opts.useCollectedData && opts.collectedData) {
+    // Snapshot collected data (exclude internal keys)
+    const snapshot: Record<string, any> = {};
+    for (const [k, v] of Object.entries(opts.collectedData)) {
+      if (!k.startsWith('__')) snapshot[k] = v;
+    }
+    metadata.collected_data = snapshot;
+  }
+
+  const insertPayload: Record<string, any> = {
+    subject: opts.subject || 'Ticket do Fluxo',
+    description: opts.description || '',
+    category: opts.category || 'outro',
+    priority: opts.priority || 'medium',
+    status: 'open',
+    source_conversation_id: opts.conversationId,
+    customer_id: opts.contactId,
+    idempotency_key: idempotencyKey,
+    metadata,
+  };
+  if (opts.departmentId) insertPayload.department_id = opts.departmentId;
+  if (opts.internalNote) insertPayload.internal_note = opts.internalNote;
+
   const { data: ticket, error } = await supabaseClient
     .from('tickets')
-    .insert({
-      subject: opts.subject || 'Ticket do Fluxo',
-      description: opts.description || '',
-      category: opts.category || 'outro',
-      priority: opts.priority || 'medium',
-      status: 'open',
-      source_conversation_id: opts.conversationId,
-      customer_id: opts.contactId,
-      idempotency_key: idempotencyKey,
-    })
+    .insert(insertPayload)
     .select('id')
     .single();
 
@@ -168,7 +192,7 @@ async function createTicketFromFlow(
       entity_type: 'conversation',
       event_type: 'flow_create_ticket',
       model: 'flow_engine',
-      output_json: { ticket_id: ticket.id, category: opts.category, priority: opts.priority, node_id: opts.nodeId },
+      output_json: { ticket_id: ticket.id, category: opts.category, priority: opts.priority, node_id: opts.nodeId, department_id: opts.departmentId || null },
     });
   } catch (e) { /* non-blocking */ }
 
@@ -2405,7 +2429,10 @@ serve(async (req) => {
           const actionData = nextNode.data.action_data || {};
           const subject = replaceVariables(actionData.subject || nextNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
           const description = replaceVariables(actionData.description || nextNode.data.description_template || '', variablesContext);
-          await createTicketFromFlow(supabaseClient, {
+          const internalNote = (actionData.internal_note || nextNode.data.internal_note)
+            ? replaceVariables(actionData.internal_note || nextNode.data.internal_note, variablesContext)
+            : null;
+          const ticket = await createTicketFromFlow(supabaseClient, {
             conversationId: conversationId,
             flowStateId: activeState.id,
             nodeId: nextNode.id,
@@ -2414,7 +2441,12 @@ serve(async (req) => {
             description,
             category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
             priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
+            departmentId: actionData.department_id || nextNode.data.department_id || null,
+            internalNote,
+            useCollectedData: actionData.use_collected_data || nextNode.data.use_collected_data || false,
+            collectedData,
           });
+          if (ticket) collectedData.__last_ticket_id = ticket.id;
         }
 
         return new Response(
@@ -2505,7 +2537,10 @@ serve(async (req) => {
           // 🎫 Mid-flow: criar ticket e auto-avançar
           const subject = replaceVariables(nextNode.data?.subject_template || 'Ticket do Fluxo', variablesContext);
           const description = replaceVariables(nextNode.data?.description_template || '', variablesContext);
-          await createTicketFromFlow(supabaseClient, {
+          const internalNote = nextNode.data?.internal_note
+            ? replaceVariables(nextNode.data.internal_note, variablesContext)
+            : null;
+          const ticket = await createTicketFromFlow(supabaseClient, {
             conversationId: conversationId,
             flowStateId: activeState.id,
             nodeId: nextNode.id,
@@ -2514,7 +2549,12 @@ serve(async (req) => {
             description,
             category: nextNode.data?.ticket_category || 'outro',
             priority: nextNode.data?.ticket_priority || 'medium',
+            departmentId: nextNode.data?.department_id || null,
+            internalNote,
+            useCollectedData: nextNode.data?.use_collected_data || false,
+            collectedData,
           });
+          if (ticket) collectedData.__last_ticket_id = ticket.id;
           console.log(`[process-chat-flow] 🎫 Auto-advancing past create_ticket node ${nextNode.id}`);
         } else {
           const msgText = replaceVariables(nextNode.data?.message || "", variablesContext);
@@ -2581,7 +2621,10 @@ serve(async (req) => {
           const actionData = nextNode.data.action_data || {};
           const subject = replaceVariables(actionData.subject || nextNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
           const description = replaceVariables(actionData.description || nextNode.data.description_template || '', variablesContext);
-          await createTicketFromFlow(supabaseClient, {
+          const internalNote = (actionData.internal_note || nextNode.data.internal_note)
+            ? replaceVariables(actionData.internal_note || nextNode.data.internal_note, variablesContext)
+            : null;
+          const ticket = await createTicketFromFlow(supabaseClient, {
             conversationId: conversationId,
             flowStateId: activeState.id,
             nodeId: nextNode.id,
@@ -2590,7 +2633,12 @@ serve(async (req) => {
             description,
             category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
             priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
+            departmentId: actionData.department_id || nextNode.data.department_id || null,
+            internalNote,
+            useCollectedData: actionData.use_collected_data || nextNode.data.use_collected_data || false,
+            collectedData,
           });
+          if (ticket) collectedData.__last_ticket_id = ticket.id;
         }
 
         const endMsg = replaceVariables(nextNode.data?.message || '', variablesContext);

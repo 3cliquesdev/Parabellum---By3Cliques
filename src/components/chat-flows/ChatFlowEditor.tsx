@@ -957,6 +957,25 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                           </SelectContent>
                         </Select>
                       </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Nota interna</Label>
+                        <VariableAutocomplete
+                          value={selectedNode.data.internal_note || ""}
+                          onChange={(v) => updateNodeData("internal_note", v)}
+                          nodes={nodes}
+                          edges={edges}
+                          selectedNodeId={selectedNode.id}
+                          placeholder="Nota interna com {{variáveis}}"
+                          minHeight="40px"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={selectedNode.data.use_collected_data || false}
+                          onCheckedChange={(v) => updateNodeData("use_collected_data", v)}
+                        />
+                        <Label className="text-xs">Salvar dados coletados no ticket</Label>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1045,6 +1064,25 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                         <SelectItem value="urgent">Urgente</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Nota interna</Label>
+                    <VariableAutocomplete
+                      value={selectedNode.data.internal_note || ""}
+                      onChange={(v) => updateNodeData("internal_note", v)}
+                      nodes={nodes}
+                      edges={edges}
+                      selectedNodeId={selectedNode.id}
+                      placeholder="Nota interna com {{variáveis}}"
+                      minHeight="40px"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={selectedNode.data.use_collected_data || false}
+                      onCheckedChange={(v) => updateNodeData("use_collected_data", v)}
+                    />
+                    <Label className="text-xs">Salvar dados coletados no ticket</Label>
                   </div>
                 </div>
               )}
