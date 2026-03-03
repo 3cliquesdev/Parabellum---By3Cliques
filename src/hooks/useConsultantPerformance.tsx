@@ -52,7 +52,18 @@ export function useConsultantPerformance() {
       // For each consultant, calculate their metrics
       const performanceData: ConsultantPerformance[] = await Promise.all(
         (consultants || []).map(async (consultant) => {
-          // Get their portfolio
+          // Contagem exata (sem limite de 1000)
+          const { count, error: countError } = await supabase
+            .from("contacts")
+            .select("id", { count: "exact", head: true })
+            .eq("consultant_id", consultant.id)
+            .eq("status", "customer");
+
+          if (countError) throw countError;
+
+          const portfolio_count = count || 0;
+
+          // Dados para cálculos de value/health (amostra até 1000 é aceitável)
           const { data: portfolio, error: portfolioError } = await supabase
             .from("contacts")
             .select("subscription_plan, last_contact_date")
@@ -60,8 +71,6 @@ export function useConsultantPerformance() {
             .eq("status", "customer");
 
           if (portfolioError) throw portfolioError;
-
-          const portfolio_count = portfolio?.length || 0;
 
           // Calculate portfolio value
           const portfolio_value = portfolio?.reduce((sum, contact) => {
