@@ -30,7 +30,7 @@ export function KnowledgeColumnMapper({ csvHeaders, mapping, onMappingChange }: 
           <div key={field.value} className="space-y-2">
             <Label className="font-medium">{field.label}</Label>
             <Select
-              value={mapping[field.value]}
+              value={mapping[field.value] ?? undefined}
               onValueChange={(value) => onMappingChange(field.value, value)}
             >
               <SelectTrigger>

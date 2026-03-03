@@ -16,10 +16,16 @@ export default function ImportClients() {
   
   const importMutation = useImportContacts();
 
+  // Normaliza string removendo acentos e caracteres especiais
+  const normalize = (str: string): string =>
+    str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, " ").trim();
+
   // Auto-mapear colunas quando CSV é carregado
   useEffect(() => {
     if (csvHeaders.length > 0) {
       const autoMapping: Record<string, string> = {};
+      
+      console.log('[ImportClients] CSV headers parseados:', csvHeaders);
       
       // Mapeamento automático inteligente
       const mappings: Record<string, string[]> = {
@@ -29,12 +35,12 @@ export default function ImportClients() {
         'phone': ['telefone', 'phone', 'tel', 'celular', 'fone'],
         'company': ['empresa', 'company', 'companhia'],
         'document': ['cpf', 'cnpj', 'documento', 'document', 'cpf/cnpj'],
-        'state_registration': ['ie', 'inscricao estadual', 'inscricão estadual', 'inscrição estadual', 'state_registration', 'inscricao_estadual'],
-        'address': ['endereco', 'endereço', 'address', 'rua', 'logradouro'],
-        'address_number': ['numero', 'número', 'number', 'address_number', 'num'],
+        'state_registration': ['ie', 'inscricao estadual', 'inscricao estadual', 'inscricao estadual', 'state_registration', 'inscricao_estadual'],
+        'address': ['endereco', 'endereco', 'address', 'rua', 'logradouro'],
+        'address_number': ['numero', 'numero', 'number', 'address_number', 'num'],
         'address_complement': ['complemento', 'complement', 'address_complement', 'compl'],
         'neighborhood': ['bairro', 'neighborhood', 'district'],
-        'city': ['cidade', 'city', 'municipio', 'município'],
+        'city': ['cidade', 'city', 'municipio', 'municipio'],
         'state': ['estado', 'state', 'uf'],
         'zip_code': ['cep', 'zip', 'zipcode', 'zip_code', 'postalcode'],
         'birth_date': ['nascimento', 'data_nascimento', 'birth_date', 'birthdate', 'data de nascimento'],
@@ -42,25 +48,27 @@ export default function ImportClients() {
         'blocked': ['bloqueado', 'blocked', 'bloquear', 'ativo'],
         'subscription_plan': ['plano', 'subscription_plan', 'plano_assinatura', 'assinatura'],
         'registration_date': ['cadastro', 'registration_date', 'data_cadastro', 'data de cadastro'],
-        'last_payment_date': ['ultimo_pagamento', 'last_payment_date', 'data_ultimo_pagamento', 'último pagamento'],
-        'next_payment_date': ['proximo_pagamento', 'next_payment_date', 'data_proximo_pagamento', 'próximo pagamento'],
+        'last_payment_date': ['ultimo_pagamento', 'last_payment_date', 'data_ultimo_pagamento', 'ultimo pagamento'],
+        'next_payment_date': ['proximo_pagamento', 'next_payment_date', 'data_proximo_pagamento', 'proximo pagamento'],
         'recent_orders_count': ['pedidos', 'recent_orders_count', 'qtd_pedidos', 'quantidade pedidos', 'pedidos recentes'],
         'account_balance': ['saldo', 'account_balance', 'saldo_conta', 'balance'],
-        'assigned_to': ['consultor', 'consultant', 'responsavel', 'responsável', 'assigned_to'],
+        'assigned_to': ['consultor', 'consultant', 'responsavel', 'responsavel', 'assigned_to'],
         'consultant_id': ['id_consultor', 'consultant_id', 'id consultor', 'uuid_consultor'],
       };
 
       csvHeaders.forEach((header) => {
-        const lowerHeader = header.toLowerCase().trim();
+        if (!header || !header.trim()) return;
+        const normalizedHeader = normalize(header);
         
         for (const [dbField, possibleNames] of Object.entries(mappings)) {
-          if (possibleNames.some(name => lowerHeader.includes(name))) {
+          if (!autoMapping[dbField] && possibleNames.some(name => normalizedHeader.includes(normalize(name)))) {
             autoMapping[dbField] = header;
             break;
           }
         }
       });
 
+      console.log('[ImportClients] Auto-mapping resultado:', autoMapping);
       setMapping(autoMapping);
     }
   }, [csvHeaders]);

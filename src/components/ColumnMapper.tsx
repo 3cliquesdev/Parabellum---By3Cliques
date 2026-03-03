@@ -51,7 +51,7 @@ export function ColumnMapper({ csvHeaders, mapping, onMappingChange }: ColumnMap
           <div key={field.value} className="grid grid-cols-2 gap-4 items-center">
             <Label className="font-medium">{field.label}</Label>
             <Select
-              value={mapping[field.value] || ''}
+              value={mapping[field.value] ?? undefined}
               onValueChange={(value) => onMappingChange(field.value, value)}
             >
               <SelectTrigger>
