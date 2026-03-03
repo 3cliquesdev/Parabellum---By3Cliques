@@ -194,6 +194,23 @@ serve(async (req) => {
         }
       }
 
+      // ---- Stuck messages alert ----
+      try {
+        const { data: stuckData } = await supabase
+          .from("message_buffer")
+          .select("conversation_id", { count: "exact", head: false })
+          .eq("processed", false)
+          .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
+
+        const stuckCount = stuckData?.length || 0;
+        if (stuckCount > 0) {
+          const uniqueConvs = [...new Set(stuckData!.map((r: any) => r.conversation_id))];
+          console.warn(`[process-buffered-messages] 🚨 ALERT: ${stuckCount} messages stuck > 5min across ${uniqueConvs.length} conversations: ${uniqueConvs.slice(0, 5).join(", ")}`);
+        }
+      } catch (alertErr) {
+        console.error("[process-buffered-messages] ⚠️ Stuck alert check failed:", alertErr);
+      }
+
       console.log(`[process-buffered-messages] 🏁 CRON complete: ${processedCount} processed, ${errorCount} errors`);
       return new Response(
         JSON.stringify({ status: "ok", processed: processedCount, errors: errorCount }),

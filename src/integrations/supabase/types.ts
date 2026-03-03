@@ -5433,6 +5433,7 @@ export type Database = {
           instance_id: string | null
           message_content: string
           processed: boolean
+          processed_at: string | null
         }
         Insert: {
           contact_id?: string | null
@@ -5445,6 +5446,7 @@ export type Database = {
           instance_id?: string | null
           message_content: string
           processed?: boolean
+          processed_at?: string | null
         }
         Update: {
           contact_id?: string | null
@@ -5457,6 +5459,7 @@ export type Database = {
           instance_id?: string | null
           message_content?: string
           processed?: boolean
+          processed_at?: string | null
         }
         Relationships: [
           {
