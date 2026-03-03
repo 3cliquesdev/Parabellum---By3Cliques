@@ -38,7 +38,7 @@ export function KnowledgeColumnMapper({ csvHeaders, mapping, onMappingChange }: 
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">Não mapear</SelectItem>
-                {csvHeaders.map((header) => (
+                {csvHeaders.filter(h => h && h.trim() !== '').map((header) => (
                   <SelectItem key={header} value={header}>
                     {header}
                   </SelectItem>
