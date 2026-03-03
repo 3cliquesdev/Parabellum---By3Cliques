@@ -7308,13 +7308,17 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             const handoffReason = args.reason || 'solicitacao_cliente';
             const handoffNote = args.internal_note || 'Transferência solicitada pela IA';
 
-            // 1. MUDAR O MODO (Desligar IA)
-            await supabaseClient
-              .from('conversations')
-              .update({ ai_mode: 'copilot' })
-              .eq('id', conversationId);
+            // 1. MUDAR O MODO (Desligar IA) — apenas se NÃO estiver dentro de um fluxo ativo
+            if (!flow_context) {
+              await supabaseClient
+                .from('conversations')
+                .update({ ai_mode: 'copilot' })
+                .eq('id', conversationId);
+              console.log('[ai-autopilot-chat] ✅ ai_mode mudado para copilot');
+            } else {
+              console.log('[ai-autopilot-chat] ⚠️ flow_context ativo — NÃO mudando ai_mode para copilot (soberania do fluxo)');
+            }
             
-            console.log('[ai-autopilot-chat] ✅ ai_mode mudado para copilot');
 
             // 2. CHAMAR O ROTEADOR (Buscar agente disponível)
             const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {

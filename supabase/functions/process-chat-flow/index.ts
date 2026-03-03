@@ -440,18 +440,35 @@ serve(async (req) => {
     // copilot: Humano atendendo com sugestões da IA
     // disabled: Atendimento 100% manual
     if ((currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') && !isTestMode) {
-      console.log(`[process-chat-flow] 🛡️ PROTEÇÃO: ai_mode=${currentAiMode} - NÃO processar fluxo/IA`);
-      console.log(`[process-chat-flow] 📋 assigned_to: ${convState?.assigned_to || 'null'}`);
-      
-      return new Response(JSON.stringify({
-        useAI: false,
-        aiNodeActive: false,
-        skipAutoResponse: true,
-        reason: `ai_mode_${currentAiMode}`,
-        message: `Conversa em modo ${currentAiMode} - fluxo/IA bloqueados`
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      // 🔓 SOBERANIA DO FLUXO: verificar se existe fluxo ativo antes de bloquear
+      const { data: activeFlowCheck } = await supabaseClient
+        .from('chat_flow_states')
+        .select('id, status')
+        .eq('conversation_id', conversationId)
+        .in('status', ['waiting_input', 'active', 'in_progress'])
+        .limit(1)
+        .maybeSingle();
+
+      if (activeFlowCheck) {
+        console.log(`[process-chat-flow] 🔓 SOBERANIA DO FLUXO: ai_mode=${currentAiMode} mas fluxo ativo (${activeFlowCheck.status}) → processando`);
+        // Restaurar ai_mode para autopilot (foi corrompido pelo handoff dentro do fluxo)
+        await supabaseClient.from('conversations')
+          .update({ ai_mode: 'autopilot' })
+          .eq('id', conversationId);
+      } else {
+        console.log(`[process-chat-flow] 🛡️ PROTEÇÃO: ai_mode=${currentAiMode} - NÃO processar fluxo/IA`);
+        console.log(`[process-chat-flow] 📋 assigned_to: ${convState?.assigned_to || 'null'}`);
+        
+        return new Response(JSON.stringify({
+          useAI: false,
+          aiNodeActive: false,
+          skipAutoResponse: true,
+          reason: `ai_mode_${currentAiMode}`,
+          message: `Conversa em modo ${currentAiMode} - fluxo/IA bloqueados`
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     if (isTestMode && (currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled')) {
