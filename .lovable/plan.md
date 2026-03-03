@@ -1,39 +1,17 @@
 
 
-# Resultado do Teste End-to-End: Fix de Soberania do Fluxo
+# Remediação em massa + Redeploy ai-autopilot-chat
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Descoberta crítica
+## Estado atual
 
-O fix de soberania que implementamos **estava no código mas NÃO estava deployed**. A edge function `process-chat-flow` ainda rodava a versão antiga. Os logs confirmam: nenhuma mensagem "SOBERANIA" aparece, apenas o bloqueio antigo `🛡️ PROTEÇÃO: ai_mode=copilot`.
+Verificação no banco mostra que restam **3 conversas** (não 97 — muitas já foram corrigidas ou expiraram) com fluxo ativo e `ai_mode` corrompido (`copilot` ou `disabled`).
 
-**Ação já tomada**: Redeploy da `process-chat-flow` realizado agora. Novas mensagens já passarão pelo check de soberania.
+## Ações a executar
 
-## Dados do problema em produção
-
-| Métrica | Valor |
-|---|---|
-| Conversas travadas em `waiting_input` no nó `1769459318164` | **97** |
-| Conversas ativas no mesmo nó | 7 |
-| Todas com `ai_mode = copilot` | Sim |
-| Fluxo afetado | Master Flow (is_master_flow = true) |
-| Conversa #14908342 | `ai_mode=copilot`, fluxo `waiting_input` — exatamente o bug |
-
-## O que o fix resolve (a partir de agora)
-
-Quando o cliente responder ao `ask_options`, o `process-chat-flow` vai:
-1. Detectar `ai_mode=copilot`
-2. Verificar `chat_flow_states` → encontrar fluxo ativo
-3. Logar `🔓 SOBERANIA DO FLUXO` → continuar processando
-4. Restaurar `ai_mode=autopilot`
-
-## Próximo passo necessário: Remediar as 97 conversas travadas
-
-As 97 conversas travadas precisam de uma ação de remediação, pois o cliente já respondeu e a mensagem foi ignorada. Duas opções:
-
-### Opção A: Script de correção em massa (recomendado)
-Restaurar `ai_mode=autopilot` em todas as conversas que têm fluxo ativo + `ai_mode=copilot`. Isso permitirá que a próxima mensagem do cliente seja processada normalmente.
+### 1. Script de correção em massa
+Executar UPDATE via insert tool para restaurar `ai_mode = 'autopilot'` nas 3 conversas travadas:
 
 ```sql
 UPDATE conversations 
@@ -46,10 +24,8 @@ WHERE id IN (
 )
 ```
 
-### Opção B: Cancelar fluxos travados
-Se preferir, cancelar os fluxos e deixar os agentes humanos atenderem manualmente.
+### 2. Redeploy `ai-autopilot-chat`
+Deploy da edge function com o fix preventivo (não setar `ai_mode=copilot` quando `flow_context` existe).
 
-## Também necessário: Redeploy do `ai-autopilot-chat`
-
-O fix preventivo (não setar `ai_mode=copilot` quando `flow_context` existe) também precisa ser redeployed para evitar novas ocorrências.
+Nenhuma alteração de código necessária — o fix já está no código. Apenas deploy.
 
