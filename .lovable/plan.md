@@ -1,37 +1,31 @@
 
-
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Diagnóstico definitivo
+## Objetivo
 
-A causa raiz NÃO é o scoring de headers. O problema é que **a planilha tem múltiplas abas** (sheets). A primeira aba é uma **tabela dinâmica (pivot table)** com headers como "Rótulos de Linha", "Contagem de Email", "Soma de ****". A aba com os dados reais (ID, Nome, Email, Telefone, Documento, etc.) está em outra posição.
+Permitir que ao clicar no nome/linha de um atendente na sidebar do Inbox, as conversas sejam filtradas para mostrar apenas as daquele agente. Atualmente a seção "Por Atendente" exibe stats e ações (redistribuir, mudar status), mas **não filtra a lista de conversas**.
 
-O `readXlsxFile(file)` lê sempre a **primeira aba por padrão**. Por isso o scoring funciona corretamente (detecta a melhor linha daquela aba), mas os dados são da aba errada.
+## Plano
 
-## Plano de correção
+### 1. Adicionar filtro por agente na URL (`InboxSidebar.tsx`)
 
-### 1. Adicionar detecção de abas no `CSVUploader.tsx`
+- Adicionar parâmetro `agent` nos search params (similar a `dept` e `tag`).
+- Tornar a linha do agente clicável para ativar/desativar o filtro `?agent=<agentId>`.
+- Highlight visual quando o agente está selecionado (mesmo padrão de departamento/tag).
 
-- Usar `readSheetNames(file)` do `read-excel-file` para listar todas as abas do XLSX.
-- Auto-selecionar a melhor aba usando scoring: a aba cujo melhor header row tem o maior score de `scoreHeaderRow` é a aba de dados.
-- Usar `readXlsxFile(file, { sheet: sheetNumber })` para ler a aba correta.
+### 2. Aplicar filtro na query de conversas
 
-### 2. Adicionar seletor manual de aba na UI (`CSVUploader.tsx`)
+- No hook/componente que busca conversas do inbox, ler o param `agent` e adicionar `.eq("assigned_to", agentId)` na query.
+- Arquivo provável: o componente que consome a lista de conversas (preciso verificar qual hook é usado).
 
-- Quando o arquivo tem mais de 1 aba, exibir um `Select` com os nomes das abas.
-- Pré-selecionar a aba detectada automaticamente.
-- Ao trocar de aba, re-parsear os dados da aba escolhida e atualizar headers + data.
+### 3. Exibir indicador de filtro ativo
 
-### 3. Propagar informação de aba para `ImportClients.tsx`
-
-- Mostrar na info de headers detectados qual aba está sendo usada (ex: "📋 Headers detectados (22) — aba 'Clientes' — linha 1 da planilha").
+- Quando filtro por agente está ativo, mostrar o nome do agente no topo da lista ou como breadcrumb para facilitar a remoção do filtro.
 
 ### Arquivos a editar
-- `src/components/CSVUploader.tsx` — principal (readSheetNames + seletor + auto-detect)
-- `src/pages/ImportClients.tsx` — exibir nome da aba detectada
+- `src/components/inbox/InboxSidebar.tsx` — tornar agentes clicáveis com filtro URL
+- Hook/componente de listagem do inbox — aplicar filtro `assigned_to`
 
-### Impacto e segurança
-- Sem regressão: arquivos com uma única aba continuam funcionando igual (sem seletor visível).
-- Sem mudança em backend/edge functions.
-- Rollback: reverter apenas `CSVUploader.tsx`.
-
+### Impacto
+- Sem regressão: filtros existentes (dept, tag, status) continuam funcionando.
+- Apenas frontend, sem mudança em backend.
