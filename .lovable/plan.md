@@ -1,27 +1,21 @@
 
 
-# Exibir ID dos consultores na página de Consultores
+# Template de importação em formato XLSX (Excel BR)
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
 ## Situação atual
 
-A página `/consultants` (Consultores) lista os consultores com nome, cargo, clientes e valor da carteira — mas **não mostra o UUID (ID)** deles. Para preencher a planilha de importação com `id_consultor`, você precisa ver esses IDs.
+O template já usa separador ponto-e-vírgula e BOM UTF-8, mas ainda é um `.csv`. Dependendo da versão do Excel, pode não separar as colunas corretamente ao abrir. A solução é gerar como **`.xlsx`** (Excel nativo), que o projeto já suporta via biblioteca `xlsx` instalada.
 
 ## Alteração
 
-### `src/pages/Consultants.tsx`
-Adicionar o ID do consultor no card, logo abaixo do cargo, com um botão de copiar para facilitar:
+### `src/pages/ImportClients.tsx` — função `downloadTemplate`
+- Substituir a geração de CSV por geração de `.xlsx` usando a biblioteca `xlsx`
+- Criar uma planilha com os headers em português e uma linha de exemplo com formatação BR (datas dd/mm/aaaa, decimais com vírgula)
+- Arquivo baixado: `template_importacao_clientes.xlsx`
 
-```
-Consultor: João Silva
-Consultor de CS
-ID: 3f8a1b2c-... [📋 copiar]
-```
+Isso garante que o Excel BR abra o arquivo corretamente com todas as colunas separadas e caracteres especiais preservados.
 
-- Exibir UUID truncado (primeiros 8 caracteres + `...`) para não poluir o card
-- Botão de copiar que copia o UUID completo para a área de transferência
-- Toast de confirmação ao copiar
-
-Upgrade puro — sem impacto em funcionalidades existentes.
+Upgrade puro — sem impacto no upload (que já aceita `.xlsx`).
 
