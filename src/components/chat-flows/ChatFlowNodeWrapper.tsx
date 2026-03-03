@@ -17,7 +17,8 @@ export type ChatFlowNodeType =
   | 'end'
   | 'fetch_order'
   | 'validate_customer'
-  | 'verify_customer_otp';
+  | 'verify_customer_otp'
+  | 'create_ticket';
 
 interface ChatFlowNodeWrapperProps {
   type: ChatFlowNodeType;
@@ -88,6 +89,10 @@ const typeColors: Record<ChatFlowNodeType, { header: string; border: string }> =
   verify_customer_otp: {
     header: 'bg-purple-700 dark:bg-purple-800',
     border: 'border-purple-500 dark:border-purple-600',
+  },
+  create_ticket: {
+    header: 'bg-rose-600 dark:bg-rose-700',
+    border: 'border-rose-400 dark:border-rose-600',
   },
 };
 

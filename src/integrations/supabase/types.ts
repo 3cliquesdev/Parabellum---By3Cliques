@@ -8903,6 +8903,7 @@ export type Database = {
           due_date: string | null
           first_response_at: string | null
           id: string
+          idempotency_key: string | null
           internal_note: string | null
           last_email_message_id: string | null
           merged_to_ticket_id: string | null
@@ -8935,6 +8936,7 @@ export type Database = {
           due_date?: string | null
           first_response_at?: string | null
           id?: string
+          idempotency_key?: string | null
           internal_note?: string | null
           last_email_message_id?: string | null
           merged_to_ticket_id?: string | null
@@ -8967,6 +8969,7 @@ export type Database = {
           due_date?: string | null
           first_response_at?: string | null
           id?: string
+          idempotency_key?: string | null
           internal_note?: string | null
           last_email_message_id?: string | null
           merged_to_ticket_id?: string | null

@@ -24,7 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   MessageSquare, User, Mail, Phone, CreditCard, ListChecks, 
   MessageCircle, GitBranch, Sparkles, UserPlus, CheckCircle,
-  Save, X, Trash2, Plus, Play, Bot, BookOpen, Package, ShieldCheck, KeyRound
+  Save, X, Trash2, Plus, Play, Bot, BookOpen, Package, ShieldCheck, KeyRound, Ticket
 } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -46,6 +46,7 @@ import {
   FetchOrderNode,
   ValidateCustomerNode,
   VerifyCustomerOTPNode,
+  CreateTicketNode,
 } from "./nodes";
 import { cn } from "@/lib/utils";
 import { TransferPropertiesPanel } from "./TransferPropertiesPanel";
@@ -72,6 +73,7 @@ export const chatFlowNodeTypes = {
   fetch_order: FetchOrderNode,
   validate_customer: ValidateCustomerNode,
   verify_customer_otp: VerifyCustomerOTPNode,
+  create_ticket: CreateTicketNode,
 };
 
 const edgeTypes = {
@@ -94,6 +96,7 @@ const blockColors: Record<string, string> = {
   fetch_order: "bg-teal-500",
   validate_customer: "bg-emerald-700",
   verify_customer_otp: "bg-purple-700",
+  create_ticket: "bg-rose-500",
 };
 
 // Cores do MiniMap
@@ -113,6 +116,7 @@ const miniMapColors: Record<string, string> = {
   fetch_order: '#14b8a6',
   validate_customer: '#047857',
   verify_customer_otp: '#7e22ce',
+  create_ticket: '#e11d48',
 };
 
 interface ChatFlowEditorProps {
@@ -227,6 +231,13 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         message_not_customer: "Vou encaminhar para nosso time comercial.",
         save_verified_as: "customer_verified",
         max_attempts: 3,
+      },
+      create_ticket: {
+        label: "Criar Ticket",
+        subject_template: "",
+        description_template: "",
+        ticket_category: "outro",
+        ticket_priority: "medium",
       },
     };
     return defaults[type] || { label: `Novo ${type}` };
@@ -471,6 +482,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 <DraggableBlock type="fetch_order" icon={Package} label="Pedido" color={blockColors.fetch_order} />
                 <DraggableBlock type="validate_customer" icon={ShieldCheck} label="Validar Cliente" color={blockColors.validate_customer} />
                 <DraggableBlock type="verify_customer_otp" icon={KeyRound} label="OTP Cliente" color={blockColors.verify_customer_otp} />
+                <DraggableBlock type="create_ticket" icon={Ticket} label="Ticket" color={blockColors.create_ticket} />
               </div>
             </div>
 
@@ -884,6 +896,69 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       <SelectItem value="add_tag">Adicionar tag</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  {/* Ticket config when end_action = create_ticket */}
+                  {selectedNode.data.end_action === "create_ticket" && (
+                    <div className="space-y-3 mt-3 border-t pt-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Assunto do ticket</Label>
+                        <VariableAutocomplete
+                          value={selectedNode.data.subject_template || ""}
+                          onChange={(v) => updateNodeData("subject_template", v)}
+                          nodes={nodes}
+                          edges={edges}
+                          selectedNodeId={selectedNode.id}
+                          placeholder="Ex: Reclamação de {{nome}}"
+                          minHeight="40px"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Descrição</Label>
+                        <VariableAutocomplete
+                          value={selectedNode.data.description_template || ""}
+                          onChange={(v) => updateNodeData("description_template", v)}
+                          nodes={nodes}
+                          edges={edges}
+                          selectedNodeId={selectedNode.id}
+                          placeholder="Detalhes do ticket"
+                          minHeight="60px"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Categoria</Label>
+                        <Select
+                          value={selectedNode.data.ticket_category || "outro"}
+                          onValueChange={(v) => updateNodeData("ticket_category", v)}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="financeiro">Financeiro</SelectItem>
+                            <SelectItem value="tecnico">Técnico</SelectItem>
+                            <SelectItem value="bug">Bug</SelectItem>
+                            <SelectItem value="devolucao">Devolução</SelectItem>
+                            <SelectItem value="reclamacao">Reclamação</SelectItem>
+                            <SelectItem value="saque">Saque</SelectItem>
+                            <SelectItem value="outro">Outro</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Prioridade</Label>
+                        <Select
+                          value={selectedNode.data.ticket_priority || "medium"}
+                          onValueChange={(v) => updateNodeData("ticket_priority", v)}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Baixa</SelectItem>
+                            <SelectItem value="medium">Média</SelectItem>
+                            <SelectItem value="high">Alta</SelectItem>
+                            <SelectItem value="urgent">Urgente</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -909,6 +984,69 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                   selectedNode={selectedNode}
                   updateNodeData={updateNodeData}
                 />
+              )}
+
+              {/* Create Ticket */}
+              {selectedNode.type === "create_ticket" && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Assunto do ticket</Label>
+                    <VariableAutocomplete
+                      value={selectedNode.data.subject_template || ""}
+                      onChange={(v) => updateNodeData("subject_template", v)}
+                      nodes={nodes}
+                      edges={edges}
+                      selectedNodeId={selectedNode.id}
+                      placeholder="Ex: Reclamação de {{nome}}"
+                      minHeight="40px"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Descrição</Label>
+                    <VariableAutocomplete
+                      value={selectedNode.data.description_template || ""}
+                      onChange={(v) => updateNodeData("description_template", v)}
+                      nodes={nodes}
+                      edges={edges}
+                      selectedNodeId={selectedNode.id}
+                      placeholder="Detalhes do ticket com {{variáveis}}"
+                      minHeight="80px"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Categoria</Label>
+                    <Select
+                      value={selectedNode.data.ticket_category || "outro"}
+                      onValueChange={(v) => updateNodeData("ticket_category", v)}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="financeiro">Financeiro</SelectItem>
+                        <SelectItem value="tecnico">Técnico</SelectItem>
+                        <SelectItem value="bug">Bug</SelectItem>
+                        <SelectItem value="devolucao">Devolução</SelectItem>
+                        <SelectItem value="reclamacao">Reclamação</SelectItem>
+                        <SelectItem value="saque">Saque</SelectItem>
+                        <SelectItem value="outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Prioridade</Label>
+                    <Select
+                      value={selectedNode.data.ticket_priority || "medium"}
+                      onValueChange={(v) => updateNodeData("ticket_priority", v)}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Baixa</SelectItem>
+                        <SelectItem value="medium">Média</SelectItem>
+                        <SelectItem value="high">Alta</SelectItem>
+                        <SelectItem value="urgent">Urgente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               )}
             </div>
           </ScrollArea>

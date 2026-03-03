@@ -107,6 +107,74 @@ const validators: Record<string, (value: string) => { valid: boolean; error?: st
   },
 };
 
+// ============================================================
+// 🎫 HELPER: Criar ticket com idempotência
+// Key: conversation_id + flow_state_id + node_id
+// ============================================================
+async function createTicketFromFlow(
+  supabaseClient: any,
+  opts: {
+    conversationId: string;
+    flowStateId: string;
+    nodeId: string;
+    contactId: string | null;
+    subject: string;
+    description: string;
+    category: string;
+    priority: string;
+  }
+) {
+  const idempotencyKey = `flow:${opts.conversationId}:${opts.flowStateId}:${opts.nodeId}`;
+
+  // Check idempotency — look for existing ticket with same key
+  const { data: existing } = await supabaseClient
+    .from('tickets')
+    .select('id')
+    .eq('idempotency_key', idempotencyKey)
+    .maybeSingle();
+
+  if (existing) {
+    console.log(`[process-chat-flow] 🎫 Ticket already exists for key=${idempotencyKey}, skipping`);
+    return existing;
+  }
+
+  const { data: ticket, error } = await supabaseClient
+    .from('tickets')
+    .insert({
+      subject: opts.subject || 'Ticket do Fluxo',
+      description: opts.description || '',
+      category: opts.category || 'outro',
+      priority: opts.priority || 'medium',
+      status: 'open',
+      source_conversation_id: opts.conversationId,
+      customer_id: opts.contactId,
+      idempotency_key: idempotencyKey,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error(`[process-chat-flow] ❌ Error creating ticket:`, error);
+    // Non-blocking: don't break flow
+    return null;
+  }
+
+  console.log(`[process-chat-flow] 🎫 Ticket created: ${ticket.id} key=${idempotencyKey}`);
+
+  // Log ai_event
+  try {
+    await supabaseClient.from('ai_events').insert({
+      entity_id: opts.conversationId,
+      entity_type: 'conversation',
+      event_type: 'flow_create_ticket',
+      model: 'flow_engine',
+      output_json: { ticket_id: ticket.id, category: opts.category, priority: opts.priority, node_id: opts.nodeId },
+    });
+  } catch (e) { /* non-blocking */ }
+
+  return ticket;
+}
+
 // Encontrar próximo nó baseado no tipo
 function findNextNode(flowDef: any, currentNode: any, path?: string): any {
   const edges = flowDef.edges || [];
@@ -132,7 +200,7 @@ function findNextNode(flowDef: any, currentNode: any, path?: string): any {
     }
     if (matchingEdges.length > 1) {
       // Priorizar nós de conteúdo sobre nós lógicos quando há edges duplicadas
-      const contentTypes = ['message', 'transfer', 'ai_response', 'ask_options', 'ask_input', 'fetch_order', 'validate_customer', 'verify_customer_otp'];
+      const contentTypes = ['message', 'transfer', 'ai_response', 'ask_options', 'ask_input', 'fetch_order', 'validate_customer', 'verify_customer_otp', 'create_ticket'];
       const targetNodes = matchingEdges.map((e: any) => flowDef.nodes.find((n: any) => n.id === e.target)).filter(Boolean);
       const contentNode = targetNodes.find((n: any) => contentTypes.includes(n.type));
       if (contentNode) {
@@ -2332,6 +2400,23 @@ serve(async (req) => {
           // TODO: Implementar criação de lead
         }
 
+        // 🎫 EndNode action: create_ticket
+        if (nextNode?.data?.end_action === 'create_ticket') {
+          const actionData = nextNode.data.action_data || {};
+          const subject = replaceVariables(actionData.subject || nextNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+          const description = replaceVariables(actionData.description || nextNode.data.description_template || '', variablesContext);
+          await createTicketFromFlow(supabaseClient, {
+            conversationId: conversationId,
+            flowStateId: activeState.id,
+            nodeId: nextNode.id,
+            contactId: activeState.conversations?.contact_id || null,
+            subject,
+            description,
+            category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
+            priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
+          });
+        }
+
         return new Response(
           JSON.stringify({
             useAI: false,
@@ -2415,14 +2500,30 @@ serve(async (req) => {
       // até encontrar um nó que colete input (ask_*, ai_response, transfer, end)
       const extraMessages: string[] = [];
       
-      while (nextNode && nextNode.type === 'message') {
-        const msgText = replaceVariables(nextNode.data?.message || "", variablesContext);
-        extraMessages.push(msgText);
-        console.log(`[process-chat-flow] 📨 Auto-advancing past message node ${nextNode.id}: "${msgText.substring(0, 50)}..."`);
+      while (nextNode && (nextNode.type === 'message' || nextNode.type === 'create_ticket')) {
+        if (nextNode.type === 'create_ticket') {
+          // 🎫 Mid-flow: criar ticket e auto-avançar
+          const subject = replaceVariables(nextNode.data?.subject_template || 'Ticket do Fluxo', variablesContext);
+          const description = replaceVariables(nextNode.data?.description_template || '', variablesContext);
+          await createTicketFromFlow(supabaseClient, {
+            conversationId: conversationId,
+            flowStateId: activeState.id,
+            nodeId: nextNode.id,
+            contactId: activeState.conversations?.contact_id || null,
+            subject,
+            description,
+            category: nextNode.data?.ticket_category || 'outro',
+            priority: nextNode.data?.ticket_priority || 'medium',
+          });
+          console.log(`[process-chat-flow] 🎫 Auto-advancing past create_ticket node ${nextNode.id}`);
+        } else {
+          const msgText = replaceVariables(nextNode.data?.message || "", variablesContext);
+          extraMessages.push(msgText);
+          console.log(`[process-chat-flow] 📨 Auto-advancing past message node ${nextNode.id}: "${msgText.substring(0, 50)}..."`);
+        }
         
         const afterMessage = findNextNode(flowDef, nextNode);
         if (!afterMessage) {
-          // Último nó é message, sem próximo — parar aqui
           nextNode = null;
           break;
         }
@@ -2433,7 +2534,6 @@ serve(async (req) => {
           const afterCond = findNextNode(flowDef, afterMessage, condPath);
           nextNode = afterCond || null;
         } else if (afterMessage.type === 'input' || afterMessage.type === 'start') {
-          // Nós não-conteúdo: atravessar
           nextNode = findNextNode(flowDef, afterMessage);
         } else {
           nextNode = afterMessage;
@@ -2475,6 +2575,23 @@ serve(async (req) => {
             completed_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
+
+        // 🎫 EndNode action: create_ticket (after auto-advance)
+        if (nextNode.data?.end_action === 'create_ticket') {
+          const actionData = nextNode.data.action_data || {};
+          const subject = replaceVariables(actionData.subject || nextNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+          const description = replaceVariables(actionData.description || nextNode.data.description_template || '', variablesContext);
+          await createTicketFromFlow(supabaseClient, {
+            conversationId: conversationId,
+            flowStateId: activeState.id,
+            nodeId: nextNode.id,
+            contactId: activeState.conversations?.contact_id || null,
+            subject,
+            description,
+            category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
+            priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
+          });
+        }
 
         const endMsg = replaceVariables(nextNode.data?.message || '', variablesContext);
         const allMessages = [...extraMessages, endMsg].filter(Boolean).join('\n\n');
