@@ -1,55 +1,40 @@
 
 
-# P1.1 — Upgrades pendentes no create_ticket
+# Checklist P1.1 — Resultado da Auditoria
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Status: P1.1 já está 85% implementado
+## Resultado por Item
 
-O trabalho anterior já entregou:
-- ✅ `createTicketFromFlow()` com idempotência (`idempotency_key` unique)
-- ✅ EndNode `end_action === 'create_ticket'` handler (2 locais: pós-input e pós-auto-advance)
-- ✅ Mid-flow `create_ticket` node no auto-advance loop
-- ✅ Frontend: `CreateTicketNode.tsx`, properties panel, registro no editor
-- ✅ `ai_events` log com `flow_create_ticket`
-- ✅ Migration com coluna `idempotency_key` na tabela tickets
+| # | Item | Status | Detalhe |
+|---|------|--------|---------|
+| **A** | Setup (schema) | ✅ | `idempotency_key` (text, unique index), `category`, `priority`, `status`, `subject`, `description`, `source_conversation_id`, `contact_id`, `department_id`, `internal_note` — todos existem |
+| **B** | EndNode end_action=create_ticket | ✅ | Handler presente em 2 locais (pós-input L2428 e pós-auto-advance L2620). `replaceVariables` aplicado em subject/description/internal_note |
+| **C** | Nó mid-flow create_ticket | ✅ | Handler no auto-advance loop (L2535-2558). Auto-avança igual `message`. `__last_ticket_id` salvo |
+| **D** | Idempotência | ✅ | Key `flow:{conv}:{state}:{node}`. Lookup antes de insert + UNIQUE index `tickets_idempotency_key_key` |
+| **E** | Log ai_events | ✅ | `event_type='flow_create_ticket'` com ticket_id, category, priority, node_id, department_id |
+| **F** | Autopilot anti-duplicidade | ✅ | Guard em `classify_and_resolve_ticket`: query `chat_flow_states` com status `in_progress/active/waiting_input`. Se ativo → bloqueia + loga em ai_events |
+| **G** | Frontend visual | ✅ | Node na sidebar "Ações", badges categoria/prioridade, VariableAutocomplete em subject/description/internal_note, Switch use_collected_data. Mesmo para EndNode config |
 
-## Gaps identificados (upgrades do checklist do usuário)
+## Bug Encontrado: coluna `metadata` não existe
 
-### 1. Backend: `createTicketFromFlow` falta campos extras
-A função aceita apenas: subject, description, category, priority, contactId, conversationId.
-**Faltam**: `department_id`, `internal_note`, `use_collected_data` (snapshot em metadata).
+**Severidade: Média** — O `createTicketFromFlow` inclui `metadata` (com `flow_state_id`, `node_id`, `collected_data` snapshot) no payload de insert, mas a tabela `tickets` **não tem coluna `metadata`** (só tem `attachments` como jsonb).
 
-**Ação**: Expandir opts e insert para incluir:
-- `department_id` (nullable)
-- `internal_note` (template resolvido via replaceVariables)
-- `metadata` JSON com `flow_state_id`, `node_id`, `idempotency_key`, e `collected_data` snapshot quando `use_collected_data=true`
-- Salvar `collectedData.__last_ticket_id = ticket.id` após criação
+**Impacto**: Dependendo do comportamento do Supabase SDK:
+- Se ignora colunas desconhecidas → ticket é criado mas sem metadata (dados de auditoria perdidos)
+- Se rejeita → insert falha e `createTicketFromFlow` retorna null (non-blocking, fluxo continua mas ticket não é criado)
 
-### 2. Frontend: Properties panel falta campos extras
-O panel do `create_ticket` node tem: subject, description, category, priority.
-**Faltam**: `department_id` (select), `internal_note` (VariableAutocomplete), `use_collected_data` (checkbox).
+**Fix necessário**: Criar coluna `metadata jsonb default '{}'::jsonb` na tabela tickets via migration.
 
-Mesma lacuna no EndNode `create_ticket` config (linhas 900-961).
+## Plano de correção
 
-**Ação**: Adicionar 3 campos em ambos os painéis (mid-flow node + EndNode action).
+1. **Migration**: `ALTER TABLE tickets ADD COLUMN metadata jsonb DEFAULT '{}'::jsonb;`
+2. Sem impacto em tickets existentes (default `{}`)
+3. Após isso, o `use_collected_data=true` funciona corretamente (snapshot salvo em `metadata.collected_data`)
 
-### 3. Anti-duplicidade: Flow ativo bloqueia tool call
-`classify_and_resolve_ticket` no `ai-autopilot-chat` não verifica se existe flow ativo. Guards atuais: kill switch, shadow mode, `ai_can_classify_ticket` flag. Mas se flow está ativo com nó `create_ticket`, a IA pode criar ticket duplicado via tool call.
+## Resumo
 
-**Ação**: Adicionar guard no handler de `classify_and_resolve_ticket`:
-- Query `chat_flow_states` para flow ativo da conversa
-- Se existe flow ativo → bloquear tool call com log em `ai_events`
-- Regra simples: "flow ativo = não cria ticket por tool call" (soberania do fluxo)
-
-## Resumo de alterações
-
-| Arquivo | Mudança |
-|---------|---------|
-| `process-chat-flow/index.ts` | Expandir `createTicketFromFlow` com department_id, internal_note, metadata/collected_data, __last_ticket_id |
-| `process-chat-flow/index.ts` | Atualizar 3 call sites para passar novos campos |
-| `ChatFlowEditor.tsx` | Adicionar department_id, internal_note, use_collected_data nos 2 painéis |
-| `ai-autopilot-chat/index.ts` | Guard em classify_and_resolve_ticket: bloquear se flow ativo |
-
-Sem migration necessária (department_id e internal_note já existem na tabela tickets; metadata é jsonb existente).
+- **7 de 7 itens do checklist passam no código** — lógica correta
+- **1 bug de schema** impede `metadata` de ser persistido (e possivelmente impede criação do ticket inteiro)
+- Fix: 1 migration simples
 
