@@ -499,7 +499,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                     onChange={(e) => setAssignedSearch(e.target.value)}
                     className="h-8 mb-2"
                   />
-                  <ScrollArea className="max-h-48">
+                  <ScrollArea className="h-48 overflow-auto">
                     <div className="space-y-1">
                       <Button
                         type="button" variant={!assignedTo ? "secondary" : "ghost"} size="sm"
