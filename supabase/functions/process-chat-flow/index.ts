@@ -2481,6 +2481,33 @@ serve(async (req) => {
           if (ticket) collectedData.__last_ticket_id = ticket.id;
         }
 
+        // 🏷️ EndNode action: add_tag
+        if (nextNode?.data?.end_action === 'add_tag') {
+          const tagId = nextNode.data.action_data?.tag_id;
+          if (tagId && activeState.conversations?.contact_id) {
+            const contactId = activeState.conversations.contact_id;
+            console.log(`[process-chat-flow] 🏷️ Adding tag ${tagId} to contact ${contactId}`);
+            const { error: tagError } = await supabaseClient
+              .from('contact_tags')
+              .upsert({ contact_id: contactId, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+            if (tagError) {
+              console.error('[process-chat-flow] ❌ Error adding tag:', tagError);
+            } else {
+              console.log(`[process-chat-flow] ✅ Tag ${nextNode.data.action_data?.tag_name || tagId} added`);
+            }
+            // Log ai_event
+            try {
+              await supabaseClient.from('ai_events').insert({
+                entity_id: conversationId,
+                entity_type: 'conversation',
+                event_type: 'flow_add_tag',
+                model: 'flow_engine',
+                output_json: { tag_id: tagId, tag_name: nextNode.data.action_data?.tag_name || null, contact_id: contactId, node_id: nextNode.id },
+              });
+            } catch (_e) { /* non-blocking */ }
+          }
+        }
+
         return new Response(
           JSON.stringify({
             useAI: false,
