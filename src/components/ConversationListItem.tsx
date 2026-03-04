@@ -182,7 +182,7 @@ function ConversationListItemComponent({
             sender_type: m.sender_type as 'user' | 'contact'
           }));
 
-          sentimentAnalysis.mutate(formattedMessages, {
+          sentimentAnalysis.mutate({ messages: formattedMessages, conversationId: conversation.id }, {
             onSuccess: (result) => setSentiment(result),
             onError: () => setSentiment('neutro'),
           });
