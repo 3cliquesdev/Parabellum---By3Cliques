@@ -1,47 +1,23 @@
 
 
-# Fix: IA nao encerra conversa quando cliente confirma
+# Fix: Bloquear envio de mensagem sem assumir controle (autopilot)
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
 ## Problema
 
-O regex de confirmação (`yesPatterns`) na linha 1759 do `ai-autopilot-chat/index.ts` usa ancoragem estrita (`^...$`), exigindo que a mensagem do cliente seja **exatamente** uma das palavras listadas. Respostas naturais como "sim obrigado", "sim, fui ajudada", "foi sim", "sim valeu obrigado", "pode sim, obrigado" **não passam** no teste regex e caem no bloco "ambíguo" (linha 1896), que repete a pergunta infinitamente.
+Quando uma conversa está em `ai_mode = autopilot`, agentes humanos conseguem enviar mensagens pelo composer sem clicar em "Assumir controle". Isso causa conflito: a IA continua respondendo automaticamente enquanto o humano também envia, gerando confusão para o cliente.
 
 ## Solução
 
-**Arquivo: `supabase/functions/ai-autopilot-chat/index.ts`** (linha ~1759)
+**Arquivo: `src/components/inbox/SuperComposer.tsx`**
 
-1. Trocar o regex de `yesPatterns` para ser mais flexível: em vez de exigir match exato da string inteira, verificar se a mensagem **contém** um padrão afirmativo e **não contém** negação
-2. Mesma lógica para `noPatterns`: verificar se contém negação
+Adicionar uma segunda regra de bloqueio no `handleSend` (logo após o bloqueio de `waiting_human` existente na linha 313):
 
-Abordagem concreta:
+- Se `aiMode === 'autopilot'` e `messageMode !== 'internal'` (nota interna), bloquear o envio com toast: **"Você precisa assumir a conversa antes de enviar mensagens. Clique em 'Assumir Controle'."**
+- Notas internas (`messageMode === 'internal'`) continuam permitidas em qualquer modo — não afetam o cliente.
 
-```typescript
-// ANTES (muito restritivo):
-const yesPatterns = /^(sim|s|yes|pode|pode sim|ok|claro|...)$/i;
+Adicionalmente, exibir um **banner visual** acima do composer quando `aiMode === 'autopilot'`, alertando o agente que a IA está no controle e que ele precisa assumir antes de digitar.
 
-// DEPOIS (flexível, detecta "sim" em qualquer posição):
-const yesKeywords = /\b(sim|s|yes|pode|ok|claro|com certeza|isso|beleza|blz|valeu|vlw|pode fechar|encerra|encerrar|fechou|tá bom|ta bom|obrigad[oa]?|brigad[oa]?|top|perfeito|resolvido|resolveu|ajudou)\b/i;
-const noKeywords = /\b(n[aã]o|nao|ainda n[aã]o|tenho sim|outra|mais uma|espera|perai|pera|n[aã]o foi|problema|d[uú]vida)\b/i;
-
-const msgLower = (customerMessage || '').toLowerCase().trim();
-const hasYes = yesKeywords.test(msgLower);
-const hasNo = noKeywords.test(msgLower);
-
-if (hasYes && !hasNo) {
-  // Confirma encerramento
-} else if (hasNo && !hasYes) {
-  // Não quer encerrar
-} else {
-  // Ambíguo - repetir pergunta
-}
-```
-
-3. Adicionar também "obrigado/obrigada/brigado" como confirmação positiva (muito comum o cliente responder apenas "obrigado" como sinal de que foi resolvido)
-
-## Impacto
-- Zero regressão: a lógica de close-conversation, CSAT, tags, kill switch e shadow mode permanece idêntica
-- Apenas o critério de match da resposta do cliente muda
-- Edge case: se cliente diz "sim, mas tenho outra dúvida" → `hasYes=true` e `hasNo=false` (sem "não"), cairia em YES. Para mitigar, adicionar "mas" como keyword de ambiguidade
+Mudança de ~15 linhas no SuperComposer. Zero regressão nos demais componentes.
 
