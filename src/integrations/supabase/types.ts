@@ -343,6 +343,59 @@ export type Database = {
           },
         ]
       }
+      ai_decision_logs: {
+        Row: {
+          channel: string | null
+          conversation_id: string
+          correlation_id: string
+          created_at: string
+          decision: string
+          decision_reason: string | null
+          department: string | null
+          error: string | null
+          id: string
+          message_id: string | null
+          persona_id: string | null
+          rule_id: string | null
+        }
+        Insert: {
+          channel?: string | null
+          conversation_id: string
+          correlation_id: string
+          created_at?: string
+          decision: string
+          decision_reason?: string | null
+          department?: string | null
+          error?: string | null
+          id?: string
+          message_id?: string | null
+          persona_id?: string | null
+          rule_id?: string | null
+        }
+        Update: {
+          channel?: string | null
+          conversation_id?: string
+          correlation_id?: string
+          created_at?: string
+          decision?: string
+          decision_reason?: string | null
+          department?: string | null
+          error?: string | null
+          id?: string
+          message_id?: string | null
+          persona_id?: string | null
+          rule_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_decision_logs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_events: {
         Row: {
           created_at: string
