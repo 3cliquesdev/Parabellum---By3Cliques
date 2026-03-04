@@ -1556,38 +1556,104 @@ serve(async (req) => {
                                 departmentId: flowResult.departmentId,
                               }));
                               
-                              const flowMessage = flowResult.response || flowResult.message;
-                              if (flowMessage) {
-                                await supabase.functions.invoke("send-meta-whatsapp", {
+                              // ═══════════════════════════════════════════════════════════
+                              // 🔧 FIX: Alinhar forceAIExit com CASO 2 (Bug 1+2+3)
+                              // ═══════════════════════════════════════════════════════════
+                              const rawFlowMessage = flowResult.response || flowResult.message;
+                              const formattedFlowMessage = rawFlowMessage
+                                ? rawFlowMessage + formatOptionsAsText(flowResult.options)
+                                : null;
+                              
+                              if (formattedFlowMessage) {
+                                // Bug 2 fix: usar skip_db_save: false + is_bot_message: true (como CASO 2)
+                                const sendResp = await supabase.functions.invoke("send-meta-whatsapp", {
                                   body: {
                                     instance_id: instance.id,
                                     phone_number: fromNumber,
-                                    message: flowMessage,
+                                    message: formattedFlowMessage,
                                     conversation_id: conversation.id,
-                                    skip_db_save: true,
+                                    skip_db_save: false,
+                                    is_bot_message: true,
                                   },
                                 });
-                                
-                                await supabase.from("messages").insert({
-                                  conversation_id: conversation.id,
-                                  content: flowMessage,
-                                  sender_type: "system",
-                                  message_type: "text",
-                                });
-                                console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (AI exit)");
+                                if (sendResp.error) {
+                                  console.error("[meta-whatsapp-webhook] ❌ Erro ao enviar msg forceAIExit:", sendResp.error);
+                                } else {
+                                  console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (AI exit) with options");
+                                }
                               }
                               
+                              // Bug 3 fix: transfer com lógica completa de consultor (como CASO 2)
+                              const DEPT_SUPORTE_FALLBACK_AIX = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
                               const transferDept = flowResult.departmentId || flowResult.department;
-                              if ((flowResult.transfer === true || flowResult.action === 'transfer') && transferDept) {
-                                await supabase
+                              if (flowResult.transfer === true || flowResult.action === 'transfer') {
+                                const deptToUse = transferDept || DEPT_SUPORTE_FALLBACK_AIX;
+                                const updateData: Record<string, unknown> = {
+                                  ai_mode: 'waiting_human',
+                                  handoff_executed_at: new Date().toISOString(),
+                                  department: deptToUse,
+                                };
+                                
+                                const isConsultantTransfer = flowResult.transferType === 'consultant';
+                                
+                                const { data: contactConsultantData } = await supabase
+                                  .from('contacts')
+                                  .select('consultant_id, consultant_manually_removed')
+                                  .eq('id', contact.id)
+                                  .maybeSingle();
+                                
+                                if (contactConsultantData?.consultant_manually_removed && !isConsultantTransfer) {
+                                  console.log("[meta-whatsapp-webhook] 🚫 consultant_manually_removed=true (forceAIExit), pulando consultor");
+                                }
+                                
+                                let consultantId = (contactConsultantData?.consultant_manually_removed && !isConsultantTransfer)
+                                  ? null
+                                  : (contactConsultantData?.consultant_id || null);
+                                
+                                if (consultantId) {
+                                  updateData.assigned_to = consultantId;
+                                  updateData.ai_mode = 'copilot';
+                                  console.log("[meta-whatsapp-webhook] 👤 Consultor atribuído (forceAIExit):", consultantId);
+                                  
+                                  await supabase
+                                    .from('contacts')
+                                    .update({ consultant_id: consultantId })
+                                    .eq('id', contact.id);
+                                }
+                                
+                                const { error: updateError } = await supabase
                                   .from('conversations')
-                                  .update({
-                                    ai_mode: 'waiting_human',
-                                    department: transferDept,
-                                    assigned_to: null,
-                                  })
+                                  .update(updateData)
                                   .eq('id', conversation.id);
-                                console.log("[meta-whatsapp-webhook] 🔄 Transfer applied from flow (AI exit) → dept:", transferDept);
+                                
+                                if (updateError) {
+                                  console.error("[meta-whatsapp-webhook] ❌ Transfer error (forceAIExit):", updateError);
+                                } else {
+                                  console.log("[meta-whatsapp-webhook] ✅ Transfer (forceAIExit) → dept:", deptToUse, "assigned:", consultantId || 'pool');
+                                  
+                                  if (!consultantId) {
+                                    try {
+                                      const routeResp = await fetch(
+                                        `${Deno.env.get("SUPABASE_URL")}/functions/v1/route-conversation`,
+                                        {
+                                          method: "POST",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                                          },
+                                          body: JSON.stringify({ conversationId: conversation.id }),
+                                        }
+                                      );
+                                      if (!routeResp.ok) {
+                                        console.error("[meta-whatsapp-webhook] ❌ route-conversation error (forceAIExit):", await routeResp.text());
+                                      } else {
+                                        console.log("[meta-whatsapp-webhook] ✅ route-conversation (forceAIExit):", JSON.stringify(await routeResp.json()));
+                                      }
+                                    } catch (routeErr) {
+                                      console.error("[meta-whatsapp-webhook] ⚠️ route-conversation exception (forceAIExit):", routeErr);
+                                    }
+                                  }
+                                }
                               }
                               
                               continue;
