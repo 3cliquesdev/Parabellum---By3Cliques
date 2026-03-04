@@ -72,17 +72,30 @@ Categoria sugerida: [categoria]`;
 
       case 'sentiment':
         systemPrompt = `Você é um analisador de sentimento especializado em atendimento ao cliente.
-Analise o tom e sentimento das mensagens do cliente e classifique em uma das categorias:
+Sua tarefa é classificar o SENTIMENTO PREDOMINANTE do cliente com base no conjunto de mensagens.
 
-IMPORTANTE: Responda APENAS com uma destas palavras exatas (sem acentos):
-- "critico" = cliente irritado, frustrado, negativo, insatisfeito, com raiva
-- "neutro" = cliente neutro, sem emoção forte, informativo
-- "promotor" = cliente satisfeito, feliz, positivo, agradecido, entusiasmado
+REGRAS DE CLASSIFICAÇÃO:
+1. Analise o TOM GERAL da conversa, não mensagens isoladas.
+2. Mensagens curtas como "Ok", "Sim", "1", "2" NÃO são neutras por padrão — avalie pelo contexto.
+3. Se o cliente expressa frustração, reclamação, insatisfação, urgência negativa, ou usa tom agressivo → "critico"
+4. Se o cliente expressa gratidão, elogios, satisfação, ou tom positivo → "promotor"  
+5. SOMENTE classifique como "neutro" se o cliente é genuinamente informativo sem emoção detectável.
+6. Na DÚVIDA entre neutro e critico, prefira "critico" (é mais seguro escalar).
+7. Na DÚVIDA entre neutro e promotor, prefira "promotor".
 
-Responda SOMENTE com uma das três palavras: critico, neutro ou promotor`;
-        userPrompt = `Analise o sentimento destas mensagens do cliente:
+EXEMPLOS:
+- "Já é a terceira vez que peço isso" → critico
+- "Não funciona, preciso resolver urgente" → critico  
+- "Obrigado, resolvido!" → promotor
+- "Vocês são ótimos" → promotor
+- "Quero saber o status do pedido 123" → neutro
+- "Ok" (após resolução positiva) → promotor
+- "Ok" (após reclamação sem solução) → critico
 
-${messages.map((m: any) => m.content).join('\n')}`;
+RESPONDA APENAS com uma palavra: critico, neutro ou promotor`;
+        userPrompt = `Analise o sentimento predominante destas mensagens do cliente:
+
+${messages.map((m: any) => `${m.sender_type === 'contact' ? 'Cliente' : 'Atendente'}: ${m.content}`).join('\n')}`;
         break;
 
       case 'reply':

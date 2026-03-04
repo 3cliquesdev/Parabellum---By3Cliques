@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAIQueue } from "./useAIQueue";
@@ -26,6 +27,9 @@ const normalizeSentiment = (raw: string): Sentiment => {
 export function useSentimentAnalysis() {
   const { enqueue } = useAIQueue();
 
+  // Track if last result was a fallback (skip logging)
+  const lastWasFallbackRef = useRef(false);
+
   return useMutation({
     mutationFn: async (messages: Message[]) => {
       // Enfileirar requisição para evitar rate limiting
@@ -37,13 +41,21 @@ export function useSentimentAnalysis() {
         if (error) {
           // Handle rate limiting gracefully
           if (error.message?.includes('429') || error.message?.includes('Rate limit')) {
-            // Retornar neutro como fallback ao invés de error
-            console.warn('[Sentiment] Rate limited, returning neutral');
+            console.warn('[Sentiment] Rate limited, returning neutral (not logged)');
+            lastWasFallbackRef.current = true;
             return 'neutro' as Sentiment;
           }
           throw error;
         }
+
+        // Check if edge function returned a fallback
+        if (data.fallback) {
+          console.warn('[Sentiment] Fallback result, not logging:', data.reason);
+          lastWasFallbackRef.current = true;
+          return normalizeSentiment(data.result || 'neutro');
+        }
         
+        lastWasFallbackRef.current = false;
         const rawSentiment = data.result.toLowerCase().trim();
         const sentiment = normalizeSentiment(rawSentiment);
         console.log('[Sentiment] AI returned:', rawSentiment, '→ normalized to:', sentiment);
@@ -51,7 +63,9 @@ export function useSentimentAnalysis() {
       });
     },
     onSuccess: async (sentiment) => {
-      // Log AI usage
+      // Don't log fallback results — they pollute metrics with fake "neutro"
+      if (lastWasFallbackRef.current) return;
+
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         await supabase.from('ai_usage_logs').insert({
