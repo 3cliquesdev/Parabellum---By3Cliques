@@ -1755,12 +1755,20 @@ serve(async (req) => {
         if (closeMeta.awaiting_close_confirmation === true) {
           const msgLower = (customerMessage || '').toLowerCase().trim();
           
-          // Padrões de SIM
-          const yesPatterns = /^(sim|s|yes|pode|pode sim|ok|claro|com certeza|isso|beleza|blz|valeu|vlw|pode fechar|encerra|encerrar|fechou|fechou!|tá bom|ta bom|tá|ta)$/i;
-          // Padrões de NÃO
-          const noPatterns = /^(n[aã]o|nao|n|não|nope|ainda n[aã]o|tenho|tenho sim|outra|mais uma|espera|perai|pera)$/i;
+          // Padrões flexíveis de SIM (keyword matching, não exige match exato)
+          const yesKeywords = /\b(sim|s|yes|pode|ok|claro|com certeza|isso|beleza|blz|valeu|vlw|pode fechar|encerra|encerrar|fechou|tá bom|ta bom|tá|ta|obrigad[oa]?|brigad[oa]?|top|perfeito|resolvido|resolveu|ajudou|foi sim|show|massa|ótimo|otimo|excelente|maravilha)\b/i;
+          // Padrões flexíveis de NÃO
+          const noKeywords = /\b(n[aã]o|nao|n|não|nope|ainda n[aã]o|tenho sim|outra|mais uma|espera|perai|pera|n[aã]o foi|problema|d[uú]vida|continua|preciso)\b/i;
+          // Padrões de ambiguidade (presença anula confirmação)
+          const ambiguityKeywords = /\b(mas|porém|porem|entretanto|só que|so que|menos|exceto)\b/i;
           
-          if (yesPatterns.test(msgLower)) {
+          const hasYes = yesKeywords.test(msgLower);
+          const hasNo = noKeywords.test(msgLower);
+          const hasAmbiguity = ambiguityKeywords.test(msgLower);
+          
+          console.log(`[ai-autopilot-chat] 🔍 Close confirmation check: msg="${msgLower}" hasYes=${hasYes} hasNo=${hasNo} hasAmbiguity=${hasAmbiguity}`);
+          
+          if (hasYes && !hasNo && !hasAmbiguity) {
             console.log('[ai-autopilot-chat] ✅ Cliente CONFIRMOU encerramento');
             
             // Checar governança
@@ -1884,7 +1892,7 @@ serve(async (req) => {
             
             return new Response(JSON.stringify({ status: 'applied', action: 'conversation_closed' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             
-          } else if (noPatterns.test(msgLower)) {
+          } else if (hasNo && !hasYes) {
             console.log('[ai-autopilot-chat] ❌ Cliente NÃO quer encerrar');
             const cleanMeta = { ...closeMeta };
             delete cleanMeta.awaiting_close_confirmation;
