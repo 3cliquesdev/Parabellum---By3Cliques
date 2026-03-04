@@ -24,14 +24,23 @@ const normalizeSentiment = (raw: string): Sentiment => {
   return 'neutro'; // Default seguro
 };
 
+interface SentimentInput {
+  messages: Message[];
+  conversationId?: string;
+}
+
 export function useSentimentAnalysis() {
   const { enqueue } = useAIQueue();
 
   // Track if last result was a fallback (skip logging)
   const lastWasFallbackRef = useRef(false);
+  const lastConversationIdRef = useRef<string | null>(null);
 
   return useMutation({
-    mutationFn: async (messages: Message[]) => {
+    mutationFn: async (input: SentimentInput) => {
+      const { messages, conversationId } = input;
+      lastConversationIdRef.current = conversationId || null;
+
       // Enfileirar requisição para evitar rate limiting
       return enqueue(async () => {
         const { data, error } = await supabase.functions.invoke('analyze-ticket', {
@@ -71,6 +80,7 @@ export function useSentimentAnalysis() {
         await supabase.from('ai_usage_logs').insert({
           user_id: user.id,
           feature_type: 'sentiment',
+          conversation_id: lastConversationIdRef.current,
           result_data: { sentiment }
         });
       }
