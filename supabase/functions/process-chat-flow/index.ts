@@ -1321,8 +1321,8 @@ serve(async (req) => {
         }
       }
       // Helper para reconstruir variablesContext (chamado após cada mudança em collectedData)
-      const rebuildCtx = () => buildVariablesContext(collectedData, activeContactData, activeConversationData);
-      let variablesContext = rebuildCtx();
+      const rebuildCtx = () => buildVariablesContext(collectedData, activeContactData, activeConversationData, supabaseClient);
+      let variablesContext = await rebuildCtx();
 
       console.log(`[process-chat-flow] 🔄 Processing node: type=${currentNode.type} id=${currentNode.id} msg="${(userMessage || '').slice(0, 60)}" collectedKeys=[${Object.keys(collectedData).filter(k => !k.startsWith('__')).join(',')}]`);
 
@@ -3024,7 +3024,7 @@ serve(async (req) => {
 
         let collectedData: Record<string, any> = {};
         // 🆕 Build variablesContext for master flow replaceVariables calls
-        const masterVariablesContext = buildVariablesContext(collectedData, contactData, conversation);
+        const masterVariablesContext = await buildVariablesContext(collectedData, contactData, conversation, supabaseClient);
 
         // Função para avaliar condição — usa getVar() centralizado
         function evalCond(data: any): boolean {
