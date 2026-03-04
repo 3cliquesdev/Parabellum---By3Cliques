@@ -1200,13 +1200,28 @@ const ESCAPE_PATTERNS = [
   /vou te transferir/i,
   /vou transferir voc[êe]/i,
   /vou encaminhar/i,
+  /vou te direcionar/i,
+  /vou direcionar voc[êe]/i,
+  /vou te redirecionar/i,
+  /vou te conectar/i,
+  /vou conectar voc[êe]/i,
+  /aguarde.*atendente/i,
+  /estou.*transferindo/i,
+  /estou.*direcionando/i,
+  /estou.*encaminhando/i,
+  /estou.*redirecionando/i,
+  /vou chamar.*especialista/i,
+  /vou chamar.*atendente/i,
   /escolha uma das op[çc][õo]es/i,
   /selecione uma op[çc][ãa]o/i,
   /1️⃣|2️⃣|3️⃣|4️⃣|5️⃣/,
   /qual.*prefere\?/i,
-  /vou te conectar/i,
-  /aguarde.*atendente/i,
-  /estou.*transferindo/i,
+  /menu de atendimento/i,
+  /encontrar.*especialista/i,
+  /vou te passar/i,
+  /passar.*para.*atendente/i,
+  /encaminhar.*departamento/i,
+  /direcionar.*setor/i,
 ];
 
 interface AutopilotChatRequest {
@@ -5738,7 +5753,20 @@ SE você não tiver informação sobre o assunto:
 - Abandonar cliente sem tentar ajudar
 `;
 
-    const contextualizedSystemPrompt = `${priorityInstruction}${antiHallucinationInstruction}
+    // 🆕 INSTRUÇÃO ANTI-FABRICAÇÃO DE TRANSFERÊNCIA (quando dentro de fluxo)
+    const flowAntiTransferInstruction = flow_context ? `
+
+**🚫 REGRA ABSOLUTA — VOCÊ ESTÁ DENTRO DE UM FLUXO AUTOMATIZADO:**
+PROIBIDO: Você NÃO pode dizer que vai transferir, direcionar, encaminhar, redirecionar, passar ou conectar o cliente com ninguém.
+Você NÃO pode mencionar "menu de atendimento", "especialista", "atendente", "departamento", "setor" ou "time".
+Você NÃO pode criar opções numeradas (1️⃣ 2️⃣ 3️⃣) nem menus de escolha.
+Você SÓ responde com informação baseada na base de conhecimento.
+Quem decide transferências, menus e direcionamentos é o FLUXO, não você.
+Se não souber a resposta, diga apenas que não encontrou a informação. NUNCA sugira transferência.
+
+` : '';
+
+    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}
 
 **🚫 REGRA DE HANDOFF (SÓ QUANDO CLIENTE PEDIR):**
 Transferência para humano SÓ acontece quando:
