@@ -33,6 +33,7 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[distribute-pending] Agente ${agentId} ficou online. Distribuindo conversas...`);
 
+    const now = new Date();
     // Verificar se está dentro do horário comercial
     const withinHours = await isWithinBusinessHours(supabaseClient);
 
