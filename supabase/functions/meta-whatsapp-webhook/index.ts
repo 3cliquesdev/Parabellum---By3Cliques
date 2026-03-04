@@ -292,9 +292,9 @@ serve(async (req) => {
           // ============================================
           // Process Messages
           // ============================================
+          const flowExitHandledByConversation = new Set<string>();
           if (value.messages && value.messages.length > 0) {
             for (const msg of value.messages) {
-              let flowExitHandled = false; // Anti-loop guard: impede re-invocação duplicada
               const contactInfo = value.contacts?.[0];
               const fromNumber = msg.from;
               const pushName = contactInfo?.profile?.name || "";
@@ -1525,8 +1525,8 @@ serve(async (req) => {
                         
                         // 🆕 CONTRACT VIOLATION / FLOW EXIT: IA fabricou transferência ou pediu [[FLOW_EXIT]]
                         // Re-invocar process-chat-flow para avançar ao próximo nó do fluxo
-                        if ((autopilotData?.flowExit || autopilotData?.contractViolation) && autopilotData?.hasFlowContext && !flowExitHandled) {
-                          flowExitHandled = true;
+                        if ((autopilotData?.flowExit || autopilotData?.contractViolation) && autopilotData?.hasFlowContext && !flowExitHandledByConversation.has(conversation.id)) {
+                          flowExitHandledByConversation.add(conversation.id);
                           console.log("[meta-whatsapp-webhook] 🔄 flowExit/contractViolation → re-invocando process-chat-flow com forceAIExit", {
                             flowExit: autopilotData.flowExit,
                             contractViolation: autopilotData.contractViolation,

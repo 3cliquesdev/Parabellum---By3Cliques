@@ -1215,7 +1215,7 @@ const ESCAPE_PATTERNS = [
   /escolha uma das op[çc][õo]es/i,
   /selecione uma op[çc][ãa]o/i,
   // Menus textuais com numeração (1) ... 2) ...)
-  /\b1[\)\.\-].*\b2[\)\.\-]/s,
+  /\b1[\)\.\-][\s\S]*?\b2[\)\.\-]/i,
 ];
 
 interface AutopilotChatRequest {
