@@ -4,6 +4,7 @@ import { useSearchContactsForTicket } from "@/hooks/useSearchContactsForTicket";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTicketCategories } from "@/hooks/useTicketCategories";
 import { useUsers } from "@/hooks/useUsers";
+import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useTicketAttachmentUpload } from "@/hooks/useTicketAttachmentUpload";
 import { useTags } from "@/hooks/useTags";
@@ -88,6 +89,8 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const [departmentId, setDepartmentId] = useState<string>("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [assignedTo, setAssignedTo] = useState<string>("");
+  const [assignedSearch, setAssignedSearch] = useState("");
+  const [assignedPopoverOpen, setAssignedPopoverOpen] = useState(false);
   
   const [uploadedAttachments, setUploadedAttachments] = useState<Array<{ url: string; type: string; name: string; preview?: string }>>([]);
 
@@ -103,12 +106,32 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const debouncedSearch = useDebouncedValue(customerSearch, 300);
   const { data: contacts = [] } = useSearchContactsForTicket(debouncedSearch);
   const { data: users = [] } = useUsers();
+  const { data: departmentUsers = [] } = useUsersByDepartment(departmentId || undefined);
   
   const supportUsers = users.filter(u => 
     ['support_agent', 'support_manager', 'admin', 'manager', 'general_manager', 'financial_manager', 'financial_agent', 'consultant', 'cs_manager'].includes(u.role) &&
     !u.is_blocked &&
     !u.is_archived
   );
+
+  // Reset assignedTo when department changes
+  useEffect(() => {
+    setAssignedTo("");
+  }, [departmentId]);
+
+  // Build filtered + sorted user list for "Atribuir a"
+  const assignableUsers = (() => {
+    const baseList = departmentId
+      ? departmentUsers.map(u => ({ id: u.id, full_name: u.full_name, email: null }))
+      : supportUsers.map(u => ({ id: u.id, full_name: u.full_name, email: u.email }));
+    
+    return baseList
+      .filter(u => {
+        if (!assignedSearch) return true;
+        return (u.full_name || '').toLowerCase().includes(assignedSearch.toLowerCase());
+      })
+      .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+  })();
 
   const filteredContacts = contacts.slice(0, 10);
   const [selectedContact, setSelectedContact] = useState<{ id: string; first_name: string; last_name: string; email: string | null } | null>(null);
@@ -459,17 +482,49 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
             <div className="space-y-2">
               <Label>{fieldLabel("Atribuir a", "assigned_to")}</Label>
-              <Select value={assignedTo || "none"} onValueChange={(v) => setAssignedTo(v === "none" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent position="popper" side="bottom" align="start" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
-                  <SelectItem value="none">Fila de Espera</SelectItem>
-                  {supportUsers.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>{user.full_name || user.email}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={assignedPopoverOpen} onOpenChange={setAssignedPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-start font-normal text-sm h-10">
+                    {assignedTo
+                      ? (assignableUsers.find(u => u.id === assignedTo)?.full_name
+                        || supportUsers.find(u => u.id === assignedTo)?.full_name
+                        || "Selecionado")
+                      : <span className="text-muted-foreground">Fila de Espera</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-2" align="start">
+                  <Input
+                    placeholder="Buscar por nome..."
+                    value={assignedSearch}
+                    onChange={(e) => setAssignedSearch(e.target.value)}
+                    className="h-8 mb-2"
+                  />
+                  <ScrollArea className="max-h-48">
+                    <div className="space-y-1">
+                      <Button
+                        type="button" variant={!assignedTo ? "secondary" : "ghost"} size="sm"
+                        className="w-full justify-start h-8 px-2"
+                        onClick={() => { setAssignedTo(""); setAssignedSearch(""); setAssignedPopoverOpen(false); }}
+                      >
+                        Fila de Espera
+                      </Button>
+                      {assignableUsers.map((user) => (
+                        <Button
+                          key={user.id} type="button"
+                          variant={assignedTo === user.id ? "secondary" : "ghost"}
+                          size="sm" className="w-full justify-start h-8 px-2"
+                          onClick={() => { setAssignedTo(user.id); setAssignedSearch(""); setAssignedPopoverOpen(false); }}
+                        >
+                          <span className="truncate">{user.full_name || user.email || user.id}</span>
+                        </Button>
+                      ))}
+                      {assignableUsers.length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center py-2">Nenhum agente encontrado</p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
