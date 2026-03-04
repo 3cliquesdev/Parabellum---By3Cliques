@@ -6,6 +6,8 @@ import type { KnowledgeCandidate } from "./useKnowledgeCandidates";
 interface ApproveParams {
   candidateId: string;
   edits?: Partial<Pick<KnowledgeCandidate, 'problem' | 'solution' | 'when_to_use' | 'when_not_to_use' | 'category' | 'tags'>>;
+  /** When true, bypasses PII/risk checks (used after explicit user confirmation) */
+  forceApprove?: boolean;
 }
 
 export function useApproveCandidate() {
@@ -13,7 +15,7 @@ export function useApproveCandidate() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ candidateId, edits }: ApproveParams) => {
+    mutationFn: async ({ candidateId, edits, forceApprove }: ApproveParams) => {
       // 1. Fetch the candidate
       const { data: candidate, error: fetchError } = await supabase
         .from('knowledge_candidates')
@@ -25,12 +27,21 @@ export function useApproveCandidate() {
         throw new Error('Candidato não encontrado');
       }
 
+      // 🆕 UPGRADE: Bloqueio de aprovação para PII sem edição
+      if (!forceApprove) {
+        if ((candidate as any).contains_pii && !edits) {
+          throw new Error('PII_REQUIRES_EDIT');
+        }
+        if ((candidate as any).risk_level === 'high' && !edits) {
+          throw new Error('HIGH_RISK_REQUIRES_CONFIRMATION');
+        }
+      }
+
       // 2. Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado');
 
       // 3. Create article in knowledge_articles
-      // 🆕 FASE 2: is_published = true, mas embedding_generated = false até embedding OK
       const { data: article, error: insertError } = await supabase
         .from('knowledge_articles')
         .insert({
@@ -46,8 +57,8 @@ export function useApproveCandidate() {
           source_conversation_id: candidate.source_conversation_id,
           department_id: candidate.department_id,
           confidence_score: candidate.confidence_score,
-          is_published: false, // 🆕 FASE 2: Começa como NÃO publicado
-          embedding_generated: false, // 🆕 FASE 2: Aguarda embedding
+          is_published: false,
+          embedding_generated: false,
           approved_by: user.id,
           approved_at: new Date().toISOString(),
           version: 1,
@@ -77,7 +88,6 @@ export function useApproveCandidate() {
       }
 
       // 5. Generate embedding asynchronously and then publish
-      // 🆕 FASE 2: Só publica após embedding gerado com sucesso
       supabase.functions.invoke('generate-article-embedding', {
         body: { articleId: article.id, publishAfterEmbedding: true }
       }).then(async (result) => {
@@ -85,7 +95,6 @@ export function useApproveCandidate() {
           console.warn('Embedding generation failed:', result.error);
           return;
         }
-        // Marcar como publicado após embedding OK
         await supabase
           .from('knowledge_articles')
           .update({ 
@@ -111,6 +120,10 @@ export function useApproveCandidate() {
       });
     },
     onError: (error: Error) => {
+      // Don't toast for special error codes - UI handles them
+      if (error.message === 'PII_REQUIRES_EDIT' || error.message === 'HIGH_RISK_REQUIRES_CONFIRMATION') {
+        return;
+      }
       toast({
         title: "Erro ao aprovar",
         description: error.message,

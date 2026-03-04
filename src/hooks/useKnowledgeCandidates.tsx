@@ -2,6 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export type CandidateStatus = 'pending' | 'approved' | 'rejected' | 'all';
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface EvidenceSnippet {
+  role: string;
+  content: string;
+}
 
 export interface KnowledgeCandidate {
   id: string;
@@ -21,6 +27,14 @@ export interface KnowledgeCandidate {
   rejection_reason: string | null;
   created_at: string;
   updated_at: string;
+  // 🆕 Safety & quality fields
+  contains_pii: boolean;
+  risk_level: RiskLevel;
+  duplicate_of: string | null;
+  clarity_score: number | null;
+  completeness_score: number | null;
+  evidence_snippets: EvidenceSnippet[];
+  sanitized_solution: string | null;
   // Joined data
   conversations?: {
     id: string;
@@ -33,11 +47,21 @@ export interface KnowledgeCandidate {
   departments?: {
     name: string;
   } | null;
+  duplicate_article?: {
+    id: string;
+    title: string;
+  } | null;
 }
 
-export function useKnowledgeCandidates(status: CandidateStatus = 'pending') {
+export interface CandidateFilters {
+  riskLevel?: RiskLevel;
+  containsPii?: boolean;
+  category?: string;
+}
+
+export function useKnowledgeCandidates(status: CandidateStatus = 'pending', filters?: CandidateFilters) {
   return useQuery({
-    queryKey: ['knowledge-candidates', status],
+    queryKey: ['knowledge-candidates', status, filters],
     queryFn: async (): Promise<KnowledgeCandidate[]> => {
       let query = supabase
         .from('knowledge_candidates')
@@ -48,12 +72,23 @@ export function useKnowledgeCandidates(status: CandidateStatus = 'pending') {
             contact:contact_id (first_name, last_name),
             closed_at
           ),
-          departments:department_id (name)
+          departments:department_id (name),
+          duplicate_article:duplicate_of (id, title)
         `)
         .order('created_at', { ascending: false });
 
       if (status !== 'all') {
         query = query.eq('status', status);
+      }
+
+      if (filters?.riskLevel) {
+        query = query.eq('risk_level', filters.riskLevel);
+      }
+      if (filters?.containsPii !== undefined) {
+        query = query.eq('contains_pii', filters.containsPii);
+      }
+      if (filters?.category) {
+        query = query.eq('category', filters.category);
       }
 
       const { data, error } = await query;
@@ -74,7 +109,7 @@ export function useKnowledgeCandidateStats() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('knowledge_candidates')
-        .select('status');
+        .select('status, contains_pii, risk_level');
 
       if (error) throw error;
 
@@ -83,12 +118,16 @@ export function useKnowledgeCandidateStats() {
         approved: 0,
         rejected: 0,
         total: data?.length || 0,
+        pii_flagged: 0,
+        high_risk: 0,
       };
 
-      data?.forEach((item) => {
+      data?.forEach((item: any) => {
         if (item.status === 'pending') counts.pending++;
         else if (item.status === 'approved') counts.approved++;
         else if (item.status === 'rejected') counts.rejected++;
+        if (item.contains_pii) counts.pii_flagged++;
+        if (item.risk_level === 'high') counts.high_risk++;
       });
 
       return counts;

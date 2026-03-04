@@ -38,7 +38,7 @@ serve(async (req) => {
     const isShadowMode = aiConfig.ai_shadow_mode;
     console.log(`[extract-knowledge] Shadow Mode: ${isShadowMode ? 'ATIVO' : 'Inativo'}`);
 
-    // 🆕 FASE 2: Guard-rail - verificar se já foi aprendido
+    // Guard-rail - verificar se já foi aprendido
     const { data: conversation } = await supabase
       .from('conversations')
       .select('learned_at')
@@ -94,15 +94,14 @@ serve(async (req) => {
       `${m.sender_type === 'user' && m.sender_id ? 'Agente' : 'Cliente'}: ${m.content}`
     ).join('\n\n');
 
-    // 🆕 FASE 2: Prompt estruturado para extração
-    const structuredPrompt = `Você é um Agente de Extração de Conhecimento.
+    // 🆕 UPGRADE: Prompt enriquecido com detecção de PII, risk, evidence e scores
+    const structuredPrompt = `Você é um Agente de Extração de Conhecimento com Análise de Segurança.
 
 Analise este atendimento BEM-SUCEDIDO (CSAT >= 4) e extraia conhecimento REUTILIZÁVEL.
 
 IGNORE COMPLETAMENTE:
 - Saudações (bom dia, obrigado, etc)
 - Agradecimentos e despedidas
-- Informações específicas do cliente (nome, CPF, número de pedido)
 - Contexto pessoal ou emocional
 - Promessas ou exceções feitas para este cliente específico
 
@@ -111,6 +110,18 @@ EXTRAIA APENAS:
 - Regras de negócio mencionadas
 - Soluções para problemas recorrentes
 - Políticas da empresa
+
+ANÁLISE DE SEGURANÇA (para cada item extraído):
+1. **PII Detection**: Verifique se a solução contém dados pessoais (CPF, telefone, email, endereço, nome completo de cliente, dados bancários, IDs internos, URLs privadas). Marque contains_pii = true se detectar.
+2. **Risk Level**: Classifique o risco:
+   - "low": FAQ comum, troubleshooting padrão, orientações gerais
+   - "medium": envolve processos financeiros, dados sensíveis mencionados indiretamente
+   - "high": instruções de reembolso/estorno, exceções a políticas, dados pessoais presentes
+3. **Sanitized Solution**: Se contains_pii = true, gere uma versão limpa substituindo dados pessoais por [DADO_REMOVIDO] ou termos genéricos.
+4. **Evidence Snippets**: Extraia 2-3 mensagens mais relevantes da conversa que evidenciam o problema e a solução (formato: {role: "Agente"|"Cliente", content: "mensagem"}).
+5. **Quality Scores** (0-100):
+   - clarity_score: Quão clara e compreensível é a solução
+   - completeness_score: Quão completa é a solução (cobre edge cases?)
 
 RETORNE JSON ESTRUTURADO:
 {
@@ -121,7 +132,16 @@ RETORNE JSON ESTRUTURADO:
       "when_to_use": "Quando aplicar esta solução",
       "when_not_to_use": "Quando NÃO aplicar (exceções)",
       "tags": ["tag1", "tag2"],
-      "category": "Categoria apropriada (ex: Pagamento, Rastreio, Produto)"
+      "category": "Categoria apropriada (ex: Pagamento, Rastreio, Produto)",
+      "contains_pii": false,
+      "risk_level": "low",
+      "sanitized_solution": null,
+      "evidence_snippets": [
+        {"role": "Cliente", "content": "mensagem relevante"},
+        {"role": "Agente", "content": "resposta relevante"}
+      ],
+      "clarity_score": 85,
+      "completeness_score": 80
     }
   ],
   "confidence_score": 0-100,
@@ -151,8 +171,8 @@ Se não houver conhecimento útil, retorne: { "extracted_items": [], "confidence
             content: `Histórico da conversa:\n\n${chatHistory.substring(0, 15000)}`
           }
         ],
-        temperature: 0.3, // Baixa temperatura para extração consistente
-        max_tokens: 2000,
+        temperature: 0.3,
+        max_tokens: 3000,
         response_format: { type: "json_object" }
       }),
     });
@@ -187,7 +207,7 @@ Se não houver conhecimento útil, retorne: { "extracted_items": [], "confidence
       );
     }
 
-    // 🆕 FASE 2: Filtrar itens com confiança muito baixa
+    // Filtrar itens com confiança muito baixa
     if (globalConfidence < 70) {
       console.log(`[extract-knowledge] Confidence too low: ${globalConfidence}`);
       return new Response(
@@ -198,11 +218,28 @@ Se não houver conhecimento útil, retorne: { "extracted_items": [], "confidence
 
     console.log(`[extract-knowledge] Extracted ${items.length} items with confidence ${globalConfidence}`);
 
-    // 🆕 FASE 2: Salvar em knowledge_candidates (NÃO em KB diretamente)
+    // Salvar em knowledge_candidates com campos enriquecidos
     const savedCandidates = [];
     
     for (const item of items) {
       if (!item.problem || !item.solution) continue;
+
+      // 🆕 UPGRADE: Buscar duplicatas por texto similar
+      let duplicateOf = null;
+      try {
+        const { data: similarArticles } = await supabase
+          .from('knowledge_articles')
+          .select('id, title')
+          .or(`title.ilike.%${item.problem.substring(0, 50)}%,problem.ilike.%${item.problem.substring(0, 50)}%`)
+          .limit(1);
+        
+        if (similarArticles && similarArticles.length > 0) {
+          duplicateOf = similarArticles[0].id;
+          console.log(`[extract-knowledge] Possible duplicate found: ${similarArticles[0].id} - ${similarArticles[0].title}`);
+        }
+      } catch (dupErr) {
+        console.warn('[extract-knowledge] Duplicate check failed (non-blocking):', dupErr);
+      }
 
       const { data: candidate, error: insertError } = await supabase
         .from('knowledge_candidates')
@@ -217,7 +254,15 @@ Se não houver conhecimento útil, retorne: { "extracted_items": [], "confidence
           department_id: departmentId || null,
           confidence_score: globalConfidence,
           extracted_by: 'extract-knowledge-from-chat',
-          status: 'pending', // 🆕 Sempre como pendente para curadoria
+          status: 'pending',
+          // 🆕 UPGRADE: Novos campos de segurança e qualidade
+          contains_pii: item.contains_pii === true,
+          risk_level: ['low', 'medium', 'high'].includes(item.risk_level) ? item.risk_level : 'low',
+          duplicate_of: duplicateOf,
+          clarity_score: typeof item.clarity_score === 'number' ? Math.min(100, Math.max(0, item.clarity_score)) : null,
+          completeness_score: typeof item.completeness_score === 'number' ? Math.min(100, Math.max(0, item.completeness_score)) : null,
+          evidence_snippets: Array.isArray(item.evidence_snippets) ? item.evidence_snippets : [],
+          sanitized_solution: item.contains_pii && item.sanitized_solution ? item.sanitized_solution.substring(0, 2000) : null,
         })
         .select()
         .single();
@@ -226,13 +271,11 @@ Se não houver conhecimento útil, retorne: { "extracted_items": [], "confidence
         console.error('[extract-knowledge] Error saving candidate:', insertError);
       } else {
         savedCandidates.push(candidate);
-        console.log(`[extract-knowledge] Candidate saved: ${candidate.id}`);
+        console.log(`[extract-knowledge] Candidate saved: ${candidate.id} (PII: ${item.contains_pii}, Risk: ${item.risk_level})`);
       }
     }
 
-    // ============================================
-    // FASE 6: Registrar na ai_learning_timeline
-    // ============================================
+    // Registrar na ai_learning_timeline
     if (savedCandidates.length > 0) {
       await supabase
         .from('ai_learning_timeline')
@@ -242,13 +285,15 @@ Se não houver conhecimento útil, retorne: { "extracted_items": [], "confidence
           source_conversations: 1,
           source_conversation_ids: [conversationId],
           confidence: globalConfidence >= 85 ? 'alta' : 'média',
-          status: isShadowMode ? 'pending' : 'pending', // Sempre pending para revisão humana
+          status: 'pending',
           department_id: departmentId || null,
           metadata: { 
             candidate_ids: savedCandidates.map((c: any) => c.id),
             agent_name: agentName,
             confidence_score: globalConfidence,
-            shadow_mode: isShadowMode
+            shadow_mode: isShadowMode,
+            pii_detected: savedCandidates.some((c: any) => c.contains_pii),
+            high_risk: savedCandidates.some((c: any) => c.risk_level === 'high'),
           }
         });
 
@@ -257,24 +302,30 @@ Se não houver conhecimento útil, retorne: { "extracted_items": [], "confidence
 
     // Notificar gerentes sobre novos candidatos
     if (savedCandidates.length > 0) {
+      const hasPII = savedCandidates.some((c: any) => c.contains_pii);
+      const hasHighRisk = savedCandidates.some((c: any) => c.risk_level === 'high');
+
       const { data: managers } = await supabase
         .from('user_roles')
         .select('user_id')
         .in('role', ['admin', 'manager', 'support_manager', 'cs_manager']);
 
       if (managers && managers.length > 0) {
+        const urgencyPrefix = hasHighRisk ? '🔴' : hasPII ? '⚠️' : '🤖';
         for (const manager of managers) {
           await supabase.from('notifications').insert({
             user_id: manager.user_id,
             type: 'knowledge_approval',
-            title: '🤖 Conhecimento Extraído para Curadoria',
-            message: `A IA extraiu ${savedCandidates.length} item(s) do atendimento de ${agentName}. Revise na curadoria.`,
+            title: `${urgencyPrefix} Conhecimento Extraído para Curadoria`,
+            message: `A IA extraiu ${savedCandidates.length} item(s) do atendimento de ${agentName}.${hasPII ? ' ⚠️ PII detectado!' : ''}${hasHighRisk ? ' 🔴 Risco alto!' : ''} Revise na curadoria.`,
             metadata: {
               candidate_ids: savedCandidates.map(c => c.id),
               conversation_id: conversationId,
               ticket_id: ticketId,
               agent_name: agentName,
               confidence: globalConfidence,
+              contains_pii: hasPII,
+              has_high_risk: hasHighRisk,
               action_url: '/settings/ai-audit',
             },
             read: false,
