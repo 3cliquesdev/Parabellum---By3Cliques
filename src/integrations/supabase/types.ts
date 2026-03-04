@@ -5181,15 +5181,22 @@ export type Database = {
         Row: {
           ai_confidence_score: number | null
           category: string | null
+          clarity_score: number | null
+          completeness_score: number | null
           confidence_score: number | null
+          contains_pii: boolean
           created_at: string | null
           department_id: string | null
+          duplicate_of: string | null
+          evidence_snippets: Json
           extracted_by: string | null
           id: string
           problem: string
           rejection_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          risk_level: string
+          sanitized_solution: string | null
           solution: string
           source_conversation_id: string | null
           status: string | null
@@ -5202,15 +5209,22 @@ export type Database = {
         Insert: {
           ai_confidence_score?: number | null
           category?: string | null
+          clarity_score?: number | null
+          completeness_score?: number | null
           confidence_score?: number | null
+          contains_pii?: boolean
           created_at?: string | null
           department_id?: string | null
+          duplicate_of?: string | null
+          evidence_snippets?: Json
           extracted_by?: string | null
           id?: string
           problem: string
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          risk_level?: string
+          sanitized_solution?: string | null
           solution: string
           source_conversation_id?: string | null
           status?: string | null
@@ -5223,15 +5237,22 @@ export type Database = {
         Update: {
           ai_confidence_score?: number | null
           category?: string | null
+          clarity_score?: number | null
+          completeness_score?: number | null
           confidence_score?: number | null
+          contains_pii?: boolean
           created_at?: string | null
           department_id?: string | null
+          duplicate_of?: string | null
+          evidence_snippets?: Json
           extracted_by?: string | null
           id?: string
           problem?: string
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          risk_level?: string
+          sanitized_solution?: string | null
           solution?: string
           source_conversation_id?: string | null
           status?: string | null
@@ -5247,6 +5268,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_candidates_duplicate_of_fkey"
+            columns: ["duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "knowledge_articles"
             referencedColumns: ["id"]
           },
           {
