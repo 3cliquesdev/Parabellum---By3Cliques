@@ -1,23 +1,59 @@
 
 
-# Fix: Bloquear envio de mensagem sem assumir controle (autopilot)
+# Plano: Corrigir IA fabricando linguagem de transferência sem executar
 
-Analisei o projeto atual e sigo as regras da base de conhecimento.
+## Problema raiz
 
-## Problema
+A IA dentro do nó `ai_response` do fluxo está gerando mensagens como **"Vou te direcionar para nosso menu de atendimento"** — texto que simula uma transferência mas NÃO executa nenhuma ação real. O cliente fica confuso achando que vai ser transferido, mas nada acontece.
 
-Quando uma conversa está em `ai_mode = autopilot`, agentes humanos conseguem enviar mensagens pelo composer sem clicar em "Assumir controle". Isso causa conflito: a IA continua respondendo automaticamente enquanto o humano também envia, gerando confusão para o cliente.
+A causa: a lista `ESCAPE_PATTERNS` no `ai-autopilot-chat` não inclui variantes como "direcionar", "redirecionar", "conectar com", "encaminhar para", etc. Só pega "transferir" e "encaminhar" em formas específicas.
 
-## Solução
+## Solução (2 arquivos)
 
-**Arquivo: `src/components/inbox/SuperComposer.tsx`**
+### 1. `supabase/functions/ai-autopilot-chat/index.ts` — Expandir ESCAPE_PATTERNS
 
-Adicionar uma segunda regra de bloqueio no `handleSend` (logo após o bloqueio de `waiting_human` existente na linha 313):
+Adicionar padrões que a IA usa para simular transferência sem executar:
 
-- Se `aiMode === 'autopilot'` e `messageMode !== 'internal'` (nota interna), bloquear o envio com toast: **"Você precisa assumir a conversa antes de enviar mensagens. Clique em 'Assumir Controle'."**
-- Notas internas (`messageMode === 'internal'`) continuam permitidas em qualquer modo — não afetam o cliente.
+```typescript
+const ESCAPE_PATTERNS = [
+  /vou te transferir/i,
+  /vou transferir voc[êe]/i,
+  /vou encaminhar/i,
+  /vou te direcionar/i,          // NOVO
+  /vou direcionar voc[êe]/i,     // NOVO
+  /vou te redirecionar/i,        // NOVO
+  /vou te conectar/i,
+  /vou conectar voc[êe]/i,       // NOVO
+  /aguarde.*atendente/i,
+  /estou.*transferindo/i,
+  /estou.*direcionando/i,        // NOVO
+  /estou.*encaminhando/i,        // NOVO
+  /estou.*redirecionando/i,      // NOVO
+  /vou chamar.*especialista/i,   // NOVO
+  /vou chamar.*atendente/i,      // NOVO
+  /escolha uma das op[çc][õo]es/i,
+  /selecione uma op[çc][ãa]o/i,
+  /1️⃣|2️⃣|3️⃣|4️⃣|5️⃣/,
+  /qual.*prefere\?/i,
+  /menu de atendimento/i,        // NOVO — exatamente o caso do screenshot
+  /encontrar.*especialista/i,    // NOVO
+];
+```
 
-Adicionalmente, exibir um **banner visual** acima do composer quando `aiMode === 'autopilot'`, alertando o agente que a IA está no controle e que ele precisa assumir antes de digitar.
+### 2. `supabase/functions/ai-autopilot-chat/index.ts` — Reforçar system prompt no flow_context
 
-Mudança de ~15 linhas no SuperComposer. Zero regressão nos demais componentes.
+No prompt do sistema que é enviado quando `flow_context` existe, adicionar instrução explícita:
+
+```
+PROIBIDO: Você NÃO pode dizer que vai transferir, direcionar, encaminhar ou conectar o cliente com ninguém.
+Você NÃO pode mencionar "menu de atendimento", "especialista", ou "atendente".
+Você SÓ responde com informação. Quem decide transferências é o FLUXO, não você.
+```
+
+Isso ataca o problema na raiz (prompt) e na validação (ESCAPE_PATTERNS).
+
+## Impacto
+- **Zero regressão**: apenas adiciona mais padrões de detecção e reforça prompt
+- **Upgrade**: IA não pode mais fabricar linguagem de transferência dentro de um fluxo
+- **1 arquivo**: `ai-autopilot-chat/index.ts` (ESCAPE_PATTERNS + system prompt)
 
