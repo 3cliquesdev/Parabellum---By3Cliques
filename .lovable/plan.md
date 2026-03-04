@@ -1,81 +1,53 @@
 
 
-# Upgrade: Aprendizado Passivo com Aprovação Humana
+# Plan: Normalizar Dados de Sentimento e Corrigir Viés Neutro
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Estado Atual
+## Diagnóstico
 
-O pipeline base **já existe e funciona**:
-- `passive-learning-cron` seleciona conversas fechadas com CSAT >= 4
-- `extract-knowledge-from-chat` gera candidatos com status `pending`
-- `/knowledge/curation` (KnowledgeCuration.tsx) permite Aprovar / Editar+Aprovar / Rejeitar
-- `useApproveCandidate` cria artigo na KB + gera embedding
-- Guard-rails: Kill Switch, Shadow Mode, `learned_at`, dedup por metadata
+**Dados atuais no banco:**
+- `neutro`: 947,209 (99.6%) -- massivamente inflado
+- `critico`: 2,999
+- `promotor`: 459
+- `crítico` (com acento): 21 -- duplicata
+- `neutra`: 1 -- espúrio
+- `crucial`: 1 -- espúrio
 
-## O que falta (upgrades do plano)
+**Causa raiz do viés neutro:** Todas as chamadas atuais ao `analyze-ticket` estão retornando `fallback: true, reason: "rate_limit"` com resultado default `"neutro"`. Ou seja, ~99% dos registros de sentimento NÃO são análises reais -- são fallbacks de rate limit sendo gravados como se fossem dados reais.
 
-### 1. Migração: Adicionar colunas de segurança na `knowledge_candidates`
+## Plano (3 partes)
 
-Campos novos:
-- `contains_pii` (boolean, default false) -- flag de PII detectado
-- `risk_level` (text, default 'low', check in low/medium/high) -- nível de risco
-- `duplicate_of` (uuid, nullable, FK para knowledge_articles) -- artigo similar
-- `clarity_score` (integer, nullable) -- pontuação de clareza
-- `completeness_score` (integer, nullable) -- pontuação de completude
-- `evidence_snippets` (jsonb, default '[]') -- trechos de evidência da conversa
-- `sanitized_solution` (text, nullable) -- versão sanitizada sugerida pela IA
+### 1. Migração SQL: Limpar dados existentes + Atualizar RPC
 
-### 2. Upgrade na Edge Function `extract-knowledge-from-chat`
+- **UPDATE** `ai_usage_logs` SET `result_data = '{"sentiment":"critico"}'` WHERE sentiment = `'crítico'`
+- **DELETE** registros com sentimentos espúrios (`neutra`, `crucial`)
+- **UPDATE** a RPC `get_ai_usage_metrics` para normalizar na query (merge `critico`/`crítico`, ignorar valores fora do set válido)
+- Adicionar filtro para excluir registros com `result_data->>'fallback' = 'true'` ou onde o sentimento foi gerado por fallback (não é análise real)
 
-Adicionar ao prompt de extração:
-- Detecção de PII (CPF, telefone, email, endereço) com flag `contains_pii`
-- Classificação de `risk_level` (low/medium/high)
-- Extração de `evidence_snippets` (2-3 mensagens relevantes)
-- Scores de `clarity_score` e `completeness_score`
-- Se PII detectado, gerar `sanitized_solution` (versão limpa)
+### 2. Edge Function `analyze-ticket`: Parar de gravar fallbacks como dados reais
 
-Adicionar busca por duplicatas via embedding similarity contra artigos existentes (se disponivel) ou por texto, salvando `duplicate_of`.
+No frontend (`useSentimentAnalysis.tsx`):
+- Quando a resposta vier com `fallback: true`, **NAO gravar** no `ai_usage_logs` -- pois não é uma análise real
+- Manter o retorno de `"neutro"` como fallback para a UI (badge), mas sem poluir os logs de métricas
 
-### 3. Upgrade na UI de Curadoria (`KnowledgeCuration.tsx`)
+### 3. Prompt de sentimento mais calibrado
 
-Melhorias no card do candidato:
-- Badges de PII warning (vermelho) e risk_level (colorido)
-- Seção de "Trechos de Evidência" (evidence_snippets)
-- Se `contains_pii = true`, mostrar alerta + botao para usar versão sanitizada
-- Se `duplicate_of` preenchido, mostrar link "Artigo similar: X" com opção de atualizar em vez de criar novo
-- Ordenação default: risk_level ASC, created_at DESC
-- Scores de clareza/completude visíveis
+Atualizar o prompt no `analyze-ticket` para:
+- Ser mais assertivo na classificação (menos viés para neutro)
+- Dar exemplos concretos de cada categoria
+- Instruir que mensagens curtas como "Ok", "1", "Sim" devem ser classificadas pelo contexto geral, não individualmente
+- Manter a normalização no `useSentimentAnalysis.tsx` como safety net
 
-Adicionar filtros:
-- Por risk_level
-- Por contains_pii
-- Por categoria
+## Arquivos modificados
 
-### 4. Upgrade no hook `useKnowledgeCandidates`
-
-- Incluir novos campos na query (contains_pii, risk_level, duplicate_of, evidence_snippets, clarity_score, completeness_score, sanitized_solution)
-- Adicionar parâmetros de ordenação e filtro
-
-### 5. Regra de bloqueio de aprovação
-
-No `useApproveCandidate`:
-- Se `contains_pii = true` e solução não foi editada, bloquear aprovação direta (forçar "Editar e Aprovar")
-- Se `risk_level = 'high'`, exigir confirmação extra
-
-## Fora do escopo (não altera)
-- Pipeline do CRON (já funciona)
-- Kill Switch / Shadow Mode (já implementados)
-- Fluxo de embedding pós-aprovação (já existe)
-- Notificações para gerentes (já existe)
+1. **Nova migração SQL** -- limpeza de dados + upgrade da RPC
+2. **`src/hooks/useSentimentAnalysis.tsx`** -- não gravar fallbacks no log
+3. **`supabase/functions/analyze-ticket/index.ts`** -- prompt de sentimento melhorado
 
 ## Impacto
-- Zero regressão: campos novos são nullable/default, código existente continua funcionando
-- Upgrade puro: mais informação para o curador, mais segurança contra PII
 
-## Sequência de implementação
-1. Migração SQL (novos campos)
-2. Upgrade da edge function (extração enriquecida)
-3. Upgrade dos hooks (query + approve)
-4. Upgrade da UI (cards + filtros + bloqueios)
+- Zero regressão: widget de sentimento continua funcionando, agora com dados limpos
+- Dashboard passa a mostrar distribuição real (sem inflação de neutros por rate limit)
+- Dados futuros ficam precisos (só análises reais são gravadas)
 
