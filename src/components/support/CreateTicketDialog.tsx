@@ -499,7 +499,15 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                     onChange={(e) => setAssignedSearch(e.target.value)}
                     className="h-8 mb-2"
                   />
-                  <div className="h-48 overflow-y-auto overscroll-contain pr-1" style={{ touchAction: 'pan-y' }}>
+                  <div
+                    className="h-48 overflow-y-auto overscroll-contain pr-1"
+                    style={{ touchAction: 'pan-y' }}
+                    onWheelCapture={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      e.currentTarget.scrollTop += e.deltaY;
+                    }}
+                  >
                     <div className="space-y-1">
                       <Button
                         type="button" variant={!assignedTo ? "secondary" : "ghost"} size="sm"
