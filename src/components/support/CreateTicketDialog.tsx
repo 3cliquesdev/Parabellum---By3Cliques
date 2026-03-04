@@ -499,7 +499,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                     onChange={(e) => setAssignedSearch(e.target.value)}
                     className="h-8 mb-2"
                   />
-                  <ScrollArea className="h-48 overflow-auto">
+                  <div className="h-48 overflow-y-auto pr-1">
                     <div className="space-y-1">
                       <Button
                         type="button" variant={!assignedTo ? "secondary" : "ghost"} size="sm"
@@ -522,7 +522,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                         <p className="text-xs text-muted-foreground text-center py-2">Nenhum agente encontrado</p>
                       )}
                     </div>
-                  </ScrollArea>
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
