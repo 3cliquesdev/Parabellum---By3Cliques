@@ -1,14 +1,20 @@
 
 
-# Fix: Scroll na lista de agentes do "Atribuir a"
+# Fix: Select não clicável dentro do Dialog "Adicionar Bloco"
 
-O `ScrollArea` está com `max-h-48` mas sem `h-48` — o Radix ScrollArea precisa de uma altura fixa para ativar o scroll. Vou trocar `max-h-48` por `h-48` e garantir que o conteúdo interno possa crescer.
+Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Mudança
+## Problema
 
-**`src/components/support/CreateTicketDialog.tsx`** (linha 502):
-- De: `<ScrollArea className="max-h-48">`
-- Para: `<ScrollArea className="h-48 overflow-auto">`
+Os `Select` (Radix UI) dentro do `DialogContent` no `AddBlockDialog.tsx` não respondem a cliques. Isso é um problema conhecido do Radix UI: quando o dropdown do Select abre como portal, o Dialog interpreta o clique fora do `DialogContent` e fecha ou bloqueia a interação.
 
-1 linha alterada, zero regressão.
+## Solução
+
+**Arquivo: `src/components/dashboard-builder/AddBlockDialog.tsx`**
+
+1. Adicionar `onPointerDownOutside={(e) => e.preventDefault()}` no `DialogContent` — impede que cliques no dropdown do Select sejam interpretados como "fora do dialog"
+2. Adicionar `onInteractOutside={(e) => e.preventDefault()}` como segurança extra
+3. Nos `SelectContent`, usar `position="popper"` e `sideOffset={4}` para melhorar o posicionamento do dropdown
+
+Mudança de ~3 linhas, zero regressão nos demais componentes.
 
