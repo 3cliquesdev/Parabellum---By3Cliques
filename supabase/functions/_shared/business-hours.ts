@@ -12,6 +12,8 @@ export interface BusinessHoursResult {
   holiday_name: string | null;
   current_day: number;
   current_time: string;
+  today_open_time: string | null;   // e.g. "09:00" or null if not working day
+  today_close_time: string | null;  // e.g. "18:00" or null if not working day
 }
 
 interface DayConfig {
@@ -162,6 +164,8 @@ export async function getBusinessHoursInfo(supabaseClient: any): Promise<Busines
       holiday_name: holidayName,
       current_day: dayOfWeek,
       current_time: timeStr,
+      today_open_time: null,
+      today_close_time: null,
     };
   }
 
@@ -176,6 +180,8 @@ export async function getBusinessHoursInfo(supabaseClient: any): Promise<Busines
       holiday_name: null,
       current_day: dayOfWeek,
       current_time: timeStr,
+      today_open_time: null,
+      today_close_time: null,
     };
   }
 
@@ -191,6 +197,8 @@ export async function getBusinessHoursInfo(supabaseClient: any): Promise<Busines
     holiday_name: null,
     current_day: dayOfWeek,
     current_time: timeStr,
+    today_open_time: startTime,
+    today_close_time: endTime,
   };
 }
 

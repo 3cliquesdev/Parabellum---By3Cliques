@@ -292,11 +292,19 @@ async function buildVariablesContext(
       ctx['business_within_hours'] = bh.within_hours;
       ctx['business_schedule_summary'] = bh.schedule_summary;
       ctx['business_next_open_text'] = bh.next_open_text;
+      ctx['business_is_holiday'] = bh.is_holiday;
+      ctx['business_holiday_name'] = bh.holiday_name || '';
+      ctx['business_today_open'] = bh.today_open_time || '';
+      ctx['business_today_close'] = bh.today_close_time || '';
     } catch (e) {
       console.warn('[process-chat-flow] ⚠️ Failed to get business hours:', e);
       ctx['business_within_hours'] = true; // Safe default
       ctx['business_schedule_summary'] = '';
       ctx['business_next_open_text'] = '';
+      ctx['business_is_holiday'] = false;
+      ctx['business_holiday_name'] = '';
+      ctx['business_today_open'] = '';
+      ctx['business_today_close'] = '';
     }
   }
 
@@ -2481,19 +2489,33 @@ serve(async (req) => {
           if (ticket) collectedData.__last_ticket_id = ticket.id;
         }
 
-        // 🏷️ EndNode action: add_tag
+        // 🏷️ EndNode action: add_tag (supports scope: 'contact' | 'conversation')
         if (nextNode?.data?.end_action === 'add_tag') {
           const tagId = nextNode.data.action_data?.tag_id;
-          if (tagId && activeState.conversations?.contact_id) {
-            const contactId = activeState.conversations.contact_id;
-            console.log(`[process-chat-flow] 🏷️ Adding tag ${tagId} to contact ${contactId}`);
-            const { error: tagError } = await supabaseClient
-              .from('contact_tags')
-              .upsert({ contact_id: contactId, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
-            if (tagError) {
-              console.error('[process-chat-flow] ❌ Error adding tag:', tagError);
-            } else {
-              console.log(`[process-chat-flow] ✅ Tag ${nextNode.data.action_data?.tag_name || tagId} added`);
+          const tagScope = nextNode.data.action_data?.tag_scope || 'contact';
+          if (tagId) {
+            const tagName = nextNode.data.action_data?.tag_name || tagId;
+            if (tagScope === 'conversation') {
+              console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to conversation ${conversationId}`);
+              const { error: tagError } = await supabaseClient
+                .from('conversation_tags')
+                .upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+              if (tagError) {
+                console.error('[process-chat-flow] ❌ Error adding conversation tag:', tagError);
+              } else {
+                console.log(`[process-chat-flow] ✅ Tag ${tagName} added to conversation`);
+              }
+            } else if (activeState.conversations?.contact_id) {
+              const contactId = activeState.conversations.contact_id;
+              console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to contact ${contactId}`);
+              const { error: tagError } = await supabaseClient
+                .from('contact_tags')
+                .upsert({ contact_id: contactId, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+              if (tagError) {
+                console.error('[process-chat-flow] ❌ Error adding contact tag:', tagError);
+              } else {
+                console.log(`[process-chat-flow] ✅ Tag ${tagName} added to contact`);
+              }
             }
             // Log ai_event
             try {
@@ -2502,7 +2524,7 @@ serve(async (req) => {
                 entity_type: 'conversation',
                 event_type: 'flow_add_tag',
                 model: 'flow_engine',
-                output_json: { tag_id: tagId, tag_name: nextNode.data.action_data?.tag_name || null, contact_id: contactId, node_id: nextNode.id },
+                output_json: { tag_id: tagId, tag_name: tagName, scope: tagScope, contact_id: activeState.conversations?.contact_id || null, node_id: nextNode.id },
               });
             } catch (_e) { /* non-blocking */ }
           }

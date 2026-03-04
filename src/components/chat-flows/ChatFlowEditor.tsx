@@ -897,6 +897,49 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                     </SelectContent>
                   </Select>
 
+                  {/* Tag config when end_action = add_tag */}
+                  {selectedNode.data.end_action === "add_tag" && (
+                    <div className="space-y-3 mt-3 border-t pt-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Escopo da tag</Label>
+                        <Select
+                          value={selectedNode.data.action_data?.tag_scope || "contact"}
+                          onValueChange={(v) => updateNodeData("action_data", { ...selectedNode.data.action_data, tag_scope: v })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="contact">👤 Contato</SelectItem>
+                            <SelectItem value="conversation">💬 Conversa</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-muted-foreground">
+                          "Contato" aplica a tag no cadastro do cliente. "Conversa" aplica apenas nesta conversa.
+                        </p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Tag</Label>
+                        <Input
+                          value={selectedNode.data.action_data?.tag_name || ""}
+                          onChange={(e) => updateNodeData("action_data", { ...selectedNode.data.action_data, tag_name: e.target.value })}
+                          placeholder="Nome da tag (ex: 9.98)"
+                          className="text-sm"
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          Digite o nome exato da tag cadastrada no sistema.
+                        </p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">ID da Tag</Label>
+                        <Input
+                          value={selectedNode.data.action_data?.tag_id || ""}
+                          onChange={(e) => updateNodeData("action_data", { ...selectedNode.data.action_data, tag_id: e.target.value })}
+                          placeholder="UUID da tag"
+                          className="text-sm font-mono"
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {/* Ticket config when end_action = create_ticket */}
                   {selectedNode.data.end_action === "create_ticket" && (
                     <div className="space-y-3 mt-3 border-t pt-3">

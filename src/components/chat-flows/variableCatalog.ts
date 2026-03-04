@@ -34,6 +34,10 @@ export const BUSINESS_VARS: VariableItem[] = [
   { value: "business_within_hours", label: "Dentro do Horário Comercial", group: "conversation" },
   { value: "business_schedule_summary", label: "Horário de Atendimento", group: "conversation" },
   { value: "business_next_open_text", label: "Próxima Abertura", group: "conversation" },
+  { value: "business_is_holiday", label: "É Feriado", group: "conversation" },
+  { value: "business_holiday_name", label: "Nome do Feriado", group: "conversation" },
+  { value: "business_today_open", label: "Abertura Hoje", group: "conversation" },
+  { value: "business_today_close", label: "Fechamento Hoje", group: "conversation" },
   { value: "sla_first_response_met", label: "SLA Primeira Resposta Cumprido", group: "conversation" },
 ];
 

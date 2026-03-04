@@ -38,7 +38,7 @@ export const EndNode = memo(({ data, selected }: NodeProps<EndNodeData>) => {
       selected={selected}
       showSourceHandle={false}
     >
-      <div className="flex items-center gap-2 mt-1">
+      <div className="flex items-center gap-2 mt-1 flex-wrap">
         <Badge className={`text-xs flex items-center gap-1 ${config.color}`}>
           <ActionIcon className="h-3 w-3" />
           {config.label}
@@ -46,6 +46,11 @@ export const EndNode = memo(({ data, selected }: NodeProps<EndNodeData>) => {
         {action === "add_tag" && data.action_data?.tag_name && (
           <Badge variant="outline" className="text-xs">
             {data.action_data.tag_name}
+          </Badge>
+        )}
+        {action === "add_tag" && data.action_data?.tag_scope && (
+          <Badge variant="secondary" className="text-[10px]">
+            {data.action_data.tag_scope === "conversation" ? "💬 Conversa" : "👤 Contato"}
           </Badge>
         )}
       </div>
