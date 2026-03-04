@@ -1,30 +1,60 @@
 
 
-# Ajustes finos: Transferência para Consultor
+# Auditoria: Mensagens do fluxo enviadas só internamente (não chegam no WhatsApp)
 
 Analisei o projeto atual e sigo as regras da base de conhecimento.
 
-## Estado Atual
+## Diagnóstico
 
-A implementação core já está feita (TransferPropertiesPanel, TransferNode, webhook, process-chat-flow). Faltam apenas **2 refinamentos de UI** que o usuário pediu:
+O problema está no handler `forceAIExit` do `meta-whatsapp-webhook` (linhas 1550-1593). Quando a IA detecta exit_keyword e re-invoca o `process-chat-flow` com `forceAIExit: true`, o resultado é tratado de forma **diferente** do fluxo principal (CASO 2). Há **3 bugs** neste handler:
 
-## Mudanças
+### Bug 1 — Opções não formatadas
+O CASO 2 (linha 876) faz:
+```
+formattedMessage = flowData.response + formatOptionsAsText(flowData.options)
+```
+O handler `forceAIExit` (linha 1559-1565) faz:
+```
+const flowMessage = flowResult.response || flowResult.message;
+// ❌ NÃO chama formatOptionsAsText(flowResult.options)
+```
+Resultado: A mensagem "Você já é nosso cliente?" chega sem as opções "1️⃣ Sim / 2️⃣ Não".
 
-### 1. TransferNode.tsx — Mostrar fallback dept abaixo do badge "Meu Consultor"
+### Bug 2 — Mensagem salva como `sender_type: "system"` 
+Linha 1574: `sender_type: "system"` em vez de seguir o padrão do CASO 2 que usa `is_bot_message: true` e `skip_db_save: false`. Mensagens do tipo "system" aparecem no inbox mas de forma diferente — e o `send-meta-whatsapp` recebe `skip_db_save: true` o que pode causar inconsistência.
 
-Quando `transfer_type === "consultant"` e `department_name` existe, exibir um segundo badge menor: `"Fallback: {department_name}"`. Ajuda na leitura do canvas.
+### Bug 3 — Transfer no forceAIExit ignora lógica de consultor
+Linhas 1581-1591: Se o flow retorna `transfer: true` com `transferType: consultant`, o handler simplesmente faz `assigned_to: null` sem buscar o `consultant_id` do contato. A lógica completa de consultor (linhas 920-1041 do CASO 2) não é replicada.
 
-### 2. TransferPropertiesPanel.tsx — Warning se dept fallback não selecionado
+## Correção
 
-Quando `transfer_type === "consultant"` e `department_id` está vazio, mostrar um aviso visual (texto vermelho/amber) pedindo para selecionar o departamento fallback. Isso reforça a obrigatoriedade sem bloquear o canvas (validação visual).
+### meta-whatsapp-webhook/index.ts — Handler forceAIExit (linhas 1550-1593)
 
-## O que NÃO precisa mudar
+Alinhar o handler `forceAIExit` com o CASO 2:
 
-- **Webhook** (`meta-whatsapp-webhook`): já trata `consultant_manually_removed` corretamente (linhas 930-936) — se removido manualmente E não é transfer consultant, pula; se é transfer consultant, tenta consultor mas respeita removed → pool.
-- **process-chat-flow**: já passa `transferType: node.data?.transfer_type` em todos os pontos de saída.
-- **Lógica de fallback**: já usa `DEPT_SUPORTE_FALLBACK` quando `departmentId` não vem do flow.
+1. **Formatar opções**: Adicionar `formatOptionsAsText(flowResult.options)` ao `flowMessage`
+2. **Envio consistente**: Usar `skip_db_save: false` e `is_bot_message: true` (como CASO 2), remover o insert manual de mensagem "system"
+3. **Transfer com consultor**: Quando `flowResult.transfer === true`, reusar a mesma lógica de consultor do CASO 2 (buscar `consultant_id`, respeitar `consultant_manually_removed` vs `transferType === 'consultant'`, chamar `route-conversation`)
+
+### Resumo das mudanças
+
+```text
+ANTES (forceAIExit):
+  flowMessage = flowResult.response
+  send-meta-whatsapp(skip_db_save: true)
+  messages.insert(sender_type: "system")  
+  transfer → assigned_to: null (sem consultor)
+
+DEPOIS (forceAIExit):  
+  flowMessage = flowResult.response + formatOptionsAsText(flowResult.options)
+  send-meta-whatsapp(skip_db_save: false, is_bot_message: true)
+  // Remove insert manual
+  transfer → mesma lógica CASO 2 (consultor + route-conversation)
+```
 
 ## Impacto
-- Zero regressão — apenas ajustes visuais no canvas
-- Tipos department/agent/queue não são afetados
+- Corrige mensagens que apareciam no inbox mas não no WhatsApp do cliente
+- Corrige opções (Sim/Não) que não apareciam formatadas
+- Corrige transferência para consultor quando disparada via forceAIExit
+- Zero regressão — CASO 2 não é alterado, apenas o handler forceAIExit é alinhado
 
