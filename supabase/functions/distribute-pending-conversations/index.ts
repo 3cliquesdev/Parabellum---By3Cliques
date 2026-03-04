@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isWithinBusinessHours } from "../_shared/business-hours.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,35 +33,11 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[distribute-pending] Agente ${agentId} ficou online. Distribuindo conversas...`);
 
-    // Verificar se está dentro do horário comercial
     const now = new Date();
-    const dayOfWeek = now.getDay();
-    const currentTime = now.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      hour12: false,
-      timeZone: 'America/Sao_Paulo' 
-    });
+    // Verificar se está dentro do horário comercial
+    const withinHours = await isWithinBusinessHours(supabaseClient);
 
-    const { data: businessHours } = await supabaseClient
-      .from('business_hours_config')
-      .select('*')
-      .eq('day_of_week', dayOfWeek)
-      .single();
-
-    let isWithinBusinessHours = true;
-    
-    if (!businessHours || !businessHours.is_working_day) {
-      isWithinBusinessHours = false;
-    } else {
-      const startTime = businessHours.start_time;
-      const endTime = businessHours.end_time;
-      if (currentTime < startTime || currentTime >= endTime) {
-        isWithinBusinessHours = false;
-      }
-    }
-
-    if (!isWithinBusinessHours) {
+    if (!withinHours) {
       console.log('[distribute-pending] Fora do horário comercial, não distribuindo');
       return new Response(JSON.stringify({ 
         status: 'ok', 

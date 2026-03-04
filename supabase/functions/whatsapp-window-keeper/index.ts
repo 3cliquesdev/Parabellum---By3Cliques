@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/ai-config-cache.ts";
+import { isWithinBusinessHours as checkBizHours } from "../_shared/business-hours.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,7 +50,7 @@ serve(async (req) => {
   }
 
   // 2. Check business hours
-  const isBusinessHours = await checkBusinessHours(supabase);
+  const isBusinessHours = await checkBizHours(supabase);
   if (!isBusinessHours) {
     console.log("[window-keeper] 🌙 Outside business hours - skipping");
     return jsonResponse({ status: "skipped", reason: "outside_business_hours", processed: 0 });
@@ -412,21 +413,7 @@ async function processWithDirectQuery(
 // ========================\\
 // Helpers
 // ========================
-async function checkBusinessHours(supabase: any): Promise<boolean> {
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=Sunday
-
-  const { data: config } = await supabase
-    .from("business_hours_config")
-    .select("is_working_day, start_time, end_time")
-    .eq("day_of_week", dayOfWeek)
-    .single();
-
-  if (!config || !config.is_working_day) return false;
-
-  const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  return currentTime >= config.start_time && currentTime <= config.end_time;
-}
+// checkBusinessHours replaced by shared _shared/business-hours.ts
 
 async function skipAndLog(
   supabase: any,

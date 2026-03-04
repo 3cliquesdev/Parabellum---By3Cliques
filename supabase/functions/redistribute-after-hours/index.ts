@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getBusinessHoursInfo } from "../_shared/business-hours.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,45 +20,11 @@ serve(async (req) => {
 
     console.log('[redistribute-after-hours] Verificando horário comercial...');
 
-    // Buscar configuração de horário comercial
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Domingo, 1 = Segunda, etc.
-    const currentTime = now.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      hour12: false,
-      timeZone: 'America/Sao_Paulo' 
-    });
+    const bhInfo = await getBusinessHoursInfo(supabaseClient);
+    const isOutsideBusinessHours = !bhInfo.within_hours;
+    const currentTime = bhInfo.current_time;
 
-    console.log(`[redistribute-after-hours] Dia: ${dayOfWeek}, Hora atual (SP): ${currentTime}`);
-
-    // Buscar configuração do dia atual
-    const { data: businessHours, error: bhError } = await supabaseClient
-      .from('business_hours_config')
-      .select('*')
-      .eq('day_of_week', dayOfWeek)
-      .single();
-
-    if (bhError) {
-      console.log('[redistribute-after-hours] Erro ao buscar horário:', bhError);
-      // Se não encontrar config, considerar fora do horário
-    }
-
-    // Verificar se está fora do horário comercial
-    let isOutsideBusinessHours = false;
-    
-    if (!businessHours || !businessHours.is_working_day) {
-      isOutsideBusinessHours = true;
-      console.log('[redistribute-after-hours] Não é dia útil');
-    } else {
-      const startTime = businessHours.start_time; // ex: "08:00"
-      const endTime = businessHours.end_time; // ex: "17:00"
-      
-      if (currentTime < startTime || currentTime >= endTime) {
-        isOutsideBusinessHours = true;
-        console.log(`[redistribute-after-hours] Fora do horário: ${currentTime} não está entre ${startTime} e ${endTime}`);
-      }
-    }
+    console.log(`[redistribute-after-hours] Dia: ${bhInfo.current_day}, Hora atual (SP): ${currentTime}, Fora do horário: ${isOutsideBusinessHours}, Feriado: ${bhInfo.is_holiday}${bhInfo.holiday_name ? ' (' + bhInfo.holiday_name + ')' : ''}`);
 
     // Se está dentro do horário comercial, não fazer nada
     if (!isOutsideBusinessHours) {

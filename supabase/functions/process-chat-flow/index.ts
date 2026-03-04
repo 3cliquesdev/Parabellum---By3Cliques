@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/ai-config-cache.ts";
+import { getBusinessHoursInfo } from "../_shared/business-hours.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -262,11 +263,12 @@ function enrichContactIsCustomer(contactData: any): void {
 // 🆕 HELPER: Construir contexto unificado de variáveis para templates
 // Merge: collectedData (prioridade) + contact_* + conversation_*
 // ============================================================
-function buildVariablesContext(
+async function buildVariablesContext(
   collectedData: Record<string, any>,
   contactData: any,
-  conversationData: any
-): Record<string, any> {
+  conversationData: any,
+  supabaseClient?: any
+): Promise<Record<string, any>> {
   const ctx: Record<string, any> = { ...collectedData };
   if (contactData) {
     for (const f of ['name','email','phone','cpf','city','state','tags','lead_score','kiwify_validated','source','company','document','consultant_id','is_customer']) {
@@ -282,6 +284,36 @@ function buildVariablesContext(
       if (conversationData[f] != null) ctx[`conversation_${f}`] = conversationData[f];
     }
   }
+
+  // Business hours variables
+  if (supabaseClient) {
+    try {
+      const bh = await getBusinessHoursInfo(supabaseClient);
+      ctx['business_within_hours'] = bh.within_hours;
+      ctx['business_schedule_summary'] = bh.schedule_summary;
+      ctx['business_next_open_text'] = bh.next_open_text;
+    } catch (e) {
+      console.warn('[process-chat-flow] ⚠️ Failed to get business hours:', e);
+      ctx['business_within_hours'] = true; // Safe default
+      ctx['business_schedule_summary'] = '';
+      ctx['business_next_open_text'] = '';
+    }
+  }
+
+  // SLA first response met
+  if (conversationData) {
+    const SLA_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour default
+    if (conversationData.first_response_at && conversationData.created_at) {
+      const created = new Date(conversationData.created_at).getTime();
+      const firstResp = new Date(conversationData.first_response_at).getTime();
+      ctx['sla_first_response_met'] = (firstResp - created) <= SLA_THRESHOLD_MS;
+    } else if (conversationData.first_response_at) {
+      ctx['sla_first_response_met'] = true; // Has response, assume met
+    } else {
+      ctx['sla_first_response_met'] = false; // No first response yet
+    }
+  }
+
   return ctx;
 }
 
@@ -1289,8 +1321,8 @@ serve(async (req) => {
         }
       }
       // Helper para reconstruir variablesContext (chamado após cada mudança em collectedData)
-      const rebuildCtx = () => buildVariablesContext(collectedData, activeContactData, activeConversationData);
-      let variablesContext = rebuildCtx();
+      const rebuildCtx = () => buildVariablesContext(collectedData, activeContactData, activeConversationData, supabaseClient);
+      let variablesContext = await rebuildCtx();
 
       console.log(`[process-chat-flow] 🔄 Processing node: type=${currentNode.type} id=${currentNode.id} msg="${(userMessage || '').slice(0, 60)}" collectedKeys=[${Object.keys(collectedData).filter(k => !k.startsWith('__')).join(',')}]`);
 
@@ -1479,7 +1511,7 @@ serve(async (req) => {
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
-                variablesContext = rebuildCtx();
+                variablesContext = await rebuildCtx();
                 const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
                 return new Response(JSON.stringify({
                   useAI: resolvedNode.type === 'ai_response',
@@ -1577,7 +1609,7 @@ serve(async (req) => {
                   status: nextStatus,
                 }).eq('id', activeState.id);
 
-                variablesContext = rebuildCtx();
+                variablesContext = await rebuildCtx();
                 const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
 
                 if (resolvedNode.type === 'transfer') {
@@ -1662,7 +1694,7 @@ serve(async (req) => {
                     status: nextStatus,
                   }).eq('id', activeState.id);
 
-                  variablesContext = rebuildCtx();
+                  variablesContext = await rebuildCtx();
                   const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
                   return new Response(JSON.stringify({
                     useAI: resolvedNode.type === 'ai_response',
@@ -1745,7 +1777,7 @@ serve(async (req) => {
       if (currentNode.data?.save_as) {
         console.log(`[process-chat-flow] 💾 Saving data: key="${currentNode.data.save_as}" value="${(userMessage || '').slice(0, 50)}" node=${currentNode.id}`);
         collectedData[currentNode.data.save_as] = userMessage;
-        variablesContext = rebuildCtx(); // Rebuild after collecting new data
+        variablesContext = await rebuildCtx(); // Rebuild after collecting new data
       }
 
       // Determinar próximo nó
@@ -1852,7 +1884,7 @@ serve(async (req) => {
                   activeContactData.status = 'customer';
                   // Atualizar variablesContext após auto-validação
                   if (typeof rebuildCtx === 'function') {
-                    variablesContext = rebuildCtx();
+                    variablesContext = await rebuildCtx();
                   }
                   break;
                 }
@@ -2449,6 +2481,33 @@ serve(async (req) => {
           if (ticket) collectedData.__last_ticket_id = ticket.id;
         }
 
+        // 🏷️ EndNode action: add_tag
+        if (nextNode?.data?.end_action === 'add_tag') {
+          const tagId = nextNode.data.action_data?.tag_id;
+          if (tagId && activeState.conversations?.contact_id) {
+            const contactId = activeState.conversations.contact_id;
+            console.log(`[process-chat-flow] 🏷️ Adding tag ${tagId} to contact ${contactId}`);
+            const { error: tagError } = await supabaseClient
+              .from('contact_tags')
+              .upsert({ contact_id: contactId, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+            if (tagError) {
+              console.error('[process-chat-flow] ❌ Error adding tag:', tagError);
+            } else {
+              console.log(`[process-chat-flow] ✅ Tag ${nextNode.data.action_data?.tag_name || tagId} added`);
+            }
+            // Log ai_event
+            try {
+              await supabaseClient.from('ai_events').insert({
+                entity_id: conversationId,
+                entity_type: 'conversation',
+                event_type: 'flow_add_tag',
+                model: 'flow_engine',
+                output_json: { tag_id: tagId, tag_name: nextNode.data.action_data?.tag_name || null, contact_id: contactId, node_id: nextNode.id },
+              });
+            } catch (_e) { /* non-blocking */ }
+          }
+        }
+
         return new Response(
           JSON.stringify({
             useAI: false,
@@ -2992,7 +3051,7 @@ serve(async (req) => {
 
         let collectedData: Record<string, any> = {};
         // 🆕 Build variablesContext for master flow replaceVariables calls
-        const masterVariablesContext = buildVariablesContext(collectedData, contactData, conversation);
+        const masterVariablesContext = await buildVariablesContext(collectedData, contactData, conversation, supabaseClient);
 
         // Função para avaliar condição — usa getVar() centralizado
         function evalCond(data: any): boolean {

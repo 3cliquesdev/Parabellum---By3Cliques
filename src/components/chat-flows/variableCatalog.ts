@@ -29,6 +29,14 @@ export const CONTACT_VARS: VariableItem[] = [
   { value: "contact_is_customer", label: "É Cliente? (Kiwify Validado)", group: "contact" },
 ];
 
+// Business hours & SLA variables (injected by engine at runtime)
+export const BUSINESS_VARS: VariableItem[] = [
+  { value: "business_within_hours", label: "Dentro do Horário Comercial", group: "conversation" },
+  { value: "business_schedule_summary", label: "Horário de Atendimento", group: "conversation" },
+  { value: "business_next_open_text", label: "Próxima Abertura", group: "conversation" },
+  { value: "sla_first_response_met", label: "SLA Primeira Resposta Cumprido", group: "conversation" },
+];
+
 // Fixed conversation variables
 export const CONVERSATION_VARS: VariableItem[] = [
   { value: "conversation_channel", label: "Canal", group: "conversation" },
@@ -153,7 +161,7 @@ export function getAvailableVariables(
 
   const customerValidationVars = hasValidateNode ? CUSTOMER_VALIDATION_VARS : [];
 
-  const all = [...flowVars, ...CONTACT_VARS, ...CONVERSATION_VARS, ...orderVars, ...customerValidationVars];
+  const all = [...flowVars, ...CONTACT_VARS, ...CONVERSATION_VARS, ...BUSINESS_VARS, ...orderVars, ...customerValidationVars];
 
   return {
     flowVars,
@@ -170,7 +178,7 @@ export function getAvailableVariables(
 export function isKnownSystemVariable(varName: string): boolean {
   const trimmed = varName.trim();
   if (trimmed.startsWith("__")) return true; // internal vars
-  const allSystem = [...CONTACT_VARS, ...CONVERSATION_VARS, ...ORDER_VARS];
+  const allSystem = [...CONTACT_VARS, ...CONVERSATION_VARS, ...ORDER_VARS, ...BUSINESS_VARS];
   return allSystem.some(v => v.value === trimmed);
 }
 
