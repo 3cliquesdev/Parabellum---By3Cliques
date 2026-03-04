@@ -1,23 +1,18 @@
 
 
-# Fix: Bloquear envio de mensagem sem assumir controle (autopilot)
+# Atualizar descrições das tags 9.98 e 9.04
 
-Analisei o projeto atual e sigo as regras da base de conhecimento.
+As duas tags já existem no banco. O pedido é atualizar suas descrições com as definições mais completas fornecidas.
 
-## Problema
+## Alterações
 
-Quando uma conversa está em `ai_mode = autopilot`, agentes humanos conseguem enviar mensagens pelo composer sem clicar em "Assumir controle". Isso causa conflito: a IA continua respondendo automaticamente enquanto o humano também envia, gerando confusão para o cliente.
+**Via update no banco (insert tool):**
 
-## Solução
+1. **Tag 9.98 – Falta de Interação** (id: `3eb75d67-...`)
+   - Atualizar `description` para a definição completa: critérios de uso (atendimento respondeu no prazo, solicitou info, cliente não retornou, demanda pendente)
 
-**Arquivo: `src/components/inbox/SuperComposer.tsx`**
+2. **Tag 9.04 – Desistência da Conversa** (id: `aa44b48d-...`)
+   - Atualizar `description` para a definição completa: critérios de uso (cliente abandona por demora, falta de entendimento, decisão de não prosseguir, resolução por outros meios)
 
-Adicionar uma segunda regra de bloqueio no `handleSend` (logo após o bloqueio de `waiting_human` existente na linha 313):
-
-- Se `aiMode === 'autopilot'` e `messageMode !== 'internal'` (nota interna), bloquear o envio com toast: **"Você precisa assumir a conversa antes de enviar mensagens. Clique em 'Assumir Controle'."**
-- Notas internas (`messageMode === 'internal'`) continuam permitidas em qualquer modo — não afetam o cliente.
-
-Adicionalmente, exibir um **banner visual** acima do composer quando `aiMode === 'autopilot'`, alertando o agente que a IA está no controle e que ele precisa assumir antes de digitar.
-
-Mudança de ~15 linhas no SuperComposer. Zero regressão nos demais componentes.
+Nenhuma alteração de código. Apenas update de dados nas duas linhas existentes da tabela `tags`.
 
