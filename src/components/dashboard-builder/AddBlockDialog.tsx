@@ -44,7 +44,7 @@ export function AddBlockDialog({ open, onOpenChange, dashboardId, currentBlockCo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Adicionar Bloco</DialogTitle>
         </DialogHeader>
@@ -55,7 +55,7 @@ export function AddBlockDialog({ open, onOpenChange, dashboardId, currentBlockCo
               <SelectTrigger>
                 <SelectValue placeholder={isLoading ? "Carregando..." : "Selecione um relatório"} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" sideOffset={4}>
                 {reports?.map((r) => (
                   <SelectItem key={r.id} value={r.id}>
                     {r.name}
@@ -70,7 +70,7 @@ export function AddBlockDialog({ open, onOpenChange, dashboardId, currentBlockCo
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" sideOffset={4}>
                 <SelectItem value="table">Tabela</SelectItem>
                 <SelectItem value="card">Card (KPI)</SelectItem>
               </SelectContent>
