@@ -119,9 +119,9 @@ ANÁLISE DE SEGURANÇA (para cada item extraído):
    - "high": instruções de reembolso/estorno, exceções a políticas, dados pessoais presentes
 3. **Sanitized Solution**: Se contains_pii = true, gere uma versão limpa substituindo dados pessoais por [DADO_REMOVIDO] ou termos genéricos.
 4. **Evidence Snippets**: Extraia 2-3 mensagens mais relevantes da conversa que evidenciam o problema e a solução (formato: {role: "Agente"|"Cliente", content: "mensagem"}).
-5. **Quality Scores** (0-100):
-   - clarity_score: Quão clara e compreensível é a solução
-   - completeness_score: Quão completa é a solução (cobre edge cases?)
+5. **Quality Scores** (0-10, inteiro):
+   - clarity_score: Quão clara e compreensível é a solução (0=incompreensível, 10=cristalino)
+   - completeness_score: Quão completa é a solução (0=incompleta, 10=cobre todos os cenários)
 
 RETORNE JSON ESTRUTURADO:
 {
@@ -140,8 +140,8 @@ RETORNE JSON ESTRUTURADO:
         {"role": "Cliente", "content": "mensagem relevante"},
         {"role": "Agente", "content": "resposta relevante"}
       ],
-      "clarity_score": 85,
-      "completeness_score": 80
+      "clarity_score": 8,
+      "completeness_score": 7
     }
   ],
   "confidence_score": 0-100,
@@ -259,8 +259,8 @@ Se não houver conhecimento útil, retorne: { "extracted_items": [], "confidence
           contains_pii: item.contains_pii === true,
           risk_level: ['low', 'medium', 'high'].includes(item.risk_level) ? item.risk_level : 'low',
           duplicate_of: duplicateOf,
-          clarity_score: typeof item.clarity_score === 'number' ? Math.min(100, Math.max(0, item.clarity_score)) : null,
-          completeness_score: typeof item.completeness_score === 'number' ? Math.min(100, Math.max(0, item.completeness_score)) : null,
+          clarity_score: typeof item.clarity_score === 'number' ? Math.min(10, Math.max(0, Math.round(item.clarity_score))) : null,
+          completeness_score: typeof item.completeness_score === 'number' ? Math.min(10, Math.max(0, Math.round(item.completeness_score))) : null,
           evidence_snippets: Array.isArray(item.evidence_snippets) ? item.evidence_snippets : [],
           sanitized_solution: item.contains_pii && item.sanitized_solution ? item.sanitized_solution.substring(0, 2000) : null,
         })

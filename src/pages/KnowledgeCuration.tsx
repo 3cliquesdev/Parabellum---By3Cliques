@@ -382,10 +382,10 @@ export default function KnowledgeCuration() {
                           </span>
                           {/* Quality scores */}
                           {candidate.clarity_score != null && (
-                            <span className="text-xs">Clareza: {candidate.clarity_score}%</span>
+                            <span className="text-xs">Clareza: {candidate.clarity_score}/10</span>
                           )}
                           {candidate.completeness_score != null && (
-                            <span className="text-xs">Completude: {candidate.completeness_score}%</span>
+                            <span className="text-xs">Completude: {candidate.completeness_score}/10</span>
                           )}
                         </div>
                       </div>
