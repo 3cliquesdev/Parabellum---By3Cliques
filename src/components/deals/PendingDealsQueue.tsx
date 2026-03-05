@@ -178,7 +178,7 @@ export function PendingDealsQueue({ pipelineId }: PendingDealsQueueProps) {
           value,
           created_at,
           lead_source,
-          contacts (
+          contacts!deals_contact_id_fkey (
             first_name,
             last_name,
             email,

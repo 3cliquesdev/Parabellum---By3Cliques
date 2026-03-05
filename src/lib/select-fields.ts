@@ -35,7 +35,7 @@ export const DEAL_SELECT = `
   product_id, tracking_code,
   success_criteria, pain_points, churn_risk,
   became_rotten_at, rotten_notified_at, rotten_escalated_at,
-  contacts(id, first_name, last_name, email, phone, company),
+  contacts!deals_contact_id_fkey(id, first_name, last_name, email, phone, company),
   organizations(name),
   assigned_user:profiles!deals_assigned_to_fkey(id, full_name, avatar_url)
 `;
