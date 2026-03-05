@@ -1,85 +1,29 @@
 
 
-# Plano: Canais de Venda Dinâmicos + FForder
+# Plano: Adicionar abas "Horário Comercial" e "Tags" na página de Departamentos
 
-## Contexto
-Hoje o dialog "Confirmar Venda" tem apenas 2 opções fixas (Kiwify / Venda Externa). O usuário quer:
-1. Adicionar FForder como canal
-2. Permitir que gerentes criem/gerenciem canais sem depender de dev
-3. Melhorar o formulário "Venda Externa" com: seleção de canal, ID opcional, cadastro de empresa
+## O que muda
 
-## Arquitetura
+Adicionar duas novas abas na página `src/pages/Departments.tsx`:
 
-### 1. Nova tabela `sales_channels` (migration)
-```sql
-CREATE TABLE public.sales_channels (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  slug text NOT NULL UNIQUE, -- ex: 'fforder', 'pix_direto'
-  icon text DEFAULT '💳',
-  requires_order_id boolean DEFAULT false,
-  is_active boolean DEFAULT true,
-  created_at timestamptz DEFAULT now(),
-  created_by uuid REFERENCES auth.users(id)
-);
+1. **"Horário Comercial"** -- Redireciona para `/settings/sla` (onde já existe a configuração completa de horário comercial e feriados)
+2. **"Tags"** -- Redireciona para `/settings/tags` (onde já existe o gerenciamento de tags)
 
--- Seed com canais iniciais
-INSERT INTO sales_channels (name, slug, icon, requires_order_id) VALUES
-  ('FForder', 'fforder', '📦', true),
-  ('PIX Direto', 'pix_direto', '💰', false),
-  ('Boleto', 'boleto', '🏦', false),
-  ('Cartão Direto', 'cartao_direto', '💳', false),
-  ('Transferência', 'transferencia', '🔄', false);
+## Abordagem
 
--- RLS: managers podem CRUD, todos authenticated podem ler
-ALTER TABLE public.sales_channels ENABLE ROW LEVEL SECURITY;
+Em vez de duplicar os componentes, as novas abas usarão `useNavigate` para redirecionar quando clicadas. Alternativa melhor: embutir os componentes diretamente nas abas se forem componentes reutilizáveis. Vou verificar qual abordagem é mais limpa.
 
-CREATE POLICY "Authenticated can read sales_channels"
-  ON public.sales_channels FOR SELECT TO authenticated USING (true);
+**Opção escolhida**: Adicionar as abas como links de navegação rápida no TabsList, redirecionando ao clicar. Isso mantém a experiência centralizada sem duplicar código.
 
-CREATE POLICY "Managers can manage sales_channels"
-  ON public.sales_channels FOR ALL TO authenticated
-  USING (public.is_manager_or_admin(auth.uid()))
-  WITH CHECK (public.is_manager_or_admin(auth.uid()));
-```
+## Alteração
 
-### 2. Refatorar `ValidateWonDealDialog.tsx`
-- Manter tab **Kiwify** como está (validação automática)
-- Renomear tab "Venda Externa" → "Outros Canais"
-- No tab "Outros Canais", adicionar:
-  - **Select "Canal de Venda"** — busca da tabela `sales_channels` (hook `useSalesChannels`)
-  - **Campo "ID da Venda"** — opcional por padrão, obrigatório se o canal tem `requires_order_id=true`
-  - **Campo "Empresa"** — input com autocomplete dos contatos tipo empresa, ou botão "Cadastrar nova empresa" inline
-  - Manter campos existentes: Valor da Venda, Observação
-
-### 3. Hook `useSalesChannels`
-- Query simples: `select * from sales_channels where is_active=true order by name`
-- Usado no dialog e na página de configuração
-
-### 4. Atualizar `onManualSuccess` (Deals.tsx)
-- Expandir o payload para incluir `sales_channel_id`, `sales_channel_name`, `external_order_id`, `company_name`
-- Salvar esses dados no deal (metadata ou campos dedicados) e no log de interação
-
-### 5. Página de gestão de canais (Settings)
-- Nova rota `/settings/sales-channels`
-- CRUD simples: nome, ícone (emoji picker ou input), toggle "Exige ID de venda", ativar/desativar
-- Acessível apenas para managers (já protegido por RLS + ProtectedRoute)
-- Link na página de Settings existente
-
-## Arquivos a criar/alterar
-
-| Arquivo | Ação |
+| Arquivo | O que |
 |---|---|
-| Migration SQL | Criar tabela `sales_channels` + seed + RLS |
-| `src/hooks/useSalesChannels.tsx` | Criar hook |
-| `src/components/deals/ValidateWonDealDialog.tsx` | Refatorar tab "manual" com canal, ID, empresa |
-| `src/pages/Deals.tsx` | Expandir `handleManualWonSuccess` com novos campos |
-| `src/pages/SalesChannelsSettingsPage.tsx` | Criar CRUD de canais |
-| `src/App.tsx` | Adicionar rota `/settings/sales-channels` |
-| `src/pages/Settings.tsx` (ou equivalente) | Adicionar link para nova página |
+| `src/pages/Departments.tsx` | Adicionar 2 `TabsTrigger` extras ("Horário Comercial" e "Tags") que ao serem clicados fazem `navigate("/settings/sla")` e `navigate("/settings/tags")` respectivamente. Importar `useNavigate` e ícones `Clock` (já importado) e `Tags` |
 
-## Resultado
-- Gerente cria "FForder" (ou qualquer canal) via Settings sem depender de dev
-- Vendedor ao fechar deal escolhe canal → preenche ID se necessário → registra empresa → fecha
-- Auditoria completa no log de interação com canal + ID + empresa
+## Impacto
+
+- Zero regressão: apenas adiciona triggers no TabsList existente
+- Não altera nenhum componente ou rota existente
+- Navegação intuitiva: o usuário encontra tudo no mesmo menu de Departamentos & Operações
 
