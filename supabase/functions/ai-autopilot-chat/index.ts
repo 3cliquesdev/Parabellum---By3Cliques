@@ -7856,6 +7856,20 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         
         if (isCleanExit) {
           console.log('[ai-autopilot-chat] ✅ [[FLOW_EXIT]] detectado ANTES de salvar — saída limpa');
+          // Log auditoria non-blocking
+          supabaseClient.from('ai_events').insert({
+            entity_type: 'conversation',
+            entity_id: conversationId,
+            event_type: 'flow_exit_clean',
+            model: configuredAIModel || 'openai/gpt-5-mini',
+            output_json: {
+              blocked_preview: assistantMessage.substring(0, 150),
+              flow_id: flow_context.flow_id,
+              node_id: flow_context.node_id,
+              reason: 'ai_requested_exit',
+            },
+            input_summary: customerMessage?.substring(0, 200) || '',
+          }).then(() => {}).catch(err => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
           return new Response(JSON.stringify({
             flowExit: true,
             reason: 'ai_requested_exit',
@@ -7870,6 +7884,20 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         } else {
           console.warn('[ai-autopilot-chat] ⚠️ ESCAPE DETECTADO ANTES de salvar! IA tentou fabricar transferência');
           console.warn('[ai-autopilot-chat] Resposta bloqueada:', assistantMessage.substring(0, 100));
+          // Log auditoria non-blocking
+          supabaseClient.from('ai_events').insert({
+            entity_type: 'conversation',
+            entity_id: conversationId,
+            event_type: 'contract_violation_blocked',
+            model: configuredAIModel || 'openai/gpt-5-mini',
+            output_json: {
+              blocked_preview: assistantMessage.substring(0, 150),
+              flow_id: flow_context.flow_id,
+              node_id: flow_context.node_id,
+              reason: 'ai_contract_violation',
+            },
+            input_summary: customerMessage?.substring(0, 200) || '',
+          }).then(() => {}).catch(err => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
           
           return new Response(JSON.stringify({
             contractViolation: true,
