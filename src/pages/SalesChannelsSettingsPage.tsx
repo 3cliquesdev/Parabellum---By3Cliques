@@ -187,12 +187,32 @@ export default function SalesChannelsSettingsPage() {
                 disabled={!!editing}
               />
             </div>
-            <div className="flex items-center justify-between">
-              <Label>Exige ID da Venda?</Label>
-              <Switch
-                checked={form.requires_order_id}
-                onCheckedChange={(v) => setForm({ ...form, requires_order_id: v })}
+            <div className="space-y-2">
+              <Label>Descrição (opcional)</Label>
+              <Textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="Descrição do canal..."
+                rows={2}
               />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Ordem de exibição</Label>
+                <Input
+                  type="number"
+                  value={form.sort_order}
+                  onChange={(e) => setForm({ ...form, sort_order: parseInt(e.target.value) || 0 })}
+                  min={0}
+                />
+              </div>
+              <div className="flex items-center justify-between pt-6">
+                <Label>Exige ID da Venda?</Label>
+                <Switch
+                  checked={form.requires_order_id}
+                  onCheckedChange={(v) => setForm({ ...form, requires_order_id: v })}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
