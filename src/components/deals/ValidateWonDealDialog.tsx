@@ -35,6 +35,7 @@ interface ValidateWonDealDialogProps {
     sales_channel_id?: string;
     sales_channel_name?: string;
     external_order_id?: string;
+    company_contact_id?: string;
     company_name?: string;
   }) => void;
 }
@@ -68,6 +69,7 @@ export default function ValidateWonDealDialog({
   const [selectedChannelId, setSelectedChannelId] = useState("");
   const [externalOrderId, setExternalOrderId] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [companyContactId, setCompanyContactId] = useState<string | undefined>(undefined);
   
   const { toast } = useToast();
   const { data: salesChannels } = useSalesChannels();
@@ -163,6 +165,7 @@ export default function ValidateWonDealDialog({
         sales_channel_id: selectedChannelId || undefined,
         sales_channel_name: selectedChannel?.name || undefined,
         external_order_id: externalOrderId.trim() || undefined,
+        company_contact_id: companyContactId || undefined,
         company_name: companyName.trim() || undefined,
       });
     } finally {
@@ -181,6 +184,7 @@ export default function ValidateWonDealDialog({
     setSelectedChannelId("");
     setExternalOrderId("");
     setCompanyName("");
+    setCompanyContactId(undefined);
     onOpenChange(false);
   };
 

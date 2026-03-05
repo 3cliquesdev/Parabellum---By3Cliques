@@ -9,7 +9,10 @@ export interface SalesChannel {
   icon: string;
   requires_order_id: boolean;
   is_active: boolean;
+  sort_order: number;
+  description: string | null;
   created_at: string;
+  updated_at: string;
   created_by: string | null;
 }
 
@@ -20,6 +23,7 @@ export function useSalesChannels(onlyActive = true) {
       let query = supabase
         .from("sales_channels")
         .select("*")
+        .order("sort_order")
         .order("name");
 
       if (onlyActive) {
@@ -43,7 +47,7 @@ export function useSalesChannelsMutations() {
   };
 
   const createChannel = useMutation({
-    mutationFn: async (channel: { name: string; slug: string; icon: string; requires_order_id: boolean }) => {
+    mutationFn: async (channel: { name: string; slug: string; icon: string; requires_order_id: boolean; description?: string; sort_order?: number }) => {
       const { data, error } = await supabase
         .from("sales_channels")
         .insert(channel)

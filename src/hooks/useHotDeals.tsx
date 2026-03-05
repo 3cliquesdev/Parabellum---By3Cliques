@@ -26,7 +26,7 @@ export function useHotDeals() {
           title,
           value,
           expected_close_date,
-          contacts(first_name, last_name),
+          contacts!deals_contact_id_fkey(first_name, last_name),
           organizations(name),
           stages(name),
           profiles!deals_assigned_to_fkey(full_name)

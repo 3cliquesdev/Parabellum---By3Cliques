@@ -1,77 +1,85 @@
 
 
-# Plano: Upgrade "Nível Produto" para Sales Channels
+# Plano: Canais de Venda Dinâmicos + FForder
 
-## Análise de Contexto
+## Contexto
+Hoje o dialog "Confirmar Venda" tem apenas 2 opções fixas (Kiwify / Venda Externa). O usuário quer:
+1. Adicionar FForder como canal
+2. Permitir que gerentes criem/gerenciem canais sem depender de dev
+3. Melhorar o formulário "Venda Externa" com: seleção de canal, ID opcional, cadastro de empresa
 
-O sistema e single-tenant (um CRM usado por uma empresa). A tabela `organizations` representa empresas-clientes no CRM, nao tenants. Portanto, `organization_id` em `sales_channels` nao se aplica -- canais de venda sao configuracoes globais gerenciadas por managers.
+## Arquitetura
 
-Vou implementar os upgrades que fazem sentido neste contexto:
+### 1. Nova tabela `sales_channels` (migration)
+```sql
+CREATE TABLE public.sales_channels (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  slug text NOT NULL UNIQUE, -- ex: 'fforder', 'pix_direto'
+  icon text DEFAULT '💳',
+  requires_order_id boolean DEFAULT false,
+  is_active boolean DEFAULT true,
+  created_at timestamptz DEFAULT now(),
+  created_by uuid REFERENCES auth.users(id)
+);
 
-## 1. Migration: Novos campos em `sales_channels`
+-- Seed com canais iniciais
+INSERT INTO sales_channels (name, slug, icon, requires_order_id) VALUES
+  ('FForder', 'fforder', '📦', true),
+  ('PIX Direto', 'pix_direto', '💰', false),
+  ('Boleto', 'boleto', '🏦', false),
+  ('Cartão Direto', 'cartao_direto', '💳', false),
+  ('Transferência', 'transferencia', '🔄', false);
 
-Adicionar via ALTER TABLE:
+-- RLS: managers podem CRUD, todos authenticated podem ler
+ALTER TABLE public.sales_channels ENABLE ROW LEVEL SECURITY;
 
-- `sort_order int DEFAULT 0` -- ordenacao no select
-- `updated_at timestamptz DEFAULT now()` -- rastreabilidade
-- `description text NULL` -- ajuda o gerente
+CREATE POLICY "Authenticated can read sales_channels"
+  ON public.sales_channels FOR SELECT TO authenticated USING (true);
 
-Criar trigger para `updated_at` automatico.
+CREATE POLICY "Managers can manage sales_channels"
+  ON public.sales_channels FOR ALL TO authenticated
+  USING (public.is_manager_or_admin(auth.uid()))
+  WITH CHECK (public.is_manager_or_admin(auth.uid()));
+```
 
-Criar indice: `(is_active, sort_order, name)` para performance no select.
+### 2. Refatorar `ValidateWonDealDialog.tsx`
+- Manter tab **Kiwify** como está (validação automática)
+- Renomear tab "Venda Externa" → "Outros Canais"
+- No tab "Outros Canais", adicionar:
+  - **Select "Canal de Venda"** — busca da tabela `sales_channels` (hook `useSalesChannels`)
+  - **Campo "ID da Venda"** — opcional por padrão, obrigatório se o canal tem `requires_order_id=true`
+  - **Campo "Empresa"** — input com autocomplete dos contatos tipo empresa, ou botão "Cadastrar nova empresa" inline
+  - Manter campos existentes: Valor da Venda, Observação
 
-## 2. Migration: Campos dedicados em `deals`
+### 3. Hook `useSalesChannels`
+- Query simples: `select * from sales_channels where is_active=true order by name`
+- Usado no dialog e na página de configuração
 
-Adicionar campos na tabela `deals` para auditoria sem depender de metadata:
+### 4. Atualizar `onManualSuccess` (Deals.tsx)
+- Expandir o payload para incluir `sales_channel_id`, `sales_channel_name`, `external_order_id`, `company_name`
+- Salvar esses dados no deal (metadata ou campos dedicados) e no log de interação
 
-- `sales_channel_id uuid NULL REFERENCES sales_channels(id)`
-- `sales_channel_name text NULL` -- snapshot do nome no momento
-- `external_order_id text NULL`
-- `company_contact_id uuid NULL REFERENCES contacts(id)` -- FK para empresa
-- `company_name_snapshot text NULL` -- nome no momento do fechamento
+### 5. Página de gestão de canais (Settings)
+- Nova rota `/settings/sales-channels`
+- CRUD simples: nome, ícone (emoji picker ou input), toggle "Exige ID de venda", ativar/desativar
+- Acessível apenas para managers (já protegido por RLS + ProtectedRoute)
+- Link na página de Settings existente
 
-## 3. Hook `useSalesChannels` -- ordenacao por sort_order
+## Arquivos a criar/alterar
 
-Atualizar query para `order by sort_order, name` (ja esta parcialmente assim, confirmar).
-
-## 4. `ValidateWonDealDialog.tsx` -- empresa com autocomplete
-
-- Trocar campo texto "Empresa" por autocomplete de contacts (tipo empresa/organizacao)
-- Botao "Cadastrar nova" inline
-- Enviar `company_contact_id` + `company_name_snapshot` no payload
-
-Atualizar interface `onManualSuccess` para incluir `company_contact_id`.
-
-## 5. `Deals.tsx` -- salvar nos campos dedicados do deal
-
-Atualizar `handleManualWonSuccess`:
-- Salvar `sales_channel_id`, `sales_channel_name` (snapshot), `external_order_id`, `company_contact_id`, `company_name_snapshot` diretamente no update do deal
-- Manter log de interacao como esta
-
-## 6. `SalesChannelsSettingsPage.tsx` -- novos campos
-
-Adicionar ao CRUD:
-- Campo `description` (textarea)
-- Campo `sort_order` (input numerico)
-- Ordenar tabela por sort_order
-
-## 7. Backend validation (requires_order_id)
-
-No `handleManualWonSuccess` (Deals.tsx), antes de salvar, buscar o canal do banco e validar server-side se `requires_order_id=true` e `external_order_id` esta vazio. Isso evita bypass via request direto.
-
-Alternativa mais robusta: criar edge function `close-deal-manual` que faz a validacao no backend. Mas como o update do deal ja passa por RLS e o handler e no frontend com dados controlados, a validacao dupla (frontend + re-check no handler) e suficiente para este caso.
-
-## Arquivos a alterar
-
-| Arquivo | Acao |
+| Arquivo | Ação |
 |---|---|
-| Migration SQL | ALTER TABLE sales_channels + deals (novos campos) |
-| `src/hooks/useSalesChannels.tsx` | Order by sort_order |
-| `src/components/deals/ValidateWonDealDialog.tsx` | Autocomplete empresa, payload expandido |
-| `src/pages/Deals.tsx` | Salvar campos dedicados no deal |
-| `src/pages/SalesChannelsSettingsPage.tsx` | Campos description + sort_order |
+| Migration SQL | Criar tabela `sales_channels` + seed + RLS |
+| `src/hooks/useSalesChannels.tsx` | Criar hook |
+| `src/components/deals/ValidateWonDealDialog.tsx` | Refatorar tab "manual" com canal, ID, empresa |
+| `src/pages/Deals.tsx` | Expandir `handleManualWonSuccess` com novos campos |
+| `src/pages/SalesChannelsSettingsPage.tsx` | Criar CRUD de canais |
+| `src/App.tsx` | Adicionar rota `/settings/sales-channels` |
+| `src/pages/Settings.tsx` (ou equivalente) | Adicionar link para nova página |
 
-## Nota sobre multi-tenant
-
-O sistema e single-tenant. `organizations` sao clientes do CRM, nao tenants. Adicionar `organization_id` em `sales_channels` criaria complexidade sem beneficio. Se futuramente o sistema virar multi-tenant, sera um refactor separado que afeta todas as tabelas.
+## Resultado
+- Gerente cria "FForder" (ou qualquer canal) via Settings sem depender de dev
+- Vendedor ao fechar deal escolhe canal → preenche ID se necessário → registra empresa → fecha
+- Auditoria completa no log de interação com canal + ID + empresa
 

@@ -2849,12 +2849,15 @@ export type Database = {
           became_rotten_at: string | null
           churn_risk: string | null
           closed_at: string | null
+          company_contact_id: string | null
+          company_name_snapshot: string | null
           contact_id: string | null
           created_at: string
           currency: string | null
           existing_products: Json | null
           expected_close_date: string | null
           expected_revenue: number | null
+          external_order_id: string | null
           gross_value: number | null
           id: string
           is_organic_sale: boolean | null
@@ -2876,6 +2879,8 @@ export type Database = {
           product_id: string | null
           rotten_escalated_at: string | null
           rotten_notified_at: string | null
+          sales_channel_id: string | null
+          sales_channel_name: string | null
           stage_id: string | null
           status: Database["public"]["Enums"]["deal_status"]
           success_criteria: string | null
@@ -2892,12 +2897,15 @@ export type Database = {
           became_rotten_at?: string | null
           churn_risk?: string | null
           closed_at?: string | null
+          company_contact_id?: string | null
+          company_name_snapshot?: string | null
           contact_id?: string | null
           created_at?: string
           currency?: string | null
           existing_products?: Json | null
           expected_close_date?: string | null
           expected_revenue?: number | null
+          external_order_id?: string | null
           gross_value?: number | null
           id?: string
           is_organic_sale?: boolean | null
@@ -2919,6 +2927,8 @@ export type Database = {
           product_id?: string | null
           rotten_escalated_at?: string | null
           rotten_notified_at?: string | null
+          sales_channel_id?: string | null
+          sales_channel_name?: string | null
           stage_id?: string | null
           status?: Database["public"]["Enums"]["deal_status"]
           success_criteria?: string | null
@@ -2935,12 +2945,15 @@ export type Database = {
           became_rotten_at?: string | null
           churn_risk?: string | null
           closed_at?: string | null
+          company_contact_id?: string | null
+          company_name_snapshot?: string | null
           contact_id?: string | null
           created_at?: string
           currency?: string | null
           existing_products?: Json | null
           expected_close_date?: string | null
           expected_revenue?: number | null
+          external_order_id?: string | null
           gross_value?: number | null
           id?: string
           is_organic_sale?: boolean | null
@@ -2962,6 +2975,8 @@ export type Database = {
           product_id?: string | null
           rotten_escalated_at?: string | null
           rotten_notified_at?: string | null
+          sales_channel_id?: string | null
+          sales_channel_name?: string | null
           stage_id?: string | null
           status?: Database["public"]["Enums"]["deal_status"]
           success_criteria?: string | null
@@ -2976,6 +2991,13 @@ export type Database = {
             columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_company_contact_id_fkey"
+            columns: ["company_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
           {
@@ -3011,6 +3033,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_sales_channel_id_fkey"
+            columns: ["sales_channel_id"]
+            isOneToOne: false
+            referencedRelation: "sales_channels"
             referencedColumns: ["id"]
           },
           {
@@ -7827,32 +7856,41 @@ export type Database = {
         Row: {
           created_at: string | null
           created_by: string | null
+          description: string | null
           icon: string | null
           id: string
           is_active: boolean | null
           name: string
           requires_order_id: boolean | null
           slug: string
+          sort_order: number | null
+          updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           created_by?: string | null
+          description?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean | null
           name: string
           requires_order_id?: boolean | null
           slug: string
+          sort_order?: number | null
+          updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           created_by?: string | null
+          description?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean | null
           name?: string
           requires_order_id?: boolean | null
           slug?: string
+          sort_order?: number | null
+          updated_at?: string | null
         }
         Relationships: []
       }

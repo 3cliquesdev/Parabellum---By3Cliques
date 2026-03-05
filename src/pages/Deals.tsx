@@ -406,9 +406,28 @@ export default function Deals() {
     sales_channel_id?: string;
     sales_channel_name?: string;
     external_order_id?: string;
+    company_contact_id?: string;
     company_name?: string;
   }) => {
     if (!pendingWonDeal) return;
+
+    // Backend validation: if channel requires order ID, verify it
+    if (data.sales_channel_id) {
+      const { data: channelData } = await supabase
+        .from("sales_channels")
+        .select("requires_order_id, name")
+        .eq("id", data.sales_channel_id)
+        .single();
+      
+      if (channelData?.requires_order_id && !data.external_order_id?.trim()) {
+        toast({
+          title: "ID da Venda obrigatório",
+          description: `O canal "${channelData.name}" exige o ID da venda.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
 
     updateDeal.mutate(
       {
@@ -419,6 +438,11 @@ export default function Deals() {
           closed_at: new Date().toISOString(),
           assigned_to: pendingWonDeal.assigned_to || null,
           is_organic_sale: false,
+          sales_channel_id: data.sales_channel_id || null,
+          sales_channel_name: data.sales_channel_name || null,
+          external_order_id: data.external_order_id || null,
+          company_contact_id: data.company_contact_id || null,
+          company_name_snapshot: data.company_name || null,
         },
       },
       {

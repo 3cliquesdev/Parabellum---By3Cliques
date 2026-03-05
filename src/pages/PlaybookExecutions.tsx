@@ -119,7 +119,7 @@ export default function PlaybookExecutions() {
           title,
           lead_email,
           lead_phone,
-          contacts(id, first_name, last_name, email, status),
+          contacts!deals_contact_id_fkey(id, first_name, last_name, email, status),
           products(name)
         `);
 
