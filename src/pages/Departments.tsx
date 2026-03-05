@@ -30,6 +30,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 
 export default function Departments() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("departments");
 
   // Department state
