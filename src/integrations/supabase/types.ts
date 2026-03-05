@@ -7823,6 +7823,39 @@ export type Database = {
         }
         Relationships: []
       }
+      sales_channels: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          requires_order_id: boolean | null
+          slug: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          requires_order_id?: boolean | null
+          slug: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          requires_order_id?: boolean | null
+          slug?: string
+        }
+        Relationships: []
+      }
       sales_goals: {
         Row: {
           assigned_to: string | null

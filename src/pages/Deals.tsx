@@ -400,7 +400,14 @@ export default function Deals() {
   };
 
   // Handler para fechamento manual (venda externa sem Kiwify)
-  const handleManualWonSuccess = async (data: { value: number; observation: string }) => {
+  const handleManualWonSuccess = async (data: { 
+    value: number; 
+    observation: string;
+    sales_channel_id?: string;
+    sales_channel_name?: string;
+    external_order_id?: string;
+    company_name?: string;
+  }) => {
     if (!pendingWonDeal) return;
 
     updateDeal.mutate(
@@ -410,14 +417,12 @@ export default function Deals() {
           status: "won",
           value: data.value,
           closed_at: new Date().toISOString(),
-          // Manter assigned_to existente, NÃO auto-atribuir a não-vendedores
           assigned_to: pendingWonDeal.assigned_to || null,
-          is_organic_sale: false, // Venda manual do vendedor, não orgânica
+          is_organic_sale: false,
         },
       },
       {
         onSuccess: async () => {
-          // Trigger confetti
           confetti({
             particleCount: 150,
             spread: 70,
@@ -425,17 +430,23 @@ export default function Deals() {
             colors: ['#FFD700', '#FFA500', '#FF6347', '#00FF00', '#1E90FF'],
           });
 
+          const channelLabel = data.sales_channel_name || "venda externa";
           toast({
             title: "🎉 Negócio Ganho!",
-            description: `Venda externa: ${formatCurrency(data.value)}`,
+            description: `${channelLabel}: ${formatCurrency(data.value)}`,
           });
 
           // Log na timeline se houver contact_id
           if (pendingWonDeal.contact_id) {
+            const parts = [`✅ Negócio fechado (${channelLabel}): ${formatCurrency(data.value)}`];
+            if (data.external_order_id) parts.push(`🔗 ID: ${data.external_order_id}`);
+            if (data.company_name) parts.push(`🏢 Empresa: ${data.company_name}`);
+            parts.push(`📝 Observação: ${data.observation}`);
+
             await supabase.from('interactions').insert({
               customer_id: pendingWonDeal.contact_id,
               type: 'note',
-              content: `✅ Negócio fechado (venda externa): ${formatCurrency(data.value)}\n📝 Observação: ${data.observation}`,
+              content: parts.join('\n'),
               channel: 'other',
               metadata: {
                 deal_id: pendingWonDeal.id,
@@ -443,6 +454,10 @@ export default function Deals() {
                 observation: data.observation,
                 validated_value: data.value,
                 validated_at: new Date().toISOString(),
+                sales_channel_id: data.sales_channel_id || null,
+                sales_channel_name: data.sales_channel_name || null,
+                external_order_id: data.external_order_id || null,
+                company_name: data.company_name || null,
               },
             });
           }

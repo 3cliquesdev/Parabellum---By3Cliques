@@ -24,7 +24,8 @@ import {
   Instagram,
   Palette,
   Send,
-  GitBranch
+  GitBranch,
+  Store
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SettingsCategory } from "@/components/settings/SettingsCategory";
@@ -175,6 +176,13 @@ export default function Settings() {
               title="Grupos Entrega"
               description="Pacotes de automação"
               onClick={() => navigate('/settings/delivery-groups')}
+            />
+            <SettingsCard
+              icon={Store}
+              iconBgColor="bg-emerald-500"
+              title="Canais de Venda"
+              description="FForder, PIX, Boleto..."
+              onClick={() => navigate('/settings/sales-channels')}
             />
           </SettingsCategory>
         </div>

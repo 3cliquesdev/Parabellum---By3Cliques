@@ -78,6 +78,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const AuditLogs = lazy(() => import("./pages/AuditLogs"));
 const PermissionsAudit = lazy(() => import("./pages/PermissionsAudit"));
 const SkillsSettings = lazy(() => import("./pages/SkillsSettings"));
+const SalesChannelsSettings = lazy(() => import("./pages/SalesChannelsSettingsPage"));
 const WhatsAppSettings = lazy(() => import("./pages/WhatsAppSettings"));
 const WebhooksSettings = lazy(() => import("./pages/WebhooksSettings"));
 const Reports = lazy(() => import("./pages/Reports"));
@@ -263,6 +264,7 @@ const App = () => {
               <Route path="/settings/ticket-notifications" element={<ProtectedRoute requiredPermission="email.manage_templates"><Layout><TicketNotificationRulesSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/sla" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SLASettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/scoring" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ScoringSettings /></Layout></ProtectedRoute>} />
+              <Route path="/settings/sales-channels" element={<ProtectedRoute requiredPermission="sales.manage_pipelines"><Layout><SalesChannelsSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/ticket-statuses" element={<ProtectedRoute requiredPermission="settings.view"><Layout><TicketStatusSettings /></Layout></ProtectedRoute>} />
               <Route path="/admin-onboarding" element={<ProtectedRoute requiredPermission="settings.view"><AdminOnboarding /></ProtectedRoute>} />
               <Route path="/super-admin" element={<ProtectedRoute requiredPermission="super_admin.access"><Layout><SuperAdminPanel /></Layout></ProtectedRoute>} />

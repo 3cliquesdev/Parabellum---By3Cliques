@@ -9,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSalesChannels } from "@/hooks/useSalesChannels";
 
 interface ValidateWonDealDialogProps {
   open: boolean;
@@ -30,6 +32,10 @@ interface ValidateWonDealDialogProps {
   onManualSuccess?: (data: {
     value: number;
     observation: string;
+    sales_channel_id?: string;
+    sales_channel_name?: string;
+    external_order_id?: string;
+    company_name?: string;
   }) => void;
 }
 
@@ -59,8 +65,15 @@ export default function ValidateWonDealDialog({
   const [manualValue, setManualValue] = useState("");
   const [manualObservation, setManualObservation] = useState("");
   const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+  const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [externalOrderId, setExternalOrderId] = useState("");
+  const [companyName, setCompanyName] = useState("");
   
   const { toast } = useToast();
+  const { data: salesChannels } = useSalesChannels();
+
+  const selectedChannel = salesChannels?.find(c => c.id === selectedChannelId);
+  const requiresOrderId = selectedChannel?.requires_order_id || false;
 
   const handleValidate = async () => {
     if (!kiwifyOrderRef.trim()) {
@@ -124,6 +137,15 @@ export default function ValidateWonDealDialog({
       return;
     }
 
+    if (requiresOrderId && !externalOrderId.trim()) {
+      toast({
+        title: "ID da Venda obrigatório",
+        description: `O canal "${selectedChannel?.name}" exige o ID da venda.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!onManualSuccess) {
       toast({
         title: "Erro",
@@ -138,6 +160,10 @@ export default function ValidateWonDealDialog({
       await onManualSuccess({
         value,
         observation: manualObservation.trim(),
+        sales_channel_id: selectedChannelId || undefined,
+        sales_channel_name: selectedChannel?.name || undefined,
+        external_order_id: externalOrderId.trim() || undefined,
+        company_name: companyName.trim() || undefined,
       });
     } finally {
       setIsSubmittingManual(false);
@@ -152,6 +178,9 @@ export default function ValidateWonDealDialog({
     setManualValue("");
     setManualObservation("");
     setClosureMode("kiwify");
+    setSelectedChannelId("");
+    setExternalOrderId("");
+    setCompanyName("");
     onOpenChange(false);
   };
 
@@ -185,7 +214,7 @@ export default function ValidateWonDealDialog({
             </TabsTrigger>
             <TabsTrigger value="manual" className="gap-2">
               <Banknote className="h-4 w-4" />
-              Venda Externa
+              Outros Canais
             </TabsTrigger>
           </TabsList>
 
@@ -267,10 +296,63 @@ export default function ValidateWonDealDialog({
             <div className="space-y-4">
               <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
                 <p className="text-sm text-amber-700">
-                  Use esta opção para vendas realizadas fora da Kiwify (PIX, boleto, cartão direto, etc.)
+                  Selecione o canal de venda e preencha os dados do fechamento.
                 </p>
               </div>
 
+              {/* Canal de Venda */}
+              <div className="space-y-2">
+                <Label>Canal de Venda</Label>
+                <Select value={selectedChannelId} onValueChange={setSelectedChannelId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o canal..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {salesChannels?.map((ch) => (
+                      <SelectItem key={ch.id} value={ch.id}>
+                        <span className="flex items-center gap-2">
+                          <span>{ch.icon}</span>
+                          <span>{ch.name}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* ID da Venda (condicional) */}
+              <div className="space-y-2">
+                <Label htmlFor="external-order-id">
+                  ID da Venda {requiresOrderId ? "*" : "(opcional)"}
+                </Label>
+                <Input
+                  id="external-order-id"
+                  placeholder="Ex: ORD-12345"
+                  value={externalOrderId}
+                  onChange={(e) => setExternalOrderId(e.target.value)}
+                  disabled={isSubmittingManual}
+                  className="font-mono"
+                />
+                {requiresOrderId && (
+                  <p className="text-xs text-amber-600">
+                    O canal "{selectedChannel?.name}" exige o ID da venda
+                  </p>
+                )}
+              </div>
+
+              {/* Empresa */}
+              <div className="space-y-2">
+                <Label htmlFor="company-name">Empresa (opcional)</Label>
+                <Input
+                  id="company-name"
+                  placeholder="Nome da empresa..."
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  disabled={isSubmittingManual}
+                />
+              </div>
+
+              {/* Valor */}
               <div className="space-y-2">
                 <Label htmlFor="manual-value">Valor da Venda *</Label>
                 <Input
@@ -282,11 +364,12 @@ export default function ValidateWonDealDialog({
                 />
               </div>
 
+              {/* Observação */}
               <div className="space-y-2">
                 <Label htmlFor="manual-observation">Observação * (mín. 10 caracteres)</Label>
                 <Textarea
                   id="manual-observation"
-                  placeholder="Ex: Cliente pagou via PIX direto, sem passar pela Kiwify..."
+                  placeholder="Ex: Cliente pagou via PIX direto..."
                   value={manualObservation}
                   onChange={(e) => setManualObservation(e.target.value)}
                   disabled={isSubmittingManual}
@@ -329,7 +412,7 @@ export default function ValidateWonDealDialog({
           ) : (
             <Button 
               onClick={handleManualClose} 
-              disabled={isSubmittingManual || !manualValue || manualObservation.length < 10}
+              disabled={isSubmittingManual || !manualValue || manualObservation.length < 10 || (requiresOrderId && !externalOrderId.trim())}
               className="bg-green-600 hover:bg-green-700"
             >
               {isSubmittingManual ? (
