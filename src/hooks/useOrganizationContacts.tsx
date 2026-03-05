@@ -65,8 +65,8 @@ export function useSearchContactsForOrg(orgId: string | null, search: string) {
     queryFn: async () => {
       let query = supabase
         .from("contacts")
-        .select("id, first_name, last_name, phone, email")
-        .is("organization_id", null)
+        .select("id, first_name, last_name, phone, email, organization_id, organizations(name)")
+        .neq("organization_id", orgId!)
         .order("first_name")
         .limit(20);
 
@@ -78,6 +78,6 @@ export function useSearchContactsForOrg(orgId: string | null, search: string) {
       if (error) throw error;
       return data;
     },
-    enabled: !!orgId && search.length >= 1,
+    enabled: !!orgId && search.length >= 2,
   });
 }
