@@ -283,10 +283,11 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
           : node
       )
     );
-    setSelectedNode({
-      ...selectedNode,
-      data: { ...selectedNode.data, [field]: value }
-    });
+    setSelectedNode((prev) =>
+      prev && prev.id === selectedNode.id
+        ? { ...prev, data: { ...prev.data, [field]: value } }
+        : prev
+    );
 
     // Auto-clean orphan edges when condition mode changes
     if (selectedNode.type === 'condition' && field === 'condition_rules') {
