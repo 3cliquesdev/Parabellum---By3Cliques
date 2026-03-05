@@ -49,7 +49,7 @@ export default function OrganizationDialog({ organization, trigger, onOpenChange
     defaultValues: {
       name: organization?.name || "",
       domain: organization?.domain || "",
-      default_department_id: (organization as any)?.default_department_id || "",
+      default_department_id: (organization as any)?.default_department_id || "none",
     },
   });
 
@@ -58,7 +58,7 @@ export default function OrganizationDialog({ organization, trigger, onOpenChange
       form.reset({
         name: organization.name,
         domain: organization.domain || "",
-        default_department_id: (organization as any)?.default_department_id || "",
+        default_department_id: (organization as any)?.default_department_id || "none",
       });
     }
   }, [organization, form]);
@@ -67,7 +67,7 @@ export default function OrganizationDialog({ organization, trigger, onOpenChange
     const payload = {
       name: data.name,
       domain: data.domain || null,
-      default_department_id: data.default_department_id || null,
+      default_department_id: data.default_department_id === "none" ? null : data.default_department_id || null,
     };
 
     if (organization) {
@@ -133,7 +133,7 @@ export default function OrganizationDialog({ organization, trigger, onOpenChange
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Nenhum</SelectItem>
+                      <SelectItem value="none">Nenhum</SelectItem>
                       {departments.map((dept) => (
                         <SelectItem key={dept.id} value={dept.id}>
                           <div className="flex items-center gap-2">
