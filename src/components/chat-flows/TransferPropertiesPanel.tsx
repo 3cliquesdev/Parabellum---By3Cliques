@@ -52,15 +52,16 @@ export function TransferPropertiesPanel({ selectedNode, updateNodeData }: Transf
             <SelectItem value="queue">Fila de atendimento</SelectItem>
             <SelectItem value="agent">Agente específico</SelectItem>
             <SelectItem value="consultant">Consultor do cliente</SelectItem>
+            <SelectItem value="preferred">Preferência do Contato</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* Selecionar Departamento - aparece para "department", "agent" e "consultant" (fallback) */}
-      {(transferType === "department" || transferType === "agent" || transferType === "consultant") && (
+      {(transferType === "department" || transferType === "agent" || transferType === "consultant" || transferType === "preferred") && (
         <div className="space-y-1.5">
           <Label className="text-xs">
-            {transferType === "agent" ? "Departamento do agente" : transferType === "consultant" ? "Departamento fallback" : "Departamento destino"}
+            {transferType === "agent" ? "Departamento do agente" : (transferType === "consultant" || transferType === "preferred") ? "Departamento fallback" : "Departamento destino"}
           </Label>
           <Select
             value={selectedNode.data.department_id || ""}
@@ -160,6 +161,26 @@ export function TransferPropertiesPanel({ selectedNode, updateNodeData }: Transf
         <div className="space-y-2">
           <div className="text-xs text-muted-foreground bg-muted/50 p-2.5 rounded-lg">
             A conversa será direcionada ao consultor vinculado ao contato. Se não houver consultor (ou foi removido manualmente), cai no departamento fallback.
+          </div>
+          {!selectedNode.data.department_id && (
+            <div className="text-xs text-warning bg-warning/10 border border-warning/20 p-2.5 rounded-lg font-medium">
+              ⚠ Selecione um departamento fallback obrigatório acima.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Mensagem de info para Preferência do Contato */}
+      {transferType === "preferred" && (
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground bg-muted/50 p-2.5 rounded-lg">
+            <p className="font-medium mb-1">Cadeia de prioridade:</p>
+            <ol className="list-decimal list-inside space-y-0.5">
+              <li>Atendente preferido do contato</li>
+              <li>Departamento preferido do contato</li>
+              <li>Departamento padrão da organização</li>
+              <li>Departamento fallback (configurado acima)</li>
+            </ol>
           </div>
           {!selectedNode.data.department_id && (
             <div className="text-xs text-warning bg-warning/10 border border-warning/20 p-2.5 rounded-lg font-medium">

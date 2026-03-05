@@ -920,21 +920,75 @@ serve(async (req) => {
                   //   mesmo quando consultant_manually_removed=true (vai pro pool)
                   // ═══════════════════════════════════════════════════════════════
                   const isConsultantTransfer = flowData.transferType === 'consultant';
+                  const isPreferredTransfer = flowData.transferType === 'preferred';
                   
                   const { data: contactConsultantData } = await supabase
                     .from('contacts')
-                    .select('consultant_id, consultant_manually_removed')
+                    .select('consultant_id, consultant_manually_removed, preferred_agent_id, preferred_department_id, organization_id')
                     .eq('id', contact.id)
                     .maybeSingle();
+
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🆕 PREFERRED TRANSFER: Cadeia de prioridade
+                  // 1. preferred_agent_id → 2. preferred_department_id → 3. org default dept → 4. fallback
+                  // ═══════════════════════════════════════════════════════════════
+                  if (isPreferredTransfer && contactConsultantData) {
+                    let resolved = false;
+
+                    // 1. Atendente preferido
+                    if (contactConsultantData.preferred_agent_id) {
+                      const { data: agentStatus } = await supabase
+                        .from('profiles')
+                        .select('id, availability_status')
+                        .eq('id', contactConsultantData.preferred_agent_id)
+                        .maybeSingle();
+                      
+                      if (agentStatus) {
+                        updateData.assigned_to = agentStatus.id;
+                        updateData.ai_mode = 'copilot';
+                        console.log("[meta-whatsapp-webhook] 👤 Preferred: atribuindo ao atendente preferido:", agentStatus.id, "status:", agentStatus.availability_status);
+                        resolved = true;
+                      }
+                    }
+
+                    // 2. Departamento preferido
+                    if (!resolved && contactConsultantData.preferred_department_id) {
+                      updateData.department = contactConsultantData.preferred_department_id;
+                      console.log("[meta-whatsapp-webhook] 🏢 Preferred: departamento preferido do contato:", contactConsultantData.preferred_department_id);
+                      resolved = true;
+                    }
+
+                    // 3. Departamento padrão da organização
+                    if (!resolved && contactConsultantData.organization_id) {
+                      const { data: orgData } = await supabase
+                        .from('organizations')
+                        .select('default_department_id')
+                        .eq('id', contactConsultantData.organization_id)
+                        .maybeSingle();
+                      
+                      if (orgData?.default_department_id) {
+                        updateData.department = orgData.default_department_id;
+                        console.log("[meta-whatsapp-webhook] 🏢 Preferred: departamento padrão da organização:", orgData.default_department_id);
+                        resolved = true;
+                      }
+                    }
+
+                    // 4. Fallback: usa department_id do nó (já definido acima)
+                    if (!resolved) {
+                      console.log("[meta-whatsapp-webhook] 🔄 Preferred: usando fallback do nó:", updateData.department);
+                    }
+                  }
 
                   // 🛡️ Se consultor foi removido manualmente E NÃO é transferência explícita para consultor
                   if (contactConsultantData?.consultant_manually_removed && !isConsultantTransfer) {
                     console.log("[meta-whatsapp-webhook] 🚫 consultant_manually_removed=true, pulando TRANSFER-PERSIST-LOCK para contato:", contact.id);
                   }
 
-                  let consultantId = (contactConsultantData?.consultant_manually_removed && !isConsultantTransfer)
-                    ? null
-                    : (contactConsultantData?.consultant_id || null);
+                  let consultantId = (isPreferredTransfer) 
+                    ? null  // Preferred já resolveu acima, não usar consultor
+                    : (contactConsultantData?.consultant_manually_removed && !isConsultantTransfer)
+                      ? null
+                      : (contactConsultantData?.consultant_id || null);
 
                   // 🆕 Se não tem consultor pelo contato, buscar pelo email coletado no fluxo
                   if (!consultantId) {

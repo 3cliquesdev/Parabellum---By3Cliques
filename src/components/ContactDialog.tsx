@@ -30,6 +30,8 @@ import { useCreateContact, useUpdateContact } from "@/hooks/useContacts";
 import { useUpsertContact } from "@/hooks/useUpsertContact";
 import { useOrganizations } from "@/hooks/useOrganizations";
 import { useSalesReps } from "@/hooks/useSalesReps";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useProfiles } from "@/hooks/useProfiles";
 import type { Tables } from "@/integrations/supabase/types";
 
 const contactSchema = z.object({
@@ -48,6 +50,8 @@ const contactSchema = z.object({
   zip_code: z.string().max(9).optional().nullable(),
   organization_id: z.string().uuid().optional().nullable(),
   assigned_to: z.string().uuid().optional().nullable(),
+  preferred_agent_id: z.string().uuid().optional().nullable(),
+  preferred_department_id: z.string().uuid().optional().nullable(),
 });
 
 type ContactFormData = z.infer<typeof contactSchema>;
@@ -86,6 +90,8 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
   const upsertContact = useUpsertContact();
   const { data: organizations } = useOrganizations();
   const { data: salesReps, isLoading: salesRepsLoading } = useSalesReps();
+  const { data: departments = [] } = useDepartments({ activeOnly: true });
+  const { data: profiles = [] } = useProfiles();
 
   const form = useForm<ContactFormData>({
     resolver: zodResolver(contactSchema),
@@ -105,6 +111,8 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
       zip_code: contact?.zip_code || "",
       organization_id: contact?.organization_id || "",
       assigned_to: (contact as any)?.assigned_to || "",
+      preferred_agent_id: contact?.preferred_agent_id || "",
+      preferred_department_id: contact?.preferred_department_id || "",
     },
   });
 
@@ -126,6 +134,8 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
         zip_code: contact.zip_code || "",
         organization_id: contact.organization_id || "",
         assigned_to: (contact as any)?.assigned_to || "",
+        preferred_agent_id: contact.preferred_agent_id || "",
+        preferred_department_id: contact.preferred_department_id || "",
       });
     }
   }, [contact, form]);
@@ -148,6 +158,8 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
         zip_code: data.zip_code || null,
         organization_id: data.organization_id || null,
         assigned_to: data.assigned_to || null,
+        preferred_agent_id: data.preferred_agent_id || null,
+        preferred_department_id: data.preferred_department_id || null,
       };
       await updateContact.mutateAsync({ id: contact.id, updates: payload });
     } else {
@@ -462,6 +474,61 @@ export default function ContactDialog({ contact, trigger, onOpenChange }: Contac
                               {salesRepsLoading ? "Carregando..." : "Nenhum responsável disponível"}
                             </SelectItem>
                           )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* ROTEAMENTO PREFERENCIAL */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="preferred_department_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Departamento preferido</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Nenhum" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {departments.map((dept) => (
+                            <SelectItem key={dept.id} value={dept.id}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dept.color }} />
+                                <span>{dept.name}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="preferred_agent_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Atendente preferido</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Nenhum" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {profiles.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.full_name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />

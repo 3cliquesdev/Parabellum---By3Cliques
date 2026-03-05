@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 interface TransferNodeData {
   label: string;
   message: string;
-  transfer_type: "department" | "agent" | "queue" | "consultant";
+  transfer_type: "department" | "agent" | "queue" | "consultant" | "preferred";
   department_id?: string;
   department_name?: string;
   agent_id?: string;
@@ -19,7 +19,10 @@ export const TransferNode = memo(({ data, selected }: NodeProps<TransferNodeData
   
   let targetLabel = "Não configurado";
   let TargetIcon = Building2;
-  if (transferType === "consultant") {
+  if (transferType === "preferred") {
+    targetLabel = "Preferência do Contato";
+    TargetIcon = UserCheck;
+  } else if (transferType === "consultant") {
     targetLabel = "Meu Consultor";
     TargetIcon = UserCheck;
   } else if (transferType === "department" && data.department_name) {
@@ -44,7 +47,7 @@ export const TransferNode = memo(({ data, selected }: NodeProps<TransferNodeData
           <TargetIcon className="h-3 w-3" />
           {targetLabel}
         </Badge>
-        {transferType === "consultant" && data.department_name && (
+        {(transferType === "consultant" || transferType === "preferred") && data.department_name && (
           <Badge variant="outline" className="text-[10px] flex items-center gap-1 text-muted-foreground">
             <Building2 className="h-2.5 w-2.5" />
             Fallback: {data.department_name}

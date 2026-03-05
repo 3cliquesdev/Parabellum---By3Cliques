@@ -19,12 +19,15 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateOrganization, useUpdateOrganization } from "@/hooks/useOrganizations";
+import { useDepartments } from "@/hooks/useDepartments";
 import type { Tables } from "@/integrations/supabase/types";
 
 const organizationSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(100),
   domain: z.string().max(100).optional().or(z.literal("")),
+  default_department_id: z.string().optional().or(z.literal("")),
 });
 
 type OrganizationFormData = z.infer<typeof organizationSchema>;
@@ -39,12 +42,14 @@ export default function OrganizationDialog({ organization, trigger, onOpenChange
   const [open, setOpen] = useState(false);
   const createOrganization = useCreateOrganization();
   const updateOrganization = useUpdateOrganization();
+  const { data: departments = [] } = useDepartments({ activeOnly: true });
 
   const form = useForm<OrganizationFormData>({
     resolver: zodResolver(organizationSchema),
     defaultValues: {
       name: organization?.name || "",
       domain: organization?.domain || "",
+      default_department_id: (organization as any)?.default_department_id || "",
     },
   });
 
@@ -53,6 +58,7 @@ export default function OrganizationDialog({ organization, trigger, onOpenChange
       form.reset({
         name: organization.name,
         domain: organization.domain || "",
+        default_department_id: (organization as any)?.default_department_id || "",
       });
     }
   }, [organization, form]);
@@ -61,6 +67,7 @@ export default function OrganizationDialog({ organization, trigger, onOpenChange
     const payload = {
       name: data.name,
       domain: data.domain || null,
+      default_department_id: data.default_department_id || null,
     };
 
     if (organization) {
@@ -109,6 +116,34 @@ export default function OrganizationDialog({ organization, trigger, onOpenChange
                   <FormControl>
                     <Input placeholder="acme.com" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="default_department_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Departamento padrão (opcional)</FormLabel>
+                  <Select value={field.value || ""} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Nenhum" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">Nenhum</SelectItem>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dept.color }} />
+                            <span>{dept.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

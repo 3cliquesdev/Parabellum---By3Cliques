@@ -1846,6 +1846,8 @@ export type Database = {
           onboarding_submission_id: string | null
           organization_id: string | null
           phone: string | null
+          preferred_agent_id: string | null
+          preferred_department_id: string | null
           recent_orders_count: number | null
           registration_date: string | null
           source: string | null
@@ -1895,6 +1897,8 @@ export type Database = {
           onboarding_submission_id?: string | null
           organization_id?: string | null
           phone?: string | null
+          preferred_agent_id?: string | null
+          preferred_department_id?: string | null
           recent_orders_count?: number | null
           registration_date?: string | null
           source?: string | null
@@ -1944,6 +1948,8 @@ export type Database = {
           onboarding_submission_id?: string | null
           organization_id?: string | null
           phone?: string | null
+          preferred_agent_id?: string | null
+          preferred_department_id?: string | null
           recent_orders_count?: number | null
           registration_date?: string | null
           source?: string | null
@@ -1983,6 +1989,20 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_preferred_agent_id_fkey"
+            columns: ["preferred_agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_preferred_department_id_fkey"
+            columns: ["preferred_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
           {
@@ -5961,23 +5981,34 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string
+          default_department_id: string | null
           domain: string | null
           id: string
           name: string
         }
         Insert: {
           created_at?: string
+          default_department_id?: string | null
           domain?: string | null
           id?: string
           name: string
         }
         Update: {
           created_at?: string
+          default_department_id?: string | null
           domain?: string | null
           id?: string
           name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "organizations_default_department_id_fkey"
+            columns: ["default_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pipeline_sales_reps: {
         Row: {
