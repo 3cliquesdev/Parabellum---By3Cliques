@@ -17,6 +17,7 @@ import {
 import { Building2, Plus, Users, TrendingUp, Pencil, Trash2 } from "lucide-react";
 import { useOrganizations, useDeleteOrganization } from "@/hooks/useOrganizations";
 import OrganizationDialog from "@/components/OrganizationDialog";
+import OrganizationContactsDialog from "@/components/OrganizationContactsDialog";
 
 export default function Organizations() {
   const [searchParams] = useSearchParams();
@@ -130,13 +131,19 @@ export default function Organizations() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Users className="h-4 w-4" />
-                      <span className="text-sm">Contatos</span>
-                    </div>
-                    <span className="font-semibold text-foreground">{org.contactsCount}</span>
-                  </div>
+                  <OrganizationContactsDialog
+                    orgId={org.id}
+                    orgName={org.name}
+                    trigger={
+                      <button className="flex items-center justify-between w-full hover:bg-muted/50 rounded-md p-1 -m-1 transition-colors">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Users className="h-4 w-4" />
+                          <span className="text-sm">Contatos</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{org.contactsCount}</span>
+                      </button>
+                    }
+                  />
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <TrendingUp className="h-4 w-4" />
