@@ -66,8 +66,6 @@ export function useDeals(pipelineId?: string, filters?: DealFilters) {
         // Status filter: default to 'open' when no status selected (fixes kanban showing only recent stages)
         if (filters.status && filters.status.length > 0) {
           query = query.in("status", filters.status as ("open" | "won" | "lost")[]);
-        } else {
-          query = query.eq("status", "open");
         }
 
         // Stage filter (NEW)
