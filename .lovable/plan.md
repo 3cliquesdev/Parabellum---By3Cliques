@@ -1,48 +1,25 @@
 
+# Plano: Roteamento por Preferência do Contato (Overrides) ✅
 
-# Plano: Fix — Transfer type não reflete instantaneamente no nó
+## Status: IMPLEMENTADO E VALIDADO
 
-## Problema
+## Resumo
 
-Quando o usuário troca o "Tipo de transferência" no painel de propriedades, o `TransferPropertiesPanel` chama `updateNodeData` 5 vezes em sequência (transfer_type, department_id, department_name, agent_id, agent_name). Cada chamada no `ChatFlowEditor` faz `setSelectedNode({...selectedNode, data: {...selectedNode.data, [field]: value}})` usando o **mesmo** `selectedNode` do closure — resultado: só a última chamada prevalece e `transfer_type` é perdido.
+Camada de roteamento baseada em overrides configuráveis por contato e organização. O sistema resolve o destino na transferência usando a cadeia: **Atendente preferido → Departamento preferido → Departamento padrão da Organização → Fallback do nó**.
 
-## Solução
+## Validação Completa
 
-Alterar `updateNodeData` no `ChatFlowEditor.tsx` para usar o padrão funcional do `setSelectedNode`, garantindo que chamadas sequenciais acumulem corretamente:
+| Camada | Status |
+|---|---|
+| Migration SQL (3 colunas) | ✅ |
+| Frontend (TransferNode + Panel) | ✅ |
+| Frontend (ContactDialog + OrgDialog) | ✅ |
+| Backend (process-chat-flow passthrough) | ✅ |
+| Backend (webhook resolução preferred) | ✅ |
+| Variáveis de contexto | ✅ |
+| Isolamento consultor vs preferred | ✅ |
+| Teste E2E com dados reais | ⏳ Pendente |
 
-```ts
-setSelectedNode((prev) => prev ? {
-  ...prev,
-  data: { ...prev.data, [field]: value }
-} : prev);
-```
+## Próximo passo
 
-**Problema**: `setSelectedNode` é um `useState` simples (`const [selectedNode, setSelectedNode] = useState<Node | null>(null)`), que aceita updater function normalmente.
-
-## Alteração
-
-**Arquivo único**: `src/components/chat-flows/ChatFlowEditor.tsx` (linhas 286-289)
-
-Trocar:
-```ts
-setSelectedNode({
-  ...selectedNode,
-  data: { ...selectedNode.data, [field]: value }
-});
-```
-
-Por:
-```ts
-setSelectedNode((prev) =>
-  prev && prev.id === selectedNode.id
-    ? { ...prev, data: { ...prev.data, [field]: value } }
-    : prev
-);
-```
-
-## Impacto
-
-- Zero regressão: todos os outros campos (label, message, save_as, options, etc.) também se beneficiam do fix
-- O `setNodes` já usa o padrão funcional (callback), então já está correto
-- Apenas o `setSelectedNode` estava usando valor direto do closure
-
+Testar E2E: preencher contatos de teste com overrides e enviar mensagens WhatsApp para validar os 4 cenários de roteamento nos logs.
