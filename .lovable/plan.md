@@ -1,25 +1,34 @@
 
-# Plano: Roteamento por Preferência do Contato (Overrides) ✅
 
-## Status: IMPLEMENTADO E VALIDADO
+# Auditoria RLS — Resultado e Limpeza de Policies Legadas
 
-## Resumo
+## Estado atual (pós-migration anterior)
 
-Camada de roteamento baseada em overrides configuráveis por contato e organização. O sistema resolve o destino na transferência usando a cadeia: **Atendente preferido → Departamento preferido → Departamento padrão da Organização → Fallback do nó**.
+A migration anterior **já aplicou corretamente** as policies `is_manager_or_admin` nas 5 tabelas. Porém, a auditoria revelou **2 policies legadas redundantes** que devem ser removidas para evitar confusão:
 
-## Validação Completa
+| Tabela | Policy legada | Tipo | Problema |
+|--------|--------------|------|----------|
+| `departments` | `managers_can_update_departments` | UPDATE | Usa `has_role` individual (4 roles hardcoded), redundante com `managers_can_manage_departments` FOR ALL |
+| `sales_goals` | `managers_can_view_goals` | SELECT | Só checa `manager` e `admin`, ignora outros gerentes. Redundante com `managers_can_manage_goals` FOR ALL |
 
-| Camada | Status |
-|---|---|
-| Migration SQL (3 colunas) | ✅ |
-| Frontend (TransferNode + Panel) | ✅ |
-| Frontend (ContactDialog + OrgDialog) | ✅ |
-| Backend (process-chat-flow passthrough) | ✅ |
-| Backend (webhook resolução preferred) | ✅ |
-| Variáveis de contexto | ✅ |
-| Isolamento consultor vs preferred | ✅ |
-| Teste E2E com dados reais | ⏳ Pendente |
+As policies FOR ALL já cobrem SELECT, INSERT, UPDATE e DELETE — então essas duas legadas são puro ruído e potencialmente confusas.
 
-## Próximo passo
+## Plano
 
-Testar E2E: preencher contatos de teste com overrides e enviar mensagens WhatsApp para validar os 4 cenários de roteamento nos logs.
+Uma migration simples com 2 DROP:
+
+```sql
+DROP POLICY IF EXISTS "managers_can_update_departments" ON public.departments;
+DROP POLICY IF EXISTS "managers_can_view_goals" ON public.sales_goals;
+```
+
+## Resultado final (todas as 5 tabelas limpas)
+
+- **products**: `managers_can_manage_products` FOR ALL ✅
+- **departments**: `managers_can_manage_departments` FOR ALL ✅ (sem a legada UPDATE)
+- **sales_goals**: `managers_can_manage_goals` FOR ALL ✅ (sem a legada SELECT)
+- **goal_milestones**: `managers_can_manage_milestones` FOR ALL ✅
+- **ai_response_cache**: `managers_delete` + `managers_insert` ✅
+
+Nenhuma alteração de código. Zero impacto funcional — as policies removidas são subconjuntos das que já existem.
+
