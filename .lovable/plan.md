@@ -1,25 +1,30 @@
 
-# Plano: Roteamento por Preferência do Contato (Overrides) ✅
 
-## Status: IMPLEMENTADO E VALIDADO
+# Liberar Gerentes para Mapear Ofertas (product_offers)
 
-## Resumo
+## Problema
 
-Camada de roteamento baseada em overrides configuráveis por contato e organização. O sistema resolve o destino na transferência usando a cadeia: **Atendente preferido → Departamento preferido → Departamento padrão da Organização → Fallback do nó**.
+A tabela `product_offers` tem a policy de escrita `admin_manager_can_manage_product_offers` que usa:
+```sql
+has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'manager')
+```
 
-## Validação Completa
+Isso exclui `cs_manager`, `support_manager`, `financial_manager`, `general_manager` — o mesmo problema que corrigimos nas outras 5 tabelas.
 
-| Camada | Status |
-|---|---|
-| Migration SQL (3 colunas) | ✅ |
-| Frontend (TransferNode + Panel) | ✅ |
-| Frontend (ContactDialog + OrgDialog) | ✅ |
-| Backend (process-chat-flow passthrough) | ✅ |
-| Backend (webhook resolução preferred) | ✅ |
-| Variáveis de contexto | ✅ |
-| Isolamento consultor vs preferred | ✅ |
-| Teste E2E com dados reais | ⏳ Pendente |
+## Correção
 
-## Próximo passo
+Uma migration:
 
-Testar E2E: preencher contatos de teste com overrides e enviar mensagens WhatsApp para validar os 4 cenários de roteamento nos logs.
+```sql
+DROP POLICY IF EXISTS "admin_manager_can_manage_product_offers" ON public.product_offers;
+
+CREATE POLICY "managers_can_manage_product_offers"
+ON public.product_offers
+FOR ALL
+TO authenticated
+USING (public.is_manager_or_admin(auth.uid()))
+WITH CHECK (public.is_manager_or_admin(auth.uid()));
+```
+
+Zero alterações de código frontend. A policy de SELECT (`authenticated_can_view_product_offers`) permanece inalterada.
+
