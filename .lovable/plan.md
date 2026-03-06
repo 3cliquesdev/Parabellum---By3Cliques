@@ -1,32 +1,25 @@
 
+# Plano: Roteamento por Preferência do Contato (Overrides) ✅
 
-# Auditoria: Liberar Gerentes das Travas de RLS
+## Status: IMPLEMENTADO E VALIDADO
 
-## Problema
+## Resumo
 
-Encontrei **5 tabelas** com policies de escrita restritas apenas a `admin`, excluindo todos os gerentes (cs_manager, support_manager, financial_manager, general_manager, manager).
+Camada de roteamento baseada em overrides configuráveis por contato e organização. O sistema resolve o destino na transferência usando a cadeia: **Atendente preferido → Departamento preferido → Departamento padrão da Organização → Fallback do nó**.
 
-## Tabelas afetadas
+## Validação Completa
 
-| Tabela | Policy atual | Acao |
-|--------|-------------|------|
-| `products` | `has_role(admin)` | Trocar para `is_manager_or_admin()` |
-| `departments` | `has_role(admin)` | Trocar para `is_manager_or_admin()` |
-| `sales_goals` | `has_role(admin)` | Trocar para `is_manager_or_admin()` |
-| `goal_milestones` | `has_role(admin)` | Trocar para `is_manager_or_admin()` |
-| `ai_response_cache` | `has_role(admin)` (DELETE) | Trocar para `is_manager_or_admin()` |
-| `role_permissions` | admin only | **Manter** (auto-protecao) |
-| `user_roles` | admin only | **Manter** (seguranca) |
+| Camada | Status |
+|---|---|
+| Migration SQL (3 colunas) | ✅ |
+| Frontend (TransferNode + Panel) | ✅ |
+| Frontend (ContactDialog + OrgDialog) | ✅ |
+| Backend (process-chat-flow passthrough) | ✅ |
+| Backend (webhook resolução preferred) | ✅ |
+| Variáveis de contexto | ✅ |
+| Isolamento consultor vs preferred | ✅ |
+| Teste E2E com dados reais | ⏳ Pendente |
 
-## O que nao muda
+## Próximo passo
 
-- `role_permissions` e `user_roles` continuam admin-only (regra de seguranca do projeto)
-- Policies de SELECT nao sao afetadas (ja funcionam)
-- A funcao `is_manager_or_admin()` ja existe e inclui todos os 6 roles de gestao
-
-## Implementacao
-
-Uma unica migration SQL com 5 DROP + 5 CREATE POLICY, substituindo `has_role(auth.uid(), 'admin')` por `is_manager_or_admin(auth.uid())` nas 5 tabelas listadas.
-
-Zero alteracoes de codigo frontend — o problema e puramente RLS.
-
+Testar E2E: preencher contatos de teste com overrides e enviar mensagens WhatsApp para validar os 4 cenários de roteamento nos logs.
