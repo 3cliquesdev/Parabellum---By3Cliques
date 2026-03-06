@@ -37,8 +37,10 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
   const [showFullData, setShowFullData] = useState(false);
   const [showCPF, setShowCPF] = useState(false);
   const [orgSearchTerm, setOrgSearchTerm] = useState("");
+  const debouncedOrgSearch = useDebouncedValue(orgSearchTerm, 300);
   const [orgPopoverOpen, setOrgPopoverOpen] = useState(false);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
+  const [confirmSwitch, setConfirmSwitch] = useState<{ orgId: string; orgName: string } | null>(null);
 
   const queryClient = useQueryClient();
 
