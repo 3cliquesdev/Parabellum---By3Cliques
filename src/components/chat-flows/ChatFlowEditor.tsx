@@ -409,7 +409,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
   const addConditionRule = () => {
     if (!selectedNode) return;
     const rules = selectedNode.data.condition_rules || [];
-    const newRule = { id: `rule_${Date.now()}`, label: "", keywords: "" };
+    const newRule = { id: `rule_${Date.now()}`, label: "", keywords: "", field: "", check_type: "has_data" };
     updateNodeData('condition_rules', [...rules, newRule]);
   };
 
@@ -849,13 +849,55 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
-                        <Textarea
-                          onKeyDown={(e) => e.stopPropagation()}
-                          value={rule.keywords || ""}
-                          onChange={(e) => updateConditionRule(idx, "keywords", e.target.value)}
-                          placeholder="Opcional: frases extras (1 por linha). Se vazio, usa o nome da regra acima."
-                          className="min-h-[40px] text-xs"
-                        />
+                        {/* 🆕 Seletor de campo (field-based) */}
+                        <Select
+                          value={rule.field || "__keywords__"}
+                          onValueChange={(val) => {
+                            const fieldVal = val === "__keywords__" ? "" : val;
+                            updateConditionRule(idx, "field", fieldVal);
+                            if (fieldVal) {
+                              // Auto-set label from field catalog
+                              const catalogItem = [...CONDITION_CONTACT_FIELDS, ...CONDITION_CONVERSATION_FIELDS].find(f => f.value === fieldVal);
+                              if (catalogItem && !rule.label) {
+                                updateConditionRule(idx, "label", catalogItem.label);
+                              }
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue placeholder="Modo da regra" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__keywords__">🔤 Keywords (texto do usuário)</SelectItem>
+                            <SelectGroup>
+                              <SelectLabel>Verificar dado do contato</SelectLabel>
+                              {CONDITION_CONTACT_FIELDS.map(f => (
+                                <SelectItem key={f.value} value={f.value}>🔍 {f.label}</SelectItem>
+                              ))}
+                            </SelectGroup>
+                            <SelectGroup>
+                              <SelectLabel>Verificar dado da conversa</SelectLabel>
+                              {CONDITION_CONVERSATION_FIELDS.map(f => (
+                                <SelectItem key={f.value} value={f.value}>🔍 {f.label}</SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        {/* Keywords textarea — só mostra se não tem field */}
+                        {!rule.field && (
+                          <Textarea
+                            onKeyDown={(e) => e.stopPropagation()}
+                            value={rule.keywords || ""}
+                            onChange={(e) => updateConditionRule(idx, "keywords", e.target.value)}
+                            placeholder="Opcional: frases extras (1 por linha). Se vazio, usa o nome da regra acima."
+                            className="min-h-[40px] text-xs"
+                          />
+                        )}
+                        {rule.field && (
+                          <p className="text-[10px] text-muted-foreground italic">
+                            ✅ Verifica se o campo tem dado — não precisa de keywords
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
