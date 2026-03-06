@@ -470,6 +470,61 @@ function evaluateConditionPath(nodeData: any, collectedData: Record<string, any>
   const result = evaluateCondition(nodeData, collectedData, userMessage, extraFlags, undefined, undefined);
   return result ? 'true' : 'false';
 }
+
+// 🆕 Avaliar condição V2 (Sim/Não por regra)
+// Retorna: rule.id (Sim), rule.id_false (Não), ou "else" (nenhuma regra bateu)
+// Diferença do V1: cada regra retorna explicitamente Sim ou Não
+function evaluateConditionV2Path(nodeData: any, collectedData: Record<string, any>, userMessage: string, extraFlags?: { inactivityTimeout?: boolean }, contactData?: any, conversationData?: any, flowEdges?: any[]): string {
+  const rules = nodeData.condition_rules;
+  
+  if (!rules || !Array.isArray(rules) || rules.length === 0) {
+    console.log('[process-chat-flow] ⚠️ condition_v2: No rules configured → else');
+    return "else";
+  }
+
+  const msg = userMessage.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  console.log(`[process-chat-flow] 🔍 V2 Evaluating ${rules.length} condition rules (Sim/Não). User message: "${msg}"`);
+
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
+    let isMatch = false;
+
+    // Field-based rule
+    if (rule.field) {
+      const fieldValue = getVar(rule.field, collectedData, contactData, conversationData);
+      const checkType = rule.check_type || 'has_data';
+      const hasValue = fieldValue !== null && fieldValue !== undefined && fieldValue !== false && String(fieldValue).trim().length > 0;
+      isMatch = checkType === 'has_data' ? hasValue : !hasValue;
+      console.log(`[process-chat-flow] 📋 V2 Rule ${i + 1}/${rules.length}: "${rule.label}" (id: ${rule.id}) | field: ${rule.field} | check: ${checkType} | value: ${fieldValue} | match: ${isMatch}`);
+    } else {
+      // Keyword-based rule
+      const rawKw = (rule.keywords || "").trim() || (rule.label || "").trim();
+      const terms = rawKw.includes("\n")
+        ? rawKw.split("\n").map((t: string) => t.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')).filter(Boolean)
+        : [rawKw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')].filter(Boolean);
+      isMatch = terms.length > 0 && terms.some((term: string) => msg.includes(term));
+      console.log(`[process-chat-flow] 📋 V2 Rule ${i + 1}/${rules.length}: "${rule.label}" (id: ${rule.id}) | keywords: [${terms.join(', ')}] | match: ${isMatch}`);
+    }
+
+    if (isMatch) {
+      console.log(`[process-chat-flow] 🎯 V2 MATCH Rule ${i + 1}: "${rule.label}" → handle "${rule.id}" (Sim)`);
+      return rule.id;
+    } else {
+      // Check if there's a "Não" edge connected
+      const falseHandle = `${rule.id}_false`;
+      const hasFalseEdge = flowEdges?.some((e: any) => e.sourceHandle === falseHandle);
+      if (hasFalseEdge) {
+        console.log(`[process-chat-flow] ✗ V2 NO MATCH Rule ${i + 1}: "${rule.label}" → handle "${falseHandle}" (Não)`);
+        return falseHandle;
+      }
+      // No "Não" edge connected — continue to next rule (fallthrough, same as V1)
+      console.log(`[process-chat-flow] ✗ V2 NO MATCH Rule ${i + 1}: "${rule.label}" — no Não edge, continuing...`);
+    }
+  }
+
+  console.log('[process-chat-flow] 🔀 V2 No rule matched → else');
+  return "else";
+}
 async function handleFetchOrderNode(
   node: any, 
   collectedData: Record<string, any>, 
