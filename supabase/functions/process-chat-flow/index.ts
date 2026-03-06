@@ -3174,9 +3174,10 @@ serve(async (req) => {
             let next: any = null;
 
           if (hasMultiRules) {
-              // 🆕 FIX: Se não há userMessage real, parar na condição e aguardar input
-              if (!userMessage || userMessage.trim().length === 0) {
-                console.log('[process-chat-flow] 🛑 Master flow: multi-rule condition without userMessage — stopping as waiting_input');
+              // 🆕 FIX: Se não há userMessage real E as regras são keyword-based, parar e aguardar input
+              const hasFieldRules = node.data.condition_rules.some((r: any) => !!r.field);
+              if (!hasFieldRules && (!userMessage || userMessage.trim().length === 0)) {
+                console.log('[process-chat-flow] 🛑 Master flow: multi-rule keyword condition without userMessage — stopping as waiting_input');
                 break;
               }
               // Multi-regra: usar evaluateConditionPath que retorna rule.id ou "else"
@@ -3428,8 +3429,9 @@ serve(async (req) => {
       if (currentNode.type === 'condition') {
         // 🆕 FIX: Multi-regra com keywords precisa de mensagem real
         const hasMultiRules = currentNode.data?.condition_rules?.length > 0;
-        if (hasMultiRules && (!userMessage || userMessage.trim().length === 0)) {
-          console.log('[process-chat-flow] 🛑 New flow: multi-rule condition without userMessage — stopping as waiting_input');
+        const hasFieldRules = hasMultiRules && currentNode.data.condition_rules.some((r: any) => !!r.field);
+        if (hasMultiRules && !hasFieldRules && (!userMessage || userMessage.trim().length === 0)) {
+          console.log('[process-chat-flow] 🛑 New flow: multi-rule keyword condition without userMessage — stopping as waiting_input');
           break;
         }
         const path = evaluateConditionPath(currentNode.data, {}, userMessage);
