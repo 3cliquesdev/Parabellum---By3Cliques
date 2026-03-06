@@ -946,7 +946,22 @@ serve(async (req) => {
             break;
           }
 
-        if (hasMultiRules) {
+          if (contentNode.type === 'condition_v2' && hasMultiRules) {
+            // V2: usar avaliador dedicado com Sim/Não
+            const hasFieldRules = contentNode.data.condition_rules.some((r: any) => !!r.field);
+            if (!hasFieldRules && (!userMessage || userMessage.trim().length === 0)) {
+              console.log('[process-chat-flow] 🛑 Manual traversal: V2 keyword condition without userMessage — stopping');
+              break;
+            }
+            const v2Path = evaluateConditionV2Path(contentNode.data, manualCollectedData, userMessage || '', undefined, manualContactData, manualConversation, flowDef.edges || []);
+            const v2Next = findNextNode(flowDef, contentNode, v2Path);
+            if (v2Next) {
+              contentNode = v2Next;
+              continue;
+            }
+            console.log('[process-chat-flow] ⚠️ Manual traversal: V2 no next node for path:', v2Path);
+            break;
+          } else if (hasMultiRules) {
             // Multi-regra com keywords precisa de mensagem real do usuário
             if (!userMessage || userMessage.trim().length === 0) {
               console.log('[process-chat-flow] 🛑 Manual traversal: multi-rule condition without userMessage — stopping as waiting_input');
