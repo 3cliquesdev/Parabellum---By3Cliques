@@ -465,6 +465,19 @@ export function AppSidebar() {
               <Button
                 variant="ghost"
                 size="icon"
+                onClick={() => {
+                  queryClient.invalidateQueries({ queryKey: ['role-permissions'] });
+                  queryClient.invalidateQueries({ queryKey: ['user-role'] });
+                  toast({ title: "Permissões atualizadas", description: "Cache recarregado." });
+                }}
+                className="h-9 w-9 mx-auto"
+                title="Recarregar permissões"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={handleSignOut}
                 className="h-9 w-9 mx-auto"
                 title="Sair"

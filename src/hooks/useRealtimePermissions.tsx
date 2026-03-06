@@ -19,8 +19,11 @@ export function useRealtimePermissions() {
         event: '*',
         schema: 'public',
         table: 'role_permissions',
-        filter: `role=eq.${role}`,
-      }, () => {
+      }, (payload: any) => {
+        // Só invalidar se a mudança é para o role do usuário atual
+        const changedRole = payload?.new?.role || payload?.old?.role;
+        if (changedRole && changedRole !== role) return;
+        
         // ✅ Invalidar TODAS as queries relacionadas
         queryClient.invalidateQueries({ queryKey: ['role-permissions', role] });
         queryClient.invalidateQueries({ queryKey: ['role-permissions'] });

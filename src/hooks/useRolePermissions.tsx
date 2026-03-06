@@ -36,9 +36,9 @@ export function useRolePermissions() {
       return permMap;
     },
     enabled: !!role,
-    staleTime: 60 * 1000, // 1 minuto - permissões recarregam mais rápido
+    staleTime: 10 * 1000, // 10s - permissões são críticas, devem ser frescas
     gcTime: 5 * 60 * 1000, // 5 minutos
-    refetchOnWindowFocus: true, // Recarrega ao focar na janela
+    refetchOnWindowFocus: "always", // Ignora staleTime ao focar janela
     refetchOnMount: true, // Recarrega ao montar o componente
   });
 

@@ -1,30 +1,32 @@
 
+# Plano: Condição V2 — Nó separado com Sim/Não por regra ✅
 
-# Fix: Permissões não refletem em tempo real para outros usuários
+## Status: IMPLEMENTADO
 
-## Diagnóstico
+## Resumo
 
-As permissões estão **salvas corretamente** no banco (17 ativas para `support_agent`). O problema é cache no navegador do atendente:
+Novo tipo de nó `condition_v2` no editor de fluxos. Cada regra tem saídas explícitas **Sim** (verde) e **Não** (vermelho), permitindo definir caminhos para ambos os resultados. O nó `condition` original permanece 100% intocado.
 
-1. `useRolePermissions` tem `staleTime: 60s` — dentro desse intervalo, nem `refetchOnWindowFocus` força refetch
-2. O realtime (`useRealtimePermissions`) DEVERIA invalidar o cache, mas pode falhar se a conexão WebSocket caiu ou se o filtro `role=eq.${role}` não está batendo corretamente
-3. Não existe feedback visual para o atendente saber que precisa atualizar
+## Arquivos alterados
 
-## Mudanças
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/chat-flows/nodes/ConditionV2Node.tsx` | **Novo** — Visual com handles Sim/Não por regra |
+| `src/components/chat-flows/nodes/index.ts` | Export do novo nó |
+| `src/components/chat-flows/ChatFlowNodeWrapper.tsx` | Tipo `condition_v2` adicionado |
+| `src/components/chat-flows/ChatFlowEditor.tsx` | nodeType, menu, painel de config, edge cleanup |
+| `supabase/functions/process-chat-flow/index.ts` | `evaluateConditionV2Path()` + todos os pontos de travessia |
 
-### 1. `src/hooks/useRolePermissions.tsx`
-- Reduzir `staleTime` de 60s para **10s** — permissões são críticas, devem ser frescas
-- Mudar `refetchOnWindowFocus` para `"always"` (ignora staleTime no focus)
+## Lógica V2 (engine)
 
-### 2. `src/hooks/useRealtimePermissions.tsx`
-- Remover o filtro `filter: role=eq.${role}` — escutar TODAS as mudanças em `role_permissions` e invalidar só quando `payload.new.role === role` ou `payload.old.role === role`
-- Isso garante que mudanças feitas pelo admin sejam captadas mesmo se o filtro do Postgres Realtime tiver edge cases
+Para cada regra em ordem:
+1. **TRUE** → segue handle `rule.id` (Sim)
+2. **FALSE** → se existe edge no handle `rule.id_false` (Não), segue por ela
+3. **FALSE sem edge Não** → continua para próxima regra (fallthrough)
+4. Se nenhuma regra bater → segue "Outros" (`else`)
 
-### 3. `src/components/AppSidebar.tsx`
-- Adicionar um botão sutil de "recarregar permissões" no rodapé do sidebar (ícone refresh) para fallback manual
+## Garantias
 
-## Impacto
-- Zero regressão — apenas cache mais agressivo e realtime mais robusto
-- Admin continua com fullAccess (bypass total)
-- Atendente verá mudanças em ~10s ou ao focar a janela
-
+- Nó `condition` original: **zero alteração na lógica**
+- Master Flow e fluxos existentes: **sem impacto**
+- Pode testar V2 em fluxo de teste antes de usar em produção
