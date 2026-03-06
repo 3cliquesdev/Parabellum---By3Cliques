@@ -1,25 +1,25 @@
 
+# Plano: Roteamento por Preferência do Contato (Overrides) ✅
 
-# Condição "Tem Organização?" no Chat Flow
+## Status: IMPLEMENTADO E VALIDADO
 
 ## Resumo
 
-Ja existe tudo pronto no motor. O campo `organization_id` ja esta disponivel no contexto do contato (`contactData`), e o tipo `has_data` ja avalia se o campo tem valor. So falta expor no editor.
+Camada de roteamento baseada em overrides configuráveis por contato e organização. O sistema resolve o destino na transferência usando a cadeia: **Atendente preferido → Departamento preferido → Departamento padrão da Organização → Fallback do nó**.
 
-## Alteracoes
+## Validação Completa
 
-### 1. `src/components/chat-flows/variableCatalog.ts`
-- Adicionar `{ value: "organization_id", label: "Tem Organização?" }` ao array `CONDITION_CONTACT_FIELDS`
+| Camada | Status |
+|---|---|
+| Migration SQL (3 colunas) | ✅ |
+| Frontend (TransferNode + Panel) | ✅ |
+| Frontend (ContactDialog + OrgDialog) | ✅ |
+| Backend (process-chat-flow passthrough) | ✅ |
+| Backend (webhook resolução preferred) | ✅ |
+| Variáveis de contexto | ✅ |
+| Isolamento consultor vs preferred | ✅ |
+| Teste E2E com dados reais | ⏳ Pendente |
 
-### 2. `src/components/chat-flows/nodes/ConditionNode.tsx`
-- Adicionar `organization_id: "Tem Organização?"` ao mapa `friendlyFieldNames`
+## Próximo passo
 
-### Zero alteracoes no backend
-O motor (`process-chat-flow`) ja resolve `organization_id` via `contactData` e o tipo `has_data` ja funciona para verificar se tem valor.
-
-## Como usar no editor
-
-1. Adicionar no Condition → Tipo: "Tem dado" → Campo: "👤 Tem Organização?"
-2. Caminho Sim = tem org vinculada → direcionar para Transfer/departamento especifico
-3. Caminho Nao = sem org → seguir fluxo padrao
-
+Testar E2E: preencher contatos de teste com overrides e enviar mensagens WhatsApp para validar os 4 cenários de roteamento nos logs.
