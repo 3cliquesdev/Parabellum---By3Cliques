@@ -9,6 +9,7 @@ export { TransferNode } from "./TransferNode";
 export { EndNode } from "./EndNode";
 export { AIResponseNode } from "./AIResponseNode";
 export { ChatFlowConditionNode } from "./ConditionNode";
+export { ConditionV2Node } from "./ConditionV2Node";
 export { FetchOrderNode } from "./FetchOrderNode";
 export { ValidateCustomerNode } from "./ValidateCustomerNode";
 export { VerifyCustomerOTPNode } from "./VerifyCustomerOTPNode";

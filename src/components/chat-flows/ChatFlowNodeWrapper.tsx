@@ -12,6 +12,7 @@ export type ChatFlowNodeType =
   | 'ask_options' 
   | 'ask_text'
   | 'condition'
+  | 'condition_v2'
   | 'ai_response'
   | 'transfer'
   | 'end'
@@ -65,6 +66,10 @@ const typeColors: Record<ChatFlowNodeType, { header: string; border: string }> =
   condition: {
     header: 'bg-purple-600 dark:bg-purple-700',
     border: 'border-purple-400 dark:border-purple-600',
+  },
+  condition_v2: {
+    header: 'bg-fuchsia-600 dark:bg-fuchsia-700',
+    border: 'border-fuchsia-400 dark:border-fuchsia-600',
   },
   ai_response: {
     header: 'bg-pink-600 dark:bg-pink-700',
