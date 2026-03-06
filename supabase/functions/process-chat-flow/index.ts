@@ -204,8 +204,8 @@ async function createTicketFromFlow(
 function findNextNode(flowDef: any, currentNode: any, path?: string): any {
   const edges = flowDef.edges || [];
   
-  // Para nós de condição, usar o path (true/false ou rule ID / else)
-  if (currentNode.type === 'condition' && path) {
+  // Para nós de condição (v1 e v2), usar o path (true/false ou rule ID / else)
+  if ((currentNode.type === 'condition' || currentNode.type === 'condition_v2') && path) {
     const edge = edges.find((e: any) => 
       e.source === currentNode.id && e.sourceHandle === path
     );
