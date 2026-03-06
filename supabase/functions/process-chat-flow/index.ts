@@ -3159,7 +3159,7 @@ serve(async (req) => {
         // 4. Logs fortes para diagnóstico
         // ============================================================
         
-        const NO_CONTENT = new Set(['input', 'start', 'condition']);
+        const NO_CONTENT = new Set(['input', 'start', 'condition', 'condition_v2']);
         const MAX_TRAVERSAL = 12;
 
         // 1) Descobrir startNode
@@ -3236,12 +3236,17 @@ serve(async (req) => {
           steps++;
           console.log(`[process-chat-flow] ⏩ Traversing[${steps}] ${node.type} (${node.id})`);
 
-          if (node.type === 'condition') {
+          if (node.type === 'condition' || node.type === 'condition_v2') {
             // Detectar multi-regra vs clássico
             const hasMultiRules = node.data?.condition_rules?.length > 0;
             let next: any = null;
 
-          if (hasMultiRules) {
+            if (node.type === 'condition_v2' && hasMultiRules) {
+              // V2: Sim/Não por regra
+              const v2Path = evaluateConditionV2Path(node.data, collectedData, userMessage, undefined, contactData, conversation, flowDef.edges || []);
+              console.log(`[process-chat-flow] 🔀 V2 condition path: "${v2Path}"`);
+              next = findNextNode(flowDef, node, v2Path);
+            } else if (hasMultiRules) {
               // 🆕 FIX: Se não há userMessage real E as regras são keyword-based, parar e aguardar input
               const hasFieldRules = node.data.condition_rules.some((r: any) => !!r.field);
               if (!hasFieldRules && (!userMessage || userMessage.trim().length === 0)) {
