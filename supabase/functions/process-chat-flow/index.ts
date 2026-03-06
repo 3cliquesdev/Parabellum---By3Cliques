@@ -2292,7 +2292,7 @@ serve(async (req) => {
       let traversalSteps = 0;
       const MAX_TRAVERSAL = 20;
 
-      while (nextNode && ['condition', 'input', 'start'].includes(nextNode.type) && traversalSteps < MAX_TRAVERSAL) {
+      while (nextNode && ['condition', 'condition_v2', 'input', 'start'].includes(nextNode.type) && traversalSteps < MAX_TRAVERSAL) {
         traversalSteps++;
         console.log(`[process-chat-flow] ⏩ Auto-traverse[${traversalSteps}] ${nextNode.type} (${nextNode.id})`);
         
@@ -2300,11 +2300,10 @@ serve(async (req) => {
           // ⏱ Inactivity condition: stop and wait (save metadata)
           if (nextNode.data?.condition_type === 'inactivity' && !inactivityTimeout) {
             // 🔧 FIX: Se o usuário ACABOU de enviar mensagem, ele está ATIVO
-            // Seguir caminho "Não" (ativo) imediatamente em vez de parar e esperar
             if (userMessage && userMessage.trim().length > 0) {
               console.log(`[process-chat-flow] ⏱ Inactivity condition reached but user just sent a message — treating as ACTIVE (path false)`);
               nextNode = findNextNode(flowDef, nextNode, 'false');
-              continue; // continua o while de auto-traverse
+              continue;
             }
 
             console.log(`[process-chat-flow] ⏱ Inactivity condition reached during traversal — saving waiting_input with timeout metadata`);
@@ -2341,6 +2340,11 @@ serve(async (req) => {
           const condPath = evaluateConditionPath(nextNode.data, collectedData, userMessage, { inactivityTimeout }, activeContactData, activeConversationData);
           console.log(`[process-chat-flow] 🔀 Condition ${nextNode.id}: → path ${condPath}`);
           nextNode = findNextNode(flowDef, nextNode, condPath);
+        } else if (nextNode.type === 'condition_v2') {
+          const v2Edges = flowDef.edges || [];
+          const condV2Path = evaluateConditionV2Path(nextNode.data, collectedData, userMessage, { inactivityTimeout }, activeContactData, activeConversationData, v2Edges);
+          console.log(`[process-chat-flow] 🔀 ConditionV2 ${nextNode.id}: → path ${condV2Path}`);
+          nextNode = findNextNode(flowDef, nextNode, condV2Path);
         } else {
           nextNode = findNextNode(flowDef, nextNode);
         }
