@@ -818,7 +818,7 @@ serve(async (req) => {
       // até encontrar o primeiro nó executável (message/ask_options/ai_response/transfer)
       // Reutiliza a mesma lógica do Master Flow para consistência
       // ============================================================
-      const NO_CONTENT_MANUAL = new Set(['input', 'start', 'condition']);
+      const NO_CONTENT_MANUAL = new Set(['input', 'start', 'condition', 'condition_v2']);
       const MAX_TRAVERSAL_MANUAL = 12;
 
       // Carregar dados de contato/conversa para avaliação de condições
@@ -881,7 +881,7 @@ serve(async (req) => {
         traversalSteps++;
         console.log(`[process-chat-flow] ⏩ Manual Traversing[${traversalSteps}] ${contentNode.type} (${contentNode.id})`);
 
-        if (contentNode.type === 'condition') {
+        if (contentNode.type === 'condition' || contentNode.type === 'condition_v2') {
           const hasMultiRules = contentNode.data?.condition_rules?.length > 0;
           let next: any = null;
 
@@ -960,8 +960,9 @@ serve(async (req) => {
 
       // Determinar status inicial baseado no tipo do nó
       // 🆕 condition (multi-regra) também fica como waiting_input quando parou sem mensagem
-      const initialStatus = (contentNode.type.startsWith('ask_') || contentNode.type === 'condition' || contentNode.type === 'verify_customer_otp')
+      const initialStatus = (contentNode.type.startsWith('ask_') || contentNode.type === 'condition' || contentNode.type === 'condition_v2' || contentNode.type === 'verify_customer_otp')
         ? 'waiting_input'
+        : 'active';
         : 'active';
 
       // ✅ FIX: Limpar TODOS os estados da conversa (incluindo cancelled antigos que podem colidir com unique_active_flow)
