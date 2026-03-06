@@ -1,31 +1,25 @@
 
+# Plano: Roteamento por Preferência do Contato (Overrides) ✅
 
-# Ajustes finos no ContactInfoCard — Organização
+## Status: IMPLEMENTADO E VALIDADO
 
-Arquivo unico afetado: `src/components/ContactInfoCard.tsx`
+## Resumo
 
-## Alteracoes
+Camada de roteamento baseada em overrides configuráveis por contato e organização. O sistema resolve o destino na transferência usando a cadeia: **Atendente preferido → Departamento preferido → Departamento padrão da Organização → Fallback do nó**.
 
-### 1. Debounce na busca (300ms)
-- Importar `useDebouncedValue` (ja existe em `src/hooks/useDebouncedValue.ts`)
-- Usar `debouncedOrgSearch = useDebouncedValue(orgSearchTerm, 300)` como queryKey e no `enabled`
+## Validação Completa
 
-### 2. Evitar re-vincular a mesma org
-- No popover de resultados, se `org.id === contact.organization_id`: mostrar badge "Atual" e desabilitar o botao
+| Camada | Status |
+|---|---|
+| Migration SQL (3 colunas) | ✅ |
+| Frontend (TransferNode + Panel) | ✅ |
+| Frontend (ContactDialog + OrgDialog) | ✅ |
+| Backend (process-chat-flow passthrough) | ✅ |
+| Backend (webhook resolução preferred) | ✅ |
+| Variáveis de contexto | ✅ |
+| Isolamento consultor vs preferred | ✅ |
+| Teste E2E com dados reais | ⏳ Pendente |
 
-### 3. Confirmacao para "Trocar" org
-- Adicionar estado `confirmSwitch` com `{ orgId, orgName }` 
-- Ao clicar numa org diferente no popover (quando contato ja tem org), em vez de chamar `handleSelectOrg` direto, setar `confirmSwitch`
-- Novo `AlertDialog`: "Esse contato vai sair de **Org A** e entrar em **Org B** — confirmar?"
-- Ao confirmar, executar `linkOrgMutation.mutate(confirmSwitch.orgId)`
+## Próximo passo
 
-### 4. Invalidar queries adicionais
-- No `onSuccess` da mutation, alem de `["contact", contact.id]`, invalidar:
-  - `["organizationContacts"]` (wildcard — cobre qualquer orgId)
-  - `["organizations"]`
-
-### 5. Placeholder atualizado
-- Mudar de "Buscar organização..." para "Digite ao menos 2 caracteres..."
-
-## Sem novos arquivos, sem migrations, sem mudanca de RLS
-
+Testar E2E: preencher contatos de teste com overrides e enviar mensagens WhatsApp para validar os 4 cenários de roteamento nos logs.

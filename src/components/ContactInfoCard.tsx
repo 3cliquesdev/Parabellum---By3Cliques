@@ -15,6 +15,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import ContactDialog from "./ContactDialog";
 
 interface ContactInfoCardProps {
@@ -36,24 +37,26 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
   const [showFullData, setShowFullData] = useState(false);
   const [showCPF, setShowCPF] = useState(false);
   const [orgSearchTerm, setOrgSearchTerm] = useState("");
+  const debouncedOrgSearch = useDebouncedValue(orgSearchTerm, 300);
   const [orgPopoverOpen, setOrgPopoverOpen] = useState(false);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
+  const [confirmSwitch, setConfirmSwitch] = useState<{ orgId: string; orgName: string } | null>(null);
 
   const queryClient = useQueryClient();
 
   // Search organizations
   const { data: orgResults, isLoading: isSearchingOrgs } = useQuery({
-    queryKey: ["org-search", orgSearchTerm],
+    queryKey: ["org-search", debouncedOrgSearch],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("organizations")
         .select("id, name")
-        .ilike("name", `%${orgSearchTerm}%`)
+        .ilike("name", `%${debouncedOrgSearch}%`)
         .limit(20);
       if (error) throw error;
       return data || [];
     },
-    enabled: orgSearchTerm.length >= 2,
+    enabled: debouncedOrgSearch.length >= 2,
   });
 
   // Link/unlink mutation
@@ -67,16 +70,24 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
     },
     onSuccess: (_, orgId) => {
       queryClient.invalidateQueries({ queryKey: ["contact", contact.id] });
+      queryClient.invalidateQueries({ queryKey: ["organization-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
       toast.success(orgId ? "Organização vinculada!" : "Organização desvinculada!");
       setOrgPopoverOpen(false);
       setOrgSearchTerm("");
+      setConfirmSwitch(null);
     },
     onError: () => {
       toast.error("Erro ao atualizar organização.");
     },
   });
 
-  const handleSelectOrg = (orgId: string) => {
+  const handleSelectOrg = (orgId: string, orgName: string) => {
+    // If contact already has an org and selecting a different one, confirm switch
+    if (contact.organization_id && orgId !== contact.organization_id) {
+      setConfirmSwitch({ orgId, orgName });
+      return;
+    }
     linkOrgMutation.mutate(orgId);
   };
 
@@ -201,7 +212,7 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
                       <div className="relative">
                         <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
-                          placeholder="Buscar organização..."
+                         placeholder="Digite ao menos 2 caracteres..."
                           value={orgSearchTerm}
                           onChange={(e) => setOrgSearchTerm(e.target.value)}
                           className="pl-8 h-8 text-sm"
@@ -213,23 +224,27 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
                           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                         </div>
                       )}
-                      {orgSearchTerm.length >= 2 && !isSearchingOrgs && orgResults && orgResults.length === 0 && (
+                       {debouncedOrgSearch.length >= 2 && !isSearchingOrgs && orgResults && orgResults.length === 0 && (
                         <p className="text-xs text-muted-foreground text-center py-2">Nenhuma organização encontrada</p>
                       )}
                       {orgResults && orgResults.length > 0 && (
                         <div className="max-h-40 overflow-auto space-y-1">
-                          {orgResults.map((org) => (
-                            <button
-                              key={org.id}
-                              onClick={() => handleSelectOrg(org.id)}
-                              className="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-accent text-foreground transition-colors"
-                              disabled={linkOrgMutation.isPending}
-                            >
-                              {org.name}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                           {orgResults.map((org) => {
+                             const isCurrent = org.id === contact.organization_id;
+                             return (
+                               <button
+                                 key={org.id}
+                                 onClick={() => handleSelectOrg(org.id, org.name)}
+                                 className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors flex items-center justify-between ${isCurrent ? 'opacity-50 cursor-not-allowed bg-muted' : 'hover:bg-accent text-foreground'}`}
+                                 disabled={linkOrgMutation.isPending || isCurrent}
+                               >
+                                 <span>{org.name}</span>
+                                 {isCurrent && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Atual</Badge>}
+                               </button>
+                             );
+                           })}
+                         </div>
+                       )}
                       {orgSearchTerm.length < 2 && (
                         <p className="text-xs text-muted-foreground text-center py-1">Digite pelo menos 2 caracteres</p>
                       )}
@@ -259,7 +274,7 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
                     <div className="relative">
                       <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                       <Input
-                        placeholder="Buscar organização..."
+                        placeholder="Digite ao menos 2 caracteres..."
                         value={orgSearchTerm}
                         onChange={(e) => setOrgSearchTerm(e.target.value)}
                         className="pl-8 h-8 text-sm"
@@ -271,22 +286,22 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       </div>
                     )}
-                    {orgSearchTerm.length >= 2 && !isSearchingOrgs && orgResults && orgResults.length === 0 && (
+                    {debouncedOrgSearch.length >= 2 && !isSearchingOrgs && orgResults && orgResults.length === 0 && (
                       <p className="text-xs text-muted-foreground text-center py-2">Nenhuma organização encontrada</p>
                     )}
                     {orgResults && orgResults.length > 0 && (
                       <div className="max-h-40 overflow-auto space-y-1">
-                        {orgResults.map((org) => (
-                          <button
-                            key={org.id}
-                            onClick={() => handleSelectOrg(org.id)}
-                            className="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-accent text-foreground transition-colors"
-                            disabled={linkOrgMutation.isPending}
-                          >
-                            {org.name}
-                          </button>
-                        ))}
-                      </div>
+                         {orgResults.map((org) => (
+                           <button
+                             key={org.id}
+                             onClick={() => handleSelectOrg(org.id, org.name)}
+                             className="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-accent text-foreground transition-colors"
+                             disabled={linkOrgMutation.isPending}
+                           >
+                             {org.name}
+                           </button>
+                         ))}
+                       </div>
                     )}
                     {orgSearchTerm.length < 2 && (
                       <p className="text-xs text-muted-foreground text-center py-1">Digite pelo menos 2 caracteres</p>
@@ -383,6 +398,24 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleUnlinkOrg}>Desvincular</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm Switch Org Dialog */}
+      <AlertDialog open={!!confirmSwitch} onOpenChange={(open) => { if (!open) setConfirmSwitch(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Trocar organização?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O contato <strong>{contact.first_name} {contact.last_name}</strong> vai sair de <strong>{contact.organizations?.name}</strong> e entrar em <strong>{confirmSwitch?.orgName}</strong>. Deseja confirmar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmSwitch && linkOrgMutation.mutate(confirmSwitch.orgId)}>
+              Confirmar troca
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
