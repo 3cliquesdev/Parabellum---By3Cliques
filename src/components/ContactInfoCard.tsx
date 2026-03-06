@@ -2,13 +2,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, Building2, Calendar, MessageCircle, MapPin, FileText, Pencil, Eye, EyeOff } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Mail, Phone, Building2, Calendar, MessageCircle, MapPin, FileText, Pencil, Eye, EyeOff, Link2, Unlink, Search, Loader2 } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import ContactDialog from "./ContactDialog";
 
 interface ContactInfoCardProps {
@@ -29,6 +35,55 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
   const statusInfo = STATUS_CONFIG[contact.status || "lead"];
   const [showFullData, setShowFullData] = useState(false);
   const [showCPF, setShowCPF] = useState(false);
+  const [orgSearchTerm, setOrgSearchTerm] = useState("");
+  const [orgPopoverOpen, setOrgPopoverOpen] = useState(false);
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
+
+  const queryClient = useQueryClient();
+
+  // Search organizations
+  const { data: orgResults, isLoading: isSearchingOrgs } = useQuery({
+    queryKey: ["org-search", orgSearchTerm],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("organizations")
+        .select("id, name")
+        .ilike("name", `%${orgSearchTerm}%`)
+        .limit(20);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: orgSearchTerm.length >= 2,
+  });
+
+  // Link/unlink mutation
+  const linkOrgMutation = useMutation({
+    mutationFn: async (organizationId: string | null) => {
+      const { error } = await supabase
+        .from("contacts")
+        .update({ organization_id: organizationId })
+        .eq("id", contact.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, orgId) => {
+      queryClient.invalidateQueries({ queryKey: ["contact", contact.id] });
+      toast.success(orgId ? "Organização vinculada!" : "Organização desvinculada!");
+      setOrgPopoverOpen(false);
+      setOrgSearchTerm("");
+    },
+    onError: () => {
+      toast.error("Erro ao atualizar organização.");
+    },
+  });
+
+  const handleSelectOrg = (orgId: string) => {
+    linkOrgMutation.mutate(orgId);
+  };
+
+  const handleUnlinkOrg = () => {
+    linkOrgMutation.mutate(null);
+    setConfirmUnlink(false);
+  };
 
   const maskCPF = (cpf: string) => {
     if (!cpf) return null;
@@ -36,7 +91,7 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
     if (numbers.length === 11) {
       return `***.***.${numbers.substring(6, 9)}-**`;
     }
-    return cpf; // Não mascarar se não for CPF válido
+    return cpf;
   };
 
   const handleCall = () => {
@@ -129,12 +184,118 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
             </div>
           )}
 
-          {contact.organizations && (
-            <div className="flex items-center gap-3 text-sm">
-              <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-foreground">{contact.organizations.name}</span>
-            </div>
-          )}
+          {/* Organization - Editable */}
+          <div className="flex items-center gap-3 text-sm">
+            <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            {contact.organizations ? (
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-foreground truncate">{contact.organizations.name}</span>
+                <Popover open={orgPopoverOpen} onOpenChange={(open) => { setOrgPopoverOpen(open); if (!open) setOrgSearchTerm(""); }}>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" title="Trocar organização">
+                      <Link2 className="h-3 w-3" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-3" align="start">
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Buscar organização..."
+                          value={orgSearchTerm}
+                          onChange={(e) => setOrgSearchTerm(e.target.value)}
+                          className="pl-8 h-8 text-sm"
+                          autoFocus
+                        />
+                      </div>
+                      {isSearchingOrgs && (
+                        <div className="flex items-center justify-center py-3">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      )}
+                      {orgSearchTerm.length >= 2 && !isSearchingOrgs && orgResults && orgResults.length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center py-2">Nenhuma organização encontrada</p>
+                      )}
+                      {orgResults && orgResults.length > 0 && (
+                        <div className="max-h-40 overflow-auto space-y-1">
+                          {orgResults.map((org) => (
+                            <button
+                              key={org.id}
+                              onClick={() => handleSelectOrg(org.id)}
+                              className="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-accent text-foreground transition-colors"
+                              disabled={linkOrgMutation.isPending}
+                            >
+                              {org.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {orgSearchTerm.length < 2 && (
+                        <p className="text-xs text-muted-foreground text-center py-1">Digite pelo menos 2 caracteres</p>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0 text-destructive hover:text-destructive"
+                  title="Desvincular organização"
+                  onClick={() => setConfirmUnlink(true)}
+                >
+                  <Unlink className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <Popover open={orgPopoverOpen} onOpenChange={(open) => { setOrgPopoverOpen(open); if (!open) setOrgSearchTerm(""); }}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1">
+                    <Link2 className="h-3 w-3" />
+                    Vincular organização
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-3" align="start">
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar organização..."
+                        value={orgSearchTerm}
+                        onChange={(e) => setOrgSearchTerm(e.target.value)}
+                        className="pl-8 h-8 text-sm"
+                        autoFocus
+                      />
+                    </div>
+                    {isSearchingOrgs && (
+                      <div className="flex items-center justify-center py-3">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      </div>
+                    )}
+                    {orgSearchTerm.length >= 2 && !isSearchingOrgs && orgResults && orgResults.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-2">Nenhuma organização encontrada</p>
+                    )}
+                    {orgResults && orgResults.length > 0 && (
+                      <div className="max-h-40 overflow-auto space-y-1">
+                        {orgResults.map((org) => (
+                          <button
+                            key={org.id}
+                            onClick={() => handleSelectOrg(org.id)}
+                            className="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-accent text-foreground transition-colors"
+                            disabled={linkOrgMutation.isPending}
+                          >
+                            {org.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {orgSearchTerm.length < 2 && (
+                      <p className="text-xs text-muted-foreground text-center py-1">Digite pelo menos 2 caracteres</p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
 
           {contact.last_contact_date && isValid(new Date(contact.last_contact_date)) && (
             <div className="flex items-center gap-3 text-sm">
@@ -209,6 +370,22 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
           </CollapsibleContent>
         </Collapsible>
       </CardContent>
+
+      {/* Confirm Unlink Dialog */}
+      <AlertDialog open={confirmUnlink} onOpenChange={setConfirmUnlink}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desvincular organização?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O contato <strong>{contact.first_name} {contact.last_name}</strong> será desvinculado da organização <strong>{contact.organizations?.name}</strong>. Isso pode ser revertido a qualquer momento.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnlinkOrg}>Desvincular</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
