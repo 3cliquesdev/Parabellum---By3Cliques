@@ -1941,6 +1941,11 @@ serve(async (req) => {
           path = evaluateConditionPath(currentNode.data, collectedData, userMessage, { inactivityTimeout }, activeContactData, activeConversationData);
           console.log(`[process-chat-flow] 🔀 condition: type=${currentNode.data?.condition_type} node=${currentNode.id} → path="${path}"`);
         }
+      } else if (currentNode.type === 'condition_v2') {
+        // Condition V2: Sim/Não por regra
+        const flowEdgesV2 = flowDef.edges || [];
+        path = evaluateConditionV2Path(currentNode.data, collectedData, userMessage, { inactivityTimeout }, activeContactData, activeConversationData, flowEdgesV2);
+        console.log(`[process-chat-flow] 🔀 condition_v2: node=${currentNode.id} → path="${path}"`);
       } else if (currentNode.type === 'ai_response') {
         // ============================================================
         // 🆕 MODO PERSISTENTE: IA responde múltiplas perguntas
