@@ -1,32 +1,41 @@
 
-# Plano: Condição V2 — Nó separado com Sim/Não por regra ✅
+# Plano: Fallback Inteligente Fora do Horário (sem "falso SLA") ✅
 
 ## Status: IMPLEMENTADO
 
 ## Resumo
 
-Novo tipo de nó `condition_v2` no editor de fluxos. Cada regra tem saídas explícitas **Sim** (verde) e **Não** (vermelho), permitindo definir caminhos para ambos os resultados. O nó `condition` original permanece 100% intocado.
+Lógica invertida: `redistribute-after-hours` agora age **dentro do horário** (redistribui conversas com tag `pendente_retorno`). Fora do horário, a IA mantém `autopilot` e registra pendência sem chamar `route-conversation`.
 
-## Arquivos alterados
+## Arquivos Alterados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/chat-flows/nodes/ConditionV2Node.tsx` | **Novo** — Visual com handles Sim/Não por regra |
-| `src/components/chat-flows/nodes/index.ts` | Export do novo nó |
-| `src/components/chat-flows/ChatFlowNodeWrapper.tsx` | Tipo `condition_v2` adicionado |
-| `src/components/chat-flows/ChatFlowEditor.tsx` | nodeType, menu, painel de config, edge cleanup |
-| `supabase/functions/process-chat-flow/index.ts` | `evaluateConditionV2Path()` + todos os pontos de travessia |
+| `supabase/functions/redistribute-after-hours/index.ts` | Reescrita: age dentro do horário, busca tag `pendente_retorno`, roteia e remove tag |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Import business-hours + contexto no prompt + condicional no `request_human_agent` |
+| SQL Migration | Tag `pendente_retorno` criada na tabela `tags` |
 
-## Lógica V2 (engine)
+## Lógica Implementada
 
-Para cada regra em ordem:
-1. **TRUE** → segue handle `rule.id` (Sim)
-2. **FALSE** → se existe edge no handle `rule.id_false` (Não), segue por ela
-3. **FALSE sem edge Não** → continua para próxima regra (fallthrough)
-4. Se nenhuma regra bater → segue "Outros" (`else`)
+### redistribute-after-hours (cron)
+- `within_hours = false` → nada a fazer
+- `within_hours = true` → busca conversas com tag `pendente_retorno` → route-conversation → waiting_human → remove tag → mensagem sistema
+
+### ai-autopilot-chat
+- **Prompt:** Injeta info de horário comercial (aberto/fechado + próxima abertura)
+- **request_human_agent dentro do horário:** comportamento padrão (copilot + route-conversation)
+- **request_human_agent fora do horário:**
+  - NÃO chama route-conversation
+  - NÃO muda ai_mode (mantém autopilot)
+  - Envia mensagem informativa ao cliente
+  - Aplica tag `pendente_retorno`
+  - Salva metadata (after_hours_handoff_requested_at, pending_department_id, etc.)
+  - Registra nota interna
 
 ## Garantias
 
-- Nó `condition` original: **zero alteração na lógica**
-- Master Flow e fluxos existentes: **sem impacto**
-- Pode testar V2 em fluxo de teste antes de usar em produção
+- Kill Switch: respeitado (verificado antes)
+- Shadow Mode: não afetado
+- Fluxos: soberania mantida (guard `if (!flow_context)`)
+- SLA: zero handoff fantasma fora do horário
+- Cron existente: mantém `* * * * *` do config.toml
