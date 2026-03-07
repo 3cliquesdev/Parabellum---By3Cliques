@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/business-hours.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1468,6 +1469,20 @@ serve(async (req) => {
       conversation = conversationData;
       contact = conversation.contacts as any;
       department = conversation.department || null;
+
+      // 🆕 BUSINESS HOURS: Buscar info de horário comercial para contexto da IA
+      let businessHoursInfo: BusinessHoursResult | null = null;
+      try {
+        businessHoursInfo = await getBusinessHoursInfo(supabaseClient);
+        console.log('[ai-autopilot-chat] 🕐 Business hours:', {
+          within_hours: businessHoursInfo.within_hours,
+          is_holiday: businessHoursInfo.is_holiday,
+          next_open: businessHoursInfo.next_open_text,
+          schedule: businessHoursInfo.schedule_summary,
+        });
+      } catch (bhErr) {
+        console.error('[ai-autopilot-chat] ⚠️ Erro ao buscar horário comercial:', bhErr);
+      }
 
       // 🛡️ VERIFICAÇÃO GLOBAL: Checar se a IA está habilitada globalmente
       const { data: globalConfig } = await supabaseClient
@@ -5761,7 +5776,15 @@ Quem decide transferências, menus e direcionamentos é o FLUXO, não você.
 
 ` : '';
 
-    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}
+    // 🆕 BUSINESS HOURS: Injetar consciência de horário no prompt
+    const businessHoursPrompt = businessHoursInfo ? (
+      businessHoursInfo.within_hours
+        ? `\n**🕐 HORÁRIO COMERCIAL:** Aberto agora até ${businessHoursInfo.today_close_time}.\n`
+        : `\n**🕐 HORÁRIO COMERCIAL:** Fora do expediente. Próxima abertura: ${businessHoursInfo.next_open_text}. Horário: ${businessHoursInfo.schedule_summary}.
+REGRA: Tente resolver sozinha. Se não conseguir e o cliente pedir humano, use request_human_agent — o sistema cuidará do restante (registrará a pendência para o próximo expediente).\n`
+    ) : '';
+
+    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}
 
 **🚫 REGRA DE HANDOFF (SÓ QUANDO CLIENTE PEDIR):**
 Transferência para humano SÓ acontece quando:
@@ -7349,67 +7372,150 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             const handoffReason = args.reason || 'solicitacao_cliente';
             const handoffNote = args.internal_note || 'Transferência solicitada pela IA';
 
-            // 1. MUDAR O MODO (Desligar IA) — apenas se NÃO estiver dentro de um fluxo ativo
-            if (!flow_context) {
-              await supabaseClient
-                .from('conversations')
-                .update({ ai_mode: 'copilot' })
-                .eq('id', conversationId);
-              console.log('[ai-autopilot-chat] ✅ ai_mode mudado para copilot');
-            } else {
-              console.log('[ai-autopilot-chat] ⚠️ flow_context ativo — NÃO mudando ai_mode para copilot (soberania do fluxo)');
-            }
-            
+            // 🆕 BUSINESS HOURS CHECK: Comportamento diferente dentro/fora do horário
+            const isWithinHours = businessHoursInfo?.within_hours ?? true; // Default: dentro do horário (seguro)
 
-            // 2. CHAMAR O ROTEADOR (Buscar agente disponível)
-            const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
-              body: { conversationId }
-            });
-            
-            if (routeError) {
-              console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
-            } else {
-              console.log('[ai-autopilot-chat] ✅ Conversa roteada:', routeResult);
-            }
+            if (isWithinHours) {
+              // ✅ DENTRO DO HORÁRIO: Comportamento padrão (intacto)
+              console.log('[ai-autopilot-chat] ☀️ Dentro do horário - handoff padrão');
 
-            // 3. REGISTRAR NOTA INTERNA
-            const reasonLabels: Record<string, string> = {
-              dados_incorretos: 'Dados Cadastrais Incorretos',
-              solicitacao_cliente: 'Solicitação do Cliente',
-              caso_complexo: 'Caso Complexo',
-              dados_financeiros_incorretos: 'Dados Financeiros Incorretos'
-            };
+              // 1. MUDAR O MODO (Desligar IA) — apenas se NÃO estiver dentro de um fluxo ativo
+              if (!flow_context) {
+                await supabaseClient
+                  .from('conversations')
+                  .update({ ai_mode: 'copilot' })
+                  .eq('id', conversationId);
+                console.log('[ai-autopilot-chat] ✅ ai_mode mudado para copilot');
+              } else {
+                console.log('[ai-autopilot-chat] ⚠️ flow_context ativo — NÃO mudando ai_mode para copilot (soberania do fluxo)');
+              }
 
-            await supabaseClient.from('interactions').insert({
-              customer_id: contact.id,
-              type: 'internal_note',
-              content: `**Handoff Manual Executado**
+              // 2. CHAMAR O ROTEADOR (Buscar agente disponível)
+              const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
+                body: { conversationId }
+              });
+              
+              if (routeError) {
+                console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
+              } else {
+                console.log('[ai-autopilot-chat] ✅ Conversa roteada:', routeResult);
+              }
+
+              // 3. REGISTRAR NOTA INTERNA
+              const reasonLabels: Record<string, string> = {
+                dados_incorretos: 'Dados Cadastrais Incorretos',
+                solicitacao_cliente: 'Solicitação do Cliente',
+                caso_complexo: 'Caso Complexo',
+                dados_financeiros_incorretos: 'Dados Financeiros Incorretos'
+              };
+
+              await supabaseClient.from('interactions').insert({
+                customer_id: contact.id,
+                type: 'internal_note',
+                content: `**Handoff Manual Executado**
 
 **Motivo:** ${reasonLabels[handoffReason] || handoffReason}
 **Contexto:** ${handoffNote}
 **Última Mensagem do Cliente:** "${customerMessage}"
 
 **Ação:** Conversa transferida para atendimento humano.`,
-              channel: responseChannel,
-              metadata: {
-                source: 'ai_autopilot_manual_handoff',
-                reason: handoffReason,
-                original_message: customerMessage
+                channel: responseChannel,
+                metadata: {
+                  source: 'ai_autopilot_manual_handoff',
+                  reason: handoffReason,
+                  original_message: customerMessage
+                }
+              });
+
+              console.log('[ai-autopilot-chat] ✅ Nota interna de handoff registrada');
+
+              // 4. DEFINIR MENSAGEM APROPRIADA PARA O CLIENTE
+              const reasonMessages: Record<string, string> = {
+                dados_incorretos: 'Entendi! Vou transferir você para um atendente que vai ajudar a atualizar seus dados cadastrais. Aguarde um momento, por favor.',
+                dados_financeiros_incorretos: 'Por segurança, vou transferir você para um atendente humano que vai ajudar a corrigir seus dados. Aguarde um momento!',
+                solicitacao_cliente: 'Sem problemas! Estou transferindo você para um atendente humano. Aguarde um momento, por favor.',
+                caso_complexo: 'Vou transferir você para um especialista que pode te ajudar melhor com essa situação. Aguarde um momento!'
+              };
+
+              assistantMessage = reasonMessages[handoffReason] || 
+                'Estou transferindo você para um atendente humano. Aguarde um momento, por favor.';
+
+            } else {
+              // 🌙 FORA DO HORÁRIO: Fallback inteligente (sem falso SLA)
+              console.log('[ai-autopilot-chat] 🌙 Fora do horário - registrando pendência sem route-conversation');
+
+              const scheduleSummary = businessHoursInfo?.schedule_summary || 'horário comercial';
+              const nextOpenText = businessHoursInfo?.next_open_text || 'no próximo dia útil';
+
+              // 1. NÃO chamar route-conversation
+              // 2. NÃO mudar ai_mode (mantém autopilot)
+
+              // 3. Mensagem ao cliente
+              assistantMessage = `Nosso atendimento humano funciona ${scheduleSummary}. ${nextOpenText} um atendente poderá te ajudar. Enquanto isso, posso continuar tentando por aqui! 😊`;
+
+              // 4. Adicionar tag "pendente_retorno" na conversation_tags
+              try {
+                const { data: tagRow } = await supabaseClient
+                  .from('tags')
+                  .select('id')
+                  .eq('name', 'pendente_retorno')
+                  .maybeSingle();
+
+                if (tagRow) {
+                  // Upsert para evitar duplicata
+                  await supabaseClient
+                    .from('conversation_tags')
+                    .upsert({
+                      conversation_id: conversationId,
+                      tag_id: tagRow.id,
+                    }, { onConflict: 'conversation_id,tag_id' });
+                  console.log('[ai-autopilot-chat] 🏷️ Tag pendente_retorno aplicada');
+                } else {
+                  console.warn('[ai-autopilot-chat] ⚠️ Tag pendente_retorno não encontrada no banco');
+                }
+              } catch (tagErr) {
+                console.error('[ai-autopilot-chat] ⚠️ Erro ao aplicar tag pendente_retorno:', tagErr);
               }
-            });
 
-            console.log('[ai-autopilot-chat] ✅ Nota interna de handoff registrada');
+              // 5. Salvar metadata na conversa
+              const existingMeta = conversation.customer_metadata || {};
+              await supabaseClient
+                .from('conversations')
+                .update({
+                  customer_metadata: {
+                    ...existingMeta,
+                    after_hours_handoff_requested_at: new Date().toISOString(),
+                    after_hours_next_open_text: nextOpenText,
+                    pending_department_id: conversation.department || null,
+                    handoff_reason: handoffReason,
+                  }
+                })
+                .eq('id', conversationId);
 
-            // 4. DEFINIR MENSAGEM APROPRIADA PARA O CLIENTE
-            const reasonMessages: Record<string, string> = {
-              dados_incorretos: 'Entendi! Vou transferir você para um atendente que vai ajudar a atualizar seus dados cadastrais. Aguarde um momento, por favor.',
-              dados_financeiros_incorretos: 'Por segurança, vou transferir você para um atendente humano que vai ajudar a corrigir seus dados. Aguarde um momento!',
-              solicitacao_cliente: 'Sem problemas! Estou transferindo você para um atendente humano. Aguarde um momento, por favor.',
-              caso_complexo: 'Vou transferir você para um especialista que pode te ajudar melhor com essa situação. Aguarde um momento!'
-            };
+              // 6. Registrar nota interna
+              await supabaseClient.from('interactions').insert({
+                customer_id: contact.id,
+                type: 'internal_note',
+                content: `**Handoff Fora do Horário (Pendente Retorno)**
 
-            assistantMessage = reasonMessages[handoffReason] || 
-              'Estou transferindo você para um atendente humano. Aguarde um momento, por favor.';
+**Motivo:** ${handoffReason}
+**Contexto:** ${handoffNote}
+**Horário:** ${businessHoursInfo?.current_time || 'N/A'}
+**Próxima abertura:** ${nextOpenText}
+
+**Ação:** Conversa marcada com pendente_retorno. Será redistribuída automaticamente no próximo expediente.`,
+                channel: responseChannel,
+                metadata: {
+                  source: 'ai_autopilot_after_hours_handoff',
+                  reason: handoffReason,
+                  after_hours: true,
+                  next_open: nextOpenText,
+                  original_message: customerMessage
+                }
+              });
+
+              console.log('[ai-autopilot-chat] ✅ Pendência fora do horário registrada');
+            }
 
           } catch (error) {
             console.error('[ai-autopilot-chat] ❌ Erro ao executar handoff manual:', error);

@@ -21,17 +21,16 @@ serve(async (req) => {
     console.log('[redistribute-after-hours] Verificando horário comercial...');
 
     const bhInfo = await getBusinessHoursInfo(supabaseClient);
-    const isOutsideBusinessHours = !bhInfo.within_hours;
     const currentTime = bhInfo.current_time;
 
-    console.log(`[redistribute-after-hours] Dia: ${bhInfo.current_day}, Hora atual (SP): ${currentTime}, Fora do horário: ${isOutsideBusinessHours}, Feriado: ${bhInfo.is_holiday}${bhInfo.holiday_name ? ' (' + bhInfo.holiday_name + ')' : ''}`);
+    console.log(`[redistribute-after-hours] Dia: ${bhInfo.current_day}, Hora atual (SP): ${currentTime}, Dentro do horário: ${bhInfo.within_hours}, Feriado: ${bhInfo.is_holiday}${bhInfo.holiday_name ? ' (' + bhInfo.holiday_name + ')' : ''}`);
 
-    // Se está dentro do horário comercial, não fazer nada
-    if (!isOutsideBusinessHours) {
-      console.log('[redistribute-after-hours] ✅ Dentro do horário comercial, nenhuma ação necessária');
+    // Se está FORA do horário comercial, não fazer nada
+    if (!bhInfo.within_hours) {
+      console.log('[redistribute-after-hours] 🌙 Fora do horário comercial, nenhuma ação necessária');
       return new Response(JSON.stringify({ 
         status: 'ok', 
-        message: 'Dentro do horário comercial',
+        message: 'Fora do horário comercial - nada a redistribuir',
         currentTime,
         redistributed: 0
       }), {
@@ -39,72 +38,138 @@ serve(async (req) => {
       });
     }
 
-    // FORA DO HORÁRIO: Buscar conversas abertas com agente atribuído
-    console.log('[redistribute-after-hours] 🌙 Fora do horário - redistribuindo conversas para pool geral...');
+    // DENTRO DO HORÁRIO: Buscar tag pendente_retorno
+    console.log('[redistribute-after-hours] ☀️ Dentro do horário - buscando conversas com tag pendente_retorno...');
 
-    // Only redistribute conversations that were NOT manually assumed by agents
-    // 'copilot' and 'disabled' modes indicate agent manually took control
-    const { data: activeConversations, error: convError } = await supabaseClient
-      .from('conversations')
-      .select('id, assigned_to, ai_mode, contact_id')
-      .in('status', ['open', 'pending'])
-      .not('assigned_to', 'is', null)
-      .neq('ai_mode', 'copilot')   // Preserve copilot (agent assumed)
-      .neq('ai_mode', 'disabled'); // Preserve disabled (agent disabled AI)
+    // 1. Buscar o tag_id de "pendente_retorno"
+    const { data: tagRow, error: tagError } = await supabaseClient
+      .from('tags')
+      .select('id')
+      .eq('name', 'pendente_retorno')
+      .maybeSingle();
 
-    if (convError) {
-      console.error('[redistribute-after-hours] Erro ao buscar conversas:', convError);
-      throw convError;
-    }
-
-    console.log(`[redistribute-after-hours] Encontradas ${activeConversations?.length || 0} conversas com agentes atribuídos`);
-
-    if (!activeConversations || activeConversations.length === 0) {
+    if (tagError || !tagRow) {
+      console.log('[redistribute-after-hours] ⚠️ Tag pendente_retorno não encontrada, nada a redistribuir');
       return new Response(JSON.stringify({ 
         status: 'ok', 
-        message: 'Nenhuma conversa para redistribuir',
+        message: 'Tag pendente_retorno não encontrada',
         redistributed: 0
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Redistribuir cada conversa para o pool geral
+    const pendenteTagId = tagRow.id;
+
+    // 2. Buscar conversation_tags com essa tag em conversas abertas
+    const { data: taggedConversations, error: taggedError } = await supabaseClient
+      .from('conversation_tags')
+      .select('conversation_id')
+      .eq('tag_id', pendenteTagId);
+
+    if (taggedError) {
+      console.error('[redistribute-after-hours] Erro ao buscar conversation_tags:', taggedError);
+      throw taggedError;
+    }
+
+    if (!taggedConversations || taggedConversations.length === 0) {
+      console.log('[redistribute-after-hours] ✅ Nenhuma conversa com pendente_retorno');
+      return new Response(JSON.stringify({ 
+        status: 'ok', 
+        message: 'Nenhuma conversa pendente para redistribuir',
+        redistributed: 0
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const conversationIds = taggedConversations.map((t: any) => t.conversation_id);
+    console.log(`[redistribute-after-hours] Encontradas ${conversationIds.length} conversas com pendente_retorno`);
+
+    // 3. Buscar detalhes das conversas (apenas abertas/pending)
+    const { data: conversations, error: convError } = await supabaseClient
+      .from('conversations')
+      .select('id, customer_metadata, department, contact_id, ai_mode, status')
+      .in('id', conversationIds)
+      .in('status', ['open', 'pending']);
+
+    if (convError) {
+      console.error('[redistribute-after-hours] Erro ao buscar conversas:', convError);
+      throw convError;
+    }
+
+    if (!conversations || conversations.length === 0) {
+      console.log('[redistribute-after-hours] ✅ Nenhuma conversa aberta com pendente_retorno');
+      return new Response(JSON.stringify({ 
+        status: 'ok', 
+        message: 'Nenhuma conversa aberta com pendente_retorno',
+        redistributed: 0
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log(`[redistribute-after-hours] ${conversations.length} conversas abertas para redistribuir`);
+
     let redistributedCount = 0;
 
-    for (const conv of activeConversations) {
-      // Guardar agente anterior e limpar atribuição
-      const { error: updateError } = await supabaseClient
-        .from('conversations')
-        .update({
-          previous_agent_id: conv.assigned_to,
-          assigned_to: null,
-          ai_mode: 'autopilot' // IA assume temporariamente
-        })
-        .eq('id', conv.id);
+    for (const conv of conversations) {
+      try {
+        // Ler pending_department_id do metadata (se existir)
+        const metadata = conv.customer_metadata || {};
+        const pendingDeptId = metadata.pending_department_id || conv.department || null;
 
-      if (updateError) {
-        console.error(`[redistribute-after-hours] Erro ao atualizar conversa ${conv.id}:`, updateError);
-        continue;
+        // 1. Invocar route-conversation
+        const routeBody: any = { conversationId: conv.id };
+        if (pendingDeptId) {
+          routeBody.departmentId = pendingDeptId;
+        }
+
+        const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
+          body: routeBody
+        });
+
+        if (routeError) {
+          console.error(`[redistribute-after-hours] ❌ Erro ao rotear conversa ${conv.id}:`, routeError);
+        } else {
+          console.log(`[redistribute-after-hours] ✅ Conversa ${conv.id} roteada:`, routeResult);
+        }
+
+        // 2. Mudar ai_mode para waiting_human
+        await supabaseClient
+          .from('conversations')
+          .update({ 
+            ai_mode: 'waiting_human',
+            // Limpar metadata de after_hours
+            customer_metadata: {
+              ...metadata,
+              after_hours_handoff_requested_at: null,
+              after_hours_next_open_text: null,
+              pending_department_id: null,
+            }
+          })
+          .eq('id', conv.id);
+
+        // 3. Remover tag pendente_retorno
+        await supabaseClient
+          .from('conversation_tags')
+          .delete()
+          .eq('conversation_id', conv.id)
+          .eq('tag_id', pendenteTagId);
+
+        // 4. Inserir mensagem de sistema
+        await supabaseClient.from('messages').insert({
+          conversation_id: conv.id,
+          content: '☀️ Horário comercial iniciado. Um atendente será designado para continuar seu atendimento.',
+          sender_type: 'system',
+          channel: 'chat'
+        });
+
+        redistributedCount++;
+        console.log(`[redistribute-after-hours] ✅ Conversa ${conv.id} redistribuída com sucesso`);
+      } catch (convErr) {
+        console.error(`[redistribute-after-hours] ❌ Erro ao processar conversa ${conv.id}:`, convErr);
       }
-
-      // Inserir mensagem de sistema
-      await supabaseClient.from('messages').insert({
-        conversation_id: conv.id,
-        content: '🌙 Estamos fora do horário de atendimento humano. A IA está disponível para ajudar até o próximo expediente.',
-        sender_type: 'system',
-        channel: 'chat' // Corrigido: usar valor válido do enum conversation_channel
-      });
-
-      // Adicionar à fila de espera
-      await supabaseClient.from('conversation_queue').upsert({
-        conversation_id: conv.id,
-        priority: 0,
-        queued_at: new Date().toISOString()
-      }, { onConflict: 'conversation_id' });
-
-      redistributedCount++;
-      console.log(`[redistribute-after-hours] ✅ Conversa ${conv.id} movida para pool geral`);
     }
 
     console.log(`[redistribute-after-hours] ✅ Finalizando: ${redistributedCount} conversas redistribuídas`);
@@ -114,7 +179,7 @@ serve(async (req) => {
       message: 'Redistribuição concluída',
       redistributed: redistributedCount,
       currentTime,
-      isOutsideBusinessHours: true
+      withinBusinessHours: true
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
