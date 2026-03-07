@@ -65,7 +65,8 @@ serve(async (req) => {
     const { data: taggedConversations, error: taggedError } = await supabaseClient
       .from('conversation_tags')
       .select('conversation_id')
-      .eq('tag_id', pendenteTagId);
+      .eq('tag_id', pendenteTagId)
+      .limit(50);
 
     if (taggedError) {
       console.error('[redistribute-after-hours] Erro ao buscar conversation_tags:', taggedError);
@@ -91,7 +92,8 @@ serve(async (req) => {
       .from('conversations')
       .select('id, customer_metadata, department, contact_id, ai_mode, status')
       .in('id', conversationIds)
-      .in('status', ['open', 'pending']);
+      .in('status', ['open', 'pending'])
+      .neq('ai_mode', 'waiting_human');
 
     if (convError) {
       console.error('[redistribute-after-hours] Erro ao buscar conversas:', convError);
@@ -115,11 +117,17 @@ serve(async (req) => {
 
     for (const conv of conversations) {
       try {
-        // Ler pending_department_id do metadata (se existir)
         const metadata = conv.customer_metadata || {};
         const pendingDeptId = metadata.pending_department_id || conv.department || null;
 
-        // 1. Invocar route-conversation
+        // 1. Remover tag PRIMEIRO (anti race-condition)
+        await supabaseClient
+          .from('conversation_tags')
+          .delete()
+          .eq('conversation_id', conv.id)
+          .eq('tag_id', pendenteTagId);
+
+        // 2. Invocar route-conversation
         const routeBody: any = { conversationId: conv.id };
         if (pendingDeptId) {
           routeBody.departmentId = pendingDeptId;
@@ -135,12 +143,11 @@ serve(async (req) => {
           console.log(`[redistribute-after-hours] ✅ Conversa ${conv.id} roteada:`, routeResult);
         }
 
-        // 2. Mudar ai_mode para waiting_human
+        // 3. Mudar ai_mode para waiting_human + limpar metadata
         await supabaseClient
           .from('conversations')
           .update({ 
             ai_mode: 'waiting_human',
-            // Limpar metadata de after_hours
             customer_metadata: {
               ...metadata,
               after_hours_handoff_requested_at: null,
@@ -149,13 +156,6 @@ serve(async (req) => {
             }
           })
           .eq('id', conv.id);
-
-        // 3. Remover tag pendente_retorno
-        await supabaseClient
-          .from('conversation_tags')
-          .delete()
-          .eq('conversation_id', conv.id)
-          .eq('tag_id', pendenteTagId);
 
         // 4. Inserir mensagem de sistema
         await supabaseClient.from('messages').insert({
