@@ -169,6 +169,18 @@ serve(async (req) => {
         console.log(`[redistribute-after-hours] ✅ Conversa ${conv.id} redistribuída com sucesso`);
       } catch (convErr) {
         console.error(`[redistribute-after-hours] ❌ Erro ao processar conversa ${conv.id}:`, convErr);
+        // Anti-perda: re-add tag para retry na próxima execução do cron
+        try {
+          await supabaseClient
+            .from('conversation_tags')
+            .upsert(
+              { conversation_id: conv.id, tag_id: pendenteTagId },
+              { onConflict: 'conversation_id,tag_id' }
+            );
+          console.log(`[redistribute-after-hours] 🔄 Tag re-adicionada para ${conv.id} (retry próximo ciclo)`);
+        } catch (reAddErr) {
+          console.error(`[redistribute-after-hours] ⚠️ CRÍTICO: Falha ao re-add tag para ${conv.id}:`, reAddErr);
+        }
       }
     }
 
