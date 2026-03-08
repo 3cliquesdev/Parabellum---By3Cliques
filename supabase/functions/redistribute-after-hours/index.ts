@@ -157,10 +157,22 @@ serve(async (req) => {
           })
           .eq('id', conv.id);
 
-        // 4. Inserir mensagem de sistema
+        // 4. Inserir mensagem de sistema (template configurável com fallback)
+        let reopenedMsg = '☀️ Horário comercial iniciado. Um atendente será designado para continuar seu atendimento.';
+        try {
+          const { data: msgRow } = await supabaseClient
+            .from('business_messages_config')
+            .select('message_template')
+            .eq('message_key', 'business_hours_reopened')
+            .maybeSingle();
+          if (msgRow?.message_template) {
+            reopenedMsg = msgRow.message_template;
+          }
+        } catch (_) { /* fallback */ }
+
         await supabaseClient.from('messages').insert({
           conversation_id: conv.id,
-          content: '☀️ Horário comercial iniciado. Um atendente será designado para continuar seu atendimento.',
+          content: reopenedMsg,
           sender_type: 'system',
           channel: 'chat'
         });
