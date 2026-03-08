@@ -1,41 +1,24 @@
 
-# Plano: Fallback Inteligente Fora do Horário (sem "falso SLA") ✅
+# Plano: Mensagens Configuráveis de Fora do Horário ✅
 
 ## Status: IMPLEMENTADO
 
 ## Resumo
 
-Lógica invertida: `redistribute-after-hours` agora age **dentro do horário** (redistribui conversas com tag `pendente_retorno`). Fora do horário, a IA mantém `autopilot` e registra pendência sem chamar `route-conversation`.
+As mensagens automáticas enviadas fora do horário comercial (handoff e redistribuição) agora são editáveis via UI na página de SLA Settings. Templates armazenados na tabela `business_messages_config` com fallback para mensagens padrão.
 
 ## Arquivos Alterados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/redistribute-after-hours/index.ts` | Reescrita: age dentro do horário, busca tag `pendente_retorno`, roteia e remove tag |
-| `supabase/functions/ai-autopilot-chat/index.ts` | Import business-hours + contexto no prompt + condicional no `request_human_agent` |
-| SQL Migration | Tag `pendente_retorno` criada na tabela `tags` |
-
-## Lógica Implementada
-
-### redistribute-after-hours (cron)
-- `within_hours = false` → nada a fazer
-- `within_hours = true` → busca conversas com tag `pendente_retorno` → route-conversation → waiting_human → remove tag → mensagem sistema
-
-### ai-autopilot-chat
-- **Prompt:** Injeta info de horário comercial (aberto/fechado + próxima abertura)
-- **request_human_agent dentro do horário:** comportamento padrão (copilot + route-conversation)
-- **request_human_agent fora do horário:**
-  - NÃO chama route-conversation
-  - NÃO muda ai_mode (mantém autopilot)
-  - Envia mensagem informativa ao cliente
-  - Aplica tag `pendente_retorno`
-  - Salva metadata (after_hours_handoff_requested_at, pending_department_id, etc.)
-  - Registra nota interna
+| SQL Migration | Tabela `business_messages_config` + seeds + RLS |
+| `src/hooks/useBusinessMessages.ts` | Novo hook (query + mutation) |
+| `src/pages/SLASettings.tsx` | Seção "Mensagens de Fora do Horário" na aba Horário Comercial |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Busca template `after_hours_handoff` com placeholders `{schedule}`, `{next_open}` |
+| `supabase/functions/redistribute-after-hours/index.ts` | Busca template `business_hours_reopened` |
 
 ## Garantias
 
-- Kill Switch: respeitado (verificado antes)
-- Shadow Mode: não afetado
-- Fluxos: soberania mantida (guard `if (!flow_context)`)
-- SLA: zero handoff fantasma fora do horário
-- Cron existente: mantém `* * * * *` do config.toml
+- Fallback hardcoded se tabela vazia ou inacessível
+- Kill Switch, Shadow Mode, Fluxos: não afetados
+- RLS: leitura authenticated, escrita managers/admins
