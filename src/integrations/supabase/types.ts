@@ -1297,6 +1297,33 @@ export type Database = {
         }
         Relationships: []
       }
+      business_messages_config: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          message_key: string
+          message_template: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          message_key: string
+          message_template: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          message_key?: string
+          message_template?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       cadence_enrollments: {
         Row: {
           cadence_id: string
