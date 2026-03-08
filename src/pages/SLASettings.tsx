@@ -558,6 +558,11 @@ function BusinessMessagesSection() {
   const updateMessage = useUpdateBusinessMessage();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
+  const defaults: Record<string, string> = {
+    after_hours_handoff: "Nosso atendimento humano funciona {schedule}. {next_open} um atendente poderá te ajudar. Enquanto isso, posso continuar tentando por aqui! 😊",
+    business_hours_reopened: "☀️ Horário comercial iniciado. Um atendente será designado para continuar seu atendimento.",
+  };
+
   useEffect(() => {
     if (messages.length > 0) {
       const initial: Record<string, string> = {};
@@ -570,6 +575,13 @@ function BusinessMessagesSection() {
     const template = drafts[id];
     if (template !== undefined) {
       updateMessage.mutate({ id, message_template: template });
+    }
+  };
+
+  const handleRestore = (msg: { id: string; message_key: string }) => {
+    const defaultVal = defaults[msg.message_key];
+    if (defaultVal) {
+      setDrafts((prev) => ({ ...prev, [msg.id]: defaultVal }));
     }
   };
 
@@ -606,27 +618,52 @@ function BusinessMessagesSection() {
       <CardContent className="space-y-6">
         {messages.map((msg) => {
           const label = labels[msg.message_key] || { title: msg.message_key, placeholderHint: "" };
-          const isDirty = drafts[msg.id] !== msg.message_template;
+          const draft = drafts[msg.id] ?? msg.message_template;
+          const isDirty = draft !== msg.message_template;
+          const isEmpty = !draft.trim();
+          const missingPlaceholders =
+            msg.message_key === "after_hours_handoff" &&
+            draft.trim() &&
+            (!draft.includes("{schedule}") || !draft.includes("{next_open}"));
 
           return (
             <div key={msg.id} className="space-y-2">
               <Label className="text-sm font-medium">{label.title}</Label>
               <p className="text-xs text-muted-foreground">{msg.description}</p>
               <Textarea
-                value={drafts[msg.id] ?? msg.message_template}
+                value={draft}
                 onChange={(e) => setDrafts((prev) => ({ ...prev, [msg.id]: e.target.value }))}
                 rows={3}
                 className="resize-none"
               />
               <p className="text-xs text-muted-foreground italic">{label.placeholderHint}</p>
-              <Button
-                size="sm"
-                onClick={() => handleSave(msg.id)}
-                disabled={!isDirty || updateMessage.isPending}
-              >
-                <Save className="h-4 w-4 mr-1" />
-                Salvar
-              </Button>
+              {missingPlaceholders && (
+                <Alert variant="default" className="border-yellow-500/50 bg-yellow-500/10">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-xs text-yellow-700">
+                    Atenção: os placeholders {"{{schedule}}"} e/ou {"{{next_open}}"} foram removidos. A mensagem pode ficar incompleta.
+                  </AlertDescription>
+                </Alert>
+              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => handleSave(msg.id)}
+                  disabled={!isDirty || isEmpty || updateMessage.isPending}
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  Salvar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleRestore(msg)}
+                  disabled={draft === defaults[msg.message_key]}
+                >
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Restaurar Padrão
+                </Button>
+              </div>
             </div>
           );
         })}
