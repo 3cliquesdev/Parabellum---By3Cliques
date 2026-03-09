@@ -573,11 +573,22 @@ async function sendEmailReport(
           </div>` : ''}
         </td></tr>` : '';
 
-  // Build team performance HTML section
+  // Build pipeline leads HTML section
+  const pipelineLeadsHtml = salesMetrics.newLeadsToday > 0 ? `
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#2563eb;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">📥 Novos Leads Hoje (Pipeline)</p>
+        </td></tr>
+        <tr><td style="padding:0 32px 12px;">
+          ${(salesMetrics.topNewSources ?? []).map((s: string) => `<p style="color:#334155;font-size:13px;margin:4px 0;">• ${s}</p>`).join('')}
+          <p style="color:#1e293b;font-size:13px;font-weight:700;margin:8px 0 0;">Total: ${salesMetrics.newLeadsToday} leads entraram</p>
+        </td></tr>` : '';
+
+  // Build team performance HTML section (daily)
   const teamHtml = (salesMetrics.topReps ?? []).length > 0 ? `
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#3b82f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">👥 Performance do Time</p>
+          <p style="color:#3b82f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">👥 Performance do Time (Hoje)</p>
           <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">Fechamentos diretos do dia (atribuídos ao time)</p>
         </td></tr>
         <tr><td style="padding:0 32px 20px;">
@@ -591,6 +602,34 @@ async function sendEmailReport(
             ${(salesMetrics.topReps ?? []).map((r: any, i: number) => {
               const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
               const bg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+              return `<tr style="background:${bg};">
+                <td style="padding:10px 12px;font-size:14px;">${medal}</td>
+                <td style="padding:10px 12px;color:#1e293b;font-size:13px;font-weight:600;">${r.name}</td>
+                <td style="padding:10px 12px;color:#1e293b;font-size:13px;text-align:center;font-weight:700;">${r.deals}</td>
+                <td style="padding:10px 12px;color:#16a34a;font-size:13px;text-align:right;font-weight:700;">${fmtBRL(r.revenue)}</td>
+              </tr>`;
+            }).join('')}
+          </table>
+        </td></tr>` : '';
+
+  // Build monthly team performance HTML section
+  const teamMonthHtml = (salesMetrics.topRepsMonth ?? []).length > 0 ? `
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#f59e0b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">👥 Time Comercial (Mês)</p>
+          <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">Ranking acumulado no mês atual</p>
+        </td></tr>
+        <tr><td style="padding:0 32px 20px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#fffbeb;">
+              <td style="padding:8px 12px;color:#92400e;font-size:11px;font-weight:700;text-transform:uppercase;">#</td>
+              <td style="padding:8px 12px;color:#92400e;font-size:11px;font-weight:700;text-transform:uppercase;">Vendedor</td>
+              <td style="padding:8px 12px;color:#92400e;font-size:11px;font-weight:700;text-transform:uppercase;text-align:center;">Deals</td>
+              <td style="padding:8px 12px;color:#92400e;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;">Receita</td>
+            </tr>
+            ${(salesMetrics.topRepsMonth ?? []).map((r: any, i: number) => {
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+              const bg = i % 2 === 0 ? '#ffffff' : '#fffbeb';
               return `<tr style="background:${bg};">
                 <td style="padding:10px 12px;font-size:14px;">${medal}</td>
                 <td style="padding:10px 12px;color:#1e293b;font-size:13px;font-weight:600;">${r.name}</td>
