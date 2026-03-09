@@ -193,7 +193,7 @@ export default function ChatFlowEditorPage() {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={handleOpenSimulator}
+            onClick={handleOpenTestDialog}
             disabled={simulatorNodes.length === 0}
           >
             <Play className="h-4 w-4 mr-2" />
