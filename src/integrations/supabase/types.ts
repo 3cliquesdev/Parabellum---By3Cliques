@@ -6640,10 +6640,12 @@ export type Database = {
           last_status_change: string | null
           manager_id: string | null
           manual_offline: boolean | null
+          notify_ai_governor: boolean | null
           onboarding_completed: boolean | null
           onboarding_completed_at: string | null
           onboarding_progress: number | null
           updated_at: string | null
+          whatsapp_number: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -6664,10 +6666,12 @@ export type Database = {
           last_status_change?: string | null
           manager_id?: string | null
           manual_offline?: boolean | null
+          notify_ai_governor?: boolean | null
           onboarding_completed?: boolean | null
           onboarding_completed_at?: string | null
           onboarding_progress?: number | null
           updated_at?: string | null
+          whatsapp_number?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -6688,10 +6692,12 @@ export type Database = {
           last_status_change?: string | null
           manager_id?: string | null
           manual_offline?: boolean | null
+          notify_ai_governor?: boolean | null
           onboarding_completed?: boolean | null
           onboarding_completed_at?: string | null
           onboarding_progress?: number | null
           updated_at?: string | null
+          whatsapp_number?: string | null
         }
         Relationships: [
           {

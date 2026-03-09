@@ -118,13 +118,37 @@ serve(async (req) => {
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiKey) throw new Error('OPENAI_API_KEY não configurada');
 
-    const { data: adminPhonesConfig } = await supabase.from('system_configurations').select('value').eq('key', 'ai_governor_admin_phones').maybeSingle();
-    let adminPhones: string[] = [];
-    try { adminPhones = JSON.parse(adminPhonesConfig?.value ?? '[]'); } catch {}
+    // Buscar admins com notify_ai_governor = true
+    const { data: adminProfiles } = await supabase
+      .from('profiles')
+      .select('whatsapp_number, full_name')
+      .eq('notify_ai_governor', true);
 
+    let adminPhones: string[] = [];
+    adminProfiles?.forEach((p: any) => {
+      const num = (p.whatsapp_number || '').replace(/\D/g, '');
+      if (num.length >= 10) {
+        adminPhones.push(num);
+        console.log(`[ai-governor] 👤 Admin notificado: ${p.full_name} → ***${num.slice(-4)}`);
+      }
+    });
+
+    // Fallback: system_configurations
+    if (adminPhones.length === 0) {
+      const { data: cfg } = await supabase
+        .from('system_configurations')
+        .select('value')
+        .eq('key', 'ai_governor_admin_phones')
+        .maybeSingle();
+      try { adminPhones = JSON.parse(cfg?.value ?? '[]'); } catch {}
+    }
+
+    // Override via body (testes)
     let bodyOverride: any = {};
     try { bodyOverride = await req.json(); } catch {}
     if (bodyOverride.admin_phones?.length) adminPhones = bodyOverride.admin_phones;
+
+    console.log(`[ai-governor] 📱 ${adminPhones.length} admin(s) para notificar`);
 
     const forceToday = bodyOverride.force_today === true;
     const now = new Date();
