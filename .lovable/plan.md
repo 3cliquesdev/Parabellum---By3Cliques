@@ -1,64 +1,31 @@
 
+# Plano: Mensagens Configuráveis de Fora do Horário ✅
 
-# Fix: Relatório Diário — Clareza HOJE vs MÊS + Contagem Real de Eventos IA
+## Status: IMPLEMENTADO (com ajustes finos aplicados)
 
-## Problemas Identificados
+## Resumo
 
-1. **`totalAIEvents` mostra "500" porque tem `.limit(500)`** na query (linha 47) — não é o total real, é o cap do fetch. Precisa usar `count: 'exact'` separado.
-2. **Mensagens (4460) e Eventos IA (500) não ficam claros se são do DIA** — falta rótulo explícito "HOJE".
-3. **Vendas fechadas hoje (175) não está destacada** no WhatsApp — aparece só nos canais.
-4. **Seções misturam HOJE e MÊS sem separação clara**.
+As mensagens automáticas enviadas fora do horário comercial (handoff e redistribuição) agora são editáveis via UI na página de SLA Settings. Templates armazenados na tabela `business_messages_config` com fallback para mensagens padrão.
 
-## Mudanças — `supabase/functions/ai-governor/index.ts`
+## Ajustes Finos Aplicados
 
-### 1. Fix contagem real de ai_events (linha 41-49)
-Adicionar query `count: 'exact', head: true` para obter o número real de eventos IA no dia, sem o `.limit(500)`.
+- ✅ Trigger `updated_at` reutilizando `public.update_updated_at_column()`
+- ✅ Validação: botão salvar desabilitado se template vazio
+- ✅ Warning visual se placeholders `{schedule}` / `{next_open}` removidos
+- ✅ Botão "Restaurar Padrão" para resetar mensagens
 
-```typescript
-// Contagem REAL de eventos IA no dia
-const { count: totalAIEventsCount } = await supabase
-  .from('ai_events')
-  .select('id', { count: 'exact', head: true })
-  .gte('created_at', since)
-  .lt('created_at', until);
-```
+## Arquivos Alterados
 
-Manter o fetch com limit(500) apenas para análise de intents/tipos, mas usar `totalAIEventsCount` para exibição.
+| Arquivo | Mudança |
+|---------|---------|
+| SQL Migrations | Tabela `business_messages_config` + seeds + RLS + trigger updated_at |
+| `src/hooks/useBusinessMessages.ts` | Hook (query + mutation) |
+| `src/pages/SLASettings.tsx` | Seção "Mensagens de Fora do Horário" com validação + restaurar padrão |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Busca template `after_hours_handoff` com fallback |
+| `supabase/functions/redistribute-after-hours/index.ts` | Busca template `business_hours_reopened` com fallback |
 
-### 2. Reestruturar WhatsApp com seções HOJE e MÊS claras (linha ~1006)
-Reformatar `fullMessage` com separadores explícitos:
+## Garantias
 
-```
-📞 *HOJE — Atendimento*
-Conversas: 280 | IA resolveu: 2 | Escaladas: 107
-Tempo médio: 42 min
-Eventos IA: 1523 | Msgs: 4460 (416 da IA)
-
-💰 *HOJE — Vendas*
-Fechamentos: 175 | Receita: R$ 42.3k
-Perdidos: 12 | Novos deals: 46
-
-📥 *HOJE — Pipeline*
-Kiwify: 23 | Outro: 17 | Formulário: 6
-Total: 46 leads entraram
-
-📊 *MÊS — Acumulado*
-Receita: R$ 109k | Meta: 18%
-Deals won: 421 | MoM: +34%
-
-👥 *MÊS — Time Comercial*
-1. Thaynara: 1 deal | R$ 0
-2. Fernanda: 20 deals | R$ 0
-```
-
-### 3. Atualizar prompt da IA para distinguir HOJE vs MÊS
-Reorganizar dados no prompt com headers `=== HOJE ===` e `=== MÊS ===` para que a análise também separe corretamente.
-
-### 4. Email HTML — mesma separação
-Adicionar subtítulos "(Hoje)" e "(Mês)" nas seções do email.
-
-## Impacto
-- Zero regressão — dados existentes mantidos, apenas reorganizados
-- Contagem real de eventos IA em vez de cap artificial de 500
-- Relatório fica imediatamente claro: o que é do DIA vs acumulado
-
+- Fallback hardcoded se tabela vazia ou inacessível
+- Kill Switch, Shadow Mode, Fluxos: não afetados
+- RLS: leitura authenticated, escrita managers/admins
