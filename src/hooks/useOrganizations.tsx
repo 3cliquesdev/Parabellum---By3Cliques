@@ -13,7 +13,7 @@ export function useOrganizations() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("organizations")
-        .select("*, contacts(count), deals(value, status)")
+        .select("*, contacts(count), deals(value, status), organization_phones(count)")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
