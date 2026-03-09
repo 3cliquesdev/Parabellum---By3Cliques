@@ -84,7 +84,12 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       minThreshold: parseFloat(configMap.get('ai_rag_min_threshold') || String(DEFAULT_RAG_CONFIG.minThreshold)),
       directThreshold: parseFloat(configMap.get('ai_rag_direct_threshold') || String(DEFAULT_RAG_CONFIG.directThreshold)),
       sources,
-      strictMode: configMap.get('ai_strict_rag_mode') === 'true',
+      strictMode: configMap.get('ai_strict_rag_mode') === 'true' || configMap.get('ai_strict_mode') === 'true',
+      blockFinancial: (configMap.get('ai_block_financial') ?? 'true') === 'true',
+      confidenceDirect: parseFloat(configMap.get('ai_confidence_direct') ?? '0.75'),
+      confidenceHandoff: parseFloat(configMap.get('ai_confidence_handoff') ?? '0.45'),
+      ragMinThreshold: parseFloat(configMap.get('ai_rag_min_threshold') ?? '0.70'),
+      maxFallback: parseInt(configMap.get('ai_max_fallback_phrases') ?? '3'),
     };
     
     console.log('[getRAGConfig] ✅ Configuração RAG carregada:', {
@@ -93,6 +98,11 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       directThreshold: config.directThreshold,
       sources: config.sources,
       strictMode: config.strictMode,
+      blockFinancial: config.blockFinancial,
+      confidenceDirect: config.confidenceDirect,
+      confidenceHandoff: config.confidenceHandoff,
+      ragMinThreshold: config.ragMinThreshold,
+      maxFallback: config.maxFallback,
     });
     
     return config;
