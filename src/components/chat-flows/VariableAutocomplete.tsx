@@ -67,15 +67,11 @@ export function VariableAutocomplete({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newValue = e.target.value;
-      const cursorPos = e.target.selectionStart || 0;
-      cursorPosRef.current = cursorPos;
-      onChange(newValue);
-
-      const textBefore = newValue.substring(0, cursorPos);
+  const syncAutocomplete = useCallback(
+    (text: string, cursorPos: number) => {
+      const textBefore = text.substring(0, cursorPos);
       const triggerMatch = textBefore.match(/\{\{([a-zA-Z0-9_.]*)$/);
+
       if (triggerMatch) {
         setFilter(triggerMatch[1] || "");
         setOpen(true);
@@ -83,7 +79,18 @@ export function VariableAutocomplete({
         setOpen(false);
       }
     },
-    [onChange]
+    []
+  );
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newValue = e.target.value;
+      const cursorPos = e.target.selectionStart || 0;
+      cursorPosRef.current = cursorPos;
+      onChange(newValue);
+      syncAutocomplete(newValue, cursorPos);
+    },
+    [onChange, syncAutocomplete]
   );
 
   const insertVariable = useCallback(
