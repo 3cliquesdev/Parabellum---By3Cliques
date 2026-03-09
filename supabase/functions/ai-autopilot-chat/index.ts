@@ -22,6 +22,11 @@ interface RAGConfig {
     sandbox: boolean;
   };
   strictMode: boolean;
+  blockFinancial: boolean;
+  confidenceDirect: number;
+  confidenceHandoff: number;
+  ragMinThreshold: number;
+  maxFallback: number;
 }
 
 const DEFAULT_RAG_CONFIG: RAGConfig = {
@@ -30,6 +35,11 @@ const DEFAULT_RAG_CONFIG: RAGConfig = {
   directThreshold: 0.75,
   sources: { kb: true, crm: true, tracking: true, sandbox: true },
   strictMode: false,
+  blockFinancial: true,
+  confidenceDirect: 0.75,
+  confidenceHandoff: 0.45,
+  ragMinThreshold: 0.70,
+  maxFallback: 3,
 };
 
 // Helper: Buscar TODAS as configurações RAG do banco
@@ -44,6 +54,11 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
         'ai_rag_direct_threshold',
         'ai_rag_sources_enabled',
         'ai_strict_rag_mode',
+        'ai_block_financial',
+        'ai_strict_mode',
+        'ai_confidence_direct',
+        'ai_confidence_handoff',
+        'ai_max_fallback_phrases',
       ]);
     
     if (error) {
@@ -69,7 +84,12 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       minThreshold: parseFloat(configMap.get('ai_rag_min_threshold') || String(DEFAULT_RAG_CONFIG.minThreshold)),
       directThreshold: parseFloat(configMap.get('ai_rag_direct_threshold') || String(DEFAULT_RAG_CONFIG.directThreshold)),
       sources,
-      strictMode: configMap.get('ai_strict_rag_mode') === 'true',
+      strictMode: configMap.get('ai_strict_rag_mode') === 'true' || configMap.get('ai_strict_mode') === 'true',
+      blockFinancial: (configMap.get('ai_block_financial') ?? 'true') === 'true',
+      confidenceDirect: parseFloat(configMap.get('ai_confidence_direct') ?? '0.75'),
+      confidenceHandoff: parseFloat(configMap.get('ai_confidence_handoff') ?? '0.45'),
+      ragMinThreshold: parseFloat(configMap.get('ai_rag_min_threshold') ?? '0.70'),
+      maxFallback: parseInt(configMap.get('ai_max_fallback_phrases') ?? '3'),
     };
     
     console.log('[getRAGConfig] ✅ Configuração RAG carregada:', {
@@ -78,6 +98,11 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       directThreshold: config.directThreshold,
       sources: config.sources,
       strictMode: config.strictMode,
+      blockFinancial: config.blockFinancial,
+      confidenceDirect: config.confidenceDirect,
+      confidenceHandoff: config.confidenceHandoff,
+      ragMinThreshold: config.ragMinThreshold,
+      maxFallback: config.maxFallback,
     });
     
     return config;
