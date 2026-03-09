@@ -250,6 +250,31 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
   const recurrenceCount = recurrenceDeals.length;
   const recurrenceRevenue = recurrenceDeals.reduce((s: number, d: any) => s + (Number(d.gross_value) || 0), 0);
 
+  // Sub-classificar vendas novas: quem vendeu?
+  const newSalesOrganic = newSalesDeals.filter((d: any) => !d.assigned_to && !d.affiliate_name);
+  const newSalesAffiliate = newSalesDeals.filter((d: any) => !d.assigned_to && d.affiliate_name);
+  const newSalesComercial = newSalesDeals.filter((d: any) => !!d.assigned_to);
+
+  const newSalesOrganicCount = newSalesOrganic.length;
+  const newSalesOrganicRevenue = newSalesOrganic.reduce((s: number, d: any) => s + (Number(d.gross_value) || 0), 0);
+  const newSalesAffiliateCount = newSalesAffiliate.length;
+  const newSalesAffiliateRevenue = newSalesAffiliate.reduce((s: number, d: any) => s + (Number(d.gross_value) || 0), 0);
+  const newSalesComercialCount = newSalesComercial.length;
+  const newSalesComercialRevenue = newSalesComercial.reduce((s: number, d: any) => s + (Number(d.gross_value) || 0), 0);
+
+  // Top afiliados nas vendas novas
+  const affNewMap: Record<string, { deals: number; revenue: number }> = {};
+  newSalesAffiliate.forEach((d: any) => {
+    const name = d.affiliate_name || 'Desconhecido';
+    if (!affNewMap[name]) affNewMap[name] = { deals: 0, revenue: 0 };
+    affNewMap[name].deals++;
+    affNewMap[name].revenue += Number(d.gross_value) || 0;
+  });
+  const topNewAffiliates = Object.entries(affNewMap)
+    .map(([name, v]) => ({ name, ...v }))
+    .sort((a, b) => b.deals - a.deals)
+    .slice(0, 5);
+
   // Deals perdidos hoje (filtro por closed_at)
   const { data: lostToday } = await supabase
     .from('deals')
@@ -436,6 +461,10 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
   const partnerPct = origins.find(o => o.key === 'parceiros')?.pct ?? 0;
   if (partnerPct >= 50) alerts.push(`⚠️ Parceiros representam ${partnerPct}% da receita — risco de dependência`);
   if (topPartners[0]?.pct >= 35) alerts.push(`⚠️ "${topPartners[0].name}" concentra ${topPartners[0].pct}% da receita do dia`);
+
+  // Alerta de concentração de afiliados nas vendas NOVAS
+  const affPctNew = newSalesCount > 0 ? Math.round((newSalesAffiliateCount / newSalesCount) * 100) : 0;
+  if (affPctNew >= 50) alerts.push(`⚠️ Afiliados representam ${affPctNew}% das vendas novas — diversificar canais`);
   
   // Alerta comercial inteligente (considera mês)
   if (cats.comercial.deals === 0 && totalRevToday > 0) {
@@ -487,6 +516,14 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
     newSalesRevenue,
     recurrenceCount,
     recurrenceRevenue,
+    newSalesOrganicCount,
+    newSalesOrganicRevenue,
+    newSalesAffiliateCount,
+    newSalesAffiliateRevenue,
+    newSalesComercialCount,
+    newSalesComercialRevenue,
+    topNewAffiliates,
+    affPctNew,
     origins,
     topPartners,
     topReps,
@@ -533,6 +570,11 @@ INBOX & IA (PRIORIDADE MAXIMA):
 
 VENDAS HOJE:
 - Vendas novas (primeiro pagamento): ${salesMetrics.newSalesCount} | R$ ${salesMetrics.newSalesRevenue.toLocaleString('pt-BR')}
+  DETALHAMENTO VENDAS NOVAS:
+  - Organico (pagina propria): ${salesMetrics.newSalesOrganicCount} vendas | R$ ${salesMetrics.newSalesOrganicRevenue.toLocaleString('pt-BR')}
+  - Afiliados: ${salesMetrics.newSalesAffiliateCount} vendas | R$ ${salesMetrics.newSalesAffiliateRevenue.toLocaleString('pt-BR')}${(salesMetrics.topNewAffiliates ?? []).length > 0 ? ' (Top: ' + (salesMetrics.topNewAffiliates ?? []).map((a: any) => `${a.name} ${a.deals}`).join(', ') + ')' : ''}
+  - Comercial (vendedor): ${salesMetrics.newSalesComercialCount} vendas | R$ ${salesMetrics.newSalesComercialRevenue.toLocaleString('pt-BR')}
+  - % Afiliados nas novas: ${salesMetrics.affPctNew}%${salesMetrics.affPctNew >= 50 ? ' ⚠️ ALERTA: DEPENDENCIA DE AFILIADOS' : ''}
 - Recorrencias (renovacoes): ${salesMetrics.recurrenceCount} | R$ ${salesMetrics.recurrenceRevenue.toLocaleString('pt-BR')}
 - Total fechamentos: ${salesMetrics.wonToday} | Receita total: R$ ${salesMetrics.revenueToday.toLocaleString('pt-BR')}
 - Perdidos: ${salesMetrics.lostToday}${salesMetrics.topLostReasons.length ? ' | Motivos: ' + salesMetrics.topLostReasons.join(', ') : ''}
@@ -576,6 +618,7 @@ PRIORIZE: Inbox e IA sao mais importantes que vendas.
 Se IA resolveu abaixo de 30% isso DEVE ser o [ATENCAO] principal.
 FOQUE NO DIA: analise o que aconteceu HOJE e o que fazer AMANHA para melhorar.
 IMPORTANTE: Distinga vendas novas de recorrencias. Recorrencias NAO sao vendas novas — sao renovacoes automaticas.
+VENDAS NOVAS: Analise o detalhamento (organico vs afiliado vs comercial). Se afiliados dominam (>50%), [SUGESTOES] DEVE incluir acao de diversificacao de canais proprios.
 TAGS: Se houver tags frequentes, sugira acoes especificas para resolver os problemas mais comuns.
 TICKETS: Se houver tickets urgentes/alta, priorize sugestoes para resolve-los amanha.
 
@@ -914,6 +957,24 @@ async function sendEmailReport(
               </td>
             </tr>
           </table>
+          <!-- Breakdown vendas novas: Orgânico / Afiliados / Comercial -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;">
+            <tr>
+              <td style="text-align:center;">
+                <span style="display:inline-block;background:#8b5cf6;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;margin:2px;">Organico: ${salesMetrics.newSalesOrganicCount} (${fmtBRL(salesMetrics.newSalesOrganicRevenue)})</span>
+                <span style="display:inline-block;background:#f97316;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;margin:2px;">Afiliados: ${salesMetrics.newSalesAffiliateCount} (${fmtBRL(salesMetrics.newSalesAffiliateRevenue)})</span>
+                <span style="display:inline-block;background:#3b82f6;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;margin:2px;">Comercial: ${salesMetrics.newSalesComercialCount} (${fmtBRL(salesMetrics.newSalesComercialRevenue)})</span>
+              </td>
+            </tr>
+            ${(salesMetrics.topNewAffiliates ?? []).length > 0 ? `<tr><td style="text-align:center;padding-top:6px;">
+              <span style="color:#64748b;font-size:11px;">Top afiliados: ${(salesMetrics.topNewAffiliates ?? []).map((a: any) => `<strong style="color:#f97316;">${a.name}</strong> ${a.deals}`).join(', ')}</span>
+            </td></tr>` : ''}
+            ${(salesMetrics.affPctNew ?? 0) >= 50 ? `<tr><td style="text-align:center;padding-top:6px;">
+              <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 12px;display:inline-block;">
+                <span style="color:#92400e;font-size:11px;font-weight:700;">⚠️ Afiliados = ${salesMetrics.affPctNew}% das vendas novas — diversificar canais</span>
+              </div>
+            </td></tr>` : ''}
+          </table>
           <p style="color:#64748b;font-size:11px;margin:8px 0 0;text-align:center;">
             Total: ${salesMetrics.wonToday} fechamentos | ${fmtBRL(salesMetrics.revenueToday)}
           </p>
@@ -1163,14 +1224,19 @@ serve(async (req) => {
       metrics.criticalAnomalies?.length > 0 ? `Anomalias: ${metrics.criticalAnomalies.length} criticas` : null,
     ].filter(Boolean).join('\n');
 
-    // ═══ HOJE — Vendas (separadas) ═══
+    // ═══ HOJE — Vendas (com breakdown por origem) ═══
+    const affTopStr = (salesMetrics.topNewAffiliates ?? []).length > 0
+      ? `  Top afiliados: ${(salesMetrics.topNewAffiliates ?? []).map((a: any) => `${a.name} ${a.deals} deals`).join(', ')}`
+      : '';
     const salesSummary = [
       `💰 *HOJE — Vendas*`,
       `Vendas novas: ${salesMetrics.newSalesCount} (${fmtK(salesMetrics.newSalesRevenue)})`,
+      `  Organico: ${salesMetrics.newSalesOrganicCount} (${fmtK(salesMetrics.newSalesOrganicRevenue)}) | Afiliados: ${salesMetrics.newSalesAffiliateCount} (${fmtK(salesMetrics.newSalesAffiliateRevenue)}) | Comercial: ${salesMetrics.newSalesComercialCount} (${fmtK(salesMetrics.newSalesComercialRevenue)})`,
+      affTopStr,
       `Recorrencias: ${salesMetrics.recurrenceCount} (${fmtK(salesMetrics.recurrenceRevenue)})`,
       `Total: ${salesMetrics.wonToday} fechamentos | ${fmtK(salesMetrics.revenueToday)}`,
       `Perdidos: ${salesMetrics.lostToday} | Novos deals: ${salesMetrics.newDeals}`,
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 
     // ═══ HOJE — Pipeline ═══
     const pipelineSummaryToday = salesMetrics.newLeadsToday > 0
