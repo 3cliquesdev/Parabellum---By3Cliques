@@ -412,3 +412,6 @@ verify_jwt = false
 [functions.process-buffered-messages.cron]
 schedule = "* * * * *"
 region = "us-east-1"
+
+[functions.ai-governor]
+verify_jwt = false
