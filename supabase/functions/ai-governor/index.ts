@@ -858,15 +858,24 @@ serve(async (req) => {
     const dateStr = formatDate(since);
     const aiAnalysis = await generateAIAnalysis(metrics, salesMetrics, dateStr, openaiKey);
 
-    // WhatsApp message with channels summary
+    // WhatsApp message
+    const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(1)}k` : `R$ ${v.toLocaleString('pt-BR')}`;
     const channelsSummary = (salesMetrics.origins ?? []).map((o: any) => `${o.emoji} ${o.label}: ${o.pct}% (${o.deals})`).join('\n');
-    const teamSummary = (salesMetrics.topReps ?? []).length > 0
-      ? (salesMetrics.topReps ?? []).map((r: any, i: number) => `${i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'} ${r.name}: ${r.deals} deals`).join('\n')
-      : '';
+
+    const teamSection = (salesMetrics.topRepsMonth ?? []).length > 0
+      ? `👥 *TIME COMERCIAL (mês)*\n` +
+        (salesMetrics.topRepsMonth ?? []).slice(0, 3).map((r: any, i: number) =>
+          `${['🥇','🥈','🥉'][i]} ${r.name}: ${r.deals} deals | ${fmtK(r.revenue)}`
+        ).join('\n')
+      : `👥 *TIME COMERCIAL*\nNenhum fechamento no mês ainda`;
+
+    const pipelineSection = salesMetrics.newLeadsToday > 0
+      ? `📥 *NOVOS LEADS HOJE (pipeline)*\n${(salesMetrics.topNewSources ?? []).join('\n')}\nTotal: ${salesMetrics.newLeadsToday} leads entraram`
+      : `📥 *NOVOS LEADS HOJE*\nNenhum lead novo capturado`;
 
     const inboxSummary = `📞 *Atendimento do Dia:*\n💬 Conversas: ${metrics.totalConvs} | IA: ${metrics.closedByAI} | Escaladas: ${metrics.escalatedToHuman}\n⏱ Tempo médio: ${metrics.avgResolutionMin ?? '—'} min\n🤖 Eventos IA: ${metrics.totalAIEvents} | Msgs: ${metrics.totalMessages} (${metrics.aiMessages} IA)${metrics.criticalAnomalies?.length > 0 ? `\n🔴 Anomalias: ${metrics.criticalAnomalies.length} críticas` : ''}`;
 
-    const fullMessage = `*Report Diário CRM 3Cliques — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}${teamSummary ? `\n\n👥 *Time Comercial:*\n${teamSummary}` : ''}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const fullMessage = `*Report Diário CRM 3Cliques — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}\n\n${pipelineSection}\n\n${teamSection}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
