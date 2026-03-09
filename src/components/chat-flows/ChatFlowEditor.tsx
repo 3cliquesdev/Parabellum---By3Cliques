@@ -1232,13 +1232,12 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="financeiro">Financeiro</SelectItem>
-                        <SelectItem value="tecnico">Técnico</SelectItem>
-                        <SelectItem value="bug">Bug</SelectItem>
-                        <SelectItem value="devolucao">Devolução</SelectItem>
-                        <SelectItem value="reclamacao">Reclamação</SelectItem>
-                        <SelectItem value="saque">Saque</SelectItem>
-                        <SelectItem value="outro">Outro</SelectItem>
+                        {ticketCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                        ))}
+                        {ticketCategories.length === 0 && (
+                          <SelectItem value="outro" disabled>Nenhuma categoria cadastrada</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
