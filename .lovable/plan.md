@@ -1,31 +1,47 @@
 
-# Plano: Mensagens Configuráveis de Fora do Horário ✅
 
-## Status: IMPLEMENTADO (com ajustes finos aplicados)
+# Fix: Classificação de Vendas no ai-governor
 
-## Resumo
+## Problemas Identificados
 
-As mensagens automáticas enviadas fora do horário comercial (handoff e redistribuição) agora são editáveis via UI na página de SLA Settings. Templates armazenados na tabela `business_messages_config` com fallback para mensagens padrão.
+### 1. Hierarquia de classificação INVERTIDA (linha 108-123)
+A função `classifyOrigin` verifica `affiliate_name` ANTES de `assigned_to`. Isso viola a regra definitiva do documento `sales-channel-attribution-rules.md`:
+- **Regra**: `assigned_to` preenchido → SEMPRE Comercial, independente de afiliado
+- **Atual**: deal com vendedor + afiliado → classificado como "parceiro" (errado)
 
-## Ajustes Finos Aplicados
+### 2. Filtro por `created_at` em vez de `closed_at` (linhas 90-91)
+Won deals são filtrados por `created_at`, mas deveriam usar `closed_at` (data do fechamento). Isso perde deals criados antes do período mas fechados no dia.
 
-- ✅ Trigger `updated_at` reutilizando `public.update_updated_at_column()`
-- ✅ Validação: botão salvar desabilitado se template vazio
-- ✅ Warning visual se placeholders `{schedule}` / `{next_open}` removidos
-- ✅ Botão "Restaurar Padrão" para resetar mensagens
+### 3. Comercial exige `pipeline_sales_reps` (linha 113)
+A condição `commercialRepsIds.includes(deal.assigned_to)` exclui vendedores que têm `assigned_to` mas não estão na tabela `pipeline_sales_reps`. Pela regra, qualquer `assigned_to` preenchido = Comercial.
 
-## Arquivos Alterados
+## Mudanças
 
-| Arquivo | Mudança |
-|---------|---------|
-| SQL Migrations | Tabela `business_messages_config` + seeds + RLS + trigger updated_at |
-| `src/hooks/useBusinessMessages.ts` | Hook (query + mutation) |
-| `src/pages/SLASettings.tsx` | Seção "Mensagens de Fora do Horário" com validação + restaurar padrão |
-| `supabase/functions/ai-autopilot-chat/index.ts` | Busca template `after_hours_handoff` com fallback |
-| `supabase/functions/redistribute-after-hours/index.ts` | Busca template `business_hours_reopened` com fallback |
+### Arquivo: `supabase/functions/ai-governor/index.ts`
 
-## Garantias
+**A) Corrigir query de won deals** (linhas 90-91)
+- Trocar `created_at` por `closed_at` nos filtros `.gte()` e `.lt()`
 
-- Fallback hardcoded se tabela vazia ou inacessível
-- Kill Switch, Shadow Mode, Fluxos: não afetados
-- RLS: leitura authenticated, escrita managers/admins
+**B) Corrigir query de lost deals** (linhas 98-99)
+- Trocar `created_at` por `closed_at` nos filtros
+
+**C) Reescrever `classifyOrigin`** (linhas 108-123) seguindo a hierarquia correta:
+```
+1. assigned_to preenchido → 'comercial_interno'
+2. lead_source = recorrência/renovação → 'kiwify:recorrencia'
+3. affiliate_name preenchido → 'parceiro:NOME'
+4. lead_source = formulario → 'formulario:...'
+5. lead_source = whatsapp/webchat → 'canal:...'
+6. is_organic_sale → 'kiwify:organico'
+7. lead_source kiwify_* → 'kiwify:...'
+8. fallback → 'direto'
+```
+
+**D) Remover dependência de `pipeline_sales_reps` para classificação**
+- A query de `pipeline_sales_reps` (linhas 80-83) pode ser mantida para o ranking de reps, mas NÃO deve ser condição para classificar como comercial
+
+## Impacto
+- Upgrade puro: mesma estrutura de dados, mesmo template, mesmo parser
+- Nenhuma mudança em tabelas, RLS ou outros arquivos
+- Próximo relatório mostrará corretamente as vendas do time comercial e formulários
+
