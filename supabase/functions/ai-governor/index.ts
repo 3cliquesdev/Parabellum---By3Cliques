@@ -375,10 +375,17 @@ VENDAS:
 - Perdidos hoje: ${salesMetrics.lostToday}${salesMetrics.topLostReasons.length ? ' | Motivos: ' + salesMetrics.topLostReasons.join(', ') : ''}
 - Novos deals: ${salesMetrics.newDeals}
 - Canais: ${salesMetrics.origins.map((o: any) => `${o.label} ${o.pct}%`).join(' | ')}
-- Time comercial: ${salesMetrics.topReps.length > 0 ? salesMetrics.topReps.map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
+- Time comercial hoje: ${salesMetrics.topReps.length > 0 ? salesMetrics.topReps.map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
 - MÊS: R$ ${salesMetrics.revenueMonth.toLocaleString('pt-BR')} / ${salesMetrics.goalProgress !== null ? salesMetrics.goalProgress + '% da meta' : 'sem meta'}
 - MoM: ${salesMetrics.momGrowth !== null ? (salesMetrics.momGrowth >= 0 ? '+' : '') + salesMetrics.momGrowth + '%' : 'N/A'}
 - Alertas: ${salesMetrics.alerts.join(' | ') || 'Nenhum'}
+
+PIPELINE COMERCIAL HOJE:
+- Novos leads capturados: ${salesMetrics.newLeadsToday}
+- Por fonte: ${salesMetrics.topNewSources.join(' | ') || 'Nenhum'}
+
+TIME COMERCIAL (mês):
+${salesMetrics.topRepsMonth.length > 0 ? salesMetrics.topRepsMonth.map((r: any) => `${r.name}: ${r.deals} deals / R$${r.revenue}`).join(' | ') : 'Sem fechamentos no mês'}
 
 ===== INSTRUÇÕES =====
 
