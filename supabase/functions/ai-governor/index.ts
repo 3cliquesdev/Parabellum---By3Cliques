@@ -74,85 +74,197 @@ async function collectDayMetrics(supabase: any, since: string, until: string) {
 async function collectSalesMetrics(supabase: any, since: string, until: string) {
   const now = new Date();
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
 
-  // Deals criados hoje
-  const { data: dealsToday } = await supabase
+  // IDs do time comercial (pipeline_sales_reps)
+  const { data: salesRepsData } = await supabase
+    .from('pipeline_sales_reps')
+    .select('user_id');
+  const commercialRepsIds = [...new Set(salesRepsData?.map((r: any) => r.user_id) ?? [])];
+
+  // Deals won hoje com origem completa
+  const { data: wonToday } = await supabase
     .from('deals')
-    .select('id, title, value, status, closed_at, lost_reason, lead_source, is_organic_sale, gross_value')
+    .select('id, gross_value, affiliate_name, affiliate_commission, lead_source, kiwify_offer_id, tracking_code, is_organic_sale, pipeline_id, assigned_to')
+    .eq('status', 'won')
     .gte('created_at', since)
     .lt('created_at', until);
 
-  // Deals fechados (won) hoje
-  const wonToday = dealsToday?.filter((d: any) => d.status === 'won') ?? [];
-  const lostToday = dealsToday?.filter((d: any) => d.status === 'lost') ?? [];
-  const newDeals = dealsToday?.length ?? 0;
-  const revenueToday = wonToday.reduce((sum: number, d: any) => sum + (Number(d.gross_value || d.value) || 0), 0);
-
-  // Pipeline total (deals abertos)
-  const { data: pipeline } = await supabase
+  // Deals perdidos hoje
+  const { data: lostToday } = await supabase
     .from('deals')
-    .select('id, value, status, probability')
-    .not('status', 'in', '("won","lost","cancelled")');
+    .select('id, lost_reason, gross_value')
+    .eq('status', 'lost')
+    .gte('created_at', since)
+    .lt('created_at', until);
 
-  const pipelineValue = pipeline?.reduce((sum: number, d: any) => sum + (Number(d.value) || 0), 0) ?? 0;
-  const pipelineCount = pipeline?.length ?? 0;
+  const { count: newDealsCount } = await supabase
+    .from('deals')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', since)
+    .lt('created_at', until);
 
-  // Motivos de perda do dia
-  const lostReasons: Record<string, number> = {};
-  lostToday.forEach((d: any) => {
-    const reason = d.lost_reason || 'Não informado';
-    lostReasons[reason] = (lostReasons[reason] ?? 0) + 1;
+  // Classificação de origem
+  const classifyOrigin = (deal: any): string => {
+    if (deal.affiliate_name) {
+      if (deal.affiliate_name.toUpperCase().includes('CIRILO')) return 'parceiro:CIRILO Educação Digital';
+      return `parceiro:${deal.affiliate_name}`;
+    }
+    if (deal.assigned_to && commercialRepsIds.includes(deal.assigned_to)) return 'comercial_interno';
+    if (deal.lead_source === 'kiwify_recorrencia') return 'kiwify:recorrencia';
+    if (deal.lead_source === 'kiwify_direto') return 'kiwify:direto';
+    if (deal.lead_source === 'kiwify_novo_cliente') return 'kiwify:novo_cliente';
+    if (deal.lead_source === 'formulario') return `formulario:${deal.tracking_code || 'geral'}`;
+    if (deal.lead_source === 'whatsapp') return 'canal:whatsapp';
+    if (deal.lead_source === 'webchat') return 'canal:webchat';
+    if (deal.is_organic_sale) return 'kiwify:organico';
+    if (deal.pipeline_id === '00000000-0000-0000-0000-000000000001') return 'recuperacao';
+    return 'direto';
+  };
+
+  // Agregar por categoria principal
+  const cats: Record<string, { deals: number; revenue: number; commission: number; label: string; emoji: string }> = {
+    parceiros: { deals: 0, revenue: 0, commission: 0, label: 'Parceiros Afiliados', emoji: '🤝' },
+    kiwify:    { deals: 0, revenue: 0, commission: 0, label: 'Kiwify (plataforma)', emoji: '🟠' },
+    comercial: { deals: 0, revenue: 0, commission: 0, label: 'Time Comercial Interno', emoji: '👥' },
+    formulario:{ deals: 0, revenue: 0, commission: 0, label: 'Formulários', emoji: '📝' },
+    canais:    { deals: 0, revenue: 0, commission: 0, label: 'WhatsApp / WebChat', emoji: '💬' },
+    organico:  { deals: 0, revenue: 0, commission: 0, label: 'Orgânico', emoji: '🌱' },
+    outros:    { deals: 0, revenue: 0, commission: 0, label: 'Outros / Direto', emoji: '📌' },
+  };
+
+  // Parceiros detalhados
+  const partnersMap: Record<string, { deals: number; revenue: number }> = {};
+  // Reps performance hoje
+  const repsMap: Record<string, { deals: number; revenue: number }> = {};
+
+  let totalRevToday = 0;
+
+  wonToday?.forEach((d: any) => {
+    const origin = classifyOrigin(d);
+    const rev = Number(d.gross_value) || 0;
+    const comm = Number(d.affiliate_commission) || 0;
+    totalRevToday += rev;
+
+    let catKey = 'outros';
+    if (origin.startsWith('parceiro:')) {
+      catKey = 'parceiros';
+      const pName = origin.replace('parceiro:', '');
+      if (!partnersMap[pName]) partnersMap[pName] = { deals: 0, revenue: 0 };
+      partnersMap[pName].deals++;
+      partnersMap[pName].revenue += rev;
+    } else if (origin.startsWith('kiwify:') || origin === 'kiwify:organico') {
+      catKey = 'kiwify';
+    } else if (origin === 'comercial_interno') {
+      catKey = 'comercial';
+      const repId = d.assigned_to;
+      if (!repsMap[repId]) repsMap[repId] = { deals: 0, revenue: 0 };
+      repsMap[repId].deals++;
+      repsMap[repId].revenue += rev;
+    } else if (origin.startsWith('formulario:')) {
+      catKey = 'formulario';
+    } else if (origin.startsWith('canal:')) {
+      catKey = 'canais';
+    } else if (origin === 'recuperacao') {
+      catKey = 'outros';
+    }
+
+    cats[catKey].deals += 1;
+    cats[catKey].revenue += rev;
+    cats[catKey].commission += comm;
   });
-  const topLostReasons = Object.entries(lostReasons)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([k, v]) => `${k} (${v}x)`);
 
-  // Performance do mês
+  // Calcular percentuais
+  const origins = Object.entries(cats)
+    .filter(([, v]) => v.deals > 0)
+    .map(([key, v]) => ({
+      key, ...v,
+      pct: totalRevToday > 0 ? Math.round((v.revenue / totalRevToday) * 100) : 0,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  // Top parceiros
+  const topPartners = Object.entries(partnersMap)
+    .map(([name, v]) => ({ name, ...v, pct: totalRevToday > 0 ? Math.round((v.revenue / totalRevToday) * 100) : 0 }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5);
+
+  // Buscar nomes dos reps comerciais
+  const repIds = Object.keys(repsMap);
+  let topReps: any[] = [];
+  if (repIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', repIds);
+    topReps = repIds
+      .map(id => ({
+        name: profiles?.find((p: any) => p.id === id)?.full_name ?? 'Agente',
+        ...repsMap[id],
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+  }
+
+  // Alertas de concentração
+  const alerts: string[] = [];
+  const partnerPct = origins.find(o => o.key === 'parceiros')?.pct ?? 0;
+  if (partnerPct >= 50) alerts.push(`⚠️ Parceiros representam ${partnerPct}% da receita — risco de dependência`);
+  if (topPartners[0]?.pct >= 35) alerts.push(`⚠️ "${topPartners[0].name}" concentra ${topPartners[0].pct}% da receita do dia`);
+  if ((cats.comercial.deals) === 0 && (wonToday?.length ?? 0) > 0) alerts.push('📢 Time comercial sem fechamentos hoje');
+
+  // Período mês + MoM
   const { data: wonMonth } = await supabase
     .from('deals')
-    .select('value, gross_value')
+    .select('gross_value, assigned_to, affiliate_name, lead_source')
     .eq('status', 'won')
     .gte('closed_at', firstDayOfMonth);
 
-  const revenueMonth = wonMonth?.reduce((sum: number, d: any) => sum + (Number(d.gross_value || d.value) || 0), 0) ?? 0;
-  const dealsWonMonth = wonMonth?.length ?? 0;
+  const { data: wonPrev } = await supabase
+    .from('deals')
+    .select('gross_value')
+    .eq('status', 'won')
+    .gte('closed_at', prevMonthStart)
+    .lt('closed_at', firstDayOfMonth);
 
-  // Meta do mês
-  const { data: goals } = await supabase
-    .from('sales_goals')
-    .select('title, target_value, goal_type')
-    .eq('period_month', now.getMonth() + 1)
-    .eq('period_year', now.getFullYear())
-    .limit(5);
+  const revenueMonth = wonMonth?.reduce((s: number, d: any) => s + (Number(d.gross_value) || 0), 0) ?? 0;
+  const revenuePrev = wonPrev?.reduce((s: number, d: any) => s + (Number(d.gross_value) || 0), 0) ?? 0;
+  const momGrowth = revenuePrev > 0 ? Math.round(((revenueMonth - revenuePrev) / revenuePrev) * 100) : null;
 
-  const mainGoal = goals?.find((g: any) => g.goal_type === 'revenue') ?? goals?.[0];
-  const goalTarget = Number(mainGoal?.target_value) || 0;
+  // Pipeline
+  const { data: pipeline } = await supabase.from('deals').select('value').not('status', 'in', '("won","lost")');
+  const pipelineValue = pipeline?.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0) ?? 0;
+
+  // Meta
+  const { data: goals } = await supabase.from('sales_goals').select('target_value')
+    .eq('period_month', now.getMonth() + 1).eq('period_year', now.getFullYear()).limit(1);
+  const goalTarget = Number(goals?.[0]?.target_value) || 0;
   const goalProgress = goalTarget > 0 ? Math.round((revenueMonth / goalTarget) * 100) : null;
 
-  // Taxa de conversão do mês
-  const { count: totalMonth } = await supabase
-    .from('deals')
-    .select('id', { count: 'exact', head: true })
-    .gte('created_at', firstDayOfMonth);
-
-  const conversionRate = (totalMonth ?? 0) > 0
-    ? Math.round((dealsWonMonth / (totalMonth ?? 1)) * 100)
-    : 0;
+  // Lost reasons
+  const lostReasons: Record<string, number> = {};
+  lostToday?.forEach((d: any) => { const r = d.lost_reason || 'Não informado'; lostReasons[r] = (lostReasons[r] ?? 0) + 1; });
+  const topLostReasons = Object.entries(lostReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} (${v}x)`);
 
   return {
-    newDeals,
-    wonToday: wonToday.length,
-    lostToday: lostToday.length,
-    revenueToday,
+    wonToday: wonToday?.length ?? 0,
+    lostToday: lostToday?.length ?? 0,
+    newDeals: newDealsCount ?? 0,
+    revenueToday: totalRevToday,
+    origins,
+    topPartners,
+    topReps,
+    alerts,
     topLostReasons,
-    dealsWonMonth,
     revenueMonth,
+    revenuePrevMonth: revenuePrev,
+    momGrowth,
+    dealsWonMonth: wonMonth?.length ?? 0,
     goalTarget,
     goalProgress,
-    conversionRate,
-    pipelineCount,
     pipelineValue,
+    pipelineCount: pipeline?.length ?? 0,
+    conversionRate: (newDealsCount || 0) > 0 ? Math.round(((wonToday?.length ?? 0) / (newDealsCount || 1)) * 100) : 0,
   };
 }
 
@@ -163,7 +275,13 @@ Analise as métricas do dia ${dateStr} e gere um relatório executivo estruturad
 DADOS:
 📞 ATENDIMENTO: Conversas: ${metrics.totalConvs} | Fechadas pela IA: ${metrics.closedByAI} (${pct(metrics.closedByAI, metrics.totalConvs)}) | Escaladas: ${metrics.escalatedToHuman} (${pct(metrics.escalatedToHuman, metrics.totalConvs)}) | Tempo médio resolução: ${metrics.avgResolutionMin ? `${metrics.avgResolutionMin} min` : 'sem dados'} | Eventos IA: ${metrics.totalAIEvents} (top: ${metrics.topIntents.join(', ') || 'Sem dados'}) | Anomalias: ${metrics.criticalAnomalies.length} críticas, ${metrics.warningAnomalies.length} avisos
 💰 VENDAS DIA: Novos: ${salesMetrics.newDeals} | Ganhos: ${salesMetrics.wonToday} (${formatCurrency(salesMetrics.revenueToday)}) | Perdidos: ${salesMetrics.lostToday} | Motivos perda: ${salesMetrics.topLostReasons.join(', ') || 'Nenhum'}
-📈 MÊS: Won: ${salesMetrics.dealsWonMonth} | Receita: ${formatCurrency(salesMetrics.revenueMonth)} | Meta: ${salesMetrics.goalTarget > 0 ? `${formatCurrency(salesMetrics.goalTarget)} (${salesMetrics.goalProgress}%)` : 'Sem meta'} | Conversão: ${salesMetrics.conversionRate}% | Pipeline: ${salesMetrics.pipelineCount} deals (${formatCurrency(salesMetrics.pipelineValue)})
+📈 MÊS: Won: ${salesMetrics.dealsWonMonth} | Receita: ${formatCurrency(salesMetrics.revenueMonth)}${salesMetrics.momGrowth !== null ? ` (MoM: ${salesMetrics.momGrowth > 0 ? '+' : ''}${salesMetrics.momGrowth}%)` : ''} | Meta: ${salesMetrics.goalTarget > 0 ? `${formatCurrency(salesMetrics.goalTarget)} (${salesMetrics.goalProgress}%)` : 'Sem meta'} | Conversão: ${salesMetrics.conversionRate}% | Pipeline: ${salesMetrics.pipelineCount} deals (${formatCurrency(salesMetrics.pipelineValue)})
+
+CANAIS DE VENDA (hoje):
+${(salesMetrics.origins ?? []).map((o: any) => `- ${o.emoji} ${o.label}: ${o.pct}% (${o.deals} deals, ${formatCurrency(o.revenue)})`).join('\n') || '- Sem vendas hoje'}
+TOP PARCEIROS: ${(salesMetrics.topPartners ?? []).map((p: any) => `${p.name}: ${p.pct}% / ${formatCurrency(p.revenue)}`).join(' | ') || 'Nenhum'}
+TIME COMERCIAL: ${(salesMetrics.topReps ?? []).length > 0 ? (salesMetrics.topReps ?? []).map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
+ALERTAS: ${(salesMetrics.alerts ?? []).join(' | ') || 'Nenhum'}
 
 FORMATO OBRIGATÓRIO - use EXATAMENTE estas seções, uma por linha, sem bullet points nem listas:
 [DESTAQUES] Uma frase com os pontos positivos do dia.
@@ -301,6 +419,66 @@ async function sendEmailReport(
           <div style="color:#64748b;font-size:13px;margin-top:4px;">${salesMetrics.dealsWonMonth} deals fechados | ${salesMetrics.conversionRate}% conversão</div>
         </td></tr>`;
 
+  // Build origins HTML section
+  const originsHtml = (salesMetrics.origins ?? []).length > 0 ? `
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#8b5cf6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">📊 Canais de Venda</p>
+        </td></tr>
+        <tr><td style="padding:0 32px 12px;">
+          ${(salesMetrics.origins ?? []).map((o: any) => {
+            const barColor = o.pct >= 40 ? '#ef4444' : o.pct >= 20 ? '#f59e0b' : '#3b82f6';
+            return `<div style="margin-bottom:10px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="color:#334155;font-size:13px;font-weight:600;">${o.emoji} ${o.label}</td>
+                  <td style="color:#64748b;font-size:12px;text-align:right;">${o.pct}% · ${o.deals} deal${o.deals !== 1 ? 's' : ''} · ${fmtBRL(o.revenue)}</td>
+                </tr>
+              </table>
+              <div style="background:#e2e8f0;border-radius:99px;height:6px;overflow:hidden;margin-top:4px;">
+                <div style="background:${barColor};height:6px;border-radius:99px;width:${Math.min(o.pct, 100)}%;"></div>
+              </div>
+            </div>`;
+          }).join('')}
+          ${(salesMetrics.alerts ?? []).length > 0 ? `
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-top:8px;">
+            ${(salesMetrics.alerts ?? []).map((a: string) => `<p style="color:#92400e;font-size:12px;margin:2px 0;">${a}</p>`).join('')}
+          </div>` : ''}
+        </td></tr>` : '';
+
+  // Build team performance HTML section
+  const teamHtml = (salesMetrics.topReps ?? []).length > 0 ? `
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#3b82f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">👥 Performance do Time</p>
+        </td></tr>
+        <tr><td style="padding:0 32px 20px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:8px 12px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;">#</td>
+              <td style="padding:8px 12px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;">Vendedor</td>
+              <td style="padding:8px 12px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;text-align:center;">Deals</td>
+              <td style="padding:8px 12px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;">Receita</td>
+            </tr>
+            ${(salesMetrics.topReps ?? []).map((r: any, i: number) => {
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+              const bg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+              return `<tr style="background:${bg};">
+                <td style="padding:10px 12px;font-size:14px;">${medal}</td>
+                <td style="padding:10px 12px;color:#1e293b;font-size:13px;font-weight:600;">${r.name}</td>
+                <td style="padding:10px 12px;color:#1e293b;font-size:13px;text-align:center;font-weight:700;">${r.deals}</td>
+                <td style="padding:10px 12px;color:#16a34a;font-size:13px;text-align:right;font-weight:700;">${fmtBRL(r.revenue)}</td>
+              </tr>`;
+            }).join('')}
+          </table>
+        </td></tr>` : '';
+
+  // MoM section
+  const momHtml = salesMetrics.momGrowth !== null ? `
+        <p style="color:#64748b;font-size:12px;margin:4px 0 0;">
+          ${salesMetrics.momGrowth >= 0 ? '📈' : '📉'} MoM: <strong style="color:${salesMetrics.momGrowth >= 0 ? '#16a34a' : '#dc2626'};">${salesMetrics.momGrowth > 0 ? '+' : ''}${salesMetrics.momGrowth}%</strong> vs mês anterior
+        </p>` : '';
+
   const htmlContent = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -383,6 +561,10 @@ async function sendEmailReport(
           </table>
         </td></tr>
 
+        ${originsHtml}
+
+        ${teamHtml}
+
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
 
         <!-- Performance do Mês -->
@@ -408,9 +590,10 @@ async function sendEmailReport(
             </tr>
           </table>
         </td></tr>
-        <!-- Pipeline value -->
+        <!-- Pipeline value + MoM -->
         <tr><td style="padding:0 32px 20px;">
           <p style="color:#64748b;font-size:12px;margin:0;">📦 Pipeline: ${salesMetrics.pipelineCount} deals abertos — <strong style="color:#1e293b;">${fmtBRL(salesMetrics.pipelineValue)}</strong></p>
+          ${momHtml}
         </td></tr>
 
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
@@ -543,7 +726,13 @@ serve(async (req) => {
     const dateStr = formatDate(since);
     const aiAnalysis = await generateAIAnalysis(metrics, salesMetrics, dateStr, openaiKey);
 
-    const fullMessage = `*IA Governante — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    // WhatsApp message with channels summary
+    const channelsSummary = (salesMetrics.origins ?? []).map((o: any) => `${o.emoji} ${o.label}: ${o.pct}% (${o.deals})`).join('\n');
+    const teamSummary = (salesMetrics.topReps ?? []).length > 0
+      ? (salesMetrics.topReps ?? []).map((r: any, i: number) => `${i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'} ${r.name}: ${r.deals} deals`).join('\n')
+      : '';
+
+    const fullMessage = `*IA Governante — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}${teamSummary ? `\n\n👥 *Time Comercial:*\n${teamSummary}` : ''}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
