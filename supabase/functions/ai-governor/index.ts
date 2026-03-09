@@ -861,7 +861,7 @@ async function sendEmailReport(
 
         <!-- Análise da IA -->
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#7c3aed;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0;">🧠 Análise da IA</p>
+          <p style="color:#7c3aed;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0;">Analise da IA</p>
         </td></tr>
         <tr><td style="padding:8px 32px 28px;">
           ${analysisHtml}
