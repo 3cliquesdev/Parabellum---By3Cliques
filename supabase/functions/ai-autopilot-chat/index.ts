@@ -3514,8 +3514,8 @@ serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Buscar modelo AI configurado dinamicamente
-    const configuredAIModel = await getConfiguredAIModel(supabaseClient);
+    // Usar modelo do RAGConfig já carregado (evita query duplicada)
+    const configuredAIModel = ragConfig.model;
     console.log(`[ai-autopilot-chat] Using AI model: ${configuredAIModel}`);
     
     if (!OPENAI_API_KEY && !LOVABLE_API_KEY) {
