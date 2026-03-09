@@ -269,31 +269,62 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
 }
 
 async function generateAIAnalysis(metrics: any, salesMetrics: any, dateStr: string, openaiKey: string): Promise<string> {
-  const prompt = `Você é a IA Governante do Parabellum, sistema de CRM e Customer Success.
-Analise as métricas do dia ${dateStr} e gere um relatório executivo estruturado.
+  const aiRate = metrics.totalConvs > 0 ? ((metrics.closedByAI / metrics.totalConvs) * 100).toFixed(1) : '0';
+  const escRate = metrics.totalConvs > 0 ? ((metrics.escalatedToHuman / metrics.totalConvs) * 100).toFixed(1) : '0';
 
-DADOS:
-📞 ATENDIMENTO: Conversas: ${metrics.totalConvs} | Fechadas pela IA: ${metrics.closedByAI} (${pct(metrics.closedByAI, metrics.totalConvs)}) | Escaladas: ${metrics.escalatedToHuman} (${pct(metrics.escalatedToHuman, metrics.totalConvs)}) | Tempo médio resolução: ${metrics.avgResolutionMin ? `${metrics.avgResolutionMin} min` : 'sem dados'} | Eventos IA: ${metrics.totalAIEvents} (top: ${metrics.topIntents.join(', ') || 'Sem dados'}) | Anomalias: ${metrics.criticalAnomalies.length} críticas, ${metrics.warningAnomalies.length} avisos
-💰 VENDAS DIA: Novos: ${salesMetrics.newDeals} | Ganhos: ${salesMetrics.wonToday} (${formatCurrency(salesMetrics.revenueToday)}) | Perdidos: ${salesMetrics.lostToday} | Motivos perda: ${salesMetrics.topLostReasons.join(', ') || 'Nenhum'}
-📈 MÊS: Won: ${salesMetrics.dealsWonMonth} | Receita: ${formatCurrency(salesMetrics.revenueMonth)}${salesMetrics.momGrowth !== null ? ` (MoM: ${salesMetrics.momGrowth > 0 ? '+' : ''}${salesMetrics.momGrowth}%)` : ''} | Meta: ${salesMetrics.goalTarget > 0 ? `${formatCurrency(salesMetrics.goalTarget)} (${salesMetrics.goalProgress}%)` : 'Sem meta'} | Conversão: ${salesMetrics.conversionRate}% | Pipeline: ${salesMetrics.pipelineCount} deals (${formatCurrency(salesMetrics.pipelineValue)})
+  const prompt = `Você é o analista executivo da Parabellum. Sua função é gerar um relatório de diagnóstico DIRETO e ACIONÁVEL. Não seja gentil — seja preciso e honesto.
 
-CANAIS DE VENDA (hoje):
-${(salesMetrics.origins ?? []).map((o: any) => `- ${o.emoji} ${o.label}: ${o.pct}% (${o.deals} deals, ${formatCurrency(o.revenue)})`).join('\n') || '- Sem vendas hoje'}
-TOP PARCEIROS: ${(salesMetrics.topPartners ?? []).map((p: any) => `${p.name}: ${p.pct}% / ${formatCurrency(p.revenue)}`).join(' | ') || 'Nenhum'}
-TIME COMERCIAL: ${(salesMetrics.topReps ?? []).length > 0 ? (salesMetrics.topReps ?? []).map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
-ALERTAS: ${(salesMetrics.alerts ?? []).join(' | ') || 'Nenhum'}
+===== DADOS DO DIA ${dateStr} =====
 
-FORMATO OBRIGATÓRIO — siga exatamente:
-[DESTAQUES] Texto corrido descrevendo os pontos positivos do dia.
-[ATENCAO] Texto corrido sobre pontos de atenção e riscos identificados.
-[SUGESTOES] Ação 1 sugerida. Ação 2 sugerida. Ação 3 sugerida.
-[MOTIVACIONAL] Frase curta de encerramento motivacional.
+INBOX & IA (PRIORIDADE MÁXIMA):
+- Total de conversas: ${metrics.totalConvs}
+- Resolvidas pela IA (autopilot): ${metrics.closedByAI} (${aiRate}%)
+- Escaladas para humano: ${metrics.escalatedToHuman} (${escRate}%)
+- Tempo médio de resolução: ${metrics.avgResolutionMin ?? 'N/A'} minutos
+- Total eventos IA disparados: ${metrics.totalAIEvents}
+- Mensagens totais: ${metrics.totalMessages} (${metrics.aiMessages} enviadas pela IA)
+- Anomalias críticas: ${metrics.criticalAnomalies?.length ?? 0}
 
-REGRAS:
-- NUNCA use **, -, *, bullet points ou markdown
-- Cada tag aparece UMA vez, em linha própria
-- Máximo 2 frases por tag (exceto SUGESTOES: até 3 ações)
-- Linguagem executiva, direta, sem floreios`;
+PARÂMETROS DE SAÚDE (use para avaliar):
+✅ IA resolução SAUDÁVEL: acima de 60%
+⚠️ IA resolução ATENÇÃO: 30–60%
+🚨 IA resolução CRÍTICO: abaixo de 30%
+✅ Escalação SAUDÁVEL: abaixo de 20%
+⚠️ Escalação ATENÇÃO: 20–35%
+🚨 Escalação CRÍTICO: acima de 35%
+✅ Tempo médio SAUDÁVEL: abaixo de 15 min
+⚠️ Tempo médio ATENÇÃO: 15–30 min
+🚨 Tempo médio CRÍTICO: acima de 30 min
+
+VENDAS:
+- Fechamentos hoje: ${salesMetrics.wonToday} | Receita: R$ ${salesMetrics.revenueToday.toLocaleString('pt-BR')}
+- Perdidos hoje: ${salesMetrics.lostToday}${salesMetrics.topLostReasons.length ? ' | Motivos: ' + salesMetrics.topLostReasons.join(', ') : ''}
+- Novos deals: ${salesMetrics.newDeals}
+- Canais: ${salesMetrics.origins.map((o: any) => `${o.label} ${o.pct}%`).join(' | ')}
+- Time comercial: ${salesMetrics.topReps.length > 0 ? salesMetrics.topReps.map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
+- MÊS: R$ ${salesMetrics.revenueMonth.toLocaleString('pt-BR')} / ${salesMetrics.goalProgress !== null ? salesMetrics.goalProgress + '% da meta' : 'sem meta'}
+- MoM: ${salesMetrics.momGrowth !== null ? (salesMetrics.momGrowth >= 0 ? '+' : '') + salesMetrics.momGrowth + '%' : 'N/A'}
+- Alertas: ${salesMetrics.alerts.join(' | ') || 'Nenhum'}
+
+===== INSTRUÇÕES =====
+
+PRIORIZE: Inbox e IA são mais importantes que vendas.
+Se IA resolveu abaixo de 30% → isso DEVE ser o [ATENCAO] principal.
+Se escalações acima de 35% → mencione a causa provável e a solução.
+Se o tempo médio está alto → aponte o impacto no cliente.
+
+FORMATO OBRIGATÓRIO — copie EXATAMENTE:
+[DESTAQUES] Uma frase sobre o ponto positivo mais relevante do dia (inbox OU vendas).
+[ATENCAO] Diagnóstico dos 2-3 problemas mais críticos com números exatos. Ex: "IA resolveu apenas X% (meta: 60%) — causa provável: KB incompleta. Escalação em Y% acima do limite."
+[SUGESTOES] 1) Ação específica para o inbox. 2) Ação específica para vendas. 3) Ação específica para o time.
+[MOTIVACIONAL] Uma frase curta de encerramento.
+
+REGRAS ABSOLUTAS:
+- NUNCA use **, -, *, markdown ou bullets
+- Cada tag aparece UMA vez em linha própria
+- SEMPRE mencione a taxa de resolução da IA no [ATENCAO] se < 60%
+- Máximo 3 frases por tag
+- Cite números reais, não genéricos`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
