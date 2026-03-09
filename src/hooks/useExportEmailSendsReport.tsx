@@ -55,7 +55,7 @@ export function useExportEmailSendsReport() {
       while (true) {
         let query = supabase
           .from("email_sends")
-          .select("id, template_id, recipient_email, subject, sent_at, status, clicked_at, opened_at, bounced_at, contact_id, contacts(first_name, last_name)")
+          .select("id, template_id, recipient_email, subject, sent_at, status, clicked_at, opened_at, bounced_at, replied_at, contact_id, contacts(first_name, last_name)")
           .order("sent_at", { ascending: false })
           .range(offset, offset + PAGE_SIZE - 1);
 
