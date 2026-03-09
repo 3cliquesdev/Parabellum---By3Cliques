@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useOrganizationContacts, useSearchContactsForOrg } from "@/hooks/useOrganizationContacts";
 import { Mail, Phone, UserMinus, UserPlus, Search, Users, Building2 } from "lucide-react";
+import OrganizationPhonesSection from "@/components/OrganizationPhonesSection";
 
 interface Props {
   orgId: string;
