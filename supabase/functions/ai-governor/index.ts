@@ -157,36 +157,21 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
 }
 
 async function generateAIAnalysis(metrics: any, salesMetrics: any, dateStr: string, openaiKey: string): Promise<string> {
-  const prompt = `Você é a IA Governante do Parabellum, sistema de Customer Success e CRM.
-Analise as métricas do dia ${dateStr} e gere relatório executivo CURTO para WhatsApp (máx 40 linhas).
+  const prompt = `Você é a IA Governante do Parabellum, sistema de CRM e Customer Success.
+Analise as métricas do dia ${dateStr} e gere um relatório executivo estruturado.
 
-📞 ATENDIMENTO:
-- Conversas: ${metrics.totalConvs} | Fechadas pela IA: ${metrics.closedByAI} (${pct(metrics.closedByAI, metrics.totalConvs)})
-- Escaladas para humano: ${metrics.escalatedToHuman} (${pct(metrics.escalatedToHuman, metrics.totalConvs)})
-- Tempo médio resolução: ${metrics.avgResolutionMin ? `${metrics.avgResolutionMin} min` : 'sem dados'}
-- Eventos de IA: ${metrics.totalAIEvents} | Diretos: ${metrics.directEvents} | Handoffs: ${metrics.fallbackEvents}
-- Mensagens: ${metrics.totalMessages} (${metrics.aiMessages} da IA)
-- Top eventos: ${metrics.topIntents.join(', ') || 'Sem dados'}
-- Anomalias críticas: ${metrics.criticalAnomalies.length} | Avisos: ${metrics.warningAnomalies.length}
+DADOS:
+📞 ATENDIMENTO: Conversas: ${metrics.totalConvs} | Fechadas pela IA: ${metrics.closedByAI} (${pct(metrics.closedByAI, metrics.totalConvs)}) | Escaladas: ${metrics.escalatedToHuman} (${pct(metrics.escalatedToHuman, metrics.totalConvs)}) | Tempo médio resolução: ${metrics.avgResolutionMin ? `${metrics.avgResolutionMin} min` : 'sem dados'} | Eventos IA: ${metrics.totalAIEvents} (top: ${metrics.topIntents.join(', ') || 'Sem dados'}) | Anomalias: ${metrics.criticalAnomalies.length} críticas, ${metrics.warningAnomalies.length} avisos
+💰 VENDAS DIA: Novos: ${salesMetrics.newDeals} | Ganhos: ${salesMetrics.wonToday} (${formatCurrency(salesMetrics.revenueToday)}) | Perdidos: ${salesMetrics.lostToday} | Motivos perda: ${salesMetrics.topLostReasons.join(', ') || 'Nenhum'}
+📈 MÊS: Won: ${salesMetrics.dealsWonMonth} | Receita: ${formatCurrency(salesMetrics.revenueMonth)} | Meta: ${salesMetrics.goalTarget > 0 ? `${formatCurrency(salesMetrics.goalTarget)} (${salesMetrics.goalProgress}%)` : 'Sem meta'} | Conversão: ${salesMetrics.conversionRate}% | Pipeline: ${salesMetrics.pipelineCount} deals (${formatCurrency(salesMetrics.pipelineValue)})
 
-💰 VENDAS DO DIA:
-- Novos deals: ${salesMetrics.newDeals}
-- Ganhos: ${salesMetrics.wonToday} (${formatCurrency(salesMetrics.revenueToday)})
-- Perdidos: ${salesMetrics.lostToday}
-- Motivos de perda: ${salesMetrics.topLostReasons.join(', ') || 'Nenhum'}
+FORMATO OBRIGATÓRIO - use EXATAMENTE estas seções, uma por linha, sem bullet points nem listas:
+[DESTAQUES] Uma frase com os pontos positivos do dia.
+[ATENCAO] Uma frase com pontos de atenção ou riscos.
+[SUGESTOES] Uma frase com sugestões práticas de melhoria.
+[MOTIVACIONAL] Uma frase motivacional curta.
 
-📈 VENDAS DO MÊS:
-- Deals ganhos no mês: ${salesMetrics.dealsWonMonth}
-- Receita acumulada: ${formatCurrency(salesMetrics.revenueMonth)}
-- Meta: ${salesMetrics.goalTarget > 0 ? `${formatCurrency(salesMetrics.goalTarget)} (${salesMetrics.goalProgress}% atingido)` : 'Sem meta definida'}
-- Taxa de conversão: ${salesMetrics.conversionRate}%
-
-📊 PIPELINE:
-- Deals abertos: ${salesMetrics.pipelineCount}
-- Valor total: ${formatCurrency(salesMetrics.pipelineValue)}
-
-FORMATO: Use emojis. Seções: 📊 Resumo | 📞 Atendimento | 💰 Vendas | ✅ Destaques | ⚠️ Atenção | 💡 Sugestões
-Termine com frase motivacional curta. Seja direto e prático.`;
+Cada seção deve ter NO MÁXIMO 2 frases. Seja direto, prático e use dados reais.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -244,27 +229,57 @@ async function sendEmailReport(
   const escRate = metrics.totalConvs > 0 ? Math.round((metrics.escalatedToHuman / metrics.totalConvs) * 100) : 0;
   const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // Formatar análise da IA em HTML limpo
-  const analysisHtml = aiAnalysis
-    .split('\n')
-    .map(line => {
-      if (line.startsWith('📊') || line.startsWith('✅') || line.startsWith('⚠️') || line.startsWith('💡') || line.startsWith('📞') || line.startsWith('💰') || line.startsWith('📈')) {
-        return `<p style="font-weight:700;font-size:15px;color:#1e293b;margin:16px 0 6px 0;">${line}</p>`;
+  // Formatar análise da IA em blocos estruturados
+  function formatAnalysisHtml(text: string): string {
+    const sectionMap: Record<string, { icon: string; title: string; color: string; bg: string; border: string }> = {
+      '[DESTAQUES]': { icon: '✅', title: 'Destaques', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+      '[ATENCAO]':   { icon: '⚠️', title: 'Atenção', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+      '[SUGESTOES]': { icon: '💡', title: 'Sugestões', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
+      '[MOTIVACIONAL]': { icon: '🚀', title: '', color: '#7c3aed', bg: '#faf5ff', border: '#e9d5ff' },
+    };
+
+    let html = '';
+    const lines = text.split('\n').filter(l => l.trim());
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      let matched = false;
+
+      for (const [tag, cfg] of Object.entries(sectionMap)) {
+        if (trimmed.toUpperCase().includes(tag)) {
+          const content = trimmed.replace(new RegExp(`\\${tag.replace('[', '\\[')}`, 'gi'), '').trim();
+          if (tag === '[MOTIVACIONAL]') {
+            html += `<div style="background:${cfg.bg};border:1px solid ${cfg.border};border-radius:10px;padding:16px 20px;margin:8px 0;text-align:center;">
+              <p style="color:${cfg.color};font-size:15px;font-weight:600;margin:0;font-style:italic;">${cfg.icon} ${content}</p>
+            </div>`;
+          } else {
+            html += `<div style="background:${cfg.bg};border-left:4px solid ${cfg.color};border-radius:0 10px 10px 0;padding:14px 18px;margin:8px 0;">
+              <p style="color:${cfg.color};font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 6px;">${cfg.icon} ${cfg.title}</p>
+              <p style="color:#334155;font-size:14px;margin:0;line-height:1.6;">${content}</p>
+            </div>`;
+          }
+          matched = true;
+          break;
+        }
       }
-      if (line.startsWith('•') || line.startsWith('-')) {
-        return `<p style="color:#475569;font-size:14px;margin:2px 0 2px 12px;padding-left:8px;border-left:2px solid #e2e8f0;">${line.replace(/^[•\-]\s*/, '')}</p>`;
+
+      // Fallback for unstructured lines
+      if (!matched && trimmed.length > 2) {
+        html += `<p style="color:#475569;font-size:14px;margin:6px 0;line-height:1.6;">${trimmed}</p>`;
       }
-      return line ? `<p style="color:#475569;font-size:14px;margin:4px 0;line-height:1.6;">${line}</p>` : '';
-    })
-    .join('');
+    }
+
+    return html;
+  }
+
+  const analysisHtml = formatAnalysisHtml(aiAnalysis);
 
   // Progress bar for goal
   const goalProgressPct = Math.min(salesMetrics.goalProgress ?? 0, 100);
   const goalColor = goalProgressPct >= 80 ? '#22c55e' : goalProgressPct >= 50 ? '#f59e0b' : '#ef4444';
 
   const goalSection = salesMetrics.goalProgress !== null ? `
-        <!-- Goal Progress Bar -->
-        <tr><td style="padding:0 40px 8px;">
+        <tr><td style="padding:0 32px 8px;">
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:4px;">
             <tr>
               <td style="color:#64748b;font-size:13px;">Receita acumulada</td>
@@ -281,8 +296,7 @@ async function sendEmailReport(
             </tr>
           </table>
         </td></tr>` : `
-        <!-- Revenue without goal -->
-        <tr><td style="padding:0 40px 8px;text-align:center;">
+        <tr><td style="padding:0 32px 8px;text-align:center;">
           <div style="color:#22c55e;font-size:28px;font-weight:700;">${fmtBRL(salesMetrics.revenueMonth)}</div>
           <div style="color:#64748b;font-size:13px;margin-top:4px;">${salesMetrics.dealsWonMonth} deals fechados | ${salesMetrics.conversionRate}% conversão</div>
         </td></tr>`;
@@ -291,122 +305,127 @@ async function sendEmailReport(
 <html lang="pt-BR">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 0;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.06);">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.06);">
 
-        <!-- Hero Header -->
-        <tr><td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#334155 100%);padding:40px 40px 36px;text-align:center;">
-          <div style="width:56px;height:56px;background:rgba(99,102,241,0.15);border-radius:16px;display:inline-block;line-height:56px;font-size:28px;margin-bottom:12px;">🤖</div>
-          <h1 style="color:#ffffff;margin:0;font-size:26px;font-weight:800;letter-spacing:-0.5px;">IA Governante</h1>
-          <p style="color:#94a3b8;margin:8px 0 0;font-size:14px;font-weight:400;">Relatório Executivo — ${dateStr}</p>
+        <!-- Header -->
+        <tr><td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:32px 32px 28px;text-align:center;">
+          <div style="font-size:32px;margin-bottom:8px;">🤖</div>
+          <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;">IA Governante</h1>
+          <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">Relatório Executivo — ${dateStr}</p>
         </td></tr>
 
         <!-- Greeting -->
-        <tr><td style="padding:28px 40px 20px;">
-          <p style="color:#1e293b;font-size:16px;margin:0;font-weight:500;">Olá, ${adminName}! 👋</p>
+        <tr><td style="padding:24px 32px 16px;">
+          <p style="color:#1e293b;font-size:15px;margin:0;">Olá, ${adminName}! 👋</p>
         </td></tr>
 
-        <!-- Section: Atendimento -->
-        <tr><td style="padding:0 40px 8px;">
-          <p style="color:#6366f1;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">📞 Atendimento do Dia</p>
+        <!-- Atendimento do Dia -->
+        <tr><td style="padding:0 32px 6px;">
+          <p style="color:#6366f1;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">📞 Atendimento do Dia</p>
         </td></tr>
-        <tr><td style="padding:0 40px 24px;">
-          <table width="100%" cellpadding="0" cellspacing="8">
+        <tr><td style="padding:0 32px 12px;">
+          <table width="100%" cellpadding="0" cellspacing="6">
             <tr>
-              <td style="background:#f8fafc;border-radius:12px;padding:16px;text-align:center;width:25%;border:1px solid #e2e8f0;">
-                <div style="color:#6366f1;font-size:32px;font-weight:800;line-height:1;">${metrics.totalConvs}</div>
-                <div style="color:#94a3b8;font-size:11px;margin-top:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Conversas</div>
+              <td style="background:#f8fafc;border-radius:10px;padding:14px 8px;text-align:center;border:1px solid #e2e8f0;">
+                <div style="color:#6366f1;font-size:28px;font-weight:800;line-height:1;">${metrics.totalConvs}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Conversas</div>
               </td>
-              <td style="background:#f8fafc;border-radius:12px;padding:16px;text-align:center;width:25%;border:1px solid #e2e8f0;">
-                <div style="color:#22c55e;font-size:32px;font-weight:800;line-height:1;">${aiRate}%</div>
-                <div style="color:#94a3b8;font-size:11px;margin-top:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Resolvido IA</div>
+              <td style="background:#f8fafc;border-radius:10px;padding:14px 8px;text-align:center;border:1px solid #e2e8f0;">
+                <div style="color:#22c55e;font-size:28px;font-weight:800;line-height:1;">${metrics.closedByAI}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Resolvidas IA (${aiRate}%)</div>
               </td>
-              <td style="background:#f8fafc;border-radius:12px;padding:16px;text-align:center;width:25%;border:1px solid #e2e8f0;">
-                <div style="color:#f97316;font-size:32px;font-weight:800;line-height:1;">${escRate}%</div>
-                <div style="color:#94a3b8;font-size:11px;margin-top:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Escalado</div>
+              <td style="background:#f8fafc;border-radius:10px;padding:14px 8px;text-align:center;border:1px solid #e2e8f0;">
+                <div style="color:#f97316;font-size:28px;font-weight:800;line-height:1;">${metrics.escalatedToHuman}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Escaladas (${escRate}%)</div>
               </td>
-              <td style="background:#f8fafc;border-radius:12px;padding:16px;text-align:center;width:25%;border:1px solid #e2e8f0;">
-                <div style="color:#8b5cf6;font-size:32px;font-weight:800;line-height:1;">${metrics.avgResolutionMin ?? '—'}</div>
-                <div style="color:#94a3b8;font-size:11px;margin-top:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Min Resolução</div>
+              <td style="background:#f8fafc;border-radius:10px;padding:14px 8px;text-align:center;border:1px solid #e2e8f0;">
+                <div style="color:#8b5cf6;font-size:28px;font-weight:800;line-height:1;">${metrics.totalAIEvents}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Eventos IA</div>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+        <!-- Sub-metrics -->
+        <tr><td style="padding:0 32px 20px;">
+          <p style="color:#64748b;font-size:12px;margin:0;line-height:1.8;">
+            ⏱ Tempo médio de resolução: <strong style="color:#1e293b;">${metrics.avgResolutionMin ? `${metrics.avgResolutionMin} min` : '—'}</strong><br/>
+            💬 Mensagens: <strong style="color:#1e293b;">${metrics.totalMessages}</strong> (${metrics.aiMessages} da IA)
+            ${metrics.topIntents.length > 0 ? `<br/>🔝 Top eventos: <strong style="color:#1e293b;">${metrics.topIntents.slice(0, 3).join(', ')}</strong>` : ''}
+            ${(metrics.criticalAnomalies?.length ?? 0) > 0 ? `<br/>🔴 Anomalias: <strong style="color:#dc2626;">${metrics.criticalAnomalies.length} críticas</strong>` : ''}
+          </p>
+        </td></tr>
+
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+
+        <!-- Vendas do Dia -->
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#22c55e;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">💰 Vendas do Dia</p>
+        </td></tr>
+        <tr><td style="padding:0 32px 20px;">
+          <table width="100%" cellpadding="0" cellspacing="6">
+            <tr>
+              <td style="background:#f0fdf4;border-radius:10px;padding:14px 8px;text-align:center;border:1px solid #bbf7d0;">
+                <div style="color:#16a34a;font-size:28px;font-weight:800;line-height:1;">${salesMetrics.wonToday}</div>
+                <div style="color:#16a34a;font-size:13px;font-weight:700;margin-top:4px;">${fmtBRL(salesMetrics.revenueToday)}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Ganhos</div>
+              </td>
+              <td style="background:#fef2f2;border-radius:10px;padding:14px 8px;text-align:center;border:1px solid #fecaca;">
+                <div style="color:#dc2626;font-size:28px;font-weight:800;line-height:1;">${salesMetrics.lostToday}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:6px;font-weight:600;text-transform:uppercase;">Perdidos</div>
+              </td>
+              <td style="background:#eff6ff;border-radius:10px;padding:14px 8px;text-align:center;border:1px solid #bfdbfe;">
+                <div style="color:#2563eb;font-size:28px;font-weight:800;line-height:1;">${salesMetrics.newDeals}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:6px;font-weight:600;text-transform:uppercase;">Novos Deals</div>
               </td>
             </tr>
           </table>
         </td></tr>
 
-        <!-- Divider -->
-        <tr><td style="padding:0 40px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
 
-        <!-- Section: Vendas do Dia -->
-        <tr><td style="padding:20px 40px 8px;">
-          <p style="color:#22c55e;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">💰 Vendas do Dia</p>
-        </td></tr>
-        <tr><td style="padding:0 40px 24px;">
-          <table width="100%" cellpadding="0" cellspacing="8">
-            <tr>
-              <td style="background:#f0fdf4;border-radius:12px;padding:16px;text-align:center;width:33%;border:1px solid #bbf7d0;">
-                <div style="color:#16a34a;font-size:32px;font-weight:800;line-height:1;">${salesMetrics.wonToday}</div>
-                <div style="color:#16a34a;font-size:14px;font-weight:700;margin-top:4px;">${fmtBRL(salesMetrics.revenueToday)}</div>
-                <div style="color:#94a3b8;font-size:11px;margin-top:4px;font-weight:500;text-transform:uppercase;">Fechamentos</div>
-              </td>
-              <td style="background:#fef2f2;border-radius:12px;padding:16px;text-align:center;width:33%;border:1px solid #fecaca;">
-                <div style="color:#dc2626;font-size:32px;font-weight:800;line-height:1;">${salesMetrics.lostToday}</div>
-                <div style="color:#94a3b8;font-size:11px;margin-top:8px;font-weight:500;text-transform:uppercase;">Perdidos</div>
-                ${salesMetrics.topLostReasons.length > 0 ? `<div style="color:#dc2626;font-size:11px;margin-top:4px;font-style:italic;">${salesMetrics.topLostReasons[0]}</div>` : ''}
-              </td>
-              <td style="background:#eff6ff;border-radius:12px;padding:16px;text-align:center;width:33%;border:1px solid #bfdbfe;">
-                <div style="color:#2563eb;font-size:32px;font-weight:800;line-height:1;">${salesMetrics.newDeals}</div>
-                <div style="color:#94a3b8;font-size:11px;margin-top:8px;font-weight:500;text-transform:uppercase;">Novos Deals</div>
-              </td>
-            </tr>
-          </table>
-        </td></tr>
-
-        <!-- Divider -->
-        <tr><td style="padding:0 40px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
-
-        <!-- Section: Performance do Mês -->
-        <tr><td style="padding:20px 40px 8px;">
-          <p style="color:#f59e0b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">📈 Performance do Mês</p>
+        <!-- Performance do Mês -->
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#f59e0b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">📈 Performance do Mês</p>
         </td></tr>
         ${goalSection}
-
-        <!-- Monthly mini-cards -->
-        <tr><td style="padding:12px 40px 24px;">
-          <table width="100%" cellpadding="0" cellspacing="8">
+        <tr><td style="padding:8px 32px 20px;">
+          <table width="100%" cellpadding="0" cellspacing="6">
             <tr>
-              <td style="background:#f8fafc;border-radius:12px;padding:14px;text-align:center;width:33%;border:1px solid #e2e8f0;">
-                <div style="color:#1e293b;font-size:24px;font-weight:800;">${salesMetrics.dealsWonMonth}</div>
-                <div style="color:#94a3b8;font-size:11px;margin-top:4px;font-weight:500;text-transform:uppercase;">Deals won/mês</div>
+              <td style="background:#f8fafc;border-radius:10px;padding:12px 8px;text-align:center;border:1px solid #e2e8f0;">
+                <div style="color:#1e293b;font-size:22px;font-weight:800;">${salesMetrics.dealsWonMonth}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Deals won/mês</div>
               </td>
-              <td style="background:#f8fafc;border-radius:12px;padding:14px;text-align:center;width:33%;border:1px solid #e2e8f0;">
-                <div style="color:#1e293b;font-size:24px;font-weight:800;">${salesMetrics.conversionRate}%</div>
-                <div style="color:#94a3b8;font-size:11px;margin-top:4px;font-weight:500;text-transform:uppercase;">Conversão</div>
+              <td style="background:#f8fafc;border-radius:10px;padding:12px 8px;text-align:center;border:1px solid #e2e8f0;">
+                <div style="color:#1e293b;font-size:22px;font-weight:800;">${salesMetrics.conversionRate}%</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Conversão</div>
               </td>
-              <td style="background:#f8fafc;border-radius:12px;padding:14px;text-align:center;width:33%;border:1px solid #e2e8f0;">
-                <div style="color:#1e293b;font-size:24px;font-weight:800;">${salesMetrics.pipelineCount}</div>
-                <div style="color:#94a3b8;font-size:11px;margin-top:4px;font-weight:500;text-transform:uppercase;">Em pipeline</div>
+              <td style="background:#f8fafc;border-radius:10px;padding:12px 8px;text-align:center;border:1px solid #e2e8f0;">
+                <div style="color:#1e293b;font-size:22px;font-weight:800;">${salesMetrics.pipelineCount}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Em pipeline</div>
               </td>
             </tr>
           </table>
         </td></tr>
-
-        <!-- Divider -->
-        <tr><td style="padding:0 40px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
-
-        <!-- AI Analysis -->
-        <tr><td style="padding:20px 40px 8px;">
-          <p style="color:#8b5cf6;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0;">🧠 Análise da IA</p>
+        <!-- Pipeline value -->
+        <tr><td style="padding:0 32px 20px;">
+          <p style="color:#64748b;font-size:12px;margin:0;">📦 Pipeline: ${salesMetrics.pipelineCount} deals abertos — <strong style="color:#1e293b;">${fmtBRL(salesMetrics.pipelineValue)}</strong></p>
         </td></tr>
-        <tr><td style="padding:8px 40px 32px;">
-          <div style="background:#faf5ff;border-radius:12px;border:1px solid #e9d5ff;padding:24px;">
-            ${analysisHtml}
-          </div>
+
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+
+        <!-- Análise da IA -->
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#7c3aed;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0;">🧠 Análise da IA</p>
+        </td></tr>
+        <tr><td style="padding:8px 32px 28px;">
+          ${analysisHtml}
         </td></tr>
 
         <!-- Footer -->
-        <tr><td style="background:#f8fafc;padding:24px 40px;text-align:center;border-top:1px solid #e2e8f0;">
-          <p style="color:#94a3b8;font-size:12px;margin:0;">Parabellum by 3Cliques • Gerado automaticamente</p>
+        <tr><td style="background:#f8fafc;padding:20px 32px;text-align:center;border-top:1px solid #e2e8f0;">
+          <p style="color:#94a3b8;font-size:11px;margin:0;">Parabellum by 3Cliques • Gerado automaticamente</p>
         </td></tr>
 
       </table>
