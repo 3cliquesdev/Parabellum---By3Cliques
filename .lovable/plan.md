@@ -1,31 +1,29 @@
 
-# Plano: Mensagens Configuráveis de Fora do Horário ✅
 
-## Status: IMPLEMENTADO (com ajustes finos aplicados)
+# Upgrade do Prompt da IA Governante — Prioridade Inbox
 
-## Resumo
+## O que muda
 
-As mensagens automáticas enviadas fora do horário comercial (handoff e redistribuição) agora são editáveis via UI na página de SLA Settings. Templates armazenados na tabela `business_messages_config` com fallback para mensagens padrão.
+Substituir o prompt atual (linhas 272-296) pelo novo prompt com:
+- **Prioridade máxima para Inbox/IA** antes de vendas
+- **Thresholds de saúde** (✅/⚠️/🚨) para resolução IA, escalação e tempo médio
+- **Instrução explícita**: se IA < 30% → DEVE ser o [ATENCAO] principal
+- **Formato reforçado**: máximo 3 frases por tag, números reais obrigatórios
+- Calcular `aiRate` e `escRate` antes do prompt
 
-## Ajustes Finos Aplicados
+## Arquivo afetado
 
-- ✅ Trigger `updated_at` reutilizando `public.update_updated_at_column()`
-- ✅ Validação: botão salvar desabilitado se template vazio
-- ✅ Warning visual se placeholders `{schedule}` / `{next_open}` removidos
-- ✅ Botão "Restaurar Padrão" para resetar mensagens
+`supabase/functions/ai-governor/index.ts` — linhas 271-296 (função `generateAIAnalysis`)
 
-## Arquivos Alterados
+## Detalhes técnicos
 
-| Arquivo | Mudança |
-|---------|---------|
-| SQL Migrations | Tabela `business_messages_config` + seeds + RLS + trigger updated_at |
-| `src/hooks/useBusinessMessages.ts` | Hook (query + mutation) |
-| `src/pages/SLASettings.tsx` | Seção "Mensagens de Fora do Horário" com validação + restaurar padrão |
-| `supabase/functions/ai-autopilot-chat/index.ts` | Busca template `after_hours_handoff` com fallback |
-| `supabase/functions/redistribute-after-hours/index.ts` | Busca template `business_hours_reopened` com fallback |
+1. Adicionar cálculo de `aiRate` e `escRate` no início da função
+2. Substituir o corpo do prompt pelo texto completo fornecido pelo usuário
+3. Manter a chamada OpenAI (`gpt-4o-mini`, `max_tokens: 1200`) inalterada
+4. Nenhuma mudança em tabelas, RLS ou outros arquivos
 
-## Garantias
+## Impacto
 
-- Fallback hardcoded se tabela vazia ou inacessível
-- Kill Switch, Shadow Mode, Fluxos: não afetados
-- RLS: leitura authenticated, escrita managers/admins
+- Upgrade puro: mesmo fluxo, mesmo parser, apenas prompt melhor
+- Próximo relatório vai diagnosticar corretamente o 0,4% de resolução IA como 🚨 CRÍTICO
+
