@@ -1123,6 +1123,25 @@ serve(async (req) => {
       ? `📥 *HOJE — Pipeline*\n${(salesMetrics.topNewSources ?? []).join('\n')}\nTotal: ${salesMetrics.newLeadsToday} leads entraram`
       : `📥 *HOJE — Pipeline*\nNenhum lead novo capturado`;
 
+    // ═══ HOJE — Tags de Conversas ═══
+    const tagsSummary = (metrics.topConversationTags ?? []).length > 0
+      ? `🏷️ *HOJE — Tags de Conversas*\n` +
+        (metrics.topConversationTags ?? []).slice(0, 10).map((t: any, i: number) =>
+          `${i + 1}. ${t.name} (${t.count}x)`
+        ).join('\n')
+      : '';
+
+    // ═══ HOJE — Tickets ═══
+    const ticketsSummary = metrics.ticketsTodayTotal > 0
+      ? [
+          `🎫 *HOJE — Tickets*`,
+          `Total: ${metrics.ticketsTodayTotal} | Urgentes: ${metrics.ticketsByPriority?.urgent ?? 0} | Abertos: ${metrics.ticketsOpen ?? 0}`,
+          ...(metrics.ticketsTopSubjects ?? []).slice(0, 5).map((t: any) =>
+            `  #${t.ticket_number} ${t.subject} (${t.priority})`
+          ),
+        ].join('\n')
+      : '';
+
     // ═══ MÊS — Acumulado ═══
     const monthSummary = `📊 *MES — Acumulado*\nReceita: ${fmtK(salesMetrics.revenueMonth)}${salesMetrics.goalProgress !== null ? ` | Meta: ${salesMetrics.goalProgress}%` : ''}\nDeals won: ${salesMetrics.dealsWonMonth}${salesMetrics.momGrowth !== null ? ` | MoM: ${salesMetrics.momGrowth > 0 ? '+' : ''}${salesMetrics.momGrowth}%` : ''}`;
 
@@ -1136,7 +1155,9 @@ serve(async (req) => {
 
     const channelsSummarySection = channelsSummary ? `\n📊 *Canais de Venda (Hoje):*\n${channelsSummary}` : '';
 
-    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${salesSummary}\n\n${pipelineSummaryToday}\n${channelsSummarySection}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const optionalSections = [tagsSummary, ticketsSummary].filter(Boolean).join('\n\n');
+
+    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${salesSummary}\n\n${pipelineSummaryToday}\n${channelsSummarySection}${optionalSections ? '\n\n' + optionalSections : ''}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
