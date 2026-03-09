@@ -975,9 +975,9 @@ async function sendEmailReport(
 
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
 
-        <!-- HOJE — Vendas (separadas) -->
+        <!-- HOJE — Vendas Novas + Recorrências -->
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#22c55e;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">HOJE — Vendas</p>
+          <p style="color:#22c55e;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">HOJE — Vendas Novas + Recorrências</p>
         </td></tr>
         <tr><td style="padding:0 32px 20px;">
           <table width="100%" cellpadding="0" cellspacing="6">
