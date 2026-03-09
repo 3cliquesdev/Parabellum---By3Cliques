@@ -111,6 +111,7 @@ async function sendWhatsAppReport(supabase: any, phoneNumbers: string[], message
 }
 
 async function sendEmailReport(
+  supabase: any,
   adminEmail: string,
   adminName: string,
   dateStr: string,
