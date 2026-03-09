@@ -278,6 +278,8 @@ export default function Reports() {
           onOpenChange={(open) => !open && setSelectedReport(null)}
         />
       ) : null}
+
+      <EmailSendsExportDialog open={emailSendsExportOpen} onOpenChange={setEmailSendsExportOpen} />
     </div>
   );
 }
