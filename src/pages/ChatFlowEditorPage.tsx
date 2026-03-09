@@ -222,14 +222,16 @@ export default function ChatFlowEditorPage() {
         />
       </div>
 
-      {/* Simulador */}
-      <ChatFlowSimulator
-        open={simulatorOpen}
-        onClose={() => setSimulatorOpen(false)}
-        nodes={simulatorNodes}
-        edges={simulatorEdges}
-        flowName={flow.name}
-      />
+      {/* Diálogo de Teste Real */}
+      {id && (
+        <FlowTestDialog
+          open={testDialogOpen}
+          onClose={() => setTestDialogOpen(false)}
+          flowId={id}
+          flowName={flow.name}
+          onAutoSave={currentFlowState ? handleAutoSave : undefined}
+        />
+      )}
 
       {/* Configurações do fluxo (gatilhos) */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
