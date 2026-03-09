@@ -548,7 +548,7 @@ async function sendEmailReport(
     branding = brandingRes.data;
   } catch {}
 
-  const fromName = 'IA Governante';
+  const fromName = sender?.from_name || brandName || 'Parabellum by 3Cliques';
   const fromEmail = sender?.from_email || 'contato@mail.3cliques.net';
   const headerColor = branding?.header_color || '#0f172a';
   const headerColorEnd = headerColor + 'dd';
@@ -564,10 +564,10 @@ async function sendEmailReport(
   // Formatar análise da IA em blocos estruturados
   function formatAnalysisHtml(text: string): string {
     const sectionMap: Record<string, { icon: string; title: string; color: string; bg: string; border: string }> = {
-      '[DESTAQUES]': { icon: '✅', title: 'Destaques', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
-      '[ATENCAO]':   { icon: '⚠️', title: 'Atenção', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
-      '[SUGESTOES]': { icon: '💡', title: 'Sugestões', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
-      '[MOTIVACIONAL]': { icon: '🚀', title: '', color: '#7c3aed', bg: '#faf5ff', border: '#e9d5ff' },
+      '[DESTAQUES]': { icon: '', title: 'Destaques', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+      '[ATENCAO]':   { icon: '', title: 'Atencao', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+      '[SUGESTOES]': { icon: '', title: 'Sugestoes', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
+      '[MOTIVACIONAL]': { icon: '', title: '', color: '#7c3aed', bg: '#faf5ff', border: '#e9d5ff' },
     };
 
     let html = '';
@@ -637,7 +637,7 @@ async function sendEmailReport(
   const originsHtml = (salesMetrics.origins ?? []).length > 0 ? `
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#8b5cf6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">📊 Canais de Venda</p>
+          <p style="color:#8b5cf6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Canais de Venda</p>
         </td></tr>
         <tr><td style="padding:0 32px 12px;">
           ${(salesMetrics.origins ?? []).map((o: any) => {
@@ -645,7 +645,7 @@ async function sendEmailReport(
             return `<div style="margin-bottom:10px;">
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td style="color:#334155;font-size:13px;font-weight:600;">${o.emoji} ${o.label}</td>
+                  <td style="color:#334155;font-size:13px;font-weight:600;">${o.label}</td>
                   <td style="color:#64748b;font-size:12px;text-align:right;">${o.pct}% · ${o.deals} deal${o.deals !== 1 ? 's' : ''} · ${fmtBRL(o.revenue)}</td>
                 </tr>
               </table>
@@ -664,7 +664,7 @@ async function sendEmailReport(
   const pipelineLeadsHtml = salesMetrics.newLeadsToday > 0 ? `
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#2563eb;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">📥 Novos Leads Hoje (Pipeline)</p>
+          <p style="color:#2563eb;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Novos Leads Hoje (Pipeline)</p>
         </td></tr>
         <tr><td style="padding:0 32px 12px;">
           ${(salesMetrics.topNewSources ?? []).map((s: string) => `<p style="color:#334155;font-size:13px;margin:4px 0;">• ${s}</p>`).join('')}
@@ -675,7 +675,7 @@ async function sendEmailReport(
   const teamHtml = (salesMetrics.topReps ?? []).length > 0 ? `
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#3b82f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">👥 Performance do Time (Hoje)</p>
+          <p style="color:#3b82f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">Performance do Time (Hoje)</p>
           <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">Fechamentos diretos do dia (atribuídos ao time)</p>
         </td></tr>
         <tr><td style="padding:0 32px 20px;">
@@ -687,7 +687,7 @@ async function sendEmailReport(
               <td style="padding:8px 12px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;">Receita</td>
             </tr>
             ${(salesMetrics.topReps ?? []).map((r: any, i: number) => {
-              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+              const medal = `${i + 1}`;
               const bg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
               return `<tr style="background:${bg};">
                 <td style="padding:10px 12px;font-size:14px;">${medal}</td>
@@ -703,7 +703,7 @@ async function sendEmailReport(
   const teamMonthHtml = (salesMetrics.topRepsMonth ?? []).length > 0 ? `
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#f59e0b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">👥 Time Comercial (Mês)</p>
+          <p style="color:#f59e0b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">Time Comercial (Mes)</p>
           <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">Ranking acumulado no mês atual</p>
         </td></tr>
         <tr><td style="padding:0 32px 20px;">
@@ -715,7 +715,7 @@ async function sendEmailReport(
               <td style="padding:8px 12px;color:#92400e;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;">Receita</td>
             </tr>
             ${(salesMetrics.topRepsMonth ?? []).map((r: any, i: number) => {
-              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+              const medal = `${i + 1}`;
               const bg = i % 2 === 0 ? '#ffffff' : '#fffbeb';
               return `<tr style="background:${bg};">
                 <td style="padding:10px 12px;font-size:14px;">${medal}</td>
@@ -730,7 +730,7 @@ async function sendEmailReport(
   // MoM section
   const momHtml = salesMetrics.momGrowth !== null ? `
         <p style="color:#64748b;font-size:12px;margin:4px 0 0;">
-          ${salesMetrics.momGrowth >= 0 ? '📈' : '📉'} MoM: <strong style="color:${salesMetrics.momGrowth >= 0 ? '#16a34a' : '#dc2626'};">${salesMetrics.momGrowth > 0 ? '+' : ''}${salesMetrics.momGrowth}%</strong> vs mês anterior
+          MoM: <strong style="color:${salesMetrics.momGrowth >= 0 ? '#16a34a' : '#dc2626'};">${salesMetrics.momGrowth > 0 ? '+' : ''}${salesMetrics.momGrowth}%</strong> vs mes anterior
         </p>` : '';
 
   const htmlContent = `<!DOCTYPE html>
@@ -745,7 +745,7 @@ async function sendEmailReport(
         <tr><td style="background:linear-gradient(135deg,${headerColor} 0%,${headerColorEnd} 100%);padding:32px 32px 28px;text-align:center;">
           ${logoUrl 
             ? `<img src="${logoUrl}" alt="${brandName}" style="max-height:40px;max-width:200px;margin-bottom:8px;" />`
-            : `<div style="font-size:32px;margin-bottom:8px;">🤖</div>`
+            : ''
           }
           <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;">Report Diário CRM 3Cliques</h1>
           <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">Relatório ${dateStr}</p>
@@ -753,12 +753,12 @@ async function sendEmailReport(
 
         <!-- Greeting -->
         <tr><td style="padding:24px 32px 16px;">
-          <p style="color:#1e293b;font-size:15px;margin:0;">Olá, ${adminName}! 👋</p>
+          <p style="color:#1e293b;font-size:15px;margin:0;">Ola, ${adminName}!</p>
         </td></tr>
 
         <!-- Atendimento do Dia -->
         <tr><td style="padding:0 32px 6px;">
-          <p style="color:#6366f1;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">📞 Atendimento do Dia</p>
+          <p style="color:#6366f1;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Atendimento do Dia</p>
         </td></tr>
         <tr><td style="padding:0 32px 12px;">
           <table width="100%" cellpadding="0" cellspacing="6">
@@ -785,10 +785,10 @@ async function sendEmailReport(
         <!-- Sub-metrics -->
         <tr><td style="padding:0 32px 20px;">
           <p style="color:#64748b;font-size:12px;margin:0;line-height:1.8;">
-            ⏱ Tempo médio de resolução: <strong style="color:#1e293b;">${metrics.avgResolutionMin ? `${metrics.avgResolutionMin} min` : '—'}</strong><br/>
-            💬 Mensagens: <strong style="color:#1e293b;">${metrics.totalMessages}</strong> (${metrics.aiMessages} da IA)
-            ${metrics.topIntents.length > 0 ? `<br/>🔝 Top eventos: <strong style="color:#1e293b;">${metrics.topIntents.slice(0, 3).join(', ')}</strong>` : ''}
-            ${(metrics.criticalAnomalies?.length ?? 0) > 0 ? `<br/>🔴 Anomalias: <strong style="color:#dc2626;">${metrics.criticalAnomalies.length} críticas</strong>` : ''}
+            Tempo medio de resolucao: <strong style="color:#1e293b;">${metrics.avgResolutionMin ? `${metrics.avgResolutionMin} min` : '—'}</strong><br/>
+            Mensagens: <strong style="color:#1e293b;">${metrics.totalMessages}</strong> (${metrics.aiMessages} da IA)
+            ${metrics.topIntents.length > 0 ? `<br/>Top eventos: <strong style="color:#1e293b;">${metrics.topIntents.slice(0, 3).join(', ')}</strong>` : ''}
+            ${(metrics.criticalAnomalies?.length ?? 0) > 0 ? `<br/>Anomalias: <strong style="color:#dc2626;">${metrics.criticalAnomalies.length} criticas</strong>` : ''}
           </p>
         </td></tr>
 
@@ -796,7 +796,7 @@ async function sendEmailReport(
 
         <!-- Vendas do Dia -->
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#22c55e;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">💰 Vendas do Dia</p>
+          <p style="color:#22c55e;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Vendas do Dia</p>
         </td></tr>
         <tr><td style="padding:0 32px 20px;">
           <table width="100%" cellpadding="0" cellspacing="6">
@@ -830,7 +830,7 @@ async function sendEmailReport(
 
         <!-- Performance do Mês -->
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#f59e0b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">📈 Performance do Mês</p>
+          <p style="color:#f59e0b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Performance do Mes</p>
         </td></tr>
         ${goalSection}
         <tr><td style="padding:8px 32px 20px;">
@@ -853,7 +853,7 @@ async function sendEmailReport(
         </td></tr>
         <!-- Pipeline value + MoM -->
         <tr><td style="padding:0 32px 20px;">
-          <p style="color:#64748b;font-size:12px;margin:0;">📦 Pipeline: ${salesMetrics.pipelineCount} deals abertos — <strong style="color:#1e293b;">${fmtBRL(salesMetrics.pipelineValue)}</strong></p>
+          <p style="color:#64748b;font-size:12px;margin:0;">Pipeline: ${salesMetrics.pipelineCount} deals abertos — <strong style="color:#1e293b;">${fmtBRL(salesMetrics.pipelineValue)}</strong></p>
           ${momHtml}
         </td></tr>
 
@@ -861,7 +861,7 @@ async function sendEmailReport(
 
         <!-- Análise da IA -->
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#7c3aed;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0;">🧠 Análise da IA</p>
+          <p style="color:#7c3aed;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0;">Analise da IA</p>
         </td></tr>
         <tr><td style="padding:8px 32px 28px;">
           ${analysisHtml}
@@ -886,7 +886,7 @@ async function sendEmailReport(
       body: JSON.stringify({
         from: `${fromName} <${fromEmail}>`,
         to: [adminEmail],
-        subject: `Report Diário CRM 3Cliques — Relatório ${dateStr}`,
+        subject: `Report Diario CRM 3Cliques - Relatorio ${dateStr}`,
         html: htmlContent,
       }),
     });
