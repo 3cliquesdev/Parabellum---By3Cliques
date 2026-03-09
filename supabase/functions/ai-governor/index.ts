@@ -148,6 +148,57 @@ async function collectDayMetrics(supabase: any, since: string, until: string) {
     .slice(0, 5)
     .map(([k, v]) => `${k} (${v}x)`);
 
+  // ═══ Tags de conversas do dia ═══
+  const { data: convTagsData } = await supabase
+    .from('conversation_tags')
+    .select('tag_id, tags(name, color), conversation_id')
+    .gte('created_at', since)
+    .lt('created_at', until);
+
+  const tagCountMap: Record<string, { name: string; count: number }> = {};
+  convTagsData?.forEach((ct: any) => {
+    const tagName = ct.tags?.name;
+    if (tagName) {
+      if (!tagCountMap[tagName]) tagCountMap[tagName] = { name: tagName, count: 0 };
+      tagCountMap[tagName].count++;
+    }
+  });
+  const topConversationTags = Object.values(tagCountMap)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  // ═══ Tickets do dia ═══
+  const { data: ticketsToday } = await supabase
+    .from('tickets')
+    .select('id, ticket_number, subject, status, priority, category, created_at')
+    .gte('created_at', since)
+    .lt('created_at', until)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const ticketsTodayTotal = ticketsToday?.length ?? 0;
+  const ticketsByPriority = {
+    urgent: ticketsToday?.filter((t: any) => t.priority === 'urgent').length ?? 0,
+    high: ticketsToday?.filter((t: any) => t.priority === 'high').length ?? 0,
+    medium: ticketsToday?.filter((t: any) => t.priority === 'medium').length ?? 0,
+    low: ticketsToday?.filter((t: any) => t.priority === 'low').length ?? 0,
+  };
+  const ticketsOpen = ticketsToday?.filter((t: any) => t.status === 'open' || t.status === 'in_progress').length ?? 0;
+  const ticketsTopSubjects = ticketsToday
+    ?.filter((t: any) => t.priority === 'urgent' || t.priority === 'high')
+    ?.slice(0, 5)
+    ?.map((t: any) => ({ ticket_number: t.ticket_number, subject: t.subject, priority: t.priority })) ?? [];
+
+  const ticketCatMap: Record<string, number> = {};
+  ticketsToday?.forEach((t: any) => {
+    const cat = t.category || 'Sem categoria';
+    ticketCatMap[cat] = (ticketCatMap[cat] ?? 0) + 1;
+  });
+  const ticketsCategories = Object.entries(ticketCatMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([category, count]) => ({ category, count }));
+
   return {
     totalConvs, closedByAI, escalatedToHuman, closedTotal, openTotal, avgResolutionMin,
     totalAIEvents, fallbackEvents, directEvents, topIntents,
@@ -165,6 +216,10 @@ async function collectDayMetrics(supabase: any, since: string, until: string) {
     activeChannels,
     aiConfig,
     topFailReasons,
+    // Tags de conversas
+    topConversationTags,
+    // Tickets do dia
+    ticketsTodayTotal, ticketsByPriority, ticketsOpen, ticketsTopSubjects, ticketsCategories,
   };
 }
 
@@ -489,6 +544,15 @@ PIPELINE HOJE:
 - Novos leads capturados: ${salesMetrics.newLeadsToday}
 - Por fonte: ${salesMetrics.topNewSources.join(' | ') || 'Nenhum'}
 
+TAGS DE CONVERSAS HOJE:
+${(metrics.topConversationTags ?? []).length > 0 ? (metrics.topConversationTags ?? []).map((t: any) => `- ${t.name}: ${t.count}x`).join('\n') : '- Nenhuma tag registrada'}
+
+TICKETS HOJE:
+- Total: ${metrics.ticketsTodayTotal} | Urgentes: ${metrics.ticketsByPriority?.urgent ?? 0} | Alta: ${metrics.ticketsByPriority?.high ?? 0} | Media: ${metrics.ticketsByPriority?.medium ?? 0} | Baixa: ${metrics.ticketsByPriority?.low ?? 0}
+- Abertos: ${metrics.ticketsOpen ?? 0}
+${(metrics.ticketsCategories ?? []).length > 0 ? '- Top categorias: ' + (metrics.ticketsCategories ?? []).map((c: any) => `${c.category} (${c.count})`).join(', ') : ''}
+${(metrics.ticketsTopSubjects ?? []).length > 0 ? '- Top tickets urgentes/alta:\n' + (metrics.ticketsTopSubjects ?? []).map((t: any) => `  #${t.ticket_number} ${t.subject} (${t.priority})`).join('\n') : ''}
+
 ===== MES (acumulado) =====
 - Receita mes: R$ ${salesMetrics.revenueMonth.toLocaleString('pt-BR')} / ${salesMetrics.goalProgress !== null ? salesMetrics.goalProgress + '% da meta' : 'sem meta'}
 - MoM: ${salesMetrics.momGrowth !== null ? (salesMetrics.momGrowth >= 0 ? '+' : '') + salesMetrics.momGrowth + '%' : 'N/A'}
@@ -512,10 +576,12 @@ PRIORIZE: Inbox e IA sao mais importantes que vendas.
 Se IA resolveu abaixo de 30% isso DEVE ser o [ATENCAO] principal.
 FOQUE NO DIA: analise o que aconteceu HOJE e o que fazer AMANHA para melhorar.
 IMPORTANTE: Distinga vendas novas de recorrencias. Recorrencias NAO sao vendas novas — sao renovacoes automaticas.
+TAGS: Se houver tags frequentes, sugira acoes especificas para resolver os problemas mais comuns.
+TICKETS: Se houver tickets urgentes/alta, priorize sugestoes para resolve-los amanha.
 
 [DESTAQUES] — O MELHOR dado do DIA. Cite numero exato.
 [ATENCAO] — Diagnostico TECNICO. Cite configs, nos do fluxo, gaps na KB. NUNCA diga "falta de treinamento".
-[SUGESTOES] — 3 acoes: 1) TECNICA 2) CONTEUDO 3) COMERCIAL. Especificas e operacionais.
+[SUGESTOES] — 4 acoes: 1) TECNICA 2) CONTEUDO 3) COMERCIAL 4) Baseada nas tags frequentes ou tickets urgentes.
 [MOTIVACIONAL] — Varie. Use dados reais do DIA.
 
 FORMATO: [TAG] texto (uma vez por tag, sem markdown, max 3 frases por tag)`;
@@ -861,6 +927,60 @@ async function sendEmailReport(
 
         ${teamMonthHtml}
 
+        ${/* Tags de Conversas HTML */ ''}
+        ${(metrics.topConversationTags ?? []).length > 0 ? `
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#8b5cf6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">HOJE — Tags de Conversas</p>
+        </td></tr>
+        <tr><td style="padding:0 32px 12px;">
+          ${(metrics.topConversationTags ?? []).map((t: any, i: number) => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;${i < (metrics.topConversationTags ?? []).length - 1 ? 'border-bottom:1px solid #f1f5f9;' : ''}">
+              <span style="color:#334155;font-size:13px;font-weight:600;">${i + 1}. ${t.name}</span>
+              <span style="background:#8b5cf6;color:#ffffff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${t.count}x</span>
+            </div>
+          `).join('')}
+        </td></tr>` : ''}
+
+        ${/* Tickets do Dia HTML */ ''}
+        ${metrics.ticketsTodayTotal > 0 ? `
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#dc2626;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">HOJE — Tickets</p>
+        </td></tr>
+        <tr><td style="padding:0 32px 12px;">
+          <table width="100%" cellpadding="0" cellspacing="6">
+            <tr>
+              <td style="background:#fef2f2;border-radius:10px;padding:12px 8px;text-align:center;border:1px solid #fecaca;">
+                <div style="color:#dc2626;font-size:22px;font-weight:800;">${metrics.ticketsTodayTotal}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Total</div>
+              </td>
+              <td style="background:#fef2f2;border-radius:10px;padding:12px 8px;text-align:center;border:1px solid #fecaca;">
+                <div style="color:#dc2626;font-size:22px;font-weight:800;">${metrics.ticketsByPriority?.urgent ?? 0}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Urgentes</div>
+              </td>
+              <td style="background:#fffbeb;border-radius:10px;padding:12px 8px;text-align:center;border:1px solid #fde68a;">
+                <div style="color:#d97706;font-size:22px;font-weight:800;">${metrics.ticketsByPriority?.high ?? 0}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Alta</div>
+              </td>
+              <td style="background:#f8fafc;border-radius:10px;padding:12px 8px;text-align:center;border:1px solid #e2e8f0;">
+                <div style="color:#1e293b;font-size:22px;font-weight:800;">${metrics.ticketsOpen ?? 0}</div>
+                <div style="color:#94a3b8;font-size:10px;margin-top:4px;font-weight:600;text-transform:uppercase;">Abertos</div>
+              </td>
+            </tr>
+          </table>
+          ${(metrics.ticketsTopSubjects ?? []).length > 0 ? `
+          <div style="margin-top:10px;">
+            ${(metrics.ticketsTopSubjects ?? []).map((t: any) => {
+              const prioColor = t.priority === 'urgent' ? '#dc2626' : '#d97706';
+              return `<p style="color:#334155;font-size:12px;margin:4px 0;">
+                <span style="background:${prioColor};color:#fff;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;">${t.priority}</span>
+                #${t.ticket_number} ${t.subject}
+              </p>`;
+            }).join('')}
+          </div>` : ''}
+        </td></tr>` : ''}
+
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
 
         <!-- MÊS — Performance Acumulada -->
@@ -1057,6 +1177,25 @@ serve(async (req) => {
       ? `📥 *HOJE — Pipeline*\n${(salesMetrics.topNewSources ?? []).join('\n')}\nTotal: ${salesMetrics.newLeadsToday} leads entraram`
       : `📥 *HOJE — Pipeline*\nNenhum lead novo capturado`;
 
+    // ═══ HOJE — Tags de Conversas ═══
+    const tagsSummary = (metrics.topConversationTags ?? []).length > 0
+      ? `🏷️ *HOJE — Tags de Conversas*\n` +
+        (metrics.topConversationTags ?? []).slice(0, 10).map((t: any, i: number) =>
+          `${i + 1}. ${t.name} (${t.count}x)`
+        ).join('\n')
+      : '';
+
+    // ═══ HOJE — Tickets ═══
+    const ticketsSummary = metrics.ticketsTodayTotal > 0
+      ? [
+          `🎫 *HOJE — Tickets*`,
+          `Total: ${metrics.ticketsTodayTotal} | Urgentes: ${metrics.ticketsByPriority?.urgent ?? 0} | Abertos: ${metrics.ticketsOpen ?? 0}`,
+          ...(metrics.ticketsTopSubjects ?? []).slice(0, 5).map((t: any) =>
+            `  #${t.ticket_number} ${t.subject} (${t.priority})`
+          ),
+        ].join('\n')
+      : '';
+
     // ═══ MÊS — Acumulado ═══
     const monthSummary = `📊 *MES — Acumulado*\nReceita: ${fmtK(salesMetrics.revenueMonth)}${salesMetrics.goalProgress !== null ? ` | Meta: ${salesMetrics.goalProgress}%` : ''}\nDeals won: ${salesMetrics.dealsWonMonth}${salesMetrics.momGrowth !== null ? ` | MoM: ${salesMetrics.momGrowth > 0 ? '+' : ''}${salesMetrics.momGrowth}%` : ''}`;
 
@@ -1070,7 +1209,9 @@ serve(async (req) => {
 
     const channelsSummarySection = channelsSummary ? `\n📊 *Canais de Venda (Hoje):*\n${channelsSummary}` : '';
 
-    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${salesSummary}\n\n${pipelineSummaryToday}\n${channelsSummarySection}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const optionalSections = [tagsSummary, ticketsSummary].filter(Boolean).join('\n\n');
+
+    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${salesSummary}\n\n${pipelineSummaryToday}\n${channelsSummarySection}${optionalSections ? '\n\n' + optionalSections : ''}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
