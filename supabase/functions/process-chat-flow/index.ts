@@ -2695,7 +2695,33 @@ serve(async (req) => {
 
       // Se é um nó de transferência
       if (nextNode.type === 'transfer') {
-        console.log(`[process-chat-flow] 🔄 Transfer node: id=${nextNode.id} dept=${nextNode.data?.department_id || 'none'} flow=${activeState.flow_id}`);
+        console.log(`[process-chat-flow] 🔄 Transfer node: id=${nextNode.id} dept=${nextNode.data?.department_id || 'none'} flow=${activeState.flow_id} target_flow=${nextNode.data?.target_flow_id || 'none'}`);
+        
+        // 🆕 FLOW-TO-FLOW TRANSFER: Se target_flow_id, iniciar sub-flow
+        if (nextNode.data?.target_flow_id) {
+          await supabaseClient.from('chat_flow_states').update({
+            collected_data: collectedData, current_node_id: nextNode.id,
+            status: 'transferred', completed_at: new Date().toISOString(),
+          }).eq('id', activeState.id);
+
+          console.log(`[process-chat-flow] 🔀 Flow-to-flow transfer → ${nextNode.data.target_flow_id}`);
+          try {
+            const targetResp = await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+                body: JSON.stringify({ conversationId, flowId: nextNode.data.target_flow_id, manualTrigger: true, bypassActiveCheck: true }),
+              }
+            );
+            const targetResult = await targetResp.json();
+            console.log(`[process-chat-flow] ✅ Flow-to-flow transfer result:`, JSON.stringify({ hasResponse: !!targetResult.response, transfer: targetResult.transfer }));
+            return new Response(JSON.stringify(targetResult), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          } catch (ftfErr) {
+            console.error('[process-chat-flow] ❌ Flow-to-flow transfer failed:', ftfErr);
+          }
+        }
+
         await supabaseClient
           .from('chat_flow_states')
           .update({
