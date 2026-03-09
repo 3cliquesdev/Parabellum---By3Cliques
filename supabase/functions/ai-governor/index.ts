@@ -68,7 +68,69 @@ async function collectDayMetrics(supabase: any, since: string, until: string) {
   const { count: totalMessages } = await supabase.from('messages').select('id', { count: 'exact', head: true }).gte('created_at', since).lt('created_at', until);
   const { count: aiMessages } = await supabase.from('messages').select('id', { count: 'exact', head: true }).eq('is_ai_generated', true).gte('created_at', since).lt('created_at', until);
 
-  return { totalConvs, closedByAI, escalatedToHuman, closedTotal, avgResolutionMin, totalAIEvents, fallbackEvents, directEvents, topIntents, criticalAnomalies, warningAnomalies, totalMessages: totalMessages ?? 0, aiMessages: aiMessages ?? 0 };
+  // ═══ CONTEXTO TÉCNICO DO SISTEMA ═══
+
+  // KB coverage: artigos ativos com embedding
+  const { count: kbArticlesCount } = await supabase
+    .from('knowledge_base_articles')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_active', true)
+    .not('embedding', 'is', null);
+
+  // Modos de conversa (autopilot vs copilot) — usar convs já carregado
+  const autopilotConvs = convs?.filter((c: any) => c.ai_mode === 'autopilot').length ?? 0;
+  const copilotConvs = convs?.filter((c: any) => c.ai_mode === 'copilot').length ?? 0;
+  const waitingHumanConvs = convs?.filter((c: any) => c.ai_mode === 'waiting_human').length ?? 0;
+
+  // Canais ativos no dia
+  const activeChannelsSet = new Set<string>();
+  convs?.forEach((c: any) => { if (c.channel) activeChannelsSet.add(c.channel); });
+  const activeChannels = Array.from(activeChannelsSet);
+
+  // Configs atuais da IA
+  const { data: aiCfgs } = await supabase
+    .from('system_configurations')
+    .select('key, value')
+    .in('key', ['ai_strict_rag_mode', 'ai_rag_min_threshold', 'ai_confidence_direct', 'ai_block_financial']);
+
+  const aiConfig = {
+    strictRagMode: aiCfgs?.find((c: any) => c.key === 'ai_strict_rag_mode')?.value ?? 'N/A',
+    ragMinThreshold: aiCfgs?.find((c: any) => c.key === 'ai_rag_min_threshold')?.value ?? 'N/A',
+    confidenceDirect: aiCfgs?.find((c: any) => c.key === 'ai_confidence_direct')?.value ?? 'N/A',
+    blockFinancial: aiCfgs?.find((c: any) => c.key === 'ai_block_financial')?.value ?? 'N/A',
+  };
+
+  // Top motivos de falha da IA (eventos de saída/transferência)
+  const { data: failEvents } = await supabase
+    .from('ai_events')
+    .select('event_type, output_json')
+    .gte('created_at', since)
+    .lt('created_at', until)
+    .in('event_type', ['ai_handoff_exit', 'ai_blocked_financial', 'ai_blocked_commercial', 'ai_transfer', 'ai_no_answer'])
+    .limit(100);
+
+  const failTopics: Record<string, number> = {};
+  failEvents?.forEach((e: any) => {
+    const t = e.event_type;
+    failTopics[t] = (failTopics[t] ?? 0) + 1;
+  });
+  const topFailReasons = Object.entries(failTopics)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([k, v]) => `${k} (${v}x)`);
+
+  return {
+    totalConvs, closedByAI, escalatedToHuman, closedTotal, avgResolutionMin,
+    totalAIEvents, fallbackEvents, directEvents, topIntents,
+    criticalAnomalies, warningAnomalies,
+    totalMessages: totalMessages ?? 0, aiMessages: aiMessages ?? 0,
+    // Contexto técnico
+    kbArticlesCount: kbArticlesCount ?? 0,
+    autopilotConvs, copilotConvs, waitingHumanConvs,
+    activeChannels,
+    aiConfig,
+    topFailReasons,
+  };
 }
 
 async function collectSalesMetrics(supabase: any, since: string, until: string) {
