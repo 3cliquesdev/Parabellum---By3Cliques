@@ -110,6 +110,115 @@ async function sendWhatsAppReport(supabase: any, phoneNumbers: string[], message
   return { sent, errors };
 }
 
+async function sendEmailReport(
+  adminEmail: string,
+  adminName: string,
+  dateStr: string,
+  aiAnalysis: string,
+  metrics: any
+): Promise<boolean> {
+  const resendKey = Deno.env.get('RESEND_API_KEY');
+  if (!resendKey) {
+    console.log('[ai-governor] ⚠️ RESEND_API_KEY não configurada, pulando email');
+    return false;
+  }
+
+  const aiRate = metrics.totalConvs > 0 ? Math.round((metrics.closedByAI / metrics.totalConvs) * 100) : 0;
+  const escalationRate = metrics.totalConvs > 0 ? Math.round((metrics.escalatedToHuman / metrics.totalConvs) * 100) : 0;
+
+  const htmlContent = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <tr><td style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:32px 40px;text-align:center;">
+          <h1 style="color:#ffffff;margin:0;font-size:24px;">🤖 IA Governante</h1>
+          <p style="color:#a0aec0;margin:8px 0 0;font-size:14px;">Relatório Executivo — ${dateStr}</p>
+        </td></tr>
+
+        <!-- Greeting -->
+        <tr><td style="padding:32px 40px 16px;">
+          <p style="color:#1a1a2e;font-size:16px;margin:0;">Olá, <strong>${adminName}</strong>!</p>
+        </td></tr>
+
+        <!-- Metrics Grid -->
+        <tr><td style="padding:0 40px 24px;">
+          <h2 style="color:#1a1a2e;font-size:18px;margin:0 0 16px;">📊 Números do Dia</h2>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:#f0f4ff;border-radius:8px;padding:16px;text-align:center;width:25%;">
+                <div style="color:#6366f1;font-size:28px;font-weight:bold;">${metrics.totalConvs}</div>
+                <div style="color:#64748b;font-size:11px;margin-top:4px;">Conversas</div>
+              </td>
+              <td width="8"></td>
+              <td style="background:#f0fdf4;border-radius:8px;padding:16px;text-align:center;width:25%;">
+                <div style="color:#22c55e;font-size:28px;font-weight:bold;">${metrics.closedByAI}</div>
+                <div style="color:#64748b;font-size:11px;margin-top:4px;">Resolvidas IA (${aiRate}%)</div>
+              </td>
+              <td width="8"></td>
+              <td style="background:#fff7ed;border-radius:8px;padding:16px;text-align:center;width:25%;">
+                <div style="color:#f97316;font-size:28px;font-weight:bold;">${metrics.escalatedToHuman}</div>
+                <div style="color:#64748b;font-size:11px;margin-top:4px;">Escaladas (${escalationRate}%)</div>
+              </td>
+              <td width="8"></td>
+              <td style="background:#faf5ff;border-radius:8px;padding:16px;text-align:center;width:25%;">
+                <div style="color:#a855f7;font-size:28px;font-weight:bold;">${metrics.totalAIEvents}</div>
+                <div style="color:#64748b;font-size:11px;margin-top:4px;">Eventos IA</div>
+              </td>
+            </tr>
+          </table>
+          ${metrics.avgResolutionMin ? `<p style="color:#64748b;font-size:13px;margin:12px 0 0;">⏱️ Tempo médio de resolução: <strong>${metrics.avgResolutionMin} min</strong></p>` : ''}
+          <p style="color:#64748b;font-size:13px;margin:4px 0 0;">💬 Mensagens: <strong>${metrics.totalMessages}</strong> (${metrics.aiMessages} da IA)</p>
+        </td></tr>
+
+        <!-- AI Analysis -->
+        <tr><td style="padding:0 40px 32px;">
+          <div style="background:#f8fafc;border-radius:8px;border-left:4px solid #6366f1;padding:20px 24px;">
+            <h3 style="color:#1a1a2e;font-size:16px;margin:0 0 12px;">🧠 Análise da IA</h3>
+            <div style="color:#334155;font-size:14px;line-height:1.7;white-space:pre-line;">${aiAnalysis.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\*(.*?)\*/g, '<strong>$1</strong>')}</div>
+          </div>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="background:#f8fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+          <p style="color:#94a3b8;font-size:12px;margin:0;">Parabellum by 3Cliques — Relatório gerado automaticamente</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'IA Governante <governante@mail.3cliques.net>',
+        to: [adminEmail],
+        subject: `🤖 Relatório IA Governante — ${dateStr}`,
+        html: htmlContent,
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[ai-governor] ❌ Email falhou para ${adminEmail}: ${res.status} ${errText}`);
+      return false;
+    }
+
+    const result = await res.json();
+    console.log(`[ai-governor] ✅ Email enviado para ${adminEmail}: ${result.id}`);
+    return true;
+  } catch (err: any) {
+    console.error(`[ai-governor] ❌ Email erro para ${adminEmail}: ${err.message}`);
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -118,20 +227,34 @@ serve(async (req) => {
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiKey) throw new Error('OPENAI_API_KEY não configurada');
 
-    // Buscar admins com notify_ai_governor = true
+    // Buscar admins com notify_ai_governor = true (inclui id para buscar email)
     const { data: adminProfiles } = await supabase
       .from('profiles')
-      .select('whatsapp_number, full_name')
+      .select('id, whatsapp_number, full_name, notify_ai_governor')
       .eq('notify_ai_governor', true);
 
     let adminPhones: string[] = [];
-    adminProfiles?.forEach((p: any) => {
+    const adminEmails: { email: string; name: string }[] = [];
+
+    // Buscar emails dos admins via auth.users (usando admin API)
+    for (const p of (adminProfiles ?? [])) {
       const num = (p.whatsapp_number || '').replace(/\D/g, '');
       if (num.length >= 10) {
         adminPhones.push(num);
-        console.log(`[ai-governor] 👤 Admin notificado: ${p.full_name} → ***${num.slice(-4)}`);
       }
-    });
+      console.log(`[ai-governor] 👤 Admin notificado: ${p.full_name} → ***${num.slice(-4)}`);
+
+      // Buscar email do usuário
+      try {
+        const { data: userData } = await supabase.auth.admin.getUserById(p.id);
+        if (userData?.user?.email) {
+          adminEmails.push({ email: userData.user.email, name: p.full_name || 'Admin' });
+          console.log(`[ai-governor] 📧 Email encontrado: ${userData.user.email}`);
+        }
+      } catch (err: any) {
+        console.log(`[ai-governor] ⚠️ Não conseguiu buscar email do admin ${p.id}: ${err.message}`);
+      }
+    }
 
     // Fallback: system_configurations
     if (adminPhones.length === 0) {
@@ -147,8 +270,15 @@ serve(async (req) => {
     let bodyOverride: any = {};
     try { bodyOverride = await req.json(); } catch {}
     if (bodyOverride.admin_phones?.length) adminPhones = bodyOverride.admin_phones;
+    if (bodyOverride.admin_emails?.length) {
+      bodyOverride.admin_emails.forEach((e: string) => {
+        if (!adminEmails.find(a => a.email === e)) {
+          adminEmails.push({ email: e, name: 'Admin' });
+        }
+      });
+    }
 
-    console.log(`[ai-governor] 📱 ${adminPhones.length} admin(s) para notificar`);
+    console.log(`[ai-governor] 📱 ${adminPhones.length} WhatsApp(s), 📧 ${adminEmails.length} email(s) para notificar`);
 
     const forceToday = bodyOverride.force_today === true;
     const now = new Date();
@@ -165,9 +295,10 @@ serve(async (req) => {
     }
 
     const metrics = await collectDayMetrics(supabase, since.toISOString(), until.toISOString());
-    const aiAnalysis = await generateAIAnalysis(metrics, formatDate(since), openaiKey);
+    const dateStr = formatDate(since);
+    const aiAnalysis = await generateAIAnalysis(metrics, dateStr, openaiKey);
 
-    const fullMessage = `🤖 *IA Governante — Relatório ${formatDate(since)}*\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const fullMessage = `🤖 *IA Governante — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
@@ -177,12 +308,33 @@ serve(async (req) => {
       generated_at: now.toISOString(),
     }).select('id').maybeSingle();
 
-    let sendResult = { sent: 0, errors: 0 };
-    if (adminPhones.length > 0) sendResult = await sendWhatsAppReport(supabase, adminPhones, fullMessage);
+    // Enviar WhatsApp
+    let whatsappResult = { sent: 0, errors: 0 };
+    if (adminPhones.length > 0) {
+      whatsappResult = await sendWhatsAppReport(supabase, adminPhones, fullMessage);
+    }
 
-    return new Response(JSON.stringify({ success: true, date: formatDate(since), metrics: { totalConvs: metrics.totalConvs, closedByAI: metrics.closedByAI, escalatedToHuman: metrics.escalatedToHuman, totalAIEvents: metrics.totalAIEvents }, aiAnalysisPreview: aiAnalysis.slice(0, 200), whatsapp: sendResult, reportId: savedReport?.id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    // Enviar Email
+    let emailResult = { sent: 0, errors: 0 };
+    for (const admin of adminEmails) {
+      const ok = await sendEmailReport(admin.email, admin.name, dateStr, aiAnalysis, metrics);
+      if (ok) emailResult.sent++; else emailResult.errors++;
+    }
+
+    console.log(`[ai-governor] 📊 Resultado: WhatsApp ${whatsappResult.sent}/${adminPhones.length} | Email ${emailResult.sent}/${adminEmails.length}`);
+
+    return new Response(JSON.stringify({
+      success: true,
+      date: dateStr,
+      metrics: { totalConvs: metrics.totalConvs, closedByAI: metrics.closedByAI, escalatedToHuman: metrics.escalatedToHuman, totalAIEvents: metrics.totalAIEvents },
+      aiAnalysisPreview: aiAnalysis.slice(0, 200),
+      whatsapp: whatsappResult,
+      email: emailResult,
+      reportId: savedReport?.id,
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: any) {
+    console.error(`[ai-governor] ❌ Erro geral: ${error.message}`);
     return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
