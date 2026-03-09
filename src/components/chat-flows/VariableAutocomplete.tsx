@@ -1,10 +1,12 @@
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import type { Node, Edge } from "reactflow";
 import { getAvailableVariables, findOrphanVariables, type VariableItem } from "./variableCatalog";
+import { cn } from "@/lib/utils";
 
 interface VariableAutocompleteProps {
   value: string;
@@ -37,6 +39,7 @@ export function VariableAutocomplete({
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const cursorPosRef = useRef<number>(0);
 
   const { flowVars, contactVars, conversationVars, orderVars } = useMemo(
@@ -49,6 +52,21 @@ export function VariableAutocomplete({
     [value, nodes, edges, selectedNodeId]
   );
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        dropdownRef.current?.contains(target) ||
+        textareaRef.current?.contains(target)
+      ) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newValue = e.target.value;
@@ -56,9 +74,8 @@ export function VariableAutocomplete({
       cursorPosRef.current = cursorPos;
       onChange(newValue);
 
-      // Detect {{ trigger
       const textBefore = newValue.substring(0, cursorPos);
-      const triggerMatch = textBefore.match(/\{\{([a-zA-Z0-9_]*)$/);
+      const triggerMatch = textBefore.match(/\{\{([a-zA-Z0-9_.]*)$/);
       if (triggerMatch) {
         setFilter(triggerMatch[1] || "");
         setOpen(true);
@@ -78,15 +95,13 @@ export function VariableAutocomplete({
       const textBefore = value.substring(0, cursorPos);
       const textAfter = value.substring(cursorPos);
 
-      // Find where {{ starts
-      const triggerMatch = textBefore.match(/\{\{([a-zA-Z0-9_]*)$/);
+      const triggerMatch = textBefore.match(/\{\{([a-zA-Z0-9_.]*)$/);
       if (triggerMatch) {
         const start = cursorPos - triggerMatch[0].length;
         const insertion = `{{${varName}}}`;
         const newValue = value.substring(0, start) + insertion + textAfter;
         onChange(newValue);
 
-        // Set cursor after insertion
         setTimeout(() => {
           const newPos = start + insertion.length;
           textarea.setSelectionRange(newPos, newPos);
@@ -100,79 +115,98 @@ export function VariableAutocomplete({
     [value, onChange]
   );
 
+  const filterItems = (items: VariableItem[]) => {
+    if (!filter) return items;
+    const f = filter.toLowerCase();
+    return items.filter(v => v.value.toLowerCase().includes(f) || v.label.toLowerCase().includes(f));
+  };
+
   const renderGroup = (items: VariableItem[], groupKey: string) => {
-    if (items.length === 0) return null;
-    const { label, icon } = GROUP_LABELS[groupKey] || { label: groupKey, icon: "📌" };
-    const filtered = filter
-      ? items.filter(v => v.value.toLowerCase().includes(filter.toLowerCase()) || v.label.toLowerCase().includes(filter.toLowerCase()))
-      : items;
+    const filtered = filterItems(items);
     if (filtered.length === 0) return null;
+    const { label, icon } = GROUP_LABELS[groupKey] || { label: groupKey, icon: "📌" };
 
     return (
-      <CommandGroup key={groupKey} heading={`${icon} ${label}`}>
+      <div key={groupKey}>
+        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+          {icon} {label}
+        </div>
         {filtered.map(v => (
-          <CommandItem
+          <button
             key={v.value}
-            value={v.value}
-            onSelect={() => insertVariable(v.value)}
+            type="button"
+            className="w-full flex items-center px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"
+            onMouseDown={(e) => {
+              e.preventDefault(); // prevent textarea blur
+              insertVariable(v.value);
+            }}
           >
             <span className="font-mono text-xs">{`{{${v.value}}}`}</span>
             <span className="ml-2 text-xs text-muted-foreground">{v.label}</span>
-          </CommandItem>
+          </button>
         ))}
-      </CommandGroup>
+      </div>
     );
   };
 
+  const hasResults = filterItems(flowVars).length > 0 ||
+    filterItems(contactVars).length > 0 ||
+    filterItems(conversationVars).length > 0 ||
+    filterItems(orderVars).length > 0;
+
   return (
     <div className="relative space-y-1">
-      <Popover open={open} onOpenChange={(o) => { if (!o) return; setOpen(o); }}>
-        <PopoverTrigger asChild>
-          <div>
-            <Textarea
-              ref={textareaRef}
-              value={value || ""}
-              onChange={handleChange}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "Escape" && open) {
-                  setOpen(false);
-                  e.preventDefault();
-                }
-              }}
-              placeholder={placeholder}
-              className={className}
-              style={{ minHeight }}
+      <Textarea
+        ref={textareaRef}
+        value={value || ""}
+        onChange={handleChange}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Escape" && open) {
+            setOpen(false);
+            e.preventDefault();
+          }
+        }}
+        placeholder={placeholder}
+        className={className}
+        style={{ minHeight }}
+      />
+
+      {open && (
+        <div
+          ref={dropdownRef}
+          className="absolute z-50 w-80 mt-1 rounded-md border bg-popover text-popover-foreground shadow-md"
+        >
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <input
+              type="text"
+              className="flex h-9 w-full bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
+              placeholder="Buscar variável..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
             />
           </div>
-        </PopoverTrigger>
-        {open && (
-          <PopoverContent
-            className="w-80 p-0"
-            side="bottom"
-            align="start"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-            onInteractOutside={(e) => e.preventDefault()}
-          >
-            <Command shouldFilter={false}>
-              <CommandInput
-                placeholder="Buscar variável..."
-                value={filter}
-                onValueChange={setFilter}
-              />
-              <CommandList>
-                <CommandEmpty>Nenhuma variável encontrada</CommandEmpty>
-                {renderGroup(flowVars, "flow")}
-                {renderGroup(contactVars, "contact")}
-                {renderGroup(conversationVars, "conversation")}
-                {renderGroup(orderVars, "order")}
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        )}
-      </Popover>
+          <ScrollArea className="max-h-[250px]">
+            <div className="p-1">
+              {hasResults ? (
+                <>
+                  {renderGroup(flowVars, "flow")}
+                  {renderGroup(contactVars, "contact")}
+                  {renderGroup(conversationVars, "conversation")}
+                  {renderGroup(orderVars, "order")}
+                </>
+              ) : (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  Nenhuma variável encontrada
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
 
-      {/* Orphan variable warnings */}
       {orphans.length > 0 && (
         <div className="space-y-1">
           {orphans.map(varName => (
