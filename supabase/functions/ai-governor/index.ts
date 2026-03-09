@@ -283,17 +283,17 @@ TOP PARCEIROS: ${(salesMetrics.topPartners ?? []).map((p: any) => `${p.name}: ${
 TIME COMERCIAL: ${(salesMetrics.topReps ?? []).length > 0 ? (salesMetrics.topReps ?? []).map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
 ALERTAS: ${(salesMetrics.alerts ?? []).join(' | ') || 'Nenhum'}
 
-FORMATO OBRIGATÓRIO (siga À RISCA, sem exceções):
-- NÃO use markdown (**, *, -, •, bullets, listas). Use APENAS texto corrido.
-- Cada linha DEVE começar com a tag entre colchetes: [DESTAQUES], [ATENCAO], [SUGESTOES] ou [MOTIVACIONAL].
-- Use exatamente 4 linhas, uma para cada tag. NO MÁXIMO 2 frases por linha.
-- Exemplo:
-[DESTAQUES] O dia teve 10 conversas com taxa de resolução IA de 30%, demonstrando boa automação.
-[ATENCAO] O tempo médio de resolução subiu para 15 min, acima do ideal de 10 min.
-[SUGESTOES] Revisar artigos da base de conhecimento sobre os temas mais escalados para reduzir handoffs.
-[MOTIVACIONAL] Cada conversa resolvida pela IA é tempo ganho para o time focar no que importa.
+FORMATO OBRIGATÓRIO — siga exatamente:
+[DESTAQUES] Texto corrido descrevendo os pontos positivos do dia.
+[ATENCAO] Texto corrido sobre pontos de atenção e riscos identificados.
+[SUGESTOES] Ação 1 sugerida. Ação 2 sugerida. Ação 3 sugerida.
+[MOTIVACIONAL] Frase curta de encerramento motivacional.
 
-Seja direto, prático e use dados reais do dia.`;
+REGRAS:
+- NUNCA use **, -, *, bullet points ou markdown
+- Cada tag aparece UMA vez, em linha própria
+- Máximo 2 frases por tag (exceto SUGESTOES: até 3 ações)
+- Linguagem executiva, direta, sem floreios`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
