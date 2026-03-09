@@ -3434,6 +3434,7 @@ export type Database = {
           playbook_execution_id: string | null
           playbook_node_id: string | null
           recipient_email: string
+          replied_at: string | null
           resend_email_id: string | null
           sent_at: string | null
           status: string | null
@@ -3455,6 +3456,7 @@ export type Database = {
           playbook_execution_id?: string | null
           playbook_node_id?: string | null
           recipient_email: string
+          replied_at?: string | null
           resend_email_id?: string | null
           sent_at?: string | null
           status?: string | null
@@ -3476,6 +3478,7 @@ export type Database = {
           playbook_execution_id?: string | null
           playbook_node_id?: string | null
           recipient_email?: string
+          replied_at?: string | null
           resend_email_id?: string | null
           sent_at?: string | null
           status?: string | null

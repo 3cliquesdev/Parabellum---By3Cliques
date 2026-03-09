@@ -1,31 +1,31 @@
 
+# Plano: Mensagens Configuráveis de Fora do Horário ✅
 
-# Adicionar coluna "Respondido" ao relatório de envios de e-mail
+## Status: IMPLEMENTADO (com ajustes finos aplicados)
 
-## Problema
-A tabela `email_sends` não possui um campo `replied_at` para rastrear quando o contato respondeu ao e-mail. O relatório exportado não mostra essa informação.
+## Resumo
 
-## Solução
+As mensagens automáticas enviadas fora do horário comercial (handoff e redistribuição) agora são editáveis via UI na página de SLA Settings. Templates armazenados na tabela `business_messages_config` com fallback para mensagens padrão.
 
-### 1. Migração: adicionar coluna `replied_at` na tabela `email_sends`
-```sql
-ALTER TABLE public.email_sends ADD COLUMN replied_at timestamptz;
-```
+## Ajustes Finos Aplicados
 
-### 2. Editar `useExportEmailSendsReport.tsx`
-- Incluir `replied_at` no select da query
-- Adicionar "Respondido" na lógica de `getEmailStatus` (prioridade entre "Clicado" e "Aberto")
-- Adicionar coluna "Respondido" no Excel com `fmtDateTime(row.replied_at)`
+- ✅ Trigger `updated_at` reutilizando `public.update_updated_at_column()`
+- ✅ Validação: botão salvar desabilitado se template vazio
+- ✅ Warning visual se placeholders `{schedule}` / `{next_open}` removidos
+- ✅ Botão "Restaurar Padrão" para resetar mensagens
 
-### 3. Atualização de status (hierarquia)
-```
-Bounce > Respondido > Clicado > Aberto > Erro > Enviado > Pendente
-```
+## Arquivos Alterados
 
-### 4. Marcação manual (por enquanto)
-Como não há integração de inbox para detectar respostas automaticamente, o `replied_at` poderá ser preenchido:
-- Manualmente pelo usuário na timeline do contato
-- Ou futuramente via webhook de resposta
+| Arquivo | Mudança |
+|---------|---------|
+| SQL Migrations | Tabela `business_messages_config` + seeds + RLS + trigger updated_at |
+| `src/hooks/useBusinessMessages.ts` | Hook (query + mutation) |
+| `src/pages/SLASettings.tsx` | Seção "Mensagens de Fora do Horário" com validação + restaurar padrão |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Busca template `after_hours_handoff` com fallback |
+| `supabase/functions/redistribute-after-hours/index.ts` | Busca template `business_hours_reopened` com fallback |
 
-Sem essa marcação automática, a coluna ficará disponível mas vazia até ser preenchida manualmente ou por integração futura.
+## Garantias
 
+- Fallback hardcoded se tabela vazia ou inacessível
+- Kill Switch, Shadow Mode, Fluxos: não afetados
+- RLS: leitura authenticated, escrita managers/admins
