@@ -1,31 +1,30 @@
 
-# Plano: Mensagens Configuráveis de Fora do Horário ✅
 
-## Status: IMPLEMENTADO (com ajustes finos aplicados)
+# Relatório de Envios por Template — Download direto
 
-## Resumo
+## Conceito
 
-As mensagens automáticas enviadas fora do horário comercial (handoff e redistribuição) agora são editáveis via UI na página de SLA Settings. Templates armazenados na tabela `business_messages_config` com fallback para mensagens padrão.
+Sem página dedicada. Adicionar um card "Envios de E-mail por Template" na Central de Relatórios (aba Onboarding ou criar aba 📧 E-mail). Ao clicar, abre o **dialog de export já existente** (`EmailSendsExportDialog`) que permite filtrar por período e template e baixar o Excel.
 
-## Ajustes Finos Aplicados
+## O que já existe
 
-- ✅ Trigger `updated_at` reutilizando `public.update_updated_at_column()`
-- ✅ Validação: botão salvar desabilitado se template vazio
-- ✅ Warning visual se placeholders `{schedule}` / `{next_open}` removidos
-- ✅ Botão "Restaurar Padrão" para resetar mensagens
+O `EmailSendsExportDialog` + `useExportEmailSendsReport` já fazem exatamente isso: filtram por período e template, buscam `email_sends` com join em `contacts`, e exportam Excel com colunas: Template, Contato, Email, Assunto, Data/Hora Envio, Status, Clicado, Aberto, Bounce.
 
-## Arquivos Alterados
+## Mudanças (1 arquivo)
 
-| Arquivo | Mudança |
-|---------|---------|
-| SQL Migrations | Tabela `business_messages_config` + seeds + RLS + trigger updated_at |
-| `src/hooks/useBusinessMessages.ts` | Hook (query + mutation) |
-| `src/pages/SLASettings.tsx` | Seção "Mensagens de Fora do Horário" com validação + restaurar padrão |
-| `supabase/functions/ai-autopilot-chat/index.ts` | Busca template `after_hours_handoff` com fallback |
-| `supabase/functions/redistribute-after-hours/index.ts` | Busca template `business_hours_reopened` com fallback |
+### `src/pages/Reports.tsx`
 
-## Garantias
+1. Importar `EmailSendsExportDialog`
+2. Adicionar state `emailSendsExportOpen`
+3. Adicionar card no array de relatórios (na categoria Onboarding ou nova categoria E-mail):
+   - id: `email_sends_export`
+   - name: "Envios de E-mail por Template"
+   - description: "Exportação com status de envio, abertura, clique e bounce por período"
+   - icon: `FileSpreadsheet`
+4. No `onClick` do card, setar `emailSendsExportOpen = true` (em vez de navegar para rota)
+5. Renderizar `<EmailSendsExportDialog>` no final do componente
 
-- Fallback hardcoded se tabela vazia ou inacessível
-- Kill Switch, Shadow Mode, Fluxos: não afetados
-- RLS: leitura authenticated, escrita managers/admins
+## Zero arquivos novos, zero migrações
+
+Reutiliza 100% do dialog e hook existentes. Apenas conecta o card ao dialog.
+
