@@ -250,7 +250,9 @@ export default function Reports() {
                   key={report.id}
                   report={report}
                   onClick={() => {
-                    if ((report as any).route) {
+                    if ((report as any).action === 'emailSendsExport') {
+                      setEmailSendsExportOpen(true);
+                    } else if ((report as any).route) {
                       navigate((report as any).route);
                     } else {
                       setSelectedReport(report);
