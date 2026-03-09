@@ -1255,9 +1255,14 @@ serve(async (req) => {
     // Canal breakdown
     const channelBreakdownWa = Object.entries(metrics.channelCounts ?? {}).map(([ch, cnt]) => `${ch} ${cnt}`).join(', ') || 'N/A';
 
+    // Período formatado
+    const periodStr = forceToday
+      ? `(00:00 - ${until.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})`
+      : '(00:00 - 23:59)';
+
     // ═══ HOJE — Atendimento (detalhado) ═══
     const inboxSummary = [
-      `📞 *HOJE — Atendimento*`,
+      `📞 *HOJE — Atendimento* ${periodStr}`,
       `Conversas: ${metrics.totalConvs} (${channelBreakdownWa})`,
       `Abertas agora: ${metrics.openTotal} | Fechadas: ${metrics.closedTotal} | Fila humana: ${metrics.waitingHumanConvs}`,
       `IA autopilot: resolveu ${metrics.closedAutopilot}, ativas ${metrics.openAutopilot}`,
@@ -1268,19 +1273,24 @@ serve(async (req) => {
       metrics.criticalAnomalies?.length > 0 ? `Anomalias: ${metrics.criticalAnomalies.length} criticas` : null,
     ].filter(Boolean).join('\n');
 
-    // ═══ HOJE — Vendas (com breakdown por origem) ═══
+    // ═══ HOJE — Vendas Novas ═══
     const affTopStr = (salesMetrics.topNewAffiliates ?? []).length > 0
       ? `  Top afiliados: ${(salesMetrics.topNewAffiliates ?? []).map((a: any) => `${a.name} ${a.deals} deals`).join(', ')}`
       : '';
-    const salesSummary = [
-      `💰 *HOJE — Vendas*`,
-      `Vendas novas: ${salesMetrics.newSalesCount} (${fmtK(salesMetrics.newSalesRevenue)})`,
-      `  Organico: ${salesMetrics.newSalesOrganicCount} (${fmtK(salesMetrics.newSalesOrganicRevenue)}) | Afiliados: ${salesMetrics.newSalesAffiliateCount} (${fmtK(salesMetrics.newSalesAffiliateRevenue)}) | Comercial: ${salesMetrics.newSalesComercialCount} (${fmtK(salesMetrics.newSalesComercialRevenue)})`,
+    const newSalesSummary = [
+      `💰 *HOJE — Vendas Novas*`,
+      `Novas: ${salesMetrics.newSalesCount} (${fmtK(salesMetrics.newSalesRevenue)})`,
+      `  Organico: ${salesMetrics.newSalesOrganicCount} (${fmtK(salesMetrics.newSalesOrganicRevenue)})`,
+      `  Afiliados: ${salesMetrics.newSalesAffiliateCount} (${fmtK(salesMetrics.newSalesAffiliateRevenue)})`,
+      `  Comercial: ${salesMetrics.newSalesComercialCount} (${fmtK(salesMetrics.newSalesComercialRevenue)})`,
       affTopStr,
-      `Recorrencias: ${salesMetrics.recurrenceCount} (${fmtK(salesMetrics.recurrenceRevenue)})`,
-      `Total: ${salesMetrics.wonToday} fechamentos | ${fmtK(salesMetrics.revenueToday)}`,
-      `Perdidos: ${salesMetrics.lostToday} | Novos deals: ${salesMetrics.newDeals}`,
     ].filter(Boolean).join('\n');
+
+    // ═══ HOJE — Recorrências ═══
+    const recurrenceSummary = `🔄 *HOJE — Recorrências*\nRenovações: ${salesMetrics.recurrenceCount} (${fmtK(salesMetrics.recurrenceRevenue)})`;
+
+    // ═══ Resumo Geral ═══
+    const salesResume = `📊 *Resumo:* ${salesMetrics.wonToday} fechamentos | ${fmtK(salesMetrics.revenueToday)}\nPerdidos: ${salesMetrics.lostToday} | Novos deals: ${salesMetrics.newDeals}`;
 
     // ═══ HOJE — Pipeline ═══
     const pipelineSummaryToday = salesMetrics.newLeadsToday > 0
@@ -1321,7 +1331,7 @@ serve(async (req) => {
 
     const optionalSections = [tagsSummary, ticketsSummary].filter(Boolean).join('\n\n');
 
-    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${salesSummary}\n\n${pipelineSummaryToday}\n${channelsSummarySection}${optionalSections ? '\n\n' + optionalSections : ''}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr} ${periodStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${newSalesSummary}\n\n${recurrenceSummary}\n\n${salesResume}\n\n${pipelineSummaryToday}\n${channelsSummarySection}${optionalSections ? '\n\n' + optionalSections : ''}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
