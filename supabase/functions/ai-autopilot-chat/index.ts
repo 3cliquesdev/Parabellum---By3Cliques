@@ -22,6 +22,11 @@ interface RAGConfig {
     sandbox: boolean;
   };
   strictMode: boolean;
+  blockFinancial: boolean;
+  confidenceDirect: number;
+  confidenceHandoff: number;
+  ragMinThreshold: number;
+  maxFallback: number;
 }
 
 const DEFAULT_RAG_CONFIG: RAGConfig = {
@@ -30,6 +35,11 @@ const DEFAULT_RAG_CONFIG: RAGConfig = {
   directThreshold: 0.75,
   sources: { kb: true, crm: true, tracking: true, sandbox: true },
   strictMode: false,
+  blockFinancial: true,
+  confidenceDirect: 0.75,
+  confidenceHandoff: 0.45,
+  ragMinThreshold: 0.70,
+  maxFallback: 3,
 };
 
 // Helper: Buscar TODAS as configurações RAG do banco
