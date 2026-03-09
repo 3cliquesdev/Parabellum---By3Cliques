@@ -7988,6 +7988,16 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
     // Se flow_context existe, IA só pode retornar texto puro
     // Detectar escape ANTES do banco + WhatsApp = zero vazamento
     // ============================================================
+
+    // 🆕 [INTENT:X] TAG DETECTION: Detectar e remover intent tags ANTES do escape check
+    const intentTagMatch = assistantMessage.match(/\[INTENT:([a-zA-Z_]+)\]/i);
+    let detectedIntentTag: string | null = null;
+    if (intentTagMatch) {
+      detectedIntentTag = intentTagMatch[1].toLowerCase();
+      assistantMessage = assistantMessage.replace(/\s*\[INTENT:[a-zA-Z_]+\]\s*/gi, '').trim();
+      console.log(`[ai-autopilot-chat] 🎯 [INTENT:${detectedIntentTag}] detectado e removido da mensagem`);
+    }
+
     if (flow_context && flow_context.response_format === 'text_only') {
       const escapeAttempt = ESCAPE_PATTERNS.some(pattern => pattern.test(assistantMessage));
       
@@ -8417,6 +8427,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       status: 'success',
       message: assistantMessage,
       from_cache: false,
+      // 🆕 INTENT EXIT: Sinalizar intent detectado para o webhook
+      ...(detectedIntentTag ? { intentExit: true, intentType: detectedIntentTag, hasFlowContext: !!flow_context, flow_context: flow_context ? { flow_id: flow_context.flow_id, node_id: flow_context.node_id } : undefined } : {}),
       persona_used: {
         id: persona.id,
         name: persona.name
