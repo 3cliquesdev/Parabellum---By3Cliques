@@ -54,6 +54,11 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
         'ai_rag_direct_threshold',
         'ai_rag_sources_enabled',
         'ai_strict_rag_mode',
+        'ai_block_financial',
+        'ai_strict_mode',
+        'ai_confidence_direct',
+        'ai_confidence_handoff',
+        'ai_max_fallback_phrases',
       ]);
     
     if (error) {
