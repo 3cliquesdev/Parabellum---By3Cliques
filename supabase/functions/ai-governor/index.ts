@@ -737,7 +737,9 @@ serve(async (req) => {
       ? (salesMetrics.topReps ?? []).map((r: any, i: number) => `${i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'} ${r.name}: ${r.deals} deals`).join('\n')
       : '';
 
-    const fullMessage = `*IA Governante — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}${teamSummary ? `\n\n👥 *Time Comercial:*\n${teamSummary}` : ''}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const inboxSummary = `📞 *Atendimento do Dia:*\n💬 Conversas: ${metrics.totalConvs} | IA: ${metrics.closedByAI} | Escaladas: ${metrics.escalatedToHuman}\n⏱ Tempo médio: ${metrics.avgResolutionMin ?? '—'} min\n🤖 Eventos IA: ${metrics.totalAIEvents} | Msgs: ${metrics.totalMessages} (${metrics.aiMessages} IA)${metrics.criticalAnomalies?.length > 0 ? `\n🔴 Anomalias: ${metrics.criticalAnomalies.length} críticas` : ''}`;
+
+    const fullMessage = `*IA Governante — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}${teamSummary ? `\n\n👥 *Time Comercial:*\n${teamSummary}` : ''}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
