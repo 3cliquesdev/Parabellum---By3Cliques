@@ -15,6 +15,10 @@ function pct(num: number, den: number): string {
   return `${Math.round((num / den) * 100)}%`;
 }
 
+function formatCurrency(value: number): string {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 async function collectDayMetrics(supabase: any, since: string, until: string) {
   const { data: convs } = await supabase
     .from('conversations')
@@ -67,11 +71,96 @@ async function collectDayMetrics(supabase: any, since: string, until: string) {
   return { totalConvs, closedByAI, escalatedToHuman, closedTotal, avgResolutionMin, totalAIEvents, fallbackEvents, directEvents, topIntents, criticalAnomalies, warningAnomalies, totalMessages: totalMessages ?? 0, aiMessages: aiMessages ?? 0 };
 }
 
-async function generateAIAnalysis(metrics: any, dateStr: string, openaiKey: string): Promise<string> {
-  const prompt = `Você é a IA Governante do Parabellum, sistema de Customer Success.
-Analise as métricas do dia ${dateStr} e gere relatório executivo CURTO para WhatsApp (máx 30 linhas).
+async function collectSalesMetrics(supabase: any, since: string, until: string) {
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-MÉTRICAS:
+  // Deals criados hoje
+  const { data: dealsToday } = await supabase
+    .from('deals')
+    .select('id, title, value, status, closed_at, lost_reason, lead_source, is_organic_sale, gross_value')
+    .gte('created_at', since)
+    .lt('created_at', until);
+
+  // Deals fechados (won) hoje
+  const wonToday = dealsToday?.filter((d: any) => d.status === 'won') ?? [];
+  const lostToday = dealsToday?.filter((d: any) => d.status === 'lost') ?? [];
+  const newDeals = dealsToday?.length ?? 0;
+  const revenueToday = wonToday.reduce((sum: number, d: any) => sum + (Number(d.gross_value || d.value) || 0), 0);
+
+  // Pipeline total (deals abertos)
+  const { data: pipeline } = await supabase
+    .from('deals')
+    .select('id, value, status, probability')
+    .not('status', 'in', '("won","lost","cancelled")');
+
+  const pipelineValue = pipeline?.reduce((sum: number, d: any) => sum + (Number(d.value) || 0), 0) ?? 0;
+  const pipelineCount = pipeline?.length ?? 0;
+
+  // Motivos de perda do dia
+  const lostReasons: Record<string, number> = {};
+  lostToday.forEach((d: any) => {
+    const reason = d.lost_reason || 'Não informado';
+    lostReasons[reason] = (lostReasons[reason] ?? 0) + 1;
+  });
+  const topLostReasons = Object.entries(lostReasons)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([k, v]) => `${k} (${v}x)`);
+
+  // Performance do mês
+  const { data: wonMonth } = await supabase
+    .from('deals')
+    .select('value, gross_value')
+    .eq('status', 'won')
+    .gte('closed_at', firstDayOfMonth);
+
+  const revenueMonth = wonMonth?.reduce((sum: number, d: any) => sum + (Number(d.gross_value || d.value) || 0), 0) ?? 0;
+  const dealsWonMonth = wonMonth?.length ?? 0;
+
+  // Meta do mês
+  const { data: goals } = await supabase
+    .from('sales_goals')
+    .select('title, target_value, goal_type')
+    .eq('period_month', now.getMonth() + 1)
+    .eq('period_year', now.getFullYear())
+    .limit(5);
+
+  const mainGoal = goals?.find((g: any) => g.goal_type === 'revenue') ?? goals?.[0];
+  const goalTarget = Number(mainGoal?.target_value) || 0;
+  const goalProgress = goalTarget > 0 ? Math.round((revenueMonth / goalTarget) * 100) : null;
+
+  // Taxa de conversão do mês
+  const { count: totalMonth } = await supabase
+    .from('deals')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', firstDayOfMonth);
+
+  const conversionRate = (totalMonth ?? 0) > 0
+    ? Math.round((dealsWonMonth / (totalMonth ?? 1)) * 100)
+    : 0;
+
+  return {
+    newDeals,
+    wonToday: wonToday.length,
+    lostToday: lostToday.length,
+    revenueToday,
+    topLostReasons,
+    dealsWonMonth,
+    revenueMonth,
+    goalTarget,
+    goalProgress,
+    conversionRate,
+    pipelineCount,
+    pipelineValue,
+  };
+}
+
+async function generateAIAnalysis(metrics: any, salesMetrics: any, dateStr: string, openaiKey: string): Promise<string> {
+  const prompt = `Você é a IA Governante do Parabellum, sistema de Customer Success e CRM.
+Analise as métricas do dia ${dateStr} e gere relatório executivo CURTO para WhatsApp (máx 40 linhas).
+
+📞 ATENDIMENTO:
 - Conversas: ${metrics.totalConvs} | Fechadas pela IA: ${metrics.closedByAI} (${pct(metrics.closedByAI, metrics.totalConvs)})
 - Escaladas para humano: ${metrics.escalatedToHuman} (${pct(metrics.escalatedToHuman, metrics.totalConvs)})
 - Tempo médio resolução: ${metrics.avgResolutionMin ? `${metrics.avgResolutionMin} min` : 'sem dados'}
@@ -80,13 +169,29 @@ MÉTRICAS:
 - Top eventos: ${metrics.topIntents.join(', ') || 'Sem dados'}
 - Anomalias críticas: ${metrics.criticalAnomalies.length} | Avisos: ${metrics.warningAnomalies.length}
 
-FORMATO: Use emojis. Seções: 📊 Resumo | ✅ Destaques | ⚠️ Atenção | 💡 Sugestões
+💰 VENDAS DO DIA:
+- Novos deals: ${salesMetrics.newDeals}
+- Ganhos: ${salesMetrics.wonToday} (${formatCurrency(salesMetrics.revenueToday)})
+- Perdidos: ${salesMetrics.lostToday}
+- Motivos de perda: ${salesMetrics.topLostReasons.join(', ') || 'Nenhum'}
+
+📈 VENDAS DO MÊS:
+- Deals ganhos no mês: ${salesMetrics.dealsWonMonth}
+- Receita acumulada: ${formatCurrency(salesMetrics.revenueMonth)}
+- Meta: ${salesMetrics.goalTarget > 0 ? `${formatCurrency(salesMetrics.goalTarget)} (${salesMetrics.goalProgress}% atingido)` : 'Sem meta definida'}
+- Taxa de conversão: ${salesMetrics.conversionRate}%
+
+📊 PIPELINE:
+- Deals abertos: ${salesMetrics.pipelineCount}
+- Valor total: ${formatCurrency(salesMetrics.pipelineValue)}
+
+FORMATO: Use emojis. Seções: 📊 Resumo | 📞 Atendimento | 💰 Vendas | ✅ Destaques | ⚠️ Atenção | 💡 Sugestões
 Termine com frase motivacional curta. Seja direto e prático.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 800, temperature: 0.7 }),
+    body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 1200, temperature: 0.7 }),
   });
 
   if (!response.ok) throw new Error(`OpenAI error: ${response.status}`);
@@ -116,7 +221,8 @@ async function sendEmailReport(
   adminName: string,
   dateStr: string,
   aiAnalysis: string,
-  metrics: any
+  metrics: any,
+  salesMetrics: any
 ): Promise<boolean> {
   const resendKey = Deno.env.get('RESEND_API_KEY');
   if (!resendKey) {
@@ -136,7 +242,7 @@ async function sendEmailReport(
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
         <!-- Header -->
         <tr><td style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:32px 40px;text-align:center;">
-          <h1 style="color:#ffffff;margin:0;font-size:24px;">🤖 IA Governante</h1>
+          <h1 style="color:#ffffff;margin:0;font-size:24px;">IA Governante</h1>
           <p style="color:#a0aec0;margin:8px 0 0;font-size:14px;">Relatório Executivo — ${dateStr}</p>
         </td></tr>
 
@@ -145,9 +251,9 @@ async function sendEmailReport(
           <p style="color:#1a1a2e;font-size:16px;margin:0;">Olá, <strong>${adminName}</strong>!</p>
         </td></tr>
 
-        <!-- Metrics Grid -->
+        <!-- Atendimento Metrics -->
         <tr><td style="padding:0 40px 24px;">
-          <h2 style="color:#1a1a2e;font-size:18px;margin:0 0 16px;">📊 Números do Dia</h2>
+          <h2 style="color:#1a1a2e;font-size:18px;margin:0 0 16px;">📞 Atendimento do Dia</h2>
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
               <td style="background:#f0f4ff;border-radius:8px;padding:16px;text-align:center;width:25%;">
@@ -173,6 +279,61 @@ async function sendEmailReport(
           </table>
           ${metrics.avgResolutionMin ? `<p style="color:#64748b;font-size:13px;margin:12px 0 0;">⏱️ Tempo médio de resolução: <strong>${metrics.avgResolutionMin} min</strong></p>` : ''}
           <p style="color:#64748b;font-size:13px;margin:4px 0 0;">💬 Mensagens: <strong>${metrics.totalMessages}</strong> (${metrics.aiMessages} da IA)</p>
+        </td></tr>
+
+        <!-- Sales Metrics -->
+        <tr><td style="padding:0 40px 24px;">
+          <h2 style="color:#1a1a2e;font-size:18px;margin:0 0 16px;">💰 Vendas do Dia</h2>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:#f0fdf4;border-radius:8px;padding:16px;text-align:center;width:33%;">
+                <div style="color:#22c55e;font-size:28px;font-weight:bold;">${salesMetrics.wonToday}</div>
+                <div style="color:#64748b;font-size:11px;margin-top:4px;">Ganhos</div>
+                <div style="color:#22c55e;font-size:13px;font-weight:bold;margin-top:4px;">${formatCurrency(salesMetrics.revenueToday)}</div>
+              </td>
+              <td width="8"></td>
+              <td style="background:#fef2f2;border-radius:8px;padding:16px;text-align:center;width:33%;">
+                <div style="color:#ef4444;font-size:28px;font-weight:bold;">${salesMetrics.lostToday}</div>
+                <div style="color:#64748b;font-size:11px;margin-top:4px;">Perdidos</div>
+              </td>
+              <td width="8"></td>
+              <td style="background:#f0f4ff;border-radius:8px;padding:16px;text-align:center;width:33%;">
+                <div style="color:#6366f1;font-size:28px;font-weight:bold;">${salesMetrics.newDeals}</div>
+                <div style="color:#64748b;font-size:11px;margin-top:4px;">Novos Deals</div>
+              </td>
+            </tr>
+          </table>
+          ${salesMetrics.topLostReasons.length > 0 ? `<p style="color:#64748b;font-size:13px;margin:12px 0 0;">❌ Motivos de perda: ${salesMetrics.topLostReasons.join(', ')}</p>` : ''}
+        </td></tr>
+
+        <!-- Monthly Performance -->
+        <tr><td style="padding:0 40px 24px;">
+          <h2 style="color:#1a1a2e;font-size:18px;margin:0 0 16px;">📈 Performance do Mês</h2>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:#f0fdf4;border-radius:8px;padding:16px;text-align:center;width:33%;">
+                <div style="color:#22c55e;font-size:22px;font-weight:bold;">${formatCurrency(salesMetrics.revenueMonth)}</div>
+                <div style="color:#64748b;font-size:11px;margin-top:4px;">Receita Mês (${salesMetrics.dealsWonMonth} deals)</div>
+              </td>
+              <td width="8"></td>
+              <td style="background:#f0f4ff;border-radius:8px;padding:16px;text-align:center;width:33%;">
+                <div style="color:#6366f1;font-size:22px;font-weight:bold;">${salesMetrics.conversionRate}%</div>
+                <div style="color:#64748b;font-size:11px;margin-top:4px;">Conversão</div>
+              </td>
+              <td width="8"></td>
+              <td style="background:${salesMetrics.goalProgress !== null ? (salesMetrics.goalProgress >= 80 ? '#f0fdf4' : salesMetrics.goalProgress >= 50 ? '#fffbeb' : '#fef2f2') : '#f8fafc'};border-radius:8px;padding:16px;text-align:center;width:33%;">
+                <div style="color:${salesMetrics.goalProgress !== null ? (salesMetrics.goalProgress >= 80 ? '#22c55e' : salesMetrics.goalProgress >= 50 ? '#f59e0b' : '#ef4444') : '#94a3b8'};font-size:22px;font-weight:bold;">${salesMetrics.goalProgress !== null ? `${salesMetrics.goalProgress}%` : '—'}</div>
+                <div style="color:#64748b;font-size:11px;margin-top:4px;">Meta${salesMetrics.goalTarget > 0 ? ` (${formatCurrency(salesMetrics.goalTarget)})` : ''}</div>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Pipeline -->
+        <tr><td style="padding:0 40px 24px;">
+          <div style="background:#f8fafc;border-radius:8px;padding:16px;display:flex;">
+            <p style="color:#1a1a2e;font-size:14px;margin:0;">📊 <strong>Pipeline:</strong> ${salesMetrics.pipelineCount} deals abertos — ${formatCurrency(salesMetrics.pipelineValue)}</p>
+          </div>
         </td></tr>
 
         <!-- AI Analysis -->
@@ -240,7 +401,7 @@ serve(async (req) => {
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiKey) throw new Error('OPENAI_API_KEY não configurada');
 
-    // Buscar admins com notify_ai_governor = true (inclui id para buscar email)
+    // Buscar admins com notify_ai_governor = true
     const { data: adminProfiles } = await supabase
       .from('profiles')
       .select('id, whatsapp_number, full_name, notify_ai_governor')
@@ -249,7 +410,6 @@ serve(async (req) => {
     let adminPhones: string[] = [];
     const adminEmails: { email: string; name: string }[] = [];
 
-    // Buscar emails dos admins via auth.users (usando admin API)
     for (const p of (adminProfiles ?? [])) {
       const num = (p.whatsapp_number || '').replace(/\D/g, '');
       if (num.length >= 10) {
@@ -257,7 +417,6 @@ serve(async (req) => {
       }
       console.log(`[ai-governor] 👤 Admin notificado: ${p.full_name} → ***${num.slice(-4)}`);
 
-      // Buscar email do usuário
       try {
         const { data: userData } = await supabase.auth.admin.getUserById(p.id);
         if (userData?.user?.email) {
@@ -307,15 +466,20 @@ serve(async (req) => {
       until = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
     }
 
-    const metrics = await collectDayMetrics(supabase, since.toISOString(), until.toISOString());
-    const dateStr = formatDate(since);
-    const aiAnalysis = await generateAIAnalysis(metrics, dateStr, openaiKey);
+    // Coletar métricas em paralelo
+    const [metrics, salesMetrics] = await Promise.all([
+      collectDayMetrics(supabase, since.toISOString(), until.toISOString()),
+      collectSalesMetrics(supabase, since.toISOString(), until.toISOString()),
+    ]);
 
-    const fullMessage = `🤖 *IA Governante — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const dateStr = formatDate(since);
+    const aiAnalysis = await generateAIAnalysis(metrics, salesMetrics, dateStr, openaiKey);
+
+    const fullMessage = `*IA Governante — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
-      metrics_snapshot: metrics,
+      metrics_snapshot: { ...metrics, sales: salesMetrics },
       ai_analysis: aiAnalysis,
       sent_to_phones: adminPhones,
       generated_at: now.toISOString(),
@@ -330,7 +494,7 @@ serve(async (req) => {
     // Enviar Email
     let emailResult = { sent: 0, errors: 0 };
     for (const admin of adminEmails) {
-      const ok = await sendEmailReport(supabase, admin.email, admin.name, dateStr, aiAnalysis, metrics);
+      const ok = await sendEmailReport(supabase, admin.email, admin.name, dateStr, aiAnalysis, metrics, salesMetrics);
       if (ok) emailResult.sent++; else emailResult.errors++;
     }
 
@@ -339,8 +503,12 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       date: dateStr,
-      metrics: { totalConvs: metrics.totalConvs, closedByAI: metrics.closedByAI, escalatedToHuman: metrics.escalatedToHuman, totalAIEvents: metrics.totalAIEvents },
-      aiAnalysisPreview: aiAnalysis.slice(0, 200),
+      metrics: {
+        totalConvs: metrics.totalConvs, closedByAI: metrics.closedByAI,
+        escalatedToHuman: metrics.escalatedToHuman, totalAIEvents: metrics.totalAIEvents,
+        sales: salesMetrics,
+      },
+      aiAnalysisPreview: aiAnalysis.slice(0, 300),
       whatsapp: whatsappResult,
       email: emailResult,
       reportId: savedReport?.id,
