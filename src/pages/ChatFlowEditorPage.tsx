@@ -21,7 +21,7 @@ export default function ChatFlowEditorPage() {
   const queryClient = useQueryClient();
   const { data: flow, isLoading } = useChatFlow(id || null);
   const updateFlow = useUpdateChatFlow();
-  const [simulatorOpen, setSimulatorOpen] = useState(false);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [currentFlowState, setCurrentFlowState] = useState<{ nodes: Node[]; edges: Edge[] } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [flowName, setFlowName] = useState("");
