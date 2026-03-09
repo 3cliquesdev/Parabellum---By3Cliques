@@ -768,9 +768,9 @@ async function sendEmailReport(
           <p style="color:#1e293b;font-size:15px;margin:0;">Ola, ${adminName}!</p>
         </td></tr>
 
-        <!-- Atendimento do Dia -->
+        <!-- HOJE — Atendimento -->
         <tr><td style="padding:0 32px 6px;">
-          <p style="color:#6366f1;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Atendimento do Dia</p>
+          <p style="color:#6366f1;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">HOJE — Atendimento</p>
         </td></tr>
         <tr><td style="padding:0 32px 12px;">
           <table width="100%" cellpadding="0" cellspacing="6">
