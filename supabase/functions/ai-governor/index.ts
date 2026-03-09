@@ -544,6 +544,15 @@ PIPELINE HOJE:
 - Novos leads capturados: ${salesMetrics.newLeadsToday}
 - Por fonte: ${salesMetrics.topNewSources.join(' | ') || 'Nenhum'}
 
+TAGS DE CONVERSAS HOJE:
+${(metrics.topConversationTags ?? []).length > 0 ? (metrics.topConversationTags ?? []).map((t: any) => `- ${t.name}: ${t.count}x`).join('\n') : '- Nenhuma tag registrada'}
+
+TICKETS HOJE:
+- Total: ${metrics.ticketsTodayTotal} | Urgentes: ${metrics.ticketsByPriority?.urgent ?? 0} | Alta: ${metrics.ticketsByPriority?.high ?? 0} | Media: ${metrics.ticketsByPriority?.medium ?? 0} | Baixa: ${metrics.ticketsByPriority?.low ?? 0}
+- Abertos: ${metrics.ticketsOpen ?? 0}
+${(metrics.ticketsCategories ?? []).length > 0 ? '- Top categorias: ' + (metrics.ticketsCategories ?? []).map((c: any) => `${c.category} (${c.count})`).join(', ') : ''}
+${(metrics.ticketsTopSubjects ?? []).length > 0 ? '- Top tickets urgentes/alta:\n' + (metrics.ticketsTopSubjects ?? []).map((t: any) => `  #${t.ticket_number} ${t.subject} (${t.priority})`).join('\n') : ''}
+
 ===== MES (acumulado) =====
 - Receita mes: R$ ${salesMetrics.revenueMonth.toLocaleString('pt-BR')} / ${salesMetrics.goalProgress !== null ? salesMetrics.goalProgress + '% da meta' : 'sem meta'}
 - MoM: ${salesMetrics.momGrowth !== null ? (salesMetrics.momGrowth >= 0 ? '+' : '') + salesMetrics.momGrowth + '%' : 'N/A'}
@@ -567,10 +576,12 @@ PRIORIZE: Inbox e IA sao mais importantes que vendas.
 Se IA resolveu abaixo de 30% isso DEVE ser o [ATENCAO] principal.
 FOQUE NO DIA: analise o que aconteceu HOJE e o que fazer AMANHA para melhorar.
 IMPORTANTE: Distinga vendas novas de recorrencias. Recorrencias NAO sao vendas novas — sao renovacoes automaticas.
+TAGS: Se houver tags frequentes, sugira acoes especificas para resolver os problemas mais comuns.
+TICKETS: Se houver tickets urgentes/alta, priorize sugestoes para resolve-los amanha.
 
 [DESTAQUES] — O MELHOR dado do DIA. Cite numero exato.
 [ATENCAO] — Diagnostico TECNICO. Cite configs, nos do fluxo, gaps na KB. NUNCA diga "falta de treinamento".
-[SUGESTOES] — 3 acoes: 1) TECNICA 2) CONTEUDO 3) COMERCIAL. Especificas e operacionais.
+[SUGESTOES] — 4 acoes: 1) TECNICA 2) CONTEUDO 3) COMERCIAL 4) Baseada nas tags frequentes ou tickets urgentes.
 [MOTIVACIONAL] — Varie. Use dados reais do DIA.
 
 FORMATO: [TAG] texto (uma vez por tag, sem markdown, max 3 frases por tag)`;
