@@ -38,6 +38,14 @@ async function collectDayMetrics(supabase: any, since: string, until: string) {
       }, 0) / closedWithTime.length)
     : null;
 
+  // Contagem REAL de eventos IA no dia (sem cap de limit)
+  const { count: totalAIEventsCount } = await supabase
+    .from('ai_events')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', since)
+    .lt('created_at', until);
+
+  // Fetch amostra para análise de intents/tipos (limit para performance)
   const { data: aiEvents } = await supabase
     .from('ai_events')
     .select('event_type, model, output_json, created_at')
@@ -46,7 +54,7 @@ async function collectDayMetrics(supabase: any, since: string, until: string) {
     .order('created_at', { ascending: false })
     .limit(500);
 
-  const totalAIEvents = aiEvents?.length ?? 0;
+  const totalAIEvents = totalAIEventsCount ?? aiEvents?.length ?? 0;
   const fallbackEvents = aiEvents?.filter((e: any) => e.output_json?.action === 'handoff' || e.output_json?.escalated === true).length ?? 0;
   const directEvents = aiEvents?.filter((e: any) => e.output_json?.action === 'direct').length ?? 0;
 
