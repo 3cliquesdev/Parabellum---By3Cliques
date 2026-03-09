@@ -10,6 +10,7 @@ import { EmailSendsExportDialog } from "@/components/email/EmailSendsExportDialo
 export default function Reports() {
   const navigate = useNavigate();
   const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [emailSendsExportOpen, setEmailSendsExportOpen] = useState(false);
 
   const reportCategories = [
     {
