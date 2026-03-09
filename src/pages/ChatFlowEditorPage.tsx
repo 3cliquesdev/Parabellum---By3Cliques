@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Play, Loader2, Settings2, Info, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatFlowEditor } from "@/components/chat-flows/ChatFlowEditor";
-import { ChatFlowSimulator } from "@/components/chat-flows/ChatFlowSimulator";
+import { FlowTestDialog } from "@/components/chat-flows/FlowTestDialog";
 import { useChatFlow, useUpdateChatFlow } from "@/hooks/useChatFlows";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ export default function ChatFlowEditorPage() {
   const queryClient = useQueryClient();
   const { data: flow, isLoading } = useChatFlow(id || null);
   const updateFlow = useUpdateChatFlow();
-  const [simulatorOpen, setSimulatorOpen] = useState(false);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [currentFlowState, setCurrentFlowState] = useState<{ nodes: Node[]; edges: Edge[] } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [flowName, setFlowName] = useState("");
@@ -58,8 +58,18 @@ export default function ChatFlowEditorPage() {
     setCurrentFlowState(flowDef);
   };
 
-  const handleOpenSimulator = () => {
-    setSimulatorOpen(true);
+  const handleOpenTestDialog = () => {
+    setTestDialogOpen(true);
+  };
+
+  const handleAutoSave = async () => {
+    if (!id || !currentFlowState) return;
+    await new Promise<void>((resolve, reject) => {
+      updateFlow.mutate(
+        { id, flow_definition: currentFlowState },
+        { onSuccess: () => resolve(), onError: (err) => reject(err) }
+      );
+    });
   };
 
   const handleOpenSettings = () => {
@@ -183,7 +193,7 @@ export default function ChatFlowEditorPage() {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={handleOpenSimulator}
+            onClick={handleOpenTestDialog}
             disabled={simulatorNodes.length === 0}
           >
             <Play className="h-4 w-4 mr-2" />
@@ -212,14 +222,16 @@ export default function ChatFlowEditorPage() {
         />
       </div>
 
-      {/* Simulador */}
-      <ChatFlowSimulator
-        open={simulatorOpen}
-        onClose={() => setSimulatorOpen(false)}
-        nodes={simulatorNodes}
-        edges={simulatorEdges}
-        flowName={flow.name}
-      />
+      {/* Diálogo de Teste Real */}
+      {id && (
+        <FlowTestDialog
+          open={testDialogOpen}
+          onClose={() => setTestDialogOpen(false)}
+          flowId={id}
+          flowName={flow.name}
+          onAutoSave={currentFlowState ? handleAutoSave : undefined}
+        />
+      )}
 
       {/* Configurações do fluxo (gatilhos) */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>

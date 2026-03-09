@@ -1,48 +1,31 @@
 
+# Plano: Mensagens Configuráveis de Fora do Horário ✅
 
-# Plano: Ativar o botão "Testar" do Editor de Fluxo com teste real
+## Status: IMPLEMENTADO (com ajustes finos aplicados)
 
-## Problema Atual
-O botão "Testar" no editor de fluxo (linha 183-191 de `ChatFlowEditorPage.tsx`) abre um `ChatFlowSimulator` — um simulador **local/frontend** que apenas percorre nós no browser. Não testa o motor real (`process-chat-flow`), não envia mensagens, não valida OTP, não cria tickets. É essencialmente inútil para validação real.
+## Resumo
 
-## Solução
-Transformar o botão "Testar" para abrir um **diálogo de teste real**, similar ao `TestModeDropdown` do inbox, que:
+As mensagens automáticas enviadas fora do horário comercial (handoff e redistribuição) agora são editáveis via UI na página de SLA Settings. Templates armazenados na tabela `business_messages_config` com fallback para mensagens padrão.
 
-1. **Salva o fluxo automaticamente** antes de iniciar (para garantir que o teste usa a versão atual)
-2. **Permite escolher uma conversa existente** ou criar uma conversa de teste
-3. **Ativa o Test Mode** (`is_test_mode: true`, `ai_mode: autopilot`) na conversa escolhida
-4. **Invoca `process-chat-flow`** com `manualTrigger: true` e `bypassActiveCheck: true` (já que pode ser rascunho)
-5. **Redireciona para o inbox** na conversa de teste para acompanhar em tempo real
+## Ajustes Finos Aplicados
 
-## Componentes
+- ✅ Trigger `updated_at` reutilizando `public.update_updated_at_column()`
+- ✅ Validação: botão salvar desabilitado se template vazio
+- ✅ Warning visual se placeholders `{schedule}` / `{next_open}` removidos
+- ✅ Botão "Restaurar Padrão" para resetar mensagens
 
-### 1. Novo componente `FlowTestDialog`
-- Dialog modal com duas opções:
-  - **Conversa existente**: busca conversas abertas e permite selecionar
-  - **Nova conversa de teste**: cria conversa + contato de teste automaticamente
-- Campo de busca para filtrar conversas
-- Botão "Iniciar Teste" que executa a sequência atômica
+## Arquivos Alterados
 
-### 2. Alteração em `ChatFlowEditorPage.tsx`
-- Substituir `handleOpenSimulator` / `ChatFlowSimulator` pelo novo `FlowTestDialog`
-- Auto-save do fluxo antes de iniciar teste
-- Após iniciar, redirecionar para `/inbox` com a conversa selecionada
+| Arquivo | Mudança |
+|---------|---------|
+| SQL Migrations | Tabela `business_messages_config` + seeds + RLS + trigger updated_at |
+| `src/hooks/useBusinessMessages.ts` | Hook (query + mutation) |
+| `src/pages/SLASettings.tsx` | Seção "Mensagens de Fora do Horário" com validação + restaurar padrão |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Busca template `after_hours_handoff` com fallback |
+| `supabase/functions/redistribute-after-hours/index.ts` | Busca template `business_hours_reopened` com fallback |
 
-### 3. Fluxo de execução
-```text
-[Clique "Testar"]
-  → Salva fluxo atual (se houver mudanças)
-  → Abre FlowTestDialog
-  → Usuário escolhe conversa (existente ou nova)
-  → [Iniciar Teste]
-    → UPDATE conversations SET is_test_mode=true, ai_mode='autopilot'
-    → INVOKE process-chat-flow (flowId, manualTrigger, bypassActiveCheck)
-    → Redireciona para /inbox?conversation={id}
-```
+## Garantias
 
-### Impacto
-- Remove o `ChatFlowSimulator` (simulador local) que não agrega valor
-- Reutiliza a mesma lógica já validada do `TestModeDropdown`
-- Zero alteração no motor de fluxos ou edge functions
-- Nenhuma migração de banco necessária
-
+- Fallback hardcoded se tabela vazia ou inacessível
+- Kill Switch, Shadow Mode, Fluxos: não afetados
+- RLS: leitura authenticated, escrita managers/admins
