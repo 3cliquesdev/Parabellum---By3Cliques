@@ -283,13 +283,17 @@ TOP PARCEIROS: ${(salesMetrics.topPartners ?? []).map((p: any) => `${p.name}: ${
 TIME COMERCIAL: ${(salesMetrics.topReps ?? []).length > 0 ? (salesMetrics.topReps ?? []).map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
 ALERTAS: ${(salesMetrics.alerts ?? []).join(' | ') || 'Nenhum'}
 
-FORMATO OBRIGATÓRIO - use EXATAMENTE estas seções, uma por linha, sem bullet points nem listas:
-[DESTAQUES] Uma frase com os pontos positivos do dia.
-[ATENCAO] Uma frase com pontos de atenção ou riscos.
-[SUGESTOES] Uma frase com sugestões práticas de melhoria.
-[MOTIVACIONAL] Uma frase motivacional curta.
+FORMATO OBRIGATÓRIO (siga À RISCA, sem exceções):
+- NÃO use markdown (**, *, -, •, bullets, listas). Use APENAS texto corrido.
+- Cada linha DEVE começar com a tag entre colchetes: [DESTAQUES], [ATENCAO], [SUGESTOES] ou [MOTIVACIONAL].
+- Use exatamente 4 linhas, uma para cada tag. NO MÁXIMO 2 frases por linha.
+- Exemplo:
+[DESTAQUES] O dia teve 10 conversas com taxa de resolução IA de 30%, demonstrando boa automação.
+[ATENCAO] O tempo médio de resolução subiu para 15 min, acima do ideal de 10 min.
+[SUGESTOES] Revisar artigos da base de conhecimento sobre os temas mais escalados para reduzir handoffs.
+[MOTIVACIONAL] Cada conversa resolvida pela IA é tempo ganho para o time focar no que importa.
 
-Cada seção deve ter NO MÁXIMO 2 frases. Seja direto, prático e use dados reais.`;
+Seja direto, prático e use dados reais do dia.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
