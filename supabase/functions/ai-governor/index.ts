@@ -339,13 +339,24 @@ async function sendEmailReport(
 
   // Buscar branding interno (employee) e sender padrão
   let sender: any = null;
+  let branding: any = null;
   try {
-    const { data } = await supabase.from('email_senders').select('*').eq('is_default', true).single();
-    sender = data;
+    const [senderRes, brandingRes] = await Promise.all([
+      supabase.from('email_senders').select('*').eq('is_default', true).single(),
+      supabase.from('email_branding').select('*').eq('is_default_employee', true).single(),
+    ]);
+    sender = senderRes.data;
+    branding = brandingRes.data;
   } catch {}
 
   const fromName = 'IA Governante';
   const fromEmail = sender?.from_email || 'contato@mail.3cliques.net';
+  const headerColor = branding?.header_color || '#0f172a';
+  const headerColorEnd = headerColor + 'dd';
+  const brandName = branding?.name || 'Parabellum by 3Cliques';
+  const logoUrl = branding?.logo_url;
+  const footerText = branding?.footer_text || 'Parabellum by 3Cliques • Gerado automaticamente';
+  const footerLogoUrl = branding?.footer_logo_url;
 
   const aiRate = metrics.totalConvs > 0 ? Math.round((metrics.closedByAI / metrics.totalConvs) * 100) : 0;
   const escRate = metrics.totalConvs > 0 ? Math.round((metrics.escalatedToHuman / metrics.totalConvs) * 100) : 0;
