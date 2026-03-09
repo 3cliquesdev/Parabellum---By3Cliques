@@ -126,7 +126,7 @@ export function VariableAutocomplete({
 
   return (
     <div className="relative space-y-1">
-      <Popover open={open} onOpenChange={(o) => { if (!o) return; setOpen(o); }{ if (!o) return; setOpen(o); }}>
+      <Popover open={open} onOpenChange={(o) => { if (!o) return; setOpen(o); }}>
         <PopoverTrigger asChild>
           <div>
             <Textarea
@@ -152,6 +152,7 @@ export function VariableAutocomplete({
             side="bottom"
             align="start"
             onOpenAutoFocus={(e) => e.preventDefault()}
+            onInteractOutside={(e) => e.preventDefault()}
           >
             <Command shouldFilter={false}>
               <CommandInput
