@@ -416,79 +416,83 @@ async function generateAIAnalysis(metrics: any, salesMetrics: any, dateStr: stri
   const aiRate = metrics.totalConvs > 0 ? ((metrics.closedByAI / metrics.totalConvs) * 100).toFixed(1) : '0';
   const escRate = metrics.totalConvs > 0 ? ((metrics.escalatedToHuman / metrics.totalConvs) * 100).toFixed(1) : '0';
 
-  const prompt = `Você é o analista executivo da Parabellum. Sua função é gerar um relatório de diagnóstico DIRETO e ACIONÁVEL. Não seja gentil — seja preciso e honesto.
+  const prompt = `Voce e o analista executivo da Parabellum. Sua funcao e gerar um relatorio de diagnostico DIRETO e ACIONAVEL. Nao seja gentil — seja preciso e honesto.
 
-===== DADOS DO DIA ${dateStr} =====
+Este relatorio e DIARIO. Foque no que aconteceu HOJE e como melhorar AMANHA.
 
-INBOX & IA (PRIORIDADE MÁXIMA):
-- Total de conversas: ${metrics.totalConvs}
-- Resolvidas pela IA (autopilot): ${metrics.closedByAI} (${aiRate}%)
-- Escaladas para humano: ${metrics.escalatedToHuman} (${escRate}%)
-- Tempo médio de resolução: ${metrics.avgResolutionMin ?? 'N/A'} minutos
-- Total eventos IA disparados: ${metrics.totalAIEvents}
-- Mensagens totais: ${metrics.totalMessages} (${metrics.aiMessages} enviadas pela IA)
-- Anomalias críticas: ${metrics.criticalAnomalies?.length ?? 0}
+===== HOJE (${dateStr}) =====
 
-PARÂMETROS DE SAÚDE (use para avaliar):
-✅ IA resolução SAUDÁVEL: acima de 60%
-⚠️ IA resolução ATENÇÃO: 30–60%
-🚨 IA resolução CRÍTICO: abaixo de 30%
-✅ Escalação SAUDÁVEL: abaixo de 20%
-⚠️ Escalação ATENÇÃO: 20–35%
-🚨 Escalação CRÍTICO: acima de 35%
-✅ Tempo médio SAUDÁVEL: abaixo de 15 min
-⚠️ Tempo médio ATENÇÃO: 15–30 min
-🚨 Tempo médio CRÍTICO: acima de 30 min
+INBOX & IA (PRIORIDADE MAXIMA):
+- Conversas abertas HOJE: ${metrics.totalConvs}
+- Resolvidas pela IA (autopilot) HOJE: ${metrics.closedByAI} (${aiRate}%)
+- Escaladas para humano HOJE: ${metrics.escalatedToHuman} (${escRate}%)
+- Tempo medio de resolucao HOJE: ${metrics.avgResolutionMin ?? 'N/A'} minutos
+- Eventos IA disparados HOJE: ${metrics.totalAIEvents}
+- Mensagens HOJE: ${metrics.totalMessages} (${metrics.aiMessages} enviadas pela IA)
+- Anomalias criticas HOJE: ${metrics.criticalAnomalies?.length ?? 0}
 
-VENDAS:
-- Fechamentos hoje: ${salesMetrics.wonToday} | Receita: R$ ${salesMetrics.revenueToday.toLocaleString('pt-BR')}
-- Perdidos hoje: ${salesMetrics.lostToday}${salesMetrics.topLostReasons.length ? ' | Motivos: ' + salesMetrics.topLostReasons.join(', ') : ''}
-- Novos deals: ${salesMetrics.newDeals}
-- Canais: ${salesMetrics.origins.map((o: any) => `${o.label} ${o.pct}%`).join(' | ')}
-- Time comercial hoje: ${salesMetrics.topReps.length > 0 ? salesMetrics.topReps.map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
-- MÊS: R$ ${salesMetrics.revenueMonth.toLocaleString('pt-BR')} / ${salesMetrics.goalProgress !== null ? salesMetrics.goalProgress + '% da meta' : 'sem meta'}
-- MoM: ${salesMetrics.momGrowth !== null ? (salesMetrics.momGrowth >= 0 ? '+' : '') + salesMetrics.momGrowth + '%' : 'N/A'}
-- Alertas: ${salesMetrics.alerts.join(' | ') || 'Nenhum'}
+VENDAS HOJE:
+- Fechamentos HOJE: ${salesMetrics.wonToday} | Receita HOJE: R$ ${salesMetrics.revenueToday.toLocaleString('pt-BR')}
+- Perdidos HOJE: ${salesMetrics.lostToday}${salesMetrics.topLostReasons.length ? ' | Motivos: ' + salesMetrics.topLostReasons.join(', ') : ''}
+- Novos deals HOJE: ${salesMetrics.newDeals}
+- Canais HOJE: ${salesMetrics.origins.map((o: any) => `${o.label} ${o.pct}%`).join(' | ')}
+- Time comercial HOJE: ${salesMetrics.topReps.length > 0 ? salesMetrics.topReps.map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
 
-PIPELINE COMERCIAL HOJE:
-- Novos leads capturados: ${salesMetrics.newLeadsToday}
+PIPELINE HOJE:
+- Novos leads capturados HOJE: ${salesMetrics.newLeadsToday}
 - Por fonte: ${salesMetrics.topNewSources.join(' | ') || 'Nenhum'}
 
-TIME COMERCIAL (mês):
-${salesMetrics.topRepsMonth.length > 0 ? salesMetrics.topRepsMonth.map((r: any) => `${r.name}: ${r.deals} deals / R$${r.revenue}`).join(' | ') : 'Sem fechamentos no mês'}
+===== MES (acumulado) =====
+- Receita mes: R$ ${salesMetrics.revenueMonth.toLocaleString('pt-BR')} / ${salesMetrics.goalProgress !== null ? salesMetrics.goalProgress + '% da meta' : 'sem meta'}
+- MoM: ${salesMetrics.momGrowth !== null ? (salesMetrics.momGrowth >= 0 ? '+' : '') + salesMetrics.momGrowth + '%' : 'N/A'}
+- Deals won mes: ${salesMetrics.dealsWonMonth}
+- Time comercial mes: ${salesMetrics.topRepsMonth.length > 0 ? salesMetrics.topRepsMonth.map((r: any) => `${r.name}: ${r.deals} deals / R$${r.revenue}`).join(' | ') : 'Sem fechamentos no mes'}
+- Alertas: ${salesMetrics.alerts.join(' | ') || 'Nenhum'}
 
-===== CONTEXTO DO SISTEMA (use para diagnóstico técnico preciso) =====
-- Configurações da IA: ai_strict_rag_mode=${metrics.aiConfig?.strictRagMode ?? 'N/A'}, threshold=${metrics.aiConfig?.ragMinThreshold ?? 'N/A'}, confidence_direct=${metrics.aiConfig?.confidenceDirect ?? 'N/A'}, block_financial=${metrics.aiConfig?.blockFinancial ?? 'N/A'}
+PARAMETROS DE SAUDE (use para avaliar):
+✅ IA resolucao SAUDAVEL: acima de 60%
+⚠️ IA resolucao ATENCAO: 30-60%
+🚨 IA resolucao CRITICO: abaixo de 30%
+✅ Escalacao SAUDAVEL: abaixo de 20%
+⚠️ Escalacao ATENCAO: 20-35%
+🚨 Escalacao CRITICO: acima de 35%
+✅ Tempo medio SAUDAVEL: abaixo de 15 min
+⚠️ Tempo medio ATENCAO: 15-30 min
+🚨 Tempo medio CRITICO: acima de 30 min
+
+===== CONTEXTO DO SISTEMA (use para diagnostico tecnico preciso) =====
+- Configuracoes da IA: ai_strict_rag_mode=${metrics.aiConfig?.strictRagMode ?? 'N/A'}, threshold=${metrics.aiConfig?.ragMinThreshold ?? 'N/A'}, confidence_direct=${metrics.aiConfig?.confidenceDirect ?? 'N/A'}, block_financial=${metrics.aiConfig?.blockFinancial ?? 'N/A'}
 - KB (Knowledge Base): ${metrics.kbArticlesCount ?? 0} artigos ativos com embedding
-- Modos de conversa do dia: ${metrics.autopilotConvs ?? 0} em autopilot, ${metrics.copilotConvs ?? 0} em copilot, ${metrics.waitingHumanConvs ?? 0} em waiting_human
+- Modos de conversa HOJE: ${metrics.autopilotConvs ?? 0} em autopilot, ${metrics.copilotConvs ?? 0} em copilot, ${metrics.waitingHumanConvs ?? 0} em waiting_human
 - Canais ativos: ${metrics.activeChannels?.join(', ') ?? 'N/A'}
-- Top motivos de falha/transferência da IA: ${metrics.topFailReasons?.length > 0 ? metrics.topFailReasons.join(', ') : 'Nenhum registrado'}
+- Top motivos de falha/transferencia da IA: ${metrics.topFailReasons?.length > 0 ? metrics.topFailReasons.join(', ') : 'Nenhum registrado'}
 
-===== INSTRUÇÕES =====
+===== INSTRUCOES =====
 
-PRIORIZE: Inbox e IA são mais importantes que vendas.
+PRIORIZE: Inbox e IA sao mais importantes que vendas.
 Se IA resolveu abaixo de 30% → isso DEVE ser o [ATENCAO] principal.
+FOQUE NO DIA: analise o que aconteceu HOJE e o que fazer AMANHA para melhorar.
 
-INSTRUÇÕES POR SEÇÃO:
+INSTRUCOES POR SECAO:
 
-[DESTAQUES] — Encontre O MELHOR dado do dia. Se inbox está ruim, foque nas vendas ou crescimento MoM. Sempre há algo positivo. Cite o número exato.
+[DESTAQUES] — Encontre O MELHOR dado do DIA. Se inbox esta ruim, foque nas vendas ou crescimento. Sempre ha algo positivo. Cite o numero exato de HOJE.
 
-[ATENCAO] — Seja um especialista TÉCNICO. Use o CONTEXTO DO SISTEMA acima para diagnosticar:
-- Se autopilotConvs = 0 ou < 50% do total: "Conversas NÃO estão em autopilot — IA assistindo humanos em vez de resolver sozinha. Verificar nó ia_entrada no Master Flow e confirmar ai_persistent=true."
-- Se topFailReasons tem ai_handoff_exit: "IA transferiu Nx por falta de conteúdo no RAG — KB precisa de artigos sobre [tópico inferido]."
-- Se ai_strict_rag_mode=true e resolução baixa: "ai_strict_rag_mode ativo — IA recusa responder sem match exato na KB. Considerar ajustar para false ou aumentar artigos."
-- Se block_financial=true: "Bloqueio financeiro ativo — IA não responde perguntas sobre valores/pagamentos."
-- CITE CAUSA TÉCNICA REAL. NUNCA diga "falta de treinamento" ou "reavaliar estratégia". Sempre aponte a config, o nó do fluxo ou o gap na KB.
+[ATENCAO] — Seja um especialista TECNICO. Use o CONTEXTO DO SISTEMA acima para diagnosticar:
+- Se autopilotConvs = 0 ou < 50% do total: "Conversas NAO estao em autopilot — IA assistindo humanos em vez de resolver sozinha. Verificar no ia_entrada no Master Flow e confirmar ai_persistent=true."
+- Se topFailReasons tem ai_handoff_exit: "IA transferiu Nx por falta de conteudo no RAG — KB precisa de artigos sobre [topico inferido]."
+- Se ai_strict_rag_mode=true e resolucao baixa: "ai_strict_rag_mode ativo — IA recusa responder sem match exato na KB. Considerar ajustar para false ou aumentar artigos."
+- Se block_financial=true: "Bloqueio financeiro ativo — IA nao responde perguntas sobre valores/pagamentos."
+- CITE CAUSA TECNICA REAL. NUNCA diga "falta de treinamento" ou "reavaliar estrategia". Sempre aponte a config, o no do fluxo ou o gap na KB.
 
-[SUGESTOES] — 3 ações ESPECÍFICAS e OPERACIONAIS:
-1) Uma ação TÉCNICA (config do sistema, nó do fluxo, deploy). Ex: "Verificar se nó ia_entrada tem forbid_financial=true" ou "Alterar ai_strict_rag_mode para false"
-2) Uma ação de CONTEÚDO (artigo KB específico baseado nos fails). Ex: "Criar artigo KB sobre cancelamento de conta — top motivo de transferência"
-3) Uma ação COMERCIAL (com nome do canal/parceiro/rep). Ex: "CIRILO representa X% — contatar 2º parceiro para diversificar"
-NUNCA USE frases vagas como "implementar treinamento", "reavaliar estratégia", "melhorar processos"
+[SUGESTOES] — 3 acoes ESPECIFICAS e OPERACIONAIS para melhorar AMANHA:
+1) Uma acao TECNICA (config do sistema, no do fluxo, deploy). Ex: "Verificar se no ia_entrada tem forbid_financial=true" ou "Alterar ai_strict_rag_mode para false"
+2) Uma acao de CONTEUDO (artigo KB especifico baseado nos fails). Ex: "Criar artigo KB sobre cancelamento de conta — top motivo de transferencia"
+3) Uma acao COMERCIAL (com nome do canal/parceiro/rep). Ex: "CIRILO representa X% — contatar 2o parceiro para diversificar"
+NUNCA USE frases vagas como "implementar treinamento", "reavaliar estrategia", "melhorar processos"
 
-[MOTIVACIONAL] — Varie a cada relatório. Use dados reais do dia. Ex: "Com X fechamentos e crescimento de Y% no mês, a direção é clara — agora é executar."
+[MOTIVACIONAL] — Varie a cada relatorio. Use dados reais do DIA. Ex: "Com X fechamentos hoje e crescimento de Y% no mes, a direcao e clara — agora e executar."
 
-FORMATO OBRIGATÓRIO:
+FORMATO OBRIGATORIO:
 [DESTAQUES] texto
 [ATENCAO] texto
 [SUGESTOES] texto
@@ -496,11 +500,11 @@ FORMATO OBRIGATÓRIO:
 
 REGRAS ABSOLUTAS:
 - NUNCA use **, -, *, markdown ou bullets
-- Cada tag aparece UMA vez em linha própria
-- SEMPRE mencione a taxa de resolução da IA no [ATENCAO] se < 60%
-- Máximo 3 frases por tag
-- Cite números reais, não genéricos
-- Use o contexto do sistema para diagnósticos técnicos precisos`;
+- Cada tag aparece UMA vez em linha propria
+- SEMPRE mencione a taxa de resolucao da IA no [ATENCAO] se < 60%
+- Maximo 3 frases por tag
+- Cite numeros reais de HOJE, nao genericos
+- Use o contexto do sistema para diagnosticos tecnicos precisos`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
