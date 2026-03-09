@@ -101,6 +101,7 @@ const PublicOnboardingForm = lazy(() => import("./pages/PublicOnboardingForm"));
 const SLASettings = lazy(() => import("./pages/SLASettings"));
 const ScoringSettings = lazy(() => import("./pages/ScoringSettings"));
 const TicketStatusSettings = lazy(() => import("./pages/TicketStatusSettings"));
+const TicketCategoriesSettings = lazy(() => import("./pages/TicketCategoriesSettings"));
 const CustomerFiscalData = lazy(() => import("./pages/CustomerFiscalData"));
 const ClientPortal = lazy(() => import("./pages/ClientPortal"));
 const SuperAdminPanel = lazy(() => import("./pages/SuperAdminPanel"));
