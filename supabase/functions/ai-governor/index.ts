@@ -853,7 +853,7 @@ async function sendEmailReport(
         </td></tr>
         <!-- Pipeline value + MoM -->
         <tr><td style="padding:0 32px 20px;">
-          <p style="color:#64748b;font-size:12px;margin:0;">📦 Pipeline: ${salesMetrics.pipelineCount} deals abertos — <strong style="color:#1e293b;">${fmtBRL(salesMetrics.pipelineValue)}</strong></p>
+          <p style="color:#64748b;font-size:12px;margin:0;">Pipeline: ${salesMetrics.pipelineCount} deals abertos — <strong style="color:#1e293b;">${fmtBRL(salesMetrics.pipelineValue)}</strong></p>
           ${momHtml}
         </td></tr>
 
