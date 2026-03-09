@@ -224,12 +224,65 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
       .slice(0, 5);
   }
 
+  // ═══ Pipeline Comercial — novos leads abertos hoje ═══
+  const { data: pipelineNewToday } = await supabase
+    .from('deals')
+    .select('id, lead_source, tracking_code, assigned_to, value, created_at')
+    .eq('status', 'open')
+    .gte('created_at', since)
+    .lt('created_at', until);
+
+  const pipelineBySource: Record<string, number> = {};
+  pipelineNewToday?.forEach((d: any) => {
+    const src = d.lead_source === 'formulario' ? `📝 Formulário${d.tracking_code ? ': ' + d.tracking_code : ''}`
+      : d.lead_source === 'whatsapp' ? '💬 WhatsApp'
+      : d.lead_source === 'webchat' ? '🌐 WebChat'
+      : d.lead_source?.startsWith('kiwify') ? '🟠 Kiwify'
+      : '📌 Outro';
+    pipelineBySource[src] = (pipelineBySource[src] ?? 0) + 1;
+  });
+  const newLeadsToday = pipelineNewToday?.length ?? 0;
+  const topNewSources = Object.entries(pipelineBySource)
+    .sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .map(([k, v]) => `${k}: ${v} leads`);
+
+  // ═══ Performance do time comercial no MÊS ═══
+  const { data: wonMonthByRep } = await supabase
+    .from('deals')
+    .select('assigned_to, gross_value')
+    .eq('status', 'won')
+    .gte('closed_at', firstDayOfMonth)
+    .not('assigned_to', 'is', null);
+
+  const repMonthMap: Record<string, { deals: number; revenue: number }> = {};
+  wonMonthByRep?.forEach((d: any) => {
+    if (!d.assigned_to) return;
+    if (!repMonthMap[d.assigned_to]) repMonthMap[d.assigned_to] = { deals: 0, revenue: 0 };
+    repMonthMap[d.assigned_to].deals++;
+    repMonthMap[d.assigned_to].revenue += Number(d.gross_value) || 0;
+  });
+
+  const repMonthIds = Object.keys(repMonthMap);
+  let topRepsMonth: any[] = [];
+  if (repMonthIds.length > 0) {
+    const { data: monthProfiles } = await supabase.from('profiles').select('id, full_name').in('id', repMonthIds);
+    topRepsMonth = repMonthIds
+      .map(id => ({ name: monthProfiles?.find((p: any) => p.id === id)?.full_name ?? 'Agente', ...repMonthMap[id] }))
+      .sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  }
+
   // Alertas de concentração
   const alerts: string[] = [];
   const partnerPct = origins.find(o => o.key === 'parceiros')?.pct ?? 0;
   if (partnerPct >= 50) alerts.push(`⚠️ Parceiros representam ${partnerPct}% da receita — risco de dependência`);
   if (topPartners[0]?.pct >= 35) alerts.push(`⚠️ "${topPartners[0].name}" concentra ${topPartners[0].pct}% da receita do dia`);
-  if ((cats.comercial.deals) === 0 && totalRevToday > 0) alerts.push('📢 Time comercial sem fechamentos hoje');
+  
+  // Alerta comercial inteligente (considera mês)
+  if (cats.comercial.deals === 0 && totalRevToday > 0) {
+    const monthDeals = topRepsMonth.reduce((s: number, r: any) => s + r.deals, 0);
+    if (monthDeals === 0) alerts.push('📢 Time comercial: sem fechamentos hoje nem no mês — verificar pipeline');
+    else alerts.push(`📢 Time comercial: sem fechamento hoje (${monthDeals} deals no mês)`);
+  }
 
   // Período mês + MoM
   const { data: wonMonth } = await supabase
@@ -283,6 +336,9 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
     pipelineValue,
     pipelineCount: pipeline?.length ?? 0,
     conversionRate: (newDealsCount || 0) > 0 ? Math.round(((wonToday?.length ?? 0) / (newDealsCount || 1)) * 100) : 0,
+    newLeadsToday,
+    topNewSources,
+    topRepsMonth,
   };
 }
 
@@ -319,10 +375,17 @@ VENDAS:
 - Perdidos hoje: ${salesMetrics.lostToday}${salesMetrics.topLostReasons.length ? ' | Motivos: ' + salesMetrics.topLostReasons.join(', ') : ''}
 - Novos deals: ${salesMetrics.newDeals}
 - Canais: ${salesMetrics.origins.map((o: any) => `${o.label} ${o.pct}%`).join(' | ')}
-- Time comercial: ${salesMetrics.topReps.length > 0 ? salesMetrics.topReps.map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
+- Time comercial hoje: ${salesMetrics.topReps.length > 0 ? salesMetrics.topReps.map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
 - MÊS: R$ ${salesMetrics.revenueMonth.toLocaleString('pt-BR')} / ${salesMetrics.goalProgress !== null ? salesMetrics.goalProgress + '% da meta' : 'sem meta'}
 - MoM: ${salesMetrics.momGrowth !== null ? (salesMetrics.momGrowth >= 0 ? '+' : '') + salesMetrics.momGrowth + '%' : 'N/A'}
 - Alertas: ${salesMetrics.alerts.join(' | ') || 'Nenhum'}
+
+PIPELINE COMERCIAL HOJE:
+- Novos leads capturados: ${salesMetrics.newLeadsToday}
+- Por fonte: ${salesMetrics.topNewSources.join(' | ') || 'Nenhum'}
+
+TIME COMERCIAL (mês):
+${salesMetrics.topRepsMonth.length > 0 ? salesMetrics.topRepsMonth.map((r: any) => `${r.name}: ${r.deals} deals / R$${r.revenue}`).join(' | ') : 'Sem fechamentos no mês'}
 
 ===== INSTRUÇÕES =====
 
@@ -510,11 +573,22 @@ async function sendEmailReport(
           </div>` : ''}
         </td></tr>` : '';
 
-  // Build team performance HTML section
+  // Build pipeline leads HTML section
+  const pipelineLeadsHtml = salesMetrics.newLeadsToday > 0 ? `
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#2563eb;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">📥 Novos Leads Hoje (Pipeline)</p>
+        </td></tr>
+        <tr><td style="padding:0 32px 12px;">
+          ${(salesMetrics.topNewSources ?? []).map((s: string) => `<p style="color:#334155;font-size:13px;margin:4px 0;">• ${s}</p>`).join('')}
+          <p style="color:#1e293b;font-size:13px;font-weight:700;margin:8px 0 0;">Total: ${salesMetrics.newLeadsToday} leads entraram</p>
+        </td></tr>` : '';
+
+  // Build team performance HTML section (daily)
   const teamHtml = (salesMetrics.topReps ?? []).length > 0 ? `
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#3b82f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">👥 Performance do Time</p>
+          <p style="color:#3b82f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">👥 Performance do Time (Hoje)</p>
           <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">Fechamentos diretos do dia (atribuídos ao time)</p>
         </td></tr>
         <tr><td style="padding:0 32px 20px;">
@@ -528,6 +602,34 @@ async function sendEmailReport(
             ${(salesMetrics.topReps ?? []).map((r: any, i: number) => {
               const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
               const bg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+              return `<tr style="background:${bg};">
+                <td style="padding:10px 12px;font-size:14px;">${medal}</td>
+                <td style="padding:10px 12px;color:#1e293b;font-size:13px;font-weight:600;">${r.name}</td>
+                <td style="padding:10px 12px;color:#1e293b;font-size:13px;text-align:center;font-weight:700;">${r.deals}</td>
+                <td style="padding:10px 12px;color:#16a34a;font-size:13px;text-align:right;font-weight:700;">${fmtBRL(r.revenue)}</td>
+              </tr>`;
+            }).join('')}
+          </table>
+        </td></tr>` : '';
+
+  // Build monthly team performance HTML section
+  const teamMonthHtml = (salesMetrics.topRepsMonth ?? []).length > 0 ? `
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+        <tr><td style="padding:16px 32px 6px;">
+          <p style="color:#f59e0b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">👥 Time Comercial (Mês)</p>
+          <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">Ranking acumulado no mês atual</p>
+        </td></tr>
+        <tr><td style="padding:0 32px 20px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#fffbeb;">
+              <td style="padding:8px 12px;color:#92400e;font-size:11px;font-weight:700;text-transform:uppercase;">#</td>
+              <td style="padding:8px 12px;color:#92400e;font-size:11px;font-weight:700;text-transform:uppercase;">Vendedor</td>
+              <td style="padding:8px 12px;color:#92400e;font-size:11px;font-weight:700;text-transform:uppercase;text-align:center;">Deals</td>
+              <td style="padding:8px 12px;color:#92400e;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;">Receita</td>
+            </tr>
+            ${(salesMetrics.topRepsMonth ?? []).map((r: any, i: number) => {
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+              const bg = i % 2 === 0 ? '#ffffff' : '#fffbeb';
               return `<tr style="background:${bg};">
                 <td style="padding:10px 12px;font-size:14px;">${medal}</td>
                 <td style="padding:10px 12px;color:#1e293b;font-size:13px;font-weight:600;">${r.name}</td>
@@ -631,7 +733,11 @@ async function sendEmailReport(
 
         ${originsHtml}
 
+        ${pipelineLeadsHtml}
+
         ${teamHtml}
+
+        ${teamMonthHtml}
 
         <tr><td style="padding:0 32px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
 
@@ -795,15 +901,24 @@ serve(async (req) => {
     const dateStr = formatDate(since);
     const aiAnalysis = await generateAIAnalysis(metrics, salesMetrics, dateStr, openaiKey);
 
-    // WhatsApp message with channels summary
+    // WhatsApp message
+    const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(1)}k` : `R$ ${v.toLocaleString('pt-BR')}`;
     const channelsSummary = (salesMetrics.origins ?? []).map((o: any) => `${o.emoji} ${o.label}: ${o.pct}% (${o.deals})`).join('\n');
-    const teamSummary = (salesMetrics.topReps ?? []).length > 0
-      ? (salesMetrics.topReps ?? []).map((r: any, i: number) => `${i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'} ${r.name}: ${r.deals} deals`).join('\n')
-      : '';
+
+    const teamSection = (salesMetrics.topRepsMonth ?? []).length > 0
+      ? `👥 *TIME COMERCIAL (mês)*\n` +
+        (salesMetrics.topRepsMonth ?? []).slice(0, 3).map((r: any, i: number) =>
+          `${['🥇','🥈','🥉'][i]} ${r.name}: ${r.deals} deals | ${fmtK(r.revenue)}`
+        ).join('\n')
+      : `👥 *TIME COMERCIAL*\nNenhum fechamento no mês ainda`;
+
+    const pipelineSection = salesMetrics.newLeadsToday > 0
+      ? `📥 *NOVOS LEADS HOJE (pipeline)*\n${(salesMetrics.topNewSources ?? []).join('\n')}\nTotal: ${salesMetrics.newLeadsToday} leads entraram`
+      : `📥 *NOVOS LEADS HOJE*\nNenhum lead novo capturado`;
 
     const inboxSummary = `📞 *Atendimento do Dia:*\n💬 Conversas: ${metrics.totalConvs} | IA: ${metrics.closedByAI} | Escaladas: ${metrics.escalatedToHuman}\n⏱ Tempo médio: ${metrics.avgResolutionMin ?? '—'} min\n🤖 Eventos IA: ${metrics.totalAIEvents} | Msgs: ${metrics.totalMessages} (${metrics.aiMessages} IA)${metrics.criticalAnomalies?.length > 0 ? `\n🔴 Anomalias: ${metrics.criticalAnomalies.length} críticas` : ''}`;
 
-    const fullMessage = `*Report Diário CRM 3Cliques — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}${teamSummary ? `\n\n👥 *Time Comercial:*\n${teamSummary}` : ''}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const fullMessage = `*Report Diário CRM 3Cliques — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}\n\n${pipelineSection}\n\n${teamSection}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
