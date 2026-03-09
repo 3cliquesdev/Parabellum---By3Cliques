@@ -57,6 +57,7 @@ import { ValidateCustomerPropertiesPanel } from "./ValidateCustomerPropertiesPan
 import { VerifyCustomerOTPPropertiesPanel } from "./VerifyCustomerOTPPropertiesPanel";
 import { VariableAutocomplete } from "./VariableAutocomplete";
 import { CONDITION_CONTACT_FIELDS, CONDITION_CONVERSATION_FIELDS, getAncestorNodeIds } from "./variableCatalog";
+import { useTicketCategories } from "@/hooks/useTicketCategories";
 
 // Tipos de nós para chat flows
 export const chatFlowNodeTypes = {
