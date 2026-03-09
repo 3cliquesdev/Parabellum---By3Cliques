@@ -830,7 +830,7 @@ async function sendEmailReport(
 
         <!-- Performance do Mês -->
         <tr><td style="padding:16px 32px 6px;">
-          <p style="color:#f59e0b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">📈 Performance do Mês</p>
+          <p style="color:#f59e0b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Performance do Mes</p>
         </td></tr>
         ${goalSection}
         <tr><td style="padding:8px 32px 20px;">
