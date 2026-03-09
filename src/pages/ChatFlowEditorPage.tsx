@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Play, Loader2, Settings2, Info, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatFlowEditor } from "@/components/chat-flows/ChatFlowEditor";
-import { ChatFlowSimulator } from "@/components/chat-flows/ChatFlowSimulator";
+import { FlowTestDialog } from "@/components/chat-flows/FlowTestDialog";
 import { useChatFlow, useUpdateChatFlow } from "@/hooks/useChatFlows";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
