@@ -35,7 +35,7 @@ export function FlowTestDialog({ open, onClose, flowId, flowName, onAutoSave }: 
       let query = supabase
         .from("conversations")
         .select("id, contact_id, status, channel, created_at, contacts:contact_id(first_name, last_name, phone)")
-        .in("status", ["open", "pending"])
+        .in("status", ["open", "waiting_human"])
         .order("created_at", { ascending: false })
         .limit(20);
 
