@@ -13,6 +13,7 @@ export function DataManagementCard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [exportingContacts, setExportingContacts] = useState(false);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
 
   // Export contacts to CSV
   const handleExportContacts = async () => {
