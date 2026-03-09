@@ -1,31 +1,19 @@
 
-# Plano: Mensagens Configuráveis de Fora do Horário ✅
 
-## Status: IMPLEMENTADO (com ajustes finos aplicados)
+# Fix: Clique nas variáveis do autocomplete não funciona
 
-## Resumo
+## Problema
+Quando o usuário clica em uma variável no dropdown do `VariableAutocomplete`, nada acontece. A causa é que o `Popover` fecha via `onOpenChange(false)` **antes** do `onSelect` do `CommandItem` disparar — o clique no item causa perda de foco do textarea (trigger), e o Popover interpreta como "clique fora" e fecha.
 
-As mensagens automáticas enviadas fora do horário comercial (handoff e redistribuição) agora são editáveis via UI na página de SLA Settings. Templates armazenados na tabela `business_messages_config` com fallback para mensagens padrão.
+## Solução
 
-## Ajustes Finos Aplicados
+Alterar `VariableAutocomplete.tsx`:
 
-- ✅ Trigger `updated_at` reutilizando `public.update_updated_at_column()`
-- ✅ Validação: botão salvar desabilitado se template vazio
-- ✅ Warning visual se placeholders `{schedule}` / `{next_open}` removidos
-- ✅ Botão "Restaurar Padrão" para resetar mensagens
+1. **No `PopoverContent`**: adicionar `onInteractOutside={(e) => e.preventDefault()}` para impedir que cliques dentro do popover o fechem prematuramente.
 
-## Arquivos Alterados
+2. **No `onOpenChange`**: manter apenas para fechar quando realmente necessário (ex: Escape), não quando o usuário interage com o conteúdo.
 
-| Arquivo | Mudança |
-|---------|---------|
-| SQL Migrations | Tabela `business_messages_config` + seeds + RLS + trigger updated_at |
-| `src/hooks/useBusinessMessages.ts` | Hook (query + mutation) |
-| `src/pages/SLASettings.tsx` | Seção "Mensagens de Fora do Horário" com validação + restaurar padrão |
-| `supabase/functions/ai-autopilot-chat/index.ts` | Busca template `after_hours_handoff` com fallback |
-| `supabase/functions/redistribute-after-hours/index.ts` | Busca template `business_hours_reopened` com fallback |
+3. **No `CommandItem`**: garantir que `onSelect` chama `insertVariable` e depois `setOpen(false)` explicitamente (isso já está feito, mas o popover fecha antes).
 
-## Garantias
+Alteração única em ~3 linhas no arquivo `src/components/chat-flows/VariableAutocomplete.tsx`.
 
-- Fallback hardcoded se tabela vazia ou inacessível
-- Kill Switch, Shadow Mode, Fluxos: não afetados
-- RLS: leitura authenticated, escrita managers/admins
